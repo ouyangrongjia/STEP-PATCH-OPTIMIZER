@@ -2,6 +2,7 @@ build/
 .vs/
 .vscode/.cmake/
 out/
+data/
 *.user
 *.suo
 *.obj

@@ -1,6 +1,7 @@
 void run_step_io_tests();
 void run_topology_graph_tests();
 void run_feature_edges_tests();
+void run_command_tests();
 void run_same_domain_merge_tests();
 
 #include "brep/ShapeDocument.h"
@@ -22,6 +23,7 @@ int main() {
     run_step_io_tests();
     run_topology_graph_tests();
     run_feature_edges_tests();
+    run_command_tests();
     run_same_domain_merge_tests();
     run_validation_tests();
     return 0;
