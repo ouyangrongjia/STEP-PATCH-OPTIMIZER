@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake: configure",
+      "type": "shell",
+      "command": "cmake --preset windows-msvc-debug",
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake: build",
+      "type": "shell",
+      "command": "cmake --build --preset windows-msvc-debug",
+      "dependsOn": "CMake: configure",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "CTest: run",
+      "type": "shell",
+      "command": "ctest --preset windows-msvc-debug",
+      "dependsOn": "CMake: build",
+      "problemMatcher": []
+    }
+  ]
+}

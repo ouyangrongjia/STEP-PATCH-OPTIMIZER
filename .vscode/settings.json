@@ -1,0 +1,7 @@
+{
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": true,
+  "cmake.buildPreset": "windows-msvc-debug",
+  "cmake.testPreset": "windows-msvc-debug",
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+}
