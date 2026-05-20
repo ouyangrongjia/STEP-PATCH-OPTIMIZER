@@ -1,7 +1,10 @@
 #pragma once
 
 #include "command/Command.h"
+#include "command/LockedEdgeRef.h"
 #include "merge/SameDomainUnifier.h"
+
+#include <vector>
 
 namespace spo {
 
@@ -10,6 +13,9 @@ public:
     MergePatchCommand(double angularThresholdDegrees, double minEdgeLength, double linearTolerance);
     const char* name() const override;
     Result execute(CommandContext& context) override;
+    bool undoable() const override;
+    Result undo(CommandContext& context) override;
+    Result redo(CommandContext& context) override;
     const SameDomainUnifyResult& result() const;
 
 private:
@@ -18,6 +24,7 @@ private:
     double linearTolerance_ = 0.001;
     ShapeDocument beforeDocument_;
     ShapeDocument afterDocument_;
+    std::vector<LockedEdgeRef> afterLockedEdges_;
     SameDomainUnifyResult result_;
 };
 
