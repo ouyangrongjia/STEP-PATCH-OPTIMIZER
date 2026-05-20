@@ -4,6 +4,7 @@
 #include "command/CommandContext.h"
 #include "command/CommandHistory.h"
 #include "common/Config.h"
+#include "common/GeometryTypes.h"
 #include "common/Result.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "merge/SameDomainUnifier.h"
@@ -11,6 +12,8 @@
 
 #include <filesystem>
 #include <memory>
+#include <set>
+#include <vector>
 
 namespace spo {
 
@@ -18,6 +21,10 @@ class AppController {
 public:
     const char* applicationName() const;
     Result execute(std::unique_ptr<Command> command);
+    Result undo();
+    Result redo();
+    bool canUndo() const;
+    bool canRedo() const;
     Result openStepFile(const std::filesystem::path& path);
     Result exportStepFile(const std::filesystem::path& path);
     Result verifyStepFileReadable(const std::filesystem::path& path);
@@ -29,6 +36,9 @@ public:
     bool hasDocument() const;
     const ShapeDocument& document() const;
     ShapeValidationReport validateShape();
+    Result lockEdges(const std::vector<EdgeId>& edgeIds);
+    Result unlockEdges(const std::vector<EdgeId>& edgeIds);
+    std::set<EdgeId> lockedEdges() const;
     const CommandHistory& history() const;
 
 private:

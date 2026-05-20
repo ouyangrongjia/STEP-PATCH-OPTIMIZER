@@ -3,8 +3,13 @@
 #include "command/DetectFeatureCommand.h"
 #include "command/ExportStepCommand.h"
 #include "command/LoadStepCommand.h"
+#include "command/LockedEdgeRef.h"
+#include "command/LockEdgeCommand.h"
 #include "command/MergePatchCommand.h"
+#include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
+
+#include <utility>
 
 namespace spo {
 
@@ -13,20 +18,32 @@ const char* AppController::applicationName() const {
 }
 
 Result AppController::execute(std::unique_ptr<Command> command) {
-    if (command == nullptr) {
-        return Result::error("无效命令。");
-    }
+    return history_.execute(std::move(command), context_);
+}
 
-    const auto commandName = command->name();
-    auto result = command->execute(context_);
-    if (result.success()) {
-        history_.record(commandName);
-    }
-    return result;
+Result AppController::undo() {
+    return history_.undo(context_);
+}
+
+Result AppController::redo() {
+    return history_.redo(context_);
+}
+
+bool AppController::canUndo() const {
+    return history_.canUndo();
+}
+
+bool AppController::canRedo() const {
+    return history_.canRedo();
 }
 
 Result AppController::openStepFile(const std::filesystem::path& path) {
-    return execute(std::make_unique<LoadStepCommand>(path));
+    const auto result = execute(std::make_unique<LoadStepCommand>(path));
+    if (result.success()) {
+        history_.clear();
+        context_.lockedEdges.clear();
+    }
+    return result;
 }
 
 Result AppController::exportStepFile(const std::filesystem::path& path) {
@@ -53,12 +70,10 @@ SameDomainUnifyResult AppController::unifySameDomain(
     double linearTolerance) {
     auto command = std::make_unique<MergePatchCommand>(angularThresholdDegrees, minEdgeLength, linearTolerance);
     auto* commandPtr = command.get();
-    const auto commandName = commandPtr->name();
-    const auto status = commandPtr->execute(context_);
+    const auto status = execute(std::move(command));
     if (!status.success()) {
         return {};
     }
-    history_.record(commandName);
     return commandPtr->result();
 }
 
@@ -76,6 +91,18 @@ ShapeValidationReport AppController::validateShape() {
         return {};
     }
     return context_.validationReport;
+}
+
+Result AppController::lockEdges(const std::vector<EdgeId>& edgeIds) {
+    return execute(std::make_unique<LockEdgeCommand>(edgeIds));
+}
+
+Result AppController::unlockEdges(const std::vector<EdgeId>& edgeIds) {
+    return execute(std::make_unique<UnlockEdgeCommand>(edgeIds));
+}
+
+std::set<EdgeId> AppController::lockedEdges() const {
+    return lockedEdgeIds(context_.lockedEdges);
 }
 
 const CommandHistory& AppController::history() const {
