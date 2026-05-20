@@ -1,0 +1,1 @@
+#include "merge/MergeCandidate.h"
