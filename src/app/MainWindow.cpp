@@ -10,8 +10,8 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QDockWidget>
-#include <QKeyEvent>
 #include <QFileDialog>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -247,6 +247,12 @@ void MainWindow::createDocks() {
         inspectPanel_->showProperties(title, rows);
         bottomTabs_->setCurrentWidget(inspectPanel_);
     });
+    viewer_->setLockEdgesCallback([this](std::vector<EdgeId> edgeIds) {
+        lockSelectedEdges(edgeIds);
+    });
+    viewer_->setUnlockEdgesCallback([this](std::vector<EdgeId> edgeIds) {
+        unlockSelectedEdges(edgeIds);
+    });
 }
 
 void MainWindow::connectActions() {
@@ -257,11 +263,11 @@ void MainWindow::connectActions() {
 
     connect(selectFaceAction_, &QAction::triggered, this, [this]() {
         viewer_->setSelectionMode(SelectionMode::Face);
-        setStatus("自适应选择：优先显示面/边命中结果");
+        setStatus("选择面模式");
     });
     connect(selectEdgeAction_, &QAction::triggered, this, [this]() {
         viewer_->setSelectionMode(SelectionMode::Edge);
-        setStatus("自适应选择：优先显示面/边命中结果");
+        setStatus("选择边模式");
     });
     connect(selectCandidateAction_, &QAction::triggered, this, [this]() {
         viewer_->setSelectionMode(SelectionMode::Candidate);
@@ -275,6 +281,8 @@ void MainWindow::connectActions() {
     connect(resetViewAction_, &QAction::triggered, this, [this]() { resetView(); });
     connect(fitAllAction_, &QAction::triggered, viewer_, &OccViewWidget::fitAll);
     connect(toggleFeaturesAction_, &QAction::toggled, viewer_, &OccViewWidget::setFeatureLinesVisible);
+    connect(undoAction_, &QAction::triggered, this, [this]() { undo(); });
+    connect(redoAction_, &QAction::triggered, this, [this]() { redo(); });
 }
 
 void MainWindow::openStepFile() {
@@ -293,8 +301,9 @@ void MainWindow::openStepFile() {
 
     const auto& document = controller_.document();
     const auto& stats = document.stats();
-    modelTree_->showDocument(document);
+    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
     viewer_->displayDocument(document);
+    syncLockedEdges();
     QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
     QTimer::singleShot(100, viewer_, &OccViewWidget::fitAll);
     inspectPanel_->showProperties("模型摘要", {
@@ -313,6 +322,7 @@ void MainWindow::openStepFile() {
         .arg(stats.edges));
     logPanel_->appendInfo(QString("已打开 STEP/STP：%1").arg(filePath));
     setStatus("STEP/STP 已加载");
+    refreshUndoRedoActions();
 }
 
 void MainWindow::saveProject() {
@@ -346,12 +356,14 @@ void MainWindow::exportStepFile() {
             .arg(filePath)
             .arg(QString::fromStdString(verifyResult.message())));
         setStatus("STEP 已导出，二次读取失败");
+        refreshUndoRedoActions();
         return;
     }
 
     logPanel_->appendInfo(QString("已导出 STEP 并通过二次读取校验：%1").arg(filePath));
     inspectPanel_->showValidation(QString("导出后二次读取校验通过\n文件：%1").arg(filePath));
     setStatus("STEP 已导出并通过校验");
+    refreshUndoRedoActions();
 }
 
 void MainWindow::detectFeatureEdges() {
@@ -374,6 +386,7 @@ void MainWindow::detectFeatureEdges() {
         .arg(result.multiple_edges));
     logPanel_->appendInfo(QString("特征边检测完成：%1 条").arg(result.edges.size()));
     setStatus("特征边检测完成");
+    refreshUndoRedoActions();
 }
 
 void MainWindow::previewMergeCandidates() {
@@ -397,8 +410,9 @@ void MainWindow::applyMerge() {
         params.linear_tolerance);
 
     const auto& document = controller_.document();
-    modelTree_->showDocument(document);
+    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
     viewer_->displayDocument(document);
+    syncLockedEdges();
     inspectPanel_->showReport(QString("同域合并完成\n保护边数量：%1\n合并前 face：%2\n合并后 face：%3\n合并前 edge：%4\n合并后 edge：%5\n合并前 solid：%6\n合并后 solid：%7")
         .arg(result.protected_edges)
         .arg(result.before.faces)
@@ -414,6 +428,7 @@ void MainWindow::applyMerge() {
         .arg(result.after.edges)
         .arg(result.protected_edges));
     setStatus("同域合并完成");
+    refreshUndoRedoActions();
 }
 
 void MainWindow::validateShape() {
@@ -437,11 +452,107 @@ void MainWindow::validateShape() {
         .arg(report.multiple_edges)
         .arg(report.brep_check_valid ? "通过" : "失败"));
     setStatus("合法性检查完成");
+    refreshUndoRedoActions();
 }
 
 void MainWindow::resetView() {
     viewer_->resetView();
     setStatus("视角已重置");
+}
+
+void MainWindow::undo() {
+    const auto result = controller_.undo();
+    if (!result.success()) {
+        logPanel_->appendWarning(QString::fromStdString(result.message()));
+        setStatus(QString::fromStdString(result.message()));
+        refreshUndoRedoActions();
+        return;
+    }
+
+    refreshDocumentViews();
+    logPanel_->appendInfo("已撤销上一条编辑命令。");
+    setStatus("已撤销");
+    refreshUndoRedoActions();
+}
+
+void MainWindow::redo() {
+    const auto result = controller_.redo();
+    if (!result.success()) {
+        logPanel_->appendWarning(QString::fromStdString(result.message()));
+        setStatus(QString::fromStdString(result.message()));
+        refreshUndoRedoActions();
+        return;
+    }
+
+    refreshDocumentViews();
+    logPanel_->appendInfo("已重做上一条编辑命令。");
+    setStatus("已重做");
+    refreshUndoRedoActions();
+}
+
+void MainWindow::refreshUndoRedoActions() {
+    undoAction_->setEnabled(controller_.canUndo());
+    redoAction_->setEnabled(controller_.canRedo());
+}
+
+void MainWindow::refreshDocumentViews() {
+    if (!controller_.hasDocument()) {
+        return;
+    }
+
+    const auto& document = controller_.document();
+    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
+    viewer_->displayDocument(document);
+    syncLockedEdges();
+}
+
+void MainWindow::syncLockedEdges() {
+    if (!controller_.hasDocument()) {
+        return;
+    }
+
+    modelTree_->showDocument(controller_.document(), static_cast<int>(controller_.lockedEdges().size()));
+    viewer_->showLockedEdges(controller_.lockedEdges());
+}
+
+void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
+    if (edgeIds.empty()) {
+        setStatus("未选择边");
+        return;
+    }
+
+    const auto result = controller_.lockEdges(edgeIds);
+    if (!result.success()) {
+        logPanel_->appendError(QString::fromStdString(result.message()));
+        setStatus(QString::fromStdString(result.message()));
+        refreshUndoRedoActions();
+        return;
+    }
+
+    logPanel_->appendInfo(QString("已锁定 %1 条边。").arg(edgeIds.size()));
+    setStatus(QString("已锁定 %1 条边").arg(edgeIds.size()));
+    syncLockedEdges();
+    refreshUndoRedoActions();
+}
+
+void MainWindow::unlockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
+    if (edgeIds.empty()) {
+        setStatus("未选择边");
+        return;
+    }
+
+    const auto result = controller_.unlockEdges(edgeIds);
+    if (!result.success()) {
+        logPanel_->appendError(QString::fromStdString(result.message()));
+        setStatus(QString::fromStdString(result.message()));
+        refreshUndoRedoActions();
+        return;
+    }
+
+    logPanel_->appendInfo(QString("已解锁 %1 条边。").arg(edgeIds.size()));
+    setStatus(QString("已解锁 %1 条边").arg(edgeIds.size()));
+    syncLockedEdges();
+    refreshUndoRedoActions();
 }
 
 void MainWindow::setStatus(const QString& message) {

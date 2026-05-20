@@ -4,6 +4,8 @@
 
 #include <QMainWindow>
 
+#include <vector>
+
 class QAction;
 class QDockWidget;
 class QMenu;
@@ -40,6 +42,13 @@ private:
     void applyMerge();
     void validateShape();
     void resetView();
+    void undo();
+    void redo();
+    void refreshUndoRedoActions();
+    void refreshDocumentViews();
+    void syncLockedEdges();
+    void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
+    void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
 
     AppController controller_;

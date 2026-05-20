@@ -62,14 +62,19 @@ void OccViewWidget::displayDocument(const ShapeDocument& document) {
     hasDocument_ = document.hasShape();
     stats_ = document.stats();
     topology_ = &document.topology();
-    selectedFace_ = -1;
-    selectedEdge_ = -1;
+    selectedFaces_.clear();
+    selectedEdges_.clear();
+    lastSelectedFace_ = -1;
+    lastSelectedEdge_ = -1;
 
     if (context_.IsNull()) {
         return;
     }
 
     context_->RemoveAll(Standard_False);
+    hoverShape_.Nullify();
+    featureEdgeShape_.Nullify();
+    lockedEdgeShape_.Nullify();
     displayedShape_ = new AIS_ColoredShape(document.shape());
     displayedShape_->SetMaterial(Graphic3d_NOM_PLASTIC);
     displayedShape_->SetColor(Quantity_Color(1.0, 0.74, 0.16, Quantity_TOC_RGB));
@@ -89,8 +94,10 @@ void OccViewWidget::clearDocument() {
     hasDocument_ = false;
     stats_ = {};
     topology_ = nullptr;
-    selectedFace_ = -1;
-    selectedEdge_ = -1;
+    selectedFaces_.clear();
+    selectedEdges_.clear();
+    lastSelectedFace_ = -1;
+    lastSelectedEdge_ = -1;
 
     if (!context_.IsNull()) {
         context_->RemoveAll(Standard_False);
@@ -99,11 +106,25 @@ void OccViewWidget::clearDocument() {
     displayedShape_.Nullify();
     hoverShape_.Nullify();
     featureEdgeShape_.Nullify();
+    lockedEdgeShape_.Nullify();
     redrawView();
 }
 
 void OccViewWidget::setSelectionMode(SelectionMode mode) {
     selectionMode_ = mode;
+    if (mode == SelectionMode::Face) {
+        selectedEdges_.clear();
+        lastSelectedEdge_ = -1;
+    } else if (mode == SelectionMode::Edge) {
+        selectedFaces_.clear();
+        lastSelectedFace_ = -1;
+    } else {
+        selectedFaces_.clear();
+        selectedEdges_.clear();
+        lastSelectedFace_ = -1;
+        lastSelectedEdge_ = -1;
+    }
+    redrawSelectedShapes();
     activateSelectionMode();
 }
 
@@ -130,6 +151,35 @@ void OccViewWidget::showFeatureEdges(const FeatureEdgeDetectionResult& result) {
     featureEdgeShape_->SetColor(Quantity_Color(1.0, 0.05, 0.05, Quantity_TOC_RGB));
     featureEdgeShape_->SetWidth(3.0);
     context_->Display(featureEdgeShape_, Standard_False);
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::showLockedEdges(const std::set<EdgeId>& edgeIds) {
+    if (context_.IsNull() || topology_ == nullptr) {
+        return;
+    }
+
+    clearLockedEdgeShape();
+    if (edgeIds.empty()) {
+        redrawView();
+        return;
+    }
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto edgeId : edgeIds) {
+        if (edgeId < topology_->edgeCount()) {
+            builder.Add(compound, topology_->edge(edgeId));
+        }
+    }
+
+    lockedEdgeShape_ = new AIS_Shape(compound);
+    lockedEdgeShape_->SetDisplayMode(AIS_WireFrame);
+    lockedEdgeShape_->SetColor(Quantity_Color(0.90, 0.0, 1.0, Quantity_TOC_RGB));
+    lockedEdgeShape_->SetWidth(5.0);
+    context_->Display(lockedEdgeShape_, Standard_False);
     context_->UpdateCurrentViewer();
     redrawView();
 }
@@ -197,6 +247,22 @@ void OccViewWidget::requestRedraw() {
 
 void OccViewWidget::setSelectionCallback(std::function<void(QString, QList<QPair<QString, QString>>)> callback) {
     selectionCallback_ = std::move(callback);
+}
+
+void OccViewWidget::setLockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback) {
+    lockEdgesCallback_ = std::move(callback);
+}
+
+void OccViewWidget::setUnlockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback) {
+    unlockEdgesCallback_ = std::move(callback);
+}
+
+std::vector<FaceId> OccViewWidget::selectedFaceIds() const {
+    return {selectedFaces_.begin(), selectedFaces_.end()};
+}
+
+std::vector<EdgeId> OccViewWidget::selectedEdgeIds() const {
+    return {selectedEdges_.begin(), selectedEdges_.end()};
 }
 
 bool OccViewWidget::event(QEvent* event) {
@@ -349,10 +415,24 @@ void OccViewWidget::wheelEvent(QWheelEvent* event) {
 void OccViewWidget::contextMenuEvent(QContextMenuEvent* event) {
     QMenu menu(this);
     if (selectionMode_ == SelectionMode::Edge) {
-        menu.addAction("锁定为特征边");
-        menu.addAction("解除特征边锁定");
-        menu.addAction("显示边信息");
-        menu.addAction("隐藏边");
+        if (selectedEdges_.empty()) {
+            selectAt(event->pos(), Qt::NoModifier);
+        }
+
+        auto* lockAction = menu.addAction("锁定选中边");
+        auto* unlockAction = menu.addAction("解锁选中边");
+        lockAction->setEnabled(!selectedEdges_.empty());
+        unlockAction->setEnabled(!selectedEdges_.empty());
+        connect(lockAction, &QAction::triggered, this, [this]() {
+            if (lockEdgesCallback_) {
+                lockEdgesCallback_(selectedEdgeIds());
+            }
+        });
+        connect(unlockAction, &QAction::triggered, this, [this]() {
+            if (unlockEdgesCallback_) {
+                unlockEdgesCallback_(selectedEdgeIds());
+            }
+        });
     } else if (selectionMode_ == SelectionMode::Face) {
         menu.addAction("显示面信息");
         menu.addAction("加入合并组");
@@ -427,6 +507,13 @@ void OccViewWidget::clearFeatureEdgeShape() {
     featureEdgeShape_.Nullify();
 }
 
+void OccViewWidget::clearLockedEdgeShape() {
+    if (!context_.IsNull() && !lockedEdgeShape_.IsNull()) {
+        context_->Remove(lockedEdgeShape_, Standard_False);
+    }
+    lockedEdgeShape_.Nullify();
+}
+
 void OccViewWidget::updateHoverShape(const QPointF& position) {
     if (!hasDocument_ || topology_ == nullptr || context_.IsNull() || view_.IsNull()) {
         return;
@@ -458,50 +545,70 @@ void OccViewWidget::selectAt(const QPointF& position, Qt::KeyboardModifiers modi
         return;
     }
 
-    Q_UNUSED(modifiers)
-
     const TopoDS_Shape selectedShape = detectedShapeAt(position);
     context_->ClearSelected(Standard_False);
+    const bool multiSelect = modifiers.testFlag(Qt::ShiftModifier);
+    const bool removeSelect = modifiers.testFlag(Qt::ControlModifier);
 
     if (selectionMode_ == SelectionMode::Face) {
-        selectedEdge_ = -1;
         const auto faceId = topology_->faceIdFor(selectedShape);
         if (!faceId.has_value()) {
             return;
         }
 
         clearHoverShape();
-        displayedShape_->ClearCustomAspects();
-        selectedFace_ = faceId.has_value() ? static_cast<int>(*faceId) : -1;
-        displayedShape_->SetCustomColor(selectedShape, Quantity_Color(0.15, 0.80, 0.20, Quantity_TOC_RGB));
-        displayedShape_->SetCustomTransparency(selectedShape, 0.0);
+        if (!multiSelect && !removeSelect) {
+            selectedFaces_.clear();
+        }
+        if (removeSelect || (multiSelect && selectedFaces_.contains(*faceId))) {
+            selectedFaces_.erase(*faceId);
+        } else {
+            selectedFaces_.insert(*faceId);
+        }
+        selectedEdges_.clear();
+        lastSelectedFace_ = static_cast<int>(*faceId);
+        lastSelectedEdge_ = -1;
+        redrawSelectedShapes();
+
         if (selectionCallback_) {
-            const auto faceEdges = faceId.has_value() ? topology_->edgesForFace(*faceId) : std::vector<EdgeId> {};
-            const auto adjacentFaces = faceId.has_value() ? topology_->adjacentFaces(*faceId) : std::vector<FaceId> {};
+            const auto faceEdges = topology_->edgesForFace(*faceId);
+            const auto adjacentFaces = topology_->adjacentFaces(*faceId);
             selectionCallback_("面", {
                 {"选择模式", selectionModeText()},
-                {"Face ID", faceId.has_value() ? QString::number(*faceId) : "未命中"},
+                {"Face ID", selectedFaces_.size() == 1 ? QString::number(*faceId) : "多选"},
+                {"已选面数量", QString::number(selectedFaces_.size())},
+                {"最近命中 ID", QString::number(*faceId)},
                 {"关联边数量", QString::number(faceEdges.size())},
                 {"相邻面数量", QString::number(adjacentFaces.size())}
             });
         }
     } else if (selectionMode_ == SelectionMode::Edge) {
-        selectedFace_ = -1;
         const auto edgeId = topology_->edgeIdFor(selectedShape);
         if (!edgeId.has_value()) {
             return;
         }
 
         clearHoverShape();
-        displayedShape_->ClearCustomAspects();
-        selectedEdge_ = edgeId.has_value() ? static_cast<int>(*edgeId) : -1;
-        displayedShape_->SetCustomColor(selectedShape, Quantity_Color(0.15, 0.80, 0.20, Quantity_TOC_RGB));
-        displayedShape_->SetCustomWidth(selectedShape, 3.0);
+        if (!multiSelect && !removeSelect) {
+            selectedEdges_.clear();
+        }
+        if (removeSelect || (multiSelect && selectedEdges_.contains(*edgeId))) {
+            selectedEdges_.erase(*edgeId);
+        } else {
+            selectedEdges_.insert(*edgeId);
+        }
+        selectedFaces_.clear();
+        lastSelectedFace_ = -1;
+        lastSelectedEdge_ = static_cast<int>(*edgeId);
+        redrawSelectedShapes();
+
         if (selectionCallback_) {
-            const auto* adjacency = edgeId.has_value() ? topology_->adjacencyForEdge(*edgeId) : nullptr;
+            const auto* adjacency = topology_->adjacencyForEdge(*edgeId);
             selectionCallback_("边", {
                 {"选择模式", selectionModeText()},
-                {"Edge ID", edgeId.has_value() ? QString::number(*edgeId) : "未命中"},
+                {"Edge ID", selectedEdges_.size() == 1 ? QString::number(*edgeId) : "多选"},
+                {"已选边数量", QString::number(selectedEdges_.size())},
+                {"最近命中 ID", QString::number(*edgeId)},
                 {"邻接面数量", adjacency != nullptr ? QString::number(adjacency->faces.size()) : "0"},
                 {"边界类型", adjacency != nullptr && adjacency->faces.size() == 1 ? "自由边" : "内部边"}
             });
@@ -512,6 +619,30 @@ void OccViewWidget::selectAt(const QPointF& position, Qt::KeyboardModifiers modi
             {"面数量", "待接入合并规划器"},
             {"是否可应用", "待验证"}
         });
+    }
+}
+
+void OccViewWidget::redrawSelectedShapes() {
+    if (context_.IsNull() || displayedShape_.IsNull() || topology_ == nullptr) {
+        return;
+    }
+
+    displayedShape_->ClearCustomAspects();
+    for (const auto faceId : selectedFaces_) {
+        if (faceId < topology_->faceCount()) {
+            displayedShape_->SetCustomColor(
+                topology_->face(faceId),
+                Quantity_Color(0.15, 0.80, 0.20, Quantity_TOC_RGB));
+            displayedShape_->SetCustomTransparency(topology_->face(faceId), 0.0);
+        }
+    }
+    for (const auto edgeId : selectedEdges_) {
+        if (edgeId < topology_->edgeCount()) {
+            displayedShape_->SetCustomColor(
+                topology_->edge(edgeId),
+                Quantity_Color(0.15, 0.80, 0.20, Quantity_TOC_RGB));
+            displayedShape_->SetCustomWidth(topology_->edge(edgeId), 3.0);
+        }
     }
 
     context_->Redisplay(displayedShape_, Standard_False);

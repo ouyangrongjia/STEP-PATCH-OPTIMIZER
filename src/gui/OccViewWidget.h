@@ -17,6 +17,8 @@
 #include <WNT_Window.hxx>
 
 #include <functional>
+#include <set>
+#include <vector>
 
 namespace spo {
 
@@ -29,12 +31,17 @@ public:
     void clearDocument();
     void setSelectionMode(SelectionMode mode);
     void showFeatureEdges(const FeatureEdgeDetectionResult& result);
+    void showLockedEdges(const std::set<EdgeId>& edgeIds);
     void setFeatureLinesVisible(bool visible);
     void setMergePreviewVisible(bool visible);
     void resetView();
     void fitAll();
     void requestRedraw();
     void setSelectionCallback(std::function<void(QString, QList<QPair<QString, QString>>)> callback);
+    void setLockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback);
+    void setUnlockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback);
+    std::vector<FaceId> selectedFaceIds() const;
+    std::vector<EdgeId> selectedEdgeIds() const;
 
 protected:
     bool event(QEvent* event) override;
@@ -60,7 +67,9 @@ private:
     void updateHoverShape(const QPointF& position);
     void clearHoverShape();
     void clearFeatureEdgeShape();
+    void clearLockedEdgeShape();
     void selectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
+    void redrawSelectedShapes();
     void initializeOcct();
     void activateSelectionMode();
     void resizeOcctWindow();
@@ -77,15 +86,20 @@ private:
     Handle(AIS_ColoredShape) displayedShape_;
     Handle(AIS_Shape) hoverShape_;
     Handle(AIS_Shape) featureEdgeShape_;
+    Handle(AIS_Shape) lockedEdgeShape_;
     SelectionMode selectionMode_ = SelectionMode::Face;
     std::function<void(QString, QList<QPair<QString, QString>>)> selectionCallback_;
+    std::function<void(std::vector<EdgeId>)> lockEdgesCallback_;
+    std::function<void(std::vector<EdgeId>)> unlockEdgesCallback_;
     QPoint lastMousePosition_;
     bool rotating_ = false;
     bool panning_ = false;
     bool featureLinesVisible_ = true;
     bool mergePreviewVisible_ = false;
-    int selectedFace_ = -1;
-    int selectedEdge_ = -1;
+    std::set<FaceId> selectedFaces_;
+    std::set<EdgeId> selectedEdges_;
+    int lastSelectedFace_ = -1;
+    int lastSelectedEdge_ = -1;
 };
 
 }

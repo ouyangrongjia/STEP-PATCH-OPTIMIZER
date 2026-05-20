@@ -25,7 +25,7 @@ void ModelTreePanel::showEmpty() {
     tree_->expandAll();
 }
 
-void ModelTreePanel::showDocument(const ShapeDocument& document) {
+void ModelTreePanel::showDocument(const ShapeDocument& document, int lockedEdgeCount) {
     tree_->clear();
     const auto& stats = document.stats();
 
@@ -48,7 +48,7 @@ void ModelTreePanel::showDocument(const ShapeDocument& document) {
 
     auto* features = new QTreeWidgetItem(root, QStringList() << "特征边");
     new QTreeWidgetItem(features, QStringList() << "锐边：未检测");
-    new QTreeWidgetItem(features, QStringList() << "用户锁定边：0");
+    new QTreeWidgetItem(features, QStringList() << QString("用户锁定边：%1").arg(lockedEdgeCount));
 
     auto* candidates = new QTreeWidgetItem(root, QStringList() << "合并候选区域");
     new QTreeWidgetItem(candidates, QStringList() << "尚未生成候选区域");
