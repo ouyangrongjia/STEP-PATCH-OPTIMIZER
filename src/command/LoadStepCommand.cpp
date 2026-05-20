@@ -24,6 +24,7 @@ Result LoadStepCommand::execute(CommandContext& context) {
     context.sourcePath = path_;
     context.featureEdges = {};
     context.validationReport = {};
+    context.lockedEdges.clear();
     context.dirty = false;
     return Result::ok();
 }

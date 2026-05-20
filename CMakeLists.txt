@@ -29,7 +29,10 @@ add_library(spo_core STATIC
     src/command/DetectFeatureCommand.cpp
     src/command/ExportStepCommand.cpp
     src/command/LoadStepCommand.cpp
+    src/command/LockedEdgeRef.cpp
+    src/command/LockEdgeCommand.cpp
     src/command/MergePatchCommand.cpp
+    src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
     src/feature/BoundaryClassifier.cpp
     src/feature/CurvatureEstimator.cpp
