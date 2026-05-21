@@ -116,6 +116,7 @@ if(SPO_BUILD_TESTS)
     add_executable(spo_tests
         tests/test_feature_edges.cpp
         tests/test_commands.cpp
+        tests/test_merge_planner.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
         tests/test_topology_graph.cpp

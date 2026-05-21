@@ -8,6 +8,7 @@
 #include "command/MergePatchCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
+#include "merge/MergePlanner.h"
 
 #include <utility>
 
@@ -62,6 +63,21 @@ FeatureEdgeDetectionResult AppController::detectFeatureEdges(double angularThres
         return {};
     }
     return context_.featureEdges;
+}
+
+MergePlannerResult AppController::previewMergeCandidates(
+    double angularThresholdDegrees,
+    double minEdgeLength,
+    const MergePlannerOptions& options) {
+    if (!context_.document.hasShape()) {
+        return {};
+    }
+
+    FeatureEdgeDetector detector;
+    context_.featureEdges = detector.detect(context_.document.topology(), angularThresholdDegrees, minEdgeLength);
+
+    MergePlanner planner;
+    return planner.plan(context_.document, context_.featureEdges, lockedEdges(), options);
 }
 
 SameDomainUnifyResult AppController::unifySameDomain(

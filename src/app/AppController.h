@@ -7,6 +7,7 @@
 #include "common/GeometryTypes.h"
 #include "common/Result.h"
 #include "feature/FeatureEdgeDetector.h"
+#include "merge/MergePlanner.h"
 #include "merge/SameDomainUnifier.h"
 #include "validate/ShapeValidator.h"
 
@@ -29,6 +30,10 @@ public:
     Result exportStepFile(const std::filesystem::path& path);
     Result verifyStepFileReadable(const std::filesystem::path& path);
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
+    MergePlannerResult previewMergeCandidates(
+        double angularThresholdDegrees,
+        double minEdgeLength,
+        const MergePlannerOptions& options);
     SameDomainUnifyResult unifySameDomain(
         double angularThresholdDegrees,
         double minEdgeLength,

@@ -20,7 +20,49 @@
 #include <QTimer>
 #include <QToolBar>
 
+#include <algorithm>
+
 namespace spo {
+
+namespace {
+
+QString candidateTypeText(MergeCandidateType type) {
+    switch (type) {
+    case MergeCandidateType::SameDomain:
+        return "SameDomain";
+    case MergeCandidateType::PlaneLike:
+        return "PlaneLike";
+    case MergeCandidateType::CylinderLike:
+        return "CylinderLike";
+    case MergeCandidateType::ConeLike:
+        return "ConeLike";
+    case MergeCandidateType::SphereLike:
+        return "SphereLike";
+    case MergeCandidateType::TorusLike:
+        return "TorusLike";
+    case MergeCandidateType::FreeformG1:
+        return "FreeformG1";
+    case MergeCandidateType::FreeformG2:
+        return "FreeformG2";
+    case MergeCandidateType::Unknown:
+        return "Unknown";
+    }
+    return "Unknown";
+}
+
+QString riskLevelText(MergeRiskLevel risk) {
+    switch (risk) {
+    case MergeRiskLevel::Low:
+        return "Low";
+    case MergeRiskLevel::Medium:
+        return "Medium";
+    case MergeRiskLevel::High:
+        return "High";
+    }
+    return "Unknown";
+}
+
+}
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("STEP 曲面片优化器");
@@ -390,10 +432,66 @@ void MainWindow::detectFeatureEdges() {
 }
 
 void MainWindow::previewMergeCandidates() {
-    viewer_->setMergePreviewVisible(true);
-    inspectPanel_->showReport("已请求合并候选预览\n同域合并规划器尚未实现。");
-    logPanel_->appendInfo("已请求合并预览。");
-    setStatus("合并预览后端待实现");
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    const auto beforeStats = controller_.document().stats();
+    const auto params = parameterPanel_->parameters();
+    MergePlannerOptions options;
+    options.max_plane_distance = params.linear_tolerance;
+    options.min_region_faces = 2;
+
+    const auto result = controller_.previewMergeCandidates(
+        params.angular_threshold_degrees,
+        params.min_edge_length,
+        options);
+    const auto afterStats = controller_.document().stats();
+
+    int maxFaceCount = 0;
+    int totalCandidateFaces = 0;
+    for (const auto& candidate : result.candidates) {
+        maxFaceCount = std::max(maxFaceCount, candidate.face_count);
+        totalCandidateFaces += candidate.face_count;
+    }
+
+    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\n保护边数量：%2\n访问 face 数量：%3\n拒绝区域数量：%4\n最大候选区域 face 数：%5\n总候选 face 数：%6\n预览前 face/edge：%7/%8\n预览后 face/edge：%9/%10")
+        .arg(result.candidates.size())
+        .arg(result.protected_edge_count)
+        .arg(result.visited_faces)
+        .arg(result.rejected_regions)
+        .arg(maxFaceCount)
+        .arg(totalCandidateFaces)
+        .arg(beforeStats.faces)
+        .arg(beforeStats.edges)
+        .arg(afterStats.faces)
+        .arg(afterStats.edges);
+
+    const auto previewCount = std::min<std::size_t>(10, result.candidates.size());
+    for (std::size_t index = 0; index < previewCount; ++index) {
+        const auto& candidate = result.candidates[index];
+        report += QString("\n\n候选 %1\n类型：%2\nface 数：%3\n总面积：%4\n最大法向夹角：%5 度\n最大距离：%6\n边界边数：%7\n内部边数：%8\n风险：%9")
+            .arg(candidate.candidate_id)
+            .arg(candidateTypeText(candidate.candidate_type))
+            .arg(candidate.face_count)
+            .arg(QString::number(candidate.total_area, 'f', 4))
+            .arg(QString::number(candidate.max_normal_angle_deg, 'f', 3))
+            .arg(QString::number(candidate.max_distance, 'g', 6))
+            .arg(candidate.boundary_edge_count)
+            .arg(candidate.internal_edge_count)
+            .arg(riskLevelText(candidate.risk_level));
+    }
+
+    viewer_->setMergePreviewVisible(false);
+    inspectPanel_->showReport(report);
+    logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，保护边 %2，访问 face %3，拒绝 %4")
+        .arg(result.candidates.size())
+        .arg(result.protected_edge_count)
+        .arg(result.visited_faces)
+        .arg(result.rejected_regions));
+    setStatus("合并候选区域预览完成");
 }
 
 void MainWindow::applyMerge() {
