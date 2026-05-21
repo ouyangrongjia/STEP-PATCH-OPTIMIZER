@@ -2,19 +2,51 @@
 
 Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测特征边、冻结边、执行 same-domain 合并、检查合法性并导出 STEP。
 
-## 最简单用法
+## 从 0 开始一键配置
 
-第一次配置一台 Windows 开发机时，优先使用脚本，不需要手动记一长串 CMake 和 vcpkg 命令。
+适用于一台新的 Windows 开发机。先把项目源码放到本机，例如：
 
 ```powershell
 cd D:\pyProject\step-patch-optimizer
-
-.\scripts\setup_deps.ps1
-.\scripts\build_debug.ps1
-.\scripts\run_gui.ps1
 ```
 
-以后日常开发通常只需要：
+然后执行一键初始化：
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\bootstrap_windows.ps1
+```
+
+这个脚本会做这些事：
+
+```text
+1. 检查 Git / CMake / Visual Studio 2022 Build Tools
+2. 缺少系统工具时，优先用 winget 自动安装
+3. 如果没有 vcpkg，自动 clone 到 %USERPROFILE%\vcpkg
+4. 设置用户级 VCPKG_ROOT
+5. 根据 vcpkg.json 安装 OpenCASCADE 和 Qt
+6. 配置 CMake
+7. 构建 GUI 和测试
+8. 运行测试
+```
+
+如果希望初始化完成后直接打开 GUI：
+
+```powershell
+.\scripts\bootstrap_windows.ps1 -RunGui
+```
+
+如果系统工具已经装好，只想安装 vcpkg 依赖并构建：
+
+```powershell
+.\scripts\bootstrap_windows.ps1 -SkipSystemInstall
+```
+
+注意：Visual Studio Build Tools 安装可能会弹出 UAC 或要求重启终端。若脚本安装完系统工具后仍提示找不到编译器，关闭当前 PowerShell，重新打开后再执行一次同一条命令即可。
+
+## 日常使用
+
+完成第一次初始化后，日常开发通常只需要：
 
 ```powershell
 .\scripts\build_debug.ps1
@@ -30,6 +62,7 @@ cd D:\pyProject\step-patch-optimizer
 ## 这几个脚本做了什么
 
 ```text
+scripts\bootstrap_windows.ps1  从 0 检查/安装系统工具、vcpkg、项目依赖并构建
 scripts\setup_deps.ps1   使用 vcpkg.json 安装依赖
 scripts\configure.ps1    执行 cmake --preset windows-msvc-debug
 scripts\build_debug.ps1  配置并构建 GUI 和测试
@@ -41,7 +74,7 @@ scripts\test.ps1         构建测试并运行 ctest
 
 ```text
 项目目录：D:\pyProject\step-patch-optimizer
-vcpkg：C:\Users\27836\vcpkg
+vcpkg：%USERPROFILE%\vcpkg
 CMake preset：windows-msvc-debug
 构建目录：build\windows-msvc-debug
 GUI exe：build\windows-msvc-debug\Debug\step-patch-optimizer.exe
@@ -53,7 +86,12 @@ GUI exe：build\windows-msvc-debug\Debug\step-patch-optimizer.exe
 .\scripts\setup_deps.ps1 -VcpkgRoot D:\dev\vcpkg
 ```
 
-注意：`CMakePresets.json` 当前仍默认指向 `C:\Users\27836\vcpkg\scripts\buildsystems\vcpkg.cmake`。如果换了 vcpkg 位置，也要同步改 preset 里的 `CMAKE_TOOLCHAIN_FILE`。
+`CMakePresets.json` 使用环境变量 `VCPKG_ROOT` 查找 vcpkg toolchain。`bootstrap_windows.ps1` 会自动设置它；如果手动换 vcpkg 位置，也请同步设置：
+
+```powershell
+[Environment]::SetEnvironmentVariable("VCPKG_ROOT", "D:\dev\vcpkg", "User")
+$env:VCPKG_ROOT = "D:\dev\vcpkg"
+```
 
 ## 必需工具
 
@@ -64,6 +102,8 @@ GUI exe：build\windows-msvc-debug\Debug\step-patch-optimizer.exe
 - Git
 - vcpkg
 - VS Code，推荐但不是必需
+
+`bootstrap_windows.ps1` 会尝试自动安装 Git、CMake 和 Visual Studio 2022 Build Tools，并自动 clone/bootstrap vcpkg。VS Code 不参与构建，可以之后再装。
 
 VS Code 只作为编辑器和启动器，不需要打开 Visual Studio IDE。
 
@@ -95,7 +135,7 @@ vcpkg install opencascade:x64-windows qtbase:x64-windows
 脚本会等价执行 manifest 安装：
 
 ```powershell
-C:\Users\27836\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root=D:\pyProject\step-patch-optimizer
+%USERPROFILE%\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root=D:\pyProject\step-patch-optimizer
 ```
 
 ## 手动构建命令
@@ -104,7 +144,8 @@ C:\Users\27836\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root=D
 
 ```powershell
 cd D:\pyProject\step-patch-optimizer
-$env:Path='C:\Program Files\CMake\bin;C:\Users\27836\vcpkg;' + $env:Path
+$env:VCPKG_ROOT="$env:USERPROFILE\vcpkg"
+$env:Path="C:\Program Files\CMake\bin;$env:VCPKG_ROOT;" + $env:Path
 
 cmake --preset windows-msvc-debug
 cmake --build --preset windows-msvc-debug --target step-patch-optimizer
@@ -199,7 +240,7 @@ This application failed to start because no Qt platform plugin could be initiali
 如果还不行，手动执行：
 
 ```powershell
-C:\Users\27836\vcpkg\installed\x64-windows\tools\Qt6\bin\windeployqt.debug.bat --no-translations --no-system-d3d-compiler --no-compiler-runtime D:\pyProject\step-patch-optimizer\build\windows-msvc-debug\Debug\step-patch-optimizer.exe
+%USERPROFILE%\vcpkg\installed\x64-windows\tools\Qt6\bin\windeployqt.debug.bat --no-translations --no-system-d3d-compiler --no-compiler-runtime D:\pyProject\step-patch-optimizer\build\windows-msvc-debug\Debug\step-patch-optimizer.exe
 ```
 
 成功后 exe 同级目录应包含：

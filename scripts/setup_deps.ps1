@@ -1,11 +1,13 @@
 param(
-    [string]$VcpkgRoot = "C:\Users\27836\vcpkg",
+    [string]$VcpkgRoot = $(if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USERPROFILE "vcpkg" }),
     [string]$Triplet = "x64-windows"
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$env:VCPKG_ROOT = $VcpkgRoot
+[Environment]::SetEnvironmentVariable("VCPKG_ROOT", $VcpkgRoot, "User")
 $vcpkgExe = Join-Path $VcpkgRoot "vcpkg.exe"
 $bootstrap = Join-Path $VcpkgRoot "bootstrap-vcpkg.bat"
 
