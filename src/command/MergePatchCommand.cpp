@@ -112,10 +112,15 @@ std::vector<LockedEdgeRef> remapLockedEdges(
 
 }
 
-MergePatchCommand::MergePatchCommand(double angularThresholdDegrees, double minEdgeLength, double linearTolerance)
+MergePatchCommand::MergePatchCommand(
+    double angularThresholdDegrees,
+    double minEdgeLength,
+    double linearTolerance,
+    bool concatBsplines)
     : angularThresholdDegrees_(angularThresholdDegrees),
       minEdgeLength_(minEdgeLength),
-      linearTolerance_(linearTolerance) {}
+      linearTolerance_(linearTolerance),
+      concatBsplines_(concatBsplines) {}
 
 const char* MergePatchCommand::name() const {
     return "MergePatchCommand";
@@ -145,6 +150,7 @@ Result MergePatchCommand::execute(CommandContext& context) {
     SameDomainUnifyOptions options;
     options.angular_tolerance_degrees = angularThresholdDegrees_;
     options.linear_tolerance = linearTolerance_;
+    options.concat_bsplines = concatBsplines_;
 
     beforeDocument_ = context.document;
     SameDomainUnifier unifier;

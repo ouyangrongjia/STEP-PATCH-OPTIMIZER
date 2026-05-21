@@ -59,6 +59,10 @@ ParameterPanel::ParameterPanel(QWidget* parent) : QWidget(parent) {
     preserveUserLockedEdges_->setChecked(true);
     mergeLayout->addRow(preserveUserLockedEdges_);
 
+    concatBsplines_ = new QCheckBox("连接 B-spline 边", mergeGroup);
+    concatBsplines_->setChecked(true);
+    mergeLayout->addRow(concatBsplines_);
+
     enableRefit_ = new QCheckBox("启用重拟合", mergeGroup);
     enableRefit_->setChecked(false);
     mergeLayout->addRow(enableRefit_);
@@ -77,6 +81,7 @@ AlgorithmParameters ParameterPanel::parameters() const {
         mergeMode_->currentText(),
         preserveFeatureEdges_->isChecked(),
         preserveUserLockedEdges_->isChecked(),
+        concatBsplines_->isChecked(),
         enableRefit_->isChecked()
     };
 }

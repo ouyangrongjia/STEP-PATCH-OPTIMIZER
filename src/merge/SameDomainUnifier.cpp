@@ -21,6 +21,7 @@ SameDomainUnifyResult SameDomainUnifier::unify(
     SameDomainUnifyResult result;
     result.before = document.stats();
     result.protected_edges = static_cast<int>(protectedEdges.size());
+    result.concat_bsplines = options.concat_bsplines;
 
     if (!document.hasShape()) {
         result.document = document;
@@ -47,6 +48,12 @@ SameDomainUnifyResult SameDomainUnifier::unify(
     unifier.Build();
     result.document = ShapeDocument(unifier.Shape(), document.sourcePath());
     result.after = result.document.stats();
+    result.face_reduction_ratio = result.before.faces > 0
+        ? static_cast<double>(result.before.faces - result.after.faces) / result.before.faces
+        : 0.0;
+    result.edge_reduction_ratio = result.before.edges > 0
+        ? static_cast<double>(result.before.edges - result.after.edges) / result.before.edges
+        : 0.0;
     return result;
 }
 

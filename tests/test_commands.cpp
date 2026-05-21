@@ -76,9 +76,10 @@ void run_command_tests() {
     spo::DetectFeatureCommand detect(25.0, 0.0);
     assert(detect.execute(context).success());
 
-    spo::MergePatchCommand merge(25.0, 0.0, 0.001);
+    spo::MergePatchCommand merge(25.0, 0.0, 0.001, false);
     assert(merge.execute(context).success());
     assert(context.document.hasShape());
+    assert(!merge.result().concat_bsplines);
 
     spo::ValidateShapeCommand validate;
     assert(validate.execute(context).success());
@@ -154,7 +155,7 @@ void run_command_tests() {
         load_context(mergeContext, sample);
         assert(spo::LockEdgeCommand(1).execute(mergeContext).success());
         const auto beforeStats = mergeContext.document.stats();
-        assert(history.execute(std::make_unique<spo::MergePatchCommand>(25.0, 0.0, 0.001), mergeContext).success());
+        assert(history.execute(std::make_unique<spo::MergePatchCommand>(25.0, 0.0, 0.001, false), mergeContext).success());
         const auto afterStats = mergeContext.document.stats();
         assert(mergeContext.document.hasShape());
         assert(spo::lockedEdgeIds(mergeContext.lockedEdges).size() <= 1);
@@ -173,9 +174,27 @@ void run_command_tests() {
         spo::CommandContext protectedContext;
         load_context(protectedContext, sample);
         assert(spo::LockEdgeCommand(1).execute(protectedContext).success());
-        spo::MergePatchCommand mergeWithLockedEdge(25.0, 1000000.0, 0.001);
+        spo::MergePatchCommand mergeWithLockedEdge(25.0, 1000000.0, 0.001, false);
         assert(mergeWithLockedEdge.execute(protectedContext).success());
         assert(mergeWithLockedEdge.result().protected_edges == 1);
+    }
+
+    {
+        spo::CommandContext concatFalseContext;
+        load_context(concatFalseContext, sample);
+        spo::MergePatchCommand mergeWithoutConcat(25.0, 0.0, 0.001, false);
+        assert(mergeWithoutConcat.execute(concatFalseContext).success());
+        assert(concatFalseContext.document.hasShape());
+        assert(!mergeWithoutConcat.result().concat_bsplines);
+    }
+
+    {
+        spo::CommandContext concatTrueContext;
+        load_context(concatTrueContext, sample);
+        spo::MergePatchCommand mergeWithConcat(25.0, 0.0, 0.001, true);
+        assert(mergeWithConcat.execute(concatTrueContext).success());
+        assert(concatTrueContext.document.hasShape());
+        assert(mergeWithConcat.result().concat_bsplines);
     }
 
     {

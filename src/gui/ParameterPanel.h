@@ -24,6 +24,7 @@ private:
     QComboBox* mergeMode_ = nullptr;
     QCheckBox* preserveFeatureEdges_ = nullptr;
     QCheckBox* preserveUserLockedEdges_ = nullptr;
+    QCheckBox* concatBsplines_ = nullptr;
     QCheckBox* enableRefit_ = nullptr;
 };
 

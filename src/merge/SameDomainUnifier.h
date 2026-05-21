@@ -20,6 +20,9 @@ struct SameDomainUnifyResult {
     ShapeStats before;
     ShapeStats after;
     int protected_edges = 0;
+    bool concat_bsplines = false;
+    double face_reduction_ratio = 0.0;
+    double edge_reduction_ratio = 0.0;
 };
 
 class SameDomainUnifier {

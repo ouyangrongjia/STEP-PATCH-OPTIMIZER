@@ -67,8 +67,13 @@ FeatureEdgeDetectionResult AppController::detectFeatureEdges(double angularThres
 SameDomainUnifyResult AppController::unifySameDomain(
     double angularThresholdDegrees,
     double minEdgeLength,
-    double linearTolerance) {
-    auto command = std::make_unique<MergePatchCommand>(angularThresholdDegrees, minEdgeLength, linearTolerance);
+    double linearTolerance,
+    bool concatBsplines) {
+    auto command = std::make_unique<MergePatchCommand>(
+        angularThresholdDegrees,
+        minEdgeLength,
+        linearTolerance,
+        concatBsplines);
     auto* commandPtr = command.get();
     const auto status = execute(std::move(command));
     if (!status.success()) {

@@ -10,7 +10,11 @@ namespace spo {
 
 class MergePatchCommand final : public Command {
 public:
-    MergePatchCommand(double angularThresholdDegrees, double minEdgeLength, double linearTolerance);
+    MergePatchCommand(
+        double angularThresholdDegrees,
+        double minEdgeLength,
+        double linearTolerance,
+        bool concatBsplines);
     const char* name() const override;
     Result execute(CommandContext& context) override;
     bool undoable() const override;
@@ -22,6 +26,7 @@ private:
     double angularThresholdDegrees_ = 25.0;
     double minEdgeLength_ = 0.0;
     double linearTolerance_ = 0.001;
+    bool concatBsplines_ = false;
     ShapeDocument beforeDocument_;
     ShapeDocument afterDocument_;
     std::vector<LockedEdgeRef> afterLockedEdges_;

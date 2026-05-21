@@ -407,25 +407,32 @@ void MainWindow::applyMerge() {
     const auto result = controller_.unifySameDomain(
         params.angular_threshold_degrees,
         params.min_edge_length,
-        params.linear_tolerance);
+        params.linear_tolerance,
+        params.concat_bsplines);
 
     const auto& document = controller_.document();
     modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
     viewer_->displayDocument(document);
     syncLockedEdges();
-    inspectPanel_->showReport(QString("同域合并完成\n保护边数量：%1\n合并前 face：%2\n合并后 face：%3\n合并前 edge：%4\n合并后 edge：%5\n合并前 solid：%6\n合并后 solid：%7")
+    inspectPanel_->showReport(QString("同域合并完成\nconcat_bsplines：%1\n保护边数量：%2\n合并前 face：%3\n合并后 face：%4\nface reduction ratio：%5%\n合并前 edge：%6\n合并后 edge：%7\nedge reduction ratio：%8%\n合并前 solid：%9\n合并后 solid：%10")
+        .arg(result.concat_bsplines ? "true" : "false")
         .arg(result.protected_edges)
         .arg(result.before.faces)
         .arg(result.after.faces)
+        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
         .arg(result.before.edges)
         .arg(result.after.edges)
+        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
         .arg(result.before.solids)
         .arg(result.after.solids));
-    logPanel_->appendInfo(QString("同域合并完成：face %1 -> %2，edge %3 -> %4，保护边 %5")
+    logPanel_->appendInfo(QString("同域合并完成：concat_bsplines=%1，face %2 -> %3（%4%），edge %5 -> %6（%7%），保护边 %8")
+        .arg(result.concat_bsplines ? "true" : "false")
         .arg(result.before.faces)
         .arg(result.after.faces)
+        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
         .arg(result.before.edges)
         .arg(result.after.edges)
+        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
         .arg(result.protected_edges));
     setStatus("同域合并完成");
     refreshUndoRedoActions();

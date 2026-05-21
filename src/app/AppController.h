@@ -32,7 +32,8 @@ public:
     SameDomainUnifyResult unifySameDomain(
         double angularThresholdDegrees,
         double minEdgeLength,
-        double linearTolerance);
+        double linearTolerance,
+        bool concatBsplines);
     bool hasDocument() const;
     const ShapeDocument& document() const;
     ShapeValidationReport validateShape();

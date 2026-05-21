@@ -18,6 +18,7 @@ struct AlgorithmParameters {
     QString merge_mode = "同域合并";
     bool preserve_feature_edges = true;
     bool preserve_user_locked_edges = true;
+    bool concat_bsplines = true;
     bool enable_refit = false;
 };
 
