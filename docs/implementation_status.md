@@ -1,0 +1,424 @@
+# 实现状态与待办清单
+
+> 文档定位：本文件用于记录当前工程实现进度、已完成功能、部分完成模块、待办事项与验证方式。  
+> 长期模块规划放在 `module_design.md`，本文件随开发进度持续更新。
+
+---
+
+## 1. 当前版本概览
+
+当前项目已形成 MVP 工程闭环：
+
+```text
+STEP 读取
+→ B-rep 拓扑索引构建
+→ OCCT Viewer 显示
+→ face/edge 选择与多选
+→ 特征边检测
+→ 用户锁边/解锁
+→ same-domain 合并
+→ undo/redo
+→ 基础合法性检查
+→ STEP 导出
+```
+
+当前重点已经从“搭建项目结构”转向：
+
+```text
+1. 提升合并候选区域的可控性。
+2. 补全项目保存与状态恢复。
+3. 增强验证指标与实验报告。
+4. 引入更强的特征线识别能力。
+```
+
+---
+
+## 2. 最新进度同步
+
+本次状态更新确认以下事项已经完成：
+
+```text
+1. UnlockEdgeCommand 已补充 document 校验。
+2. 用户锁边进入 protectedEdges 的测试已补充。
+3. GUI 手动流程验证已通过。
+4. MergePatchCommand undo 时清空锁边状态是当前确认的正确语义。
+```
+
+其中，`MergePatchCommand` 的撤销语义当前定义为：
+
+```text
+撤销合并曲面片时，取消合并后产生或保留的锁边状态。
+```
+
+这是一个明确设计决策，不再作为待修复问题记录。
+
+---
+
+## 3. 已实现功能清单
+
+### 3.1 GUI 模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| 主窗口布局 | 已完成 | 包含模型树、3D Viewer、参数面板、日志/检查/验证/报告区域 |
+| STEP 模型显示 | 已完成 | 基于 OCCT Viewer |
+| 鼠标中键旋转视角 | 已完成 | 支持基础视角浏览 |
+| 鼠标滚轮缩放 | 已完成 | 支持放大 / 缩小 |
+| face 选择 | 已完成 | 支持面选择模式 |
+| edge 选择 | 已完成 | 支持边选择模式 |
+| Shift 多选 face/edge | 已完成 | 支持多选与 toggle |
+| Ctrl 点击移除选择 | 已完成 | 支持从选择集中移除 |
+| 右键菜单 | 部分完成 | edge 模式已接入锁边/解锁；face/candidate 菜单多为预留 |
+| 特征线显示 | 已完成基础版 | 显示自动检测出的特征边 |
+| 锁定边显示 | 已完成 | 锁定边以高亮方式显示 |
+| 合并候选预览 | 入口已完成 | 后端 MergePlanner 尚未实现 |
+| undo/redo 按钮 | 已完成 | 已接入 Ctrl+Z / Ctrl+Y |
+| GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
+
+### 3.2 AppController 模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| 打开 STEP/STP | 已完成 | `openStepFile` |
+| 导出 STEP | 已完成 | `exportStepFile` |
+| 导出后二次读取校验 | 已完成 | `verifyStepFileReadable` |
+| 特征边检测 | 已完成基础版 | `detectFeatureEdges` |
+| same-domain 合并 | 已完成 | `unifySameDomain` |
+| 合法性检查 | 已完成基础版 | `validateShape` |
+| 锁边 / 解锁边 | 已完成 | `lockEdges` / `unlockEdges` |
+| undo / redo | 已完成 | `undo` / `redo` |
+| undo/redo 状态查询 | 已完成 | `canUndo` / `canRedo` |
+
+### 3.3 Command 模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| `Command` 基类 | 已完成 | 支持 `execute`、`undoable`、`undo`、`redo` |
+| `CommandContext` | 已完成基础版 | 保存当前文档、检测结果、验证报告、锁边状态等 |
+| `CommandHistory` | 已完成 | 维护 undoStack / redoStack / executedCommands |
+| `LoadStepCommand` | 已完成 | 加载 STEP；不可撤销 |
+| `DetectFeatureCommand` | 已完成基础版 | 检测特征边；不可撤销 |
+| `ValidateShapeCommand` | 已完成基础版 | 生成验证报告；不可撤销 |
+| `ExportStepCommand` | 已完成 | 导出 STEP；不可撤销 |
+| `MergePatchCommand` | 已完成基础版 | 支持 same-domain 合并和 undo/redo |
+| `LockEdgeCommand` | 已完成 | 支持多边锁定和 undo/redo |
+| `UnlockEdgeCommand` | 已完成 | 支持多边解锁、document 校验和 undo/redo |
+| `LockedEdgeRef` | 已完成 | 保存锁边几何签名，用于合并后边 ID 重映射 |
+
+### 3.4 IO 模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| STEP 读取 | 已完成 | 支持读取 `.step` / `.stp` |
+| STEP 写出 | 已完成 | 支持导出 STEP |
+| STEP 二次读取验证 | 已完成 | 导出后可重新读取验证 |
+| 项目文件保存 | 未完成 | `ProjectSerializer` 仍待实现 |
+| 项目文件恢复 | 未完成 | 需要保存锁边、参数、操作日志等 |
+
+### 3.5 B-rep 拓扑模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| `ShapeDocument` | 已完成基础版 | 保存 shape、source path、stats、topology |
+| `FaceIndex` | 已完成基础版 | face 编号与查询 |
+| `EdgeIndex` | 已完成基础版 | edge 编号与查询 |
+| `TopologyGraph` | 已完成基础版 | 支持 face/edge 查询、邻接关系、面边关系 |
+| face/edge GUI 命中查询 | 已完成 | 支持从 TopoDS_Shape 反查 ID |
+| 面属性统计 | 待增强 | 面积、中心点、平均法向、曲面类型等仍可扩展 |
+| 边属性统计 | 待增强 | 长度、曲线类型、曲率等仍可扩展 |
+
+### 3.6 特征线模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| sharp edge 检测 | 已完成基础版 | 基于二面角阈值 |
+| free edge 检测 | 已完成基础版 | 用于识别开口边 |
+| multiple edge 检测 | 已完成基础版 | 用于识别异常拓扑边 |
+| min edge length 过滤 | 已完成基础版 | 可过滤过短边 |
+| 用户锁边 | 已完成 | 通过 `CommandContext.lockedEdges` 维护 |
+| 用户锁边参与合并保护 | 已完成 | 合并时加入 protectedEdges，并已有测试覆盖 |
+| 曲率特征线 | 未完成 | ridge / valley / weak feature 仍待实现 |
+| 圆角起止线识别 | 未完成 | 后续由 BoundaryClassifier 增强 |
+| 曲面类型变化识别 | 未完成 | 后续可结合 B-rep surface type |
+
+### 3.7 合并模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| `SameDomainUnifier` | 已完成基础版 | 当前主合并能力 |
+| 自动特征边保护 | 已完成 | sharp/free/multiple edges 进入保护边 |
+| 用户锁边保护 | 已完成 | locked edges 进入 protectedEdges |
+| 用户锁边保护测试 | 已完成 | 已补充 protectedEdges 测试 |
+| 合并前后统计 | 已完成基础版 | before/after stats |
+| 合并撤销/重做 | 已完成 | 通过 `MergePatchCommand` 快照实现 |
+| 合并撤销时清空锁边 | 已确认 | 当前定义为正确交互语义 |
+| 锁边重映射 | 已完成基础版 | 通过 `LockedEdgeRef` 几何签名尝试映射 |
+| `MergePlanner` | 未完成 | 当前基本为占位 |
+| `MergeRegionGrower` | 未完成 | 当前基本为占位 |
+| `MergeCandidate` 预览 | 未完成 | GUI 有入口，后端未接入 |
+| `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
+
+### 3.8 验证模块
+
+| 功能 | 状态 | 说明 |
+|---|---:|---|
+| shape 是否存在 | 已完成 |
+| BRepCheck | 已完成基础版 |
+| stats 统计 | 已完成 |
+| free edge 数量 | 已完成 |
+| multiple edge 数量 | 已完成 |
+| 导出后二次读取验证 | 已完成 |
+| max deviation | 未完成 |
+| mean / RMS deviation | 未完成 |
+| feature preserve rate | 未完成 |
+| locked edge preserve rate | 未完成 |
+| 实验报告生成 | 未完成 |
+
+### 3.9 测试模块
+
+| 测试内容 | 状态 | 说明 |
+|---|---:|---|
+| STEP IO 测试 | 已完成基础版 |
+| TopologyGraph 测试 | 已完成基础版 |
+| FeatureEdge 测试 | 已完成基础版 |
+| SameDomainMerge 测试 | 已完成基础版 |
+| Validation 测试 | 已完成基础版 |
+| CommandHistory 测试 | 已完成 |
+| LockEdgeCommand 测试 | 已完成 |
+| UnlockEdgeCommand 测试 | 已完成 |
+| UnlockEdgeCommand 无文档校验测试 | 已完成 |
+| MergePatchCommand undo/redo 测试 | 已完成 |
+| 用户锁边进入 protectedEdges 测试 | 已完成 |
+| AppController 打开新文档清历史测试 | 已完成 |
+| GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
+| GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
+
+---
+
+## 4. 当前已完成的关键工程闭环
+
+### 4.1 锁边保护闭环
+
+```text
+边选择模式
+→ Shift 多选边
+→ 右键锁定选中边
+→ 锁边高亮显示
+→ 执行 same-domain 合并
+→ 用户锁定边进入 protectedEdges
+→ 合并尽量不跨越锁定边
+```
+
+### 4.2 undo/redo 闭环
+
+```text
+执行可撤销命令
+→ 命令进入 undoStack
+→ Ctrl+Z 撤销
+→ 命令进入 redoStack
+→ Ctrl+Y 重做
+```
+
+当前可撤销命令：
+
+```text
+1. MergePatchCommand
+2. LockEdgeCommand
+3. UnlockEdgeCommand
+```
+
+当前不可撤销命令：
+
+```text
+1. LoadStepCommand
+2. DetectFeatureCommand
+3. ValidateShapeCommand
+4. ExportStepCommand
+```
+
+### 4.3 STEP 处理闭环
+
+```text
+打开 STEP
+→ 显示模型
+→ 检测特征边
+→ 锁定关键边
+→ 执行合并
+→ 合法性检查
+→ 导出 STEP
+→ 二次读取校验
+```
+
+---
+
+## 5. 已确认设计决策
+
+### 5.1 MergePatchCommand undo 清空锁边状态
+
+当前语义：
+
+```text
+用户先锁边
+→ 执行合并
+→ 撤销合并
+→ 模型回到合并前
+→ 锁边状态清空
+```
+
+该语义已确认是当前正确设计。
+
+理由：
+
+```text
+1. 合并前后拓扑 edge ID 可能变化。
+2. 合并后的锁边状态不一定能安全映射回合并前模型。
+3. 撤销合并时清空锁边，可以避免锁边引用错误拓扑。
+4. 用户可以在回退后的模型上重新选择并锁定边。
+```
+
+### 5.2 UnlockEdgeCommand 必须要求已有文档
+
+当前语义：
+
+```text
+没有已加载模型时，LockEdgeCommand 和 UnlockEdgeCommand 都应返回错误。
+```
+
+这保证锁边/解锁边行为一致。
+
+### 5.3 用户锁边是 protectedEdges 的一部分
+
+当前语义：
+
+```text
+protectedEdges = 自动检测特征边 + 用户锁定边
+```
+
+目的：
+
+```text
+1. 自动特征边保护棱边、free edge、multiple edge。
+2. 用户锁边保护人工认为重要但算法未识别的边。
+3. same-domain 合并不应跨越 protectedEdges。
+```
+
+---
+
+## 6. 待办清单
+
+## P0：稳定性收口
+
+| 任务 | 状态 | 验收方式 |
+|---|---:|---|
+| 手动完整验证 GUI 主流程 | 已完成 | 打开、选择、多选、锁边、合并、撤销、重做、验证、导出 |
+| 确认 MergePatchCommand undo 锁边语义 | 已完成 | 已确认撤销合并时清空锁边是正确语义 |
+| 补 UnlockEdgeCommand document 校验 | 已完成 | 无模型时解锁返回错误 |
+| 补充用户锁边进入 protectedEdges 的测试 | 已完成 | 已有测试验证锁边会贡献 protectedEdges |
+| 复杂 STEP 样例回归测试 | 待做 | 选择 3-5 个潮玩件或碎片 STP 样例 |
+
+## P1：合并候选规划
+
+| 任务 | 状态 | 验收方式 |
+|---|---:|---|
+| 实现 MergeCandidate 数据结构 | 待做 | 能表达候选区域 face 集合、边界、风险说明 |
+| 实现 MergePlanner 基础候选生成 | 待做 | 能从 TopologyGraph 生成候选区域 |
+| 实现 MergeRegionGrower 基础区域生长 | 待做 | 能根据特征边/锁边阻断区域扩张 |
+| GUI 显示候选区域 | 待做 | 可高亮候选区域 |
+| 用户接受/拒绝候选区域 | 待做 | 可从 GUI 应用或跳过候选 |
+
+## P2：项目保存与报告
+
+| 任务 | 状态 | 验收方式 |
+|---|---:|---|
+| 实现 ProjectSerializer | 待做 | 保存 `.spo.json` |
+| 保存用户锁边状态 | 待做 | 重开项目后锁边可恢复 |
+| 保存参数配置 | 待做 | 重开项目后参数可恢复 |
+| 保存操作日志 | 待做 | 项目文件中记录核心操作 |
+| 实现 ReportGenerator 基础报告 | 待做 | 输出 face/edge 变化、free/multiple edge、BRepCheck |
+| 实现导出批量实验报告 | 待做 | 可用于论文/组会实验记录 |
+
+## P3：高级特征线与重拟合
+
+| 任务 | 状态 | 验收方式 |
+|---|---:|---|
+| CurvatureEstimator 实用化 | 待做 | 能估计局部曲率变化 |
+| BoundaryClassifier 实用化 | 待做 | 能识别圆角起止线、凸凹分界 |
+| ridge / valley 检测 | 待做 | 能在潮玩件凸起/凹陷处生成候选特征线 |
+| SurfaceRefitter 局部重拟合 | 待做 | 能对局部碎片区域拟合新 B-spline |
+| 局部 patch layout 重构 | 待做 | 能减少 tiny/slender patch |
+| 学习辅助候选区域推荐 | 待做 | 作为研究增强方向，不进入 MVP |
+
+---
+
+## 7. 当前建议验证命令
+
+Windows 本地构建与测试：
+
+```powershell
+cd D:\pyProject\step-patch-optimizer
+$env:Path='C:\Program Files\CMake\bin;C:\Users\27836\vcpkg;' + $env:Path
+
+cmake --build --preset windows-msvc-debug --target step-patch-optimizer
+ctest --preset windows-msvc-debug --output-on-failure --timeout 30
+```
+
+手动 GUI 验证流程：
+
+```text
+1. 打开一个 STEP/STP。
+2. 切换到边选择模式。
+3. Shift + 左键多选几条边。
+4. 右键锁定选中边，确认锁边高亮。
+5. Ctrl+Z，确认锁边撤销。
+6. Ctrl+Y，确认锁边恢复。
+7. 执行特征边检测。
+8. 执行 same-domain 合并。
+9. Ctrl+Z，确认模型回退并清空合并相关锁边状态。
+10. Ctrl+Y，确认模型恢复。
+11. 执行合法性检查。
+12. 导出 STEP。
+13. 确认导出后二次读取校验通过。
+```
+
+---
+
+## 8. 近期推荐开发顺序
+
+建议下一阶段进入合并候选规划，不再继续堆 GUI 基础按钮：
+
+```text
+1. 用真实潮玩件 STEP 做回归测试。
+2. 实现 MergeCandidate 数据结构。
+3. 实现 MergePlanner 最小候选生成。
+4. 实现 MergeRegionGrower 基础区域生长。
+5. 实现候选区域 GUI 高亮预览。
+6. 实现用户接受 / 拒绝候选区域。
+7. 再考虑 ProjectSerializer。
+```
+
+---
+
+## 9. 版本进度判断
+
+当前阶段判断：
+
+```text
+MVP 基础闭环：已完成
+锁边交互闭环：已完成
+最小 undo/redo：已完成
+same-domain 合并闭环：已完成
+P0 稳定性收口：基本完成
+复杂 STEP 样例回归测试：待做
+合并候选规划：未完成
+项目保存恢复：未完成
+完整误差评估：未完成
+高级特征线：未完成
+局部重拟合：未完成
+```
+
+总体评价：
+
+```text
+当前项目已经具备可演示的工程雏形。
+下一步重点应转向候选区域规划、真实潮玩件样例测试、报告指标和状态持久化。
+```
