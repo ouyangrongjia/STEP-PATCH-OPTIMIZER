@@ -15,6 +15,8 @@
 #include <BRep_Builder.hxx>
 #include <TopoDS_Compound.hxx>
 
+#include <algorithm>
+#include <array>
 #include <QContextMenuEvent>
 #include <QFocusEvent>
 #include <QKeyEvent>
@@ -40,6 +42,22 @@ TopoDS_Shape shapeFromOwner(const Handle(SelectMgr_EntityOwner)& owner) {
         return {};
     }
     return brepOwner->Shape();
+}
+
+const Quantity_Color& candidateColor(std::size_t index) {
+    static const std::array<Quantity_Color, 10> colors = {
+        Quantity_Color(0.00, 0.45, 1.00, Quantity_TOC_RGB),
+        Quantity_Color(0.00, 0.80, 0.25, Quantity_TOC_RGB),
+        Quantity_Color(1.00, 0.42, 0.00, Quantity_TOC_RGB),
+        Quantity_Color(0.55, 0.20, 1.00, Quantity_TOC_RGB),
+        Quantity_Color(1.00, 0.00, 0.45, Quantity_TOC_RGB),
+        Quantity_Color(0.00, 0.85, 0.85, Quantity_TOC_RGB),
+        Quantity_Color(0.95, 0.90, 0.00, Quantity_TOC_RGB),
+        Quantity_Color(0.00, 0.95, 0.55, Quantity_TOC_RGB),
+        Quantity_Color(0.90, 0.15, 0.95, Quantity_TOC_RGB),
+        Quantity_Color(1.00, 0.15, 0.10, Quantity_TOC_RGB)
+    };
+    return colors[index % colors.size()];
 }
 
 }
@@ -75,6 +93,9 @@ void OccViewWidget::displayDocument(const ShapeDocument& document) {
     hoverShape_.Nullify();
     featureEdgeShape_.Nullify();
     lockedEdgeShape_.Nullify();
+    mergeCandidateShapes_.clear();
+    mergeCandidateFaceColors_.clear();
+    mergePreviewVisible_ = false;
     displayedShape_ = new AIS_ColoredShape(document.shape());
     displayedShape_->SetMaterial(Graphic3d_NOM_PLASTIC);
     displayedShape_->SetColor(Quantity_Color(1.0, 0.74, 0.16, Quantity_TOC_RGB));
@@ -107,6 +128,9 @@ void OccViewWidget::clearDocument() {
     hoverShape_.Nullify();
     featureEdgeShape_.Nullify();
     lockedEdgeShape_.Nullify();
+    mergeCandidateShapes_.clear();
+    mergeCandidateFaceColors_.clear();
+    mergePreviewVisible_ = false;
     redrawView();
 }
 
@@ -184,6 +208,103 @@ void OccViewWidget::showLockedEdges(const std::set<EdgeId>& edgeIds) {
     redrawView();
 }
 
+void OccViewWidget::showMergeCandidates(
+    const std::vector<MergeCandidate>& candidates,
+    int maxCandidatesToShow,
+    bool showAll) {
+    if (context_.IsNull() || topology_ == nullptr) {
+        return;
+    }
+
+    clearMergeCandidates();
+    if (candidates.empty()) {
+        return;
+    }
+
+    std::vector<const MergeCandidate*> sortedCandidates;
+    sortedCandidates.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        if (candidate.valid && !candidate.faces.empty()) {
+            sortedCandidates.push_back(&candidate);
+        }
+    }
+
+    std::sort(sortedCandidates.begin(), sortedCandidates.end(), [](const auto* lhs, const auto* rhs) {
+        if (lhs->face_count != rhs->face_count) {
+            return lhs->face_count > rhs->face_count;
+        }
+        return lhs->total_area > rhs->total_area;
+    });
+
+    const auto displayCount = showAll
+        ? sortedCandidates.size()
+        : std::min<std::size_t>(sortedCandidates.size(), static_cast<std::size_t>(std::max(0, maxCandidatesToShow)));
+
+    for (std::size_t index = 0; index < displayCount; ++index) {
+        const auto* candidate = sortedCandidates[index];
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+        bool hasFace = false;
+        for (const auto faceId : candidate->faces) {
+            if (faceId < topology_->faceCount()) {
+                builder.Add(compound, topology_->face(faceId));
+                hasFace = true;
+            }
+        }
+        if (!hasFace) {
+            continue;
+        }
+
+        const auto& color = candidateColor(index);
+        for (const auto faceId : candidate->faces) {
+            if (faceId < topology_->faceCount()) {
+                mergeCandidateFaceColors_.push_back({faceId, color});
+            }
+        }
+
+        Handle(AIS_Shape) boundaryOverlay = new AIS_Shape(compound);
+        boundaryOverlay->SetDisplayMode(AIS_WireFrame);
+        boundaryOverlay->SetColor(color);
+        boundaryOverlay->SetWidth(4.0);
+        context_->Display(boundaryOverlay, Standard_False);
+        context_->Deactivate(boundaryOverlay);
+        mergeCandidateShapes_.push_back(boundaryOverlay);
+    }
+
+    applyCustomAspects();
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+bool OccViewWidget::showMergeCandidateById(const std::vector<MergeCandidate>& candidates, int candidateId) {
+    const auto it = std::find_if(candidates.begin(), candidates.end(), [candidateId](const auto& candidate) {
+        return candidate.candidate_id == candidateId;
+    });
+    if (it == candidates.end()) {
+        clearMergeCandidates();
+        return false;
+    }
+
+    showMergeCandidates(std::vector<MergeCandidate>{*it}, 1, true);
+    return true;
+}
+
+void OccViewWidget::clearMergeCandidates() {
+    if (!context_.IsNull()) {
+        for (const auto& shape : mergeCandidateShapes_) {
+            if (!shape.IsNull()) {
+                context_->Remove(shape, Standard_False);
+            }
+        }
+        context_->UpdateCurrentViewer();
+    }
+    mergeCandidateShapes_.clear();
+    mergeCandidateFaceColors_.clear();
+    applyCustomAspects();
+    redrawView();
+}
+
 void OccViewWidget::setFeatureLinesVisible(bool visible) {
     featureLinesVisible_ = visible;
     if (!context_.IsNull() && !displayedShape_.IsNull()) {
@@ -195,8 +316,11 @@ void OccViewWidget::setFeatureLinesVisible(bool visible) {
 
 void OccViewWidget::setMergePreviewVisible(bool visible) {
     mergePreviewVisible_ = visible;
+    if (!visible) {
+        clearMergeCandidates();
+    }
     if (!context_.IsNull() && !displayedShape_.IsNull()) {
-        displayedShape_->SetTransparency(visible ? 0.25 : 0.0);
+        displayedShape_->SetTransparency(0.0);
         context_->Redisplay(displayedShape_, Standard_False);
     }
     redrawView();
@@ -627,7 +751,22 @@ void OccViewWidget::redrawSelectedShapes() {
         return;
     }
 
+    applyCustomAspects();
+    redrawView();
+}
+
+void OccViewWidget::applyCustomAspects() {
+    if (context_.IsNull() || displayedShape_.IsNull() || topology_ == nullptr) {
+        return;
+    }
+
     displayedShape_->ClearCustomAspects();
+    for (const auto& [faceId, color] : mergeCandidateFaceColors_) {
+        if (faceId < topology_->faceCount()) {
+            displayedShape_->SetCustomColor(topology_->face(faceId), color);
+            displayedShape_->SetCustomTransparency(topology_->face(faceId), 0.0);
+        }
+    }
     for (const auto faceId : selectedFaces_) {
         if (faceId < topology_->faceCount()) {
             displayedShape_->SetCustomColor(
@@ -647,7 +786,6 @@ void OccViewWidget::redrawSelectedShapes() {
 
     context_->Redisplay(displayedShape_, Standard_False);
     context_->UpdateCurrentViewer();
-    redrawView();
 }
 
 void OccViewWidget::initializeOcct() {

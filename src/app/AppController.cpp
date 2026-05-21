@@ -106,6 +106,10 @@ const ShapeDocument& AppController::document() const {
     return context_.document;
 }
 
+const FeatureEdgeDetectionResult& AppController::featureEdges() const {
+    return context_.featureEdges;
+}
+
 ShapeValidationReport AppController::validateShape() {
     const auto result = execute(std::make_unique<ValidateShapeCommand>());
     if (!result.success()) {

@@ -41,6 +41,7 @@ public:
         bool concatBsplines);
     bool hasDocument() const;
     const ShapeDocument& document() const;
+    const FeatureEdgeDetectionResult& featureEdges() const;
     ShapeValidationReport validateShape();
     Result lockEdges(const std::vector<EdgeId>& edgeIds);
     Result unlockEdges(const std::vector<EdgeId>& edgeIds);

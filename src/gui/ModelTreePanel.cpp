@@ -25,7 +25,12 @@ void ModelTreePanel::showEmpty() {
     tree_->expandAll();
 }
 
-void ModelTreePanel::showDocument(const ShapeDocument& document, int lockedEdgeCount) {
+void ModelTreePanel::showDocument(
+    const ShapeDocument& document,
+    int lockedEdgeCount,
+    int mergeCandidateCount,
+    int visibleMergeCandidateCount,
+    const FeatureEdgeDetectionResult* featureEdges) {
     tree_->clear();
     const auto& stats = document.stats();
 
@@ -47,11 +52,23 @@ void ModelTreePanel::showDocument(const ShapeDocument& document, int lockedEdgeC
     new QTreeWidgetItem(edges, QStringList() << "边索引已就绪");
 
     auto* features = new QTreeWidgetItem(root, QStringList() << "特征边");
-    new QTreeWidgetItem(features, QStringList() << "锐边：未检测");
+    if (featureEdges != nullptr) {
+        new QTreeWidgetItem(features, QStringList() << QString("特征边总数：%1").arg(featureEdges->edges.size()));
+        new QTreeWidgetItem(features, QStringList() << QString("锐边：%1").arg(featureEdges->sharp_edges));
+        new QTreeWidgetItem(features, QStringList() << QString("自由边：%1").arg(featureEdges->free_edges));
+        new QTreeWidgetItem(features, QStringList() << QString("多重边：%1").arg(featureEdges->multiple_edges));
+    } else {
+        new QTreeWidgetItem(features, QStringList() << "锐边：未检测");
+    }
     new QTreeWidgetItem(features, QStringList() << QString("用户锁定边：%1").arg(lockedEdgeCount));
 
     auto* candidates = new QTreeWidgetItem(root, QStringList() << "合并候选区域");
-    new QTreeWidgetItem(candidates, QStringList() << "尚未生成候选区域");
+    if (mergeCandidateCount > 0) {
+        new QTreeWidgetItem(candidates, QStringList() << QString("候选总数：%1").arg(mergeCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("当前高亮：%1").arg(visibleMergeCandidateCount));
+    } else {
+        new QTreeWidgetItem(candidates, QStringList() << "尚未生成候选区域");
+    }
 
     tree_->expandToDepth(1);
 }

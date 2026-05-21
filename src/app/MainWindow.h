@@ -39,6 +39,9 @@ private:
     void exportStepFile();
     void detectFeatureEdges();
     void previewMergeCandidates();
+    void showAllMergeCandidates();
+    void highlightMergeCandidateById();
+    void clearMergeCandidatePreview();
     void applyMerge();
     void validateShape();
     void resetView();
@@ -47,6 +50,7 @@ private:
     void refreshUndoRedoActions();
     void refreshDocumentViews();
     void syncLockedEdges();
+    void refreshModelTree();
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -72,6 +76,9 @@ private:
     QAction* selectCandidateAction_ = nullptr;
     QAction* detectAction_ = nullptr;
     QAction* previewMergeAction_ = nullptr;
+    QAction* showAllMergeCandidatesAction_ = nullptr;
+    QAction* highlightMergeCandidateByIdAction_ = nullptr;
+    QAction* clearMergeCandidatesAction_ = nullptr;
     QAction* applyMergeAction_ = nullptr;
     QAction* validateAction_ = nullptr;
     QAction* resetViewAction_ = nullptr;
@@ -79,6 +86,9 @@ private:
     QAction* toggleFeaturesAction_ = nullptr;
     QAction* undoAction_ = nullptr;
     QAction* redoAction_ = nullptr;
+    std::vector<MergeCandidate> lastMergeCandidates_;
+    int visibleMergeCandidateCount_ = 0;
+    bool hasFeatureEdgeResult_ = false;
 };
 
 }

@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QKeySequence>
 #include <QMenuBar>
@@ -161,6 +162,9 @@ void MainWindow::createActions() {
     detectAction_ = new QAction("检测特征边", this);
     previewMergeAction_ = new QAction("预览合并", this);
     previewMergeAction_->setShortcut(QKeySequence("M"));
+    showAllMergeCandidatesAction_ = new QAction("显示全部候选", this);
+    highlightMergeCandidateByIdAction_ = new QAction("按 ID 高亮候选", this);
+    clearMergeCandidatesAction_ = new QAction("清除候选高亮", this);
     applyMergeAction_ = new QAction("执行合并", this);
 
     validateAction_ = new QAction("合法性检查", this);
@@ -208,6 +212,10 @@ void MainWindow::createMenus() {
 
     auto* mergeMenu = menuBar()->addMenu("合并");
     mergeMenu->addAction(previewMergeAction_);
+    mergeMenu->addAction(showAllMergeCandidatesAction_);
+    mergeMenu->addAction(highlightMergeCandidateByIdAction_);
+    mergeMenu->addAction(clearMergeCandidatesAction_);
+    mergeMenu->addSeparator();
     mergeMenu->addAction(applyMergeAction_);
     mergeMenu->addSeparator();
     mergeMenu->addAction(undoAction_);
@@ -237,6 +245,8 @@ void MainWindow::createToolBars() {
     toolBar->addSeparator();
     toolBar->addAction(detectAction_);
     toolBar->addAction(previewMergeAction_);
+    toolBar->addAction(showAllMergeCandidatesAction_);
+    toolBar->addAction(clearMergeCandidatesAction_);
     toolBar->addAction(applyMergeAction_);
     toolBar->addAction(validateAction_);
     toolBar->addAction(exportStepAction_);
@@ -318,6 +328,9 @@ void MainWindow::connectActions() {
 
     connect(detectAction_, &QAction::triggered, this, [this]() { detectFeatureEdges(); });
     connect(previewMergeAction_, &QAction::triggered, this, [this]() { previewMergeCandidates(); });
+    connect(showAllMergeCandidatesAction_, &QAction::triggered, this, [this]() { showAllMergeCandidates(); });
+    connect(highlightMergeCandidateByIdAction_, &QAction::triggered, this, [this]() { highlightMergeCandidateById(); });
+    connect(clearMergeCandidatesAction_, &QAction::triggered, this, [this]() { clearMergeCandidatePreview(); });
     connect(applyMergeAction_, &QAction::triggered, this, [this]() { applyMerge(); });
     connect(validateAction_, &QAction::triggered, this, [this]() { validateShape(); });
     connect(resetViewAction_, &QAction::triggered, this, [this]() { resetView(); });
@@ -343,7 +356,10 @@ void MainWindow::openStepFile() {
 
     const auto& document = controller_.document();
     const auto& stats = document.stats();
-    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
+    lastMergeCandidates_.clear();
+    visibleMergeCandidateCount_ = 0;
+    hasFeatureEdgeResult_ = false;
+    refreshModelTree();
     viewer_->displayDocument(document);
     syncLockedEdges();
     QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
@@ -417,9 +433,11 @@ void MainWindow::detectFeatureEdges() {
 
     const auto params = parameterPanel_->parameters();
     const auto result = controller_.detectFeatureEdges(params.angular_threshold_degrees, params.min_edge_length);
+    hasFeatureEdgeResult_ = true;
     viewer_->showFeatureEdges(result);
     viewer_->setFeatureLinesVisible(true);
     toggleFeaturesAction_->setChecked(true);
+    refreshModelTree();
     inspectPanel_->showReport(QString("特征边检测完成\n角度阈值：%1 度\n特征边总数：%2\nSharp edge：%3\nFree edge：%4\nMultiple edge：%5")
         .arg(params.angular_threshold_degrees)
         .arg(result.edges.size())
@@ -449,6 +467,8 @@ void MainWindow::previewMergeCandidates() {
         params.min_edge_length,
         options);
     const auto afterStats = controller_.document().stats();
+    lastMergeCandidates_ = result.candidates;
+    hasFeatureEdgeResult_ = true;
 
     int maxFaceCount = 0;
     int totalCandidateFaces = 0;
@@ -484,7 +504,18 @@ void MainWindow::previewMergeCandidates() {
             .arg(riskLevelText(candidate.risk_level));
     }
 
-    viewer_->setMergePreviewVisible(false);
+    if (result.candidates.empty()) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        report += "\n\n没有可预览候选区域。";
+    } else {
+        viewer_->showMergeCandidates(result.candidates, 10, false);
+        visibleMergeCandidateCount_ = static_cast<int>(std::min<std::size_t>(10, result.candidates.size()));
+    }
+    viewer_->showFeatureEdges(controller_.featureEdges());
+    viewer_->setFeatureLinesVisible(true);
+    toggleFeaturesAction_->setChecked(true);
+    refreshModelTree();
     inspectPanel_->showReport(report);
     logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，保护边 %2，访问 face %3，拒绝 %4")
         .arg(result.candidates.size())
@@ -492,6 +523,69 @@ void MainWindow::previewMergeCandidates() {
         .arg(result.visited_faces)
         .arg(result.rejected_regions));
     setStatus("合并候选区域预览完成");
+}
+
+void MainWindow::showAllMergeCandidates() {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    viewer_->showMergeCandidates(lastMergeCandidates_, 10, true);
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = static_cast<int>(lastMergeCandidates_.size());
+    refreshModelTree();
+    logPanel_->appendInfo(QString("已显示全部 %1 个候选区域。").arg(lastMergeCandidates_.size()));
+    setStatus("已显示全部候选区域");
+}
+
+void MainWindow::highlightMergeCandidateById() {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    bool ok = false;
+    const auto candidateId = QInputDialog::getInt(
+        this,
+        "按 ID 高亮候选",
+        "候选 ID：",
+        0,
+        0,
+        1000000,
+        1,
+        &ok);
+    if (!ok) {
+        return;
+    }
+
+    if (!viewer_->showMergeCandidateById(lastMergeCandidates_, candidateId)) {
+        visibleMergeCandidateCount_ = 0;
+        refreshModelTree();
+        logPanel_->appendWarning(QString("未找到候选 ID：%1").arg(candidateId));
+        setStatus("未找到候选区域");
+        return;
+    }
+
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = 1;
+    refreshModelTree();
+    logPanel_->appendInfo(QString("已高亮候选 ID：%1").arg(candidateId));
+    setStatus(QString("已高亮候选 %1").arg(candidateId));
+}
+
+void MainWindow::clearMergeCandidatePreview() {
+    viewer_->clearMergeCandidates();
+    visibleMergeCandidateCount_ = 0;
+    refreshModelTree();
+    logPanel_->appendInfo("已清除候选区域高亮。");
+    setStatus("候选高亮已清除");
 }
 
 void MainWindow::applyMerge() {
@@ -509,7 +603,10 @@ void MainWindow::applyMerge() {
         params.concat_bsplines);
 
     const auto& document = controller_.document();
-    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
+    lastMergeCandidates_.clear();
+    visibleMergeCandidateCount_ = 0;
+    hasFeatureEdgeResult_ = false;
+    refreshModelTree();
     viewer_->displayDocument(document);
     syncLockedEdges();
     inspectPanel_->showReport(QString("同域合并完成\nconcat_bsplines：%1\n保护边数量：%2\n合并前 face：%3\n合并后 face：%4\nface reduction ratio：%5%\n合并前 edge：%6\n合并后 edge：%7\nedge reduction ratio：%8%\n合并前 solid：%9\n合并后 solid：%10")
@@ -606,7 +703,10 @@ void MainWindow::refreshDocumentViews() {
     }
 
     const auto& document = controller_.document();
-    modelTree_->showDocument(document, static_cast<int>(controller_.lockedEdges().size()));
+    lastMergeCandidates_.clear();
+    visibleMergeCandidateCount_ = 0;
+    hasFeatureEdgeResult_ = false;
+    refreshModelTree();
     viewer_->displayDocument(document);
     syncLockedEdges();
 }
@@ -616,8 +716,21 @@ void MainWindow::syncLockedEdges() {
         return;
     }
 
-    modelTree_->showDocument(controller_.document(), static_cast<int>(controller_.lockedEdges().size()));
+    refreshModelTree();
     viewer_->showLockedEdges(controller_.lockedEdges());
+}
+
+void MainWindow::refreshModelTree() {
+    if (!controller_.hasDocument()) {
+        return;
+    }
+
+    modelTree_->showDocument(
+        controller_.document(),
+        static_cast<int>(controller_.lockedEdges().size()),
+        static_cast<int>(lastMergeCandidates_.size()),
+        visibleMergeCandidateCount_,
+        hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

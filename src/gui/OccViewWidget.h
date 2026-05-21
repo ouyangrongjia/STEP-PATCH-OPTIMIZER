@@ -3,6 +3,7 @@
 #include "brep/ShapeDocument.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "gui/GuiTypes.h"
+#include "merge/MergeCandidate.h"
 
 #include <QPoint>
 #include <QWidget>
@@ -11,12 +12,14 @@
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Shape.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Quantity_Color.hxx>
 #include <TopoDS_Shape.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 #include <WNT_Window.hxx>
 
 #include <functional>
+#include <utility>
 #include <set>
 #include <vector>
 
@@ -32,6 +35,12 @@ public:
     void setSelectionMode(SelectionMode mode);
     void showFeatureEdges(const FeatureEdgeDetectionResult& result);
     void showLockedEdges(const std::set<EdgeId>& edgeIds);
+    void showMergeCandidates(
+        const std::vector<MergeCandidate>& candidates,
+        int maxCandidatesToShow = 10,
+        bool showAll = false);
+    bool showMergeCandidateById(const std::vector<MergeCandidate>& candidates, int candidateId);
+    void clearMergeCandidates();
     void setFeatureLinesVisible(bool visible);
     void setMergePreviewVisible(bool visible);
     void resetView();
@@ -70,6 +79,7 @@ private:
     void clearLockedEdgeShape();
     void selectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
     void redrawSelectedShapes();
+    void applyCustomAspects();
     void initializeOcct();
     void activateSelectionMode();
     void resizeOcctWindow();
@@ -87,6 +97,8 @@ private:
     Handle(AIS_Shape) hoverShape_;
     Handle(AIS_Shape) featureEdgeShape_;
     Handle(AIS_Shape) lockedEdgeShape_;
+    std::vector<Handle(AIS_Shape)> mergeCandidateShapes_;
+    std::vector<std::pair<FaceId, Quantity_Color>> mergeCandidateFaceColors_;
     SelectionMode selectionMode_ = SelectionMode::Face;
     std::function<void(QString, QList<QPair<QString, QString>>)> selectionCallback_;
     std::function<void(std::vector<EdgeId>)> lockEdgesCallback_;
