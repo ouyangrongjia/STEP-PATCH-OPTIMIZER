@@ -118,6 +118,7 @@ void run_command_tests() {
     {
         spo::CommandHistory history;
         spo::CommandContext unlockContext;
+        load_context(unlockContext, sample);
         unlockContext.lockedEdges = locked_refs({1, 2, 3});
         assert(history.execute(std::make_unique<spo::UnlockEdgeCommand>(std::vector<spo::EdgeId>{2, 3}), unlockContext).success());
         assert(spo::lockedEdgeIds(unlockContext.lockedEdges) == std::set<spo::EdgeId>{1});
@@ -127,6 +128,13 @@ void run_command_tests() {
 
         assert(history.redo(unlockContext).success());
         assert(spo::lockedEdgeIds(unlockContext.lockedEdges) == std::set<spo::EdgeId>{1});
+    }
+
+    {
+        spo::CommandContext unlockWithoutDocument;
+        unlockWithoutDocument.lockedEdges = locked_refs({1});
+        spo::UnlockEdgeCommand unlock(1);
+        assert(!unlock.execute(unlockWithoutDocument).success());
     }
 
     {
@@ -159,6 +167,15 @@ void run_command_tests() {
         assert(history.redo(mergeContext).success());
         assert(mergeContext.document.hasShape());
         assert(same_stats(mergeContext.document.stats(), afterStats));
+    }
+
+    {
+        spo::CommandContext protectedContext;
+        load_context(protectedContext, sample);
+        assert(spo::LockEdgeCommand(1).execute(protectedContext).success());
+        spo::MergePatchCommand mergeWithLockedEdge(25.0, 1000000.0, 0.001);
+        assert(mergeWithLockedEdge.execute(protectedContext).success());
+        assert(mergeWithLockedEdge.result().protected_edges == 1);
     }
 
     {

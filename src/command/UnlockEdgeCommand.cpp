@@ -19,6 +19,9 @@ Result UnlockEdgeCommand::execute(CommandContext& context) {
     if (edgeIds_.empty()) {
         return Result::error("未选择需要解锁的边。");
     }
+    if (!context.document.hasShape()) {
+        return Result::error("当前没有已加载的模型。");
+    }
 
     beforeLockedEdges_ = context.lockedEdges;
     std::sort(edgeIds_.begin(), edgeIds_.end());
