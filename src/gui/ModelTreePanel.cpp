@@ -30,6 +30,11 @@ void ModelTreePanel::showDocument(
     int lockedEdgeCount,
     int mergeCandidateCount,
     int visibleMergeCandidateCount,
+    int pendingCandidateCount,
+    int acceptedCandidateCount,
+    int rejectedCandidateCount,
+    int hiddenCandidateCount,
+    int currentMergeCandidateId,
     const FeatureEdgeDetectionResult* featureEdges) {
     tree_->clear();
     const auto& stats = document.stats();
@@ -65,7 +70,12 @@ void ModelTreePanel::showDocument(
     auto* candidates = new QTreeWidgetItem(root, QStringList() << "合并候选区域");
     if (mergeCandidateCount > 0) {
         new QTreeWidgetItem(candidates, QStringList() << QString("候选总数：%1").arg(mergeCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("待处理：%1").arg(pendingCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("已接受：%1").arg(acceptedCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("已拒绝：%1").arg(rejectedCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("已隐藏：%1").arg(hiddenCandidateCount));
         new QTreeWidgetItem(candidates, QStringList() << QString("当前高亮：%1").arg(visibleMergeCandidateCount));
+        new QTreeWidgetItem(candidates, QStringList() << QString("当前候选 ID：%1").arg(currentMergeCandidateId >= 0 ? QString::number(currentMergeCandidateId) : "无"));
     } else {
         new QTreeWidgetItem(candidates, QStringList() << "尚未生成候选区域");
     }

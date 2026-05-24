@@ -25,10 +25,20 @@ enum class MergeRiskLevel {
     High
 };
 
+enum class MergeCandidateStatus {
+    Pending,
+    Accepted,
+    Rejected,
+    Hidden
+};
+
+const char* toString(MergeCandidateStatus status);
+
 struct MergeCandidate {
     int candidate_id = -1;
     MergeCandidateType candidate_type = MergeCandidateType::Unknown;
     MergeRiskLevel risk_level = MergeRiskLevel::Low;
+    MergeCandidateStatus status = MergeCandidateStatus::Pending;
 
     std::vector<FaceId> faces;
     std::vector<EdgeId> internal_edges;

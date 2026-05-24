@@ -63,6 +63,38 @@ QString riskLevelText(MergeRiskLevel risk) {
     return "Unknown";
 }
 
+QString candidateStatusText(MergeCandidateStatus status) {
+    return QString::fromLatin1(toString(status));
+}
+
+struct CandidateStatusCounts {
+    int pending = 0;
+    int accepted = 0;
+    int rejected = 0;
+    int hidden = 0;
+};
+
+CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& candidates) {
+    CandidateStatusCounts counts;
+    for (const auto& candidate : candidates) {
+        switch (candidate.status) {
+        case MergeCandidateStatus::Pending:
+            ++counts.pending;
+            break;
+        case MergeCandidateStatus::Accepted:
+            ++counts.accepted;
+            break;
+        case MergeCandidateStatus::Rejected:
+            ++counts.rejected;
+            break;
+        case MergeCandidateStatus::Hidden:
+            ++counts.hidden;
+            break;
+        }
+    }
+    return counts;
+}
+
 }
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -162,9 +194,15 @@ void MainWindow::createActions() {
     detectAction_ = new QAction("检测特征边", this);
     previewMergeAction_ = new QAction("预览合并", this);
     previewMergeAction_->setShortcut(QKeySequence("M"));
-    showAllMergeCandidatesAction_ = new QAction("显示全部候选", this);
+    showAllMergeCandidatesAction_ = new QAction("显示全部非隐藏候选", this);
     highlightMergeCandidateByIdAction_ = new QAction("按 ID 高亮候选", this);
     clearMergeCandidatesAction_ = new QAction("清除候选高亮", this);
+    acceptMergeCandidateAction_ = new QAction("接受当前候选", this);
+    rejectMergeCandidateAction_ = new QAction("拒绝当前候选", this);
+    hideMergeCandidateAction_ = new QAction("隐藏当前候选", this);
+    restoreMergeCandidateAction_ = new QAction("恢复当前候选", this);
+    showAcceptedMergeCandidatesAction_ = new QAction("显示已接受候选", this);
+    showPendingMergeCandidatesAction_ = new QAction("显示待处理候选", this);
     applyMergeAction_ = new QAction("执行合并", this);
 
     validateAction_ = new QAction("合法性检查", this);
@@ -216,6 +254,14 @@ void MainWindow::createMenus() {
     mergeMenu->addAction(highlightMergeCandidateByIdAction_);
     mergeMenu->addAction(clearMergeCandidatesAction_);
     mergeMenu->addSeparator();
+    mergeMenu->addAction(acceptMergeCandidateAction_);
+    mergeMenu->addAction(rejectMergeCandidateAction_);
+    mergeMenu->addAction(hideMergeCandidateAction_);
+    mergeMenu->addAction(restoreMergeCandidateAction_);
+    mergeMenu->addSeparator();
+    mergeMenu->addAction(showAcceptedMergeCandidatesAction_);
+    mergeMenu->addAction(showPendingMergeCandidatesAction_);
+    mergeMenu->addSeparator();
     mergeMenu->addAction(applyMergeAction_);
     mergeMenu->addSeparator();
     mergeMenu->addAction(undoAction_);
@@ -247,6 +293,9 @@ void MainWindow::createToolBars() {
     toolBar->addAction(previewMergeAction_);
     toolBar->addAction(showAllMergeCandidatesAction_);
     toolBar->addAction(clearMergeCandidatesAction_);
+    toolBar->addAction(acceptMergeCandidateAction_);
+    toolBar->addAction(rejectMergeCandidateAction_);
+    toolBar->addAction(hideMergeCandidateAction_);
     toolBar->addAction(applyMergeAction_);
     toolBar->addAction(validateAction_);
     toolBar->addAction(exportStepAction_);
@@ -305,6 +354,9 @@ void MainWindow::createDocks() {
     viewer_->setUnlockEdgesCallback([this](std::vector<EdgeId> edgeIds) {
         unlockSelectedEdges(edgeIds);
     });
+    viewer_->setCandidateFaceCallback([this](FaceId faceId) {
+        selectMergeCandidateByFace(faceId);
+    });
 }
 
 void MainWindow::connectActions() {
@@ -331,6 +383,12 @@ void MainWindow::connectActions() {
     connect(showAllMergeCandidatesAction_, &QAction::triggered, this, [this]() { showAllMergeCandidates(); });
     connect(highlightMergeCandidateByIdAction_, &QAction::triggered, this, [this]() { highlightMergeCandidateById(); });
     connect(clearMergeCandidatesAction_, &QAction::triggered, this, [this]() { clearMergeCandidatePreview(); });
+    connect(acceptMergeCandidateAction_, &QAction::triggered, this, [this]() { acceptCurrentMergeCandidate(); });
+    connect(rejectMergeCandidateAction_, &QAction::triggered, this, [this]() { rejectCurrentMergeCandidate(); });
+    connect(hideMergeCandidateAction_, &QAction::triggered, this, [this]() { hideCurrentMergeCandidate(); });
+    connect(restoreMergeCandidateAction_, &QAction::triggered, this, [this]() { restoreCurrentMergeCandidate(); });
+    connect(showAcceptedMergeCandidatesAction_, &QAction::triggered, this, [this]() { showAcceptedMergeCandidates(); });
+    connect(showPendingMergeCandidatesAction_, &QAction::triggered, this, [this]() { showPendingMergeCandidates(); });
     connect(applyMergeAction_, &QAction::triggered, this, [this]() { applyMerge(); });
     connect(validateAction_, &QAction::triggered, this, [this]() { validateShape(); });
     connect(resetViewAction_, &QAction::triggered, this, [this]() { resetView(); });
@@ -356,8 +414,7 @@ void MainWindow::openStepFile() {
 
     const auto& document = controller_.document();
     const auto& stats = document.stats();
-    lastMergeCandidates_.clear();
-    visibleMergeCandidateCount_ = 0;
+    clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
     viewer_->displayDocument(document);
@@ -467,6 +524,7 @@ void MainWindow::previewMergeCandidates() {
         params.min_edge_length,
         options);
     const auto afterStats = controller_.document().stats();
+    clearMergeCandidateState();
     lastMergeCandidates_ = result.candidates;
     hasFeatureEdgeResult_ = true;
 
@@ -476,9 +534,14 @@ void MainWindow::previewMergeCandidates() {
         maxFaceCount = std::max(maxFaceCount, candidate.face_count);
         totalCandidateFaces += candidate.face_count;
     }
+    const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
 
-    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\n保护边数量：%2\n访问 face 数量：%3\n拒绝区域数量：%4\n最大候选区域 face 数：%5\n总候选 face 数：%6\n预览前 face/edge：%7/%8\n预览后 face/edge：%9/%10")
+    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPending：%2\nAccepted：%3\nRejected：%4\nHidden：%5\n保护边数量：%6\n访问 face 数量：%7\n拒绝区域数量：%8\n最大候选区域 face 数：%9\n总候选 face 数：%10\n预览前 face/edge：%11/%12\n预览后 face/edge：%13/%14")
         .arg(result.candidates.size())
+        .arg(statusCounts.pending)
+        .arg(statusCounts.accepted)
+        .arg(statusCounts.rejected)
+        .arg(statusCounts.hidden)
         .arg(result.protected_edge_count)
         .arg(result.visited_faces)
         .arg(result.rejected_regions)
@@ -492,8 +555,9 @@ void MainWindow::previewMergeCandidates() {
     const auto previewCount = std::min<std::size_t>(10, result.candidates.size());
     for (std::size_t index = 0; index < previewCount; ++index) {
         const auto& candidate = result.candidates[index];
-        report += QString("\n\n候选 %1\n类型：%2\nface 数：%3\n总面积：%4\n最大法向夹角：%5 度\n最大距离：%6\n边界边数：%7\n内部边数：%8\n风险：%9")
+        report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\n风险：%10")
             .arg(candidate.candidate_id)
+            .arg(candidateStatusText(candidate.status))
             .arg(candidateTypeText(candidate.candidate_type))
             .arg(candidate.face_count)
             .arg(QString::number(candidate.total_area, 'f', 4))
@@ -532,14 +596,31 @@ void MainWindow::showAllMergeCandidates() {
         return;
     }
 
-    viewer_->showMergeCandidates(lastMergeCandidates_, 10, true);
+    showNonHiddenMergeCandidates();
+}
+
+void MainWindow::showNonHiddenMergeCandidates() {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    std::vector<MergeCandidate> visibleCandidates;
+    for (const auto& candidate : lastMergeCandidates_) {
+        if (candidate.status != MergeCandidateStatus::Hidden) {
+            visibleCandidates.push_back(candidate);
+        }
+    }
+
+    viewer_->showMergeCandidates(visibleCandidates, 10, true);
     if (hasFeatureEdgeResult_) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = static_cast<int>(lastMergeCandidates_.size());
+    visibleMergeCandidateCount_ = static_cast<int>(visibleCandidates.size());
     refreshModelTree();
-    logPanel_->appendInfo(QString("已显示全部 %1 个候选区域。").arg(lastMergeCandidates_.size()));
-    setStatus("已显示全部候选区域");
+    showCandidateStatusReport("已显示全部非隐藏候选区域");
+    setStatus("已显示全部非隐藏候选区域");
 }
 
 void MainWindow::highlightMergeCandidateById() {
@@ -563,7 +644,10 @@ void MainWindow::highlightMergeCandidateById() {
         return;
     }
 
-    if (!viewer_->showMergeCandidateById(lastMergeCandidates_, candidateId)) {
+    auto it = std::find_if(lastMergeCandidates_.begin(), lastMergeCandidates_.end(), [candidateId](const auto& candidate) {
+        return candidate.candidate_id == candidateId;
+    });
+    if (it == lastMergeCandidates_.end()) {
         visibleMergeCandidateCount_ = 0;
         refreshModelTree();
         logPanel_->appendWarning(QString("未找到候选 ID：%1").arg(candidateId));
@@ -571,13 +655,73 @@ void MainWindow::highlightMergeCandidateById() {
         return;
     }
 
+    currentMergeCandidateId_ = candidateId;
+    if (it->status == MergeCandidateStatus::Hidden) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        refreshModelTree();
+        showCandidateStatusReport(QString("候选 %1 当前为 Hidden，未显示").arg(candidateId));
+        setStatus("候选已隐藏");
+        return;
+    }
+
+    viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*it}, candidateId);
     if (hasFeatureEdgeResult_) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
     visibleMergeCandidateCount_ = 1;
     refreshModelTree();
-    logPanel_->appendInfo(QString("已高亮候选 ID：%1").arg(candidateId));
+    showCandidateStatusReport(QString("已高亮候选 ID：%1").arg(candidateId));
     setStatus(QString("已高亮候选 %1").arg(candidateId));
+}
+
+void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    MergeCandidate* matchedCandidate = nullptr;
+    MergeCandidate* hiddenCandidate = nullptr;
+    for (auto& candidate : lastMergeCandidates_) {
+        if (std::find(candidate.faces.begin(), candidate.faces.end(), faceId) == candidate.faces.end()) {
+            continue;
+        }
+        if (candidate.status == MergeCandidateStatus::Hidden) {
+            if (hiddenCandidate == nullptr) {
+                hiddenCandidate = &candidate;
+            }
+            continue;
+        }
+        matchedCandidate = &candidate;
+        break;
+    }
+
+    if (matchedCandidate == nullptr) {
+        visibleMergeCandidateCount_ = 0;
+        refreshModelTree();
+        if (hiddenCandidate != nullptr) {
+            currentMergeCandidateId_ = hiddenCandidate->candidate_id;
+            viewer_->clearMergeCandidates();
+            showCandidateStatusReport(QString("Face %1 属于隐藏候选 %2，未显示").arg(faceId).arg(currentMergeCandidateId_));
+            setStatus("候选已隐藏");
+        } else {
+            logPanel_->appendWarning(QString("Face %1 不属于当前候选区域。").arg(faceId));
+            setStatus("未命中候选区域");
+        }
+        return;
+    }
+
+    currentMergeCandidateId_ = matchedCandidate->candidate_id;
+    viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*matchedCandidate}, matchedCandidate->candidate_id);
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = 1;
+    refreshModelTree();
+    showCandidateStatusReport(QString("已选择候选 ID：%1").arg(currentMergeCandidateId_));
+    setStatus(QString("已选择候选 %1").arg(currentMergeCandidateId_));
 }
 
 void MainWindow::clearMergeCandidatePreview() {
@@ -586,6 +730,48 @@ void MainWindow::clearMergeCandidatePreview() {
     refreshModelTree();
     logPanel_->appendInfo("已清除候选区域高亮。");
     setStatus("候选高亮已清除");
+}
+
+void MainWindow::acceptCurrentMergeCandidate() {
+    if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Accepted)) {
+        showCandidateStatusReport(QString("已接受候选 ID：%1").arg(currentMergeCandidateId_));
+        setStatus("候选已接受");
+    }
+}
+
+void MainWindow::rejectCurrentMergeCandidate() {
+    if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Rejected)) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        refreshModelTree();
+        showCandidateStatusReport(QString("已拒绝候选 ID：%1").arg(currentMergeCandidateId_));
+        setStatus("候选已拒绝");
+    }
+}
+
+void MainWindow::hideCurrentMergeCandidate() {
+    if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Hidden)) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        refreshModelTree();
+        showCandidateStatusReport(QString("已隐藏候选 ID：%1").arg(currentMergeCandidateId_));
+        setStatus("候选已隐藏");
+    }
+}
+
+void MainWindow::restoreCurrentMergeCandidate() {
+    if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Pending)) {
+        showCandidateStatusReport(QString("已恢复候选 ID：%1").arg(currentMergeCandidateId_));
+        setStatus("候选已恢复为待处理");
+    }
+}
+
+void MainWindow::showAcceptedMergeCandidates() {
+    showFilteredMergeCandidates(MergeCandidateStatus::Accepted);
+}
+
+void MainWindow::showPendingMergeCandidates() {
+    showFilteredMergeCandidates(MergeCandidateStatus::Pending);
 }
 
 void MainWindow::applyMerge() {
@@ -603,8 +789,7 @@ void MainWindow::applyMerge() {
         params.concat_bsplines);
 
     const auto& document = controller_.document();
-    lastMergeCandidates_.clear();
-    visibleMergeCandidateCount_ = 0;
+    clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
     viewer_->displayDocument(document);
@@ -703,8 +888,7 @@ void MainWindow::refreshDocumentViews() {
     }
 
     const auto& document = controller_.document();
-    lastMergeCandidates_.clear();
-    visibleMergeCandidateCount_ = 0;
+    clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
     viewer_->displayDocument(document);
@@ -725,12 +909,110 @@ void MainWindow::refreshModelTree() {
         return;
     }
 
+    const auto counts = countCandidateStatuses(lastMergeCandidates_);
     modelTree_->showDocument(
         controller_.document(),
         static_cast<int>(controller_.lockedEdges().size()),
         static_cast<int>(lastMergeCandidates_.size()),
         visibleMergeCandidateCount_,
+        counts.pending,
+        counts.accepted,
+        counts.rejected,
+        counts.hidden,
+        currentMergeCandidateId_,
         hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr);
+}
+
+void MainWindow::clearMergeCandidateState() {
+    lastMergeCandidates_.clear();
+    visibleMergeCandidateCount_ = 0;
+    currentMergeCandidateId_ = -1;
+    if (viewer_ != nullptr) {
+        viewer_->clearMergeCandidates();
+    }
+}
+
+MergeCandidate* MainWindow::currentMergeCandidate() {
+    if (currentMergeCandidateId_ < 0) {
+        return nullptr;
+    }
+
+    const auto it = std::find_if(lastMergeCandidates_.begin(), lastMergeCandidates_.end(), [this](const auto& candidate) {
+        return candidate.candidate_id == currentMergeCandidateId_;
+    });
+    if (it == lastMergeCandidates_.end()) {
+        return nullptr;
+    }
+    return &(*it);
+}
+
+bool MainWindow::setCurrentMergeCandidateStatus(MergeCandidateStatus status) {
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        logPanel_->appendWarning("请先选择一个候选区域。");
+        setStatus("未选择候选区域");
+        return false;
+    }
+
+    candidate->status = status;
+    if (status == MergeCandidateStatus::Accepted || status == MergeCandidateStatus::Pending) {
+        viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*candidate}, candidate->candidate_id);
+        visibleMergeCandidateCount_ = 1;
+        if (hasFeatureEdgeResult_) {
+            viewer_->showFeatureEdges(controller_.featureEdges());
+        }
+    }
+    refreshModelTree();
+    return true;
+}
+
+void MainWindow::showFilteredMergeCandidates(MergeCandidateStatus status) {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    std::vector<MergeCandidate> filteredCandidates;
+    for (const auto& candidate : lastMergeCandidates_) {
+        if (candidate.status == status) {
+            filteredCandidates.push_back(candidate);
+        }
+    }
+
+    viewer_->showMergeCandidates(filteredCandidates, 10, true);
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = static_cast<int>(filteredCandidates.size());
+    refreshModelTree();
+    showCandidateStatusReport(QString("已显示 %1 候选区域").arg(candidateStatusText(status)));
+    setStatus(QString("已显示 %1 候选区域").arg(candidateStatusText(status)));
+}
+
+void MainWindow::showCandidateStatusReport(const QString& title) {
+    const auto counts = countCandidateStatuses(lastMergeCandidates_);
+    QString currentStatus = "无";
+    if (const auto* candidate = currentMergeCandidate()) {
+        currentStatus = candidateStatusText(candidate->status);
+    }
+
+    inspectPanel_->showReport(QString("%1\n当前候选 ID：%2\n当前候选状态：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n当前显示候选数量：%8")
+        .arg(title)
+        .arg(currentMergeCandidateId_ >= 0 ? QString::number(currentMergeCandidateId_) : "无")
+        .arg(currentStatus)
+        .arg(counts.pending)
+        .arg(counts.accepted)
+        .arg(counts.rejected)
+        .arg(counts.hidden)
+        .arg(visibleMergeCandidateCount_));
+    logPanel_->appendInfo(QString("%1：Pending %2，Accepted %3，Rejected %4，Hidden %5，当前显示 %6")
+        .arg(title)
+        .arg(counts.pending)
+        .arg(counts.accepted)
+        .arg(counts.rejected)
+        .arg(counts.hidden)
+        .arg(visibleMergeCandidateCount_));
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

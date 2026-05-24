@@ -41,7 +41,15 @@ private:
     void previewMergeCandidates();
     void showAllMergeCandidates();
     void highlightMergeCandidateById();
+    void selectMergeCandidateByFace(FaceId faceId);
     void clearMergeCandidatePreview();
+    void acceptCurrentMergeCandidate();
+    void rejectCurrentMergeCandidate();
+    void hideCurrentMergeCandidate();
+    void restoreCurrentMergeCandidate();
+    void showAcceptedMergeCandidates();
+    void showPendingMergeCandidates();
+    void showNonHiddenMergeCandidates();
     void applyMerge();
     void validateShape();
     void resetView();
@@ -51,6 +59,11 @@ private:
     void refreshDocumentViews();
     void syncLockedEdges();
     void refreshModelTree();
+    void clearMergeCandidateState();
+    MergeCandidate* currentMergeCandidate();
+    bool setCurrentMergeCandidateStatus(MergeCandidateStatus status);
+    void showFilteredMergeCandidates(MergeCandidateStatus status);
+    void showCandidateStatusReport(const QString& title);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -79,6 +92,12 @@ private:
     QAction* showAllMergeCandidatesAction_ = nullptr;
     QAction* highlightMergeCandidateByIdAction_ = nullptr;
     QAction* clearMergeCandidatesAction_ = nullptr;
+    QAction* acceptMergeCandidateAction_ = nullptr;
+    QAction* rejectMergeCandidateAction_ = nullptr;
+    QAction* hideMergeCandidateAction_ = nullptr;
+    QAction* restoreMergeCandidateAction_ = nullptr;
+    QAction* showAcceptedMergeCandidatesAction_ = nullptr;
+    QAction* showPendingMergeCandidatesAction_ = nullptr;
     QAction* applyMergeAction_ = nullptr;
     QAction* validateAction_ = nullptr;
     QAction* resetViewAction_ = nullptr;
@@ -88,6 +107,7 @@ private:
     QAction* redoAction_ = nullptr;
     std::vector<MergeCandidate> lastMergeCandidates_;
     int visibleMergeCandidateCount_ = 0;
+    int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;
 };
 

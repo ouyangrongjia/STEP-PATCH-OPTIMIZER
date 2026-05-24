@@ -42,6 +42,9 @@ STEP 读取
 2. 用户锁边进入 protectedEdges 的测试已补充。
 3. GUI 手动流程验证已通过。
 4. MergePatchCommand undo 时清空锁边状态是当前确认的正确语义。
+5. Stage 2 Generic Merge Candidate Framework 已完成：MergeCandidate / MergePlanner / MergeRegionGrower 可生成 PlaneLike 候选区域。
+6. Stage 2.5 Candidate GUI Preview 已完成：支持 Top N、显示全部非隐藏候选、按 ID 高亮和清除候选高亮。
+7. Stage 2.6 Candidate Selection / Rejection 已完成：支持候选区域点击选择、接受、拒绝、隐藏、恢复和状态统计。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -71,7 +74,9 @@ STEP 读取
 | 右键菜单 | 部分完成 | edge 模式已接入锁边/解锁；face/candidate 菜单多为预留 |
 | 特征线显示 | 已完成基础版 | 显示自动检测出的特征边 |
 | 锁定边显示 | 已完成 | 锁定边以高亮方式显示 |
-| 合并候选预览 | 入口已完成 | 后端 MergePlanner 尚未实现 |
+| 合并候选预览 | 已完成基础版 | 后端 MergePlanner 已接入，可高亮候选区域 |
+| 候选区域点击选择 | 已完成基础版 | 选择候选区域模式下点击面片可选中所属候选 |
+| 候选区域接受/拒绝/隐藏/恢复 | 已完成基础版 | 管理运行时候选状态，不修改 B-rep |
 | undo/redo 按钮 | 已完成 | 已接入 Ctrl+Z / Ctrl+Y |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
 
@@ -153,9 +158,11 @@ STEP 读取
 | 合并撤销/重做 | 已完成 | 通过 `MergePatchCommand` 快照实现 |
 | 合并撤销时清空锁边 | 已确认 | 当前定义为正确交互语义 |
 | 锁边重映射 | 已完成基础版 | 通过 `LockedEdgeRef` 几何签名尝试映射 |
-| `MergePlanner` | 未完成 | 当前基本为占位 |
-| `MergeRegionGrower` | 未完成 | 当前基本为占位 |
-| `MergeCandidate` 预览 | 未完成 | GUI 有入口，后端未接入 |
+| `MergeCandidate` | 已完成基础版 | 支持候选类型、风险、face/edge 集合、统计指标和运行时状态 |
+| `MergePlanner` | 已完成基础版 | 基于特征边和锁边生成 PlaneLike 候选区域 |
+| `MergeRegionGrower` | 已完成基础版 | 支持平面近似区域生长，protectedEdges 可阻断扩张 |
+| `MergeCandidate` 预览 | 已完成基础版 | GUI 可预览 Top N、全部非隐藏候选和指定候选 |
+| 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块
@@ -189,6 +196,8 @@ STEP 读取
 | UnlockEdgeCommand 无文档校验测试 | 已完成 |
 | MergePatchCommand undo/redo 测试 | 已完成 |
 | 用户锁边进入 protectedEdges 测试 | 已完成 |
+| MergePlanner / MergeRegionGrower 测试 | 已完成基础版 | 覆盖候选生成、protectedEdges 阻断、min_region_faces 和预览不改模型 |
+| MergeCandidate 状态测试 | 已完成基础版 | 覆盖 Pending 默认状态、状态切换、Hidden 过滤和 stats 不变 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -320,11 +329,11 @@ protectedEdges = 自动检测特征边 + 用户锁定边
 
 | 任务 | 状态 | 验收方式 |
 |---|---:|---|
-| 实现 MergeCandidate 数据结构 | 待做 | 能表达候选区域 face 集合、边界、风险说明 |
-| 实现 MergePlanner 基础候选生成 | 待做 | 能从 TopologyGraph 生成候选区域 |
-| 实现 MergeRegionGrower 基础区域生长 | 待做 | 能根据特征边/锁边阻断区域扩张 |
-| GUI 显示候选区域 | 待做 | 可高亮候选区域 |
-| 用户接受/拒绝候选区域 | 待做 | 可从 GUI 应用或跳过候选 |
+| 实现 MergeCandidate 数据结构 | 已完成基础版 | 能表达候选区域 face 集合、边界、风险说明和运行时状态 |
+| 实现 MergePlanner 基础候选生成 | 已完成基础版 | 能从 TopologyGraph 生成 PlaneLike 候选区域 |
+| 实现 MergeRegionGrower 基础区域生长 | 已完成基础版 | 能根据特征边/锁边阻断区域扩张 |
+| GUI 显示候选区域 | 已完成基础版 | 可高亮 Top N、全部非隐藏候选和指定候选 |
+| 用户接受/拒绝候选区域 | 已完成基础版 | 支持选择、接受、拒绝、隐藏、恢复候选；本阶段不应用到 B-rep |
 
 ## P2：项目保存与报告
 
@@ -384,16 +393,14 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ## 8. 近期推荐开发顺序
 
-建议下一阶段进入合并候选规划，不再继续堆 GUI 基础按钮：
+建议下一阶段从候选区域规划转入真实区域合并前的收口验证：
 
 ```text
 1. 用真实潮玩件 STEP 做回归测试。
-2. 实现 MergeCandidate 数据结构。
-3. 实现 MergePlanner 最小候选生成。
-4. 实现 MergeRegionGrower 基础区域生长。
-5. 实现候选区域 GUI 高亮预览。
-6. 实现用户接受 / 拒绝候选区域。
-7. 再考虑 ProjectSerializer。
+2. 检查 PlaneLike 候选质量和误选/漏选案例。
+3. 明确 Accepted candidates 到 Stage 3A PlaneRegionMerge 的输入契约。
+4. 再实现 PlaneRegionMerge 的最小 B-rep 替换实验。
+5. 再考虑 ProjectSerializer。
 ```
 
 ---
@@ -409,7 +416,9 @@ MVP 基础闭环：已完成
 same-domain 合并闭环：已完成
 P0 稳定性收口：基本完成
 复杂 STEP 样例回归测试：待做
-合并候选规划：未完成
+合并候选规划：已完成基础版
+候选区域 GUI 预览：已完成基础版
+候选区域选择/接受/拒绝/隐藏：已完成基础版
 项目保存恢复：未完成
 完整误差评估：未完成
 高级特征线：未完成
@@ -419,6 +428,6 @@ P0 稳定性收口：基本完成
 总体评价：
 
 ```text
-当前项目已经具备可演示的工程雏形。
-下一步重点应转向候选区域规划、真实潮玩件样例测试、报告指标和状态持久化。
+当前项目已经具备可演示的工程雏形，并已完成 PlaneLike 候选生成、可视化预览和人工筛选基础。
+下一步重点应转向真实潮玩件样例回归、候选质量评估、Stage 3A PlaneRegionMerge 最小实验、报告指标和状态持久化。
 ```

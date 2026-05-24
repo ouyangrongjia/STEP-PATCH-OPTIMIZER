@@ -9,6 +9,8 @@
 #include <chrono>
 #include <filesystem>
 #include <set>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -35,6 +37,37 @@ bool same_stats(const spo::ShapeStats& lhs, const spo::ShapeStats& rhs) {
         lhs.faces == rhs.faces &&
         lhs.edges == rhs.edges &&
         lhs.vertices == rhs.vertices;
+}
+
+spo::MergeCandidate* find_candidate(std::vector<spo::MergeCandidate>& candidates, int candidateId) {
+    for (auto& candidate : candidates) {
+        if (candidate.candidate_id == candidateId) {
+            return &candidate;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<spo::MergeCandidate> candidates_with_status(
+    const std::vector<spo::MergeCandidate>& candidates,
+    spo::MergeCandidateStatus status) {
+    std::vector<spo::MergeCandidate> filtered;
+    for (const auto& candidate : candidates) {
+        if (candidate.status == status) {
+            filtered.push_back(candidate);
+        }
+    }
+    return filtered;
+}
+
+std::vector<spo::MergeCandidate> non_hidden_candidates(const std::vector<spo::MergeCandidate>& candidates) {
+    std::vector<spo::MergeCandidate> filtered;
+    for (const auto& candidate : candidates) {
+        if (candidate.status != spo::MergeCandidateStatus::Hidden) {
+            filtered.push_back(candidate);
+        }
+    }
+    return filtered;
 }
 
 void test_merge_planner_creates_plane_candidates_without_modifying_document() {
@@ -110,6 +143,53 @@ void test_app_controller_preview_keeps_document_and_counts_locked_edges() {
     std::filesystem::remove(path);
 }
 
+void test_merge_candidate_status_defaults_and_filters() {
+    spo::MergeCandidate pending;
+    pending.candidate_id = 1;
+    assert(pending.status == spo::MergeCandidateStatus::Pending);
+    assert(std::string(spo::toString(pending.status)) == "Pending");
+
+    spo::MergeCandidate accepted;
+    accepted.candidate_id = 2;
+    accepted.status = spo::MergeCandidateStatus::Accepted;
+    spo::MergeCandidate rejected;
+    rejected.candidate_id = 3;
+    rejected.status = spo::MergeCandidateStatus::Rejected;
+    spo::MergeCandidate hidden;
+    hidden.candidate_id = 4;
+    hidden.status = spo::MergeCandidateStatus::Hidden;
+
+    std::vector<spo::MergeCandidate> candidates{pending, accepted, rejected, hidden};
+    assert(candidates_with_status(candidates, spo::MergeCandidateStatus::Accepted).size() == 1);
+    assert(candidates_with_status(candidates, spo::MergeCandidateStatus::Pending).size() == 1);
+    assert(non_hidden_candidates(candidates).size() == 3);
+    assert(find_candidate(candidates, 999) == nullptr);
+}
+
+void test_candidate_status_changes_do_not_modify_document_stats() {
+    const auto document = create_box_document();
+    const auto before = document.stats();
+
+    spo::MergePlannerOptions options;
+    options.min_region_faces = 1;
+
+    const spo::MergePlanner planner;
+    const spo::FeatureEdgeDetectionResult featureEdges;
+    auto result = planner.plan(document, featureEdges, {}, options);
+    assert(!result.candidates.empty());
+
+    auto* candidate = find_candidate(result.candidates, result.candidates.front().candidate_id);
+    assert(candidate != nullptr);
+    candidate->status = spo::MergeCandidateStatus::Accepted;
+    assert(candidate->status == spo::MergeCandidateStatus::Accepted);
+    candidate->status = spo::MergeCandidateStatus::Rejected;
+    assert(candidate->status == spo::MergeCandidateStatus::Rejected);
+    candidate->status = spo::MergeCandidateStatus::Hidden;
+    assert(candidate->status == spo::MergeCandidateStatus::Hidden);
+
+    assert(same_stats(document.stats(), before));
+}
+
 }
 
 void run_merge_planner_tests() {
@@ -117,4 +197,6 @@ void run_merge_planner_tests() {
     test_protected_edges_are_reported_for_region_growth_barriers();
     test_min_region_faces_filters_candidates();
     test_app_controller_preview_keeps_document_and_counts_locked_edges();
+    test_merge_candidate_status_defaults_and_filters();
+    test_candidate_status_changes_do_not_modify_document_stats();
 }

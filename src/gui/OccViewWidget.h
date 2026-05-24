@@ -49,6 +49,7 @@ public:
     void setSelectionCallback(std::function<void(QString, QList<QPair<QString, QString>>)> callback);
     void setLockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback);
     void setUnlockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback);
+    void setCandidateFaceCallback(std::function<void(FaceId)> callback);
     std::vector<FaceId> selectedFaceIds() const;
     std::vector<EdgeId> selectedEdgeIds() const;
 
@@ -103,6 +104,7 @@ private:
     std::function<void(QString, QList<QPair<QString, QString>>)> selectionCallback_;
     std::function<void(std::vector<EdgeId>)> lockEdgesCallback_;
     std::function<void(std::vector<EdgeId>)> unlockEdgesCallback_;
+    std::function<void(FaceId)> candidateFaceCallback_;
     QPoint lastMousePosition_;
     bool rotating_ = false;
     bool panning_ = false;

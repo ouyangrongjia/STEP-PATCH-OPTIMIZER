@@ -224,7 +224,9 @@ void OccViewWidget::showMergeCandidates(
     std::vector<const MergeCandidate*> sortedCandidates;
     sortedCandidates.reserve(candidates.size());
     for (const auto& candidate : candidates) {
-        if (candidate.valid && !candidate.faces.empty()) {
+        if (candidate.valid &&
+            candidate.status != MergeCandidateStatus::Hidden &&
+            !candidate.faces.empty()) {
             sortedCandidates.push_back(&candidate);
         }
     }
@@ -379,6 +381,10 @@ void OccViewWidget::setLockEdgesCallback(std::function<void(std::vector<EdgeId>)
 
 void OccViewWidget::setUnlockEdgesCallback(std::function<void(std::vector<EdgeId>)> callback) {
     unlockEdgesCallback_ = std::move(callback);
+}
+
+void OccViewWidget::setCandidateFaceCallback(std::function<void(FaceId)> callback) {
+    candidateFaceCallback_ = std::move(callback);
 }
 
 std::vector<FaceId> OccViewWidget::selectedFaceIds() const {
@@ -646,7 +652,8 @@ void OccViewWidget::updateHoverShape(const QPointF& position) {
     const auto shape = detectedShapeAt(position);
     const bool isExpectedShape =
         (selectionMode_ == SelectionMode::Face && topology_->faceIdFor(shape).has_value()) ||
-        (selectionMode_ == SelectionMode::Edge && topology_->edgeIdFor(shape).has_value());
+        (selectionMode_ == SelectionMode::Edge && topology_->edgeIdFor(shape).has_value()) ||
+        (selectionMode_ == SelectionMode::Candidate && topology_->faceIdFor(shape).has_value());
 
     clearHoverShape();
     if (!isExpectedShape) {
@@ -737,12 +744,21 @@ void OccViewWidget::selectAt(const QPointF& position, Qt::KeyboardModifiers modi
                 {"边界类型", adjacency != nullptr && adjacency->faces.size() == 1 ? "自由边" : "内部边"}
             });
         }
-    } else if (selectionCallback_) {
-        selectionCallback_("合并候选区域", {
-            {"候选区域 ID", "待接入合并规划器"},
-            {"面数量", "待接入合并规划器"},
-            {"是否可应用", "待验证"}
-        });
+    } else {
+        const auto faceId = topology_->faceIdFor(selectedShape);
+        if (!faceId.has_value()) {
+            return;
+        }
+
+        clearHoverShape();
+        selectedFaces_.clear();
+        selectedEdges_.clear();
+        lastSelectedFace_ = static_cast<int>(*faceId);
+        lastSelectedEdge_ = -1;
+
+        if (candidateFaceCallback_) {
+            candidateFaceCallback_(*faceId);
+        }
     }
 }
 
