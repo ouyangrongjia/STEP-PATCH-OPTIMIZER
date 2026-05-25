@@ -46,6 +46,8 @@ STEP 读取
 6. Stage 2.5 Candidate GUI Preview 已完成：支持 Top N、显示全部非隐藏候选、按 ID 高亮和清除候选高亮。
 7. Stage 2.6 Candidate Selection / Rejection 已完成：支持候选区域点击选择、接受、拒绝、隐藏、恢复和状态统计。
 8. Stage 3-0 Analytic RegionMerger Framework Preparation 已完成：已预留统一结果、选项、失败原因和解析图元 merger stub。
+9. Stage 3A PlaneRegionMerge 已完成基础可用版：支持 PlaneLike candidate 的真实 planar trimmed face 替换、Command 层执行、undo/redo、批量平面候选合并和 BRepCheck 报告。
+10. PlaneRegionMerge 已修复合并后实体数丢失问题：当前通过原 shape 上的 face 级 reshape 保留 solid/shell 容器，并对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -166,6 +168,11 @@ STEP 读取
 | 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
 | RegionMergeResult / RegionMergeOptions | 已完成基础版 | 统一解析图元区域合并返回值、失败原因和基础选项 |
 | Plane/Cylinder/Cone/Sphere/Torus RegionMerger stub | 已完成基础版 | 仅返回 NotImplemented / UnsupportedCandidateType，不修改 B-rep |
+| `PlaneRegionMerger` | 已完成基础可用版 | 支持 PlaneLike 候选区域真实替换为 planar trimmed face，保留 solid/shell 容器 |
+| 平面候选批量合并 | 已完成基础版 | 支持合并当前候选、合并所有已接受平面候选、一键合并全部可合并平面候选 |
+| 平面合并边界简化 | 已完成基础版 | 对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段 |
+| `PlaneRegionMergeCommand` | 已完成基础版 | 平面候选合并通过 Command 层执行，支持 undo/redo |
+| `PlaneRegionBatchMergeCommand` | 已完成基础版 | 批量平面候选合并通过 Command 层执行，支持 undo/redo |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块
@@ -202,6 +209,9 @@ STEP 读取
 | MergePlanner / MergeRegionGrower 测试 | 已完成基础版 | 覆盖候选生成、protectedEdges 阻断、min_region_faces 和预览不改模型 |
 | MergeCandidate 状态测试 | 已完成基础版 | 覆盖 Pending 默认状态、状态切换、Hidden 过滤和 stats 不变 |
 | RegionMerger stub 测试 | 已完成基础版 | 覆盖 NotImplemented、UnsupportedCandidateType、Rejected/Hidden 和 stats 不变 |
+| PlaneRegionMerger 测试 | 已完成基础版 | 覆盖非法候选、边界无效、NURBS-backed 平面区域、solid 容器保留和边界分段简化 |
+| PlaneRegionMergeCommand 测试 | 已完成基础版 | 覆盖失败不污染文档、成功后 undo/redo |
+| PlaneRegionBatchMergeCommand 测试 | 已完成基础版 | 覆盖批量平面合并成功后的 undo/redo |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -238,6 +248,8 @@ STEP 读取
 1. MergePatchCommand
 2. LockEdgeCommand
 3. UnlockEdgeCommand
+4. PlaneRegionMergeCommand
+5. PlaneRegionBatchMergeCommand
 ```
 
 当前不可撤销命令：
@@ -388,9 +400,12 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 8. 执行 same-domain 合并。
 9. Ctrl+Z，确认模型回退并清空合并相关锁边状态。
 10. Ctrl+Y，确认模型恢复。
-11. 执行合法性检查。
-12. 导出 STEP。
-13. 确认导出后二次读取校验通过。
+11. 点击“预览合并”，选择或接受 PlaneLike 候选区域。
+12. 通过“平面合并”下拉菜单执行当前候选、全部已接受候选或全部可合并候选。
+13. 确认平面合并后 face/edge 数下降，solid 数不丢失，候选外边界共线分段尽量被简化。
+14. 执行合法性检查。
+15. 导出 STEP。
+16. 确认导出后二次读取校验通过。
 ```
 
 ---
@@ -402,8 +417,8 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 ```text
 1. 用真实潮玩件 STEP 做回归测试。
 2. 检查 PlaneLike 候选质量和误选/漏选案例。
-3. 明确 Accepted candidates 到 Stage 3A PlaneRegionMerge 的输入契约。
-4. 再实现 PlaneRegionMerge 的最小 B-rep 替换实验。
+3. 用真实潮玩件样例验证 Stage 3A PlaneRegionMerge 的候选边界、BRepCheck 和导出后重读。
+4. 再评估 Stage 3B CylinderRegionMerge 的输入契约与风险边界。
 5. 再考虑 ProjectSerializer。
 ```
 
@@ -424,6 +439,9 @@ P0 稳定性收口：基本完成
 候选区域 GUI 预览：已完成基础版
 候选区域选择/接受/拒绝/隐藏：已完成基础版
 RegionMerger 框架准备：已完成基础版
+PlaneRegionMerge：已完成基础可用版
+平面候选批量合并：已完成基础版
+平面合并边界简化：已完成基础版
 项目保存恢复：未完成
 完整误差评估：未完成
 高级特征线：未完成
@@ -433,6 +451,6 @@ RegionMerger 框架准备：已完成基础版
 总体评价：
 
 ```text
-当前项目已经具备可演示的工程雏形，并已完成 PlaneLike 候选生成、可视化预览和人工筛选基础。
-下一步重点应转向真实潮玩件样例回归、候选质量评估、Stage 3A PlaneRegionMerge 最小实验、报告指标和状态持久化。
+当前项目已经具备可演示的工程雏形，并已完成 PlaneLike 候选生成、可视化预览、人工筛选基础和 Stage 3A PlaneRegionMerge 基础可用闭环。
+下一步重点应转向真实潮玩件样例回归、候选质量评估、PlaneRegionMerge 复杂边界失败案例收敛、报告指标和状态持久化。
 ```
