@@ -34,7 +34,8 @@ std::string ShapeDocument::displayName() const {
     if (sourcePath_.empty()) {
         return "未命名";
     }
-    return sourcePath_.filename().string();
+    const auto utf8Name = sourcePath_.filename().u8string();
+    return {reinterpret_cast<const char*>(utf8Name.c_str()), utf8Name.size()};
 }
 
 ShapeStats ShapeDocument::computeStats(const TopoDS_Shape& shape) {

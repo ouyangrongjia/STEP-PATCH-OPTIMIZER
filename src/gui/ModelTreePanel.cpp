@@ -39,7 +39,7 @@ void ModelTreePanel::showDocument(
     tree_->clear();
     const auto& stats = document.stats();
 
-    auto* root = new QTreeWidgetItem(tree_, QStringList() << QString::fromStdString(document.displayName()));
+    auto* root = new QTreeWidgetItem(tree_, QStringList() << QString::fromUtf8(document.displayName().c_str()));
     auto* solids = new QTreeWidgetItem(root, QStringList() << QString("实体 (%1)").arg(stats.solids));
     for (int i = 0; i < stats.solids; ++i) {
         new QTreeWidgetItem(solids, QStringList() << QString("实体 %1").arg(i));
