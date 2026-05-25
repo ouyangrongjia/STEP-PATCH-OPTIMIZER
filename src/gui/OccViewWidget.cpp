@@ -9,6 +9,7 @@
 #include <Prs3d_LineAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <SelectMgr_EntityOwner.hxx>
+#include <Standard_Failure.hxx>
 #include <StdSelect_BRepOwner.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS_Shape.hxx>
@@ -30,6 +31,8 @@
 #include <QWheelEvent>
 
 #include <cmath>
+#include <exception>
+#include <string>
 #include <vector>
 
 namespace spo {
@@ -60,6 +63,11 @@ const Quantity_Color& candidateColor(std::size_t index) {
     return colors[index % colors.size()];
 }
 
+std::string occtMessage(const Standard_Failure& error) {
+    const auto* message = error.GetMessageString();
+    return message != nullptr ? message : "unknown OCCT error";
+}
+
 }
 
 OccViewWidget::OccViewWidget(QWidget* parent) : QWidget(parent) {
@@ -71,44 +79,72 @@ OccViewWidget::OccViewWidget(QWidget* parent) : QWidget(parent) {
     setMouseTracking(true);
 }
 
+OccViewWidget::~OccViewWidget() {
+    if (!context_.IsNull()) {
+        context_->RemoveAll(Standard_False);
+    }
+    mergeCandidateShapes_.clear();
+    displayedShape_.Nullify();
+    hoverShape_.Nullify();
+    featureEdgeShape_.Nullify();
+    lockedEdgeShape_.Nullify();
+    context_.Nullify();
+    view_.Nullify();
+    viewer_.Nullify();
+    window_.Nullify();
+    displayConnection_.Nullify();
+}
+
 QPaintEngine* OccViewWidget::paintEngine() const {
     return context_.IsNull() ? QWidget::paintEngine() : nullptr;
 }
 
-void OccViewWidget::displayDocument(const ShapeDocument& document) {
-    initializeOcct();
-    hasDocument_ = document.hasShape();
-    stats_ = document.stats();
-    topology_ = &document.topology();
-    selectedFaces_.clear();
-    selectedEdges_.clear();
-    lastSelectedFace_ = -1;
-    lastSelectedEdge_ = -1;
+Result OccViewWidget::displayDocument(const ShapeDocument& document) {
+    try {
+        initializeOcct();
+        hasDocument_ = document.hasShape();
+        stats_ = document.stats();
+        topology_ = &document.topology();
+        selectedFaces_.clear();
+        selectedEdges_.clear();
+        lastSelectedFace_ = -1;
+        lastSelectedEdge_ = -1;
 
-    if (context_.IsNull()) {
-        return;
+        if (context_.IsNull()) {
+            return Result::ok();
+        }
+
+        context_->RemoveAll(Standard_False);
+        hoverShape_.Nullify();
+        featureEdgeShape_.Nullify();
+        lockedEdgeShape_.Nullify();
+        mergeCandidateShapes_.clear();
+        mergeCandidateFaceColors_.clear();
+        mergePreviewVisible_ = false;
+        displayedShape_ = new AIS_ColoredShape(document.shape());
+        displayedShape_->SetMaterial(Graphic3d_NOM_PLASTIC);
+        displayedShape_->SetColor(Quantity_Color(1.0, 0.74, 0.16, Quantity_TOC_RGB));
+        displayedShape_->SetDisplayMode(AIS_Shaded);
+        displayedShape_->Attributes()->SetFaceBoundaryDraw(Standard_True);
+        displayedShape_->Attributes()->SetFaceBoundaryAspect(
+            new Prs3d_LineAspect(Quantity_Color(0.08, 0.08, 0.08, Quantity_TOC_RGB), Aspect_TOL_SOLID, 1.0));
+
+        context_->Display(displayedShape_, Standard_False);
+        context_->UpdateCurrentViewer();
+        activateSelectionMode();
+        resizeOcctWindow();
+        fitAll();
+        return Result::ok();
+    } catch (const Standard_Failure& error) {
+        clearDocument();
+        return Result::error(std::string("OCCT 显示模型异常：") + occtMessage(error));
+    } catch (const std::exception& error) {
+        clearDocument();
+        return Result::error(std::string("显示模型异常：") + error.what());
+    } catch (...) {
+        clearDocument();
+        return Result::error("显示模型异常：未知错误");
     }
-
-    context_->RemoveAll(Standard_False);
-    hoverShape_.Nullify();
-    featureEdgeShape_.Nullify();
-    lockedEdgeShape_.Nullify();
-    mergeCandidateShapes_.clear();
-    mergeCandidateFaceColors_.clear();
-    mergePreviewVisible_ = false;
-    displayedShape_ = new AIS_ColoredShape(document.shape());
-    displayedShape_->SetMaterial(Graphic3d_NOM_PLASTIC);
-    displayedShape_->SetColor(Quantity_Color(1.0, 0.74, 0.16, Quantity_TOC_RGB));
-    displayedShape_->SetDisplayMode(AIS_Shaded);
-    displayedShape_->Attributes()->SetFaceBoundaryDraw(Standard_True);
-    displayedShape_->Attributes()->SetFaceBoundaryAspect(
-        new Prs3d_LineAspect(Quantity_Color(0.08, 0.08, 0.08, Quantity_TOC_RGB), Aspect_TOL_SOLID, 1.0));
-
-    context_->Display(displayedShape_, Standard_False);
-    context_->UpdateCurrentViewer();
-    activateSelectionMode();
-    resizeOcctWindow();
-    fitAll();
 }
 
 void OccViewWidget::clearDocument() {

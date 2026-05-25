@@ -1,6 +1,7 @@
 #pragma once
 
 #include "brep/ShapeDocument.h"
+#include "common/Result.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "gui/GuiTypes.h"
 #include "merge/MergeCandidate.h"
@@ -30,7 +31,8 @@ class TopologyGraph;
 class OccViewWidget final : public QWidget {
 public:
     explicit OccViewWidget(QWidget* parent = nullptr);
-    void displayDocument(const ShapeDocument& document);
+    ~OccViewWidget() override;
+    Result displayDocument(const ShapeDocument& document);
     void clearDocument();
     void setSelectionMode(SelectionMode mode);
     void showFeatureEdges(const FeatureEdgeDetectionResult& result);
