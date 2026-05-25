@@ -44,7 +44,7 @@ FeatureEdgeDetector
 2. concat_bsplines=true 主要减少部分 edge，不一定减少 face。
 3. MergePlanner / MergeRegionGrower 已进入候选区域生成阶段。
 4. 候选区域已经可以 GUI 高亮预览，但仍未参与真实合并。
-5. Stage 3A PlaneRegionMerge 强化版已经进入真实 region merge；Stage 3B-E 仍为后续解析图元扩展。
+5. Stage 3A PlaneRegionMerge 强化版已经进入真实 region merge；但当前候选层仍以 PlaneLike 为主，缺少多类型解析图元候选探测。
 6. 当前 PlaneRegionMerge 采用 ReShape 替换 + boundary edge same-domain cleanup，并报告 BRepCheck 状态。
 7. 潮玩模型常见自由曲面碎片化尚未解决，SurfaceRefitter 暂不具备直接落地条件。
 ```
@@ -626,6 +626,424 @@ RestoreCandidateCommand
 5. 清除预览或打开新文件后候选状态清空。
 6. Accepted candidates 能被后续 Stage 3A 读取或预留接口读取。
 ```
+
+---
+
+## 6.7 Stage 2.7：Face / Candidate Inspect
+
+### 6.7.1 目标
+
+Stage 2.7 的目标不是新增候选类型，也不是执行真实合并，而是补齐交互式检查能力：
+
+```text
+用户点击模型上的某个 face
+→ 系统自动反查 FaceId
+→ 判断该 face 是否属于当前候选区域
+→ 如果属于候选，显示 candidate 信息
+→ 如果不属于候选，显示基础 inspect 信息
+```
+
+该阶段解决的问题是：
+
+```text
+1. 用户不应手动输入或理解 face id。
+2. 用户应通过点击模型直接知道某个面是否属于候选。
+3. 当前候选没有覆盖某个区域时，系统至少应说明：
+   - 该 face 的拓扑编号；
+   - surface type；
+   - 是否属于已生成候选；
+   - 是否被 Top N 显示过滤；
+   - 是否邻接 protected edge；
+   - 是否可能因为 min_region_faces / PlaneLike 限制未成为候选。
+```
+
+### 6.7.2 实现边界
+
+允许：
+
+```text
+1. 扩展 Viewer 点击 face 后的检查信息。
+2. 在 InspectPanel / ReportPanel 显示 face inspect 结果。
+3. 显示 face 所属 candidate id/type/status/risk/metrics。
+4. 对不属于候选的 face，显示 surface type 和基础拓扑上下文。
+5. 不修改 TopoDS_Shape。
+6. 不执行任何真实合并。
+```
+
+不允许：
+
+```text
+1. 不实现 Cylinder / Sphere / Cone / Torus 真实合并。
+2. 不修改 Stage 3A PlaneRegionMerge。
+3. 不强行生成多类型候选。
+4. 不把 inspect 结果写入 ShapeDocument。
+5. 不要求用户输入 face id。
+```
+
+### 6.7.3 推荐信息结构
+
+可新增轻量结构：
+
+```cpp
+enum class FaceInspectCandidateState {
+    InVisibleCandidate,
+    InHiddenCandidate,
+    InCandidateButNotDisplayed,
+    NotInCandidate
+};
+
+struct FaceInspectInfo {
+    FaceId face_id = invalidFaceId;
+
+    std::string surface_type; // Plane / Cylinder / Cone / Sphere / Torus / BSpline / Other / Unknown
+
+    FaceInspectCandidateState candidate_state = FaceInspectCandidateState::NotInCandidate;
+    int candidate_id = -1;
+    MergeCandidateType candidate_type = MergeCandidateType::Unknown;
+    MergeCandidateStatus candidate_status = MergeCandidateStatus::Pending;
+    MergeRiskLevel risk_level = MergeRiskLevel::Low;
+
+    int candidate_face_count = 0;
+    int candidate_boundary_edge_count = 0;
+    int candidate_internal_edge_count = 0;
+
+    bool adjacent_to_protected_edge = false;
+    bool adjacent_to_locked_edge = false;
+    int adjacent_protected_edge_count = 0;
+
+    double max_normal_angle_deg = 0.0;
+    double max_distance = 0.0;
+};
+```
+
+该结构可以先只在 GUI 层运行时使用，不需要进入 `ShapeDocument`。
+
+### 6.7.4 GUI 行为
+
+推荐行为：
+
+```text
+1. 用户点击“预览合并”生成候选。
+2. 用户切换到“候选区域选择”或“Inspect face”模式。
+3. 用户点击任意 face。
+4. 如果该 face 属于候选：
+   - Viewer 高亮该 candidate；
+   - InspectPanel 显示 candidate id/type/status/metrics。
+5. 如果该 face 不属于候选：
+   - Viewer 可短暂高亮该 face；
+   - InspectPanel 显示 surface type、邻接 protected edge、是否可能被 Top N 过滤等信息。
+```
+
+### 6.7.5 验收标准
+
+```text
+1. 用户不需要知道 face id。
+2. 点击属于 candidate 的 face 时，可以显示 candidate 详情。
+3. 点击不属于 candidate 的 face 时，可以显示 surface type 和基础原因。
+4. Inspect 不修改 B-rep。
+5. Inspect 不影响 Stage 3A PlaneRegionMerge。
+6. 现有候选预览、接受、拒绝、隐藏、恢复功能不被破坏。
+```
+
+---
+
+## 6.8 Stage 2.8：Analytic Primitive Candidate Detection / Type Probing
+
+### 6.8.1 目标
+
+Stage 2.8 的目标是扩展候选识别层，而不是执行真实合并。
+
+当前 Stage 2 只稳定生成 `PlaneLike` candidate。Stage 2.8 需要补充解析图元候选探测：
+
+```text
+PlaneLike，已有
+CylinderLike，新增候选探测
+SphereLike，新增候选探测
+ConeLike / FrustumLike，新增候选探测
+TorusLike，可先预留或低优先级
+FreeformLike / Unknown，可作为分类结果预留
+```
+
+该阶段回答：
+
+```text
+某个区域不是 PlaneLike，那么它更可能是什么？
+它是否可以作为后续 Stage 3B / 3D / 3C 的候选？
+```
+
+### 6.8.2 关键原则
+
+```text
+1. 只生成候选，不修改 B-rep。
+2. 只做可视化预览，不执行真实合并。
+3. 不新增 CylinderRegionMerge / SphereRegionMerge / ConeRegionMerge 的真实拓扑替换。
+4. 不改变 Stage 3A PlaneRegionMerge。
+5. 每个新增候选类型都必须有风险等级和 reject reason。
+6. 候选探测应服务后续 Stage 3B / 3D / 3C。
+```
+
+### 6.8.3 推荐拆分
+
+Stage 2.8 不建议一次做完所有类型。推荐子阶段：
+
+```text
+Stage 2.8A：Surface Type Probe
+  对每个 face 识别底层 BRep surface type：
+  Plane / Cylinder / Cone / Sphere / Torus / BSpline / Other。
+
+Stage 2.8B：CylinderLike Candidate Detection
+  基于同轴、同半径、邻接关系和 protectedEdges 生成 CylinderLike candidates。
+
+Stage 2.8C：SphereLike Candidate Detection
+  基于同球心、同半径、邻接关系和 protectedEdges 生成 SphereLike candidates。
+
+Stage 2.8D：ConeLike / FrustumLike Candidate Detection
+  基于同轴、半角、apex/reference radius、邻接关系和 protectedEdges 生成 ConeLike candidates。
+
+Stage 2.8E：TorusLike Candidate Detection，可选
+  仅在有明确 torus 样例时实现。
+```
+
+### 6.8.4 Candidate 检测输入
+
+```text
+ShapeDocument
+TopologyGraph
+FeatureEdgeDetectionResult
+lockedEdges
+protectedEdges
+MergePlannerOptions
+```
+
+`protectedEdges` 仍然由：
+
+```text
+自动 feature edges + 用户 lockedEdges
+```
+
+构成。新增候选类型同样不能跨越 protectedEdges。
+
+### 6.8.5 Candidate 输出
+
+仍然输出 `MergeCandidate`，但 `candidate_type` 不再只有 PlaneLike：
+
+```cpp
+MergeCandidateType::CylinderLike
+MergeCandidateType::SphereLike
+MergeCandidateType::ConeLike
+MergeCandidateType::TorusLike
+```
+
+推荐补充或复用字段：
+
+```text
+candidate_id
+candidate_type
+faces
+boundary_edges
+internal_edges
+blocked_edges
+protected_edges
+face_count
+boundary_edge_count
+internal_edge_count
+total_area
+fit_error
+risk_level
+status
+```
+
+如需 primitive-specific 参数，可以先放入轻量诊断结构，不要急于污染 `MergeCandidate` 主结构。
+
+### 6.8.6 验收标准
+
+```text
+1. PlaneLike 既有行为不回退。
+2. 至少能识别一种新增解析图元候选，优先 CylinderLike 或 ConeLike/FrustumLike。
+3. 新增候选不跨越 protectedEdges / lockedEdges。
+4. 新增候选不会修改 ShapeDocument。
+5. GUI / Report 能显示 candidate type。
+6. 用户可以在 Viewer 中区分不同 candidate type。
+7. 现有 Stage 3A PlaneRegionMerge 仍只处理 PlaneLike。
+8. 新增 Cylinder/Sphere/Cone/Torus candidate 不会被误交给 PlaneRegionMerger。
+```
+
+---
+
+## 6.9 Stage 2.9：Multi-type Candidate Preview
+
+### 6.9.1 目标
+
+Stage 2.9 的目标是让多类型候选可视化、可筛选、可解释。该阶段应作为通用多类型候选展示框架实现，即使某些类型当前数量为 0，也要预留显示、统计和过滤通道。
+
+在 Stage 2.8 生成多类型 candidates 后，Stage 2.9 负责 GUI 呈现：
+
+```text
+按类型显示候选
+按风险显示候选
+按状态显示候选
+点击 face 显示其候选类型与原因
+```
+
+### 6.9.2 推荐 GUI 能力
+
+```text
+1. 显示全部 PlaneLike candidates。
+2. 显示全部 CylinderLike candidates。
+3. 显示全部 SphereLike candidates。
+4. 显示全部 ConeLike / FrustumLike candidates。
+5. 显示全部 TorusLike candidates，可选；当前可能为 0。
+6. 预留 FreeformG1 / FreeformG2 / Unknown candidates 的统计和显示入口。
+7. 显示全部非隐藏 candidates。
+7. 只显示 Accepted / Pending / Rejected / Hidden。
+8. 按 candidate id 高亮。
+9. 点击 face 反查所属 candidate。
+10. ReportPanel 显示按类型统计：
+    - PlaneLike count
+    - CylinderLike count
+    - SphereLike count
+    - ConeLike count
+    - TorusLike count
+    - TorusLike count
+    - FreeformG1 count
+    - FreeformG2 count
+    - Unknown count
+```
+
+### 6.9.3 Viewer 显示建议
+
+```text
+不同 candidate type 使用不同颜色族。
+同一类型内可以使用深浅变化或循环色。
+Rejected / Hidden 不默认显示。
+当前选中 candidate 使用更粗边框或更高亮覆盖。
+```
+
+### 6.9.4 与 Stage 3 的边界
+
+```text
+1. Stage 2.9 只显示候选，不合并候选。
+2. Stage 2.9 不新增真实 B-rep 替换。
+3. Stage 2.9 不调用 CylinderRegionMerger / SphereRegionMerger / ConeRegionMerger。
+4. Stage 3A 仍只处理 PlaneLike。
+5. 后续 Stage 3B / 3D / 3C 再读取对应类型 candidate 做真实合并。
+```
+
+### 6.9.5 验收标准
+
+```text
+1. 多类型候选能在 Viewer 中区分显示。
+2. ReportPanel 能按 candidate type 输出统计。
+3. ModelTreePanel 能显示候选类型统计。
+4. 用户点击 face 后能看到 candidate type / status / metrics。
+5. Hidden candidate 不默认显示。
+6. Rejected candidate 不进入后续真实合并。
+7. 原 Stage 2.5 / Stage 2.6 / Stage 3A 不回退。
+```
+
+---
+
+## 6.10 Stage 2.8 当前实现状态与后续增强计划
+
+### 6.10.1 当前 Stage 2.8 基础版状态
+
+截至当前版本，Stage 2.8 已完成多类型解析候选的基础接入。当前候选识别状态如下：
+
+| 类型                    | 当前状态                                                     |      默认 GUI 预览是否开启 | 当前限制                                            |
+| ----------------------- | ------------------------------------------------------------ | -------------------------: | --------------------------------------------------- |
+| PlaneLike               | 已支持，原有平面近似区域生长                                 |                       开启 | 仅处理近似共面区域                                  |
+| CylinderLike            | 已支持基础版，仅识别 OCCT 原生 Cylinder 面                   |                       开启 | 当前真实样例中可能为 0，需要近似圆柱检测增强        |
+| SphereLike              | 已支持增强版，识别 OCCT 原生 Sphere，也支持保守的 BSpline / Bezier 球面近似 |                       开启 | 当前只做候选，不做真实 SphereRegionMerge            |
+| ConeLike                | 已支持基础版，仅识别 OCCT 原生 Cone 面                       |                       开启 | 当前真实样例中可能为 0，需要近似圆锥 / 圆台检测增强 |
+| TorusLike               | 只有开关和空 stub，目前不生成候选                            | 开启了开关，但不会产生候选 | 保留为后续可选高级解析图元                          |
+| FreeformG1 / FreeformG2 | 只预留类型，没有真实检测                                     |                     未开启 | 后续 Stage 4 / Stage 5 再处理                       |
+
+### 6.10.2 当前判断
+
+当前继续推进 Stage 2.9 是合理的，原因是：
+
+```text
+1. 多类型候选系统已经不再是 Plane-only。
+2. PlaneLike 和 SphereLike 已经能作为多类型预览的真实输入。
+3. CylinderLike / ConeLike 虽然当前样例可能为 0，但基础类型、开关和候选通道已经接入。
+4. Stage 2.9 可以先建立多类型候选展示、统计、筛选和点击查看框架。
+5. 后续 CylinderLike / ConeLike approximate detection 增强后，可以直接复用 Stage 2.9 的 GUI 通道。
+```
+
+但需要明确：
+
+```text
+1. Stage 2.9 不负责提升 CylinderLike / ConeLike 检出率。
+2. Stage 2.9 完成后，不能直接声称多类型候选识别已经成熟。
+3. CylinderLike / ConeLike 当前只能视为 native-only 基础版接入。
+4. 后续必须补充 CylinderLike approximate detection 和 ConeLike / FrustumLike approximate detection。
+5. 在上述增强完成前，不建议进入 Stage 3B / Stage 3C 的真实合并。
+```
+
+### 6.10.3 推荐后续路线
+
+当前推荐路线调整为：
+
+```text
+Stage 2.9：Multi-type Candidate Preview
+  建立多类型候选显示、统计、筛选、点击查看框架。
+  必须预留 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 等类型。
+  允许某些类型当前数量为 0。
+
+Stage 2.8 Enhancement A：CylinderLike Approximate Detection
+  在 native Cylinder 基础上，增强对 BSpline / Bezier / SurfaceOfRevolution / 近似圆柱区域的保守识别。
+  只生成候选，不做真实合并。
+
+Stage 2.8 Enhancement B：ConeLike / FrustumLike Approximate Detection
+  在 native Cone 基础上，增强对 BSpline / Bezier / SurfaceOfRevolution / 圆台类区域的保守识别。
+  只生成候选，不做真实合并。
+
+Stage 3B：CylinderRegionMerge
+  仅在 CylinderLike candidate 检测足够稳定后推进真实圆柱区域合并。
+
+Stage 3D：SphereRegionMerge
+  基于当前 SphereLike 增强候选，后续可优先进入真实球面区域合并。
+
+Stage 3C：ConeRegionMerge
+  后置，避免误伤自由曲面尖角、发尖和高曲率装饰区域。
+```
+
+### 6.10.4 Stage 2.9 的边界
+
+Stage 2.9 应按“展示框架”实现，而不是“检测增强”实现：
+
+```text
+允许：
+1. 按 candidate_type 统计数量。
+2. 按 candidate_type 过滤显示。
+3. 不同 candidate_type 使用不同颜色族。
+4. 点击 face 显示 candidate type / status / risk / metrics。
+5. ReportPanel / ModelTreePanel 显示多类型统计。
+6. 对 TorusLike / FreeformG1 / FreeformG2 / Unknown 预留显示和统计逻辑。
+7. 正确处理某些类型 count == 0 的情况。
+
+不允许：
+1. 不增强 CylinderLike / ConeLike 检测算法。
+2. 不实现 CylinderRegionMerge / ConeRegionMerge / SphereRegionMerge。
+3. 不构造新 face。
+4. 不替换 TopoDS_Shape。
+5. 不改变 Stage 3A PlaneRegionMerge。
+6. 不把非 PlaneLike candidate 送入 PlaneRegionMerger。
+```
+
+### 6.10.5 Stage 2.8 增强的边界
+
+后续 CylinderLike / ConeLike 增强都属于 Stage 2.8 Enhancement，不属于 Stage 2.9：
+
+```text
+1. Enhancement 只增强候选检测，不执行真实合并。
+2. Enhancement 允许对 BSpline / Bezier / SurfaceOfRevolution 做保守近似判断。
+3. Enhancement 必须设置 risk_level。
+4. Enhancement 必须允许失败或不生成候选，不能强行拟合。
+5. Enhancement 不应误伤自由曲面尖角、发尖、高曲率装饰区域。
+6. Enhancement 完成后，仍需 Stage 2.9 负责可视化预览。
+```
+
 
 ---
 
@@ -1308,8 +1726,11 @@ test_plane_region_merge_command.cpp:
 ```text
 1. Stage 3-0：已完成。
 2. Stage 3A：已完成强化版，继续真实样例验证。
-3. Stage 3B：CylinderRegionMerge。
-4. Stage 3D：SphereRegionMerge。
+3. Stage 2.7：Face / Candidate Inspect。
+4. Stage 2.8：Analytic Primitive Candidate Detection / Type Probing。
+5. Stage 2.9：Multi-type Candidate Preview。
+6. Stage 3B：CylinderRegionMerge。
+7. Stage 3D：SphereRegionMerge。
 5. Stage 4：Freeform Candidate Detection。
 6. Stage 5：Freeform B-spline / Plate Refit。
 7. Stage 3C：ConeRegionMerge，后置补全。
@@ -1791,7 +2212,7 @@ Codex 修改合并算法时必须遵守：
    - 3C ConeRegionMerge，保留但后置
    - 3D SphereRegionMerge
    - 3E TorusRegionMerge，可选补全
-7. 当前近期主线是：验证 3A 强化版 → 3B → 3D → Stage 4 → Stage 5。
+7. 当前近期主线是：验证 3A 强化版 → Stage 2.9 多类型候选预览框架 → Stage 2.8 Enhancement Cylinder/Cone 近似检测 → 3B/3D/3C → Stage 4 → Stage 5。
 8. 3C / 3E 不删除，但不阻塞自由曲面路线。
 9. Freeform Candidate Detection 提前进入，服务潮玩模型自由曲面。
 10. B-spline / Plate Refit 在验证、报告和 rollback 完善后实施。
