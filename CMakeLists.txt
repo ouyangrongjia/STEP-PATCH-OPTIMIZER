@@ -32,6 +32,8 @@ add_library(spo_core STATIC
     src/command/LockedEdgeRef.cpp
     src/command/LockEdgeCommand.cpp
     src/command/MergePatchCommand.cpp
+    src/command/PlaneRegionBatchMergeCommand.cpp
+    src/command/PlaneRegionMergeCommand.cpp
     src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
     src/feature/BoundaryClassifier.cpp
@@ -123,6 +125,8 @@ if(SPO_BUILD_TESTS)
         tests/test_feature_edges.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp
+        tests/test_plane_region_merge_command.cpp
+        tests/test_plane_region_merger.cpp
         tests/test_region_merge_stubs.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp

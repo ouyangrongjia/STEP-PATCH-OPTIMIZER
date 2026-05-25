@@ -1,5 +1,6 @@
 #pragma once
 
+#include "brep/ShapeDocument.h"
 #include "merge/MergeCandidate.h"
 
 #include <string>
@@ -48,6 +49,13 @@ struct RegionMergeResult {
     double max_deviation = 0.0;
     double mean_deviation = 0.0;
     double rms_deviation = 0.0;
+
+    double plane_normal_x = 0.0;
+    double plane_normal_y = 0.0;
+    double plane_normal_z = 0.0;
+
+    bool brep_check_valid = false;
+    ShapeDocument document;
 };
 
 }

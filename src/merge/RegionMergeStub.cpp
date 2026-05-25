@@ -15,6 +15,7 @@ RegionMergeResult baseResult(const ShapeDocument& document, const MergeCandidate
     result.face_count_after = stats.faces;
     result.edge_count_before = stats.edges;
     result.edge_count_after = stats.edges;
+    result.document = document;
     return result;
 }
 

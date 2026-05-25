@@ -52,12 +52,6 @@ void test_region_merger_stubs_return_not_implemented_for_matching_types() {
     const auto before = document.stats();
     const spo::RegionMergeOptions options;
 
-    const spo::PlaneRegionMerger plane;
-    assert_not_implemented_without_document_change(
-        document,
-        plane.merge(document, make_candidate(spo::MergeCandidateType::PlaneLike), options),
-        spo::MergeCandidateType::PlaneLike);
-
     const spo::CylinderRegionMerger cylinder;
     assert_not_implemented_without_document_change(
         document,
@@ -89,29 +83,29 @@ void test_region_merger_stub_rejects_wrong_candidate_type() {
     const auto document = create_box_document();
     const auto before = document.stats();
     const spo::RegionMergeOptions options;
-    const spo::PlaneRegionMerger plane;
+    const spo::CylinderRegionMerger cylinder;
 
-    const auto result = plane.merge(document, make_candidate(spo::MergeCandidateType::CylinderLike), options);
+    const auto result = cylinder.merge(document, make_candidate(spo::MergeCandidateType::PlaneLike), options);
     assert(!result.success);
     assert(result.failure_reason == spo::RegionMergeFailureReason::UnsupportedCandidateType);
-    assert(result.candidate_type == spo::MergeCandidateType::CylinderLike);
+    assert(result.candidate_type == spo::MergeCandidateType::PlaneLike);
     assert(same_stats(document.stats(), before));
 }
 
 void test_region_merger_stub_rejects_hidden_and_rejected_candidates() {
     const auto document = create_box_document();
     const spo::RegionMergeOptions options;
-    const spo::PlaneRegionMerger plane;
+    const spo::CylinderRegionMerger cylinder;
 
-    auto rejected = make_candidate(spo::MergeCandidateType::PlaneLike);
+    auto rejected = make_candidate(spo::MergeCandidateType::CylinderLike);
     rejected.status = spo::MergeCandidateStatus::Rejected;
-    const auto rejectedResult = plane.merge(document, rejected, options);
+    const auto rejectedResult = cylinder.merge(document, rejected, options);
     assert(!rejectedResult.success);
     assert(rejectedResult.failure_reason == spo::RegionMergeFailureReason::RejectedCandidate);
 
-    auto hidden = make_candidate(spo::MergeCandidateType::PlaneLike);
+    auto hidden = make_candidate(spo::MergeCandidateType::CylinderLike);
     hidden.status = spo::MergeCandidateStatus::Hidden;
-    const auto hiddenResult = plane.merge(document, hidden, options);
+    const auto hiddenResult = cylinder.merge(document, hidden, options);
     assert(!hiddenResult.success);
     assert(hiddenResult.failure_reason == spo::RegionMergeFailureReason::HiddenCandidate);
 }
