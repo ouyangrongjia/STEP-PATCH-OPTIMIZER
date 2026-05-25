@@ -1,9 +1,11 @@
 #pragma once
 
 #include "app/AppController.h"
+#include "merge/FaceInspectInfo.h"
 
 #include <QMainWindow>
 
+#include <set>
 #include <vector>
 
 class QAction;
@@ -64,6 +66,7 @@ private:
     void syncLockedEdges();
     void refreshModelTree();
     void clearMergeCandidateState();
+    void showFaceInspectReport(const FaceInspectInfo& info, bool hasCandidatePreview);
     MergeCandidate* currentMergeCandidate();
     bool setCurrentMergeCandidateStatus(MergeCandidateStatus status);
     void showFilteredMergeCandidates(MergeCandidateStatus status);
@@ -114,6 +117,7 @@ private:
     QAction* undoAction_ = nullptr;
     QAction* redoAction_ = nullptr;
     std::vector<MergeCandidate> lastMergeCandidates_;
+    std::set<int> visibleMergeCandidateIds_;
     int visibleMergeCandidateCount_ = 0;
     int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;

@@ -24,6 +24,7 @@ add_library(spo_core STATIC
     src/brep/EdgeIndex.cpp
     src/brep/FaceIndex.cpp
     src/brep/ShapeDocument.cpp
+    src/brep/SurfaceTypeProbe.cpp
     src/brep/TopologyGraph.cpp
     src/command/CommandHistory.cpp
     src/command/DetectFeatureCommand.cpp
@@ -43,6 +44,8 @@ add_library(spo_core STATIC
     src/io/ProjectSerializer.cpp
     src/io/StepReader.cpp
     src/io/StepWriter.cpp
+    src/merge/FaceInspectInfo.cpp
+    src/merge/FaceInspector.cpp
     src/merge/ConeRegionMerger.cpp
     src/merge/CylinderRegionMerger.cpp
     src/merge/MergeCandidate.cpp
@@ -123,6 +126,7 @@ if(SPO_BUILD_TESTS)
 
     add_executable(spo_tests
         tests/test_feature_edges.cpp
+        tests/test_face_inspect.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp
         tests/test_plane_region_merge_command.cpp
