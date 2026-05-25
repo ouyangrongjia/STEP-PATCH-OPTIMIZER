@@ -2,10 +2,25 @@
 
 #include "command/Command.h"
 
+#include <Standard_Failure.hxx>
+
+#include <exception>
 #include <memory>
 #include <string>
 
 namespace spo {
+
+namespace {
+
+std::string occtMessage(const Standard_Failure& error) {
+    const auto* message = error.GetMessageString();
+    if (message == nullptr || std::string(message).empty()) {
+        return "OCCT 操作失败。";
+    }
+    return message;
+}
+
+}
 
 Result CommandHistory::execute(std::unique_ptr<Command> command, CommandContext& context) {
     if (command == nullptr) {
@@ -13,7 +28,16 @@ Result CommandHistory::execute(std::unique_ptr<Command> command, CommandContext&
     }
 
     const std::string commandName = command->name();
-    const auto result = command->execute(context);
+    Result result = Result::ok();
+    try {
+        result = command->execute(context);
+    } catch (const Standard_Failure& error) {
+        return Result::error(commandName + " 失败：" + occtMessage(error));
+    } catch (const std::exception& error) {
+        return Result::error(commandName + " 失败：" + error.what());
+    } catch (...) {
+        return Result::error(commandName + " 失败：未知异常。");
+    }
     if (!result.success()) {
         return result;
     }
@@ -41,7 +65,16 @@ Result CommandHistory::undo(CommandContext& context) {
 
     auto command = std::move(undoStack_.back());
     undoStack_.pop_back();
-    const auto result = command->undo(context);
+    Result result = Result::ok();
+    try {
+        result = command->undo(context);
+    } catch (const Standard_Failure& error) {
+        result = Result::error(std::string(command->name()) + " 撤销失败：" + occtMessage(error));
+    } catch (const std::exception& error) {
+        result = Result::error(std::string(command->name()) + " 撤销失败：" + error.what());
+    } catch (...) {
+        result = Result::error(std::string(command->name()) + " 撤销失败：未知异常。");
+    }
     if (!result.success()) {
         undoStack_.push_back(std::move(command));
         return result;
@@ -58,7 +91,16 @@ Result CommandHistory::redo(CommandContext& context) {
 
     auto command = std::move(redoStack_.back());
     redoStack_.pop_back();
-    const auto result = command->redo(context);
+    Result result = Result::ok();
+    try {
+        result = command->redo(context);
+    } catch (const Standard_Failure& error) {
+        result = Result::error(std::string(command->name()) + " 重做失败：" + occtMessage(error));
+    } catch (const std::exception& error) {
+        result = Result::error(std::string(command->name()) + " 重做失败：" + error.what());
+    } catch (...) {
+        result = Result::error(std::string(command->name()) + " 重做失败：未知异常。");
+    }
     if (!result.success()) {
         redoStack_.push_back(std::move(command));
         return result;

@@ -19,6 +19,7 @@
 #include <chrono>
 #include <filesystem>
 #include <set>
+#include <stdexcept>
 
 namespace {
 
@@ -49,6 +50,12 @@ class NonUndoableCommand final : public spo::Command {
 public:
     const char* name() const override { return "NonUndoableCommand"; }
     spo::Result execute(spo::CommandContext&) override { return spo::Result::ok(); }
+};
+
+class ThrowingCommand final : public spo::Command {
+public:
+    const char* name() const override { return "ThrowingCommand"; }
+    spo::Result execute(spo::CommandContext&) override { throw std::runtime_error("boom"); }
 };
 
 void load_context(spo::CommandContext& context, const std::filesystem::path& path) {
@@ -96,6 +103,15 @@ void run_command_tests() {
         assert(history.execute(std::make_unique<NonUndoableCommand>(), commandContext).success());
         assert(!history.canUndo());
         assert(!history.canRedo());
+    }
+
+    {
+        spo::CommandHistory history;
+        spo::CommandContext commandContext;
+        const auto result = history.execute(std::make_unique<ThrowingCommand>(), commandContext);
+        assert(!result.success());
+        assert(result.message().find("ThrowingCommand") != std::string::npos);
+        assert(!history.canUndo());
     }
 
     {

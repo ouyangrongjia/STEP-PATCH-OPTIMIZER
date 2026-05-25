@@ -4,7 +4,18 @@
 #include <STEPControl_StepModelType.hxx>
 #include <STEPControl_Writer.hxx>
 
+#include <string>
+
 namespace spo {
+
+namespace {
+
+std::string pathToOcctString(const std::filesystem::path& path) {
+    const auto utf8Path = path.u8string();
+    return {reinterpret_cast<const char*>(utf8Path.c_str()), utf8Path.size()};
+}
+
+}
 
 Result StepWriter::write(const ShapeDocument& document, const std::filesystem::path& path) const {
     if (!document.hasShape()) {
@@ -17,7 +28,8 @@ Result StepWriter::write(const ShapeDocument& document, const std::filesystem::p
         return Result::error("OCCT 为 STEP 导出转换模型失败。");
     }
 
-    const auto writeStatus = writer.Write(path.string().c_str());
+    const auto occtPath = pathToOcctString(path);
+    const auto writeStatus = writer.Write(occtPath.c_str());
     if (writeStatus != IFSelect_RetDone) {
         return Result::error("OCCT 写出 STEP 文件失败。");
     }
