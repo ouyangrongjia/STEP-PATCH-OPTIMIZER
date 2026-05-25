@@ -7,11 +7,14 @@
 #include <BRepGProp.hxx>
 #include <BRepLProp_SLProps.hxx>
 #include <BRepTools.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 #include <GProp_GProps.hxx>
 #include <Precision.hxx>
 #include <TopAbs_Orientation.hxx>
+#include <gp_Lin.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 #include <optional>
@@ -102,6 +105,372 @@ bool containsFace(const std::set<FaceId>& faces, const EdgeAdjacency& adjacency)
         }
     }
     return true;
+}
+
+struct AnalyticSurfaceSample {
+    GeomAbs_SurfaceType surface_type = GeomAbs_OtherSurface;
+    gp_Dir axis_direction = gp_Dir(0.0, 0.0, 1.0);
+    gp_Pnt axis_location;
+    gp_Pnt center;
+    gp_Pnt apex;
+    double radius = 0.0;
+    double semi_angle_degrees = 0.0;
+};
+
+bool solveLinear4x4(std::array<std::array<double, 4>, 4> matrix, std::array<double, 4> rhs, std::array<double, 4>& solution) {
+    for (int pivot = 0; pivot < 4; ++pivot) {
+        int pivotRow = pivot;
+        for (int row = pivot + 1; row < 4; ++row) {
+            if (std::abs(matrix[row][pivot]) > std::abs(matrix[pivotRow][pivot])) {
+                pivotRow = row;
+            }
+        }
+        if (std::abs(matrix[pivotRow][pivot]) <= 1.0e-12) {
+            return false;
+        }
+        if (pivotRow != pivot) {
+            std::swap(matrix[pivot], matrix[pivotRow]);
+            std::swap(rhs[pivot], rhs[pivotRow]);
+        }
+
+        const auto divisor = matrix[pivot][pivot];
+        for (int col = pivot; col < 4; ++col) {
+            matrix[pivot][col] /= divisor;
+        }
+        rhs[pivot] /= divisor;
+
+        for (int row = 0; row < 4; ++row) {
+            if (row == pivot) {
+                continue;
+            }
+            const auto factor = matrix[row][pivot];
+            for (int col = pivot; col < 4; ++col) {
+                matrix[row][col] -= factor * matrix[pivot][col];
+            }
+            rhs[row] -= factor * rhs[pivot];
+        }
+    }
+
+    solution = rhs;
+    return true;
+}
+
+std::optional<AnalyticSurfaceSample> fitSphereLikeSurface(const TopoDS_Face& face) {
+    double uMin = 0.0;
+    double uMax = 0.0;
+    double vMin = 0.0;
+    double vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    if (!std::isfinite(uMin) || !std::isfinite(uMax) || !std::isfinite(vMin) || !std::isfinite(vMax)) {
+        return std::nullopt;
+    }
+
+    BRepAdaptor_Surface surface(face);
+    std::vector<gp_Pnt> points;
+    points.reserve(9);
+    for (const auto uFactor : {0.25, 0.5, 0.75}) {
+        for (const auto vFactor : {0.25, 0.5, 0.75}) {
+            BRepLProp_SLProps props(surface, uMin + (uMax - uMin) * uFactor, vMin + (vMax - vMin) * vFactor, 0, Precision::Confusion());
+            points.push_back(props.Value());
+        }
+    }
+    if (points.size() < 4) {
+        return std::nullopt;
+    }
+
+    std::array<std::array<double, 4>, 4> normalMatrix {};
+    std::array<double, 4> normalRhs {};
+    for (const auto& point : points) {
+        const std::array<double, 4> row {point.X(), point.Y(), point.Z(), 1.0};
+        const auto rhs = -(point.X() * point.X() + point.Y() * point.Y() + point.Z() * point.Z());
+        for (int i = 0; i < 4; ++i) {
+            normalRhs[i] += row[i] * rhs;
+            for (int j = 0; j < 4; ++j) {
+                normalMatrix[i][j] += row[i] * row[j];
+            }
+        }
+    }
+
+    std::array<double, 4> coefficients {};
+    if (!solveLinear4x4(normalMatrix, normalRhs, coefficients)) {
+        return std::nullopt;
+    }
+
+    const gp_Pnt center(-0.5 * coefficients[0], -0.5 * coefficients[1], -0.5 * coefficients[2]);
+    const auto radiusSquared = center.X() * center.X() + center.Y() * center.Y() + center.Z() * center.Z() - coefficients[3];
+    if (radiusSquared <= Precision::Confusion()) {
+        return std::nullopt;
+    }
+    const auto radius = std::sqrt(radiusSquared);
+
+    double maxResidual = 0.0;
+    for (const auto& point : points) {
+        maxResidual = std::max(maxResidual, std::abs(center.Distance(point) - radius));
+    }
+    if (maxResidual > std::max(0.20, radius * 0.06)) {
+        return std::nullopt;
+    }
+
+    AnalyticSurfaceSample sample;
+    sample.surface_type = GeomAbs_Sphere;
+    sample.center = center;
+    sample.radius = radius;
+    return sample;
+}
+
+std::optional<AnalyticSurfaceSample> sampleAnalyticSurface(
+    const TopoDS_Face& face,
+    GeomAbs_SurfaceType expectedType) {
+    if (face.IsNull()) {
+        return std::nullopt;
+    }
+
+    BRepAdaptor_Surface surface(face);
+    if (surface.GetType() != expectedType) {
+        if (expectedType == GeomAbs_Sphere &&
+            (surface.GetType() == GeomAbs_BSplineSurface || surface.GetType() == GeomAbs_BezierSurface)) {
+            return fitSphereLikeSurface(face);
+        }
+        return std::nullopt;
+    }
+
+    AnalyticSurfaceSample sample;
+    sample.surface_type = expectedType;
+    switch (expectedType) {
+    case GeomAbs_Cylinder: {
+        const auto cylinder = surface.Cylinder();
+        sample.axis_direction = cylinder.Axis().Direction();
+        sample.axis_location = cylinder.Axis().Location();
+        sample.radius = cylinder.Radius();
+        return sample;
+    }
+    case GeomAbs_Sphere: {
+        const auto sphere = surface.Sphere();
+        sample.center = sphere.Location();
+        sample.radius = sphere.Radius();
+        return sample;
+    }
+    case GeomAbs_Cone: {
+        const auto cone = surface.Cone();
+        sample.axis_direction = cone.Axis().Direction();
+        sample.axis_location = cone.Axis().Location();
+        sample.apex = cone.Apex();
+        sample.radius = cone.RefRadius();
+        sample.semi_angle_degrees = std::abs(cone.SemiAngle()) * 180.0 / kPi;
+        return sample;
+    }
+    default:
+        return std::nullopt;
+    }
+}
+
+double axisAngleDegrees(const gp_Dir& first, const gp_Dir& second) {
+    const auto dot = std::abs(clampCosine(first.Dot(second)));
+    return std::acos(dot) * 180.0 / kPi;
+}
+
+double axisPositionDistance(const AnalyticSurfaceSample& first, const AnalyticSurfaceSample& second) {
+    return gp_Lin(first.axis_location, first.axis_direction).Distance(gp_Lin(second.axis_location, second.axis_direction));
+}
+
+struct AnalyticCompatibility {
+    bool compatible = false;
+    double fit_error = 0.0;
+    double axis_angle_degrees = 0.0;
+    double distance = 0.0;
+};
+
+AnalyticCompatibility compareAnalyticSamples(
+    const AnalyticSurfaceSample& seed,
+    const AnalyticSurfaceSample& next,
+    MergeCandidateType candidateType,
+    const MergePlannerOptions& options) {
+    AnalyticCompatibility result;
+    switch (candidateType) {
+    case MergeCandidateType::CylinderLike: {
+        result.axis_angle_degrees = axisAngleDegrees(seed.axis_direction, next.axis_direction);
+        const auto axisDistance = axisPositionDistance(seed, next);
+        const auto radiusDelta = std::abs(seed.radius - next.radius);
+        result.distance = std::max(axisDistance, radiusDelta);
+        result.fit_error = std::max({result.axis_angle_degrees / options.max_cylinder_axis_angle_degrees,
+            axisDistance / options.max_cylinder_axis_position_delta,
+            radiusDelta / options.max_cylinder_radius_delta});
+        result.compatible =
+            result.axis_angle_degrees <= options.max_cylinder_axis_angle_degrees &&
+            axisDistance <= options.max_cylinder_axis_position_delta &&
+            radiusDelta <= options.max_cylinder_radius_delta;
+        return result;
+    }
+    case MergeCandidateType::SphereLike: {
+        const auto centerDelta = seed.center.Distance(next.center);
+        const auto radiusDelta = std::abs(seed.radius - next.radius);
+        const auto centerTolerance = std::max(options.max_sphere_center_delta, seed.radius * 0.10);
+        const auto radiusTolerance = std::max(options.max_sphere_radius_delta, seed.radius * 0.08);
+        result.distance = std::max(centerDelta, radiusDelta);
+        result.fit_error = std::max(centerDelta / centerTolerance, radiusDelta / radiusTolerance);
+        result.compatible =
+            centerDelta <= centerTolerance &&
+            radiusDelta <= radiusTolerance;
+        return result;
+    }
+    case MergeCandidateType::ConeLike: {
+        result.axis_angle_degrees = axisAngleDegrees(seed.axis_direction, next.axis_direction);
+        const auto semiAngleDelta = std::abs(seed.semi_angle_degrees - next.semi_angle_degrees);
+        const auto apexDelta = seed.apex.Distance(next.apex);
+        result.distance = std::max(apexDelta, semiAngleDelta);
+        result.fit_error = std::max({result.axis_angle_degrees / options.max_cone_axis_angle_degrees,
+            semiAngleDelta / options.max_cone_semi_angle_delta_degrees,
+            apexDelta / options.max_cone_apex_delta});
+        result.compatible =
+            result.axis_angle_degrees <= options.max_cone_axis_angle_degrees &&
+            semiAngleDelta <= options.max_cone_semi_angle_delta_degrees &&
+            apexDelta <= options.max_cone_apex_delta &&
+            result.fit_error <= options.max_cone_fit_error / std::max(options.max_cone_fit_error, 1.0e-12);
+        return result;
+    }
+    default:
+        return result;
+    }
+}
+
+MergeRiskLevel riskFromFitError(double fitError) {
+    if (fitError <= 0.5) {
+        return MergeRiskLevel::Low;
+    }
+    if (fitError <= 1.0) {
+        return MergeRiskLevel::Medium;
+    }
+    return MergeRiskLevel::High;
+}
+
+std::vector<MergeCandidate> growAnalyticRegions(
+    const ShapeDocument& document,
+    const std::set<EdgeId>& protectedEdges,
+    const MergePlannerOptions& options,
+    GeomAbs_SurfaceType surfaceType,
+    MergeCandidateType candidateType,
+    int* visitedFaces,
+    int* rejectedRegions) {
+    std::vector<MergeCandidate> candidates;
+    const auto& topology = document.topology();
+    std::vector<bool> visited(topology.faceCount(), false);
+    int visitedCount = 0;
+    int rejectedCount = 0;
+
+    for (FaceId seed = 0; seed < topology.faceCount(); ++seed) {
+        if (visited[seed]) {
+            continue;
+        }
+
+        const auto seedSurface = sampleAnalyticSurface(topology.face(seed), surfaceType);
+        if (!seedSurface.has_value()) {
+            continue;
+        }
+
+        std::queue<FaceId> queue;
+        std::set<FaceId> regionFaces;
+        std::set<EdgeId> blockedEdges;
+        std::vector<double> distances;
+        std::vector<double> fitErrors;
+        std::vector<double> axisAngles;
+
+        visited[seed] = true;
+        ++visitedCount;
+        queue.push(seed);
+        regionFaces.insert(seed);
+        distances.push_back(0.0);
+        fitErrors.push_back(0.0);
+        axisAngles.push_back(0.0);
+
+        while (!queue.empty()) {
+            const auto current = queue.front();
+            queue.pop();
+
+            for (const auto neighbor : topology.adjacentFaces(current)) {
+                const auto sharedEdge = sharedEdgeBetweenFaces(topology, current, neighbor);
+                if (sharedEdge.has_value() && protectedEdges.contains(*sharedEdge)) {
+                    blockedEdges.insert(*sharedEdge);
+                    continue;
+                }
+                if (visited[neighbor]) {
+                    continue;
+                }
+
+                const auto neighborSurface = sampleAnalyticSurface(topology.face(neighbor), surfaceType);
+                if (!neighborSurface.has_value()) {
+                    continue;
+                }
+
+                const auto compatibility = compareAnalyticSamples(*seedSurface, *neighborSurface, candidateType, options);
+                if (!compatibility.compatible) {
+                    continue;
+                }
+
+                visited[neighbor] = true;
+                ++visitedCount;
+                queue.push(neighbor);
+                regionFaces.insert(neighbor);
+                distances.push_back(compatibility.distance);
+                fitErrors.push_back(compatibility.fit_error);
+                axisAngles.push_back(compatibility.axis_angle_degrees);
+            }
+        }
+
+        if (static_cast<int>(regionFaces.size()) < options.min_analytic_region_faces) {
+            ++rejectedCount;
+            continue;
+        }
+
+        MergeCandidate candidate;
+        candidate.candidate_id = static_cast<int>(candidates.size());
+        candidate.candidate_type = candidateType;
+        candidate.faces.assign(regionFaces.begin(), regionFaces.end());
+        candidate.face_count = static_cast<int>(candidate.faces.size());
+        candidate.blocked_edges.assign(blockedEdges.begin(), blockedEdges.end());
+        candidate.protected_edges = candidate.blocked_edges;
+
+        std::set<EdgeId> internalEdges;
+        std::set<EdgeId> boundaryEdges;
+        for (const auto face : candidate.faces) {
+            const auto faceSample = sampleFace(topology.face(face));
+            if (faceSample.has_value()) {
+                candidate.total_area += faceSample->area;
+            }
+
+            for (const auto edge : topology.edgesForFace(face)) {
+                const auto* adjacency = topology.adjacencyForEdge(edge);
+                if (adjacency != nullptr && adjacency->faces.size() == 2 && containsFace(regionFaces, *adjacency)) {
+                    internalEdges.insert(edge);
+                } else {
+                    boundaryEdges.insert(edge);
+                }
+            }
+        }
+
+        candidate.internal_edges.assign(internalEdges.begin(), internalEdges.end());
+        candidate.boundary_edges.assign(boundaryEdges.begin(), boundaryEdges.end());
+        candidate.internal_edge_count = static_cast<int>(candidate.internal_edges.size());
+        candidate.boundary_edge_count = static_cast<int>(candidate.boundary_edges.size());
+        candidate.max_distance = distances.empty() ? 0.0 : *std::max_element(distances.begin(), distances.end());
+        candidate.mean_distance = distances.empty()
+            ? 0.0
+            : std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
+        candidate.max_normal_angle_deg = axisAngles.empty() ? 0.0 : *std::max_element(axisAngles.begin(), axisAngles.end());
+        candidate.mean_normal_angle_deg = axisAngles.empty()
+            ? 0.0
+            : std::accumulate(axisAngles.begin(), axisAngles.end(), 0.0) / axisAngles.size();
+        candidate.fit_error = fitErrors.empty() ? 0.0 : *std::max_element(fitErrors.begin(), fitErrors.end());
+        candidate.risk_level = riskFromFitError(candidate.fit_error);
+        candidates.push_back(std::move(candidate));
+    }
+
+    if (visitedFaces != nullptr) {
+        *visitedFaces = visitedCount;
+    }
+    if (rejectedRegions != nullptr) {
+        *rejectedRegions = rejectedCount;
+    }
+    return candidates;
 }
 
 }
@@ -239,6 +608,69 @@ std::vector<MergeCandidate> MergeRegionGrower::growPlaneLikeRegions(
         *rejectedRegions = rejectedCount;
     }
     return candidates;
+}
+
+std::vector<MergeCandidate> MergeRegionGrower::growCylinderLikeRegions(
+    const ShapeDocument& document,
+    const std::set<EdgeId>& protectedEdges,
+    const MergePlannerOptions& options,
+    int* visitedFaces,
+    int* rejectedRegions) const {
+    return growAnalyticRegions(
+        document,
+        protectedEdges,
+        options,
+        GeomAbs_Cylinder,
+        MergeCandidateType::CylinderLike,
+        visitedFaces,
+        rejectedRegions);
+}
+
+std::vector<MergeCandidate> MergeRegionGrower::growSphereLikeRegions(
+    const ShapeDocument& document,
+    const std::set<EdgeId>& protectedEdges,
+    const MergePlannerOptions& options,
+    int* visitedFaces,
+    int* rejectedRegions) const {
+    return growAnalyticRegions(
+        document,
+        protectedEdges,
+        options,
+        GeomAbs_Sphere,
+        MergeCandidateType::SphereLike,
+        visitedFaces,
+        rejectedRegions);
+}
+
+std::vector<MergeCandidate> MergeRegionGrower::growConeLikeRegions(
+    const ShapeDocument& document,
+    const std::set<EdgeId>& protectedEdges,
+    const MergePlannerOptions& options,
+    int* visitedFaces,
+    int* rejectedRegions) const {
+    return growAnalyticRegions(
+        document,
+        protectedEdges,
+        options,
+        GeomAbs_Cone,
+        MergeCandidateType::ConeLike,
+        visitedFaces,
+        rejectedRegions);
+}
+
+std::vector<MergeCandidate> MergeRegionGrower::growTorusLikeRegions(
+    const ShapeDocument&,
+    const std::set<EdgeId>&,
+    const MergePlannerOptions&,
+    int* visitedFaces,
+    int* rejectedRegions) const {
+    if (visitedFaces != nullptr) {
+        *visitedFaces = 0;
+    }
+    if (rejectedRegions != nullptr) {
+        *rejectedRegions = 0;
+    }
+    return {};
 }
 
 }

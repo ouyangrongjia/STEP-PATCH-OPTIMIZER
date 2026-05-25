@@ -18,6 +18,30 @@ public:
         const MergePlannerOptions& options,
         int* visitedFaces,
         int* rejectedRegions) const;
+    std::vector<MergeCandidate> growCylinderLikeRegions(
+        const ShapeDocument& document,
+        const std::set<EdgeId>& protectedEdges,
+        const MergePlannerOptions& options,
+        int* visitedFaces,
+        int* rejectedRegions) const;
+    std::vector<MergeCandidate> growSphereLikeRegions(
+        const ShapeDocument& document,
+        const std::set<EdgeId>& protectedEdges,
+        const MergePlannerOptions& options,
+        int* visitedFaces,
+        int* rejectedRegions) const;
+    std::vector<MergeCandidate> growConeLikeRegions(
+        const ShapeDocument& document,
+        const std::set<EdgeId>& protectedEdges,
+        const MergePlannerOptions& options,
+        int* visitedFaces,
+        int* rejectedRegions) const;
+    std::vector<MergeCandidate> growTorusLikeRegions(
+        const ShapeDocument& document,
+        const std::set<EdgeId>& protectedEdges,
+        const MergePlannerOptions& options,
+        int* visitedFaces,
+        int* rejectedRegions) const;
 };
 
 }

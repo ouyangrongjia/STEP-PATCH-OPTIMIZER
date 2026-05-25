@@ -8,6 +8,7 @@ void run_region_merge_stub_tests();
 void run_plane_region_merger_tests();
 void run_plane_region_merge_command_tests();
 void run_face_inspect_tests();
+void run_analytic_candidate_detection_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -35,6 +36,7 @@ int main() {
     run_plane_region_merger_tests();
     run_plane_region_merge_command_tests();
     run_face_inspect_tests();
+    run_analytic_candidate_detection_tests();
     run_validation_tests();
     return 0;
 }

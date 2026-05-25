@@ -24,10 +24,19 @@
 #include <QToolButton>
 
 #include <algorithm>
+#include <filesystem>
 
 namespace spo {
 
 namespace {
+
+std::filesystem::path pathFromQString(const QString& path) {
+    return std::filesystem::path(path.toStdWString());
+}
+
+QString pathToQString(const std::filesystem::path& path) {
+    return QString::fromStdWString(path.wstring());
+}
 
 QString candidateTypeText(MergeCandidateType type) {
     switch (type) {
@@ -126,6 +135,14 @@ struct CandidateStatusCounts {
     int hidden = 0;
 };
 
+struct CandidateTypeCounts {
+    int plane = 0;
+    int cylinder = 0;
+    int sphere = 0;
+    int cone = 0;
+    int torus = 0;
+};
+
 CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& candidates) {
     CandidateStatusCounts counts;
     for (const auto& candidate : candidates) {
@@ -141,6 +158,32 @@ CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& 
             break;
         case MergeCandidateStatus::Hidden:
             ++counts.hidden;
+            break;
+        }
+    }
+    return counts;
+}
+
+CandidateTypeCounts countCandidateTypes(const std::vector<MergeCandidate>& candidates) {
+    CandidateTypeCounts counts;
+    for (const auto& candidate : candidates) {
+        switch (candidate.candidate_type) {
+        case MergeCandidateType::PlaneLike:
+            ++counts.plane;
+            break;
+        case MergeCandidateType::CylinderLike:
+            ++counts.cylinder;
+            break;
+        case MergeCandidateType::SphereLike:
+            ++counts.sphere;
+            break;
+        case MergeCandidateType::ConeLike:
+            ++counts.cone;
+            break;
+        case MergeCandidateType::TorusLike:
+            ++counts.torus;
+            break;
+        default:
             break;
         }
     }
@@ -481,7 +524,7 @@ void MainWindow::openStepFile() {
         return;
     }
 
-    const auto result = controller_.openStepFile(filePath.toStdString());
+    const auto result = controller_.openStepFile(pathFromQString(filePath));
     if (!result.success()) {
         QMessageBox::critical(this, "打开 STEP/STP 失败", QString::fromStdString(result.message()));
         logPanel_->appendError(QString("打开失败：%1").arg(QString::fromStdString(result.message())));
@@ -493,12 +536,19 @@ void MainWindow::openStepFile() {
     clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
-    viewer_->displayDocument(document);
+    const auto displayStatus = viewer_->displayDocument(document);
+    if (!displayStatus.success()) {
+        QMessageBox::critical(this, "显示模型失败", QString::fromStdString(displayStatus.message()));
+        logPanel_->appendError(QString("显示模型失败：%1").arg(QString::fromStdString(displayStatus.message())));
+        setStatus("模型已读取，但显示失败");
+        refreshUndoRedoActions();
+        return;
+    }
     syncLockedEdges();
     QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
     QTimer::singleShot(100, viewer_, &OccViewWidget::fitAll);
     inspectPanel_->showProperties("模型摘要", {
-        {"文件", QString::fromStdString(document.sourcePath().string())},
+        {"文件", pathToQString(document.sourcePath())},
         {"实体数", QString::number(stats.solids)},
         {"壳数", QString::number(stats.shells)},
         {"面数", QString::number(stats.faces)},
@@ -506,7 +556,7 @@ void MainWindow::openStepFile() {
         {"顶点数", QString::number(stats.vertices)}
     });
     inspectPanel_->showReport(QString("输入文件：%1\n实体数：%2\n壳数：%3\n面数：%4\n边数：%5")
-        .arg(QString::fromStdString(document.sourcePath().string()))
+        .arg(pathToQString(document.sourcePath()))
         .arg(stats.solids)
         .arg(stats.shells)
         .arg(stats.faces)
@@ -533,14 +583,14 @@ void MainWindow::exportStepFile() {
         return;
     }
 
-    const auto result = controller_.exportStepFile(filePath.toStdString());
+    const auto result = controller_.exportStepFile(pathFromQString(filePath));
     if (!result.success()) {
         QMessageBox::critical(this, "导出 STEP 失败", QString::fromStdString(result.message()));
         logPanel_->appendError(QString("导出失败：%1").arg(QString::fromStdString(result.message())));
         return;
     }
 
-    const auto verifyResult = controller_.verifyStepFileReadable(filePath.toStdString());
+    const auto verifyResult = controller_.verifyStepFileReadable(pathFromQString(filePath));
     if (!verifyResult.success()) {
         logPanel_->appendError(QString("STEP 已导出，但重新读取校验失败：%1").arg(QString::fromStdString(verifyResult.message())));
         inspectPanel_->showValidation(QString("导出后二次读取校验失败\n文件：%1\n错误：%2")
@@ -594,6 +644,13 @@ void MainWindow::previewMergeCandidates() {
     MergePlannerOptions options;
     options.max_plane_distance = params.linear_tolerance;
     options.min_region_faces = 2;
+    options.enable_cylinder_candidates = true;
+    options.enable_sphere_candidates = true;
+    options.enable_cone_candidates = true;
+    options.enable_torus_candidates = true;
+    options.min_analytic_region_faces = 2;
+    options.max_sphere_center_delta = 0.50;
+    options.max_sphere_radius_delta = 0.25;
 
     const auto result = controller_.previewMergeCandidates(
         params.angular_threshold_degrees,
@@ -611,9 +668,15 @@ void MainWindow::previewMergeCandidates() {
         totalCandidateFaces += candidate.face_count;
     }
     const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
+    const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
 
-    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPending：%2\nAccepted：%3\nRejected：%4\nHidden：%5\n保护边数量：%6\n访问 face 数量：%7\n拒绝区域数量：%8\n最大候选区域 face 数：%9\n总候选 face 数：%10\n预览前 face/edge：%11/%12\n预览后 face/edge：%13/%14")
+    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nPending：%7\nAccepted：%8\nRejected：%9\nHidden：%10\n保护边数量：%11\n访问 face 数量：%12\n拒绝区域数量：%13\n最大候选区域 face 数：%14\n总候选 face 数：%15\n预览前 face/edge：%16/%17\n预览后 face/edge：%18/%19")
         .arg(result.candidates.size())
+        .arg(typeCounts.plane)
+        .arg(typeCounts.cylinder)
+        .arg(typeCounts.sphere)
+        .arg(typeCounts.cone)
+        .arg(typeCounts.torus)
         .arg(statusCounts.pending)
         .arg(statusCounts.accepted)
         .arg(statusCounts.rejected)
@@ -1068,7 +1131,14 @@ void MainWindow::applyMerge() {
     clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
-    viewer_->displayDocument(document);
+    const auto displayStatus = viewer_->displayDocument(document);
+    if (!displayStatus.success()) {
+        QMessageBox::critical(this, "显示模型失败", QString::fromStdString(displayStatus.message()));
+        logPanel_->appendError(QString("合并后显示模型失败：%1").arg(QString::fromStdString(displayStatus.message())));
+        setStatus("合并完成，但显示失败");
+        refreshUndoRedoActions();
+        return;
+    }
     syncLockedEdges();
     inspectPanel_->showReport(QString("同域合并完成\nconcat_bsplines：%1\n保护边数量：%2\n合并前 face：%3\n合并后 face：%4\nface reduction ratio：%5%\n合并前 edge：%6\n合并后 edge：%7\nedge reduction ratio：%8%\n合并前 solid：%9\n合并后 solid：%10")
         .arg(result.concat_bsplines ? "true" : "false")
@@ -1167,7 +1237,12 @@ void MainWindow::refreshDocumentViews() {
     clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;
     refreshModelTree();
-    viewer_->displayDocument(document);
+    const auto displayStatus = viewer_->displayDocument(document);
+    if (!displayStatus.success()) {
+        logPanel_->appendError(QString("刷新模型显示失败：%1").arg(QString::fromStdString(displayStatus.message())));
+        setStatus("模型刷新失败");
+        return;
+    }
     syncLockedEdges();
 }
 
@@ -1239,10 +1314,13 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
         report += QString("\nAdjacent Protected Edges：%1\nAdjacent Locked Edges：%2")
             .arg(info.adjacent_protected_edge_count)
             .arg(info.adjacent_locked_edge_count);
+        if (info.sphere_like_single_patch) {
+            report += "\nNote：该 face 可识别为 SphereLike 单面 patch，但单面区域没有可消除的内部边，因此不会作为合并候选显示。";
+        }
         if (!hasCandidatePreview) {
             report += "\nNote：当前尚未生成合并候选，请先点击“预览合并”。";
         } else {
-            report += "\nNote：当前候选检测主要基于 PlaneLike。如果该区域是 Cylinder / Cone / Sphere / BSpline，可能需要 Stage 2.8 多类型候选识别。也可能因为 min_region_faces 不足或邻接 protected/locked edge 未形成候选。";
+            report += "\nNote：当前候选检测已启用 PlaneLike / CylinderLike / SphereLike / ConeLike。若该面仍未进入候选，通常是因为该面为 BSpline 近似曲面、区域面数不足，或邻接 protected/locked edge 阻断。";
         }
     }
 

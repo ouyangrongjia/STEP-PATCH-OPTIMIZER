@@ -127,6 +127,7 @@ if(SPO_BUILD_TESTS)
     add_executable(spo_tests
         tests/test_feature_edges.cpp
         tests/test_face_inspect.cpp
+        tests/test_analytic_candidate_detection.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp
         tests/test_plane_region_merge_command.cpp
