@@ -8,6 +8,8 @@
 #include "common/Result.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "merge/MergePlanner.h"
+#include "merge/PlaneRegionMerger.h"
+#include "merge/RegionMergeResult.h"
 #include "merge/SameDomainUnifier.h"
 #include "validate/ShapeValidator.h"
 
@@ -39,6 +41,12 @@ public:
         double minEdgeLength,
         double linearTolerance,
         bool concatBsplines);
+    RegionMergeResult mergePlaneCandidate(
+        const MergeCandidate& candidate,
+        const PlaneRegionMergeOptions& options);
+    RegionMergeResult mergePlaneCandidates(
+        const std::vector<MergeCandidate>& candidates,
+        const PlaneRegionMergeOptions& options);
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;

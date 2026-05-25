@@ -50,6 +50,10 @@ private:
     void showAcceptedMergeCandidates();
     void showPendingMergeCandidates();
     void showNonHiddenMergeCandidates();
+    void mergeCurrentPlaneCandidate();
+    void mergeAcceptedPlaneCandidates();
+    void mergeAllMergeablePlaneCandidates();
+    void mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
     void applyMerge();
     void validateShape();
     void resetView();
@@ -79,6 +83,7 @@ private:
     QDockWidget* parameterDock_ = nullptr;
     QDockWidget* bottomDock_ = nullptr;
     QMenu* viewMenu_ = nullptr;
+    QMenu* planeMergeMenu_ = nullptr;
 
     QAction* openStepAction_ = nullptr;
     QAction* saveProjectAction_ = nullptr;
@@ -98,6 +103,9 @@ private:
     QAction* restoreMergeCandidateAction_ = nullptr;
     QAction* showAcceptedMergeCandidatesAction_ = nullptr;
     QAction* showPendingMergeCandidatesAction_ = nullptr;
+    QAction* mergePlaneCandidateAction_ = nullptr;
+    QAction* mergeAcceptedPlaneCandidatesAction_ = nullptr;
+    QAction* mergeAllPlaneCandidatesAction_ = nullptr;
     QAction* applyMergeAction_ = nullptr;
     QAction* validateAction_ = nullptr;
     QAction* resetViewAction_ = nullptr;

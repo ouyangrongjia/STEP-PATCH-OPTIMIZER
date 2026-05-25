@@ -6,6 +6,8 @@
 #include "command/LockedEdgeRef.h"
 #include "command/LockEdgeCommand.h"
 #include "command/MergePatchCommand.h"
+#include "command/PlaneRegionBatchMergeCommand.h"
+#include "command/PlaneRegionMergeCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
 #include "merge/MergePlanner.h"
@@ -96,6 +98,30 @@ SameDomainUnifyResult AppController::unifySameDomain(
         return {};
     }
     return commandPtr->result();
+}
+
+RegionMergeResult AppController::mergePlaneCandidate(
+    const MergeCandidate& candidate,
+    const PlaneRegionMergeOptions& options) {
+    RegionMergeResult result;
+    auto command = std::make_unique<PlaneRegionMergeCommand>(candidate, options, &result);
+    const auto status = execute(std::move(command));
+    if (!status.success()) {
+        return result;
+    }
+    return result;
+}
+
+RegionMergeResult AppController::mergePlaneCandidates(
+    const std::vector<MergeCandidate>& candidates,
+    const PlaneRegionMergeOptions& options) {
+    RegionMergeResult result;
+    auto command = std::make_unique<PlaneRegionBatchMergeCommand>(candidates, options, &result);
+    const auto status = execute(std::move(command));
+    if (!status.success()) {
+        return result;
+    }
+    return result;
 }
 
 bool AppController::hasDocument() const {
