@@ -34,6 +34,7 @@ struct FaceInspectInfo {
     bool adjacent_to_locked_edge = false;
     int adjacent_protected_edge_count = 0;
     int adjacent_locked_edge_count = 0;
+    bool sphere_like_single_patch = false;
 
     double max_normal_angle_deg = 0.0;
     double max_distance = 0.0;
