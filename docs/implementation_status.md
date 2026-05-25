@@ -45,6 +45,7 @@ STEP 读取
 5. Stage 2 Generic Merge Candidate Framework 已完成：MergeCandidate / MergePlanner / MergeRegionGrower 可生成 PlaneLike 候选区域。
 6. Stage 2.5 Candidate GUI Preview 已完成：支持 Top N、显示全部非隐藏候选、按 ID 高亮和清除候选高亮。
 7. Stage 2.6 Candidate Selection / Rejection 已完成：支持候选区域点击选择、接受、拒绝、隐藏、恢复和状态统计。
+8. Stage 3-0 Analytic RegionMerger Framework Preparation 已完成：已预留统一结果、选项、失败原因和解析图元 merger stub。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -163,6 +164,8 @@ STEP 读取
 | `MergeRegionGrower` | 已完成基础版 | 支持平面近似区域生长，protectedEdges 可阻断扩张 |
 | `MergeCandidate` 预览 | 已完成基础版 | GUI 可预览 Top N、全部非隐藏候选和指定候选 |
 | 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
+| RegionMergeResult / RegionMergeOptions | 已完成基础版 | 统一解析图元区域合并返回值、失败原因和基础选项 |
+| Plane/Cylinder/Cone/Sphere/Torus RegionMerger stub | 已完成基础版 | 仅返回 NotImplemented / UnsupportedCandidateType，不修改 B-rep |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块
@@ -198,6 +201,7 @@ STEP 读取
 | 用户锁边进入 protectedEdges 测试 | 已完成 |
 | MergePlanner / MergeRegionGrower 测试 | 已完成基础版 | 覆盖候选生成、protectedEdges 阻断、min_region_faces 和预览不改模型 |
 | MergeCandidate 状态测试 | 已完成基础版 | 覆盖 Pending 默认状态、状态切换、Hidden 过滤和 stats 不变 |
+| RegionMerger stub 测试 | 已完成基础版 | 覆盖 NotImplemented、UnsupportedCandidateType、Rejected/Hidden 和 stats 不变 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -419,6 +423,7 @@ P0 稳定性收口：基本完成
 合并候选规划：已完成基础版
 候选区域 GUI 预览：已完成基础版
 候选区域选择/接受/拒绝/隐藏：已完成基础版
+RegionMerger 框架准备：已完成基础版
 项目保存恢复：未完成
 完整误差评估：未完成
 高级特征线：未完成

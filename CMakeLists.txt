@@ -41,11 +41,17 @@ add_library(spo_core STATIC
     src/io/ProjectSerializer.cpp
     src/io/StepReader.cpp
     src/io/StepWriter.cpp
+    src/merge/ConeRegionMerger.cpp
+    src/merge/CylinderRegionMerger.cpp
     src/merge/MergeCandidate.cpp
     src/merge/MergePlanner.cpp
     src/merge/MergeRegionGrower.cpp
+    src/merge/PlaneRegionMerger.cpp
+    src/merge/RegionMergeStub.cpp
     src/merge/SameDomainUnifier.cpp
+    src/merge/SphereRegionMerger.cpp
     src/merge/SurfaceRefitter.cpp
+    src/merge/TorusRegionMerger.cpp
     src/validate/ErrorMetric.cpp
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
@@ -117,6 +123,7 @@ if(SPO_BUILD_TESTS)
         tests/test_feature_edges.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp
+        tests/test_region_merge_stubs.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
         tests/test_topology_graph.cpp
