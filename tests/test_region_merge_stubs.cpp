@@ -2,7 +2,6 @@
 #include "merge/ConeRegionMerger.h"
 #include "merge/CylinderRegionMerger.h"
 #include "merge/PlaneRegionMerger.h"
-#include "merge/SphereRegionMerger.h"
 #include "merge/TorusRegionMerger.h"
 
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -63,12 +62,6 @@ void test_region_merger_stubs_return_not_implemented_for_matching_types() {
         document,
         cone.merge(document, make_candidate(spo::MergeCandidateType::ConeLike), options),
         spo::MergeCandidateType::ConeLike);
-
-    const spo::SphereRegionMerger sphere;
-    assert_not_implemented_without_document_change(
-        document,
-        sphere.merge(document, make_candidate(spo::MergeCandidateType::SphereLike), options),
-        spo::MergeCandidateType::SphereLike);
 
     const spo::TorusRegionMerger torus;
     assert_not_implemented_without_document_change(
