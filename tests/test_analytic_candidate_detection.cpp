@@ -109,6 +109,19 @@ spo::ShapeDocument make_split_cone_document() {
     return spo::ShapeDocument(sewing.SewedShape(), {});
 }
 
+spo::ShapeDocument make_split_nurbs_cone_document() {
+    const gp_Cone cone(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 0.25, 2.0);
+    const auto first = BRepBuilderAPI_MakeFace(cone, 0.0, 3.14159265358979323846, 2.0, 8.0).Face();
+    const auto second = BRepBuilderAPI_MakeFace(cone, 3.14159265358979323846, 6.28318530717958647692, 2.0, 8.0).Face();
+    BRepBuilderAPI_NurbsConvert firstConverter(first);
+    BRepBuilderAPI_NurbsConvert secondConverter(second);
+    BRepBuilderAPI_Sewing sewing;
+    sewing.Add(firstConverter.Shape());
+    sewing.Add(secondConverter.Shape());
+    sewing.Perform();
+    return spo::ShapeDocument(sewing.SewedShape(), "split-nurbs-cone");
+}
+
 spo::ShapeDocument make_compound_document(const std::vector<spo::ShapeDocument>& documents) {
     BRep_Builder builder;
     TopoDS_Compound compound;
@@ -199,6 +212,34 @@ void test_cone_candidates_are_generated() {
     assert(coneCandidates.front().face_count >= 2);
 }
 
+void test_nurbs_backed_cone_candidates_are_generated() {
+    const auto document = make_split_nurbs_cone_document();
+    const auto before = document.stats();
+
+    spo::MergePlannerOptions options;
+    options.enable_plane_candidates = false;
+    options.enable_cone_candidates = true;
+
+    const auto result = plan_candidates(document, options);
+    const auto coneCandidates = candidates_of_type(result.candidates, spo::MergeCandidateType::ConeLike);
+
+    assert(!coneCandidates.empty());
+    assert(coneCandidates.front().face_count >= 2);
+    assert(coneCandidates.front().fit_error <= 1.0);
+    assert(same_stats(document.stats(), before));
+}
+
+void test_nurbs_backed_cylinder_is_not_cone_candidate() {
+    const auto document = make_split_nurbs_cylinder_document();
+
+    spo::MergePlannerOptions options;
+    options.enable_plane_candidates = false;
+    options.enable_cone_candidates = true;
+
+    const auto result = plan_candidates(document, options);
+    assert(candidates_of_type(result.candidates, spo::MergeCandidateType::ConeLike).empty());
+}
+
 void test_protected_edge_blocks_analytic_region_growth() {
     const auto document = make_split_cylinder_document();
     spo::MergePlannerOptions options;
@@ -271,6 +312,8 @@ void run_analytic_candidate_detection_tests() {
     test_nurbs_backed_cylinder_candidates_are_generated();
     test_sphere_candidates_are_generated();
     test_cone_candidates_are_generated();
+    test_nurbs_backed_cone_candidates_are_generated();
+    test_nurbs_backed_cylinder_is_not_cone_candidate();
     test_protected_edge_blocks_analytic_region_growth();
     test_candidate_ids_are_global_and_continuous();
     test_plane_like_generation_does_not_regress();

@@ -52,6 +52,7 @@ STEP 读取
 12. Stage 2.8 Analytic Primitive Candidate Detection 已完成基础版：PlaneLike 保持原行为，CylinderLike/SphereLike/ConeLike 支持基础检测，TorusLike/Freeform 类型保留通道。
 13. Stage 2.9 Multi-type Candidate Preview 已完成：报告、模型树、按类型筛选、Viewer 多类型配色和 Face Inspect 已支持 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 的显示通道。
 14. Stage 2.8 Enhancement A 已完成：CylinderLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆柱 face 做保守采样拟合检测；CylinderLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 CylinderRegionMerge。
+15. Stage 2.8 Enhancement B 已完成：ConeLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆锥/圆台 face 做保守采样拟合检测；ConeLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 ConeRegionMerge。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -171,7 +172,7 @@ STEP 读取
 | `MergeCandidate` 预览 | 已完成基础版 | GUI 可预览 Top N、全部非隐藏候选和指定候选 |
 | 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
 | Face / Candidate Inspect | 已完成基础版 | 点击 face 可查看 surface type、候选归属、candidate type/status/risk/fit_error 等信息 |
-| Analytic primitive candidate detection | 已完成增强 A | 支持 PlaneLike、CylinderLike 原生与 B-spline/Bezier/SurfaceOfRevolution 近似检测、SphereLike、基础 ConeLike；TorusLike/Freeform 类型预留 |
+| Analytic primitive candidate detection | 已完成增强 B | 支持 PlaneLike、CylinderLike 原生与 B-spline/Bezier/SurfaceOfRevolution 近似检测、SphereLike、ConeLike 原生与 B-spline/Bezier/SurfaceOfRevolution 近似检测；TorusLike/Freeform 类型预留 |
 | Multi-type Candidate Preview | 已完成基础版 | 支持多类型统计、按类型筛选、Viewer 类型配色、模型树同步和点击查看 |
 | RegionMergeResult / RegionMergeOptions | 已完成基础版 | 统一解析图元区域合并返回值、失败原因和基础选项 |
 | Plane/Cylinder/Cone/Sphere/Torus RegionMerger stub | 已完成基础版 | 仅返回 NotImplemented / UnsupportedCandidateType，不修改 B-rep |
@@ -220,7 +221,7 @@ STEP 读取
 | PlaneRegionMergeCommand 测试 | 已完成基础版 | 覆盖失败不污染文档、成功后 undo/redo |
 | PlaneRegionBatchMergeCommand 测试 | 已完成基础版 | 覆盖批量平面合并成功后的 undo/redo |
 | Face / Candidate Inspect 测试 | 已完成基础版 | 覆盖 surface type、候选归属、NotInCandidate 和 stats 不变 |
-| Analytic Candidate Detection 测试 | 已完成增强 A | 覆盖 CylinderLike 原生与 NURBS-backed 近似检测、SphereLike/ConeLike 基础检测、protected edge 阻断和 ID 唯一 |
+| Analytic Candidate Detection 测试 | 已完成增强 B | 覆盖 CylinderLike 原生与 NURBS-backed 近似检测、SphereLike/ConeLike 基础检测、NURBS-backed ConeLike 近似检测、近似圆柱不误判为 ConeLike、protected edge 阻断和 ID 唯一 |
 | Candidate Type Statistics 测试 | 已完成基础版 | 覆盖多类型统计、Hidden 过滤、按类型筛选和 PlaneLike 合并过滤 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
@@ -449,8 +450,9 @@ P0 稳定性收口：基本完成
 候选区域 GUI 预览：已完成基础版
 候选区域选择/接受/拒绝/隐藏：已完成基础版
 Face / Candidate Inspect：已完成基础版
-Analytic primitive candidate detection：已完成增强 A
+Analytic primitive candidate detection：已完成增强 B
 Stage 2.8 Enhancement A B-spline CylinderLike approximate detection：已完成
+Stage 2.8 Enhancement B B-spline ConeLike / FrustumLike approximate detection：已完成
 Multi-type candidate preview：已完成基础版
 RegionMerger 框架准备：已完成基础版
 PlaneRegionMerge：已完成基础可用版

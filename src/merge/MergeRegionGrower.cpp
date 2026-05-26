@@ -346,6 +346,268 @@ std::optional<AnalyticSurfaceSample> fitCylinderLikeSurface(
     return sample;
 }
 
+std::optional<AnalyticSurfaceSample> fitConeLikeSurface(
+    const TopoDS_Face& face,
+    const MergePlannerOptions& options) {
+    double uMin = 0.0;
+    double uMax = 0.0;
+    double vMin = 0.0;
+    double vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    if (!std::isfinite(uMin) || !std::isfinite(uMax) || !std::isfinite(vMin) || !std::isfinite(vMax)) {
+        return std::nullopt;
+    }
+
+    if (fitCylinderLikeSurface(face, options).has_value()) {
+        return std::nullopt;
+    }
+
+    BRepAdaptor_Surface surface(face);
+    std::array<std::array<gp_Pnt, 5>, 5> points {};
+    std::array<std::array<gp_Dir, 5>, 5> normals {};
+    constexpr std::array<double, 5> factors {0.15, 0.325, 0.5, 0.675, 0.85};
+    for (std::size_t row = 0; row < factors.size(); ++row) {
+        for (std::size_t col = 0; col < factors.size(); ++col) {
+            BRepLProp_SLProps props(
+                surface,
+                uMin + (uMax - uMin) * factors[col],
+                vMin + (vMax - vMin) * factors[row],
+                1,
+                Precision::Confusion());
+            if (!props.IsNormalDefined()) {
+                return std::nullopt;
+            }
+            auto normal = props.Normal();
+            if (face.Orientation() == TopAbs_REVERSED) {
+                normal.Reverse();
+            }
+            points[row][col] = props.Value();
+            normals[row][col] = normal;
+        }
+    }
+
+    std::array<gp_Pnt, 5> rowCenters {};
+    std::array<gp_Pnt, 5> columnCenters {};
+    for (std::size_t row = 0; row < factors.size(); ++row) {
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        for (std::size_t col = 0; col < factors.size(); ++col) {
+            x += points[row][col].X();
+            y += points[row][col].Y();
+            z += points[row][col].Z();
+        }
+        rowCenters[row] = gp_Pnt(x / factors.size(), y / factors.size(), z / factors.size());
+    }
+    for (std::size_t col = 0; col < factors.size(); ++col) {
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        for (std::size_t row = 0; row < factors.size(); ++row) {
+            x += points[row][col].X();
+            y += points[row][col].Y();
+            z += points[row][col].Z();
+        }
+        columnCenters[col] = gp_Pnt(x / factors.size(), y / factors.size(), z / factors.size());
+    }
+
+    auto fitForAxis = [&](const gp_Dir& axisDirection) -> std::optional<AnalyticSurfaceSample> {
+        const gp_Vec axisVector(axisDirection);
+
+        const gp_Dir reference = std::abs(axisDirection.Z()) < 0.9 ? gp_Dir(0.0, 0.0, 1.0) : gp_Dir(1.0, 0.0, 0.0);
+        auto uVector = axisVector.Crossed(gp_Vec(reference));
+        if (uVector.Magnitude() <= Precision::Confusion()) {
+            return std::nullopt;
+        }
+        uVector.Normalize();
+        auto vVector = axisVector.Crossed(uVector);
+        vVector.Normalize();
+
+        std::array<std::array<double, 3>, 3> normalMatrix {};
+        std::array<double, 3> normalRhs {};
+        std::vector<std::array<double, 3>> coordinates;
+        coordinates.reserve(25);
+        double meanT = 0.0;
+        for (std::size_t row = 0; row < factors.size(); ++row) {
+            for (std::size_t col = 0; col < factors.size(); ++col) {
+                const gp_Vec vector(gp_Pnt(0.0, 0.0, 0.0), points[row][col]);
+                const auto x = vector.Dot(uVector);
+                const auto y = vector.Dot(vVector);
+                const auto t = vector.Dot(axisVector);
+                coordinates.push_back({x, y, t});
+                meanT += t;
+
+                const std::array<double, 3> matrixRow {x, y, 1.0};
+                const auto rhs = -(x * x + y * y);
+                for (int i = 0; i < 3; ++i) {
+                    normalRhs[i] += matrixRow[i] * rhs;
+                    for (int j = 0; j < 3; ++j) {
+                        normalMatrix[i][j] += matrixRow[i] * matrixRow[j];
+                    }
+                }
+            }
+        }
+        meanT /= static_cast<double>(coordinates.size());
+
+        std::array<double, 3> coefficients {};
+        if (!solveLinear3x3(normalMatrix, normalRhs, coefficients)) {
+            return std::nullopt;
+        }
+        const auto centerX = -0.5 * coefficients[0];
+        const auto centerY = -0.5 * coefficients[1];
+        const auto originVector = uVector.Multiplied(centerX) + vVector.Multiplied(centerY) + axisVector.Multiplied(meanT);
+        const gp_Pnt axisOrigin(originVector.X(), originVector.Y(), originVector.Z());
+
+        std::vector<std::pair<double, double>> radiusByAxis;
+        radiusByAxis.reserve(25);
+        for (const auto& coordinate : coordinates) {
+            const auto t = coordinate[2] - meanT;
+            const auto radius = std::hypot(coordinate[0] - centerX, coordinate[1] - centerY);
+            if (radius <= Precision::Confusion()) {
+                return std::nullopt;
+            }
+            radiusByAxis.push_back({t, radius});
+        }
+
+        double meanAxisT = 0.0;
+        double meanR = 0.0;
+        for (const auto& [t, radius] : radiusByAxis) {
+            meanAxisT += t;
+            meanR += radius;
+        }
+        meanAxisT /= static_cast<double>(radiusByAxis.size());
+        meanR /= static_cast<double>(radiusByAxis.size());
+
+        double denominator = 0.0;
+        double numerator = 0.0;
+        for (const auto& [t, radius] : radiusByAxis) {
+            denominator += (t - meanAxisT) * (t - meanAxisT);
+            numerator += (t - meanAxisT) * (radius - meanR);
+        }
+        if (denominator <= Precision::Confusion()) {
+            return std::nullopt;
+        }
+
+        const auto slope = numerator / denominator;
+        const auto intercept = meanR - slope * meanAxisT;
+        const auto semiAngleDegrees = std::atan(std::abs(slope)) * 180.0 / kPi;
+        constexpr double kMinConeSemiAngleDegrees = 2.0;
+        constexpr double kMaxConeSemiAngleDegrees = 55.0;
+        if (semiAngleDegrees < kMinConeSemiAngleDegrees || semiAngleDegrees > kMaxConeSemiAngleDegrees) {
+            return std::nullopt;
+        }
+
+        double maxRadiusResidual = 0.0;
+        double minT = radiusByAxis.front().first;
+        double maxT = radiusByAxis.front().first;
+        for (const auto& [t, radius] : radiusByAxis) {
+            const auto predicted = slope * t + intercept;
+            if (predicted <= Precision::Confusion()) {
+                return std::nullopt;
+            }
+            maxRadiusResidual = std::max(maxRadiusResidual, std::abs(radius - predicted));
+            minT = std::min(minT, t);
+            maxT = std::max(maxT, t);
+        }
+        const auto radiusTolerance = std::max(options.max_cone_fit_error, meanR * 0.08);
+        if (maxRadiusResidual > radiusTolerance) {
+            return std::nullopt;
+        }
+
+        const auto apexT = -intercept / slope;
+        const auto axialSpan = maxT - minT;
+        if (apexT >= minT - axialSpan * 0.15 && apexT <= maxT + axialSpan * 0.15) {
+            return std::nullopt;
+        }
+
+        double maxNormalAngle = 0.0;
+        for (std::size_t row = 0; row < factors.size(); ++row) {
+            for (std::size_t col = 0; col < factors.size(); ++col) {
+                const gp_Vec fromOrigin(axisOrigin, points[row][col]);
+                const auto t = fromOrigin.Dot(axisVector);
+                auto radial = fromOrigin - axisVector.Multiplied(t);
+                if (radial.Magnitude() <= Precision::Confusion()) {
+                    return std::nullopt;
+                }
+                radial.Normalize();
+                gp_Vec expectedNormal = radial - axisVector.Multiplied(slope);
+                if (expectedNormal.Magnitude() <= Precision::Confusion()) {
+                    return std::nullopt;
+                }
+                expectedNormal.Normalize();
+                const auto dot = std::abs(clampCosine(expectedNormal.Dot(gp_Vec(normals[row][col]))));
+                maxNormalAngle = std::max(maxNormalAngle, std::acos(dot) * 180.0 / kPi);
+            }
+        }
+        constexpr double kMaxConeNormalAngleDegrees = 25.0;
+        if (maxNormalAngle > kMaxConeNormalAngleDegrees) {
+            return std::nullopt;
+        }
+
+        const gp_Pnt apex = axisOrigin.Translated(axisVector.Multiplied(apexT));
+
+        AnalyticSurfaceSample sample;
+        sample.surface_type = GeomAbs_Cone;
+        sample.axis_direction = axisDirection;
+        sample.axis_location = axisOrigin;
+        sample.apex = apex;
+        sample.radius = meanR;
+        sample.semi_angle_degrees = semiAngleDegrees;
+        sample.fit_error = std::max(maxRadiusResidual / radiusTolerance, maxNormalAngle / kMaxConeNormalAngleDegrees);
+        return sample;
+    };
+
+    std::vector<std::optional<AnalyticSurfaceSample>> fits;
+    const gp_Vec rowAxis(rowCenters.front(), rowCenters.back());
+    if (rowAxis.Magnitude() > Precision::Confusion()) {
+        fits.push_back(fitForAxis(gp_Dir(rowAxis)));
+    }
+    const gp_Vec columnAxis(columnCenters.front(), columnCenters.back());
+    if (columnAxis.Magnitude() > Precision::Confusion()) {
+        fits.push_back(fitForAxis(gp_Dir(columnAxis)));
+    }
+
+    std::vector<gp_Vec> normalVectors;
+    normalVectors.reserve(25);
+    for (std::size_t row = 0; row < factors.size(); ++row) {
+        for (std::size_t col = 0; col < factors.size(); ++col) {
+            normalVectors.push_back(gp_Vec(normals[row][col]));
+        }
+    }
+    gp_Vec normalAxis;
+    double maxNormalAxisMagnitude = 0.0;
+    for (std::size_t i = 1; i < normalVectors.size(); ++i) {
+        for (std::size_t j = i + 1; j < normalVectors.size(); ++j) {
+            const auto first = normalVectors[i] - normalVectors[0];
+            const auto second = normalVectors[j] - normalVectors[0];
+            auto candidate = first.Crossed(second);
+            const auto magnitude = candidate.Magnitude();
+            if (magnitude > maxNormalAxisMagnitude) {
+                maxNormalAxisMagnitude = magnitude;
+                normalAxis = candidate;
+            }
+        }
+    }
+    if (maxNormalAxisMagnitude > Precision::Confusion()) {
+        fits.push_back(fitForAxis(gp_Dir(normalAxis)));
+    }
+
+    std::optional<AnalyticSurfaceSample> bestFit;
+    for (const auto& fit : fits) {
+        if (!fit.has_value()) {
+            continue;
+        }
+        if (!bestFit.has_value() || fit->fit_error < bestFit->fit_error) {
+            bestFit = fit;
+        }
+    }
+    if (bestFit.has_value()) {
+        return bestFit;
+    }
+
+    return std::nullopt;
+}
+
 std::optional<AnalyticSurfaceSample> fitSphereLikeSurface(const TopoDS_Face& face) {
     double uMin = 0.0;
     double uMax = 0.0;
@@ -428,6 +690,12 @@ std::optional<AnalyticSurfaceSample> sampleAnalyticSurface(
         if (expectedType == GeomAbs_Sphere &&
             (surface.GetType() == GeomAbs_BSplineSurface || surface.GetType() == GeomAbs_BezierSurface)) {
             return fitSphereLikeSurface(face);
+        }
+        if (expectedType == GeomAbs_Cone &&
+            (surface.GetType() == GeomAbs_BSplineSurface ||
+                surface.GetType() == GeomAbs_BezierSurface ||
+                surface.GetType() == GeomAbs_SurfaceOfRevolution)) {
+            return fitConeLikeSurface(face, options);
         }
         return std::nullopt;
     }
@@ -515,14 +783,16 @@ AnalyticCompatibility compareAnalyticSamples(
         result.axis_angle_degrees = axisAngleDegrees(seed.axis_direction, next.axis_direction);
         const auto semiAngleDelta = std::abs(seed.semi_angle_degrees - next.semi_angle_degrees);
         const auto apexDelta = seed.apex.Distance(next.apex);
+        const auto apexTolerance = std::max(options.max_cone_apex_delta, std::max(seed.radius, next.radius) * 4.0);
+        const auto axisTolerance = std::max(options.max_cone_axis_angle_degrees, 25.0);
         result.distance = std::max(apexDelta, semiAngleDelta);
-        result.fit_error = std::max({result.axis_angle_degrees / options.max_cone_axis_angle_degrees,
+        result.fit_error = std::max({result.axis_angle_degrees / axisTolerance,
             semiAngleDelta / options.max_cone_semi_angle_delta_degrees,
-            apexDelta / options.max_cone_apex_delta});
+            apexDelta / apexTolerance});
         result.compatible =
-            result.axis_angle_degrees <= options.max_cone_axis_angle_degrees &&
+            result.axis_angle_degrees <= axisTolerance &&
             semiAngleDelta <= options.max_cone_semi_angle_delta_degrees &&
-            apexDelta <= options.max_cone_apex_delta &&
+            apexDelta <= apexTolerance &&
             result.fit_error <= options.max_cone_fit_error / std::max(options.max_cone_fit_error, 1.0e-12);
         return result;
     }
