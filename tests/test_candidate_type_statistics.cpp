@@ -84,6 +84,27 @@ void test_mergeable_plane_filter_only_returns_plane_candidates() {
     assert(planes.front().candidate_type == spo::MergeCandidateType::PlaneLike);
 }
 
+void test_mergeable_sphere_filter_skips_high_risk_and_single_face_candidates() {
+    std::vector<spo::MergeCandidate> candidates {
+        make_candidate(0, spo::MergeCandidateType::SphereLike),
+        make_candidate(1, spo::MergeCandidateType::SphereLike),
+        make_candidate(2, spo::MergeCandidateType::SphereLike),
+        make_candidate(3, spo::MergeCandidateType::PlaneLike),
+    };
+    candidates[0].face_count = 2;
+    candidates[0].faces = {0, 1};
+    candidates[1].face_count = 2;
+    candidates[1].faces = {2, 3};
+    candidates[1].risk_level = spo::MergeRiskLevel::High;
+    candidates[2].face_count = 1;
+    candidates[2].faces = {4};
+
+    const auto spheres = spo::filterMergeableSphereCandidates(candidates);
+    assert(spheres.size() == 1);
+    assert(spheres.front().candidate_id == 0);
+    assert(spheres.front().candidate_type == spo::MergeCandidateType::SphereLike);
+}
+
 void test_plane_region_merger_rejects_non_plane_candidate() {
     const spo::ShapeDocument document;
     const spo::PlaneRegionMerger merger;
@@ -98,5 +119,6 @@ void run_candidate_type_statistics_tests() {
     test_candidate_type_counts_include_zero_types();
     test_candidate_filters_by_visibility_and_type();
     test_mergeable_plane_filter_only_returns_plane_candidates();
+    test_mergeable_sphere_filter_skips_high_risk_and_single_face_candidates();
     test_plane_region_merger_rejects_non_plane_candidate();
 }

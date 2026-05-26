@@ -73,4 +73,19 @@ std::vector<MergeCandidate> filterMergeablePlaneCandidates(const std::vector<Mer
     return result;
 }
 
+std::vector<MergeCandidate> filterMergeableSphereCandidates(const std::vector<MergeCandidate>& candidates) {
+    std::vector<MergeCandidate> result;
+    for (const auto& candidate : candidates) {
+        if (candidate.valid &&
+            candidate.candidate_type == MergeCandidateType::SphereLike &&
+            candidate.status != MergeCandidateStatus::Rejected &&
+            candidate.status != MergeCandidateStatus::Hidden &&
+            candidate.risk_level != MergeRiskLevel::High &&
+            candidate.face_count >= 2) {
+            result.push_back(candidate);
+        }
+    }
+    return result;
+}
+
 }

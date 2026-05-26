@@ -24,5 +24,6 @@ std::vector<MergeCandidate> filterCandidatesByType(
     bool includeHidden = false);
 std::vector<MergeCandidate> filterNonHiddenCandidates(const std::vector<MergeCandidate>& candidates);
 std::vector<MergeCandidate> filterMergeablePlaneCandidates(const std::vector<MergeCandidate>& candidates);
+std::vector<MergeCandidate> filterMergeableSphereCandidates(const std::vector<MergeCandidate>& candidates);
 
 }
