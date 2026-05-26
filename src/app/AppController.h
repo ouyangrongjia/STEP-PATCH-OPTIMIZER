@@ -11,6 +11,7 @@
 #include "merge/PlaneRegionMerger.h"
 #include "merge/RegionMergeResult.h"
 #include "merge/SameDomainUnifier.h"
+#include "merge/SphereRegionMerger.h"
 #include "validate/ShapeValidator.h"
 
 #include <filesystem>
@@ -47,6 +48,12 @@ public:
     RegionMergeResult mergePlaneCandidates(
         const std::vector<MergeCandidate>& candidates,
         const PlaneRegionMergeOptions& options);
+    RegionMergeResult mergeSphereCandidate(
+        const MergeCandidate& candidate,
+        const SphereRegionMergeOptions& options);
+    RegionMergeResult mergeSphereCandidates(
+        const std::vector<MergeCandidate>& candidates,
+        const SphereRegionMergeOptions& options);
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;

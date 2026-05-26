@@ -8,6 +8,8 @@
 #include "command/MergePatchCommand.h"
 #include "command/PlaneRegionBatchMergeCommand.h"
 #include "command/PlaneRegionMergeCommand.h"
+#include "command/SphereRegionBatchMergeCommand.h"
+#include "command/SphereRegionMergeCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
 #include "merge/MergePlanner.h"
@@ -117,6 +119,30 @@ RegionMergeResult AppController::mergePlaneCandidates(
     const PlaneRegionMergeOptions& options) {
     RegionMergeResult result;
     auto command = std::make_unique<PlaneRegionBatchMergeCommand>(candidates, options, &result);
+    const auto status = execute(std::move(command));
+    if (!status.success()) {
+        return result;
+    }
+    return result;
+}
+
+RegionMergeResult AppController::mergeSphereCandidate(
+    const MergeCandidate& candidate,
+    const SphereRegionMergeOptions& options) {
+    RegionMergeResult result;
+    auto command = std::make_unique<SphereRegionMergeCommand>(candidate, options, &result);
+    const auto status = execute(std::move(command));
+    if (!status.success()) {
+        return result;
+    }
+    return result;
+}
+
+RegionMergeResult AppController::mergeSphereCandidates(
+    const std::vector<MergeCandidate>& candidates,
+    const SphereRegionMergeOptions& options) {
+    RegionMergeResult result;
+    auto command = std::make_unique<SphereRegionBatchMergeCommand>(candidates, options, &result);
     const auto status = execute(std::move(command));
     if (!status.success()) {
         return result;

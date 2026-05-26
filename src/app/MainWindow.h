@@ -58,6 +58,10 @@ private:
     void mergeAcceptedPlaneCandidates();
     void mergeAllMergeablePlaneCandidates();
     void mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
+    void mergeCurrentSphereCandidate();
+    void mergeAcceptedSphereCandidates();
+    void mergeAllMergeableSphereCandidates();
+    void mergeSphereCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
     void applyMerge();
     void validateShape();
     void resetView();
@@ -89,6 +93,7 @@ private:
     QDockWidget* bottomDock_ = nullptr;
     QMenu* viewMenu_ = nullptr;
     QMenu* planeMergeMenu_ = nullptr;
+    QMenu* sphereMergeMenu_ = nullptr;
 
     QAction* openStepAction_ = nullptr;
     QAction* saveProjectAction_ = nullptr;
@@ -112,6 +117,9 @@ private:
     QAction* mergePlaneCandidateAction_ = nullptr;
     QAction* mergeAcceptedPlaneCandidatesAction_ = nullptr;
     QAction* mergeAllPlaneCandidatesAction_ = nullptr;
+    QAction* mergeSphereCandidateAction_ = nullptr;
+    QAction* mergeAcceptedSphereCandidatesAction_ = nullptr;
+    QAction* mergeAllSphereCandidatesAction_ = nullptr;
     QAction* applyMergeAction_ = nullptr;
     QAction* validateAction_ = nullptr;
     QAction* resetViewAction_ = nullptr;

@@ -35,6 +35,8 @@ add_library(spo_core STATIC
     src/command/MergePatchCommand.cpp
     src/command/PlaneRegionBatchMergeCommand.cpp
     src/command/PlaneRegionMergeCommand.cpp
+    src/command/SphereRegionBatchMergeCommand.cpp
+    src/command/SphereRegionMergeCommand.cpp
     src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
     src/feature/BoundaryClassifier.cpp
@@ -135,6 +137,8 @@ if(SPO_BUILD_TESTS)
         tests/test_plane_region_merge_command.cpp
         tests/test_plane_region_merger.cpp
         tests/test_region_merge_stubs.cpp
+        tests/test_sphere_region_merge_command.cpp
+        tests/test_sphere_region_merger.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
         tests/test_topology_graph.cpp

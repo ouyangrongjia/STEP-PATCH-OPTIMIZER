@@ -7,6 +7,7 @@
 #include "gui/ParameterPanel.h"
 #include "merge/CandidateFilters.h"
 #include "merge/FaceInspector.h"
+#include "merge/SphereRegionMerger.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -286,6 +287,9 @@ void MainWindow::createActions() {
     mergePlaneCandidateAction_ = new QAction("合并当前平面候选", this);
     mergeAcceptedPlaneCandidatesAction_ = new QAction("合并所有已接受平面候选", this);
     mergeAllPlaneCandidatesAction_ = new QAction("一键合并全部可合并平面候选", this);
+    mergeSphereCandidateAction_ = new QAction("合并当前球面候选", this);
+    mergeAcceptedSphereCandidatesAction_ = new QAction("合并所有已接受球面候选", this);
+    mergeAllSphereCandidatesAction_ = new QAction("一键合并全部可合并球面候选", this);
     applyMergeAction_ = new QAction("执行合并", this);
 
     validateAction_ = new QAction("合法性检查", this);
@@ -350,6 +354,10 @@ void MainWindow::createMenus() {
     planeMergeMenu_->addAction(mergePlaneCandidateAction_);
     planeMergeMenu_->addAction(mergeAcceptedPlaneCandidatesAction_);
     planeMergeMenu_->addAction(mergeAllPlaneCandidatesAction_);
+    sphereMergeMenu_ = mergeMenu->addMenu("球面候选合并");
+    sphereMergeMenu_->addAction(mergeSphereCandidateAction_);
+    sphereMergeMenu_->addAction(mergeAcceptedSphereCandidatesAction_);
+    sphereMergeMenu_->addAction(mergeAllSphereCandidatesAction_);
     mergeMenu->addSeparator();
     mergeMenu->addAction(applyMergeAction_);
     mergeMenu->addSeparator();
@@ -394,6 +402,15 @@ void MainWindow::createToolBars() {
     planeMergeToolMenu->addAction(mergeAllPlaneCandidatesAction_);
     planeMergeButton->setMenu(planeMergeToolMenu);
     toolBar->addWidget(planeMergeButton);
+    auto* sphereMergeButton = new QToolButton(this);
+    sphereMergeButton->setText("球面合并");
+    sphereMergeButton->setPopupMode(QToolButton::InstantPopup);
+    auto* sphereMergeToolMenu = new QMenu(sphereMergeButton);
+    sphereMergeToolMenu->addAction(mergeSphereCandidateAction_);
+    sphereMergeToolMenu->addAction(mergeAcceptedSphereCandidatesAction_);
+    sphereMergeToolMenu->addAction(mergeAllSphereCandidatesAction_);
+    sphereMergeButton->setMenu(sphereMergeToolMenu);
+    toolBar->addWidget(sphereMergeButton);
     toolBar->addAction(applyMergeAction_);
     toolBar->addAction(validateAction_);
     toolBar->addAction(exportStepAction_);
@@ -491,6 +508,9 @@ void MainWindow::connectActions() {
     connect(mergePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentPlaneCandidate(); });
     connect(mergeAcceptedPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedPlaneCandidates(); });
     connect(mergeAllPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeablePlaneCandidates(); });
+    connect(mergeSphereCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentSphereCandidate(); });
+    connect(mergeAcceptedSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedSphereCandidates(); });
+    connect(mergeAllSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeableSphereCandidates(); });
     connect(applyMergeAction_, &QAction::triggered, this, [this]() { applyMerge(); });
     connect(validateAction_, &QAction::triggered, this, [this]() { validateShape(); });
     connect(resetViewAction_, &QAction::triggered, this, [this]() { resetView(); });
@@ -1107,6 +1127,167 @@ void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& can
     options.min_region_faces = 2;
 
     const auto result = controller_.mergePlaneCandidates(candidates, options);
+    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n合并前 face：%6\n合并后 face：%7\nface reduction ratio：%8%\n合并前 edge：%9\n合并后 edge：%10\nedge reduction ratio：%11%\nmax deviation：%12\nmean deviation：%13\nrms deviation：%14\nBRepCheck：%15")
+        .arg(title)
+        .arg(result.success ? "完成" : "失败")
+        .arg(candidates.size())
+        .arg(regionMergeFailureText(result.failure_reason))
+        .arg(QString::fromStdString(result.message))
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after)
+        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
+        .arg(QString::number(result.max_deviation, 'g', 6))
+        .arg(QString::number(result.mean_deviation, 'g', 6))
+        .arg(QString::number(result.rms_deviation, 'g', 6))
+        .arg(result.brep_check_valid ? "通过" : "失败");
+
+    inspectPanel_->showReport(report);
+    if (!result.success) {
+        logPanel_->appendWarning(QString("%1失败：原因 %2，%3")
+            .arg(title)
+            .arg(regionMergeFailureText(result.failure_reason))
+            .arg(QString::fromStdString(result.message)));
+        setStatus(QString("%1失败").arg(title));
+        refreshUndoRedoActions();
+        return;
+    }
+
+    refreshDocumentViews();
+    logPanel_->appendInfo(QString("%1完成：输入候选 %2，face %3 -> %4，edge %5 -> %6")
+        .arg(title)
+        .arg(candidates.size())
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after));
+    setStatus(QString("%1完成").arg(title));
+    refreshUndoRedoActions();
+}
+
+void MainWindow::mergeCurrentSphereCandidate() {
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+    if (lastMergeCandidates_.empty() || currentMergeCandidateId_ < 0) {
+        inspectPanel_->showReport("请先选择一个候选区域。");
+        setStatus("没有选中候选");
+        return;
+    }
+    const auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先选择一个候选区域。");
+        setStatus("没有选中候选");
+        return;
+    }
+    if (candidate->candidate_type != MergeCandidateType::SphereLike) {
+        inspectPanel_->showReport(QString("当前候选不是 SphereLike，不能执行球面区域合并。\n候选 ID：%1\n候选类型：%2")
+            .arg(candidate->candidate_id)
+            .arg(candidateTypeText(candidate->candidate_type)));
+        setStatus("当前候选不是球面候选");
+        return;
+    }
+
+    const auto params = parameterPanel_->parameters();
+    SphereRegionMergeOptions options;
+    options.sphere_radius_tolerance = std::max(options.sphere_radius_tolerance, params.linear_tolerance);
+    options.allow_pending_candidate = true;
+    options.require_accepted_candidate = false;
+    options.min_region_faces = 2;
+
+    const auto result = controller_.mergeSphereCandidate(*candidate, options);
+    const auto report = QString("球面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n球心：(%7, %8, %9)\n球半径：%10\n拟合误差：%11\n合并前 face：%12\n合并后 face：%13\nface reduction ratio：%14%\n合并前 edge：%15\n合并后 edge：%16\nedge reduction ratio：%17%\nmax deviation：%18\nmean deviation：%19\nrms deviation：%20\nBRepCheck：%21")
+        .arg(result.success ? "完成" : "失败")
+        .arg(candidate->candidate_id)
+        .arg(candidateTypeText(candidate->candidate_type))
+        .arg(candidateStatusText(candidate->status))
+        .arg(regionMergeFailureText(result.failure_reason))
+        .arg(QString::fromStdString(result.message))
+        .arg(QString::number(result.primitive_center_x, 'f', 6))
+        .arg(QString::number(result.primitive_center_y, 'f', 6))
+        .arg(QString::number(result.primitive_center_z, 'f', 6))
+        .arg(QString::number(result.primitive_radius, 'f', 6))
+        .arg(QString::number(result.primitive_fit_error, 'g', 6))
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after)
+        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
+        .arg(QString::number(result.max_deviation, 'g', 6))
+        .arg(QString::number(result.mean_deviation, 'g', 6))
+        .arg(QString::number(result.rms_deviation, 'g', 6))
+        .arg(result.brep_check_valid ? "通过" : "失败");
+
+    inspectPanel_->showReport(report);
+    if (!result.success) {
+        logPanel_->appendWarning(QString("球面候选合并失败：候选 %1，原因 %2，%3")
+            .arg(candidate->candidate_id)
+            .arg(regionMergeFailureText(result.failure_reason))
+            .arg(QString::fromStdString(result.message)));
+        setStatus("球面候选合并失败");
+        refreshUndoRedoActions();
+        return;
+    }
+
+    refreshDocumentViews();
+    logPanel_->appendInfo(QString("球面候选合并完成：候选 %1，face %2 -> %3，edge %4 -> %5")
+        .arg(result.candidate_id)
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after));
+    setStatus("球面候选合并完成");
+    refreshUndoRedoActions();
+}
+
+void MainWindow::mergeAcceptedSphereCandidates() {
+    std::vector<MergeCandidate> candidates;
+    for (const auto& candidate : lastMergeCandidates_) {
+        if (candidate.candidate_type == MergeCandidateType::SphereLike &&
+            candidate.status == MergeCandidateStatus::Accepted) {
+            candidates.push_back(candidate);
+        }
+    }
+    mergeSphereCandidateBatch(candidates, "合并所有已接受球面候选");
+}
+
+void MainWindow::mergeAllMergeableSphereCandidates() {
+    const auto candidates = filterMergeableSphereCandidates(lastMergeCandidates_);
+    mergeSphereCandidateBatch(candidates, "一键合并全部可合并球面候选");
+}
+
+void MainWindow::mergeSphereCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title) {
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+    if (lastMergeCandidates_.empty()) {
+        inspectPanel_->showReport(QString::fromUtf8("请先点击“预览合并”生成候选区域。"));
+        logPanel_->appendWarning("批量球面合并前尚未生成候选区域。");
+        setStatus("没有候选区域");
+        return;
+    }
+    if (candidates.empty()) {
+        inspectPanel_->showReport(QString("%1\n没有符合条件的 SphereLike 候选区域。").arg(title));
+        logPanel_->appendWarning(QString("%1：没有符合条件的 SphereLike 候选区域。").arg(title));
+        setStatus("没有可批量合并的球面候选");
+        return;
+    }
+
+    SphereRegionMergeOptions options;
+    const auto params = parameterPanel_->parameters();
+    options.sphere_radius_tolerance = std::max(options.sphere_radius_tolerance, params.linear_tolerance);
+    options.allow_pending_candidate = true;
+    options.require_accepted_candidate = false;
+    options.min_region_faces = 2;
+
+    const auto result = controller_.mergeSphereCandidates(candidates, options);
     const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n合并前 face：%6\n合并后 face：%7\nface reduction ratio：%8%\n合并前 edge：%9\n合并后 edge：%10\nedge reduction ratio：%11%\nmax deviation：%12\nmean deviation：%13\nrms deviation：%14\nBRepCheck：%15")
         .arg(title)
         .arg(result.success ? "完成" : "失败")
