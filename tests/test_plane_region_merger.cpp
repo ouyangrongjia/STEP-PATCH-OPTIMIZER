@@ -306,13 +306,86 @@ void test_plane_region_merger_preserves_solid_container() {
     assert(result.document.stats().edges < before.edges - 1);
 }
 
+void test_region_merge_result_default_primitive_fields() {
+    const spo::RegionMergeResult result;
+    assert(result.primitive_center_x == 0.0);
+    assert(result.primitive_center_y == 0.0);
+    assert(result.primitive_center_z == 0.0);
+    assert(result.primitive_axis_x == 0.0);
+    assert(result.primitive_axis_y == 0.0);
+    assert(result.primitive_axis_z == 0.0);
+    assert(result.primitive_radius == 0.0);
+    assert(result.primitive_secondary_radius == 0.0);
+    assert(result.primitive_angle_degrees == 0.0);
+    assert(result.primitive_fit_error == 0.0);
+}
+
+void test_plane_region_merger_fills_primitive_fields_on_success() {
+    const auto fixture = make_two_face_plane_fixture();
+    const spo::PlaneRegionMerger merger;
+    const spo::PlaneRegionMergeOptions options;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    assert(result.success);
+    assert(result.plane_normal_x != 0.0 || result.plane_normal_y != 0.0 || result.plane_normal_z != 0.0);
+
+    assert(result.primitive_axis_x == result.plane_normal_x);
+    assert(result.primitive_axis_y == result.plane_normal_y);
+    assert(result.primitive_axis_z == result.plane_normal_z);
+
+    assert(result.primitive_fit_error > 0.0 || result.primitive_fit_error == result.max_deviation);
+    assert(result.primitive_fit_error <= options.max_deviation);
+
+    assert(result.primitive_center_x == 0.0);
+    assert(result.primitive_center_y == 0.0);
+    assert(result.primitive_center_z == 0.0);
+    assert(result.primitive_radius == 0.0);
+    assert(result.primitive_secondary_radius == 0.0);
+    assert(result.primitive_angle_degrees == 0.0);
+}
+
+void test_plane_region_merger_fills_primitive_fields_on_nurbs_success() {
+    const auto fixture = make_two_face_plane_fixture(true);
+    const spo::PlaneRegionMerger merger;
+    const spo::PlaneRegionMergeOptions options;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    assert(result.success);
+
+    assert(result.primitive_axis_x == result.plane_normal_x);
+    assert(result.primitive_axis_y == result.plane_normal_y);
+    assert(result.primitive_axis_z == result.plane_normal_z);
+
+    assert(result.primitive_fit_error > 0.0 || result.primitive_fit_error == result.max_deviation);
+    assert(result.primitive_fit_error <= options.max_deviation);
+}
+
+void test_plane_region_merger_failure_does_not_fill_primitive_fields() {
+    const auto fixture = make_two_face_plane_fixture();
+    const spo::PlaneRegionMerger merger;
+    const spo::PlaneRegionMergeOptions options;
+
+    auto wrong_type = fixture.candidate;
+    wrong_type.candidate_type = spo::MergeCandidateType::CylinderLike;
+    const auto result = merger.merge(fixture.document, wrong_type, options);
+    assert(!result.success);
+    assert(result.primitive_axis_x == 0.0);
+    assert(result.primitive_axis_y == 0.0);
+    assert(result.primitive_axis_z == 0.0);
+    assert(result.primitive_fit_error == 0.0);
+}
+
 }
 
 void run_plane_region_merger_tests() {
+    test_region_merge_result_default_primitive_fields();
     test_plane_region_merger_rejects_invalid_candidate_states();
     test_plane_region_merger_rejects_small_or_protected_regions();
     test_plane_region_merger_rejects_invalid_boundary_without_changing_stats();
     test_plane_region_merger_merges_simple_coplanar_region();
     test_plane_region_merger_accepts_nurbs_backed_planar_region();
     test_plane_region_merger_preserves_solid_container();
+    test_plane_region_merger_fills_primitive_fields_on_success();
+    test_plane_region_merger_fills_primitive_fields_on_nurbs_success();
+    test_plane_region_merger_failure_does_not_fill_primitive_fields();
 }

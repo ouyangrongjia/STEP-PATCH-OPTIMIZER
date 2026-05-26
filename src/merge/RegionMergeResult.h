@@ -54,6 +54,20 @@ struct RegionMergeResult {
     double plane_normal_y = 0.0;
     double plane_normal_z = 0.0;
 
+    double primitive_center_x = 0.0;
+    double primitive_center_y = 0.0;
+    double primitive_center_z = 0.0;
+
+    double primitive_axis_x = 0.0;
+    double primitive_axis_y = 0.0;
+    double primitive_axis_z = 0.0;
+
+    double primitive_radius = 0.0;
+    double primitive_secondary_radius = 0.0;
+
+    double primitive_angle_degrees = 0.0;
+    double primitive_fit_error = 0.0;
+
     bool brep_check_valid = false;
     ShapeDocument document;
 };

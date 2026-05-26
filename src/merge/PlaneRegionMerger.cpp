@@ -390,9 +390,14 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
     result.plane_normal_x = normal.X();
     result.plane_normal_y = normal.Y();
     result.plane_normal_z = normal.Z();
+    result.primitive_axis_x = normal.X();
+    result.primitive_axis_y = normal.Y();
+    result.primitive_axis_z = normal.Z();
     if (!computeDeviation(document, candidate, *targetPlane, options, result)) {
         return std::nullopt;
     }
+
+    result.primitive_fit_error = result.max_deviation;
 
     const auto boundaryWire = makeBoundaryWire(document, candidate);
     if (!boundaryWire.has_value()) {
@@ -584,12 +589,16 @@ RegionMergeResult PlaneRegionMerger::mergeBatch(
 
         usedFaces.insert(prepared->region_faces.begin(), prepared->region_faces.end());
         result.max_deviation = std::max(result.max_deviation, prepared->max_deviation);
+        result.primitive_fit_error = std::max(result.primitive_fit_error, prepared->max_deviation);
         result.mean_deviation += prepared->mean_deviation;
         result.rms_deviation += prepared->rms_deviation;
         if (preparedMerges.empty()) {
             result.plane_normal_x = prepared->plane_normal.X();
             result.plane_normal_y = prepared->plane_normal.Y();
             result.plane_normal_z = prepared->plane_normal.Z();
+            result.primitive_axis_x = prepared->plane_normal.X();
+            result.primitive_axis_y = prepared->plane_normal.Y();
+            result.primitive_axis_z = prepared->plane_normal.Z();
         }
         preparedMerges.push_back(*prepared);
     }

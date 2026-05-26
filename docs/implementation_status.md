@@ -53,6 +53,7 @@ STEP 读取
 13. Stage 2.9 Multi-type Candidate Preview 已完成：报告、模型树、按类型筛选、Viewer 多类型配色和 Face Inspect 已支持 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 的显示通道。
 14. Stage 2.8 Enhancement A 已完成：CylinderLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆柱 face 做保守采样拟合检测；CylinderLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 CylinderRegionMerge。
 15. Stage 2.8 Enhancement B 已完成：ConeLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆锥/圆台 face 做保守采样拟合检测；ConeLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 ConeRegionMerge。
+16. Stage 3-S Shared Primitive Result Fields 已完成：RegionMergeResult 已新增通用 primitive 参数字段（primitive_center_x/y/z、primitive_axis_x/y/z、primitive_radius、primitive_secondary_radius、primitive_angle_degrees、primitive_fit_error）；Stage 3A PlaneRegionMerge 仍保持原有行为，成功时填充 primitive_axis_* 和 primitive_fit_error；Cylinder / Sphere / Cone / Torus 真实合并仍未实现；后续 Stage 3D / Stage 3B 将复用这些字段。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -181,6 +182,7 @@ STEP 读取
 | 平面合并边界简化 | 已完成基础版 | 对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段 |
 | `PlaneRegionMergeCommand` | 已完成基础版 | 平面候选合并通过 Command 层执行，支持 undo/redo |
 | `PlaneRegionBatchMergeCommand` | 已完成基础版 | 批量平面候选合并通过 Command 层执行，支持 undo/redo |
+| Stage 3-S Shared Primitive Fields | 已完成 | RegionMergeResult 已新增 9 个通用 primitive 参数字段，供后续 Sphere / Cylinder / Cone / Torus 复用 |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块

@@ -1037,6 +1037,9 @@ Stage 2.8 Enhancement B：B-spline ConeLike / FrustumLike Approximate Detection
   从 B-spline / Bezier / SurfaceOfRevolution patch 中保守识别近似圆锥 / 圆台候选。
   只生成候选，不做真实合并。
 
+Stage 3-S：Shared Primitive Result Fields
+  进入真实非平面合并前，先扩展 RegionMergeResult 的通用 primitive 参数字段。
+
 Stage 3D：SphereRegionMerge
   由于 SphereLike 已有 B-spline 近似增强，Stage 3D 可能比 Stage 3B / 3C 更早具备推进条件。
 
@@ -1102,6 +1105,163 @@ B-spline CylinderLike / ConeLike 增强属于 Stage 2.8 Enhancement，不属于 
 ```
 
 这比单纯调用 OCCT native surface type 更有研究价值。
+
+---
+
+## 7.0 Stage 3-S：Shared Primitive Result Fields
+
+### 7.0.1 阶段定位
+
+Stage 3-S 是进入 Stage 3B / Stage 3D 真实解析图元合并前的共享结果字段准备阶段。
+
+该阶段只扩展真实合并结果结构、报告字段和 GUI 展示，不执行任何新的真实合并。
+
+它解决的问题是：
+
+```text
+Stage 3A PlaneRegionMerge 的 RegionMergeResult 当前主要记录平面法向和通用误差。
+Stage 3B CylinderRegionMerge 和 Stage 3D SphereRegionMerge 需要记录轴线、中心、半径等 primitive 参数。
+如果直接分别在 3B / 3D 中各自扩展字段，会导致结果结构重复修改、GUI 报告重复改动、测试分散。
+```
+
+因此在进入 3B / 3D 前，先增加通用 primitive result fields。
+
+### 7.0.2 当前代码事实
+
+当前 `RegionMergeResult` 已有：
+
+```cpp
+bool success;
+RegionMergeFailureReason failure_reason;
+std::string message;
+
+int candidate_id;
+MergeCandidateType candidate_type;
+
+int face_count_before;
+int face_count_after;
+int edge_count_before;
+int edge_count_after;
+
+double face_reduction_ratio;
+double edge_reduction_ratio;
+
+double max_deviation;
+double mean_deviation;
+double rms_deviation;
+
+double plane_normal_x;
+double plane_normal_y;
+double plane_normal_z;
+
+bool brep_check_valid;
+ShapeDocument document;
+```
+
+这些字段足够支撑 Stage 3A 平面合并，但不足以表达：
+
+```text
+SphereRegionMerge:
+  sphere center
+  sphere radius
+
+CylinderRegionMerge:
+  cylinder axis location
+  cylinder axis direction
+  cylinder radius
+
+ConeRegionMerge:
+  cone axis
+  apex
+  semi-angle
+  reference radius
+
+TorusRegionMerge:
+  center
+  axis
+  major radius
+  minor radius
+```
+
+### 7.0.3 推荐新增字段
+
+建议在 `RegionMergeResult` 中增加通用 primitive 字段，而不是只增加 sphere/cylinder 专属字段：
+
+```cpp
+double primitive_center_x = 0.0;
+double primitive_center_y = 0.0;
+double primitive_center_z = 0.0;
+
+double primitive_axis_x = 0.0;
+double primitive_axis_y = 0.0;
+double primitive_axis_z = 0.0;
+
+double primitive_radius = 0.0;
+double primitive_secondary_radius = 0.0;
+
+double primitive_angle_degrees = 0.0;
+double primitive_fit_error = 0.0;
+```
+
+字段语义：
+
+| 字段                       | SphereLike     | CylinderLike | ConeLike               | TorusLike    |
+| -------------------------- | -------------- | ------------ | ---------------------- | ------------ |
+| primitive_center_x/y/z     | 球心           | 轴线参考点   | 轴线参考点或 apex 参考 | 圆环中心     |
+| primitive_axis_x/y/z       | 可空或参考方向 | 圆柱轴方向   | 圆锥轴方向             | 圆环轴方向   |
+| primitive_radius           | 球半径         | 圆柱半径     | reference radius       | major radius |
+| primitive_secondary_radius | 0              | 0            | 0 或局部半径           | minor radius |
+| primitive_angle_degrees    | 0              | 0            | semi-angle             | 0            |
+| primitive_fit_error        | 拟合误差       | 拟合误差     | 拟合误差               | 拟合误差     |
+
+### 7.0.4 允许做
+
+```text
+1. 扩展 RegionMergeResult 通用 primitive 字段。
+2. 更新 PlaneRegionMerger，使其可以继续写 plane_normal_x/y/z，也可以选择性写 primitive_axis_x/y/z。
+3. 更新 GUI 报告 helper，使后续非平面合并结果能显示 primitive 参数。
+4. 更新测试，验证新增字段默认值稳定，不破坏既有 Stage 3A 测试。
+5. 更新文档，说明 3B / 3D 应复用这些字段。
+```
+
+### 7.0.5 不允许做
+
+```text
+1. 不实现 CylinderRegionMerge。
+2. 不实现 SphereRegionMerge。
+3. 不构造 cylindrical / spherical trimmed face。
+4. 不替换 TopoDS_Shape。
+5. 不新增 CylinderRegionMergeCommand / SphereRegionMergeCommand。
+6. 不新增 GUI 真实合并入口。
+7. 不改变 Stage 3A PlaneRegionMerge 的成功/失败语义。
+8. 不修改 SameDomainUnifier。
+```
+
+### 7.0.6 验收标准
+
+```text
+1. 项目构建通过。
+2. 现有测试通过。
+3. RegionMergeResult 新字段有默认值。
+4. Stage 3A PlaneRegionMerge 既有测试不回退。
+5. GUI 报告仍能正常显示 Stage 3A 结果。
+6. 新字段能被后续 Stage 3D / Stage 3B 复用。
+```
+
+### 7.0.7 后续顺序
+
+完成 Stage 3-S 后，推荐推进顺序为：
+
+```text
+Stage 3D：SphereRegionMerge
+  当前 SphereLike 候选检测链路最成熟，适合作为第一个非平面真实合并阶段。
+
+Stage 3B：CylinderRegionMerge
+  当前 CylinderLike 已有 B-spline approximate detection，但 cylindrical surface seam / periodic parameter domain 风险较高，建议放在 Sphere 之后。
+
+Stage 3C：ConeRegionMerge
+  后置，避免误伤自由曲面尖角、发尖和高曲率装饰区域。
+```
 
 
 ---
@@ -2271,7 +2431,7 @@ Codex 修改合并算法时必须遵守：
    - 3C ConeRegionMerge，保留但后置
    - 3D SphereRegionMerge
    - 3E TorusRegionMerge，可选补全
-7. 当前近期主线是：验证 3A 强化版 → Stage 2.9 多类型候选预览框架 → Stage 2.8 Enhancement Cylinder/Cone 近似检测 → 3B/3D/3C → Stage 4 → Stage 5。
+7. 当前近期主线是：验证 3A 强化版 → Stage 2.9 多类型候选预览框架 → Stage 2.8 Enhancement Cylinder/Cone 近似检测 → Stage 3-S 通用结果字段 → 3D → 3B → 3C → Stage 4 → Stage 5。
 8. 3C / 3E 不删除，但不阻塞自由曲面路线。
 9. Freeform Candidate Detection 提前进入，服务潮玩模型自由曲面。
 10. B-spline / Plate Refit 在验证、报告和 rollback 完善后实施。
