@@ -54,6 +54,8 @@ STEP 读取
 14. Stage 2.8 Enhancement A 已完成：CylinderLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆柱 face 做保守采样拟合检测；CylinderLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 CylinderRegionMerge。
 15. Stage 2.8 Enhancement B 已完成：ConeLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆锥/圆台 face 做保守采样拟合检测；ConeLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 ConeRegionMerge。
 16. Stage 3-S Shared Primitive Result Fields 已完成：RegionMergeResult 已新增通用 primitive 参数字段（primitive_center_x/y/z、primitive_axis_x/y/z、primitive_radius、primitive_secondary_radius、primitive_angle_degrees、primitive_fit_error）；Stage 3A PlaneRegionMerge 仍保持原有行为，成功时填充 primitive_axis_* 和 primitive_fit_error；Cylinder / Sphere / Cone / Torus 真实合并仍未实现；后续 Stage 3D / Stage 3B 将复用这些字段。
+17. Stage 3D SphereRegionMerge 已完成稳定版调整：SphereLike candidate 合并不再手工构造 spherical trimmed face，也不再使用 ReShape 删除 face；当前改为只放开候选内部边并保护其他所有边，然后调用 OCCT `ShapeUpgrade_UnifySameDomain` 合并同域球面片，避免手工球面边界导致缺面和飞线；支持所有已接受 SphereLike candidates 的批量合并；支持全部可合并 SphereLike candidates 的实验性批量合并；支持 Command 层执行和 undo/redo；支持 AppController 和 GUI 三个入口；写入 RegionMergeResult primitive_center / primitive_radius / primitive_fit_error；Cylinder / Cone / Torus 真实合并仍未实现。
+18. SphereRegionMerge 一键批量合并已增加防护：一键全部可合并球面候选会跳过 High risk 和单 face 候选；批量合并保护候选外部边和其他所有边，只允许候选内部边被同域合并消除；若结果丢失拓扑、solid 数变化或 face 数未下降则失败回滚。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -183,6 +185,12 @@ STEP 读取
 | `PlaneRegionMergeCommand` | 已完成基础版 | 平面候选合并通过 Command 层执行，支持 undo/redo |
 | `PlaneRegionBatchMergeCommand` | 已完成基础版 | 批量平面候选合并通过 Command 层执行，支持 undo/redo |
 | Stage 3-S Shared Primitive Fields | 已完成 | RegionMergeResult 已新增 9 个通用 primitive 参数字段，供后续 Sphere / Cylinder / Cone / Torus 复用 |
+| `SphereRegionMerger` | 已完成稳定版调整 | 支持 SphereLike 候选区域通过 OCCT same-domain unifier 消除内部边，不再手工构造 spherical trimmed face；批量路径保护候选外边界和其他所有边，避免缺面和飞线 |
+| `SphereRegionMergeCommand` | 已完成基础版 | 球面候选合并通过 Command 层执行，支持 undo/redo |
+| `SphereRegionBatchMergeCommand` | 已完成基础版 | 批量球面候选合并通过 Command 层执行，支持 undo/redo |
+| `CylinderRegionMerger` | 未完成 | 当前仍为 stub |
+| `ConeRegionMerger` | 未完成 | 当前仍为 stub，后置 |
+| `TorusRegionMerger` | 未完成 | 当前仍为 stub，可选 |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块
@@ -225,6 +233,7 @@ STEP 读取
 | Face / Candidate Inspect 测试 | 已完成基础版 | 覆盖 surface type、候选归属、NotInCandidate 和 stats 不变 |
 | Analytic Candidate Detection 测试 | 已完成增强 B | 覆盖 CylinderLike 原生与 NURBS-backed 近似检测、SphereLike/ConeLike 基础检测、NURBS-backed ConeLike 近似检测、近似圆柱不误判为 ConeLike、protected edge 阻断和 ID 唯一 |
 | Candidate Type Statistics 测试 | 已完成基础版 | 覆盖多类型统计、Hidden 过滤、按类型筛选和 PlaneLike 合并过滤 |
+| SphereLike 一键合并过滤测试 | 已完成基础版 | 覆盖一键球面候选过滤会跳过 High risk 和单 face 候选；球面合并不再依赖 boundary wire 闭合，而是基于候选内部边做同域合并 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
