@@ -47,20 +47,28 @@ TopoDS_Shape shapeFromOwner(const Handle(SelectMgr_EntityOwner)& owner) {
     return brepOwner->Shape();
 }
 
-const Quantity_Color& candidateColor(std::size_t index) {
-    static const std::array<Quantity_Color, 10> colors = {
-        Quantity_Color(0.00, 0.45, 1.00, Quantity_TOC_RGB),
-        Quantity_Color(0.00, 0.80, 0.25, Quantity_TOC_RGB),
-        Quantity_Color(1.00, 0.42, 0.00, Quantity_TOC_RGB),
-        Quantity_Color(0.55, 0.20, 1.00, Quantity_TOC_RGB),
-        Quantity_Color(1.00, 0.00, 0.45, Quantity_TOC_RGB),
-        Quantity_Color(0.00, 0.85, 0.85, Quantity_TOC_RGB),
-        Quantity_Color(0.95, 0.90, 0.00, Quantity_TOC_RGB),
-        Quantity_Color(0.00, 0.95, 0.55, Quantity_TOC_RGB),
-        Quantity_Color(0.90, 0.15, 0.95, Quantity_TOC_RGB),
-        Quantity_Color(1.00, 0.15, 0.10, Quantity_TOC_RGB)
-    };
-    return colors[index % colors.size()];
+Quantity_Color candidateColor(MergeCandidateType type, std::size_t index) {
+    const auto shade = static_cast<double>(index % 3) * 0.08;
+    switch (type) {
+    case MergeCandidateType::PlaneLike:
+        return Quantity_Color(1.00, 0.62 + shade, 0.05, Quantity_TOC_RGB);
+    case MergeCandidateType::CylinderLike:
+        return Quantity_Color(0.05, 0.38 + shade, 1.00, Quantity_TOC_RGB);
+    case MergeCandidateType::SphereLike:
+        return Quantity_Color(0.00, 0.72 + shade, 0.28, Quantity_TOC_RGB);
+    case MergeCandidateType::ConeLike:
+        return Quantity_Color(0.72 + shade, 0.12, 0.95, Quantity_TOC_RGB);
+    case MergeCandidateType::TorusLike:
+        return Quantity_Color(0.00, 0.78 + shade, 0.85, Quantity_TOC_RGB);
+    case MergeCandidateType::FreeformG1:
+        return Quantity_Color(0.36, 0.52 + shade, 0.68, Quantity_TOC_RGB);
+    case MergeCandidateType::FreeformG2:
+        return Quantity_Color(0.42, 0.66 + shade, 0.48, Quantity_TOC_RGB);
+    case MergeCandidateType::SameDomain:
+    case MergeCandidateType::Unknown:
+        return Quantity_Color(0.55 + shade, 0.55 + shade, 0.55 + shade, Quantity_TOC_RGB);
+    }
+    return Quantity_Color(0.55, 0.55, 0.55, Quantity_TOC_RGB);
 }
 
 std::string occtMessage(const Standard_Failure& error) {
@@ -294,7 +302,7 @@ void OccViewWidget::showMergeCandidates(
             continue;
         }
 
-        const auto& color = candidateColor(index);
+        const auto color = candidateColor(candidate->candidate_type, index);
         for (const auto faceId : candidate->faces) {
             if (faceId < topology_->faceCount()) {
                 mergeCandidateFaceColors_.push_back({faceId, color});

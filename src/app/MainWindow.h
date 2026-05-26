@@ -52,6 +52,8 @@ private:
     void showAcceptedMergeCandidates();
     void showPendingMergeCandidates();
     void showNonHiddenMergeCandidates();
+    void showMergeCandidatesByTypeDialog();
+    void showMergeCandidatesByType(MergeCandidateType type);
     void mergeCurrentPlaneCandidate();
     void mergeAcceptedPlaneCandidates();
     void mergeAllMergeablePlaneCandidates();
@@ -106,6 +108,7 @@ private:
     QAction* restoreMergeCandidateAction_ = nullptr;
     QAction* showAcceptedMergeCandidatesAction_ = nullptr;
     QAction* showPendingMergeCandidatesAction_ = nullptr;
+    QAction* showCandidatesByTypeAction_ = nullptr;
     QAction* mergePlaneCandidateAction_ = nullptr;
     QAction* mergeAcceptedPlaneCandidatesAction_ = nullptr;
     QAction* mergeAllPlaneCandidatesAction_ = nullptr;

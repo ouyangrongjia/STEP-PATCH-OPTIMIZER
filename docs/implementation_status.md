@@ -48,6 +48,9 @@ STEP 读取
 8. Stage 3-0 Analytic RegionMerger Framework Preparation 已完成：已预留统一结果、选项、失败原因和解析图元 merger stub。
 9. Stage 3A PlaneRegionMerge 已完成基础可用版：支持 PlaneLike candidate 的真实 planar trimmed face 替换、Command 层执行、undo/redo、批量平面候选合并和 BRepCheck 报告。
 10. PlaneRegionMerge 已修复合并后实体数丢失问题：当前通过原 shape 上的 face 级 reshape 保留 solid/shell 容器，并对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段。
+11. Stage 2.7 Face / Candidate Inspect 已完成：点击 face 可查看 surface type、候选归属、candidate type/status/risk/metrics，并支持未命中原因提示。
+12. Stage 2.8 Analytic Primitive Candidate Detection 已完成基础版：PlaneLike 保持原行为，CylinderLike/SphereLike/ConeLike 支持基础检测，TorusLike/Freeform 类型保留通道。
+13. Stage 2.9 Multi-type Candidate Preview 已完成：报告、模型树、按类型筛选、Viewer 多类型配色和 Face Inspect 已支持 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 的显示通道。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -166,6 +169,9 @@ STEP 读取
 | `MergeRegionGrower` | 已完成基础版 | 支持平面近似区域生长，protectedEdges 可阻断扩张 |
 | `MergeCandidate` 预览 | 已完成基础版 | GUI 可预览 Top N、全部非隐藏候选和指定候选 |
 | 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
+| Face / Candidate Inspect | 已完成基础版 | 点击 face 可查看 surface type、候选归属、candidate type/status/risk/fit_error 等信息 |
+| Analytic primitive candidate detection | 已完成基础版 | 支持 PlaneLike、基础 CylinderLike/SphereLike/ConeLike；TorusLike/Freeform 类型预留 |
+| Multi-type Candidate Preview | 已完成基础版 | 支持多类型统计、按类型筛选、Viewer 类型配色、模型树同步和点击查看 |
 | RegionMergeResult / RegionMergeOptions | 已完成基础版 | 统一解析图元区域合并返回值、失败原因和基础选项 |
 | Plane/Cylinder/Cone/Sphere/Torus RegionMerger stub | 已完成基础版 | 仅返回 NotImplemented / UnsupportedCandidateType，不修改 B-rep |
 | `PlaneRegionMerger` | 已完成基础可用版 | 支持 PlaneLike 候选区域真实替换为 planar trimmed face，保留 solid/shell 容器 |
@@ -212,6 +218,9 @@ STEP 读取
 | PlaneRegionMerger 测试 | 已完成基础版 | 覆盖非法候选、边界无效、NURBS-backed 平面区域、solid 容器保留和边界分段简化 |
 | PlaneRegionMergeCommand 测试 | 已完成基础版 | 覆盖失败不污染文档、成功后 undo/redo |
 | PlaneRegionBatchMergeCommand 测试 | 已完成基础版 | 覆盖批量平面合并成功后的 undo/redo |
+| Face / Candidate Inspect 测试 | 已完成基础版 | 覆盖 surface type、候选归属、NotInCandidate 和 stats 不变 |
+| Analytic Candidate Detection 测试 | 已完成基础版 | 覆盖 CylinderLike/SphereLike/ConeLike 基础检测、protected edge 阻断和 ID 唯一 |
+| Candidate Type Statistics 测试 | 已完成基础版 | 覆盖多类型统计、Hidden 过滤、按类型筛选和 PlaneLike 合并过滤 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -438,6 +447,9 @@ P0 稳定性收口：基本完成
 合并候选规划：已完成基础版
 候选区域 GUI 预览：已完成基础版
 候选区域选择/接受/拒绝/隐藏：已完成基础版
+Face / Candidate Inspect：已完成基础版
+Analytic primitive candidate detection：已完成基础版
+Multi-type candidate preview：已完成基础版
 RegionMerger 框架准备：已完成基础版
 PlaneRegionMerge：已完成基础可用版
 平面候选批量合并：已完成基础版

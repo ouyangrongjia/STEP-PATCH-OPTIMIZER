@@ -2,6 +2,7 @@
 
 #include "brep/ShapeDocument.h"
 #include "feature/FeatureEdgeDetector.h"
+#include "merge/CandidateFilters.h"
 
 #include <QWidget>
 
@@ -23,6 +24,7 @@ public:
         int rejectedCandidateCount = 0,
         int hiddenCandidateCount = 0,
         int currentMergeCandidateId = -1,
+        const CandidateTypeCounts* candidateTypeCounts = nullptr,
         const FeatureEdgeDetectionResult* featureEdges = nullptr);
 
 private:

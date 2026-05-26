@@ -874,7 +874,7 @@ status
 
 ### 6.9.1 目标
 
-Stage 2.9 的目标是让多类型候选可视化、可筛选、可解释。该阶段应作为通用多类型候选展示框架实现，即使某些类型当前数量为 0，也要预留显示、统计和过滤通道。
+Stage 2.9 的目标是让多类型候选可视化、可筛选、可解释。该阶段是通用多类型候选展示框架，即使某些类型当前数量为 0，也必须预留显示、统计和过滤通道。该阶段应作为通用多类型候选展示框架实现，即使某些类型当前数量为 0，也要预留显示、统计和过滤通道。
 
 在 Stage 2.8 生成多类型 candidates 后，Stage 2.9 负责 GUI 呈现：
 
@@ -943,86 +943,133 @@ Rejected / Hidden 不默认显示。
 
 ---
 
-## 6.10 Stage 2.8 当前实现状态与后续增强计划
+## 6.10 Stage 2.8 当前实现状态与 B-spline 事实修正
 
-### 6.10.1 当前 Stage 2.8 基础版状态
+### 6.10.1 新事实
 
-截至当前版本，Stage 2.8 已完成多类型解析候选的基础接入。当前候选识别状态如下：
-
-| 类型                    | 当前状态                                                     |      默认 GUI 预览是否开启 | 当前限制                                            |
-| ----------------------- | ------------------------------------------------------------ | -------------------------: | --------------------------------------------------- |
-| PlaneLike               | 已支持，原有平面近似区域生长                                 |                       开启 | 仅处理近似共面区域                                  |
-| CylinderLike            | 已支持基础版，仅识别 OCCT 原生 Cylinder 面                   |                       开启 | 当前真实样例中可能为 0，需要近似圆柱检测增强        |
-| SphereLike              | 已支持增强版，识别 OCCT 原生 Sphere，也支持保守的 BSpline / Bezier 球面近似 |                       开启 | 当前只做候选，不做真实 SphereRegionMerge            |
-| ConeLike                | 已支持基础版，仅识别 OCCT 原生 Cone 面                       |                       开启 | 当前真实样例中可能为 0，需要近似圆锥 / 圆台检测增强 |
-| TorusLike               | 只有开关和空 stub，目前不生成候选                            | 开启了开关，但不会产生候选 | 保留为后续可选高级解析图元                          |
-| FreeformG1 / FreeformG2 | 只预留类型，没有真实检测                                     |                     未开启 | 后续 Stage 4 / Stage 5 再处理                       |
-
-### 6.10.2 当前判断
-
-当前继续推进 Stage 2.9 是合理的，原因是：
+通过 Stage 2.7 / Surface Type Probe 检查后，当前样例中大量视觉上接近圆柱、圆锥、圆台、球面或过渡面的区域，底层 `SurfaceType` 主要为：
 
 ```text
-1. 多类型候选系统已经不再是 Plane-only。
-2. PlaneLike 和 SphereLike 已经能作为多类型预览的真实输入。
-3. CylinderLike / ConeLike 虽然当前样例可能为 0，但基础类型、开关和候选通道已经接入。
-4. Stage 2.9 可以先建立多类型候选展示、统计、筛选和点击查看框架。
-5. 后续 CylinderLike / ConeLike approximate detection 增强后，可以直接复用 Stage 2.9 的 GUI 通道。
+B-spline
 ```
 
-但需要明确：
+这说明当前 STEP/STP 模型并不是典型“解析 CAD 面片集合”，而更接近：
+
+```text
+AutoSurface / 逆向曲面化结果
+→ 大量 Geom_BSplineSurface patch
+→ 视觉上像解析图元
+→ kernel 层面却不是 native Cylinder / Cone / Sphere
+```
+
+因此，后续路线必须从：
+
+```text
+识别 OCCT 原生解析面
+```
+
+调整为：
+
+```text
+从 B-spline patch 中反推近似解析图元
+```
+
+该事实对 Stage 2.8 / 2.9 / Stage 3 有直接影响。
+
+### 6.10.2 当前 Stage 2.8 状态
+
+| 类型                             | 当前状态                                                     |              默认 GUI 预览 | 当前限制                            |
+| -------------------------------- | ------------------------------------------------------------ | -------------------------: | ----------------------------------- |
+| PlaneLike                        | 已支持，原有平面近似区域生长                                 |                       开启 | 仍适合近似共面 patch                |
+| CylinderLike                     | 已支持基础版，仅识别 OCCT 原生 Cylinder 面                   |                       开启 | 当前样例多为 B-spline，因此通常为 0 |
+| SphereLike                       | 已支持增强版，识别 OCCT 原生 Sphere，也支持保守的 B-spline / Bezier 球面近似 |                       开启 | 当前最有价值的非平面候选之一        |
+| ConeLike                         | 已支持基础版，仅识别 OCCT 原生 Cone 面                       |                       开启 | 当前样例多为 B-spline，因此通常为 0 |
+| TorusLike                        | 只有开关和空 stub，目前不生成候选                            | 开启了开关，但不会产生候选 | 保留为后续可选高级图元              |
+| FreeformG1 / FreeformG2          | 只预留类型，没有真实检测                                     |                     未开启 | 后续 Stage 4 / Stage 5 再处理       |
+| Unknown / B-spline analytic-like | 当前可通过 Surface Type Probe 看见，但未形成稳定候选类型     |        可在 Stage 2.9 预留 | 后续需要近似解析图元探测            |
+
+### 6.10.3 当前判断
+
+当前继续推进 Stage 2.9 是合理的，但 Stage 2.9 的定位必须收窄为：
+
+```text
+多类型候选展示框架
+```
+
+而不是：
+
+```text
+多类型候选检测成熟验证
+```
+
+理由：
+
+```text
+1. 当前已经有 PlaneLike 和 SphereLike 两类有效候选，可用于验证多类型显示框架。
+2. CylinderLike / ConeLike 当前为 0 是合理现象，因为底层多为 B-spline。
+3. Stage 2.9 可以先建立类型统计、过滤、颜色、点击查看、后续类型预留。
+4. 后续 B-spline CylinderLike / ConeLike 增强完成后，可直接复用 Stage 2.9 的展示框架。
+```
+
+明确限制：
 
 ```text
 1. Stage 2.9 不负责提升 CylinderLike / ConeLike 检出率。
-2. Stage 2.9 完成后，不能直接声称多类型候选识别已经成熟。
-3. CylinderLike / ConeLike 当前只能视为 native-only 基础版接入。
-4. 后续必须补充 CylinderLike approximate detection 和 ConeLike / FrustumLike approximate detection。
-5. 在上述增强完成前，不建议进入 Stage 3B / Stage 3C 的真实合并。
+2. Stage 2.9 必须允许某些类型数量为 0。
+3. Stage 2.9 必须预留 TorusLike、FreeformG1、FreeformG2、Unknown / B-spline analytic-like 的显示和统计通道。
+4. Stage 2.9 完成后，不应直接进入 Stage 3B / Stage 3C 真实合并。
+5. 下一步应优先补 B-spline CylinderLike approximate detection 和 B-spline ConeLike / FrustumLike approximate detection。
 ```
 
-### 6.10.3 推荐后续路线
-
-当前推荐路线调整为：
+### 6.10.4 推荐后续路线
 
 ```text
 Stage 2.9：Multi-type Candidate Preview
   建立多类型候选显示、统计、筛选、点击查看框架。
-  必须预留 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 等类型。
-  允许某些类型当前数量为 0。
+  预留 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown。
+  正确处理 count == 0 的类型。
 
-Stage 2.8 Enhancement A：CylinderLike Approximate Detection
-  在 native Cylinder 基础上，增强对 BSpline / Bezier / SurfaceOfRevolution / 近似圆柱区域的保守识别。
+Stage 2.8 Enhancement A：B-spline CylinderLike Approximate Detection
+  从 B-spline / Bezier / SurfaceOfRevolution patch 中保守识别近似圆柱候选。
   只生成候选，不做真实合并。
 
-Stage 2.8 Enhancement B：ConeLike / FrustumLike Approximate Detection
-  在 native Cone 基础上，增强对 BSpline / Bezier / SurfaceOfRevolution / 圆台类区域的保守识别。
+Stage 2.8 Enhancement B：B-spline ConeLike / FrustumLike Approximate Detection
+  从 B-spline / Bezier / SurfaceOfRevolution patch 中保守识别近似圆锥 / 圆台候选。
   只生成候选，不做真实合并。
-
-Stage 3B：CylinderRegionMerge
-  仅在 CylinderLike candidate 检测足够稳定后推进真实圆柱区域合并。
 
 Stage 3D：SphereRegionMerge
-  基于当前 SphereLike 增强候选，后续可优先进入真实球面区域合并。
+  由于 SphereLike 已有 B-spline 近似增强，Stage 3D 可能比 Stage 3B / 3C 更早具备推进条件。
+
+Stage 3B：CylinderRegionMerge
+  等 CylinderLike approximate detection 稳定后推进。
 
 Stage 3C：ConeRegionMerge
-  后置，避免误伤自由曲面尖角、发尖和高曲率装饰区域。
+  后置推进，避免误伤自由曲面尖角、发尖和高曲率装饰区域。
+
+Stage 4：Freeform Candidate Detection
+  面向不能稳定归入解析图元的 B-spline patch 群。
+
+Stage 5：Freeform B-spline / Plate Refit
+  面向高可信自由曲面候选区域做局部重拟合。
 ```
 
-### 6.10.4 Stage 2.9 的边界
+### 6.10.5 Stage 2.9 边界
 
-Stage 2.9 应按“展示框架”实现，而不是“检测增强”实现：
+允许：
 
 ```text
-允许：
 1. 按 candidate_type 统计数量。
 2. 按 candidate_type 过滤显示。
 3. 不同 candidate_type 使用不同颜色族。
-4. 点击 face 显示 candidate type / status / risk / metrics。
+4. 点击 face 显示 candidate type / surface type / status / risk / metrics。
 5. ReportPanel / ModelTreePanel 显示多类型统计。
-6. 对 TorusLike / FreeformG1 / FreeformG2 / Unknown 预留显示和统计逻辑。
-7. 正确处理某些类型 count == 0 的情况。
+6. 对 TorusLike / FreeformG1 / FreeformG2 / Unknown / B-spline analytic-like 预留显示和统计逻辑。
+7. 正确处理 CylinderLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 count == 0。
+```
 
 不允许：
+
+```text
 1. 不增强 CylinderLike / ConeLike 检测算法。
 2. 不实现 CylinderRegionMerge / ConeRegionMerge / SphereRegionMerge。
 3. 不构造新 face。
@@ -1031,18 +1078,30 @@ Stage 2.9 应按“展示框架”实现，而不是“检测增强”实现：
 6. 不把非 PlaneLike candidate 送入 PlaneRegionMerger。
 ```
 
-### 6.10.5 Stage 2.8 增强的边界
+### 6.10.6 Stage 2.8 Enhancement 边界
 
-后续 CylinderLike / ConeLike 增强都属于 Stage 2.8 Enhancement，不属于 Stage 2.9：
+B-spline CylinderLike / ConeLike 增强属于 Stage 2.8 Enhancement，不属于 Stage 2.9：
 
 ```text
-1. Enhancement 只增强候选检测，不执行真实合并。
-2. Enhancement 允许对 BSpline / Bezier / SurfaceOfRevolution 做保守近似判断。
-3. Enhancement 必须设置 risk_level。
-4. Enhancement 必须允许失败或不生成候选，不能强行拟合。
-5. Enhancement 不应误伤自由曲面尖角、发尖、高曲率装饰区域。
-6. Enhancement 完成后，仍需 Stage 2.9 负责可视化预览。
+1. 只增强候选检测，不执行真实合并。
+2. 允许对 B-spline / Bezier / SurfaceOfRevolution 做保守近似判断。
+3. 必须设置 fit_error 和 risk_level。
+4. 必须允许检测失败或不生成候选，不能强行拟合。
+5. 不能误伤自由曲面尖角、发尖、高曲率装饰区域。
+6. Enhancement 完成后，仍由 Stage 2.9 负责可视化预览。
 ```
+
+### 6.10.7 研究意义修正
+
+该事实使本项目更接近以下研究问题：
+
+```text
+从逆向工程生成的 B-spline patch STEP 中，
+识别潜在解析图元结构，
+并进行特征感知的候选区域合并与边界优化。
+```
+
+这比单纯调用 OCCT native surface type 更有研究价值。
 
 
 ---

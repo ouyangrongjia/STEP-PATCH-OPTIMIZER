@@ -5,6 +5,7 @@
 #include "gui/ModelTreePanel.h"
 #include "gui/OccViewWidget.h"
 #include "gui/ParameterPanel.h"
+#include "merge/CandidateFilters.h"
 #include "merge/FaceInspector.h"
 
 #include <QAction>
@@ -60,6 +61,19 @@ QString candidateTypeText(MergeCandidateType type) {
         return "Unknown";
     }
     return "Unknown";
+}
+
+std::vector<MergeCandidateType> displayCandidateTypes() {
+    return {
+        MergeCandidateType::PlaneLike,
+        MergeCandidateType::CylinderLike,
+        MergeCandidateType::SphereLike,
+        MergeCandidateType::ConeLike,
+        MergeCandidateType::TorusLike,
+        MergeCandidateType::FreeformG1,
+        MergeCandidateType::FreeformG2,
+        MergeCandidateType::Unknown
+    };
 }
 
 QString riskLevelText(MergeRiskLevel risk) {
@@ -135,14 +149,6 @@ struct CandidateStatusCounts {
     int hidden = 0;
 };
 
-struct CandidateTypeCounts {
-    int plane = 0;
-    int cylinder = 0;
-    int sphere = 0;
-    int cone = 0;
-    int torus = 0;
-};
-
 CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& candidates) {
     CandidateStatusCounts counts;
     for (const auto& candidate : candidates) {
@@ -158,32 +164,6 @@ CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& 
             break;
         case MergeCandidateStatus::Hidden:
             ++counts.hidden;
-            break;
-        }
-    }
-    return counts;
-}
-
-CandidateTypeCounts countCandidateTypes(const std::vector<MergeCandidate>& candidates) {
-    CandidateTypeCounts counts;
-    for (const auto& candidate : candidates) {
-        switch (candidate.candidate_type) {
-        case MergeCandidateType::PlaneLike:
-            ++counts.plane;
-            break;
-        case MergeCandidateType::CylinderLike:
-            ++counts.cylinder;
-            break;
-        case MergeCandidateType::SphereLike:
-            ++counts.sphere;
-            break;
-        case MergeCandidateType::ConeLike:
-            ++counts.cone;
-            break;
-        case MergeCandidateType::TorusLike:
-            ++counts.torus;
-            break;
-        default:
             break;
         }
     }
@@ -302,6 +282,7 @@ void MainWindow::createActions() {
     restoreMergeCandidateAction_ = new QAction("恢复当前候选", this);
     showAcceptedMergeCandidatesAction_ = new QAction("显示已接受候选", this);
     showPendingMergeCandidatesAction_ = new QAction("显示待处理候选", this);
+    showCandidatesByTypeAction_ = new QAction("按类型显示候选", this);
     mergePlaneCandidateAction_ = new QAction("合并当前平面候选", this);
     mergeAcceptedPlaneCandidatesAction_ = new QAction("合并所有已接受平面候选", this);
     mergeAllPlaneCandidatesAction_ = new QAction("一键合并全部可合并平面候选", this);
@@ -363,6 +344,7 @@ void MainWindow::createMenus() {
     mergeMenu->addSeparator();
     mergeMenu->addAction(showAcceptedMergeCandidatesAction_);
     mergeMenu->addAction(showPendingMergeCandidatesAction_);
+    mergeMenu->addAction(showCandidatesByTypeAction_);
     mergeMenu->addSeparator();
     planeMergeMenu_ = mergeMenu->addMenu("平面候选合并");
     planeMergeMenu_->addAction(mergePlaneCandidateAction_);
@@ -505,6 +487,7 @@ void MainWindow::connectActions() {
     connect(restoreMergeCandidateAction_, &QAction::triggered, this, [this]() { restoreCurrentMergeCandidate(); });
     connect(showAcceptedMergeCandidatesAction_, &QAction::triggered, this, [this]() { showAcceptedMergeCandidates(); });
     connect(showPendingMergeCandidatesAction_, &QAction::triggered, this, [this]() { showPendingMergeCandidates(); });
+    connect(showCandidatesByTypeAction_, &QAction::triggered, this, [this]() { showMergeCandidatesByTypeDialog(); });
     connect(mergePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentPlaneCandidate(); });
     connect(mergeAcceptedPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedPlaneCandidates(); });
     connect(mergeAllPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeablePlaneCandidates(); });
@@ -670,13 +653,16 @@ void MainWindow::previewMergeCandidates() {
     const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
     const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
 
-    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nPending：%7\nAccepted：%8\nRejected：%9\nHidden：%10\n保护边数量：%11\n访问 face 数量：%12\n拒绝区域数量：%13\n最大候选区域 face 数：%14\n总候选 face 数：%15\n预览前 face/edge：%16/%17\n预览后 face/edge：%18/%19")
+    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFreeformG1：%7\nFreeformG2：%8\nUnknown：%9\nPending：%10\nAccepted：%11\nRejected：%12\nHidden：%13\n保护边数量：%14\n访问 face 数量：%15\n拒绝区域数量：%16\n最大候选区域 face 数：%17\n总候选 face 数：%18\n预览前 face/edge：%19/%20\n预览后 face/edge：%21/%22")
         .arg(result.candidates.size())
-        .arg(typeCounts.plane)
-        .arg(typeCounts.cylinder)
-        .arg(typeCounts.sphere)
-        .arg(typeCounts.cone)
-        .arg(typeCounts.torus)
+        .arg(typeCounts.plane_like)
+        .arg(typeCounts.cylinder_like)
+        .arg(typeCounts.sphere_like)
+        .arg(typeCounts.cone_like)
+        .arg(typeCounts.torus_like)
+        .arg(typeCounts.freeform_g1)
+        .arg(typeCounts.freeform_g2)
+        .arg(typeCounts.unknown)
         .arg(statusCounts.pending)
         .arg(statusCounts.accepted)
         .arg(statusCounts.rejected)
@@ -694,7 +680,7 @@ void MainWindow::previewMergeCandidates() {
     const auto previewCount = std::min<std::size_t>(10, result.candidates.size());
     for (std::size_t index = 0; index < previewCount; ++index) {
         const auto& candidate = result.candidates[index];
-        report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\n风险：%10")
+        report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\nfit_error：%10\n风险：%11")
             .arg(candidate.candidate_id)
             .arg(candidateStatusText(candidate.status))
             .arg(candidateTypeText(candidate.candidate_type))
@@ -704,6 +690,7 @@ void MainWindow::previewMergeCandidates() {
             .arg(QString::number(candidate.max_distance, 'g', 6))
             .arg(candidate.boundary_edge_count)
             .arg(candidate.internal_edge_count)
+            .arg(QString::number(candidate.fit_error, 'g', 6))
             .arg(riskLevelText(candidate.risk_level));
     }
 
@@ -750,12 +737,7 @@ void MainWindow::showNonHiddenMergeCandidates() {
         return;
     }
 
-    std::vector<MergeCandidate> visibleCandidates;
-    for (const auto& candidate : lastMergeCandidates_) {
-        if (candidate.status != MergeCandidateStatus::Hidden) {
-            visibleCandidates.push_back(candidate);
-        }
-    }
+    const auto visibleCandidates = filterNonHiddenCandidates(lastMergeCandidates_);
 
     viewer_->showMergeCandidates(visibleCandidates, 10, true);
     if (hasFeatureEdgeResult_) {
@@ -769,6 +751,66 @@ void MainWindow::showNonHiddenMergeCandidates() {
     refreshModelTree();
     showCandidateStatusReport("已显示全部非隐藏候选区域");
     setStatus("已显示全部非隐藏候选区域");
+}
+
+void MainWindow::showMergeCandidatesByTypeDialog() {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    QStringList items;
+    for (const auto type : displayCandidateTypes()) {
+        items << candidateTypeText(type);
+    }
+
+    bool ok = false;
+    const auto selected = QInputDialog::getItem(this, "按类型显示候选", "候选类型：", items, 0, false, &ok);
+    if (!ok || selected.isEmpty()) {
+        return;
+    }
+
+    for (const auto type : displayCandidateTypes()) {
+        if (candidateTypeText(type) == selected) {
+            showMergeCandidatesByType(type);
+            return;
+        }
+    }
+}
+
+void MainWindow::showMergeCandidatesByType(MergeCandidateType type) {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+
+    const auto filteredCandidates = filterCandidatesByType(lastMergeCandidates_, type);
+    if (filteredCandidates.empty()) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        visibleMergeCandidateIds_.clear();
+        refreshModelTree();
+        const auto message = QString("当前没有 %1 类型候选。").arg(candidateTypeText(type));
+        inspectPanel_->showReport(message);
+        logPanel_->appendInfo(message);
+        setStatus(message);
+        return;
+    }
+
+    viewer_->showMergeCandidates(filteredCandidates, 10, true);
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = static_cast<int>(filteredCandidates.size());
+    visibleMergeCandidateIds_.clear();
+    for (const auto& candidate : filteredCandidates) {
+        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
+    }
+    refreshModelTree();
+    showCandidateStatusReport(QString("已显示全部 %1 候选").arg(candidateTypeText(type)));
+    setStatus(QString("已显示全部 %1 候选").arg(candidateTypeText(type)));
 }
 
 void MainWindow::highlightMergeCandidateById() {
@@ -1034,15 +1076,7 @@ void MainWindow::mergeAcceptedPlaneCandidates() {
 }
 
 void MainWindow::mergeAllMergeablePlaneCandidates() {
-    std::vector<MergeCandidate> candidates;
-    for (const auto& candidate : lastMergeCandidates_) {
-        if (candidate.valid &&
-            candidate.candidate_type == MergeCandidateType::PlaneLike &&
-            candidate.status != MergeCandidateStatus::Rejected &&
-            candidate.status != MergeCandidateStatus::Hidden) {
-            candidates.push_back(candidate);
-        }
-    }
+    const auto candidates = filterMergeablePlaneCandidates(lastMergeCandidates_);
     mergePlaneCandidateBatch(candidates, "一键合并全部可合并平面候选");
 }
 
@@ -1261,6 +1295,7 @@ void MainWindow::refreshModelTree() {
     }
 
     const auto counts = countCandidateStatuses(lastMergeCandidates_);
+    const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
     modelTree_->showDocument(
         controller_.document(),
         static_cast<int>(controller_.lockedEdges().size()),
@@ -1271,6 +1306,7 @@ void MainWindow::refreshModelTree() {
         counts.rejected,
         counts.hidden,
         currentMergeCandidateId_,
+        &typeCounts,
         hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr);
 }
 
@@ -1310,6 +1346,10 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
             .arg(info.candidate_internal_edge_count)
             .arg(QString::number(info.max_normal_angle_deg, 'f', 3))
             .arg(QString::number(info.max_distance, 'g', 6));
+        report += QString("\nFit Error：%1").arg(QString::number(info.fit_error, 'g', 6));
+        if (info.matching_candidate_count > 1) {
+            report += "\nNote：该 face 可能属于多个候选，当前显示第一个匹配项。";
+        }
     } else {
         report += QString("\nAdjacent Protected Edges：%1\nAdjacent Locked Edges：%2")
             .arg(info.adjacent_protected_edge_count)

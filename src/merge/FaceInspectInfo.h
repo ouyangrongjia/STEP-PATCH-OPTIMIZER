@@ -29,6 +29,7 @@ struct FaceInspectInfo {
     int candidate_face_count = 0;
     int candidate_boundary_edge_count = 0;
     int candidate_internal_edge_count = 0;
+    int matching_candidate_count = 0;
 
     bool adjacent_to_protected_edge = false;
     bool adjacent_to_locked_edge = false;
@@ -38,6 +39,7 @@ struct FaceInspectInfo {
 
     double max_normal_angle_deg = 0.0;
     double max_distance = 0.0;
+    double fit_error = 0.0;
 };
 
 const char* toString(FaceInspectCandidateState state);

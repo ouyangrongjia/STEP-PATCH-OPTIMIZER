@@ -162,6 +162,7 @@ FaceInspectInfo inspectFace(
         if (!containsFace(candidate, faceId)) {
             continue;
         }
+        ++info.matching_candidate_count;
         if (candidate.status == MergeCandidateStatus::Hidden) {
             if (hiddenMatch == nullptr) {
                 hiddenMatch = &candidate;
@@ -186,6 +187,7 @@ FaceInspectInfo inspectFace(
     info.candidate_internal_edge_count = match->internal_edge_count;
     info.max_normal_angle_deg = match->max_normal_angle_deg;
     info.max_distance = match->max_distance;
+    info.fit_error = match->fit_error;
 
     if (match->status == MergeCandidateStatus::Hidden) {
         info.candidate_state = FaceInspectCandidateState::InHiddenCandidate;
