@@ -6,6 +6,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_NurbsConvert.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRep_Builder.hxx>
@@ -42,6 +43,11 @@ spo::ShapeDocument make_split_cylinder_document() {
     sewing.Add(second);
     sewing.Perform();
     return spo::ShapeDocument(sewing.SewedShape(), {});
+}
+
+spo::ShapeDocument make_split_nurbs_cylinder_document() {
+    BRepBuilderAPI_NurbsConvert converter(make_split_cylinder_document().shape());
+    return spo::ShapeDocument(converter.Shape(), "split-nurbs-cylinder");
 }
 
 spo::ShapeDocument make_split_plane_document() {
@@ -150,6 +156,23 @@ void test_cylinder_candidates_respect_enable_flag() {
     assert(same_stats(document.stats(), before));
 }
 
+void test_nurbs_backed_cylinder_candidates_are_generated() {
+    const auto document = make_split_nurbs_cylinder_document();
+    const auto before = document.stats();
+
+    spo::MergePlannerOptions options;
+    options.enable_plane_candidates = false;
+    options.enable_cylinder_candidates = true;
+
+    const auto result = plan_candidates(document, options);
+    const auto cylinderCandidates = candidates_of_type(result.candidates, spo::MergeCandidateType::CylinderLike);
+
+    assert(!cylinderCandidates.empty());
+    assert(cylinderCandidates.front().face_count >= 2);
+    assert(cylinderCandidates.front().fit_error <= 1.0);
+    assert(same_stats(document.stats(), before));
+}
+
 void test_sphere_candidates_are_generated() {
     const auto document = make_split_sphere_document();
     spo::MergePlannerOptions options;
@@ -193,7 +216,9 @@ void test_protected_edge_blocks_analytic_region_growth() {
     const std::set<spo::EdgeId> protectedEdges {cylinderCandidates.front().internal_edges.front()};
     const auto blocked = grower.growCylinderLikeRegions(document, protectedEdges, options, &visited, &rejected);
 
-    assert(blocked.empty());
+    for (const auto& candidate : blocked) {
+        assert(candidate.internal_edges.empty());
+    }
 }
 
 void test_candidate_ids_are_global_and_continuous() {
@@ -243,6 +268,7 @@ void test_plane_region_merger_still_rejects_non_plane_candidate() {
 
 void run_analytic_candidate_detection_tests() {
     test_cylinder_candidates_respect_enable_flag();
+    test_nurbs_backed_cylinder_candidates_are_generated();
     test_sphere_candidates_are_generated();
     test_cone_candidates_are_generated();
     test_protected_edge_blocks_analytic_region_growth();

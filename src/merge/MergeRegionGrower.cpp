@@ -115,6 +115,7 @@ struct AnalyticSurfaceSample {
     gp_Pnt apex;
     double radius = 0.0;
     double semi_angle_degrees = 0.0;
+    double fit_error = 0.0;
 };
 
 bool solveLinear4x4(std::array<std::array<double, 4>, 4> matrix, std::array<double, 4> rhs, std::array<double, 4>& solution) {
@@ -153,6 +154,196 @@ bool solveLinear4x4(std::array<std::array<double, 4>, 4> matrix, std::array<doub
 
     solution = rhs;
     return true;
+}
+
+bool solveLinear3x3(std::array<std::array<double, 3>, 3> matrix, std::array<double, 3> rhs, std::array<double, 3>& solution) {
+    for (int pivot = 0; pivot < 3; ++pivot) {
+        int pivotRow = pivot;
+        for (int row = pivot + 1; row < 3; ++row) {
+            if (std::abs(matrix[row][pivot]) > std::abs(matrix[pivotRow][pivot])) {
+                pivotRow = row;
+            }
+        }
+        if (std::abs(matrix[pivotRow][pivot]) <= 1.0e-12) {
+            return false;
+        }
+        if (pivotRow != pivot) {
+            std::swap(matrix[pivot], matrix[pivotRow]);
+            std::swap(rhs[pivot], rhs[pivotRow]);
+        }
+
+        const auto divisor = matrix[pivot][pivot];
+        for (int col = pivot; col < 3; ++col) {
+            matrix[pivot][col] /= divisor;
+        }
+        rhs[pivot] /= divisor;
+
+        for (int row = 0; row < 3; ++row) {
+            if (row == pivot) {
+                continue;
+            }
+            const auto factor = matrix[row][pivot];
+            for (int col = pivot; col < 3; ++col) {
+                matrix[row][col] -= factor * matrix[pivot][col];
+            }
+            rhs[row] -= factor * rhs[pivot];
+        }
+    }
+
+    solution = rhs;
+    return true;
+}
+
+std::optional<AnalyticSurfaceSample> fitSphereLikeSurface(const TopoDS_Face& face);
+
+std::optional<AnalyticSurfaceSample> fitCylinderLikeSurface(
+    const TopoDS_Face& face,
+    const MergePlannerOptions& options) {
+    double uMin = 0.0;
+    double uMax = 0.0;
+    double vMin = 0.0;
+    double vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    if (!std::isfinite(uMin) || !std::isfinite(uMax) || !std::isfinite(vMin) || !std::isfinite(vMax)) {
+        return std::nullopt;
+    }
+
+    if (fitSphereLikeSurface(face).has_value()) {
+        return std::nullopt;
+    }
+
+    BRepAdaptor_Surface surface(face);
+    std::vector<gp_Pnt> points;
+    std::vector<gp_Dir> normals;
+    points.reserve(25);
+    normals.reserve(25);
+    for (const auto uFactor : {0.15, 0.325, 0.5, 0.675, 0.85}) {
+        for (const auto vFactor : {0.15, 0.325, 0.5, 0.675, 0.85}) {
+            BRepLProp_SLProps props(surface, uMin + (uMax - uMin) * uFactor, vMin + (vMax - vMin) * vFactor, 1, Precision::Confusion());
+            if (!props.IsNormalDefined()) {
+                return std::nullopt;
+            }
+            auto normal = props.Normal();
+            if (face.Orientation() == TopAbs_REVERSED) {
+                normal.Reverse();
+            }
+            points.push_back(props.Value());
+            normals.push_back(normal);
+        }
+    }
+    if (points.size() < 9) {
+        return std::nullopt;
+    }
+
+    gp_Vec bestAxis;
+    double bestMagnitude = 0.0;
+    for (std::size_t i = 0; i < normals.size(); ++i) {
+        for (std::size_t j = i + 1; j < normals.size(); ++j) {
+            const auto candidate = gp_Vec(normals[i]).Crossed(gp_Vec(normals[j]));
+            const auto magnitude = candidate.Magnitude();
+            if (magnitude > bestMagnitude) {
+                bestMagnitude = magnitude;
+                bestAxis = candidate;
+            }
+        }
+    }
+    if (bestMagnitude <= std::sin(5.0 * kPi / 180.0)) {
+        return std::nullopt;
+    }
+    const gp_Dir axisDirection(bestAxis);
+    const gp_Vec axisVector(axisDirection);
+
+    double maxAxisNormalDot = 0.0;
+    for (const auto& normal : normals) {
+        maxAxisNormalDot = std::max(maxAxisNormalDot, std::abs(gp_Vec(normal).Dot(axisVector)));
+    }
+    constexpr double kMaxAxisNormalAngleDegrees = 8.0;
+    if (maxAxisNormalDot > std::sin(kMaxAxisNormalAngleDegrees * kPi / 180.0)) {
+        return std::nullopt;
+    }
+
+    const gp_Dir reference = std::abs(axisDirection.Z()) < 0.9 ? gp_Dir(0.0, 0.0, 1.0) : gp_Dir(1.0, 0.0, 0.0);
+    auto uVector = axisVector.Crossed(gp_Vec(reference));
+    if (uVector.Magnitude() <= Precision::Confusion()) {
+        return std::nullopt;
+    }
+    uVector.Normalize();
+    auto vVector = axisVector.Crossed(uVector);
+    vVector.Normalize();
+
+    std::array<std::array<double, 3>, 3> normalMatrix {};
+    std::array<double, 3> normalRhs {};
+    std::vector<std::array<double, 3>> coordinates;
+    coordinates.reserve(points.size());
+    for (const auto& point : points) {
+        const gp_Vec vector(gp_Pnt(0.0, 0.0, 0.0), point);
+        const auto x = vector.Dot(uVector);
+        const auto y = vector.Dot(vVector);
+        const auto t = vector.Dot(axisVector);
+        coordinates.push_back({x, y, t});
+
+        const std::array<double, 3> row {x, y, 1.0};
+        const auto rhs = -(x * x + y * y);
+        for (int i = 0; i < 3; ++i) {
+            normalRhs[i] += row[i] * rhs;
+            for (int j = 0; j < 3; ++j) {
+                normalMatrix[i][j] += row[i] * row[j];
+            }
+        }
+    }
+
+    std::array<double, 3> coefficients {};
+    if (!solveLinear3x3(normalMatrix, normalRhs, coefficients)) {
+        return std::nullopt;
+    }
+    const auto centerX = -0.5 * coefficients[0];
+    const auto centerY = -0.5 * coefficients[1];
+    const auto radiusSquared = centerX * centerX + centerY * centerY - coefficients[2];
+    if (radiusSquared <= Precision::Confusion()) {
+        return std::nullopt;
+    }
+    const auto radius = std::sqrt(radiusSquared);
+    const auto radiusTolerance = std::max(options.max_cylinder_fit_error, radius * 0.015);
+
+    double meanT = 0.0;
+    double maxRadiusError = 0.0;
+    for (const auto& coordinate : coordinates) {
+        const auto radiusAtPoint = std::hypot(coordinate[0] - centerX, coordinate[1] - centerY);
+        maxRadiusError = std::max(maxRadiusError, std::abs(radiusAtPoint - radius));
+        meanT += coordinate[2];
+    }
+    meanT /= static_cast<double>(coordinates.size());
+    if (maxRadiusError > radiusTolerance) {
+        return std::nullopt;
+    }
+
+    gp_Vec axisLocationVector = uVector.Multiplied(centerX) + vVector.Multiplied(centerY) + axisVector.Multiplied(meanT);
+    const gp_Pnt axisLocation(axisLocationVector.X(), axisLocationVector.Y(), axisLocationVector.Z());
+
+    double maxNormalRadialAngle = 0.0;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const gp_Vec fromAxis(axisLocation, points[i]);
+        const auto axialOffset = fromAxis.Dot(axisVector);
+        auto radial = fromAxis - axisVector.Multiplied(axialOffset);
+        if (radial.Magnitude() <= Precision::Confusion()) {
+            return std::nullopt;
+        }
+        radial.Normalize();
+        const auto dot = std::abs(clampCosine(radial.Dot(gp_Vec(normals[i]))));
+        maxNormalRadialAngle = std::max(maxNormalRadialAngle, std::acos(dot) * 180.0 / kPi);
+    }
+    constexpr double kMaxNormalRadialAngleDegrees = 12.0;
+    if (maxNormalRadialAngle > kMaxNormalRadialAngleDegrees) {
+        return std::nullopt;
+    }
+
+    AnalyticSurfaceSample sample;
+    sample.surface_type = GeomAbs_Cylinder;
+    sample.axis_direction = axisDirection;
+    sample.axis_location = axisLocation;
+    sample.radius = radius;
+    sample.fit_error = std::max(maxRadiusError / radiusTolerance, maxNormalRadialAngle / kMaxNormalRadialAngleDegrees);
+    return sample;
 }
 
 std::optional<AnalyticSurfaceSample> fitSphereLikeSurface(const TopoDS_Face& face) {
@@ -220,6 +411,7 @@ std::optional<AnalyticSurfaceSample> fitSphereLikeSurface(const TopoDS_Face& fac
 
 std::optional<AnalyticSurfaceSample> sampleAnalyticSurface(
     const TopoDS_Face& face,
+    const MergePlannerOptions& options,
     GeomAbs_SurfaceType expectedType) {
     if (face.IsNull()) {
         return std::nullopt;
@@ -227,6 +419,12 @@ std::optional<AnalyticSurfaceSample> sampleAnalyticSurface(
 
     BRepAdaptor_Surface surface(face);
     if (surface.GetType() != expectedType) {
+        if (expectedType == GeomAbs_Cylinder &&
+            (surface.GetType() == GeomAbs_BSplineSurface ||
+                surface.GetType() == GeomAbs_BezierSurface ||
+                surface.GetType() == GeomAbs_SurfaceOfRevolution)) {
+            return fitCylinderLikeSurface(face, options);
+        }
         if (expectedType == GeomAbs_Sphere &&
             (surface.GetType() == GeomAbs_BSplineSurface || surface.GetType() == GeomAbs_BezierSurface)) {
             return fitSphereLikeSurface(face);
@@ -362,7 +560,7 @@ std::vector<MergeCandidate> growAnalyticRegions(
             continue;
         }
 
-        const auto seedSurface = sampleAnalyticSurface(topology.face(seed), surfaceType);
+        const auto seedSurface = sampleAnalyticSurface(topology.face(seed), options, surfaceType);
         if (!seedSurface.has_value()) {
             continue;
         }
@@ -379,7 +577,7 @@ std::vector<MergeCandidate> growAnalyticRegions(
         queue.push(seed);
         regionFaces.insert(seed);
         distances.push_back(0.0);
-        fitErrors.push_back(0.0);
+        fitErrors.push_back(seedSurface->fit_error);
         axisAngles.push_back(0.0);
 
         while (!queue.empty()) {
@@ -396,7 +594,7 @@ std::vector<MergeCandidate> growAnalyticRegions(
                     continue;
                 }
 
-                const auto neighborSurface = sampleAnalyticSurface(topology.face(neighbor), surfaceType);
+                const auto neighborSurface = sampleAnalyticSurface(topology.face(neighbor), options, surfaceType);
                 if (!neighborSurface.has_value()) {
                     continue;
                 }
@@ -411,7 +609,7 @@ std::vector<MergeCandidate> growAnalyticRegions(
                 queue.push(neighbor);
                 regionFaces.insert(neighbor);
                 distances.push_back(compatibility.distance);
-                fitErrors.push_back(compatibility.fit_error);
+                fitErrors.push_back(std::max(compatibility.fit_error, neighborSurface->fit_error));
                 axisAngles.push_back(compatibility.axis_angle_degrees);
             }
         }

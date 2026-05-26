@@ -16,6 +16,7 @@ struct MergePlannerOptions {
     double max_cylinder_axis_angle_degrees = 5.0;
     double max_cylinder_axis_position_delta = 0.02;
     double max_cylinder_radius_delta = 0.01;
+    double max_cylinder_fit_error = 0.02;
     double max_sphere_center_delta = 0.02;
     double max_sphere_radius_delta = 0.01;
     double max_cone_axis_angle_degrees = 5.0;
