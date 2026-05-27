@@ -22,6 +22,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <vector>
 
 namespace {
@@ -38,6 +39,12 @@ bool same_stats(const spo::ShapeStats& lhs, const spo::ShapeStats& rhs) {
         lhs.faces == rhs.faces &&
         lhs.edges == rhs.edges &&
         lhs.vertices == rhs.vertices;
+}
+
+void assert_failure_reason_string(spo::RegionMergeFailureReason reason, const char* expected) {
+    const auto* text = spo::regionMergeFailureReasonToString(reason);
+    assert(text != nullptr);
+    assert(std::string(text) == expected);
 }
 
 std::filesystem::path make_temp_file_path(const char* name) {
@@ -356,6 +363,31 @@ void test_region_merge_result_default_primitive_fields() {
     assert(result.primitive_fit_error == 0.0);
 }
 
+void test_region_merge_failure_reason_strings_cover_all_values() {
+    assert_failure_reason_string(spo::RegionMergeFailureReason::None, "None");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::NotImplemented, "NotImplemented");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::NotSupported, "NotSupported");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::CandidateNotFound, "CandidateNotFound");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::InvalidCandidate, "InvalidCandidate");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::UnsupportedCandidateType, "UnsupportedCandidateType");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::RejectedCandidate, "RejectedCandidate");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::HiddenCandidate, "HiddenCandidate");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::InsufficientFaces, "InsufficientFaces");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::ProtectedEdgeConflict, "ProtectedEdgeConflict");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::LockedEdgeConflict, "LockedEdgeConflict");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::BoundaryLoopInvalid, "BoundaryLoopInvalid");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::MultipleOuterLoopsNotSupported, "MultipleOuterLoopsNotSupported");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::InnerLoopsNotSupported, "InnerLoopsNotSupported");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::PrimitiveFitFailed, "PrimitiveFitFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::DeviationTooLarge, "DeviationTooLarge");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::SurfaceConstructionFailed, "SurfaceConstructionFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::TopologyReplacementFailed, "TopologyReplacementFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::SewingFailed, "SewingFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::ValidationFailed, "ValidationFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::ExportRoundtripFailed, "ExportRoundtripFailed");
+    assert_failure_reason_string(spo::RegionMergeFailureReason::ApproximateSurfaceNotSupported, "ApproximateSurfaceNotSupported");
+}
+
 void test_plane_region_merger_fills_primitive_fields_on_success() {
     const auto fixture = make_two_face_plane_fixture();
     const spo::PlaneRegionMerger merger;
@@ -415,6 +447,7 @@ void test_plane_region_merger_failure_does_not_fill_primitive_fields() {
 }
 
 void run_plane_region_merger_tests() {
+    test_region_merge_failure_reason_strings_cover_all_values();
     test_region_merge_result_default_primitive_fields();
     test_plane_region_merger_rejects_invalid_candidate_states();
     test_plane_region_merger_rejects_small_or_protected_regions();

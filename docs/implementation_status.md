@@ -71,6 +71,7 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 18. SphereRegionMerge 一键批量合并已增加防护：一键全部可合并球面候选会跳过 High risk 和单 face 候选；批量合并保护候选外部边和其他所有边，只允许候选内部边被同域合并消除；若结果丢失拓扑、solid 数变化或 face 数未下降则失败回滚。
 19. GUI 主工具栏已按功能收敛为下拉入口：选择、候选显示、候选状态、合并、检查/导出；候选显示下拉中补充了直接显示 PlaneLike / SphereLike 候选的入口，避免工具栏横向溢出。
 20. GUI 平面候选入口已区分“PlaneLike 预览候选”和“可真实平面合并候选”：严格合并入口只显示原生 `GeomAbs_Plane`、边界有效、非隐藏/非拒绝的候选；B-spline backed planar-like 候选会明确报告为预览专用，不再显示 Unknown 失败原因。
+21. Stage 3A-Fix T3 Unsafe Candidate Rejection Report 已完成：`RegionMergeFailureReason` 已有稳定字符串转换；平面/球面候选合并报告会输出 candidate、failure reason、message、统计、BRepCheck 和失败时 `document was not modified / rollback applied`。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：

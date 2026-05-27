@@ -32,6 +32,56 @@ enum class RegionMergeFailureReason {
     ApproximateSurfaceNotSupported
 };
 
+inline const char* regionMergeFailureReasonToString(RegionMergeFailureReason reason) {
+    switch (reason) {
+    case RegionMergeFailureReason::None:
+        return "None";
+    case RegionMergeFailureReason::NotImplemented:
+        return "NotImplemented";
+    case RegionMergeFailureReason::NotSupported:
+        return "NotSupported";
+    case RegionMergeFailureReason::CandidateNotFound:
+        return "CandidateNotFound";
+    case RegionMergeFailureReason::InvalidCandidate:
+        return "InvalidCandidate";
+    case RegionMergeFailureReason::UnsupportedCandidateType:
+        return "UnsupportedCandidateType";
+    case RegionMergeFailureReason::RejectedCandidate:
+        return "RejectedCandidate";
+    case RegionMergeFailureReason::HiddenCandidate:
+        return "HiddenCandidate";
+    case RegionMergeFailureReason::InsufficientFaces:
+        return "InsufficientFaces";
+    case RegionMergeFailureReason::ProtectedEdgeConflict:
+        return "ProtectedEdgeConflict";
+    case RegionMergeFailureReason::LockedEdgeConflict:
+        return "LockedEdgeConflict";
+    case RegionMergeFailureReason::BoundaryLoopInvalid:
+        return "BoundaryLoopInvalid";
+    case RegionMergeFailureReason::MultipleOuterLoopsNotSupported:
+        return "MultipleOuterLoopsNotSupported";
+    case RegionMergeFailureReason::InnerLoopsNotSupported:
+        return "InnerLoopsNotSupported";
+    case RegionMergeFailureReason::PrimitiveFitFailed:
+        return "PrimitiveFitFailed";
+    case RegionMergeFailureReason::DeviationTooLarge:
+        return "DeviationTooLarge";
+    case RegionMergeFailureReason::SurfaceConstructionFailed:
+        return "SurfaceConstructionFailed";
+    case RegionMergeFailureReason::TopologyReplacementFailed:
+        return "TopologyReplacementFailed";
+    case RegionMergeFailureReason::SewingFailed:
+        return "SewingFailed";
+    case RegionMergeFailureReason::ValidationFailed:
+        return "ValidationFailed";
+    case RegionMergeFailureReason::ExportRoundtripFailed:
+        return "ExportRoundtripFailed";
+    case RegionMergeFailureReason::ApproximateSurfaceNotSupported:
+        return "ApproximateSurfaceNotSupported";
+    }
+    return "Unknown";
+}
+
 struct RegionMergeResult {
     bool success = false;
     RegionMergeFailureReason failure_reason = RegionMergeFailureReason::None;

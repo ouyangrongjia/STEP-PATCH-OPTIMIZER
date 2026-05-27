@@ -101,53 +101,11 @@ QString faceInspectCandidateStateText(FaceInspectCandidateState state) {
 }
 
 QString regionMergeFailureText(RegionMergeFailureReason reason) {
-    switch (reason) {
-    case RegionMergeFailureReason::None:
-        return "None";
-    case RegionMergeFailureReason::NotImplemented:
-        return "NotImplemented";
-    case RegionMergeFailureReason::NotSupported:
-        return "NotSupported";
-    case RegionMergeFailureReason::CandidateNotFound:
-        return "CandidateNotFound";
-    case RegionMergeFailureReason::InvalidCandidate:
-        return "InvalidCandidate";
-    case RegionMergeFailureReason::UnsupportedCandidateType:
-        return "UnsupportedCandidateType";
-    case RegionMergeFailureReason::RejectedCandidate:
-        return "RejectedCandidate";
-    case RegionMergeFailureReason::HiddenCandidate:
-        return "HiddenCandidate";
-    case RegionMergeFailureReason::InsufficientFaces:
-        return "InsufficientFaces";
-    case RegionMergeFailureReason::ProtectedEdgeConflict:
-        return "ProtectedEdgeConflict";
-    case RegionMergeFailureReason::LockedEdgeConflict:
-        return "LockedEdgeConflict";
-    case RegionMergeFailureReason::BoundaryLoopInvalid:
-        return "BoundaryLoopInvalid";
-    case RegionMergeFailureReason::MultipleOuterLoopsNotSupported:
-        return "MultipleOuterLoopsNotSupported";
-    case RegionMergeFailureReason::InnerLoopsNotSupported:
-        return "InnerLoopsNotSupported";
-    case RegionMergeFailureReason::PrimitiveFitFailed:
-        return "PrimitiveFitFailed";
-    case RegionMergeFailureReason::DeviationTooLarge:
-        return "DeviationTooLarge";
-    case RegionMergeFailureReason::SurfaceConstructionFailed:
-        return "SurfaceConstructionFailed";
-    case RegionMergeFailureReason::TopologyReplacementFailed:
-        return "TopologyReplacementFailed";
-    case RegionMergeFailureReason::SewingFailed:
-        return "SewingFailed";
-    case RegionMergeFailureReason::ValidationFailed:
-        return "ValidationFailed";
-    case RegionMergeFailureReason::ExportRoundtripFailed:
-        return "ExportRoundtripFailed";
-    case RegionMergeFailureReason::ApproximateSurfaceNotSupported:
-        return "ApproximateSurfaceNotSupported";
-    }
-    return "Unknown";
+    return QString::fromLatin1(regionMergeFailureReasonToString(reason));
+}
+
+QString regionMergeDocumentStateText(const RegionMergeResult& result) {
+    return result.success ? "document updated" : "document was not modified / rollback applied";
 }
 
 bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
@@ -1157,13 +1115,14 @@ void MainWindow::mergeCurrentPlaneCandidate() {
     options.min_region_faces = 2;
 
     const auto result = controller_.mergePlaneCandidate(*candidate, options);
-    const auto report = QString("平面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n平面法向：(%7, %8, %9)\n合并前 face：%10\n合并后 face：%11\nface reduction ratio：%12%\n合并前 edge：%13\n合并后 edge：%14\nedge reduction ratio：%15%\nmax deviation：%16\nmean deviation：%17\nrms deviation：%18\nBRepCheck：%19")
+    const auto report = QString("平面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n文档状态：%7\n平面法向：(%8, %9, %10)\n合并前 face：%11\n合并后 face：%12\nface reduction ratio：%13%\n合并前 edge：%14\n合并后 edge：%15\nedge reduction ratio：%16%\nmax deviation：%17\nmean deviation：%18\nrms deviation：%19\nBRepCheck：%20")
         .arg(result.success ? "完成" : "失败")
         .arg(candidate->candidate_id)
         .arg(candidateTypeText(candidate->candidate_type))
         .arg(candidateStatusText(candidate->status))
         .arg(regionMergeFailureText(result.failure_reason))
         .arg(QString::fromStdString(result.message))
+        .arg(regionMergeDocumentStateText(result))
         .arg(QString::number(result.plane_normal_x, 'f', 6))
         .arg(QString::number(result.plane_normal_y, 'f', 6))
         .arg(QString::number(result.plane_normal_z, 'f', 6))
@@ -1248,12 +1207,13 @@ void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& can
     options.min_region_faces = 2;
 
     const auto result = controller_.mergePlaneCandidates(candidates, options);
-    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n合并前 face：%6\n合并后 face：%7\nface reduction ratio：%8%\n合并前 edge：%9\n合并后 edge：%10\nedge reduction ratio：%11%\nmax deviation：%12\nmean deviation：%13\nrms deviation：%14\nBRepCheck：%15")
+    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n文档状态：%6\n合并前 face：%7\n合并后 face：%8\nface reduction ratio：%9%\n合并前 edge：%10\n合并后 edge：%11\nedge reduction ratio：%12%\nmax deviation：%13\nmean deviation：%14\nrms deviation：%15\nBRepCheck：%16")
         .arg(title)
         .arg(result.success ? "完成" : "失败")
         .arg(candidates.size())
         .arg(regionMergeFailureText(result.failure_reason))
         .arg(QString::fromStdString(result.message))
+        .arg(regionMergeDocumentStateText(result))
         .arg(result.face_count_before)
         .arg(result.face_count_after)
         .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
@@ -1321,13 +1281,14 @@ void MainWindow::mergeCurrentSphereCandidate() {
     options.min_region_faces = 2;
 
     const auto result = controller_.mergeSphereCandidate(*candidate, options);
-    const auto report = QString("球面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n球心：(%7, %8, %9)\n球半径：%10\n拟合误差：%11\n合并前 face：%12\n合并后 face：%13\nface reduction ratio：%14%\n合并前 edge：%15\n合并后 edge：%16\nedge reduction ratio：%17%\nmax deviation：%18\nmean deviation：%19\nrms deviation：%20\nBRepCheck：%21")
+    const auto report = QString("球面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n文档状态：%7\n球心：(%8, %9, %10)\n球半径：%11\n拟合误差：%12\n合并前 face：%13\n合并后 face：%14\nface reduction ratio：%15%\n合并前 edge：%16\n合并后 edge：%17\nedge reduction ratio：%18%\nmax deviation：%19\nmean deviation：%20\nrms deviation：%21\nBRepCheck：%22")
         .arg(result.success ? "完成" : "失败")
         .arg(candidate->candidate_id)
         .arg(candidateTypeText(candidate->candidate_type))
         .arg(candidateStatusText(candidate->status))
         .arg(regionMergeFailureText(result.failure_reason))
         .arg(QString::fromStdString(result.message))
+        .arg(regionMergeDocumentStateText(result))
         .arg(QString::number(result.primitive_center_x, 'f', 6))
         .arg(QString::number(result.primitive_center_y, 'f', 6))
         .arg(QString::number(result.primitive_center_z, 'f', 6))
@@ -1409,12 +1370,13 @@ void MainWindow::mergeSphereCandidateBatch(const std::vector<MergeCandidate>& ca
     options.min_region_faces = 2;
 
     const auto result = controller_.mergeSphereCandidates(candidates, options);
-    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n合并前 face：%6\n合并后 face：%7\nface reduction ratio：%8%\n合并前 edge：%9\n合并后 edge：%10\nedge reduction ratio：%11%\nmax deviation：%12\nmean deviation：%13\nrms deviation：%14\nBRepCheck：%15")
+    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n文档状态：%6\n合并前 face：%7\n合并后 face：%8\nface reduction ratio：%9%\n合并前 edge：%10\n合并后 edge：%11\nedge reduction ratio：%12%\nmax deviation：%13\nmean deviation：%14\nrms deviation：%15\nBRepCheck：%16")
         .arg(title)
         .arg(result.success ? "完成" : "失败")
         .arg(candidates.size())
         .arg(regionMergeFailureText(result.failure_reason))
         .arg(QString::fromStdString(result.message))
+        .arg(regionMergeDocumentStateText(result))
         .arg(result.face_count_before)
         .arg(result.face_count_after)
         .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
