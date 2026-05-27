@@ -22,14 +22,27 @@ STEP 读取
 → STEP 导出
 ```
 
-当前重点已经从“搭建项目结构”转向：
+当前重点已经从”搭建项目结构”转向：
 
 ```text
-1. 提升合并候选区域的可控性。
-2. 补全项目保存与状态恢复。
-3. 增强验证指标与实验报告。
-4. 引入更强的特征线识别能力。
+1. Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口（唯一优先级）。
+2. 暂停扩展球面/圆柱/圆锥/自由曲面真实合并。
+3. 冻结候选检测增强和自由曲面路线。
 ```
+
+### 1.1 当前关键诊断（2026-05-27）
+
+```text
+GUI 显示”看起来连续” ≠ STEP/B-rep 拓扑合法。
+
+平面重建后，boundary wire / pcurve / orientation / 闭合关系不正确
+→ 外部软件（非 OCCT）重新解析 STEP 时暴露为缺面、飞面、无限平面、开壳。
+
+这不是渲染问题，而是 B-rep 拓扑 / 裁剪边界不稳定问题。
+```
+
+因此当前唯一优先级是 Stage 3A-Fix：
+PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 
 ---
 
@@ -432,16 +445,59 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ---
 
-## 8. 近期推荐开发顺序
+## 8. 近期推荐开发顺序（2026-05-27 修订）
 
-建议下一阶段从候选区域规划转入真实区域合并前的收口验证：
+**唯一当前任务：Stage 3A-Fix**
 
 ```text
-1. 用真实潮玩件 STEP 做回归测试。
-2. 检查 PlaneLike 候选质量和误选/漏选案例。
-3. 用真实潮玩件样例验证 Stage 3A PlaneRegionMerge 的候选边界、BRepCheck 和导出后重读。
-4. 再评估 Stage 3B CylinderRegionMerge 的输入契约与风险边界。
-5. 再考虑 ProjectSerializer。
+1. 导出级合法性闭环：
+   - 每次真实合并后自动执行 BRepCheck_Analyzer
+   - ShapeValidator
+   - 导出临时 STEP
+   - 重新读取临时 STEP
+   - 再次统计 solid/shell/face/edge
+   - 若失败则 rollback
+
+2. 冻结 PlaneRegionMerge 输入范围：
+   - 只允许原生 Plane + 单 outer wire + 无 inner loop + 边界闭合
+   - 不跨 protected/locked/feature edge
+   - 合并后 solid 数不下降
+   - 近似平面降级为候选预览
+
+3. 修复 boundary wire：
+   - outer wire 排序
+   - edge orientation
+   - 3D curve 与 2D pcurve 同步
+   - ShapeFix_Wire + ShapeFix_Face + BRepLib::BuildCurves3d
+   - 必要时重建 planar pcurve
+
+4. 不安全候选明确拒绝：
+   - 多边界环 → 不支持
+   - 有洞 → 不支持
+   - 边界不闭合 → 不支持
+   - 导出重读失败 → 已回滚
+   - 近似平面 → 暂不进入真实重建
+
+5. 用真实 STEP 样例做导出重读回归测试。
+```
+
+**冻结范围（Stage 3A-Fix 验收通过前不可推进）：**
+
+```text
+- Stage 3B CylinderRegionMerge → 冻结
+- Stage 3D SphereRegionMerge → 实验性保持，不进一步扩展
+- Stage 3C ConeRegionMerge → 冻结
+- Stage 3E TorusRegionMerge → 冻结
+- Stage 4 Freeform Candidate Detection → 冻结
+- Stage 5 Freeform B-spline / Plate Refit → 冻结
+```
+
+**3A-Fix 验收通过后：**
+
+```text
+1. 将导出闭环机制复用于 SphereRegionMerge。
+2. 评估 CylinderRegionMerge 推进条件。
+3. 逐步解冻 Stage 4 / Stage 5。
 ```
 
 ---
@@ -466,18 +522,46 @@ Stage 2.8 Enhancement A B-spline CylinderLike approximate detection：已完成
 Stage 2.8 Enhancement B B-spline ConeLike / FrustumLike approximate detection：已完成
 Multi-type candidate preview：已完成基础版
 RegionMerger 框架准备：已完成基础版
-PlaneRegionMerge：已完成基础可用版
+PlaneRegionMerge：已完成基础可用版（导出稳定性未验证）
 平面候选批量合并：已完成基础版
 平面合并边界简化：已完成基础版
-项目保存恢复：未完成
-完整误差评估：未完成
-高级特征线：未完成
-局部重拟合：未完成
+Stage 3-S Shared Primitive Fields：已完成
+SphereRegionMerge：已完成稳定版调整（标记为实验性）
+```
+
+**当前唯一优先级 → Stage 3A-Fix：**
+
+```text
+PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild
+- 导出级合法性闭环：待实现
+- 输入范围冻结：待实现
+- Boundary wire 修复：待实现
+- 不安全候选明确拒绝：待实现
+- STEP 导出重读回归测试：待做
+```
+
+**冻结区域：**
+
+```text
+CylinderRegionMerge：冻结
+ConeRegionMerge：冻结
+TorusRegionMerge：冻结
+SphereRegionMerge 进一步扩展：冻结
+Freeform Candidate Detection：冻结
+Freeform B-spline / Plate Refit：冻结
+项目保存恢复：冻结
+完整误差评估：冻结
+高级特征线：冻结
+局部重拟合：冻结
 ```
 
 总体评价：
 
 ```text
-当前项目已经具备可演示的工程雏形，并已完成 PlaneLike 候选生成、可视化预览、人工筛选基础和 Stage 3A PlaneRegionMerge 基础可用闭环。
-下一步重点应转向真实潮玩件样例回归、候选质量评估、PlaneRegionMerge 复杂边界失败案例收敛、报告指标和状态持久化。
+当前项目已具备可演示的工程雏形，并已完成 PlaneLike 候选生成、可视化预览、
+人工筛选基础和 Stage 3A PlaneRegionMerge 基础可用闭环。
+SphereRegionMerge 已完成稳定版调整（基于 same-domain unifier）。
+
+当前唯一待收口项是 Stage 3A-Fix：PlaneRegionMerge 导出稳定性验证与安全边界重建。
+在平面合并做到"导出后重读仍然对"之前，暂停所有其他合并类型的扩展。
 ```

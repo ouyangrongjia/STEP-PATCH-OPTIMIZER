@@ -422,14 +422,106 @@ sewing
 
 ---
 
-## 9. 当前阶段建议
+## 9. 当前阶段建议（2026-05-27 修订）
+
+### 9.1 关键诊断
+
+当前 GUI 显示模型"看起来连续"，但真实 STEP/B-rep 依赖的拓扑结构可能已经损坏：
+
+```text
+GUI 显示 → OCCT 可视化三角网格 → "看起来连续"
+真实 STEP/B-rep → Face + Wire + Edge + Vertex + PCurve + Orientation
+```
+
+平面重建后，如果新 face 的边界 wire、pcurve、方向、闭合关系不正确，外部软件（非 OCCT）重新解析 STEP 时会暴露为：
+
+```text
+- 缺面（missing face）
+- 飞面（floating face / detached patch）
+- 大平面（unbounded infinite plane）
+- 开壳（open shell）
+```
+
+**这不是渲染问题，而是 B-rep 拓扑 / 裁剪边界不稳定问题。**
+
+### 9.2 当前路线收窄
 
 当前最合理的路线是：
 
 ```text
-先做 OCCT + Qt GUI 工程闭环，
-再做特征边提取，
-最后做特征约束下的曲面片合并。
+立即收窄，不继续扩展球面、圆柱、圆锥真实合并。
+先做 PlaneRegionMerge 导出级合法性闭环。
+等平面导出稳定后，再做球面 / 圆柱。
 ```
 
-不建议一开始直接做复杂 NURBS 重拟合。应先用 same-domain unify 和特征边冻结机制解决最确定、最可控、最容易展示的部分。
+理由：
+
+```text
+球面、圆柱比平面更难。平面都没做到 STEP 稳定前，
+继续做球面/圆柱真实合并只会放大问题。
+```
+
+### 9.3 下一阶段任务
+
+**Stage 3A-Fix：PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild**
+
+任务：
+
+```text
+1. 导出级合法性闭环
+   - 每次真实合并后自动执行 BRepCheck_Analyzer
+   - 自动执行 ShapeValidator
+   - 导出临时 STEP
+   - 重新读取临时 STEP
+   - 再次统计 solid/shell/face/edge
+   - 若失败则 rollback
+
+2. 冻结 PlaneRegionMerge 输入范围
+   - 只允许原生 Plane
+   - 只允许单 outer wire
+   - 只允许无 inner loop
+   - 只允许边界闭合
+   - 不跨 protected/locked edge
+   - 不跨 feature edge
+   - 合并后 solid 数不下降
+   - 近似平面降级为候选预览，不直接真实合并
+
+3. 修复 boundary wire
+   - outer wire 排序
+   - edge orientation
+   - 3D curve 与 2D pcurve 同步
+   - ShapeFix_Wire
+   - ShapeFix_Face
+   - BRepLib::BuildCurves3d
+   - 必要时重建 planar pcurve
+
+4. 把不安全候选明确拒绝
+   - 多边界环 → 不支持
+   - 有洞 → 不支持
+   - 边界不闭合 → 不支持
+   - 导出重读失败 → 已回滚
+   - 近似平面 → 暂不进入真实重建
+```
+
+验收标准：
+
+```text
+平面合并后，不只 GUI 正常，还必须：
+1. 导出 STEP
+2. 重新读取 STEP
+3. solid/shell/face/edge 统计合理
+4. 外部软件（非 OCCT）不再出现缺面、飞面、无限平面
+```
+
+### 9.4 冻结范围
+
+以下能力已完成但不进一步扩展，直到 Stage 3A-Fix 验收通过：
+
+```text
+- Stage 3D SphereRegionMerge → 实验性保持
+- Stage 3B CylinderRegionMerge → 冻结
+- Stage 3C ConeRegionMerge → 冻结
+- Stage 3E TorusRegionMerge → 冻结
+- Stage 4 Freeform Candidate Detection → 冻结
+- Stage 5 Freeform B-spline / Plate Refit → 冻结
+```

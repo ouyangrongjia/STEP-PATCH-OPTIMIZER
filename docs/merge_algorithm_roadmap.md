@@ -8,6 +8,72 @@
 
 ---
 
+## 0. 当前阶段关键判断（2026-05-27）
+
+### 0.1 核心诊断
+
+当前 GUI 显示模型"看起来连续"，但真实 STEP/B-rep 依赖的拓扑结构可能已经损坏：
+
+```text
+GUI 显示 → OCCT 可视化三角网格 → "看起来连续"
+真实 STEP/B-rep → Face + Wire + Edge + Vertex + PCurve + Orientation
+```
+
+平面重建后，如果新 face 的边界 wire、pcurve、方向、闭合关系不正确，外部软件（非 OCCT）重新解析 STEP 时会暴露为：
+
+```text
+- 缺面（missing face）
+- 飞面（floating face / detached patch）
+- 大平面（unbounded infinite plane）
+- 开壳（open shell）
+```
+
+**这不是渲染问题，而是 B-rep 拓扑 / 裁剪边界不稳定问题。**
+
+因此当前最紧迫的任务不是继续扩展球面、圆柱、圆锥真实合并，而是先让平面合并做到 **STEP 导出稳定性**。
+
+### 0.2 路线收窄决策
+
+```text
+立即收窄，不继续扩展球面、圆柱、圆锥真实合并。
+先做 PlaneRegionMerge 导出级合法性闭环。
+等平面导出稳定后，再做球面 / 圆柱。
+```
+
+理由：
+
+```text
+球面、圆柱比平面更难。
+平面都没做到 STEP 稳定前，继续做球面/圆柱真实合并只会放大问题。
+```
+
+### 0.3 当前已实现但未稳定验证的能力
+
+```text
+- Stage 3A PlaneRegionMerge 已实现真实平面区域合并
+- Stage 3D SphereRegionMerge 已实现稳定版（基于 same-domain unifier）
+- Stage 2.8 Enhancement A/B 已完成 B-spline Cylinder/Cone 近似候选检测
+- Stage 2.9 多类型候选预览已完成
+```
+
+以上能力中，**仅 PlaneRegionMerge 需要在本次收口中达到导出稳定**；SphereRegionMerge / CylinderRegionMerge / ConeRegionMerge 的进一步扩展应冻结，直到 Stage 3A-Fix 验收通过。
+
+### 0.4 下一阶段任务定义
+
+**Stage 3A-Fix：PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild**
+
+验收标准：
+
+```text
+平面合并后，不只 GUI 正常，还必须：
+1. 导出 STEP
+2. 重新读取 STEP
+3. solid/shell/face/edge 统计合理
+4. 外部软件（非 OCCT）不再出现缺面、飞面、无限平面
+```
+
+---
+
 ## 1. 当前问题
 
 当前项目已经完成 MVP 工程闭环：
@@ -43,10 +109,14 @@ FeatureEdgeDetector
 1. face reduction 不到 10%～15% 时，继续调 same-domain 参数的收益有限。
 2. concat_bsplines=true 主要减少部分 edge，不一定减少 face。
 3. MergePlanner / MergeRegionGrower 已进入候选区域生成阶段。
-4. 候选区域已经可以 GUI 高亮预览，但仍未参与真实合并。
-5. Stage 3A PlaneRegionMerge 强化版已经进入真实 region merge；但当前候选层仍以 PlaneLike 为主，缺少多类型解析图元候选探测。
-6. 当前 PlaneRegionMerge 采用 ReShape 替换 + boundary edge same-domain cleanup，并报告 BRepCheck 状态。
-7. 潮玩模型常见自由曲面碎片化尚未解决，SurfaceRefitter 暂不具备直接落地条件。
+4. 候选区域已经可以 GUI 高亮预览，多类型显示框架已完成。
+5. Stage 3A PlaneRegionMerge 已实现真实平面区域合并；
+   但 boundary wire / pcurve / orientation / 闭合关系不稳定，
+   导致外部软件重新解析 STEP 时出现缺面、飞面、无限平面。
+6. 这不是 GUI 渲染问题，而是 B-rep 拓扑 / 裁剪边界不稳定问题。
+7. Stage 3D SphereRegionMerge 已完成稳定版（基于 same-domain unifier），
+   但导出稳定性同样未经验证，标记为实验性。
+8. 当前唯一任务是 Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口。
 ```
 
 ---
@@ -75,16 +145,17 @@ Stage 2.6: Candidate Selection / Rejection
 Stage 3: Analytic Primitive Region Merge
          解析基础图元真实合并总阶段：
          Stage 3-0 Analytic RegionMerger Framework Preparation，可选
-         Stage 3A PlaneRegionMerge
-         Stage 3B CylinderRegionMerge
-         Stage 3C ConeRegionMerge
-         Stage 3D SphereRegionMerge
-         Stage 3E TorusRegionMerge，可选。
+         Stage 3A PlaneRegionMerge，已实现基础可用版
+         → Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口（当前唯一优先级）
+         Stage 3B CylinderRegionMerge（冻结）
+         Stage 3C ConeRegionMerge（冻结）
+         Stage 3D SphereRegionMerge（实验性保持）
+         Stage 3E TorusRegionMerge（冻结）
 
-Stage 4: Freeform Candidate Detection
+Stage 4: Freeform Candidate Detection（冻结）
          提前识别潮玩模型常见自由曲面候选区域，但不立即重拟合。
 
-Stage 5: Freeform B-spline / Plate Refit
+Stage 5: Freeform B-spline / Plate Refit（冻结）
          对高可信自由曲面候选区域做局部重拟合和拓扑替换。
 ```
 
@@ -101,6 +172,8 @@ Stage 5: Freeform B-spline / Plate Refit
 8. 每次真正修改 B-rep 后都必须进行合法性检查。
 9. 任何高风险合并都必须支持 rollback 或 undo。
 10. 所有破坏性几何修改必须通过 Command 层执行。
+11. 导出级合法性闭环是合并成功的必要条件，"GUI 看起来对"不够。
+12. 平面导出稳定后，才可推进球面 / 圆柱 / 圆锥 / 自由曲面真实合并。
 ```
 
 ---
@@ -1793,7 +1866,8 @@ test_plane_region_merge_command.cpp:
 按当前代码优先文档，Stage 3A 强化版可标记为：
 
 ```text
-已实现，待真实复杂 STEP 样例持续验证。
+已实现基础可用版，但导出稳定性未经验证。
+当前必须进入 Stage 3A-Fix 收口。
 ```
 
 完成项：
@@ -1810,178 +1884,382 @@ test_plane_region_merge_command.cpp:
 9. BRepCheck 状态已报告。
 ```
 
-保留 TODO：
+保留 TODO（其中高风险项已提升至 Stage 3A-Fix）：
 
 ```text
 1. 在真实 STEP/STP 潮玩样例上持续验证。
 2. 对复杂多洞区域提供更明确失败报告。
-3. 如果后续要求严格 BRepCheck 通过，需要先改文档再收紧代码。
-4. 如果后续需要显式 sewing，需要先改文档再实现。
-5. 一键合并全部可合并平面候选后续可增加确认框或实验模式标记。
+3. 导出 STEP 后二次读取验证（Stage 3A-Fix 核心要求）。
+4. boundary wire 排序、orientation、pcurve 同步修复（Stage 3A-Fix 核心要求）。
+5. 不安全候选明确拒绝（Stage 3A-Fix 核心要求）。
 ```
 
 ---
 
-### 7.5 Stage 3B：CylinderRegionMerge
+### 7.5 Stage 3A-Fix：PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild
 
-#### 7.5.1 当前状态
+#### 7.5.1 目标
 
-当前 `CylinderRegionMerger` 仍属于后续阶段。  
-在 Stage 3-0 中只应保留 stub 行为，不得伪装为真实圆柱区域合并。
+Stage 3A-Fix 不是新增合并类型，而是对 Stage 3A PlaneRegionMerge 做**导出级稳定性收口**。
 
-#### 7.5.2 目标
-
-对 `CylinderLike` candidate 执行真实 B-rep 区域合并：
+核心目标：
 
 ```text
-多个近似同圆柱面的相邻 faces
-→ 一个较大的 cylindrical trimmed face
+平面合并后，不只 GUI 正常，还必须：
+1. 导出 STEP
+2. 重新读取 STEP
+3. solid/shell/face/edge 统计合理
+4. 外部软件（非 OCCT）不再出现缺面、飞面、无限平面
 ```
 
-#### 7.5.3 前置条件
+验收标准从 "GUI 看起来对" 提升为 "导出后重读仍然对"。
+
+#### 7.5.2 导出级合法性闭环
+
+每次真实合并后都必须自动执行：
 
 ```text
-1. Stage 3A PlaneRegionMerge 在真实样例上稳定。
-2. CylinderLike candidate detection 已稳定。
-3. Command / rollback / undo / redo 路径复用 Stage 3A。
-4. 需要明确处理圆柱参数域 seam。
+1. BRepCheck_Analyzer：检查合并后 shape 的 B-rep 合法性
+2. ShapeValidator：执行完整拓扑验证
+3. 导出临时 STEP：写入临时文件
+4. 重新读取临时 STEP：用 OCCT 重新解析
+5. 再次统计 solid/shell/face/edge：对比合并前后统计
+6. 若失败则 rollback：恢复合并前状态
 ```
 
-#### 7.5.4 暂不做内容
+该闭环应成为 `PlaneRegionMerger::merge()` 的内置步骤，不可跳过。
+
+实现要求：
 
 ```text
-1. 当前不得实现真实 CylinderRegionMerge，除非另开 Stage 3B 任务。
-2. 不得在 Stage 3A 后续修补中顺手实现圆柱。
-3. 不得把 CylinderLike candidate 交给 PlaneRegionMerger。
+1. 导出-重读验证不是可选步骤，是 merge() 的必经路径。
+2. 验证失败时 result.success = false，result.message 说明具体失败原因。
+3. 失败时 command 层自动 rollback，不污染 ShapeDocument。
+4. 成功时 result.message 中记录导出重读验证通过。
+```
+
+推荐实现方式：
+
+```cpp
+// PlaneRegionMerger 内部步骤
+bool validateExportRoundtrip(const TopoDS_Shape& shape,
+                             const std::string& tempPath,
+                             RegionMergeResult& result);
+```
+
+验收标准：
+
+```text
+1. 导出临时 STEP 文件成功。
+2. 重新读取后 solid count 与合并前一致。
+3. 重新读取后 shell count 合理（不低于合并前）。
+4. 重新读取后 face count ≤ 合并后 face count（允许 edge 简化导致更少）。
+5. 重新读取后 BRepCheck 通过。
+6. 任何一步失败都应导致 merge() 返回 success=false。
+```
+
+#### 7.5.3 冻结 PlaneRegionMerge 输入范围
+
+当前 Stage 3A 对输入候选的校验过于宽松。Stage 3A-Fix 应临时收紧输入约束：
+
+**只允许以下输入进入真实合并：**
+
+```text
+1. 原生 Plane（OCCT 解析平面，非 B-spline 近似平面）。
+2. 单 outer wire（只有一个外边界环）。
+3. 无 inner loop（不含孔洞）。
+4. 边界闭合（boundary wire 能形成闭合环）。
+5. 不跨 protected edge（内部边不含自动特征边或用户锁定边）。
+6. 不跨 locked edge（内部边不含用户显式锁定边）。
+7. 合并后 solid 数不下降。
+```
+
+**明确拒绝以下输入：**
+
+```text
+1. 多边界环（multiple boundary loops）→ 不支持，拒绝合并。
+2. 有洞（inner loops / holes）→ 不支持，拒绝合并。
+3. 边界不闭合（boundary not closed）→ 不支持，拒绝合并。
+4. 近似平面（B-spline backed planar-like surface）→ 降级为候选预览，
+   不进入真实重建。
+5. boundary_edges 引用的 edge id 不存在 → 拒绝合并。
+6. 合并后 solid count 下降 → 拒绝合并。
+```
+
+近似平面处理策略：
+
+```text
+1. 近似平面（非原生 Plane surface 的 PlaneLike candidate）：
+   - GUI 中仍可生成候选预览
+   - 接受 / 拒绝状态管理仍然可用
+   - 但真实合并入口必须拒绝
+2. 拒绝原因写入 RegionMergeResult.failure_reason 和 message。
+3. GUI 报告面板显示拒绝原因。
+```
+
+#### 7.5.4 修复 boundary wire
+
+当前 makeBoundaryWire() 对边界边的排序、方向和 pcurve 处理不稳定。Stage 3A-Fix 必须修复：
+
+```text
+1. outer wire 排序：
+   - 确保 boundary_edges 按几何连续性排序
+   - 每条边的终点 = 下一条边的起点（允许容差）
+   - 不连续时使用最近邻匹配
+
+2. edge orientation：
+   - 检查每条边在 wire 中的 orientation 是否正确
+   - 使用 ShapeFix_Wire::FixEdgeCurves 修复方向
+   - 必要时使用 ShapeAnalysis_Edge 检查同参数方向
+
+3. 3D curve 与 2D pcurve 同步：
+   - 合并后必须调用 BRepLib::BuildCurves3d 重建缺失的 3D 曲线
+   - 合并后必须确保 pcurve 与 3D curve 一致
+   - 必要时重建 planar pcurve：
+     - 将 3D curve 投影到 Geom_Plane 上
+     - 使用投影结果更新 pcurve
+
+4. ShapeFix_Face：
+   - 对合并后的新 face 调用 ShapeFix_Face
+   - 修复 wire 方向、pcurve 缺失和容差问题
+   - 调用 FixMissingSeam、FixSmallAreaWire 等子修复
+
+5. ShapeFix_Wire：
+   - 在构造 boundary wire 后调用 ShapeFix_Wire
+   - 修复 gap、order、disconnected、self-intersection
+```
+
+推荐流程：
+
+```text
+构造 boundary wire
+→ ShapeFix_Wire::FixGaps
+→ ShapeFix_Wire::FixReorder
+→ ShapeFix_Wire::FixConnected
+→ ShapeFix_Wire::FixSelfIntersection
+→ ShapeFix_Wire::FixEdgeCurves
+→ BRepBuilderAPI_MakeFace(Geom_Plane, fixed_wire)
+→ ShapeFix_Face::FixWireMode
+→ ShapeFix_Face::FixOrientation
+→ ShapeFix_Face::FixMissingSeam
+→ ShapeFix_Face::Perform
+→ BRepLib::BuildCurves3d
+→ 重建 planar pcurve（如有必要）
+```
+
+#### 7.5.5 不安全候选在 GUI 中明确报告
+
+GUI 报告面板必须直接显示拒绝原因：
+
+```text
+候选区域 ID: 3
+候选类型: PlaneLike
+合并状态: 已拒绝
+拒绝原因: 多边界环，不支持
+
+候选区域 ID: 5
+候选类型: PlaneLike
+合并状态: 已拒绝
+拒绝原因: 存在内部孔洞，不支持
+
+候选区域 ID: 7
+候选类型: PlaneLike（近似平面 / B-spline backed）
+合并状态: 已拒绝
+拒绝原因: 近似平面暂不进入真实重建，仅作为候选预览
+
+候选区域 ID: 2
+候选类型: PlaneLike
+合并状态: 已拒绝
+拒绝原因: 导出重读失败，已回滚
+```
+
+拒绝类型枚举应扩展：
+
+```cpp
+enum class RegionMergeFailureReason {
+    // ... 已有项 ...
+    MultipleBoundaryLoopsNotSupported,   // 新增
+    InnerLoopsNotSupported,              // 已有，确认使用
+    BoundaryNotClosed,                   // 已有，确认使用
+    ApproximateSurfaceNotSupported,      // 新增：近似平面/曲面
+    ExportRoundtripFailed,               // 新增：导出重读失败
+    SolidCountDecreased,                 // 新增：solid 数下降
+};
+```
+
+#### 7.5.6 与已有 SphereRegionMerge 的关系
+
+Stage 3D SphereRegionMerge 已完成稳定版调整（基于 same-domain unifier，不手工构造 spherical face）。在 Stage 3A-Fix 期间：
+
+```text
+1. SphereRegionMerge 的真实合并入口保持可用，但标记为"实验性"。
+2. 不对 SphereRegionMerge 做导出稳定性收口。
+3. 等 Stage 3A-Fix 验收通过后，再将导出闭环机制复用于 SphereRegionMerge。
+4. Cylinder / Cone / Torus 真实合并继续冻结。
+```
+
+#### 7.5.7 不做内容
+
+```text
+1. 不新增 CylinderRegionMerge 真实合并。
+2. 不新增 SphereRegionMerge 真实合并（已有能力保持冻结）。
+3. 不新增 ConeRegionMerge 真实合并。
+4. 不新增 TorusRegionMerge 真实合并。
+5. 不扩展候选检测（Stage 2.8 Enhancement 保持当前状态）。
+6. 不做自由曲面重拟合。
+7. 不修改 SameDomainUnifier。
+```
+
+#### 7.5.8 验收标准
+
+```text
+1. 平面合并后，导出 STEP → 重新读取 → solid/shell/face/edge 统计合理。
+2. 外部软件（非 OCCT）打开导出 STEP 不再出现缺面、飞面、无限平面。
+3. 多边界环候选被明确拒绝，并在 GUI 报告中显示原因。
+4. 有孔洞候选被明确拒绝，并在 GUI 报告中显示原因。
+5. 边界不闭合候选被明确拒绝，并在 GUI 报告中显示原因。
+6. 近似平面候选被降级为预览模式，真实合并入口拒绝。
+7. 导出重读失败时自动 rollback，模型不变。
+8. 合并后 BRepCheck 通过。
+9. 现有测试全部通过。
+10. 新增测试覆盖导出重读验证、不安全候选拒绝和 boundary wire 修复。
 ```
 
 ---
 
-### 7.6 Stage 3C：ConeRegionMerge，后置
+### 7.6 Stage 3B：CylinderRegionMerge（冻结）
 
 #### 7.6.1 当前状态
 
-当前 `ConeRegionMerger` 仍属于后置扩展阶段。  
-它容易误伤自由曲面尖角、发尖和高曲率装饰区域，因此不进入近期稳定主线。
+**冻结。** `CylinderRegionMerger` 当前仍为 stub。
 
-#### 7.6.2 目标
+在 Stage 3A-Fix 验收通过之前，不得实现真实 CylinderRegionMerge。
 
-对 `ConeLike` candidate 执行真实 B-rep 区域合并：
+#### 7.6.2 冻结原因
 
 ```text
-多个近似同圆锥面的相邻 faces
-→ 一个较大的 conical trimmed face
+1. 圆柱面合并涉及 cylindrical parameter domain seam 和周期性边界。
+2. 平面合并的 boundary wire / pcurve / orientation 问题在平面上尚未解决。
+3. 在更复杂的圆柱面上继续做真实合并只会放大现有问题。
+4. 等 Stage 3A-Fix 导出闭环稳定后，再评估 CylinderRegionMerge 推进条件。
 ```
 
-#### 7.6.3 后置原因
+#### 7.6.3 冻结期间允许的操作
 
 ```text
-1. cone apex 附近参数域退化。
-2. 潮玩模型尖角不等于规则圆锥。
-3. 需要更可靠的 protectedEdges 和尖角保护。
-4. 需要能区分规则锥面和自由曲面尖角。
+1. CylinderLike 候选检测保持当前状态（Stage 2.8 Enhancement A）。
+2. CylinderLike 候选预览保持当前状态（Stage 2.9）。
+3. CylinderLike 候选接受/拒绝保持当前状态（Stage 2.6）。
+4. CylinderRegionMerger stub 保持当前状态（返回 NotImplemented）。
 ```
 
 ---
 
-### 7.7 Stage 3D：SphereRegionMerge
+### 7.7 Stage 3C：ConeRegionMerge（冻结，后置）
 
 #### 7.7.1 当前状态
 
-当前 `SphereRegionMerger` 仍属于后续阶段。  
-建议在 Stage 3B 之后推进。
+**冻结。** `ConeRegionMerger` 当前仍为 stub。
 
-#### 7.7.2 目标
+cone apex 附近参数域退化、潮玩模型尖角不等于规则圆锥，后置处理。
 
-对 `SphereLike` candidate 执行真实 B-rep 区域合并：
-
-```text
-多个近似同球面的相邻 faces
-→ 一个较大的 spherical trimmed face
-```
-
-#### 7.7.3 前置条件
+#### 7.7.2 冻结期间允许的操作
 
 ```text
-1. Stage 3A 稳定。
-2. Stage 3B 最好已完成或 Command/rollback 路径已足够稳定。
-3. SphereLike candidate detection 已稳定。
-4. 需要明确处理 sphere pole 和 seam。
+1. ConeLike 候选检测保持当前状态（Stage 2.8 Enhancement B）。
+2. ConeLike 候选预览保持当前状态（Stage 2.9）。
+3. ConeLike 候选接受/拒绝保持当前状态（Stage 2.6）。
+4. ConeRegionMerger stub 保持当前状态（返回 NotImplemented）。
 ```
 
 ---
 
-### 7.8 Stage 3E：TorusRegionMerge，可选
+### 7.8 Stage 3D：SphereRegionMerge（实验性保持）
 
 #### 7.8.1 当前状态
 
-当前 `TorusRegionMerger` 仍属于可选扩展阶段。  
-只有在存在明确 torus patch 样例和工程需求时才建议实现。
+`SphereRegionMerger` 已完成稳定版调整（基于 same-domain unifier，不手工构造 spherical trimmed face）。在 Stage 3A-Fix 期间，标记为实验性，保留但不进一步扩展。
 
-#### 7.8.2 目标
-
-对 `TorusLike` candidate 执行真实 B-rep 区域合并：
+#### 7.8.2 冻结期间允许的操作
 
 ```text
-多个近似同圆环面的相邻 faces
-→ 一个较大的 toroidal trimmed face
-```
-
-#### 7.8.3 可选原因
-
-```text
-1. torus 参数域双周期。
-2. trim curve 和 seam 处理复杂。
-3. 很多圆角可能是 B-spline 过渡面，并非真 torus。
-4. 没有明确样例时不应阻塞 Stage 4 / Stage 5。
+1. SphereLike 候选检测保持当前状态。
+2. SphereLike 候选预览保持当前状态。
+3. SphereLike 候选接受/拒绝保持当前状态。
+4. SphereRegionMerge 真实合并入口保持可用，标记为"实验性"。
+5. 不对 SphereRegionMerge 做导出稳定性收口。
 ```
 
 ---
 
-### 7.9 Stage 3 推荐实现顺序
+### 7.9 Stage 3E：TorusRegionMerge（冻结，可选）
 
-当前推荐顺序保持：
+#### 7.9.1 当前状态
+
+**冻结。** `TorusRegionMerger` 当前仍为 stub。
+
+torus 参数域双周期、trim curve 和 seam 处理复杂，可选扩展。
+
+---
+
+### 7.10 Stage 3 推荐实现顺序（2026-05-27 修订）
+
+**当前主线（唯一优先级）：**
 
 ```text
-1. Stage 3-0：已完成。
-2. Stage 3A：已完成强化版，继续真实样例验证。
-3. Stage 2.7：Face / Candidate Inspect。
-4. Stage 2.8：Analytic Primitive Candidate Detection / Type Probing。
-5. Stage 2.9：Multi-type Candidate Preview。
-6. Stage 3B：CylinderRegionMerge。
-7. Stage 3D：SphereRegionMerge。
-5. Stage 4：Freeform Candidate Detection。
-6. Stage 5：Freeform B-spline / Plate Refit。
-7. Stage 3C：ConeRegionMerge，后置补全。
-8. Stage 3E：TorusRegionMerge，可选补全。
+1. Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口 + 安全边界重建
+   → 这是当前唯一不可跳过的阶段。
+```
+
+**冻结阶段（3A-Fix 验收通过前不可推进）：**
+
+```text
+2. Stage 3B：CylinderRegionMerge — 冻结
+3. Stage 3D：SphereRegionMerge — 实验性保持，不进一步扩展
+4. Stage 3C：ConeRegionMerge — 冻结
+5. Stage 3E：TorusRegionMerge — 冻结
+```
+
+**3A-Fix 验收通过后的推荐顺序：**
+
+```text
+1. 将导出闭环机制复用于 SphereRegionMerge。
+2. 评估 CylinderRegionMerge 推进条件。
+3. Stage 4：Freeform Candidate Detection。
+4. Stage 5：Freeform B-spline / Plate Refit。
+5. Stage 3C：ConeRegionMerge，后置补全。
+6. Stage 3E：TorusRegionMerge，可选补全。
 ```
 
 说明：
 
 ```text
-1. 3A 是当前真实 region merge baseline。
-2. 3B / 3D 是近期更稳定的解析图元扩展。
-3. 3C 保留，但后置，避免误伤尖角。
-4. 3E 保留，但可选，不阻塞自由曲面路线。
+1. 3A-Fix 是当前真实 region merge 稳定性基线，优先级最高。
+2. 球面、圆柱比平面更难。平面没做到 STEP 稳定前，
+   继续做球面/圆柱真实合并只会放大问题。
+3. 3B/3C/3D/3E 不删除，但冻结至 3A-Fix 验收通过。
+4. 已有 SphereRegionMerge 入口标记为实验性，不进一步扩展。
 ```
 
-### 7.10 Stage 3 总体验收标准，代码对齐版
+### 7.11 Stage 3 总体验收标准，代码对齐版
 
-当前 Stage 3A 的验收标准按代码对齐为：
+当前 Stage 3A-Fix 的验收标准按代码对齐为：
 
 ```text
 1. Stage 3-0 框架存在，并且 stub 不修改模型。
 2. PlaneRegionMerger 能对简单 PlaneLike candidate 真实减少 face。
-3. PlaneRegionMerger 能处理 NURBS-backed planar region。
+3. PlaneRegionMerger 能处理 NURBS-backed planar region（仅在原生 Plane 类型时）。
 4. PlaneRegionMerger 能保持 split solid top fixture 的 solid count。
-5. Rejected / Hidden / 错误类型 / face 不足 / protected internal edge / invalid boundary 能失败返回。
+5. Rejected / Hidden / 错误类型 / face 不足 / protected internal edge / invalid boundary / 多边界环 / 有洞 / 边界不闭合 / 近似平面 能失败返回。
 6. 失败时不污染原 ShapeDocument。
 7. PlaneRegionMergeCommand 支持 undo / redo。
 8. PlaneRegionBatchMergeCommand 支持 undo / redo。
 9. GUI 提供单候选、Accepted 批量、全部可合并平面候选实验入口。
 10. 原 applyMerge() 仍走 SameDomainUnifier。
 11. BRepCheck 状态进入 RegionMergeResult 和报告。
-12. 真实 STEP/STP 导出后二次读取仍需作为手动验证项持续记录。
+12. 导出 STEP 后二次读取自动执行，失败则 rollback（Stage 3A-Fix 核心要求）。
+13. boundary wire 排序、orientation、pcurve 同步修复（Stage 3A-Fix 核心要求）。
+14. 不安全候选在 GUI 报告中明确显示拒绝原因（Stage 3A-Fix 核心要求）。
 ```
 
 
@@ -2157,68 +2435,42 @@ reject_reason
 
 ## 10. 推荐实际推进顺序
 
-### 10.1 工程优先路线
+### 10.1 当前工程路线（2026-05-27 修订）
 
-目标是尽快看到稳定合并率提升：
+**唯一当前主线：**
 
 ```text
-1. Stage 1：SameDomainUnifier 参数与报告增强，重点验证 concat_bsplines=true。
-2. Stage 2：通用候选区域框架。
-3. Stage 2.5：候选区域 GUI 高亮预览。
-4. Stage 2.6：候选区域选择 / 接受 / 拒绝。
-5. Stage 3-0：Analytic RegionMerger Framework Preparation，可选。
-6. Stage 3A：PlaneRegionMerge 强化版，已实现，继续真实样例验证。
-7. Stage 3B：CylinderRegionMerge。
-8. Stage 3D：SphereRegionMerge。
-9. Stage 4：Freeform Candidate Detection。
-10. Stage 5：Freeform B-spline / Plate Refit。
-11. Stage 3C：ConeRegionMerge，作为解析图元补全任务，后置。
-12. Stage 3E：TorusRegionMerge，可选，仅在有明确样例需求时实现。
+0. Stage 3A-Fix：PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild
+   → 唯一优先级。不可跳过。
 ```
 
-### 10.2 研究优先路线
-
-目标是更贴近潮玩模型论文方向：
+**冻结阶段：**
 
 ```text
-1. Stage 2：通用候选区域框架。
-2. Stage 2.5：候选区域 GUI 高亮预览。
-3. Stage 3A：PlaneRegionMerge，作为稳定 baseline。
-4. Stage 4：Freeform Candidate Detection。
-5. Stage 2.6：候选区域接受 / 拒绝，用于构建人工标注和对比数据。
-6. Stage 5：Freeform B-spline / Plate Refit。
-7. Stage 3B / 3C / 3D：解析图元补全。
+1. Stage 3B：CylinderRegionMerge — 冻结
+2. Stage 3D：SphereRegionMerge — 实验性保持
+3. Stage 3C：ConeRegionMerge — 冻结
+4. Stage 3E：TorusRegionMerge — 冻结
+5. Stage 4：Freeform Candidate Detection — 冻结
+6. Stage 5：Freeform B-spline / Plate Refit — 冻结
 ```
 
-### 10.3 当前推荐折中路线
-
-结合当前项目状态，建议采用折中路线：
+**Stage 3A-Fix 验收通过后推荐顺序：**
 
 ```text
-1. Stage 1：增强 SameDomainUnifier 的参数与报告，重点暴露 concat_bsplines 并验证 true/false。
-2. Stage 2：实现通用 MergeCandidate / MergePlanner / MergeRegionGrower。
-3. Stage 2 初期只启用 PlaneLike candidate，但框架预留多类型。
-4. Stage 2.5：实现候选区域 GUI 高亮预览。
-5. Stage 2.6：实现候选区域选择 / 接受 / 拒绝。
-6. Stage 3-0：可选，预留 RegionMerger result/options/failure reason 和 NotImplemented stub。
-7. Stage 3A：PlaneRegionMerge 强化版已实现，继续真实 STEP/STP 样例验证。
-8. Stage 3B：实现 CylinderRegionMerge。
-9. Stage 3D：实现 SphereRegionMerge。
-10. Stage 4：尽早启动 Freeform Candidate Detection。
-11. Stage 5：在 ErrorMetric / ReportGenerator 完善后再做自由曲面重拟合。
-12. Stage 3C：在尖角保护、ConeLike 检测和 apex 风险控制稳定后实现。
-13. Stage 3E：作为 Optional/Future Work，仅在 torus 样例充分时实现。
+1. 将导出闭环机制复用于 SphereRegionMerge。
+2. 评估 CylinderRegionMerge 推进条件。
+3. 在平面导出稳定后，逐步解冻 Stage 4 / Stage 5。
+4. Stage 3C / 3E：不删除，后置补全。
 ```
 
-当前折中路线的含义是：
+路线收窄原因：
 
 ```text
-1. 文档先行，代码只能实现文档中已经定义的阶段和边界。
-2. Stage 3-0 是可选框架准备，不是实际合并阶段。
-3. 3A / 3B / 3D 是近期稳定收益主线。
-4. 3C / 3E 是解析图元补全路线，不删除，但不阻塞 Stage 4 / Stage 5。
-5. 3C 的核心风险是误伤自由曲面尖角。
-6. 3E 的核心风险是 torus 双周期参数域和 trim curve 复杂度。
+1. 球面、圆柱比平面更难。平面都没做到 STEP 稳定前，
+   继续做球面/圆柱真实合并只会放大问题。
+2. 当前迫切需要的是导出级合法性闭环，不是更多合并类型。
+3. 先让平面合并做到"导出后重读仍然对"，再谈扩展。
 ```
 
 ---
@@ -2232,20 +2484,26 @@ Codex 修改合并算法时必须遵守：
 2. 架构边界遵循 docs/module_design.md。
 3. 当前任务状态遵循 docs/implementation_status.md。
 4. 合并算法路线遵循本文件。
-4. GUI 不直接修改 TopoDS_Shape。
-5. 修改模型的操作必须通过 Command。
-6. MergePlanner / MergeRegionGrower 只负责候选生成，不负责 GUI。
-7. merge 模块不负责界面显示。
-8. validate 模块只负责验证，不负责合并策略。
-9. brep 模块只负责索引和查询，不负责修改模型。
-10. 在 Stage 2.5 / 2.6 之前不要实现 PlaneRegionMerge。
-11. 在候选区域没有验证前，不要做破坏性拓扑替换。
-12. 每个阶段只实现当前阶段允许的最小功能，不提前混入后续阶段。
-13. Stage 1 不允许硬编码 concat_bsplines=true；必须暴露参数并记录实际值。
-14. Candidate Preview 不应改变 ShapeDocument。
-15. Candidate Selection / Rejection 不应自动应用到真实合并。
-16. Stage 3A/B/C/D/E 都必须通过 Command 层执行真实模型修改。
-17. Stage 3 的 region merge 路径必须与 applyMerge() 的 same-domain 路径边界清晰。
+5. GUI 不直接修改 TopoDS_Shape。
+6. 修改模型的操作必须通过 Command。
+7. MergePlanner / MergeRegionGrower 只负责候选生成，不负责 GUI。
+8. merge 模块不负责界面显示。
+9. validate 模块只负责验证，不负责合并策略。
+10. brep 模块只负责索引和查询，不负责修改模型。
+11. 在 Stage 2.5 / 2.6 之前不要实现 PlaneRegionMerge。
+12. 在候选区域没有验证前，不要做破坏性拓扑替换。
+13. 每个阶段只实现当前阶段允许的最小功能，不提前混入后续阶段。
+14. Stage 1 不允许硬编码 concat_bsplines=true；必须暴露参数并记录实际值。
+15. Candidate Preview 不应改变 ShapeDocument。
+16. Candidate Selection / Rejection 不应自动应用到真实合并。
+17. Stage 3A/B/C/D/E 都必须通过 Command 层执行真实模型修改。
+18. Stage 3 的 region merge 路径必须与 applyMerge() 的 same-domain 路径边界清晰。
+19. 当前唯一优先级是 Stage 3A-Fix。不得实现 Stage 3B/3C/3E 真实合并。
+20. 不得扩展 SphereRegionMerge（保持实验性标记）。
+21. 不得实现 Stage 4 / Stage 5。
+22. PlaneRegionMerge 必须包含导出级合法性闭环：导出 → 重读 → 统计 → BRepCheck。
+23. 导出重读失败必须自动 rollback。
+24. 不安全候选（多边界环、有洞、不闭合、近似平面）必须明确拒绝并报告原因。
 ```
 
 ---
@@ -2408,34 +2666,49 @@ Codex 修改合并算法时必须遵守：
 
 ---
 
-## 14. 简短结论
+## 14. 简短结论（2026-05-27 修订）
 
-当前路线不是：
-
-```text
-只做近似共面合并
-```
-
-而是：
+当前路线已收窄为：
 
 ```text
-1. SameDomainUnifier 作为当前保守基础。
-2. Stage 1 明确暴露 concat_bsplines 参数，并重点验证 concat_bsplines=true。
-3. MergeCandidate / MergePlanner / MergeRegionGrower 作为通用候选框架。
-4. Stage 2.5 在 GUI 中高亮候选区域，先验证候选是否合理。
-5. Stage 2.6 支持用户选择、接受、拒绝候选区域，形成后续真实合并的人工控制入口。
-6. Stage 3 拆分为 3-0/A/B/C/D/E：
-   - 3-0 Analytic RegionMerger Framework Preparation，可选
-   - 3A PlaneRegionMerge，已实现强化版
-   - 3B CylinderRegionMerge
-   - 3C ConeRegionMerge，保留但后置
-   - 3D SphereRegionMerge
-   - 3E TorusRegionMerge，可选补全
-7. 当前近期主线是：验证 3A 强化版 → Stage 2.9 多类型候选预览框架 → Stage 2.8 Enhancement Cylinder/Cone 近似检测 → Stage 3-S 通用结果字段 → 3D → 3B → 3C → Stage 4 → Stage 5。
-8. 3C / 3E 不删除，但不阻塞自由曲面路线。
-9. Freeform Candidate Detection 提前进入，服务潮玩模型自由曲面。
-10. B-spline / Plate Refit 在验证、报告和 rollback 完善后实施。
+唯一优先级：Stage 3A-Fix
+  PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild
 ```
 
-Stage 3 的重点不只是平面；平面只是建立真实 region merge baseline 的第一个低风险子阶段。  
-ConeRegionMerge 和 TorusRegionMerge 仍然保留在路线中，但分别作为后置补全和可选补全处理。
+核心判断：
+
+```text
+1. GUI 里 "看起来连续" 不等于 B-rep 拓扑合法。
+2. 平面重建后，boundary wire / pcurve / orientation / 闭合关系不正确
+   会导致外部软件出现缺面、飞面、无限平面。
+3. 球面、圆柱比平面更难。平面没做到 STEP 稳定前，
+   继续做球面/圆柱真实合并只会放大问题。
+4. 当前迫切需要的是导出级合法性闭环，不是更多合并类型。
+```
+
+阶段性结论：
+
+```text
+1. SameDomainUnifier 作为当前保守基础（保持不变）。
+2. Stage 1 concat_bsplines 参数已暴露，继续作为可配置项。
+3. Stage 2 候选框架、预览、选择/拒绝、多类型显示已完备，保持不变。
+4. Stage 3A PlaneRegionMerge 已实现基础可用版，当前唯一待收口项。
+5. Stage 3A-Fix：
+   - 导出级合法性闭环（导出 → 重读 → 统计 → rollback）
+   - 冻结输入范围（只允许原生 Plane + 单 outer wire + 无洞 + 边界闭合）
+   - 修复 boundary wire（排序、orientation、pcurve 同步、ShapeFix）
+   - 明确拒绝不安全候选（多边界环、有洞、不闭合、近似平面、导出重读失败）
+6. Stage 3B/3C/3D/3E：冻结，3A-Fix 验收通过前不可推进。
+7. SphereRegionMerge 已有入口标记为实验性，不进一步扩展。
+8. Stage 4 / Stage 5：冻结，等平面导出稳定后再评估推进条件。
+```
+
+验收标准简单明确：
+
+```text
+平面合并后，不只 GUI 正常，还必须：
+1. 导出 STEP
+2. 重新读取 STEP
+3. solid/shell/face/edge 统计合理
+4. 外部软件（非 OCCT）不再出现缺面、飞面、无限平面
+```
