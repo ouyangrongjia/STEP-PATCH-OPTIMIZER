@@ -13,6 +13,8 @@ namespace spo {
 struct PlaneRegionMergeOptions : RegionMergeOptions {
     double normal_angle_tolerance_degrees = 3.0;
     double plane_distance_tolerance = 0.01;
+    bool allow_approximate_planar_surfaces = false;
+    double approximate_plane_max_deviation = 0.01;
     std::filesystem::path roundtrip_temp_directory;
 };
 

@@ -73,6 +73,7 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 20. GUI 平面候选入口已区分“PlaneLike 预览候选”和“可真实平面合并候选”：严格合并入口只显示原生 `GeomAbs_Plane`、边界有效、非隐藏/非拒绝的候选；B-spline backed planar-like 候选会明确报告为预览专用，不再显示 Unknown 失败原因。
 21. Stage 3A-Fix T3 Unsafe Candidate Rejection Report 已完成：`RegionMergeFailureReason` 已有稳定字符串转换；平面/球面候选合并报告会输出 candidate、failure reason、message、统计、BRepCheck 和失败时 `document was not modified / rollback applied`。
 22. Stage 3A-Fix T4 RegionBoundaryAnalyzer 已完成：新增独立边界分析器，在 PlaneRegionMerger 真实重建前检查单连通区域、单一闭合外环、无内环/洞、无 non-manifold 边；复杂 boundary 先明确拒绝，不执行修复。
+23. Stage 3A-Approx A1 已完成：PlaneRegionMergeOptions 新增 `allow_approximate_planar_surfaces=false` 和 `approximate_plane_max_deviation=0.01`；默认继续保持 T2 strict mode，显式开启后 B-spline backed PlaneLike 可越过 strict native Plane 检查进入后续拟合/偏差检查，但本阶段未实现真实 B-spline 平面重建。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：

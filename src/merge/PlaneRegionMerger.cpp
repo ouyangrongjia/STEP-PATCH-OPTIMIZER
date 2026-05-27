@@ -117,7 +117,7 @@ bool validateCandidate(
             return false;
         }
         BRepAdaptor_Surface surface(topology.face(faceId));
-        if (surface.GetType() != GeomAbs_Plane) {
+        if (surface.GetType() != GeomAbs_Plane && !options.allow_approximate_planar_surfaces) {
             fail(
                 result,
                 RegionMergeFailureReason::ApproximateSurfaceNotSupported,
@@ -142,6 +142,13 @@ bool validateCandidate(
         }
     }
     return true;
+}
+
+bool candidateUsesApproximatePlanarSurface(const ShapeDocument& document, const MergeCandidate& candidate) {
+    const auto& topology = document.topology();
+    return std::any_of(candidate.faces.begin(), candidate.faces.end(), [&topology](FaceId faceId) {
+        return faceId < topology.faceCount() && BRepAdaptor_Surface(topology.face(faceId)).GetType() != GeomAbs_Plane;
+    });
 }
 
 std::optional<gp_Pln> planeFromFace(const TopoDS_Face& face) {
@@ -407,6 +414,14 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
     }
 
     result.primitive_fit_error = result.max_deviation;
+
+    if (options.allow_approximate_planar_surfaces && candidateUsesApproximatePlanarSurface(document, candidate)) {
+        fail(
+            result,
+            RegionMergeFailureReason::NotImplemented,
+            "Approximate planar surface passed fitting checks, but B-spline planar rebuild is not implemented in A1.");
+        return std::nullopt;
+    }
 
     const RegionBoundaryAnalyzer boundaryAnalyzer;
     const auto boundaryAnalysis = boundaryAnalyzer.analyze(document, candidate);

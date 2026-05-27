@@ -1,685 +1,527 @@
-# STEP-PATCH-OPTIMIZER 当前 TODO：Stage 3A-Fix 新分工方案
+# STEP-PATCH-OPTIMIZER 当前 TODO：Stage 3A-Fix → Stage 3A-Approx 路线调整版
 
 > 文档定位：这是当前执行 TODO 文档，用于随开发进度持续更新、替换和勾选。  
-> 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `merge_algorithm_roadmap.md`。  
-> 当前阶段：`Stage 3A-Fix：PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild`  
-> 更新时间：2026-05-27
+> 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
+> 当前阶段：`Stage 3A-Approx：B-spline backed planar-like rebuild`  
+> 更新时间：2026-05-27  
+> 当前判断：T1-T4 已形成安全底座；由于 Geomagic Wrap 输出的 STP 中几乎没有 OCCT 原生 `GeomAbs_Plane`，需要从“原生 Plane strict merge”转向“B-spline 近似平面重构”。
 
 ---
 
-## 0. 当前唯一优先级
+## 0. 当前核心判断
 
-当前唯一优先级：
+当前 Geomagic Wrap 输出的 STP 中，视觉上看似平面的区域，底层通常不是 OCCT 原生 `GeomAbs_Plane`，而是：
 
 ```text
-Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口
+B-spline backed planar-like surface
+Bezier / BSpline surface
+Geomagic Wrap 拟合出的自由曲面 patch
 ```
 
-目标不是新增更多合并类型，而是让已有 `PlaneRegionMerge` 从：
+因此，T2 的 strict native Plane 限制虽然安全，但会导致：
 
 ```text
-GUI 看起来能合并
+显示可真实平面合并候选为空；
+PlaneLike candidate 可以预览，但真实 merge 被 ApproximateSurfaceNotSupported 拦截；
+当前样例无法获得有效 face reduction。
 ```
 
-提升为：
+所以路线调整为：
 
 ```text
-STEP 导出后重新读取仍稳定，
-外部 CAD 软件不再出现缺面、飞面、无限平面、开壳。
+保留 T1-T4 作为安全门；
+暂停 T5A/T5B 原生 Plane 专用边界修复；
+新增 Stage 3A-Approx：B-spline backed planar-like candidate → approximate planar rebuild。
 ```
 
----
-
-## 1. 本 TODO 与长期 roadmap 的关系
+核心原则：
 
 ```text
-TODO.md
-  当前阶段执行清单。
-  可以频繁更新、替换、勾选。
-  记录当前任务拆分、状态、验收项和 Codex 投喂顺序。
-
-merge_algorithm_roadmap.md
-  长期遵循文档。
-  不应大幅删减。
-  保留完整阶段路线、设计原则、实现边界、历史诊断和长期规划。
-```
-
-本 TODO 不替代 roadmap。
-
----
-
-## 2. 暂停事项
-
-Stage 3A-Fix 完成前，暂停以下方向：
-
-```text
-1. 不新增 CylinderRegionMerge 真实合并。
-2. 不新增 ConeRegionMerge 真实合并。
-3. 不新增 TorusRegionMerge 真实合并。
-4. 不扩展 SphereRegionMerge 的强合并能力。
-5. 不新增 Freeform B-spline / Plate Refit。
-6. 不继续扩展候选检测。
-7. 不修改 SameDomainUnifier。
-8. 不做大范围 GUI 重构。
-```
-
-已有 SphereRegionMerge 可以保留为实验入口，但不作为本轮主线。
-
----
-
-## 3. 当前任务拆分
-
-| 编号 | 任务                                           | 优先级 | 状态 | 目标                                         |
-| ---: | ---------------------------------------------- | -----: | ---- | -------------------------------------------- |
-|   T1 | BRepCheck Hard Failure + Export Roundtrip Gate |     P0 | DONE | 坏结果不能进入 document                      |
-|   T2 | Strict Input Freezing                          |     P0 | DONE | 只允许原生 Plane + 简单边界进入真实合并      |
-|   T3 | Unsafe Candidate Rejection Report              |     P1 | DONE | GUI / Report 明确显示拒绝原因                |
-|   T4 | RegionBoundaryAnalyzer                         |     P1 | DONE | 独立分析 boundary loops / holes / closedness |
-|  T5A | Conservative Boundary Wire Rebuild             |     P2 | TODO | 保守修复 edge order / orientation            |
-|  T5B | Planar Face / PCurve Fix                       |     P2 | TODO | 必要时再修 ShapeFix_Face / pcurve            |
-
-推荐执行顺序：
-
-```text
-T1 → T2 → T3 → T4 → T5A → T5B
-```
-
-最低可交付版本：
-
-```text
-完成 T1 + T2 + T3。
+不是删除 strict mode，
+而是在 strict mode 之外新增 experimental approximate planar mode。
 ```
 
 ---
 
-## 4. T1：BRepCheck Hard Failure + Export Roundtrip Gate
+## 1. 当前仓库状态
 
-### 4.1 目标
+| 编号 | 任务                                           | 状态   | 当前结论                                                  |
+| ---: | ---------------------------------------------- | ------ | --------------------------------------------------------- |
+|   T1 | BRepCheck Hard Failure + Export Roundtrip Gate | DONE   | 坏结果不会进入 document                                   |
+|   T2 | Strict Input Freezing                          | DONE   | 非原生 Plane 会被 ApproximateSurfaceNotSupported 拒绝     |
+|   T3 | Unsafe Candidate Rejection Report              | DONE   | GUI / Report 可以显示失败原因和 document rollback 状态    |
+|   T4 | RegionBoundaryAnalyzer                         | DONE   | 可在合并前分析 boundary loop / holes / closedness         |
+|  T5A | Conservative Boundary Wire Rebuild             | PAUSED | 只服务原生 Plane，当前样例收益低                          |
+|  T5B | Planar Face / PCurve Fix                       | PAUSED | 只服务原生 Plane，当前样例收益低                          |
+|   A1 | Approx Planar Mode Options                     | DONE   | 新增近似平面合并开关                                      |
+|   A2 | B-spline PlaneLike Candidate Rebuild           | TODO   | 允许低误差 B-spline backed PlaneLike 进入平面重构         |
+|   A3 | Approx Boundary Rebuild using T4               | TODO   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
+|   A4 | Experimental GUI Entry                         | TODO   | 提供实验性近似平面合并入口                                |
+|   A5 | Tests + Export Validation                      | TODO   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
 
-将 `PlaneRegionMerger` 的成功条件升级为：
+---
+
+## 2. 保留的安全底座
+
+### 2.1 T1 必须保留
+
+所有真实 merge 成功前必须经过：
 
 ```text
-1. 合并后 ShapeDocument 有效。
-2. BRepCheck 通过。
-3. topology usable。
-4. solid count preserved。
-5. face count reduced。
-6. 临时 STEP 导出成功。
-7. 临时 STEP 重新读取成功。
-8. roundtrip BRepCheck 通过。
-9. roundtrip stats 合理。
+1. ShapeValidator
+2. BRepCheck
+3. STEP 临时导出
+4. STEP 重新读取
+5. roundtrip BRepCheck
+6. solid count preserved
+7. failure rollback
 ```
 
-### 4.2 修改范围
+不得绕过 T1。
 
-允许修改：
+### 2.2 T2 strict mode 必须保留
+
+T2 的 strict native Plane 逻辑继续存在：
 
 ```text
-src/merge/PlaneRegionMerger.cpp
-src/merge/PlaneRegionMerger.h
-src/merge/RegionMergeResult.h
-src/io/StepWriter.cpp / .h
-src/io/StepReader.cpp / .h
-tests/test_plane_region_merger.cpp
+allow_approximate_planar_surfaces == false:
+  candidate.faces 中任意 face 不是 GeomAbs_Plane
+  → ApproximateSurfaceNotSupported
 ```
 
-不允许修改：
+strict mode 作为安全基准，不删除、不弱化。
+
+### 2.3 T3 报告逻辑必须保留
+
+失败时 GUI / Report 必须继续显示：
 
 ```text
-SameDomainUnifier
-SphereRegionMerger
-CylinderRegionMerger
-ConeRegionMerger
-TorusRegionMerger
-MergePlanner
-MergeRegionGrower
-GUI 大结构
+candidate_id
+candidate_type
+failure_reason
+message
+document was not modified / rollback applied
+face_count_before / after
+edge_count_before / after
+BRepCheck
 ```
 
-### 4.3 验收标准
+### 2.4 T4 RegionBoundaryAnalyzer 必须复用
+
+Stage 3A-Approx 不重新发明 boundary 分析，应复用 T4：
 
 ```text
-[x] BRepCheck invalid 时 result.success=false。
-[x] BRepCheck invalid 不再 warning success。
-[x] PlaneRegionMerger::merge() 成功前必须执行 STEP 导出重读。
-[x] STEP 写出失败时 result.success=false。
-[x] STEP 重读失败时 result.success=false。
-[x] roundtrip BRepCheck invalid 时 result.success=false。
-[x] 失败时 result.document 保持原 document。
-[x] PlaneRegionMergeCommand 失败时不污染 CommandContext.document。
-[x] 原有 plane merge 测试通过。
+RegionBoundaryAnalyzer
+→ strict boundary analysis
+→ ordered_boundary_edges
+→ valid / failure_reason / message
 ```
 
-### 4.4 Codex Prompt
+不满足 strict boundary 的 candidate 直接拒绝，不进入 planar rebuild。
+
+---
+
+## 3. 暂停 T5A / T5B 的原因
+
+T5A / T5B 原本目标是：
 
 ```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
+T5A：Conservative Boundary Wire Rebuild
+T5B：Planar Face / PCurve Fix
+```
 
-当前任务是 Stage 3A-Fix 的第 1 步：为 PlaneRegionMerger 增加 BRepCheck hard failure 和 Export Roundtrip Gate。
+但它们默认服务对象是：
 
-背景：
-当前 PlaneRegionMerger::merge() 在合并后会执行 ShapeValidator / BRepCheck，但 BRepCheck invalid 仍可能以 warning 形式返回 success=true。现在需要将 PlaneRegionMerge 的成功标准提升为导出级合法性闭环。
+```text
+原生 GeomAbs_Plane candidate
+```
 
-请严格按以下要求修改：
+当前真实样例中几乎没有原生 Plane，所以继续做 T5 的问题是：
 
-1. 只修改 PlaneRegionMerger 相关代码、必要的 STEP IO 复用代码和测试。
+```text
+1. 能提升原生 Plane 的边界稳定性；
+2. 但当前样例没有可合并原生 Plane；
+3. 对当前 Geomagic Wrap STP 的 face reduction 没有直接帮助；
+4. 主要瓶颈已经从 boundary fix 转为 B-spline backed planar-like rebuild。
+```
+
+因此：
+
+```text
+T5A / T5B 暂停；
+其部分能力后续并入 Stage 3A-Approx 的 boundary rebuild / face fix 内部。
+```
+
+---
+
+## 4. 当前主线：Stage 3A-Approx
+
+### 4.1 阶段目标
+
+新增实验性近似平面重构能力：
+
+```text
+B-spline backed PlaneLike candidate
+→ 拟合目标 Geom_Plane
+→ 检查 deviation
+→ 使用 T4 boundary analysis
+→ 重建 planar trimmed face
+→ 替换 candidate face group
+→ BRepCheck
+→ STEP export roundtrip
+→ 成功才更新 document
+```
+
+### 4.2 与 strict mode 的关系
+
+```text
+Strict mode:
+  只允许原生 GeomAbs_Plane。
+  最安全。
+  保留作为 baseline。
+
+Approx mode:
+  允许 B-spline backed PlaneLike。
+  需要通过误差阈值、边界检查、BRepCheck、STEP roundtrip。
+  标记为 experimental。
+```
+
+### 4.3 不允许做
+
+```text
+1. 不删除 strict native Plane mode。
 2. 不修改 SameDomainUnifier。
 3. 不修改 SphereRegionMerger / CylinderRegionMerger / ConeRegionMerger / TorusRegionMerger。
-4. 不修改 MergePlanner / MergeRegionGrower。
-5. 不修改候选检测、候选预览、GUI 大结构。
-6. PlaneRegionMerger::merge() 中：
-   - 合并后先构造 ShapeDocument。
-   - 执行 ShapeValidator。
-   - 如果 validation.brep_check_valid == false，则返回 success=false。
-   - 不允许再出现 “BRepCheck warning but success” 的语义。
-7. 增加导出重读验证：
-   - 将 merged shape 写入临时 STEP 文件。
-   - 重新读取该临时 STEP 文件。
-   - 对重读后的 ShapeDocument 再执行 ShapeValidator。
-   - 如果写出失败、重读失败、roundtrip BRepCheck 失败，则返回 success=false。
-8. 失败时 result.document 必须保持原始 document，不允许把坏模型写入 result.document。
-9. 成功时 result.message 中说明 export roundtrip validation passed。
-10. PlaneRegionMerger::mergeBatch() 也要走同样验证逻辑。
-11. 保持现有 Command undo/redo 语义：Command 层只在 result.success==true 时更新 context.document。
-12. 新增或修改测试：
-    - BRepCheck invalid 不再 success。
-    - export roundtrip 失败时 merge 返回 failure。
-    - failure 不污染原 document stats。
-    - 原有 plane region merge 正常样例仍通过。
-13. 不要顺手重构无关代码。
-14. 不要格式化无关文件。
-15. 修改完成后运行现有测试，并只修复与本任务直接相关的问题。
-
-完成后请总结：
-- 修改了哪些文件；
-- 新增了哪些失败条件；
-- 新增/修改了哪些测试；
-- 是否存在仍需外部软件人工验证的项目。
+4. 不修改 MergePlanner / MergeRegionGrower 的候选生成逻辑。
+5. 不做 Freeform B-spline / Plate Refit。
+6. 不支持多 boundary loop。
+7. 不支持 holes / inner loops。
+8. 不支持 disconnected boundary。
+9. 不绕过 BRepCheck。
+10. 不绕过 STEP roundtrip。
+11. 不让失败结果污染 document。
+12. 不使用大 tolerance 强行 sewing。
 ```
 
 ---
 
-## 5. T2：Strict Input Freezing
+## 5. A1：Approx Planar Mode Options
 
 ### 5.1 目标
 
-Stage 3A-Fix 期间临时收紧真实合并输入范围。
+在 `PlaneRegionMergeOptions` 中增加实验性近似平面开关。
 
-只允许：
+建议字段：
 
-```text
-1. 原生 GeomAbs_Plane。
-2. 单 outer wire。
-3. 无 inner loop。
-4. boundary wire 闭合。
-5. 不跨 protected edge。
-6. 不跨 locked edge。
-7. 合并后 solid count preserved。
+```cpp
+bool allow_approximate_planar_surfaces = false;
+double approximate_plane_max_deviation = 0.01;
 ```
 
-明确拒绝：
+可选字段：
 
-```text
-1. B-spline backed planar-like candidate。
-2. 多边界环。
-3. 有洞。
-4. 边界不闭合。
-5. candidate 引用不存在 face / edge id。
+```cpp
+bool mark_approximate_planar_mode_experimental = true;
 ```
 
 ### 5.2 验收标准
 
 ```text
-[x] 原生 Plane 简单候选仍可合并。
-[x] B-spline backed planar-like candidate 被拒绝。
-[x] 多边界环被拒绝。
-[x] 有洞候选被拒绝。
-[x] 边界不闭合候选被拒绝。
-[x] 失败时 document 不变。
-[x] failure_reason 与 message 明确。
-```
-
-### 5.3 Codex Prompt
-
-```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
-
-当前任务是 Stage 3A-Fix 的第 2 步：收紧 PlaneRegionMerger 的真实合并输入范围。
-
-背景：
-当前 PlaneRegionMerger 支持 NURBS-backed planar region，但 Stage 3A-Fix 当前优先目标是导出稳定性。因此真实合并入口必须临时冻结输入范围，只允许原生 Plane 且边界简单的候选进入真实重建。
-
-请严格按以下要求修改：
-
-1. 只修改 PlaneRegionMerger、RegionMergeResult / RegionMergeFailureReason 和相关测试。
-2. 不修改 SameDomainUnifier。
-3. 不修改 SphereRegionMerger。
-4. 不修改 Candidate 生成逻辑；近似平面仍然可以被生成和预览，但真实 merge 必须拒绝。
-5. 在 PlaneRegionMerger 的 candidate 准备阶段增加严格检查：
-   - candidate.faces 中每个 face 的 BRepAdaptor_Surface::GetType() 必须是 GeomAbs_Plane。
-   - 如果任一 face 不是 GeomAbs_Plane，返回 failure。
-   - failure_reason 使用 ApproximateSurfaceNotSupported；如果该枚举不存在，请新增。
-   - message 说明：B-spline backed planar-like candidate is preview-only and not supported by strict PlaneRegionMerge.
-6. 增加边界约束检查：
-   - 只允许单 outer wire。
-   - 不允许 inner loop / holes。
-   - boundary wire 必须闭合。
-   - 多边界环、有洞、不闭合时必须返回明确 failure_reason 和 message。
-7. 不要尝试在本任务中修复复杂 boundary。
-   - 本任务只负责拒绝不安全输入。
-   - Safe Boundary Rebuild 留给后续任务。
-8. 修改测试：
-   - 原生 Plane 两面合并仍成功。
-   - NURBS-backed planar region 现在应失败，并返回 ApproximateSurfaceNotSupported。
-   - invalid boundary 仍失败且不污染 stats。
-   - 新增多环 / 有洞 / 不闭合测试；如果构造成本过高，先覆盖不闭合和非原生 Plane。
-9. 不要修改 GUI。
-10. 不要顺手重构无关代码。
-11. 修改完成后运行测试。
-
-完成后请总结：
-- 哪些输入现在被拒绝；
-- 哪些历史测试语义发生变化；
-- 哪些复杂 boundary 仍留给后续任务。
+[x] 默认 allow_approximate_planar_surfaces=false。
+[x] 默认行为完全保持 T2 strict mode。
+[x] false 时 B-spline backed PlaneLike 仍返回 ApproximateSurfaceNotSupported。
+[x] true 时 B-spline backed PlaneLike 可以进入拟合与 deviation 检查。
+[x] 选项不会影响 Sphere/Cylinder/Cone/Torus。
 ```
 
 ---
 
-## 6. T3：Unsafe Candidate Rejection Report
+## 6. A2：B-spline PlaneLike Candidate Rebuild
 
 ### 6.1 目标
 
-让 GUI / ReportPanel 明确显示失败原因。
+允许几何上足够接近平面的 B-spline backed PlaneLike candidate 被重建为 planar trimmed face。
 
-报告至少包含：
-
-```text
-candidate_id
-candidate_type
-success / failure
-failure_reason
-message
-face_count_before / after
-edge_count_before / after
-brep_check_valid
-是否 rollback / document not modified
-```
-
-### 6.2 验收标准
-
-```text
-[x] failure_reason 有稳定字符串输出。
-[x] 近似平面拒绝时报告显示 preview-only。
-[x] 多环拒绝时报告显示 multiple boundary loops not supported。
-[x] 有洞拒绝时报告显示 inner loops not supported。
-[x] 导出重读失败时报告显示 export roundtrip failed。
-[x] 失败时报告说明 document not modified / rollback applied。
-```
-
-### 6.3 Codex Prompt
-
-```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
-
-当前任务是 Stage 3A-Fix 的第 3 步：让 PlaneRegionMerge 的失败原因在 GUI / 报告中明确显示。
-
-背景：
-Stage 3A-Fix 会新增更多拒绝路径，例如近似平面不支持、多边界环不支持、有洞不支持、导出重读失败等。用户需要在 GUI 报告面板中看到明确原因，而不是只看到 generic merge failed。
-
-请严格按以下要求修改：
-
-1. 只修改报告展示相关代码和必要的 result 字段辅助函数。
-2. 不修改 PlaneRegionMerger 的几何算法。
-3. 不修改 SameDomainUnifier。
-4. 不修改 SphereRegionMerger。
-5. 检查当前 MainWindow / AppController 中输出 RegionMergeResult 的位置。
-6. 为 RegionMergeFailureReason 增加一个稳定的字符串转换函数，例如：
-   - toString(RegionMergeFailureReason)
-   - 或 regionMergeFailureReasonToString()
-7. 报告中至少显示：
-   - candidate_id
-   - candidate_type
-   - success / failure
-   - failure_reason 字符串
-   - result.message
-   - face_count_before / after
-   - edge_count_before / after
-   - brep_check_valid
-8. 当 result.success == false 时，报告明确说明 document was not modified / rollback applied。
-9. 不要改变 Command 层成功/失败语义。
-10. 不要新增大面积 GUI 重构。
-11. 修改或新增测试：
-   - 如果已有 GUI 测试困难，可以给纯函数 toString 增加测试。
-   - 确保新增枚举都有字符串输出。
-12. 不要顺手格式化无关文件。
-
-完成后请总结：
-- 新增了哪些 failure reason 显示；
-- 报告中现在会输出哪些字段；
-- 哪些 GUI 行为没有修改。
-```
-
----
-
-## 7. T4：RegionBoundaryAnalyzer
-
-### 7.1 目标
-
-新增独立边界分析模块，避免 PlaneRegionMerger 直接依赖脆弱的 `makeBoundaryWire()`。
-
-新增：
-
-```text
-src/merge/RegionBoundaryAnalyzer.h
-src/merge/RegionBoundaryAnalyzer.cpp
-tests/test_region_boundary_analyzer.cpp
-```
-
-### 7.2 建议输出结构
-
-```cpp
-struct RegionBoundaryAnalysis {
-    bool valid = false;
-
-    int connected_component_count = 0;
-    int outer_wire_count = 0;
-    int inner_wire_count = 0;
-
-    bool boundary_closed = false;
-    bool has_holes = false;
-    bool has_non_manifold_edges = false;
-
-    std::vector<EdgeId> ordered_boundary_edges;
-    std::vector<std::vector<EdgeId>> boundary_loops;
-
-    RegionMergeFailureReason failure_reason = RegionMergeFailureReason::None;
-    std::string message;
-};
-```
-
-### 7.3 第一版 strict mode
-
-只允许：
-
-```text
-connected_component_count == 1
-outer_wire_count == 1
-inner_wire_count == 0
-boundary_closed == true
-has_non_manifold_edges == false
-```
-
-其他情况只拒绝，不修复。
-
-### 7.4 验收标准
-
-```text
-[ ] 简单闭合边界 valid。
-[ ] 缺失边界 invalid。
-[ ] 多 loop invalid。
-[ ] 有洞 invalid。
-[ ] non-manifold invalid。
-[ ] PlaneRegionMerger 使用分析结果拒绝危险候选。
-[ ] 原有简单平面合并仍通过。
-```
-
-### 7.5 Codex Prompt
-
-```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
-
-当前任务是 Stage 3A-Fix 的第 4 步：新增 RegionBoundaryAnalyzer，用于在 PlaneRegionMerger 执行真实重建前分析候选区域边界。
-
-背景：
-当前 PlaneRegionMerger 直接用 candidate.boundary_edges 调用 makeBoundaryWire()，边界排序、闭合、多环、有洞等情况缺少独立诊断。Stage 3A-Fix 需要将不安全候选明确拒绝，并给出原因。
-
-请严格按以下要求修改：
-
-1. 新增 RegionBoundaryAnalyzer.h / RegionBoundaryAnalyzer.cpp。
-2. 新增 tests/test_region_boundary_analyzer.cpp，并接入 CMakeLists.txt。
-3. 不修改 MergePlanner / MergeRegionGrower。
-4. 不修改 SameDomainUnifier。
-5. 不修改 SphereRegionMerger。
-6. RegionBoundaryAnalyzer 输入：
-   - const ShapeDocument&
-   - const MergeCandidate&
-7. RegionBoundaryAnalyzer 输出结构包含：
-   - valid
-   - connected_component_count
-   - outer_wire_count
-   - inner_wire_count
-   - boundary_closed
-   - has_holes
-   - has_non_manifold_edges
-   - ordered_boundary_edges
-   - boundary_loops
-   - failure_reason
-   - message
-8. 第一版只支持 strict mode：
-   - connected_component_count == 1
-   - outer_wire_count == 1
-   - inner_wire_count == 0
-   - boundary_closed == true
-   - has_non_manifold_edges == false
-9. 不要在本任务中做 ShapeFix_Wire / ShapeFix_Face。
-10. 不要尝试修复复杂边界；只分析并返回明确失败原因。
-11. PlaneRegionMerger 在 preparePlaneMerge() 中调用 RegionBoundaryAnalyzer：
-   - 如果 analysis.valid == false，直接 fail(result, analysis.failure_reason, analysis.message)。
-   - 如果 valid，则使用 analysis.ordered_boundary_edges 构造 wire。
-12. 新增测试覆盖：
-   - simple closed boundary success
-   - missing boundary edge failure
-   - multiple loops failure，如构造复杂则先用 synthetic candidate 覆盖
-   - invalid edge id failure
-13. 保持现有 PlaneRegionMerger 简单样例测试通过。
-14. 不要顺手重构无关代码。
-
-完成后请总结：
-- 新增了哪些文件；
-- RegionBoundaryAnalyzer 当前能识别哪些风险；
-- 哪些复杂情况仍未修复，只会拒绝。
-```
-
----
-
-## 8. T5A：Conservative Boundary Wire Rebuild
-
-### 8.1 目标
-
-在 RegionBoundaryAnalyzer 通过后，对安全边界做保守 wire 构造：
-
-```text
-1. 使用 ordered_boundary_edges。
-2. 确保 edge 方向连续。
-3. 必要时使用 edge.Reversed()。
-4. ShapeFix_Wire 只做保守修复。
-5. 修复失败则拒绝，不继续 MakeFace。
-```
-
-### 8.2 验收标准
-
-```text
-[ ] reversed boundary edge 能被正确处理。
-[ ] discontinuous boundary 被拒绝。
-[ ] simple plane merge 仍成功。
-[ ] export roundtrip gate 仍生效。
-```
-
-### 8.3 Codex Prompt
-
-```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
-
-当前任务是 Stage 3A-Fix 的第 5A 步：对 PlaneRegionMerger 的 boundary wire 构造做保守修复。
-
-背景：
-RegionBoundaryAnalyzer 已经负责识别安全边界。本任务只在安全边界上改进 wire 构造，不处理多环、有洞、不闭合等复杂情况。
-
-请严格按以下要求修改：
-
-1. 只修改 PlaneRegionMerger 中 boundary wire 构造相关函数，或新增局部 helper。
-2. 不修改 SameDomainUnifier。
-3. 不修改 SphereRegionMerger。
-4. 不新增 Cylinder/Cone/Torus 真实合并。
-5. 使用 RegionBoundaryAnalyzer 提供的 ordered_boundary_edges。
-6. 构造 wire 时确保：
-   - 前一条 edge 的 end vertex 与后一条 edge 的 start vertex 一致。
-   - 如果方向相反，则使用 edge.Reversed()。
-   - 如果无法连续，返回 BoundaryLoopInvalid。
-7. 调用 ShapeFix_Wire 时必须保守：
-   - 不使用大 tolerance。
-   - 不吞掉失败。
-   - 修复后仍必须检查 wire.Closed()。
-8. 如果 ShapeFix_Wire 后 wire 不闭合或异常，返回 failure，不继续 MakeFace。
-9. 不要在本任务中重建 pcurve。
-10. 保持 export roundtrip gate 仍然生效。
-11. 新增或修改测试：
-    - reversed boundary edge 能被正确处理。
-    - discontinuous boundary 被拒绝。
-    - simple plane merge 仍成功。
-12. 不要顺手重构无关代码。
-
-完成后请总结：
-- wire 构造逻辑如何变化；
-- 哪些情况会被修复；
-- 哪些情况仍会被拒绝。
-```
-
----
-
-## 9. T5B：Planar Face / PCurve Fix
-
-### 9.1 目标
-
-在 T1-T5A 稳定后，再做：
-
-```text
-1. ShapeFix_Face。
-2. BRepLib::BuildCurves3d。
-3. planar pcurve 缺失检查。
-4. 必要时重建 planar pcurve。
-```
-
-### 9.2 前置条件
+### 6.2 输入条件
 
 必须满足：
 
 ```text
-[ ] T1 已完成。
-[ ] T2 已完成。
-[x] T3 已完成。
-[x] T4 已完成。
-[ ] T5A 已完成。
-[ ] 仍存在真实 STEP 样例导出后外部软件异常。
+1. document.hasShape() == true。
+2. candidate.valid == true。
+3. candidate.candidate_type == PlaneLike。
+4. candidate.status != Rejected。
+5. candidate.status != Hidden。
+6. candidate.face_count >= min_region_faces。
+7. internal_edges 不跨 protected_edges。
+8. candidate face id / edge id 有效。
+9. allow_approximate_planar_surfaces == true。
 ```
 
-### 9.3 验收标准
+### 6.3 几何条件
+
+必须满足：
 
 ```text
-[ ] 修复后 face 非空。
-[ ] 修复后只有一个 wire。
-[ ] 修复后 wire closed。
-[ ] 修复后 BRepCheck valid。
-[ ] export roundtrip valid。
-[ ] 修复失败时 document 不变。
+1. estimatePlaneFromCandidate() 成功。
+2. computeDeviation() 成功。
+3. max_deviation <= approximate_plane_max_deviation。
+4. normal compatibility 在阈值内。
+5. 面片组不能明显弯曲。
 ```
 
-### 9.4 Codex Prompt
+### 6.4 失败条件
 
 ```text
-你正在修改 STEP-PATCH-OPTIMIZER 仓库。
+1. plane fit failed → PrimitiveFitFailed。
+2. deviation too large → DeviationTooLarge。
+3. boundary invalid → 使用 T4 的 failure_reason。
+4. surface construction failed → SurfaceConstructionFailed。
+5. topology replacement failed → TopologyReplacementFailed。
+6. validation failed → ValidationFailed。
+7. export roundtrip failed → ExportRoundtripFailed。
+```
 
-当前任务是 Stage 3A-Fix 的第 5B 步：对 PlaneRegionMerger 新建 planar face 做保守的 face / curve 修复。
+### 6.5 验收标准
 
-背景：
-当前已经完成 Export Roundtrip Gate、Strict Input Freezing、RegionBoundaryAnalyzer 和 Conservative Wire Fix。本任务只处理简单单外环原生 Plane 合并后的 face 修复，不支持复杂多环、有洞或近似平面。
-
-请严格按以下要求修改：
-
-1. 只修改 PlaneRegionMerger 的新 face 构造后处理逻辑。
-2. 不修改 SameDomainUnifier。
-3. 不修改 SphereRegionMerger。
-4. 不新增 Cylinder/Cone/Torus 真实合并。
-5. 在 BRepBuilderAPI_MakeFace 成功后，对 mergedFace 做保守修复：
-   - 可使用 ShapeFix_Face。
-   - 可使用 BRepLib::BuildCurves3d。
-   - 必须保持 tolerance 保守，不允许大幅放宽。
-6. 修复后必须重新检查：
-   - face 非空。
-   - 只有一个 wire。
-   - wire closed。
-   - BRepCheck valid。
-7. 如果修复失败，返回 SurfaceConstructionFailed 或 ValidationFailed，不继续替换拓扑。
-8. 不要强行修复多环、有洞、不闭合边界；这些应在前置阶段直接拒绝。
-9. 保持 export roundtrip gate 作为最终成功条件。
-10. 新增测试：
-    - 修复后 simple plane merge 仍通过。
-    - 修复失败路径不会污染 document。
-    - export roundtrip 仍通过。
-11. 不要顺手重构无关代码。
-
-完成后请总结：
-- 使用了哪些 OCCT 修复 API；
-- 修复失败时如何回退；
-- 是否仍需要真实 STEP 样例人工验证。
+```text
+[ ] allow_approximate_planar_surfaces=false 时旧 strict 行为不变。
+[ ] allow_approximate_planar_surfaces=true 时低 deviation B-spline PlaneLike 可以进入 rebuild。
+[ ] 高 deviation B-spline candidate 失败。
+[ ] 成功后 face_count_after < face_count_before。
+[ ] 成功后 BRepCheck valid。
+[ ] 成功后 STEP roundtrip valid。
+[ ] 失败时 document 不变。
 ```
 
 ---
 
-## 10. 推荐 commit 顺序
+## 7. A3：Approx Boundary Rebuild using T4
+
+### 7.1 目标
+
+Approx mode 中的 boundary 构造必须复用 T4 的 RegionBoundaryAnalyzer。
+
+推荐流程：
 
 ```text
-commit 1: Stage 3A-Fix: make PlaneRegionMerge fail on invalid BRepCheck
-commit 2: Stage 3A-Fix: add export roundtrip gate for PlaneRegionMerge
-commit 3: Stage 3A-Fix: reject non-native planar candidates in strict mode
-commit 4: Stage 3A-Fix: report unsafe candidate rejection reasons
-commit 5: Stage 3A-Fix: add RegionBoundaryAnalyzer
-commit 6: Stage 3A-Fix: integrate RegionBoundaryAnalyzer into PlaneRegionMerger
-commit 7: Stage 3A-Fix: conservative boundary wire rebuild
-commit 8: Stage 3A-Fix: conservative planar face and curve repair
+RegionBoundaryAnalyzer::analyze(document, candidate)
+  ↓
+analysis.valid == true
+  ↓
+analysis.ordered_boundary_edges
+  ↓
+construct boundary wire
+  ↓
+BRepBuilderAPI_MakeFace(fitted Geom_Plane, boundary wire)
+  ↓
+BRepCheck + STEP roundtrip
+```
+
+### 7.2 严格限制
+
+第一版只支持：
+
+```text
+1. single outer loop。
+2. no holes。
+3. closed boundary。
+4. no disconnected boundary。
+5. no non-manifold / branch boundary。
+```
+
+不支持：
+
+```text
+1. multiple outer loops。
+2. inner loops / holes。
+3. open boundary。
+4. disconnected boundary。
+5. self-intersection boundary。
+```
+
+### 7.3 验收标准
+
+```text
+[ ] Approx mode 使用 RegionBoundaryAnalyzer。
+[ ] analysis.valid=false 时直接失败。
+[ ] valid 时使用 ordered_boundary_edges。
+[ ] invalid boundary 不进入 MakeFace。
+[ ] 不尝试修复复杂 boundary。
 ```
 
 ---
 
-## 11. 当前周报可交付版本
+## 8. A4：Experimental GUI Entry
 
-本周最低可汇报目标：
+### 8.1 目标
+
+为近似平面合并提供明确的实验入口，避免和 strict native Plane 合并混淆。
+
+推荐 GUI 入口：
 
 ```text
-Stage 3A-Fix v1：PlaneRegionMerge Export-Stable Gate
+实验性合并当前近似平面候选
+实验性合并所有近似平面候选
 ```
 
-包含：
+如果 GUI 改动成本高，第一版可以只做：
 
 ```text
-1. BRepCheck invalid hard failure。
-2. STEP export roundtrip validation。
-3. roundtrip BRepCheck。
-4. solid count preserved。
-5. failure rollback。
-6. result.message 明确说明失败原因。
-7. 原有测试通过。
+后端 API + 测试；
+GUI 暂时复用现有入口，但报告中明确显示 approximate planar experimental mode。
 ```
 
-周报表述：
+### 8.2 报告要求
+
+报告必须显示：
 
 ```text
-本周将 PlaneRegionMerge 的验收标准从 GUI 层显示正确提升为 STEP 导出级稳定。
-合并结果必须通过 BRepCheck、临时 STEP 导出、重新读取和二次验证。
-若任意环节失败，系统自动回滚，不污染当前 ShapeDocument。
+mode: strict native plane / approximate planar experimental
+allow_approximate_planar_surfaces: true/false
+candidate_id
+candidate_type
+failure_reason
+message
+max_deviation
+mean_deviation
+rms_deviation
+BRepCheck
+STEP roundtrip
+document state
+```
+
+### 8.3 验收标准
+
+```text
+[ ] 用户能区分 strict mode 和 approx experimental mode。
+[ ] Approx mode 的成功/失败报告明确。
+[ ] 失败时显示 document was not modified / rollback applied。
+[ ] 不影响原有 strict “显示可平面合并候选”。
 ```
 
 ---
 
-## 12. 完成后再推进
+## 9. A5：Tests + Export Validation
 
-Stage 3A-Fix 通过后，再考虑：
+### 9.1 必须测试
 
 ```text
-1. 将 export roundtrip gate 复用于 SphereRegionMerge。
-2. 评估 CylinderRegionMerge 推进条件。
-3. Stage 4：Freeform Candidate Detection。
-4. Stage 5：Freeform B-spline / Plate Refit。
-5. ConeRegionMerge 后置。
-6. TorusRegionMerge 可选。
+[ ] strict false：B-spline backed planar-like 失败，reason=ApproximateSurfaceNotSupported。
+[ ] approx true：低 deviation B-spline backed planar-like 成功。
+[ ] approx true：高 deviation B-spline backed candidate 失败。
+[ ] invalid boundary 失败。
+[ ] disconnected boundary 失败。
+[ ] multiple loop / hole 如已有构造能力则失败。
+[ ] 成功路径经过 BRepCheck。
+[ ] 成功路径经过 STEP roundtrip。
+[ ] roundtrip failure 失败。
+[ ] 失败不污染 document/stats。
+[ ] 原生 Plane 简单合并仍成功。
+[ ] command undo/redo 不破坏。
+```
+
+### 9.2 手动验证
+
+```text
+1. 打开 Geomagic Wrap 输出 STP。
+2. 点击“预览合并”。
+3. 确认 PlaneLike candidate 存在。
+4. strict 可合并平面候选可能为空，这是正常现象。
+5. 执行 experimental approximate planar merge。
+6. 检查 face/edge 是否减少。
+7. 检查 BRepCheck 是否通过。
+8. 检查 STEP roundtrip 是否通过。
+9. 导出 STEP。
+10. 使用外部 CAD 打开。
+11. 检查是否无缺面、飞面、无限平面、开壳。
+```
+
+外部 CAD 建议：
+
+```text
+FreeCAD
+CAD Assistant
+Rhino
+Geomagic
+SolidWorks / Fusion 360，如可用
+```
+
+---
+
+## 10. 推荐实现顺序
+
+```text
+commit 1:
+  docs: update TODO for Stage 3A-Approx route
+
+commit 2:
+  Stage 3A-Approx: add approximate planar options
+
+commit 3:
+  Stage 3A-Approx: keep strict mode default and allow approximate mode opt-in
+
+commit 4:
+  Stage 3A-Approx: rebuild low-deviation B-spline PlaneLike as planar trimmed face
+
+commit 5:
+  Stage 3A-Approx: reuse RegionBoundaryAnalyzer ordered boundary edges
+
+commit 6:
+  Stage 3A-Approx: add tests for strict vs approx mode
+
+commit 7:
+  Stage 3A-Approx: add experimental GUI entry/report, if needed
+```
+
+---
+
+## 11. 下一步 Codex 任务
+
+当前下一步不是 T5，而是：
+
+```text
+A1 + A2：新增 approximate planar mode，并让低 deviation B-spline backed PlaneLike 可以进入 planar rebuild。
+```
+
+极简 Codex 任务边界：
+
+```text
+只做后端；
+不大改 GUI；
+strict mode 默认不变；
+approx mode 通过 option 显式开启；
+必须保留 T1/T4 安全门；
+失败不污染 document。
+```
+
+---
+
+## 12. 当前周报表述
+
+```text
+本周完成了 PlaneRegionMerge 的安全底座：
+T1 建立 BRepCheck + STEP roundtrip gate；
+T2 建立 strict native Plane 输入冻结；
+T3 完善失败原因报告；
+T4 增加 RegionBoundaryAnalyzer 做边界安全分析。
+
+进一步测试发现，Geomagic Wrap 输出的 STP 中大多数视觉平面并不是 OCCT 原生 Plane，
+而是 B-spline backed planar-like surface。
+因此 strict native Plane 模式虽然安全，但当前样例没有可真实合并的原生 Plane 候选。
+
+下一步路线调整为 Stage 3A-Approx：
+在保留 T1-T4 安全门的前提下，新增实验性 B-spline 近似平面重构路径，
+允许低 deviation 的 B-spline PlaneLike candidate 被重建为 planar trimmed face，
+并继续通过 BRepCheck、STEP roundtrip 和外部 CAD 验证保证 B-Rep 合法性。
+```
+
+---
+
+## 13. 关键结论
+
+```text
+T1-T4 是安全底座。
+T5 原生 Plane 专用修复暂时暂停。
+Stage 3A-Approx 才是适配 Geomagic Wrap STP 的当前主线。
 ```

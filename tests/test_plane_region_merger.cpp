@@ -247,6 +247,12 @@ void test_plane_region_merger_rejects_invalid_candidate_states() {
     assert(hidden_result.failure_reason == spo::RegionMergeFailureReason::HiddenCandidate);
 }
 
+void test_plane_region_merge_options_default_strict_mode() {
+    const spo::PlaneRegionMergeOptions options;
+    assert(!options.allow_approximate_planar_surfaces);
+    assert(options.approximate_plane_max_deviation == 0.01);
+}
+
 void test_plane_region_merger_rejects_small_or_protected_regions() {
     const auto fixture = make_two_face_plane_fixture();
     const spo::PlaneRegionMerger merger;
@@ -331,6 +337,20 @@ void test_plane_region_merger_rejects_nurbs_backed_planar_region() {
     assert(result.message == "B-spline backed planar-like candidate is preview-only and not supported by strict PlaneRegionMerge.");
     assert(result.document.hasShape());
     assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
+}
+
+void test_plane_region_merger_approx_mode_reaches_later_checks_for_nurbs_planar_region() {
+    const auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    assert(!result.success);
+    assert(result.failure_reason != spo::RegionMergeFailureReason::ApproximateSurfaceNotSupported);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::NotImplemented);
     assert(same_stats(fixture.document.stats(), before));
 }
 
@@ -449,12 +469,14 @@ void test_plane_region_merger_failure_does_not_fill_primitive_fields() {
 void run_plane_region_merger_tests() {
     test_region_merge_failure_reason_strings_cover_all_values();
     test_region_merge_result_default_primitive_fields();
+    test_plane_region_merge_options_default_strict_mode();
     test_plane_region_merger_rejects_invalid_candidate_states();
     test_plane_region_merger_rejects_small_or_protected_regions();
     test_plane_region_merger_rejects_invalid_boundary_without_changing_stats();
     test_plane_region_merger_merges_simple_coplanar_region();
     test_plane_region_merger_roundtrip_failure_does_not_change_result_document();
     test_plane_region_merger_rejects_nurbs_backed_planar_region();
+    test_plane_region_merger_approx_mode_reaches_later_checks_for_nurbs_planar_region();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();
     test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields();
