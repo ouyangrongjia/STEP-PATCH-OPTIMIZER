@@ -2,6 +2,7 @@
 
 #include "io/StepReader.h"
 #include "io/StepWriter.h"
+#include "merge/RegionBoundaryAnalyzer.h"
 #include "validate/ShapeValidator.h"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -295,10 +296,10 @@ bool computeDeviation(
     return true;
 }
 
-std::optional<TopoDS_Wire> makeBoundaryWire(const ShapeDocument& document, const MergeCandidate& candidate) {
+std::optional<TopoDS_Wire> makeBoundaryWire(const ShapeDocument& document, const std::vector<EdgeId>& orderedBoundaryEdges) {
     std::vector<TopoDS_Edge> remaining;
-    remaining.reserve(candidate.boundary_edges.size());
-    for (const auto edgeId : candidate.boundary_edges) {
+    remaining.reserve(orderedBoundaryEdges.size());
+    for (const auto edgeId : orderedBoundaryEdges) {
         remaining.push_back(document.topology().edge(edgeId));
     }
     if (remaining.empty()) {
@@ -407,7 +408,14 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
 
     result.primitive_fit_error = result.max_deviation;
 
-    const auto boundaryWire = makeBoundaryWire(document, candidate);
+    const RegionBoundaryAnalyzer boundaryAnalyzer;
+    const auto boundaryAnalysis = boundaryAnalyzer.analyze(document, candidate);
+    if (!boundaryAnalysis.valid) {
+        fail(result, boundaryAnalysis.failure_reason, boundaryAnalysis.message);
+        return std::nullopt;
+    }
+
+    const auto boundaryWire = makeBoundaryWire(document, boundaryAnalysis.ordered_boundary_edges);
     if (!boundaryWire.has_value()) {
         fail(result, RegionMergeFailureReason::BoundaryLoopInvalid, "Plane candidate boundary edges do not form one closed wire.");
         return std::nullopt;

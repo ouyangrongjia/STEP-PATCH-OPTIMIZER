@@ -55,6 +55,7 @@ add_library(spo_core STATIC
     src/merge/MergePlanner.cpp
     src/merge/MergeRegionGrower.cpp
     src/merge/PlaneRegionMerger.cpp
+    src/merge/RegionBoundaryAnalyzer.cpp
     src/merge/RegionMergeStub.cpp
     src/merge/SameDomainUnifier.cpp
     src/merge/SphereRegionMerger.cpp
@@ -136,6 +137,7 @@ if(SPO_BUILD_TESTS)
         tests/test_merge_planner.cpp
         tests/test_plane_region_merge_command.cpp
         tests/test_plane_region_merger.cpp
+        tests/test_region_boundary_analyzer.cpp
         tests/test_region_merge_stubs.cpp
         tests/test_sphere_region_merge_command.cpp
         tests/test_sphere_region_merger.cpp

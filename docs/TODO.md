@@ -74,7 +74,7 @@ Stage 3A-Fix 完成前，暂停以下方向：
 |   T1 | BRepCheck Hard Failure + Export Roundtrip Gate |     P0 | DONE | 坏结果不能进入 document                      |
 |   T2 | Strict Input Freezing                          |     P0 | DONE | 只允许原生 Plane + 简单边界进入真实合并      |
 |   T3 | Unsafe Candidate Rejection Report              |     P1 | DONE | GUI / Report 明确显示拒绝原因                |
-|   T4 | RegionBoundaryAnalyzer                         |     P1 | TODO | 独立分析 boundary loops / holes / closedness |
+|   T4 | RegionBoundaryAnalyzer                         |     P1 | DONE | 独立分析 boundary loops / holes / closedness |
 |  T5A | Conservative Boundary Wire Rebuild             |     P2 | TODO | 保守修复 edge order / orientation            |
 |  T5B | Planar Face / PCurve Fix                       |     P2 | TODO | 必要时再修 ShapeFix_Face / pcurve            |
 
@@ -568,7 +568,7 @@ RegionBoundaryAnalyzer 已经负责识别安全边界。本任务只在安全边
 [ ] T1 已完成。
 [ ] T2 已完成。
 [x] T3 已完成。
-[ ] T4 已完成。
+[x] T4 已完成。
 [ ] T5A 已完成。
 [ ] 仍存在真实 STEP 样例导出后外部软件异常。
 ```

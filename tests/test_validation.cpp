@@ -6,6 +6,7 @@ void run_same_domain_merge_tests();
 void run_merge_planner_tests();
 void run_region_merge_stub_tests();
 void run_plane_region_merger_tests();
+void run_region_boundary_analyzer_tests();
 void run_plane_region_merge_command_tests();
 void run_face_inspect_tests();
 void run_analytic_candidate_detection_tests();
@@ -37,6 +38,7 @@ int main() {
     run_merge_planner_tests();
     run_region_merge_stub_tests();
     run_plane_region_merger_tests();
+    run_region_boundary_analyzer_tests();
     run_plane_region_merge_command_tests();
     run_face_inspect_tests();
     run_analytic_candidate_detection_tests();
