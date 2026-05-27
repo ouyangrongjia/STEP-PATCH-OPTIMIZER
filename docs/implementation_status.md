@@ -587,13 +587,15 @@ Stage 3A-Approx / A6：进行中
 - A6.1：boundary 3D curve 采样点若明显偏离拟合平面，提前返回 DeviationTooLarge。
 - A6.1：失败时 result.document 保持原 document，Command 层仍不会污染当前模型。
 - A6.1：新增测试覆盖“face 采样误差低，但 boundary 曲线偏离拟合平面”的失败路径。
+- A6.2：RegionMergeResult 新增 diagnostic_report，用于承载近似平面重建失败诊断。
+- A6.2：PlaneRegionMerger approximate mode 失败路径会输出 candidate id/type/status、face ids、boundary/internal/ordered edge ids、拟合平面、face/boundary deviation、RegionBoundaryAnalyzer 结果、每条 boundary edge 的 3D curve type、start/mid/end 距离和 pcurve 信息。
+- A6.2：data/samples/3#_底部.stp 已纳入自动测试；样例存在时会读取真实 STP、生成候选并验证失败诊断报告，同时确认 document/stats 不被污染。
 
 仍未完成：
-- A6.2：真实 STP 失败样例的 candidate / boundary 诊断输出。
 - A6.3：ShapeFix_Wire / ShapeFix_Face / SameParameter 最小修复路径评估。
 - A6.4：projected boundary / pcurve rebuild 设计与验证。
 
 当前结论：
 A6.1 不是提升合并力度，而是防止不安全的近似平面候选进入 MakeFace 后才在 BRepCheck 阶段失败。
-如果真实样例仍失败，下一步应先做 A6.2 诊断，而不是放宽 BRepCheck / STEP roundtrip gate。
+A6.2 让真实失败样例具备可定位诊断。下一步应基于 diagnostic_report 做 A6.3，评估 SameParameter / BuildCurves3d / ShapeFix_Wire / ShapeFix_Face 是否足够；仍不应放宽 BRepCheck / STEP roundtrip gate。
 ```

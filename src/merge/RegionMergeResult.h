@@ -86,6 +86,7 @@ struct RegionMergeResult {
     bool success = false;
     RegionMergeFailureReason failure_reason = RegionMergeFailureReason::None;
     std::string message;
+    std::string diagnostic_report;
 
     int candidate_id = -1;
     MergeCandidateType candidate_type = MergeCandidateType::Unknown;

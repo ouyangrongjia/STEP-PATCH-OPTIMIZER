@@ -1,4 +1,7 @@
 #include "brep/ShapeDocument.h"
+#include "feature/FeatureEdgeDetector.h"
+#include "io/StepReader.h"
+#include "merge/MergePlanner.h"
 #include "merge/PlaneRegionMerger.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -54,6 +57,21 @@ std::filesystem::path make_temp_file_path(const char* name) {
     auto path = std::filesystem::temp_directory_path();
     path /= name;
     return path;
+}
+
+std::filesystem::path find_sample_path(const std::filesystem::path& relativePath) {
+    auto current = std::filesystem::current_path();
+    for (int depth = 0; depth < 6; ++depth) {
+        const auto candidate = current / relativePath;
+        if (std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+        if (!current.has_parent_path() || current == current.parent_path()) {
+            break;
+        }
+        current = current.parent_path();
+    }
+    return {};
 }
 
 PlaneFixture make_two_face_plane_fixture(bool convert_to_nurbs = false) {
@@ -496,9 +514,59 @@ void test_plane_region_merger_approx_mode_rejects_boundary_curves_outside_fitted
     assert(!result.success);
     assert(result.failure_reason == spo::RegionMergeFailureReason::DeviationTooLarge);
     assert(result.message == "Plane candidate boundary edges exceed fitted plane tolerance.");
+    assert(result.diagnostic_report.find("A6.2 PlaneRegionMerger diagnostics") != std::string::npos);
+    assert(result.diagnostic_report.find("candidate_id=13") != std::string::npos);
+    assert(result.diagnostic_report.find("face_ids=") != std::string::npos);
+    assert(result.diagnostic_report.find("boundary_edge_ids=") != std::string::npos);
+    assert(result.diagnostic_report.find("RegionBoundaryAnalyzer") != std::string::npos);
+    assert(result.diagnostic_report.find("boundary_max_distance=") != std::string::npos);
+    assert(result.diagnostic_report.find("pcurve=") != std::string::npos);
     assert(result.document.hasShape());
     assert(same_stats(result.document.stats(), before));
     assert(same_stats(fixture.document.stats(), before));
+}
+
+void test_plane_region_merger_real_bottom_sample_reports_approx_diagnostics() {
+    const auto samplePath = find_sample_path("data/samples/3#_底部.stp");
+    if (samplePath.empty()) {
+        return;
+    }
+
+    const spo::StepReader reader;
+    const auto readResult = reader.read(samplePath);
+    assert(readResult.status.success());
+    assert(readResult.document.hasShape());
+    const auto before = readResult.document.stats();
+
+    const spo::FeatureEdgeDetector detector;
+    const auto featureEdges = detector.detect(readResult.document.topology(), 25.0, 0.0);
+    spo::MergePlannerOptions plannerOptions;
+    plannerOptions.enable_plane_candidates = true;
+    plannerOptions.enable_sphere_candidates = true;
+    const spo::MergePlanner planner;
+    const auto plan = planner.plan(readResult.document, featureEdges, {}, plannerOptions);
+    assert(plan.candidates.size() > 88);
+    const auto& candidate = plan.candidates[88];
+    assert(candidate.candidate_type == spo::MergeCandidateType::PlaneLike);
+
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions mergeOptions;
+    mergeOptions.allow_approximate_planar_surfaces = true;
+    mergeOptions.allow_pending_candidate = true;
+    mergeOptions.require_accepted_candidate = false;
+    const auto result = merger.merge(readResult.document, candidate, mergeOptions);
+
+    assert(!result.success);
+    assert(!result.diagnostic_report.empty());
+    assert(result.diagnostic_report.find("A6.2 PlaneRegionMerger diagnostics") != std::string::npos);
+    assert(result.diagnostic_report.find("candidate_id=88") != std::string::npos);
+    assert(result.diagnostic_report.find("boundary_edge_ids=") != std::string::npos);
+    assert(result.diagnostic_report.find("ordered_boundary_edge_ids=") != std::string::npos);
+    assert(result.diagnostic_report.find("RegionBoundaryAnalyzer") != std::string::npos);
+    assert(result.diagnostic_report.find("pcurve=") != std::string::npos);
+    assert(same_stats(readResult.document.stats(), before));
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
 }
 
 void test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one() {
@@ -690,6 +758,7 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer();
     test_plane_region_merger_approx_mode_rejects_boundary_curves_outside_fitted_plane();
+    test_plane_region_merger_real_bottom_sample_reports_approx_diagnostics();
     test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one();
     test_plane_region_merger_approx_batch_fails_when_all_candidates_invalid();
     test_plane_region_merger_approx_batch_roundtrip_failure_does_not_change_result_document();

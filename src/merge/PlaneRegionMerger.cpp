@@ -1,5 +1,6 @@
 #include "merge/PlaneRegionMerger.h"
 
+#include "brep/SurfaceTypeProbe.h"
 #include "io/StepReader.h"
 #include "io/StepWriter.h"
 #include "merge/RegionBoundaryAnalyzer.h"
@@ -12,9 +13,12 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepLProp_SLProps.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
 #include <BRepTools_ReShape.hxx>
+#include <Geom2d_Curve.hxx>
 #include <Geom_Plane.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <Precision.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <TopAbs_Orientation.hxx>
@@ -63,6 +67,71 @@ RegionMergeResult baseResult(const ShapeDocument& document, const MergeCandidate
 
 bool containsEdge(const std::vector<EdgeId>& edges, EdgeId edge) {
     return std::find(edges.begin(), edges.end(), edge) != edges.end();
+}
+
+bool faceContainsEdge(const ShapeDocument& document, FaceId faceId, EdgeId edgeId) {
+    const auto& edges = document.topology().edgesForFace(faceId);
+    return std::find(edges.begin(), edges.end(), edgeId) != edges.end();
+}
+
+template <typename Id>
+std::string joinIds(const std::vector<Id>& ids) {
+    std::ostringstream stream;
+    for (std::size_t index = 0; index < ids.size(); ++index) {
+        if (index != 0) {
+            stream << ",";
+        }
+        stream << ids[index];
+    }
+    return stream.str();
+}
+
+const char* curveTypeName(GeomAbs_CurveType type) {
+    switch (type) {
+    case GeomAbs_Line:
+        return "Line";
+    case GeomAbs_Circle:
+        return "Circle";
+    case GeomAbs_Ellipse:
+        return "Ellipse";
+    case GeomAbs_Hyperbola:
+        return "Hyperbola";
+    case GeomAbs_Parabola:
+        return "Parabola";
+    case GeomAbs_BezierCurve:
+        return "Bezier";
+    case GeomAbs_BSplineCurve:
+        return "BSpline";
+    case GeomAbs_OffsetCurve:
+        return "Offset";
+    case GeomAbs_OtherCurve:
+        return "Other";
+    }
+    return "Unknown";
+}
+
+const char* candidateTypeName(MergeCandidateType type) {
+    switch (type) {
+    case MergeCandidateType::SameDomain:
+        return "SameDomain";
+    case MergeCandidateType::PlaneLike:
+        return "PlaneLike";
+    case MergeCandidateType::CylinderLike:
+        return "CylinderLike";
+    case MergeCandidateType::ConeLike:
+        return "ConeLike";
+    case MergeCandidateType::SphereLike:
+        return "SphereLike";
+    case MergeCandidateType::TorusLike:
+        return "TorusLike";
+    case MergeCandidateType::FreeformG1:
+        return "FreeformG1";
+    case MergeCandidateType::FreeformG2:
+        return "FreeformG2";
+    case MergeCandidateType::Unknown:
+        return "Unknown";
+    }
+    return "Unknown";
 }
 
 void fail(RegionMergeResult& result, RegionMergeFailureReason reason, std::string message) {
@@ -310,12 +379,12 @@ bool computeDeviation(
     return true;
 }
 
-bool checkApproximateBoundaryOnPlane(
+double maxBoundaryDistanceOnPlane(
     const ShapeDocument& document,
     const std::vector<EdgeId>& orderedBoundaryEdges,
     const gp_Pln& plane,
-    const PlaneRegionMergeOptions& options,
-    RegionMergeResult& result) {
+    bool& validParameterRange) {
+    validParameterRange = true;
     double maxBoundaryDistance = 0.0;
     for (const auto edgeId : orderedBoundaryEdges) {
         const auto& edge = document.topology().edge(edgeId);
@@ -323,8 +392,8 @@ bool checkApproximateBoundaryOnPlane(
         const double first = curve.FirstParameter();
         const double last = curve.LastParameter();
         if (!std::isfinite(first) || !std::isfinite(last) || first > last) {
-            fail(result, RegionMergeFailureReason::BoundaryLoopInvalid, "Plane candidate boundary curve has invalid parameter range.");
-            return false;
+            validParameterRange = false;
+            return maxBoundaryDistance;
         }
 
         const std::array<double, 3> params {first, (first + last) * 0.5, last};
@@ -332,6 +401,116 @@ bool checkApproximateBoundaryOnPlane(
             const auto point = curve.Value(param);
             maxBoundaryDistance = std::max(maxBoundaryDistance, std::abs(plane.Distance(point)));
         }
+    }
+    return maxBoundaryDistance;
+}
+
+std::string buildApproximatePlaneDiagnostic(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const RegionMergeResult& result,
+    const gp_Pln& plane,
+    const RegionBoundaryAnalysis& boundaryAnalysis,
+    double boundaryMaxDistance) {
+    std::ostringstream stream;
+    stream << "A6.2 PlaneRegionMerger diagnostics\n";
+    stream << "candidate_id=" << candidate.candidate_id << "\n";
+    stream << "candidate_type=" << candidateTypeName(candidate.candidate_type) << "\n";
+    stream << "candidate_status=" << toString(candidate.status) << "\n";
+    stream << "face_ids=" << joinIds(candidate.faces) << "\n";
+    stream << "boundary_edge_ids=" << joinIds(candidate.boundary_edges) << "\n";
+    stream << "ordered_boundary_edge_ids=" << joinIds(boundaryAnalysis.ordered_boundary_edges) << "\n";
+    stream << "internal_edge_ids=" << joinIds(candidate.internal_edges) << "\n";
+    stream << "plane_normal=("
+           << plane.Axis().Direction().X() << ","
+           << plane.Axis().Direction().Y() << ","
+           << plane.Axis().Direction().Z() << ")\n";
+    stream << "plane_location=("
+           << plane.Location().X() << ","
+           << plane.Location().Y() << ","
+           << plane.Location().Z() << ")\n";
+    stream << "face_max_deviation=" << result.max_deviation << "\n";
+    stream << "face_mean_deviation=" << result.mean_deviation << "\n";
+    stream << "face_rms_deviation=" << result.rms_deviation << "\n";
+    stream << "boundary_max_distance=" << boundaryMaxDistance << "\n";
+    stream << "RegionBoundaryAnalyzer valid=" << (boundaryAnalysis.valid ? "true" : "false")
+           << ", connected_components=" << boundaryAnalysis.connected_component_count
+           << ", outer_wires=" << boundaryAnalysis.outer_wire_count
+           << ", inner_wires=" << boundaryAnalysis.inner_wire_count
+           << ", closed=" << (boundaryAnalysis.boundary_closed ? "true" : "false")
+           << ", holes=" << (boundaryAnalysis.has_holes ? "true" : "false")
+           << ", non_manifold=" << (boundaryAnalysis.has_non_manifold_edges ? "true" : "false")
+           << ", failure_reason=" << regionMergeFailureReasonToString(boundaryAnalysis.failure_reason)
+           << ", message=" << boundaryAnalysis.message << "\n";
+
+    const auto& topology = document.topology();
+    for (const auto faceId : candidate.faces) {
+        if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
+            continue;
+        }
+        stream << "face " << faceId << ": surface=" << surfaceTypeName(topology.face(faceId)) << "\n";
+    }
+
+    for (const auto edgeId : boundaryAnalysis.ordered_boundary_edges.empty()
+            ? candidate.boundary_edges
+            : boundaryAnalysis.ordered_boundary_edges) {
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            stream << "edge " << edgeId << ": invalid\n";
+            continue;
+        }
+        const auto& edge = topology.edge(edgeId);
+        BRepAdaptor_Curve curve(edge);
+        const double first = curve.FirstParameter();
+        const double last = curve.LastParameter();
+        stream << "edge " << edgeId
+               << ": curve_type=" << curveTypeName(curve.GetType())
+               << ", first=" << first
+               << ", last=" << last;
+        if (std::isfinite(first) && std::isfinite(last) && first <= last) {
+            const std::array<double, 3> params {first, (first + last) * 0.5, last};
+            stream << ", distances=(";
+            for (std::size_t index = 0; index < params.size(); ++index) {
+                if (index != 0) {
+                    stream << ",";
+                }
+                stream << std::abs(plane.Distance(curve.Value(params[index])));
+            }
+            stream << ")";
+        } else {
+            stream << ", distances=invalid-parameter-range";
+        }
+
+        bool wrotePcurve = false;
+        for (const auto faceId : candidate.faces) {
+            if (faceId < 0 ||
+                static_cast<std::size_t>(faceId) >= topology.faceCount() ||
+                !faceContainsEdge(document, faceId, edgeId)) {
+                continue;
+            }
+            Standard_Real pcurveFirst = 0.0;
+            Standard_Real pcurveLast = 0.0;
+            const auto pcurve = BRep_Tool::CurveOnSurface(edge, topology.face(faceId), pcurveFirst, pcurveLast);
+            stream << ", pcurve=face:" << faceId
+                   << ":" << surfaceTypeName(topology.face(faceId))
+                   << ":" << (pcurve.IsNull() ? "missing" : "present");
+            wrotePcurve = true;
+        }
+        if (!wrotePcurve) {
+            stream << ", pcurve=none-on-candidate-faces";
+        }
+        stream << "\n";
+    }
+    return stream.str();
+}
+
+bool checkApproximateBoundaryOnPlane(
+    double maxBoundaryDistance,
+    bool validParameterRange,
+    const PlaneRegionMergeOptions& options,
+    RegionMergeResult& result) {
+    if (!validParameterRange) {
+        fail(result, RegionMergeFailureReason::BoundaryLoopInvalid, "Plane candidate boundary curve has invalid parameter range.");
+        return false;
     }
 
     const double boundaryTolerance = std::min(
@@ -460,16 +639,39 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
 
     const RegionBoundaryAnalyzer boundaryAnalyzer;
     const auto boundaryAnalysis = boundaryAnalyzer.analyze(document, candidate);
+    const bool approximatePlanar = options.allow_approximate_planar_surfaces &&
+        candidateUsesApproximatePlanarSurface(document, candidate);
     if (!boundaryAnalysis.valid) {
         fail(result, boundaryAnalysis.failure_reason, boundaryAnalysis.message);
+        if (approximatePlanar) {
+            result.diagnostic_report = buildApproximatePlaneDiagnostic(
+                document,
+                candidate,
+                result,
+                *targetPlane,
+                boundaryAnalysis,
+                0.0);
+        }
         return std::nullopt;
     }
 
-    const bool approximatePlanar = options.allow_approximate_planar_surfaces &&
-        candidateUsesApproximatePlanarSurface(document, candidate);
-    if (approximatePlanar &&
-        !checkApproximateBoundaryOnPlane(document, boundaryAnalysis.ordered_boundary_edges, *targetPlane, options, result)) {
-        return std::nullopt;
+    if (approximatePlanar) {
+        bool validBoundaryParameterRange = true;
+        const double boundaryMaxDistance = maxBoundaryDistanceOnPlane(
+            document,
+            boundaryAnalysis.ordered_boundary_edges,
+            *targetPlane,
+            validBoundaryParameterRange);
+        result.diagnostic_report = buildApproximatePlaneDiagnostic(
+            document,
+            candidate,
+            result,
+            *targetPlane,
+            boundaryAnalysis,
+            boundaryMaxDistance);
+        if (!checkApproximateBoundaryOnPlane(boundaryMaxDistance, validBoundaryParameterRange, options, result)) {
+            return std::nullopt;
+        }
     }
 
     const auto boundaryWire = makeBoundaryWire(document, boundaryAnalysis.ordered_boundary_edges);
