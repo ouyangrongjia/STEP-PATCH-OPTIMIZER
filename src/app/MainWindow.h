@@ -52,6 +52,7 @@ private:
     void showAcceptedMergeCandidates();
     void showPendingMergeCandidates();
     void showNonHiddenMergeCandidates();
+    void showStrictPlaneMergeCandidates();
     void showMergeCandidatesByTypeDialog();
     void showMergeCandidatesByType(MergeCandidateType type);
     void mergeCurrentPlaneCandidate();

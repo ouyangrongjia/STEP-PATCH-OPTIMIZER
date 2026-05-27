@@ -9,6 +9,9 @@
 #include "merge/FaceInspector.h"
 #include "merge/SphereRegionMerger.h"
 
+#include <BRepAdaptor_Surface.hxx>
+#include <GeomAbs_SurfaceType.hxx>
+
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
@@ -139,8 +142,47 @@ QString regionMergeFailureText(RegionMergeFailureReason reason) {
         return "SewingFailed";
     case RegionMergeFailureReason::ValidationFailed:
         return "ValidationFailed";
+    case RegionMergeFailureReason::ExportRoundtripFailed:
+        return "ExportRoundtripFailed";
+    case RegionMergeFailureReason::ApproximateSurfaceNotSupported:
+        return "ApproximateSurfaceNotSupported";
     }
     return "Unknown";
+}
+
+bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
+    if (!document.hasShape() || !candidate.valid ||
+        candidate.candidate_type != MergeCandidateType::PlaneLike ||
+        candidate.status == MergeCandidateStatus::Rejected ||
+        candidate.status == MergeCandidateStatus::Hidden ||
+        candidate.face_count < 2 ||
+        candidate.boundary_edges.empty()) {
+        return false;
+    }
+
+    const auto& topology = document.topology();
+    for (const auto faceId : candidate.faces) {
+        if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
+            return false;
+        }
+        BRepAdaptor_Surface surface(topology.face(faceId));
+        if (surface.GetType() != GeomAbs_Plane) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<MergeCandidate> filterStrictPlaneMergeCandidates(
+    const ShapeDocument& document,
+    const std::vector<MergeCandidate>& candidates) {
+    std::vector<MergeCandidate> result;
+    for (const auto& candidate : candidates) {
+        if (isStrictPlaneMergeCandidate(document, candidate)) {
+            result.push_back(candidate);
+        }
+    }
+    return result;
 }
 
 struct CandidateStatusCounts {
@@ -379,41 +421,75 @@ void MainWindow::createMenus() {
 void MainWindow::createToolBars() {
     auto* toolBar = addToolBar("主工具栏");
     toolBar->setMovable(false);
+
+    auto* selectionMenu = new QMenu(this);
+    selectionMenu->addAction(selectFaceAction_);
+    selectionMenu->addAction(selectEdgeAction_);
+    selectionMenu->addAction(selectCandidateAction_);
+
+    auto* candidateViewMenu = new QMenu(this);
+    candidateViewMenu->addAction(previewMergeAction_);
+    candidateViewMenu->addSeparator();
+    candidateViewMenu->addAction(showAllMergeCandidatesAction_);
+    auto* showStrictPlaneCandidatesAction = candidateViewMenu->addAction("显示可平面合并候选");
+    connect(showStrictPlaneCandidatesAction, &QAction::triggered, this, [this]() {
+        showStrictPlaneMergeCandidates();
+    });
+    auto* showPlaneCandidatesAction = candidateViewMenu->addAction("显示 PlaneLike 候选");
+    connect(showPlaneCandidatesAction, &QAction::triggered, this, [this]() {
+        showMergeCandidatesByType(MergeCandidateType::PlaneLike);
+    });
+    auto* showSphereCandidatesAction = candidateViewMenu->addAction("显示 SphereLike 候选");
+    connect(showSphereCandidatesAction, &QAction::triggered, this, [this]() {
+        showMergeCandidatesByType(MergeCandidateType::SphereLike);
+    });
+    candidateViewMenu->addAction(showCandidatesByTypeAction_);
+    candidateViewMenu->addSeparator();
+    candidateViewMenu->addAction(clearMergeCandidatesAction_);
+
+    auto* candidateStateMenu = new QMenu(this);
+    candidateStateMenu->addAction(acceptMergeCandidateAction_);
+    candidateStateMenu->addAction(rejectMergeCandidateAction_);
+    candidateStateMenu->addAction(hideMergeCandidateAction_);
+    candidateStateMenu->addAction(restoreMergeCandidateAction_);
+    candidateStateMenu->addSeparator();
+    candidateStateMenu->addAction(showAcceptedMergeCandidatesAction_);
+    candidateStateMenu->addAction(showPendingMergeCandidatesAction_);
+    candidateStateMenu->addAction(highlightMergeCandidateByIdAction_);
+
+    auto* mergeToolMenu = new QMenu(this);
+    auto* planeToolMenu = mergeToolMenu->addMenu("平面合并");
+    planeToolMenu->addAction(mergePlaneCandidateAction_);
+    planeToolMenu->addAction(mergeAcceptedPlaneCandidatesAction_);
+    planeToolMenu->addAction(mergeAllPlaneCandidatesAction_);
+    auto* sphereToolMenu = mergeToolMenu->addMenu("球面合并");
+    sphereToolMenu->addAction(mergeSphereCandidateAction_);
+    sphereToolMenu->addAction(mergeAcceptedSphereCandidatesAction_);
+    sphereToolMenu->addAction(mergeAllSphereCandidatesAction_);
+    mergeToolMenu->addSeparator();
+    mergeToolMenu->addAction(applyMergeAction_);
+
+    auto* validateExportMenu = new QMenu(this);
+    validateExportMenu->addAction(validateAction_);
+    validateExportMenu->addAction(exportStepAction_);
+
+    auto addMenuButton = [this, toolBar](const QString& text, QMenu* menu) {
+        auto* button = new QToolButton(this);
+        button->setText(text);
+        button->setPopupMode(QToolButton::InstantPopup);
+        button->setMenu(menu);
+        toolBar->addWidget(button);
+    };
+
     toolBar->addAction(openStepAction_);
     toolBar->addAction(saveProjectAction_);
     toolBar->addSeparator();
-    toolBar->addAction(selectFaceAction_);
-    toolBar->addAction(selectEdgeAction_);
-    toolBar->addAction(selectCandidateAction_);
-    toolBar->addSeparator();
+    addMenuButton("选择", selectionMenu);
     toolBar->addAction(detectAction_);
-    toolBar->addAction(previewMergeAction_);
-    toolBar->addAction(showAllMergeCandidatesAction_);
-    toolBar->addAction(clearMergeCandidatesAction_);
-    toolBar->addAction(acceptMergeCandidateAction_);
-    toolBar->addAction(rejectMergeCandidateAction_);
-    toolBar->addAction(hideMergeCandidateAction_);
-    auto* planeMergeButton = new QToolButton(this);
-    planeMergeButton->setText("平面合并");
-    planeMergeButton->setPopupMode(QToolButton::InstantPopup);
-    auto* planeMergeToolMenu = new QMenu(planeMergeButton);
-    planeMergeToolMenu->addAction(mergePlaneCandidateAction_);
-    planeMergeToolMenu->addAction(mergeAcceptedPlaneCandidatesAction_);
-    planeMergeToolMenu->addAction(mergeAllPlaneCandidatesAction_);
-    planeMergeButton->setMenu(planeMergeToolMenu);
-    toolBar->addWidget(planeMergeButton);
-    auto* sphereMergeButton = new QToolButton(this);
-    sphereMergeButton->setText("球面合并");
-    sphereMergeButton->setPopupMode(QToolButton::InstantPopup);
-    auto* sphereMergeToolMenu = new QMenu(sphereMergeButton);
-    sphereMergeToolMenu->addAction(mergeSphereCandidateAction_);
-    sphereMergeToolMenu->addAction(mergeAcceptedSphereCandidatesAction_);
-    sphereMergeToolMenu->addAction(mergeAllSphereCandidatesAction_);
-    sphereMergeButton->setMenu(sphereMergeToolMenu);
-    toolBar->addWidget(sphereMergeButton);
-    toolBar->addAction(applyMergeAction_);
-    toolBar->addAction(validateAction_);
-    toolBar->addAction(exportStepAction_);
+    addMenuButton("候选显示", candidateViewMenu);
+    addMenuButton("候选状态", candidateStateMenu);
+    addMenuButton("合并", mergeToolMenu);
+    addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
     toolBar->addAction(undoAction_);
     toolBar->addAction(redoAction_);
@@ -773,6 +849,46 @@ void MainWindow::showNonHiddenMergeCandidates() {
     setStatus("已显示全部非隐藏候选区域");
 }
 
+void MainWindow::showStrictPlaneMergeCandidates() {
+    if (lastMergeCandidates_.empty()) {
+        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
+        setStatus("没有候选区域");
+        return;
+    }
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    const auto strictCandidates = filterStrictPlaneMergeCandidates(controller_.document(), lastMergeCandidates_);
+    if (strictCandidates.empty()) {
+        viewer_->clearMergeCandidates();
+        visibleMergeCandidateCount_ = 0;
+        visibleMergeCandidateIds_.clear();
+        refreshModelTree();
+        const auto message = QString("当前没有可真实平面合并的原生 Plane 候选。\n"
+                                     "当前 PlaneLike 可能是 B-spline backed planar-like 候选，只能用于预览，严格 PlaneRegionMerge 会拒绝。");
+        inspectPanel_->showReport(message);
+        logPanel_->appendWarning(message);
+        setStatus("没有可平面合并候选");
+        return;
+    }
+
+    viewer_->showMergeCandidates(strictCandidates, 10, true);
+    if (hasFeatureEdgeResult_) {
+        viewer_->showFeatureEdges(controller_.featureEdges());
+    }
+    visibleMergeCandidateCount_ = static_cast<int>(strictCandidates.size());
+    visibleMergeCandidateIds_.clear();
+    for (const auto& candidate : strictCandidates) {
+        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
+    }
+    refreshModelTree();
+    showCandidateStatusReport("已显示可真实平面合并候选");
+    setStatus("已显示可平面合并候选");
+}
+
 void MainWindow::showMergeCandidatesByTypeDialog() {
     if (lastMergeCandidates_.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
@@ -1088,7 +1204,9 @@ void MainWindow::mergeAcceptedPlaneCandidates() {
     std::vector<MergeCandidate> candidates;
     for (const auto& candidate : lastMergeCandidates_) {
         if (candidate.candidate_type == MergeCandidateType::PlaneLike &&
-            candidate.status == MergeCandidateStatus::Accepted) {
+            candidate.status == MergeCandidateStatus::Accepted &&
+            controller_.hasDocument() &&
+            isStrictPlaneMergeCandidate(controller_.document(), candidate)) {
             candidates.push_back(candidate);
         }
     }
@@ -1096,7 +1214,9 @@ void MainWindow::mergeAcceptedPlaneCandidates() {
 }
 
 void MainWindow::mergeAllMergeablePlaneCandidates() {
-    const auto candidates = filterMergeablePlaneCandidates(lastMergeCandidates_);
+    const auto candidates = controller_.hasDocument()
+        ? filterStrictPlaneMergeCandidates(controller_.document(), lastMergeCandidates_)
+        : std::vector<MergeCandidate>{};
     mergePlaneCandidateBatch(candidates, "一键合并全部可合并平面候选");
 }
 
@@ -1113,8 +1233,9 @@ void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& can
         return;
     }
     if (candidates.empty()) {
-        inspectPanel_->showReport(QString("%1\n没有符合条件的 PlaneLike 候选区域。").arg(title));
-        logPanel_->appendWarning(QString("%1：没有符合条件的 PlaneLike 候选区域。").arg(title));
+        inspectPanel_->showReport(QString("%1\n没有符合严格平面合并条件的原生 PlaneLike 候选区域。\n"
+                                          "B-spline backed planar-like candidate 当前只允许预览，不进入真实 PlaneRegionMerge。").arg(title));
+        logPanel_->appendWarning(QString("%1：没有符合严格平面合并条件的原生 PlaneLike 候选区域。").arg(title));
         setStatus("没有可批量合并的平面候选");
         return;
     }

@@ -69,6 +69,8 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 16. Stage 3-S Shared Primitive Result Fields 已完成：RegionMergeResult 已新增通用 primitive 参数字段（primitive_center_x/y/z、primitive_axis_x/y/z、primitive_radius、primitive_secondary_radius、primitive_angle_degrees、primitive_fit_error）；Stage 3A PlaneRegionMerge 仍保持原有行为，成功时填充 primitive_axis_* 和 primitive_fit_error；Cylinder / Sphere / Cone / Torus 真实合并仍未实现；后续 Stage 3D / Stage 3B 将复用这些字段。
 17. Stage 3D SphereRegionMerge 已完成稳定版调整：SphereLike candidate 合并不再手工构造 spherical trimmed face，也不再使用 ReShape 删除 face；当前改为只放开候选内部边并保护其他所有边，然后调用 OCCT `ShapeUpgrade_UnifySameDomain` 合并同域球面片，避免手工球面边界导致缺面和飞线；支持所有已接受 SphereLike candidates 的批量合并；支持全部可合并 SphereLike candidates 的实验性批量合并；支持 Command 层执行和 undo/redo；支持 AppController 和 GUI 三个入口；写入 RegionMergeResult primitive_center / primitive_radius / primitive_fit_error；Cylinder / Cone / Torus 真实合并仍未实现。
 18. SphereRegionMerge 一键批量合并已增加防护：一键全部可合并球面候选会跳过 High risk 和单 face 候选；批量合并保护候选外部边和其他所有边，只允许候选内部边被同域合并消除；若结果丢失拓扑、solid 数变化或 face 数未下降则失败回滚。
+19. GUI 主工具栏已按功能收敛为下拉入口：选择、候选显示、候选状态、合并、检查/导出；候选显示下拉中补充了直接显示 PlaneLike / SphereLike 候选的入口，避免工具栏横向溢出。
+20. GUI 平面候选入口已区分“PlaneLike 预览候选”和“可真实平面合并候选”：严格合并入口只显示原生 `GeomAbs_Plane`、边界有效、非隐藏/非拒绝的候选；B-spline backed planar-like 候选会明确报告为预览专用，不再显示 Unknown 失败原因。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
