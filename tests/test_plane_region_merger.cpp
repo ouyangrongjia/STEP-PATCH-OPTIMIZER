@@ -416,6 +416,23 @@ void test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_re
     assert(same_stats(fixture.document.stats(), before));
 }
 
+void test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer() {
+    auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
+    fixture.candidate.boundary_edges.pop_back();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert(result.message == "Candidate boundary edges do not form closed loops.");
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
+}
+
 void test_plane_region_merger_preserves_solid_container() {
     const auto fixture = make_split_solid_top_fixture();
     const auto before = fixture.document.stats();
@@ -540,6 +557,7 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_rejects_nurbs_backed_planar_region();
     test_plane_region_merger_approx_mode_merges_low_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region();
+    test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();
     test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields();

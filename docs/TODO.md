@@ -55,7 +55,7 @@ PlaneLike candidate 可以预览，但真实 merge 被 ApproximateSurfaceNotSupp
 |  T5B | Planar Face / PCurve Fix                       | PAUSED | 只服务原生 Plane，当前样例收益低                          |
 |   A1 | Approx Planar Mode Options                     | DONE   | 新增近似平面合并开关                                      |
 |   A2 | B-spline PlaneLike Candidate Rebuild           | DONE   | 允许低误差 B-spline backed PlaneLike 进入平面重构         |
-|   A3 | Approx Boundary Rebuild using T4               | TODO   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
+|   A3 | Approx Boundary Rebuild using T4               | DONE   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
 |   A4 | Experimental GUI Entry                         | TODO   | 提供实验性近似平面合并入口                                |
 |   A5 | Tests + Export Validation                      | TODO   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
 
@@ -343,11 +343,11 @@ BRepCheck + STEP roundtrip
 ### 7.3 验收标准
 
 ```text
-[ ] Approx mode 使用 RegionBoundaryAnalyzer。
-[ ] analysis.valid=false 时直接失败。
-[ ] valid 时使用 ordered_boundary_edges。
-[ ] invalid boundary 不进入 MakeFace。
-[ ] 不尝试修复复杂 boundary。
+[x] Approx mode 使用 RegionBoundaryAnalyzer。
+[x] analysis.valid=false 时直接失败。
+[x] valid 时使用 ordered_boundary_edges。
+[x] invalid boundary 不进入 MakeFace。
+[x] 不尝试修复复杂 boundary。
 ```
 
 ---

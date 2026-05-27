@@ -93,6 +93,19 @@ void test_region_boundary_analyzer_accepts_simple_closed_boundary() {
     assert(analysis.ordered_boundary_edges.size() == fixture.candidate.boundary_edges.size());
 }
 
+void test_region_boundary_analyzer_orders_unsorted_boundary_edges() {
+    auto fixture = make_two_face_boundary_fixture();
+    std::reverse(fixture.candidate.boundary_edges.begin(), fixture.candidate.boundary_edges.end());
+
+    const spo::RegionBoundaryAnalyzer analyzer;
+    const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
+
+    assert(analysis.valid);
+    assert(analysis.boundary_closed);
+    assert(analysis.boundary_loops.size() == 1);
+    assert(analysis.ordered_boundary_edges.size() == fixture.candidate.boundary_edges.size());
+}
+
 void test_region_boundary_analyzer_rejects_invalid_edge_id() {
     auto fixture = make_two_face_boundary_fixture();
     fixture.candidate.boundary_edges.push_back(static_cast<spo::EdgeId>(fixture.document.topology().edgeCount() + 10));
@@ -141,12 +154,27 @@ void test_plane_region_merger_still_merges_with_boundary_analyzer() {
     assert(result.document.stats().faces < before.faces);
 }
 
+void test_plane_region_merger_uses_analyzer_ordered_boundary_edges() {
+    auto fixture = make_two_face_boundary_fixture();
+    std::reverse(fixture.candidate.boundary_edges.begin(), fixture.candidate.boundary_edges.end());
+    const spo::PlaneRegionMerger merger;
+    const spo::PlaneRegionMergeOptions options;
+    const auto before = fixture.document.stats();
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+
+    assert(result.success);
+    assert(result.document.stats().faces < before.faces);
+}
+
 }
 
 void run_region_boundary_analyzer_tests() {
     test_region_boundary_analyzer_accepts_simple_closed_boundary();
+    test_region_boundary_analyzer_orders_unsorted_boundary_edges();
     test_region_boundary_analyzer_rejects_invalid_edge_id();
     test_region_boundary_analyzer_rejects_open_boundary();
     test_region_boundary_analyzer_rejects_disconnected_region();
     test_plane_region_merger_still_merges_with_boundary_analyzer();
+    test_plane_region_merger_uses_analyzer_ordered_boundary_edges();
 }
