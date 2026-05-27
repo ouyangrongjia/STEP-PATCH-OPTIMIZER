@@ -433,6 +433,69 @@ void test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer
     assert(same_stats(fixture.document.stats(), before));
 }
 
+void test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one() {
+    auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
+    auto invalid = fixture.candidate;
+    invalid.candidate_id = 12;
+    invalid.boundary_edges.pop_back();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+
+    const auto result = merger.mergeBatch(fixture.document, {fixture.candidate, invalid}, options);
+
+    assert(result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(result.message.find("merged 1 candidates, skipped 1") != std::string::npos);
+    assert(result.message.find("export roundtrip validation passed") != std::string::npos);
+    assert(result.brep_check_valid);
+    assert(result.document.hasShape());
+    assert(result.document.stats().faces < before.faces);
+    assert(same_stats(fixture.document.stats(), before));
+}
+
+void test_plane_region_merger_approx_batch_fails_when_all_candidates_invalid() {
+    auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
+    fixture.candidate.boundary_edges.pop_back();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+
+    const auto result = merger.mergeBatch(fixture.document, {fixture.candidate}, options);
+
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::CandidateNotFound);
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
+}
+
+void test_plane_region_merger_approx_batch_roundtrip_failure_does_not_change_result_document() {
+    const auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+    const auto tempFile = make_temp_file_path("step-patch-optimizer-approx-batch-roundtrip-not-a-directory.tmp");
+    {
+        std::ofstream stream(tempFile.string());
+        stream << "not a directory";
+    }
+    options.roundtrip_temp_directory = tempFile;
+
+    const auto result = merger.mergeBatch(fixture.document, {fixture.candidate}, options);
+
+    std::error_code ignored;
+    std::filesystem::remove(tempFile, ignored);
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::ExportRoundtripFailed);
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
+}
+
 void test_plane_region_merger_preserves_solid_container() {
     const auto fixture = make_split_solid_top_fixture();
     const auto before = fixture.document.stats();
@@ -558,6 +621,9 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_approx_mode_merges_low_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer();
+    test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one();
+    test_plane_region_merger_approx_batch_fails_when_all_candidates_invalid();
+    test_plane_region_merger_approx_batch_roundtrip_failure_does_not_change_result_document();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();
     test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields();

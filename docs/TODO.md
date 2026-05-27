@@ -57,7 +57,7 @@ PlaneLike candidate 可以预览，但真实 merge 被 ApproximateSurfaceNotSupp
 |   A2 | B-spline PlaneLike Candidate Rebuild           | DONE   | 允许低误差 B-spline backed PlaneLike 进入平面重构         |
 |   A3 | Approx Boundary Rebuild using T4               | DONE   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
 |   A4 | Experimental GUI Entry                         | DONE   | 提供实验性近似平面合并入口                                |
-|   A5 | Tests + Export Validation                      | TODO   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
+|   A5 | Tests + Export Validation                      | DONE   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
 
 ---
 
@@ -407,17 +407,17 @@ document state
 ### 9.1 必须测试
 
 ```text
-[ ] strict false：B-spline backed planar-like 失败，reason=ApproximateSurfaceNotSupported。
-[ ] approx true：低 deviation B-spline backed planar-like 成功。
-[ ] approx true：高 deviation B-spline backed candidate 失败。
-[ ] invalid boundary 失败。
-[ ] disconnected boundary 失败。
+[x] strict false：B-spline backed planar-like 失败，reason=ApproximateSurfaceNotSupported。
+[x] approx true：低 deviation B-spline backed planar-like 成功。
+[x] approx true：高 deviation B-spline backed candidate 失败。
+[x] invalid boundary 失败。
+[x] disconnected boundary 失败。
 [ ] multiple loop / hole 如已有构造能力则失败。
-[ ] 成功路径经过 BRepCheck。
-[ ] 成功路径经过 STEP roundtrip。
-[ ] roundtrip failure 失败。
-[ ] 失败不污染 document/stats。
-[ ] 原生 Plane 简单合并仍成功。
+[x] 成功路径经过 BRepCheck。
+[x] 成功路径经过 STEP roundtrip。
+[x] roundtrip failure 失败。
+[x] 失败不污染 document/stats。
+[x] 原生 Plane 简单合并仍成功。
 [ ] command undo/redo 不破坏。
 ```
 
