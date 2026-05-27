@@ -312,17 +312,19 @@ void test_plane_region_merger_roundtrip_failure_does_not_change_result_document(
     assert(same_stats(fixture.document.stats(), before));
 }
 
-void test_plane_region_merger_accepts_nurbs_backed_planar_region() {
+void test_plane_region_merger_rejects_nurbs_backed_planar_region() {
     const auto fixture = make_two_face_plane_fixture(true);
+    const auto before = fixture.document.stats();
     const spo::PlaneRegionMerger merger;
     const spo::PlaneRegionMergeOptions options;
 
     const auto result = merger.merge(fixture.document, fixture.candidate, options);
-    assert(result.success);
-    assert(result.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::ApproximateSurfaceNotSupported);
+    assert(result.message == "B-spline backed planar-like candidate is preview-only and not supported by strict PlaneRegionMerge.");
     assert(result.document.hasShape());
-    assert(result.face_count_after < result.face_count_before);
-    assert(result.max_deviation <= options.max_deviation);
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
 }
 
 void test_plane_region_merger_preserves_solid_container() {
@@ -378,20 +380,21 @@ void test_plane_region_merger_fills_primitive_fields_on_success() {
     assert(result.primitive_angle_degrees == 0.0);
 }
 
-void test_plane_region_merger_fills_primitive_fields_on_nurbs_success() {
+void test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields() {
     const auto fixture = make_two_face_plane_fixture(true);
     const spo::PlaneRegionMerger merger;
     const spo::PlaneRegionMergeOptions options;
 
     const auto result = merger.merge(fixture.document, fixture.candidate, options);
-    assert(result.success);
-
-    assert(result.primitive_axis_x == result.plane_normal_x);
-    assert(result.primitive_axis_y == result.plane_normal_y);
-    assert(result.primitive_axis_z == result.plane_normal_z);
-
-    assert(result.primitive_fit_error > 0.0 || result.primitive_fit_error == result.max_deviation);
-    assert(result.primitive_fit_error <= options.max_deviation);
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::ApproximateSurfaceNotSupported);
+    assert(result.plane_normal_x == 0.0);
+    assert(result.plane_normal_y == 0.0);
+    assert(result.plane_normal_z == 0.0);
+    assert(result.primitive_axis_x == 0.0);
+    assert(result.primitive_axis_y == 0.0);
+    assert(result.primitive_axis_z == 0.0);
+    assert(result.primitive_fit_error == 0.0);
 }
 
 void test_plane_region_merger_failure_does_not_fill_primitive_fields() {
@@ -418,9 +421,9 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_rejects_invalid_boundary_without_changing_stats();
     test_plane_region_merger_merges_simple_coplanar_region();
     test_plane_region_merger_roundtrip_failure_does_not_change_result_document();
-    test_plane_region_merger_accepts_nurbs_backed_planar_region();
+    test_plane_region_merger_rejects_nurbs_backed_planar_region();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();
-    test_plane_region_merger_fills_primitive_fields_on_nurbs_success();
+    test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields();
     test_plane_region_merger_failure_does_not_fill_primitive_fields();
 }

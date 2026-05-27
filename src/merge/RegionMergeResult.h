@@ -28,7 +28,8 @@ enum class RegionMergeFailureReason {
     TopologyReplacementFailed,
     SewingFailed,
     ValidationFailed,
-    ExportRoundtripFailed
+    ExportRoundtripFailed,
+    ApproximateSurfaceNotSupported
 };
 
 struct RegionMergeResult {

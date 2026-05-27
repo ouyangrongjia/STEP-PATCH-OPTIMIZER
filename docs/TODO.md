@@ -72,7 +72,7 @@ Stage 3A-Fix 完成前，暂停以下方向：
 | 编号 | 任务                                           | 优先级 | 状态 | 目标                                         |
 | ---: | ---------------------------------------------- | -----: | ---- | -------------------------------------------- |
 |   T1 | BRepCheck Hard Failure + Export Roundtrip Gate |     P0 | DONE | 坏结果不能进入 document                      |
-|   T2 | Strict Input Freezing                          |     P0 | TODO | 只允许原生 Plane + 简单边界进入真实合并      |
+|   T2 | Strict Input Freezing                          |     P0 | DONE | 只允许原生 Plane + 简单边界进入真实合并      |
 |   T3 | Unsafe Candidate Rejection Report              |     P1 | TODO | GUI / Report 明确显示拒绝原因                |
 |   T4 | RegionBoundaryAnalyzer                         |     P1 | TODO | 独立分析 boundary loops / holes / closedness |
 |  T5A | Conservative Boundary Wire Rebuild             |     P2 | TODO | 保守修复 edge order / orientation            |
@@ -230,13 +230,13 @@ Stage 3A-Fix 期间临时收紧真实合并输入范围。
 ### 5.2 验收标准
 
 ```text
-[ ] 原生 Plane 简单候选仍可合并。
-[ ] B-spline backed planar-like candidate 被拒绝。
-[ ] 多边界环被拒绝。
-[ ] 有洞候选被拒绝。
-[ ] 边界不闭合候选被拒绝。
-[ ] 失败时 document 不变。
-[ ] failure_reason 与 message 明确。
+[x] 原生 Plane 简单候选仍可合并。
+[x] B-spline backed planar-like candidate 被拒绝。
+[x] 多边界环被拒绝。
+[x] 有洞候选被拒绝。
+[x] 边界不闭合候选被拒绝。
+[x] 失败时 document 不变。
+[x] failure_reason 与 message 明确。
 ```
 
 ### 5.3 Codex Prompt

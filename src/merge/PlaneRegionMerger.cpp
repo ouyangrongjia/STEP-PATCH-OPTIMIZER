@@ -14,7 +14,6 @@
 #include <BRepTools_ReShape.hxx>
 #include <Geom_Plane.hxx>
 #include <Precision.hxx>
-#include <ShapeFix_Wire.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -114,6 +113,14 @@ bool validateCandidate(
     for (const auto faceId : candidate.faces) {
         if (faceId >= topology.faceCount()) {
             fail(result, RegionMergeFailureReason::InvalidCandidate, "Plane candidate references a missing face.");
+            return false;
+        }
+        BRepAdaptor_Surface surface(topology.face(faceId));
+        if (surface.GetType() != GeomAbs_Plane) {
+            fail(
+                result,
+                RegionMergeFailureReason::ApproximateSurfaceNotSupported,
+                "B-spline backed planar-like candidate is preview-only and not supported by strict PlaneRegionMerge.");
             return false;
         }
     }
@@ -349,9 +356,6 @@ std::optional<TopoDS_Wire> makeBoundaryWire(const ShapeDocument& document, const
     }
 
     auto wire = wireBuilder.Wire();
-    ShapeFix_Wire fixer(wire, TopoDS_Face(), Precision::Confusion());
-    fixer.Perform();
-    wire = fixer.Wire();
     if (wire.IsNull() || !wire.Closed()) {
         return std::nullopt;
     }
