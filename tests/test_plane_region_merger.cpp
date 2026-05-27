@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <vector>
 
 namespace {
@@ -36,6 +38,12 @@ bool same_stats(const spo::ShapeStats& lhs, const spo::ShapeStats& rhs) {
         lhs.faces == rhs.faces &&
         lhs.edges == rhs.edges &&
         lhs.vertices == rhs.vertices;
+}
+
+std::filesystem::path make_temp_file_path(const char* name) {
+    auto path = std::filesystem::temp_directory_path();
+    path /= name;
+    return path;
 }
 
 PlaneFixture make_two_face_plane_fixture(bool convert_to_nurbs = false) {
@@ -273,10 +281,35 @@ void test_plane_region_merger_merges_simple_coplanar_region() {
     const auto result = merger.merge(fixture.document, fixture.candidate, options);
     assert(result.success);
     assert(result.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(result.brep_check_valid);
+    assert(result.message == "Plane region merge completed with export roundtrip validation passed.");
     assert(result.document.hasShape());
     assert(result.face_count_after < result.face_count_before);
     assert(result.document.stats().faces > 0);
     assert(result.document.stats().edges > 0);
+}
+
+void test_plane_region_merger_roundtrip_failure_does_not_change_result_document() {
+    const auto fixture = make_two_face_plane_fixture();
+    const auto before = fixture.document.stats();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    const auto tempFile = make_temp_file_path("step-patch-optimizer-roundtrip-not-a-directory.tmp");
+    {
+        std::ofstream stream(tempFile.string());
+        stream << "not a directory";
+    }
+    options.roundtrip_temp_directory = tempFile;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+
+    std::error_code ignored;
+    std::filesystem::remove(tempFile, ignored);
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::ExportRoundtripFailed);
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
 }
 
 void test_plane_region_merger_accepts_nurbs_backed_planar_region() {
@@ -301,6 +334,7 @@ void test_plane_region_merger_preserves_solid_container() {
     const auto result = merger.merge(fixture.document, fixture.candidate, options);
 
     assert(result.success);
+    assert(result.brep_check_valid);
     assert(result.document.stats().solids == before.solids);
     assert(result.document.stats().faces < before.faces);
     assert(result.document.stats().edges < before.edges - 1);
@@ -383,6 +417,7 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_rejects_small_or_protected_regions();
     test_plane_region_merger_rejects_invalid_boundary_without_changing_stats();
     test_plane_region_merger_merges_simple_coplanar_region();
+    test_plane_region_merger_roundtrip_failure_does_not_change_result_document();
     test_plane_region_merger_accepts_nurbs_backed_planar_region();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();

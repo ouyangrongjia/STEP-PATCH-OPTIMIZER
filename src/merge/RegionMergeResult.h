@@ -27,7 +27,8 @@ enum class RegionMergeFailureReason {
     SurfaceConstructionFailed,
     TopologyReplacementFailed,
     SewingFailed,
-    ValidationFailed
+    ValidationFailed,
+    ExportRoundtripFailed
 };
 
 struct RegionMergeResult {

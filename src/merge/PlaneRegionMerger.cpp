@@ -1,5 +1,7 @@
 #include "merge/PlaneRegionMerger.h"
 
+#include "io/StepReader.h"
+#include "io/StepWriter.h"
 #include "validate/ShapeValidator.h"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -27,7 +29,9 @@
 #include <gp_Pln.hxx>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -498,6 +502,101 @@ bool preservesSolidCount(const ShapeStats& before, const ShapeStats& after) {
     return before.solids == 0 || before.solids == after.solids;
 }
 
+std::filesystem::path makeRoundtripTempPath(const PlaneRegionMergeOptions& options) {
+    const auto tick = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::filesystem::path path = options.roundtrip_temp_directory.empty()
+        ? std::filesystem::temp_directory_path()
+        : options.roundtrip_temp_directory;
+    path /= "step-patch-optimizer-plane-roundtrip-" + std::to_string(tick) + ".stp";
+    return path;
+}
+
+bool validateMergedDocument(
+    const ShapeDocument& originalDocument,
+    const ShapeDocument& mergedDocument,
+    const PlaneRegionMergeOptions& options,
+    const char* operationName,
+    RegionMergeResult& result) {
+    ShapeValidator validator;
+    const auto validation = validator.validate(mergedDocument);
+    result.brep_check_valid = validation.brep_check_valid;
+
+    fillReductionStats(result, mergedDocument.stats());
+    if (!hasUsableTopology(mergedDocument.stats())) {
+        fail(result, RegionMergeFailureReason::ValidationFailed, std::string(operationName) + " result lost usable topology.");
+        return false;
+    }
+    if (!preservesSolidCount(originalDocument.stats(), mergedDocument.stats())) {
+        fail(result, RegionMergeFailureReason::ValidationFailed, std::string(operationName) + " result changed solid count.");
+        return false;
+    }
+    if (result.face_count_after >= result.face_count_before) {
+        fail(result, RegionMergeFailureReason::TopologyReplacementFailed, std::string(operationName) + " did not reduce face count.");
+        return false;
+    }
+    if (!validation.brep_check_valid) {
+        fail(result, RegionMergeFailureReason::ValidationFailed, std::string(operationName) + " result failed BRepCheck.");
+        return false;
+    }
+
+    const auto tempPath = makeRoundtripTempPath(options);
+    bool removeTemp = false;
+    const auto cleanup = [&]() {
+        if (removeTemp) {
+            std::error_code ignored;
+            std::filesystem::remove(tempPath, ignored);
+        }
+    };
+
+    StepWriter writer;
+    const auto writeStatus = writer.write(mergedDocument, tempPath);
+    removeTemp = std::filesystem::exists(tempPath);
+    if (!writeStatus.success()) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip failed while writing STEP: " + writeStatus.message());
+        cleanup();
+        return false;
+    }
+
+    StepReader reader;
+    const auto readResult = reader.read(tempPath);
+    if (!readResult.status.success()) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip failed while reading STEP: " + readResult.status.message());
+        cleanup();
+        return false;
+    }
+    if (!readResult.document.hasShape()) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip produced an empty document.");
+        cleanup();
+        return false;
+    }
+
+    const auto roundtripValidation = validator.validate(readResult.document);
+    if (!roundtripValidation.brep_check_valid) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip failed BRepCheck.");
+        cleanup();
+        return false;
+    }
+    if (!preservesSolidCount(originalDocument.stats(), roundtripValidation.stats)) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip changed solid count.");
+        cleanup();
+        return false;
+    }
+    if (!hasUsableTopology(roundtripValidation.stats)) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip lost usable topology.");
+        cleanup();
+        return false;
+    }
+    if (roundtripValidation.free_edges > validation.free_edges ||
+        roundtripValidation.multiple_edges > validation.multiple_edges) {
+        fail(result, RegionMergeFailureReason::ExportRoundtripFailed, std::string(operationName) + " export roundtrip increased free or multiple edge count.");
+        cleanup();
+        return false;
+    }
+
+    cleanup();
+    return true;
+}
+
 }
 
 RegionMergeResult PlaneRegionMerger::merge(
@@ -517,29 +616,13 @@ RegionMergeResult PlaneRegionMerger::merge(
     }
 
     auto mergedDocument = ShapeDocument(mergedShape, document.sourcePath());
-    ShapeValidator validator;
-    const auto validation = validator.validate(mergedDocument);
-    result.brep_check_valid = validation.brep_check_valid;
-
-    fillReductionStats(result, mergedDocument.stats());
-    if (!hasUsableTopology(mergedDocument.stats())) {
-        fail(result, RegionMergeFailureReason::ValidationFailed, "Plane region merge result lost usable topology.");
-        return result;
-    }
-    if (!preservesSolidCount(document.stats(), mergedDocument.stats())) {
-        fail(result, RegionMergeFailureReason::ValidationFailed, "Plane region merge result changed solid count.");
-        return result;
-    }
-    if (result.face_count_after >= result.face_count_before) {
-        fail(result, RegionMergeFailureReason::TopologyReplacementFailed, "Plane region merge did not reduce face count.");
+    if (!validateMergedDocument(document, mergedDocument, options, "Plane region merge", result)) {
         return result;
     }
 
     result.success = true;
     result.failure_reason = RegionMergeFailureReason::None;
-    result.message = validation.brep_check_valid
-        ? "Plane region merge completed."
-        : "Plane region merge completed with BRepCheck warning.";
+    result.message = "Plane region merge completed with export roundtrip validation passed.";
     result.document = std::move(mergedDocument);
     return result;
 }
@@ -617,31 +700,14 @@ RegionMergeResult PlaneRegionMerger::mergeBatch(
     }
 
     auto mergedDocument = ShapeDocument(mergedShape, document.sourcePath());
-    ShapeValidator validator;
-    const auto validation = validator.validate(mergedDocument);
-    result.brep_check_valid = validation.brep_check_valid;
-
-    fillReductionStats(result, mergedDocument.stats());
-    if (!hasUsableTopology(mergedDocument.stats())) {
-        fail(result, RegionMergeFailureReason::ValidationFailed, "Plane region batch merge result lost usable topology.");
-        return result;
-    }
-    if (!preservesSolidCount(document.stats(), mergedDocument.stats())) {
-        fail(result, RegionMergeFailureReason::ValidationFailed, "Plane region batch merge result changed solid count.");
-        return result;
-    }
-    if (result.face_count_after >= result.face_count_before) {
-        fail(result, RegionMergeFailureReason::TopologyReplacementFailed, "Plane region batch merge did not reduce face count.");
+    if (!validateMergedDocument(document, mergedDocument, options, "Plane region batch merge", result)) {
         return result;
     }
 
     std::ostringstream message;
     message << "Plane region batch merge completed: merged " << preparedMerges.size()
             << " candidates, skipped " << skipped;
-    if (!validation.brep_check_valid) {
-        message << ", with BRepCheck warning";
-    }
-    message << ".";
+    message << ", export roundtrip validation passed.";
 
     result.success = true;
     result.failure_reason = RegionMergeFailureReason::None;

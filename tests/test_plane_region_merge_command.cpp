@@ -12,6 +12,8 @@
 #include <gp_Pnt.hxx>
 
 #include <cassert>
+#include <filesystem>
+#include <fstream>
 
 namespace {
 
@@ -101,6 +103,30 @@ void test_plane_region_merge_command_failure_does_not_pollute_document() {
     assert(same_stats(fixture.context.document.stats(), before));
 }
 
+void test_plane_region_merge_command_roundtrip_failure_does_not_pollute_document() {
+    auto fixture = make_command_fixture();
+    const auto before = fixture.context.document.stats();
+    auto tempFile = std::filesystem::temp_directory_path();
+    tempFile /= "step-patch-optimizer-command-roundtrip-not-a-directory.tmp";
+    {
+        std::ofstream stream(tempFile.string());
+        stream << "not a directory";
+    }
+
+    spo::PlaneRegionMergeOptions options;
+    options.roundtrip_temp_directory = tempFile;
+    spo::RegionMergeResult result;
+    spo::PlaneRegionMergeCommand command(fixture.candidate, options, &result);
+    const auto status = command.execute(fixture.context);
+
+    std::error_code ignored;
+    std::filesystem::remove(tempFile, ignored);
+    assert(!status.success());
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::ExportRoundtripFailed);
+    assert(same_stats(fixture.context.document.stats(), before));
+}
+
 void test_plane_region_merge_command_supports_undo_redo_after_success() {
     auto fixture = make_command_fixture();
     const auto before = fixture.context.document.stats();
@@ -151,6 +177,7 @@ void test_plane_region_batch_merge_command_supports_undo_redo_after_success() {
 
 void run_plane_region_merge_command_tests() {
     test_plane_region_merge_command_failure_does_not_pollute_document();
+    test_plane_region_merge_command_roundtrip_failure_does_not_pollute_document();
     test_plane_region_merge_command_supports_undo_redo_after_success();
     test_plane_region_batch_merge_command_supports_undo_redo_after_success();
 }

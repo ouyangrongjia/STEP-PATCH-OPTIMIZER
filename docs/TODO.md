@@ -71,7 +71,7 @@ Stage 3A-Fix 完成前，暂停以下方向：
 
 | 编号 | 任务                                           | 优先级 | 状态 | 目标                                         |
 | ---: | ---------------------------------------------- | -----: | ---- | -------------------------------------------- |
-|   T1 | BRepCheck Hard Failure + Export Roundtrip Gate |     P0 | TODO | 坏结果不能进入 document                      |
+|   T1 | BRepCheck Hard Failure + Export Roundtrip Gate |     P0 | DONE | 坏结果不能进入 document                      |
 |   T2 | Strict Input Freezing                          |     P0 | TODO | 只允许原生 Plane + 简单边界进入真实合并      |
 |   T3 | Unsafe Candidate Rejection Report              |     P1 | TODO | GUI / Report 明确显示拒绝原因                |
 |   T4 | RegionBoundaryAnalyzer                         |     P1 | TODO | 独立分析 boundary loops / holes / closedness |
@@ -139,15 +139,15 @@ GUI 大结构
 ### 4.3 验收标准
 
 ```text
-[ ] BRepCheck invalid 时 result.success=false。
-[ ] BRepCheck invalid 不再 warning success。
-[ ] PlaneRegionMerger::merge() 成功前必须执行 STEP 导出重读。
-[ ] STEP 写出失败时 result.success=false。
-[ ] STEP 重读失败时 result.success=false。
-[ ] roundtrip BRepCheck invalid 时 result.success=false。
-[ ] 失败时 result.document 保持原 document。
-[ ] PlaneRegionMergeCommand 失败时不污染 CommandContext.document。
-[ ] 原有 plane merge 测试通过。
+[x] BRepCheck invalid 时 result.success=false。
+[x] BRepCheck invalid 不再 warning success。
+[x] PlaneRegionMerger::merge() 成功前必须执行 STEP 导出重读。
+[x] STEP 写出失败时 result.success=false。
+[x] STEP 重读失败时 result.success=false。
+[x] roundtrip BRepCheck invalid 时 result.success=false。
+[x] 失败时 result.document 保持原 document。
+[x] PlaneRegionMergeCommand 失败时不污染 CommandContext.document。
+[x] 原有 plane merge 测试通过。
 ```
 
 ### 4.4 Codex Prompt

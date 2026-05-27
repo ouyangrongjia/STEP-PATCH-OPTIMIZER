@@ -5,6 +5,7 @@
 #include "merge/RegionMergeOptions.h"
 #include "merge/RegionMergeResult.h"
 
+#include <filesystem>
 #include <vector>
 
 namespace spo {
@@ -12,6 +13,7 @@ namespace spo {
 struct PlaneRegionMergeOptions : RegionMergeOptions {
     double normal_angle_tolerance_degrees = 3.0;
     double plane_distance_tolerance = 0.01;
+    std::filesystem::path roundtrip_temp_directory;
 };
 
 class PlaneRegionMerger {
