@@ -574,3 +574,26 @@ SphereRegionMerge 已完成稳定版调整（基于 same-domain unifier）。
 当前唯一待收口项是 Stage 3A-Fix：PlaneRegionMerge 导出稳定性验证与安全边界重建。
 在平面合并做到"导出后重读仍然对"之前，暂停所有其他合并类型的扩展。
 ```
+
+---
+
+## 10. Stage 3A-Approx / A6 当前状态（2026-05-27）
+
+```text
+Stage 3A-Approx / A6：进行中
+
+已完成：
+- A6.1：PlaneRegionMerger 在 approximate planar rebuild 进入 MakeFace 前检查 ordered boundary edges。
+- A6.1：boundary 3D curve 采样点若明显偏离拟合平面，提前返回 DeviationTooLarge。
+- A6.1：失败时 result.document 保持原 document，Command 层仍不会污染当前模型。
+- A6.1：新增测试覆盖“face 采样误差低，但 boundary 曲线偏离拟合平面”的失败路径。
+
+仍未完成：
+- A6.2：真实 STP 失败样例的 candidate / boundary 诊断输出。
+- A6.3：ShapeFix_Wire / ShapeFix_Face / SameParameter 最小修复路径评估。
+- A6.4：projected boundary / pcurve rebuild 设计与验证。
+
+当前结论：
+A6.1 不是提升合并力度，而是防止不安全的近似平面候选进入 MakeFace 后才在 BRepCheck 阶段失败。
+如果真实样例仍失败，下一步应先做 A6.2 诊断，而不是放宽 BRepCheck / STEP roundtrip gate。
+```

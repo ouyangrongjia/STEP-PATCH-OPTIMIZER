@@ -9,11 +9,13 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepTools.hxx>
+#include <Geom_BezierSurface.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Shell.hxx>
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TColgp_Array2OfPnt.hxx>
 #include <TopExp_Explorer.hxx>
 #include <gp_Pnt.hxx>
 
@@ -167,6 +169,53 @@ PlaneFixture make_three_face_wavy_nurbs_fixture() {
     fixture.candidate.internal_edge_count = static_cast<int>(fixture.candidate.internal_edges.size());
     assert(fixture.candidate.boundary_edges.size() == 8);
     assert(fixture.candidate.internal_edges.size() == 2);
+    return fixture;
+}
+
+TopoDS_Face make_curved_boundary_bezier_face(double x0, double x1) {
+    TColgp_Array2OfPnt poles(1, 3, 1, 3);
+    for (int u = 1; u <= 3; ++u) {
+        const double tx = static_cast<double>(u - 1) / 2.0;
+        for (int v = 1; v <= 3; ++v) {
+            const double ty = static_cast<double>(v - 1) / 2.0;
+            const double z = 0.03 * ty * ty;
+            poles.SetValue(u, v, gp_Pnt(x0 + (x1 - x0) * tx, ty, z));
+        }
+    }
+    Handle(Geom_BezierSurface) surface = new Geom_BezierSurface(poles);
+    return BRepBuilderAPI_MakeFace(surface, 0.0, 1.0, 0.0, 1.0, Precision::Confusion()).Face();
+}
+
+PlaneFixture make_two_face_curved_boundary_nurbs_fixture() {
+    BRepBuilderAPI_Sewing sewing;
+    sewing.Add(make_curved_boundary_bezier_face(0.0, 1.0));
+    sewing.Add(make_curved_boundary_bezier_face(1.0, 2.0));
+    sewing.Perform();
+
+    PlaneFixture fixture;
+    fixture.document = spo::ShapeDocument(sewing.SewedShape(), {});
+    assert(fixture.document.topology().faceCount() == 2);
+    for (spo::FaceId face = 0; face < fixture.document.topology().faceCount(); ++face) {
+        fixture.candidate.faces.push_back(face);
+    }
+    for (spo::EdgeId edge = 0; edge < fixture.document.topology().edgeCount(); ++edge) {
+        const auto* adjacency = fixture.document.topology().adjacencyForEdge(edge);
+        assert(adjacency != nullptr);
+        if (adjacency->faces.size() == 2) {
+            fixture.candidate.internal_edges.push_back(edge);
+        } else if (adjacency->faces.size() == 1) {
+            fixture.candidate.boundary_edges.push_back(edge);
+        }
+    }
+
+    fixture.candidate.candidate_id = 13;
+    fixture.candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+    fixture.candidate.status = spo::MergeCandidateStatus::Accepted;
+    fixture.candidate.face_count = static_cast<int>(fixture.candidate.faces.size());
+    fixture.candidate.boundary_edge_count = static_cast<int>(fixture.candidate.boundary_edges.size());
+    fixture.candidate.internal_edge_count = static_cast<int>(fixture.candidate.internal_edges.size());
+    assert(fixture.candidate.boundary_edges.size() == 6);
+    assert(fixture.candidate.internal_edges.size() == 1);
     return fixture;
 }
 
@@ -433,6 +482,25 @@ void test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer
     assert(same_stats(fixture.document.stats(), before));
 }
 
+void test_plane_region_merger_approx_mode_rejects_boundary_curves_outside_fitted_plane() {
+    const auto fixture = make_two_face_curved_boundary_nurbs_fixture();
+    const auto before = fixture.document.stats();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+    options.normal_angle_tolerance_degrees = 45.0;
+    options.approximate_plane_max_deviation = 0.01;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+
+    assert(!result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::DeviationTooLarge);
+    assert(result.message == "Plane candidate boundary edges exceed fitted plane tolerance.");
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
+    assert(same_stats(fixture.document.stats(), before));
+}
+
 void test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one() {
     auto fixture = make_two_face_plane_fixture(true);
     const auto before = fixture.document.stats();
@@ -621,6 +689,7 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_approx_mode_merges_low_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region();
     test_plane_region_merger_approx_mode_rejects_invalid_boundary_from_analyzer();
+    test_plane_region_merger_approx_mode_rejects_boundary_curves_outside_fitted_plane();
     test_plane_region_merger_approx_batch_skips_invalid_candidate_and_merges_valid_one();
     test_plane_region_merger_approx_batch_fails_when_all_candidates_invalid();
     test_plane_region_merger_approx_batch_roundtrip_failure_does_not_change_result_document();

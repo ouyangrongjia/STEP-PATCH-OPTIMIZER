@@ -58,6 +58,7 @@ PlaneLike candidate 可以预览，但真实 merge 被 ApproximateSurfaceNotSupp
 |   A3 | Approx Boundary Rebuild using T4               | DONE   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
 |   A4 | Experimental GUI Entry                         | DONE   | 提供实验性近似平面合并入口                                |
 |   A5 | Tests + Export Validation                      | DONE   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
+|   A6 | Approx Boundary / PCurve Stabilization         | ACTIVE | 近似平面重建前拦截不安全 boundary / pcurve 风险           |
 
 ---
 
@@ -449,7 +450,45 @@ SolidWorks / Fusion 360，如可用
 
 ---
 
-## 10. 推荐实现顺序
+## 10. A6：Approx Boundary / PCurve Stabilization
+
+### 10.1 背景
+
+```text
+A1-A5 已经允许低 deviation 的 B-spline backed PlaneLike candidate 进入实验性近似平面重建。
+真实样例中仍出现：face 中心/采样 deviation 很低，但 MakeFace 后 BRepCheck 失败。
+
+这说明风险不只来自拟合平面误差，还来自 boundary edge 的 3D curve / pcurve 与拟合平面不一致。
+如果直接构造 planar trimmed face，可能得到 GUI 中看似存在、导出或 BRepCheck 中不合法的面。
+```
+
+### 10.2 当前策略
+
+```text
+[x] A6.1：在 approximate planar rebuild 进入 MakeFace 前，对 ordered boundary edges 做 3D curve 到拟合平面的保守预检。
+[x] A6.1：boundary 曲线采样点超出保守阈值时，返回 DeviationTooLarge，并保持 document rollback。
+[x] A6.1：补充测试，覆盖 face 采样低误差但 boundary 曲线偏离拟合平面的失败路径。
+```
+
+### 10.3 后续子任务
+
+```text
+[ ] A6.2：对真实失败 STP 导出 candidate / boundary 诊断信息，用于定位 pcurve / 3D curve 不一致。
+[ ] A6.3：评估是否需要 ShapeFix_Wire / ShapeFix_Face / SameParameter 的最小修复路径。
+[ ] A6.4：如仍需要真实合并，设计 projected boundary / pcurve rebuild；未验证前不得放宽 T1 安全门。
+```
+
+### 10.4 验收边界
+
+```text
+A6 不是放宽安全门。
+当前已完成的是 unsafe approximate boundary preflight。
+它可以把部分 BRepCheck failure 提前变成 DeviationTooLarge failure，但不会保证所有 B-spline backed PlaneLike 都能合并。
+```
+
+---
+
+## 11. 推荐实现顺序
 
 ```text
 commit 1:
@@ -472,32 +511,34 @@ commit 6:
 
 commit 7:
   Stage 3A-Approx: add experimental GUI entry/report, if needed
+
+commit 8:
+  Stage 3A-Approx: reject approximate planar candidates with unsafe boundary curves
 ```
 
 ---
 
-## 11. 下一步 Codex 任务
+## 12. 下一步 Codex 任务
 
 当前下一步不是 T5，而是：
 
 ```text
-A1 + A2：新增 approximate planar mode，并让低 deviation B-spline backed PlaneLike 可以进入 planar rebuild。
+A6.2：为真实 STP 失败样例输出 candidate / boundary 诊断信息。
 ```
 
 极简 Codex 任务边界：
 
 ```text
-只做后端；
+只做诊断和安全判定；
+不放宽 T1/T4 安全门；
 不大改 GUI；
-strict mode 默认不变；
-approx mode 通过 option 显式开启；
-必须保留 T1/T4 安全门；
+不做 ShapeFix / pcurve 重建；
 失败不污染 document。
 ```
 
 ---
 
-## 12. 当前周报表述
+## 13. 当前周报表述
 
 ```text
 本周完成了 PlaneRegionMerge 的安全底座：
@@ -514,11 +555,15 @@ T4 增加 RegionBoundaryAnalyzer 做边界安全分析。
 在保留 T1-T4 安全门的前提下，新增实验性 B-spline 近似平面重构路径，
 允许低 deviation 的 B-spline PlaneLike candidate 被重建为 planar trimmed face，
 并继续通过 BRepCheck、STEP roundtrip 和外部 CAD 验证保证 B-Rep 合法性。
+
+当前 A6 已开始收口 approximate planar rebuild 的 boundary 风险：
+在进入 MakeFace 前先检查 boundary 3D curve 是否落在拟合平面内。
+不满足条件的候选会提前失败并 rollback，避免生成 BRepCheck 失败的坏结果。
 ```
 
 ---
 
-## 13. 关键结论
+## 14. 关键结论
 
 ```text
 T1-T4 是安全底座。

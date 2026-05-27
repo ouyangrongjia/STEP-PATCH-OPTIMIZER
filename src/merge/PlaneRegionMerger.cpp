@@ -5,6 +5,7 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "validate/ShapeValidator.h"
 
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -29,6 +30,7 @@
 #include <gp_Pln.hxx>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -308,6 +310,41 @@ bool computeDeviation(
     return true;
 }
 
+bool checkApproximateBoundaryOnPlane(
+    const ShapeDocument& document,
+    const std::vector<EdgeId>& orderedBoundaryEdges,
+    const gp_Pln& plane,
+    const PlaneRegionMergeOptions& options,
+    RegionMergeResult& result) {
+    double maxBoundaryDistance = 0.0;
+    for (const auto edgeId : orderedBoundaryEdges) {
+        const auto& edge = document.topology().edge(edgeId);
+        BRepAdaptor_Curve curve(edge);
+        const double first = curve.FirstParameter();
+        const double last = curve.LastParameter();
+        if (!std::isfinite(first) || !std::isfinite(last) || first > last) {
+            fail(result, RegionMergeFailureReason::BoundaryLoopInvalid, "Plane candidate boundary curve has invalid parameter range.");
+            return false;
+        }
+
+        const std::array<double, 3> params {first, (first + last) * 0.5, last};
+        for (const auto param : params) {
+            const auto point = curve.Value(param);
+            maxBoundaryDistance = std::max(maxBoundaryDistance, std::abs(plane.Distance(point)));
+        }
+    }
+
+    const double boundaryTolerance = std::min(
+        options.approximate_plane_max_deviation,
+        options.plane_distance_tolerance * 0.01);
+    result.max_deviation = std::max(result.max_deviation, maxBoundaryDistance);
+    if (maxBoundaryDistance > boundaryTolerance) {
+        fail(result, RegionMergeFailureReason::DeviationTooLarge, "Plane candidate boundary edges exceed fitted plane tolerance.");
+        return false;
+    }
+    return true;
+}
+
 std::optional<TopoDS_Wire> makeBoundaryWire(const ShapeDocument& document, const std::vector<EdgeId>& orderedBoundaryEdges) {
     std::vector<TopoDS_Edge> remaining;
     remaining.reserve(orderedBoundaryEdges.size());
@@ -428,6 +465,13 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
         return std::nullopt;
     }
 
+    const bool approximatePlanar = options.allow_approximate_planar_surfaces &&
+        candidateUsesApproximatePlanarSurface(document, candidate);
+    if (approximatePlanar &&
+        !checkApproximateBoundaryOnPlane(document, boundaryAnalysis.ordered_boundary_edges, *targetPlane, options, result)) {
+        return std::nullopt;
+    }
+
     const auto boundaryWire = makeBoundaryWire(document, boundaryAnalysis.ordered_boundary_edges);
     if (!boundaryWire.has_value()) {
         fail(result, RegionMergeFailureReason::BoundaryLoopInvalid, "Plane candidate boundary edges do not form one closed wire.");
@@ -455,8 +499,7 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
     prepared.max_deviation = result.max_deviation;
     prepared.mean_deviation = result.mean_deviation;
     prepared.rms_deviation = result.rms_deviation;
-    prepared.approximate_planar = options.allow_approximate_planar_surfaces &&
-        candidateUsesApproximatePlanarSurface(document, candidate);
+    prepared.approximate_planar = approximatePlanar;
     prepared.plane_normal = normal;
     return prepared;
 }
