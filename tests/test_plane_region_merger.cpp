@@ -18,6 +18,7 @@
 #include <gp_Pnt.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <filesystem>
@@ -125,6 +126,48 @@ TopoDS_Face make_quad_face(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3,
     wire.Add(BRepBuilderAPI_MakeEdge(p3, p4).Edge());
     wire.Add(BRepBuilderAPI_MakeEdge(p4, p1).Edge());
     return BRepBuilderAPI_MakeFace(wire.Wire()).Face();
+}
+
+PlaneFixture make_three_face_wavy_nurbs_fixture() {
+    const std::array<double, 4> zValues {0.0, 0.0, 0.03, 0.0};
+
+    BRepBuilderAPI_Sewing sewing;
+    for (int i = 0; i < 3; ++i) {
+        sewing.Add(make_quad_face(
+            gp_Pnt(static_cast<double>(i), 0.0, zValues[static_cast<std::size_t>(i)]),
+            gp_Pnt(static_cast<double>(i + 1), 0.0, zValues[static_cast<std::size_t>(i + 1)]),
+            gp_Pnt(static_cast<double>(i + 1), 1.0, zValues[static_cast<std::size_t>(i + 1)]),
+            gp_Pnt(static_cast<double>(i), 1.0, zValues[static_cast<std::size_t>(i)])));
+    }
+    sewing.Perform();
+
+    BRepBuilderAPI_NurbsConvert converter(sewing.SewedShape());
+
+    PlaneFixture fixture;
+    fixture.document = spo::ShapeDocument(converter.Shape(), {});
+    assert(fixture.document.topology().faceCount() == 3);
+    for (spo::FaceId face = 0; face < fixture.document.topology().faceCount(); ++face) {
+        fixture.candidate.faces.push_back(face);
+    }
+    for (spo::EdgeId edge = 0; edge < fixture.document.topology().edgeCount(); ++edge) {
+        const auto* adjacency = fixture.document.topology().adjacencyForEdge(edge);
+        assert(adjacency != nullptr);
+        if (adjacency->faces.size() == 2) {
+            fixture.candidate.internal_edges.push_back(edge);
+        } else if (adjacency->faces.size() == 1) {
+            fixture.candidate.boundary_edges.push_back(edge);
+        }
+    }
+
+    fixture.candidate.candidate_id = 11;
+    fixture.candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+    fixture.candidate.status = spo::MergeCandidateStatus::Accepted;
+    fixture.candidate.face_count = static_cast<int>(fixture.candidate.faces.size());
+    fixture.candidate.boundary_edge_count = static_cast<int>(fixture.candidate.boundary_edges.size());
+    fixture.candidate.internal_edge_count = static_cast<int>(fixture.candidate.internal_edges.size());
+    assert(fixture.candidate.boundary_edges.size() == 8);
+    assert(fixture.candidate.internal_edges.size() == 2);
+    return fixture;
 }
 
 PlaneFixture make_split_solid_top_fixture() {
@@ -340,7 +383,7 @@ void test_plane_region_merger_rejects_nurbs_backed_planar_region() {
     assert(same_stats(fixture.document.stats(), before));
 }
 
-void test_plane_region_merger_approx_mode_reaches_later_checks_for_nurbs_planar_region() {
+void test_plane_region_merger_approx_mode_merges_low_deviation_nurbs_planar_region() {
     const auto fixture = make_two_face_plane_fixture(true);
     const auto before = fixture.document.stats();
     const spo::PlaneRegionMerger merger;
@@ -348,9 +391,28 @@ void test_plane_region_merger_approx_mode_reaches_later_checks_for_nurbs_planar_
     options.allow_approximate_planar_surfaces = true;
 
     const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    assert(result.success);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(result.message == "Approximate planar B-spline candidate rebuilt as planar trimmed face with export roundtrip validation passed.");
+    assert(result.brep_check_valid);
+    assert(result.document.stats().faces < before.faces);
+    assert(same_stats(fixture.document.stats(), before));
+}
+
+void test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region() {
+    const auto fixture = make_three_face_wavy_nurbs_fixture();
+    const auto before = fixture.document.stats();
+    const spo::PlaneRegionMerger merger;
+    spo::PlaneRegionMergeOptions options;
+    options.allow_approximate_planar_surfaces = true;
+    options.normal_angle_tolerance_degrees = 45.0;
+    options.approximate_plane_max_deviation = 1.0e-6;
+
+    const auto result = merger.merge(fixture.document, fixture.candidate, options);
     assert(!result.success);
-    assert(result.failure_reason != spo::RegionMergeFailureReason::ApproximateSurfaceNotSupported);
-    assert(result.failure_reason == spo::RegionMergeFailureReason::NotImplemented);
+    assert(result.failure_reason == spo::RegionMergeFailureReason::DeviationTooLarge);
+    assert(result.document.hasShape());
+    assert(same_stats(result.document.stats(), before));
     assert(same_stats(fixture.document.stats(), before));
 }
 
@@ -476,7 +538,8 @@ void run_plane_region_merger_tests() {
     test_plane_region_merger_merges_simple_coplanar_region();
     test_plane_region_merger_roundtrip_failure_does_not_change_result_document();
     test_plane_region_merger_rejects_nurbs_backed_planar_region();
-    test_plane_region_merger_approx_mode_reaches_later_checks_for_nurbs_planar_region();
+    test_plane_region_merger_approx_mode_merges_low_deviation_nurbs_planar_region();
+    test_plane_region_merger_approx_mode_rejects_high_deviation_nurbs_planar_region();
     test_plane_region_merger_preserves_solid_container();
     test_plane_region_merger_fills_primitive_fields_on_success();
     test_plane_region_merger_failure_on_nurbs_does_not_fill_primitive_fields();

@@ -295,8 +295,13 @@ bool computeDeviation(
     result.max_deviation = maxDistance;
     result.mean_deviation = sumDistance / sampleCount;
     result.rms_deviation = std::sqrt(sumSquaredDistance / sampleCount);
+    const bool approximatePlanar = options.allow_approximate_planar_surfaces &&
+        candidateUsesApproximatePlanarSurface(document, candidate);
+    const double planeLimit = approximatePlanar
+        ? options.approximate_plane_max_deviation
+        : options.plane_distance_tolerance;
     if (result.max_deviation > options.max_deviation ||
-        result.max_deviation > options.plane_distance_tolerance) {
+        result.max_deviation > planeLimit) {
         fail(result, RegionMergeFailureReason::DeviationTooLarge, "Plane candidate deviation exceeds tolerance.");
         return false;
     }
@@ -386,6 +391,7 @@ struct PreparedPlaneMerge {
     double max_deviation = 0.0;
     double mean_deviation = 0.0;
     double rms_deviation = 0.0;
+    bool approximate_planar = false;
     gp_Dir plane_normal = gp_Dir(0.0, 0.0, 1.0);
 };
 
@@ -414,14 +420,6 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
     }
 
     result.primitive_fit_error = result.max_deviation;
-
-    if (options.allow_approximate_planar_surfaces && candidateUsesApproximatePlanarSurface(document, candidate)) {
-        fail(
-            result,
-            RegionMergeFailureReason::NotImplemented,
-            "Approximate planar surface passed fitting checks, but B-spline planar rebuild is not implemented in A1.");
-        return std::nullopt;
-    }
 
     const RegionBoundaryAnalyzer boundaryAnalyzer;
     const auto boundaryAnalysis = boundaryAnalyzer.analyze(document, candidate);
@@ -457,6 +455,8 @@ std::optional<PreparedPlaneMerge> preparePlaneMerge(
     prepared.max_deviation = result.max_deviation;
     prepared.mean_deviation = result.mean_deviation;
     prepared.rms_deviation = result.rms_deviation;
+    prepared.approximate_planar = options.allow_approximate_planar_surfaces &&
+        candidateUsesApproximatePlanarSurface(document, candidate);
     prepared.plane_normal = normal;
     return prepared;
 }
@@ -649,7 +649,9 @@ RegionMergeResult PlaneRegionMerger::merge(
 
     result.success = true;
     result.failure_reason = RegionMergeFailureReason::None;
-    result.message = "Plane region merge completed with export roundtrip validation passed.";
+    result.message = prepared->approximate_planar
+        ? "Approximate planar B-spline candidate rebuilt as planar trimmed face with export roundtrip validation passed."
+        : "Plane region merge completed with export roundtrip validation passed.";
     result.document = std::move(mergedDocument);
     return result;
 }
