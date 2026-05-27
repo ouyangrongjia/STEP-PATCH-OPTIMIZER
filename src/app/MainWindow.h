@@ -58,7 +58,10 @@ private:
     void mergeCurrentPlaneCandidate();
     void mergeAcceptedPlaneCandidates();
     void mergeAllMergeablePlaneCandidates();
-    void mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
+    void mergeCurrentApproximatePlaneCandidate();
+    void mergeAllApproximatePlaneCandidates();
+    void mergeApproximatePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
+    void mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title, bool approximateMode);
     void mergeCurrentSphereCandidate();
     void mergeAcceptedSphereCandidates();
     void mergeAllMergeableSphereCandidates();
@@ -118,6 +121,8 @@ private:
     QAction* mergePlaneCandidateAction_ = nullptr;
     QAction* mergeAcceptedPlaneCandidatesAction_ = nullptr;
     QAction* mergeAllPlaneCandidatesAction_ = nullptr;
+    QAction* mergeApproximatePlaneCandidateAction_ = nullptr;
+    QAction* mergeAllApproximatePlaneCandidatesAction_ = nullptr;
     QAction* mergeSphereCandidateAction_ = nullptr;
     QAction* mergeAcceptedSphereCandidatesAction_ = nullptr;
     QAction* mergeAllSphereCandidatesAction_ = nullptr;

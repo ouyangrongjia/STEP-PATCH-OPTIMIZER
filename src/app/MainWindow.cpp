@@ -143,6 +143,60 @@ std::vector<MergeCandidate> filterStrictPlaneMergeCandidates(
     return result;
 }
 
+bool isApproximatePlaneMergeCandidate(const MergeCandidate& candidate) {
+    return candidate.valid &&
+        candidate.candidate_type == MergeCandidateType::PlaneLike &&
+        candidate.status != MergeCandidateStatus::Rejected &&
+        candidate.status != MergeCandidateStatus::Hidden &&
+        candidate.face_count >= 2 &&
+        !candidate.boundary_edges.empty();
+}
+
+std::vector<MergeCandidate> filterApproximatePlaneMergeCandidates(
+    const std::vector<MergeCandidate>& candidates) {
+    std::vector<MergeCandidate> result;
+    for (const auto& candidate : candidates) {
+        if (isApproximatePlaneMergeCandidate(candidate)) {
+            result.push_back(candidate);
+        }
+    }
+    return result;
+}
+
+PlaneRegionMergeOptions makePlaneMergeOptions(const AlgorithmParameters& params, bool approximateMode) {
+    PlaneRegionMergeOptions options;
+    options.plane_distance_tolerance = std::max(options.plane_distance_tolerance, params.linear_tolerance);
+    options.allow_pending_candidate = true;
+    options.require_accepted_candidate = false;
+    options.min_region_faces = 2;
+    if (approximateMode) {
+        options.allow_approximate_planar_surfaces = true;
+        options.approximate_plane_max_deviation =
+            std::max(options.approximate_plane_max_deviation, params.linear_tolerance);
+    }
+    return options;
+}
+
+QString planeMergeModeText(bool approximateMode) {
+    return approximateMode ? "approximate planar experimental" : "strict native plane";
+}
+
+QString candidateIdSummary(const std::vector<MergeCandidate>& candidates) {
+    QString summary;
+    constexpr std::size_t maxShown = 20;
+    const auto shown = std::min(maxShown, candidates.size());
+    for (std::size_t i = 0; i < shown; ++i) {
+        if (!summary.isEmpty()) {
+            summary += ", ";
+        }
+        summary += QString::number(candidates[i].candidate_id);
+    }
+    if (candidates.size() > maxShown) {
+        summary += QString(", ... +%1").arg(candidates.size() - maxShown);
+    }
+    return summary;
+}
+
 struct CandidateStatusCounts {
     int pending = 0;
     int accepted = 0;
@@ -169,6 +223,15 @@ CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& 
         }
     }
     return counts;
+}
+
+QString candidateStatusSummary(const std::vector<MergeCandidate>& candidates) {
+    auto counts = countCandidateStatuses(candidates);
+    return QString("Pending %1，Accepted %2，Rejected %3，Hidden %4")
+        .arg(counts.pending)
+        .arg(counts.accepted)
+        .arg(counts.rejected)
+        .arg(counts.hidden);
 }
 
 void addVisibleCandidateId(std::set<int>& visibleIds, const MergeCandidate& candidate) {
@@ -287,6 +350,8 @@ void MainWindow::createActions() {
     mergePlaneCandidateAction_ = new QAction("合并当前平面候选", this);
     mergeAcceptedPlaneCandidatesAction_ = new QAction("合并所有已接受平面候选", this);
     mergeAllPlaneCandidatesAction_ = new QAction("一键合并全部可合并平面候选", this);
+    mergeApproximatePlaneCandidateAction_ = new QAction("实验性合并当前近似平面候选", this);
+    mergeAllApproximatePlaneCandidatesAction_ = new QAction("实验性合并全部近似平面候选", this);
     mergeSphereCandidateAction_ = new QAction("合并当前球面候选", this);
     mergeAcceptedSphereCandidatesAction_ = new QAction("合并所有已接受球面候选", this);
     mergeAllSphereCandidatesAction_ = new QAction("一键合并全部可合并球面候选", this);
@@ -354,6 +419,9 @@ void MainWindow::createMenus() {
     planeMergeMenu_->addAction(mergePlaneCandidateAction_);
     planeMergeMenu_->addAction(mergeAcceptedPlaneCandidatesAction_);
     planeMergeMenu_->addAction(mergeAllPlaneCandidatesAction_);
+    planeMergeMenu_->addSeparator();
+    planeMergeMenu_->addAction(mergeApproximatePlaneCandidateAction_);
+    planeMergeMenu_->addAction(mergeAllApproximatePlaneCandidatesAction_);
     sphereMergeMenu_ = mergeMenu->addMenu("球面候选合并");
     sphereMergeMenu_->addAction(mergeSphereCandidateAction_);
     sphereMergeMenu_->addAction(mergeAcceptedSphereCandidatesAction_);
@@ -420,6 +488,9 @@ void MainWindow::createToolBars() {
     planeToolMenu->addAction(mergePlaneCandidateAction_);
     planeToolMenu->addAction(mergeAcceptedPlaneCandidatesAction_);
     planeToolMenu->addAction(mergeAllPlaneCandidatesAction_);
+    planeToolMenu->addSeparator();
+    planeToolMenu->addAction(mergeApproximatePlaneCandidateAction_);
+    planeToolMenu->addAction(mergeAllApproximatePlaneCandidatesAction_);
     auto* sphereToolMenu = mergeToolMenu->addMenu("球面合并");
     sphereToolMenu->addAction(mergeSphereCandidateAction_);
     sphereToolMenu->addAction(mergeAcceptedSphereCandidatesAction_);
@@ -542,6 +613,8 @@ void MainWindow::connectActions() {
     connect(mergePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentPlaneCandidate(); });
     connect(mergeAcceptedPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedPlaneCandidates(); });
     connect(mergeAllPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeablePlaneCandidates(); });
+    connect(mergeApproximatePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentApproximatePlaneCandidate(); });
+    connect(mergeAllApproximatePlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllApproximatePlaneCandidates(); });
     connect(mergeSphereCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentSphereCandidate(); });
     connect(mergeAcceptedSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedSphereCandidates(); });
     connect(mergeAllSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeableSphereCandidates(); });
@@ -1108,15 +1181,14 @@ void MainWindow::mergeCurrentPlaneCandidate() {
     }
 
     const auto params = parameterPanel_->parameters();
-    PlaneRegionMergeOptions options;
-    options.plane_distance_tolerance = std::max(options.plane_distance_tolerance, params.linear_tolerance);
-    options.allow_pending_candidate = true;
-    options.require_accepted_candidate = false;
-    options.min_region_faces = 2;
+    const auto options = makePlaneMergeOptions(params, false);
 
     const auto result = controller_.mergePlaneCandidate(*candidate, options);
-    const auto report = QString("平面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n文档状态：%7\n平面法向：(%8, %9, %10)\n合并前 face：%11\n合并后 face：%12\nface reduction ratio：%13%\n合并前 edge：%14\n合并后 edge：%15\nedge reduction ratio：%16%\nmax deviation：%17\nmean deviation：%18\nrms deviation：%19\nBRepCheck：%20")
+    const auto report = QString("平面候选合并%1\nmode：%2\nallow_approximate_planar_surfaces：%3\napproximate_plane_max_deviation：%4\n候选 ID：%5\n候选类型：%6\n候选状态：%7\n失败原因：%8\n消息：%9\n文档状态：%10\n平面法向：(%11, %12, %13)\n合并前 face：%14\n合并后 face：%15\nface reduction ratio：%16%\n合并前 edge：%17\n合并后 edge：%18\nedge reduction ratio：%19%\nmax deviation：%20\nmean deviation：%21\nrms deviation：%22\nBRepCheck：%23\nSTEP roundtrip gate：后端强制执行")
         .arg(result.success ? "完成" : "失败")
+        .arg(planeMergeModeText(false))
+        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
+        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
         .arg(candidate->candidate_id)
         .arg(candidateTypeText(candidate->candidate_type))
         .arg(candidateStatusText(candidate->status))
@@ -1169,17 +1241,102 @@ void MainWindow::mergeAcceptedPlaneCandidates() {
             candidates.push_back(candidate);
         }
     }
-    mergePlaneCandidateBatch(candidates, "合并所有已接受平面候选");
+    mergePlaneCandidateBatch(candidates, "合并所有已接受平面候选", false);
 }
 
 void MainWindow::mergeAllMergeablePlaneCandidates() {
     const auto candidates = controller_.hasDocument()
         ? filterStrictPlaneMergeCandidates(controller_.document(), lastMergeCandidates_)
         : std::vector<MergeCandidate>{};
-    mergePlaneCandidateBatch(candidates, "一键合并全部可合并平面候选");
+    mergePlaneCandidateBatch(candidates, "一键合并全部可合并平面候选", false);
 }
 
-void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title) {
+void MainWindow::mergeCurrentApproximatePlaneCandidate() {
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先在候选选择模式下点击一个候选区域，或按 ID 高亮一个候选区域。");
+        logPanel_->appendWarning("实验性近似平面合并前未选择候选区域。");
+        setStatus("未选择候选区域");
+        return;
+    }
+
+    if (!isApproximatePlaneMergeCandidate(*candidate)) {
+        inspectPanel_->showReport(QString("当前候选不满足实验性近似平面合并入口条件。\n候选 ID：%1\n候选类型：%2\n候选状态：%3\nface 数：%4\nboundary edge 数：%5")
+            .arg(candidate->candidate_id)
+            .arg(candidateTypeText(candidate->candidate_type))
+            .arg(candidateStatusText(candidate->status))
+            .arg(candidate->face_count)
+            .arg(candidate->boundary_edges.size()));
+        setStatus("当前候选不能进入实验性近似平面合并");
+        return;
+    }
+
+    const auto params = parameterPanel_->parameters();
+    const auto options = makePlaneMergeOptions(params, true);
+    const auto result = controller_.mergePlaneCandidate(*candidate, options);
+    const auto report = QString("实验性近似平面候选合并%1\nmode：%2\nallow_approximate_planar_surfaces：%3\napproximate_plane_max_deviation：%4\n候选 ID：%5\n候选类型：%6\n候选状态：%7\n失败原因：%8\n消息：%9\n文档状态：%10\n平面法向：(%11, %12, %13)\n合并前 face：%14\n合并后 face：%15\nface reduction ratio：%16%\n合并前 edge：%17\n合并后 edge：%18\nedge reduction ratio：%19%\nmax deviation：%20\nmean deviation：%21\nrms deviation：%22\nBRepCheck：%23\nSTEP roundtrip gate：后端强制执行")
+        .arg(result.success ? "完成" : "失败")
+        .arg(planeMergeModeText(true))
+        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
+        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
+        .arg(candidate->candidate_id)
+        .arg(candidateTypeText(candidate->candidate_type))
+        .arg(candidateStatusText(candidate->status))
+        .arg(regionMergeFailureText(result.failure_reason))
+        .arg(QString::fromStdString(result.message))
+        .arg(regionMergeDocumentStateText(result))
+        .arg(QString::number(result.plane_normal_x, 'f', 6))
+        .arg(QString::number(result.plane_normal_y, 'f', 6))
+        .arg(QString::number(result.plane_normal_z, 'f', 6))
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after)
+        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
+        .arg(QString::number(result.max_deviation, 'g', 6))
+        .arg(QString::number(result.mean_deviation, 'g', 6))
+        .arg(QString::number(result.rms_deviation, 'g', 6))
+        .arg(result.brep_check_valid ? "通过" : "失败");
+
+    inspectPanel_->showReport(report);
+    if (!result.success) {
+        logPanel_->appendWarning(QString("实验性近似平面候选合并失败：候选 %1，原因 %2，%3")
+            .arg(candidate->candidate_id)
+            .arg(regionMergeFailureText(result.failure_reason))
+            .arg(QString::fromStdString(result.message)));
+        setStatus("实验性近似平面候选合并失败");
+        refreshUndoRedoActions();
+        return;
+    }
+
+    refreshDocumentViews();
+    logPanel_->appendInfo(QString("实验性近似平面候选合并完成：候选 %1，face %2 -> %3，edge %4 -> %5")
+        .arg(result.candidate_id)
+        .arg(result.face_count_before)
+        .arg(result.face_count_after)
+        .arg(result.edge_count_before)
+        .arg(result.edge_count_after));
+    setStatus("实验性近似平面候选合并完成");
+    refreshUndoRedoActions();
+}
+
+void MainWindow::mergeAllApproximatePlaneCandidates() {
+    const auto candidates = filterApproximatePlaneMergeCandidates(lastMergeCandidates_);
+    mergeApproximatePlaneCandidateBatch(candidates, "实验性合并全部近似平面候选");
+}
+
+void MainWindow::mergeApproximatePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title) {
+    mergePlaneCandidateBatch(candidates, title, true);
+}
+
+void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title, bool approximateMode) {
     if (!controller_.hasDocument()) {
         inspectPanel_->showReport("请先打开 STEP/STP 文件。");
         setStatus("未加载模型");
@@ -1192,25 +1349,31 @@ void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& can
         return;
     }
     if (candidates.empty()) {
-        inspectPanel_->showReport(QString("%1\n没有符合严格平面合并条件的原生 PlaneLike 候选区域。\n"
-                                          "B-spline backed planar-like candidate 当前只允许预览，不进入真实 PlaneRegionMerge。").arg(title));
-        logPanel_->appendWarning(QString("%1：没有符合严格平面合并条件的原生 PlaneLike 候选区域。").arg(title));
+        const auto reason = approximateMode
+            ? "没有符合实验性近似平面合并入口条件的 PlaneLike 候选区域。"
+            : "没有符合严格平面合并条件的原生 PlaneLike 候选区域。\nB-spline backed planar-like candidate 请使用实验性近似平面入口。";
+        inspectPanel_->showReport(QString("%1\nmode：%2\n%3")
+            .arg(title)
+            .arg(planeMergeModeText(approximateMode))
+            .arg(reason));
+        logPanel_->appendWarning(QString("%1：%2").arg(title, reason));
         setStatus("没有可批量合并的平面候选");
         return;
     }
 
-    PlaneRegionMergeOptions options;
     const auto params = parameterPanel_->parameters();
-    options.plane_distance_tolerance = std::max(options.plane_distance_tolerance, params.linear_tolerance);
-    options.allow_pending_candidate = true;
-    options.require_accepted_candidate = false;
-    options.min_region_faces = 2;
+    const auto options = makePlaneMergeOptions(params, approximateMode);
 
     const auto result = controller_.mergePlaneCandidates(candidates, options);
-    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n文档状态：%6\n合并前 face：%7\n合并后 face：%8\nface reduction ratio：%9%\n合并前 edge：%10\n合并后 edge：%11\nedge reduction ratio：%12%\nmax deviation：%13\nmean deviation：%14\nrms deviation：%15\nBRepCheck：%16")
+    const auto report = QString("%1%2\nmode：%3\nallow_approximate_planar_surfaces：%4\napproximate_plane_max_deviation：%5\n输入候选数量：%6\n候选 ID：%7\n候选类型：PlaneLike\n候选状态：%8\n失败原因：%9\n消息：%10\n文档状态：%11\n合并前 face：%12\n合并后 face：%13\nface reduction ratio：%14%\n合并前 edge：%15\n合并后 edge：%16\nedge reduction ratio：%17%\nmax deviation：%18\nmean deviation：%19\nrms deviation：%20\nBRepCheck：%21\nSTEP roundtrip gate：后端强制执行")
         .arg(title)
         .arg(result.success ? "完成" : "失败")
+        .arg(planeMergeModeText(approximateMode))
+        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
+        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
         .arg(candidates.size())
+        .arg(candidateIdSummary(candidates))
+        .arg(candidateStatusSummary(candidates))
         .arg(regionMergeFailureText(result.failure_reason))
         .arg(QString::fromStdString(result.message))
         .arg(regionMergeDocumentStateText(result))

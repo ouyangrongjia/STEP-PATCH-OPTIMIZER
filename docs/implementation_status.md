@@ -76,6 +76,7 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 23. Stage 3A-Approx A1 已完成：PlaneRegionMergeOptions 新增 `allow_approximate_planar_surfaces=false` 和 `approximate_plane_max_deviation=0.01`；默认继续保持 T2 strict mode，显式开启后 B-spline backed PlaneLike 可越过 strict native Plane 检查进入后续拟合/偏差检查，但本阶段未实现真实 B-spline 平面重建。
 24. Stage 3A-Approx A2 已完成：`allow_approximate_planar_surfaces=true` 时低误差 B-spline backed PlaneLike 可复用拟合平面、T4 边界分析、planar trimmed face 构造、ShapeValidator/BRepCheck 和 STEP roundtrip gate 完成近似平面重建；高偏差候选返回 `DeviationTooLarge`，失败时 document/stats 保持不变；GUI 实验入口仍留给 A4。
 25. Stage 3A-Approx A3 已完成：strict native Plane 与 approximate B-spline planar rebuild 统一使用 `RegionBoundaryAnalyzer`；构造 boundary wire 时只使用 `analysis.ordered_boundary_edges`，不依赖原始 `candidate.boundary_edges` 顺序；open/disconnected/multiple-loop/hole/non-manifold/branching boundary 仍按 strict 策略拒绝，不做 ShapeFix 或 pcurve 深度修复。
+26. Stage 3A-Approx A4 已完成：GUI 新增“实验性合并当前近似平面候选”和“实验性合并全部近似平面候选”入口；原 strict 平面合并入口保持 `allow_approximate_planar_surfaces=false`，实验入口显式开启 `allow_approximate_planar_surfaces=true` 并在报告中输出 mode、approximate_plane_max_deviation、失败原因、文档回滚状态、统计和 BRepCheck。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：

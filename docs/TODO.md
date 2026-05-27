@@ -56,7 +56,7 @@ PlaneLike candidate 可以预览，但真实 merge 被 ApproximateSurfaceNotSupp
 |   A1 | Approx Planar Mode Options                     | DONE   | 新增近似平面合并开关                                      |
 |   A2 | B-spline PlaneLike Candidate Rebuild           | DONE   | 允许低误差 B-spline backed PlaneLike 进入平面重构         |
 |   A3 | Approx Boundary Rebuild using T4               | DONE   | 使用 RegionBoundaryAnalyzer 输出的 ordered boundary edges |
-|   A4 | Experimental GUI Entry                         | TODO   | 提供实验性近似平面合并入口                                |
+|   A4 | Experimental GUI Entry                         | DONE   | 提供实验性近似平面合并入口                                |
 |   A5 | Tests + Export Validation                      | TODO   | 保证 BRep 合法、STEP roundtrip、失败 rollback             |
 
 ---
@@ -394,10 +394,10 @@ document state
 ### 8.3 验收标准
 
 ```text
-[ ] 用户能区分 strict mode 和 approx experimental mode。
-[ ] Approx mode 的成功/失败报告明确。
-[ ] 失败时显示 document was not modified / rollback applied。
-[ ] 不影响原有 strict “显示可平面合并候选”。
+[x] 用户能区分 strict mode 和 approx experimental mode。
+[x] Approx mode 的成功/失败报告明确。
+[x] 失败时显示 document was not modified / rollback applied。
+[x] 不影响原有 strict “显示可平面合并候选”。
 ```
 
 ---
