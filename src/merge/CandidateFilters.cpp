@@ -21,6 +21,9 @@ CandidateTypeCounts countCandidateTypes(const std::vector<MergeCandidate>& candi
         case MergeCandidateType::TorusLike:
             ++counts.torus_like;
             break;
+        case MergeCandidateType::FeatureBoundedRefit:
+            ++counts.feature_bounded_refit;
+            break;
         case MergeCandidateType::FreeformG1:
             ++counts.freeform_g1;
             break;

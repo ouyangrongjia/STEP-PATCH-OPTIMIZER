@@ -14,6 +14,7 @@ enum class MergeCandidateType {
     ConeLike,
     SphereLike,
     TorusLike,
+    FeatureBoundedRefit,
     FreeformG1,
     FreeformG2,
     Unknown
@@ -33,6 +34,7 @@ enum class MergeCandidateStatus {
 };
 
 const char* toString(MergeCandidateStatus status);
+const char* toString(MergeCandidateType type);
 
 struct MergeCandidate {
     int candidate_id = -1;

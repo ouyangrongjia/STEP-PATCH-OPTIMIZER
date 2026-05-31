@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <set>
+#include <string>
 
 namespace {
 
@@ -27,7 +28,8 @@ void test_candidate_type_counts_include_zero_types() {
         make_candidate(1, spo::MergeCandidateType::SphereLike),
         make_candidate(2, spo::MergeCandidateType::CylinderLike),
         make_candidate(3, spo::MergeCandidateType::FreeformG1),
-        make_candidate(4, spo::MergeCandidateType::Unknown),
+        make_candidate(4, spo::MergeCandidateType::FeatureBoundedRefit),
+        make_candidate(5, spo::MergeCandidateType::Unknown),
     };
 
     const auto counts = spo::countCandidateTypes(candidates);
@@ -36,6 +38,7 @@ void test_candidate_type_counts_include_zero_types() {
     assert(counts.sphere_like == 1);
     assert(counts.cone_like == 0);
     assert(counts.torus_like == 0);
+    assert(counts.feature_bounded_refit == 1);
     assert(counts.freeform_g1 == 1);
     assert(counts.freeform_g2 == 0);
     assert(counts.unknown == 1);
@@ -46,10 +49,11 @@ void test_candidate_filters_by_visibility_and_type() {
         make_candidate(0, spo::MergeCandidateType::PlaneLike),
         make_candidate(1, spo::MergeCandidateType::PlaneLike, spo::MergeCandidateStatus::Hidden),
         make_candidate(2, spo::MergeCandidateType::SphereLike),
+        make_candidate(3, spo::MergeCandidateType::FeatureBoundedRefit),
     };
 
     const auto nonHidden = spo::filterNonHiddenCandidates(candidates);
-    assert(nonHidden.size() == 2);
+    assert(nonHidden.size() == 3);
     for (const auto& candidate : nonHidden) {
         assert(candidate.status != spo::MergeCandidateStatus::Hidden);
     }
@@ -62,10 +66,18 @@ void test_candidate_filters_by_visibility_and_type() {
     assert(sphereOnly.size() == 1);
     assert(sphereOnly.front().candidate_type == spo::MergeCandidateType::SphereLike);
 
+    const auto featureBoundedOnly = spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FeatureBoundedRefit);
+    assert(featureBoundedOnly.size() == 1);
+    assert(featureBoundedOnly.front().candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
+
     assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::ConeLike).empty());
     assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FreeformG1).empty());
     assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FreeformG2).empty());
     assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::Unknown).empty());
+}
+
+void test_candidate_type_string_includes_feature_bounded_refit() {
+    assert(std::string(spo::toString(spo::MergeCandidateType::FeatureBoundedRefit)) == "FeatureBoundedRefit");
 }
 
 void test_mergeable_plane_filter_only_returns_plane_candidates() {
@@ -118,6 +130,7 @@ void test_plane_region_merger_rejects_non_plane_candidate() {
 void run_candidate_type_statistics_tests() {
     test_candidate_type_counts_include_zero_types();
     test_candidate_filters_by_visibility_and_type();
+    test_candidate_type_string_includes_feature_bounded_refit();
     test_mergeable_plane_filter_only_returns_plane_candidates();
     test_mergeable_sphere_filter_skips_high_risk_and_single_face_candidates();
     test_plane_region_merger_rejects_non_plane_candidate();

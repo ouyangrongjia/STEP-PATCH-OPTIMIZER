@@ -48,6 +48,7 @@ add_library(spo_core STATIC
     src/io/StepWriter.cpp
     src/merge/FaceInspectInfo.cpp
     src/merge/FaceInspector.cpp
+    src/merge/FeatureBoundedRegionBuilder.cpp
     src/merge/CandidateFilters.cpp
     src/merge/ConeRegionMerger.cpp
     src/merge/CylinderRegionMerger.cpp
@@ -130,6 +131,7 @@ if(SPO_BUILD_TESTS)
 
     add_executable(spo_tests
         tests/test_feature_edges.cpp
+        tests/test_feature_bounded_region_builder.cpp
         tests/test_face_inspect.cpp
         tests/test_analytic_candidate_detection.cpp
         tests/test_candidate_type_statistics.cpp

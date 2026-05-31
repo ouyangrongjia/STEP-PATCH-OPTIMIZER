@@ -12,6 +12,7 @@ struct CandidateTypeCounts {
     int sphere_like = 0;
     int cone_like = 0;
     int torus_like = 0;
+    int feature_bounded_refit = 0;
     int freeform_g1 = 0;
     int freeform_g2 = 0;
     int unknown = 0;
