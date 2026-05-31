@@ -21,6 +21,7 @@ set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(spo_core STATIC
     src/app/AppController.cpp
+    src/brep/BoundaryWireBuilder.cpp
     src/brep/EdgeIndex.cpp
     src/brep/FaceIndex.cpp
     src/brep/ShapeDocument.cpp
@@ -134,6 +135,7 @@ if(SPO_BUILD_TESTS)
         tests/test_feature_bounded_region_builder.cpp
         tests/test_face_inspect.cpp
         tests/test_analytic_candidate_detection.cpp
+        tests/test_boundary_wire_builder.cpp
         tests/test_candidate_type_statistics.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp

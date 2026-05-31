@@ -72,34 +72,34 @@ struct BoundaryEdgeInfo {
     EdgeId id = -1;
     TopoDS_Vertex first;
     TopoDS_Vertex second;
+    int first_vertex = -1;
+    int second_vertex = -1;
 };
 
-bool sharesVertex(const BoundaryEdgeInfo& info, const TopoDS_Vertex& vertex) {
-    return info.first.IsSame(vertex) || info.second.IsSame(vertex);
-}
-
-TopoDS_Vertex otherVertex(const BoundaryEdgeInfo& info, const TopoDS_Vertex& vertex) {
-    if (info.first.IsSame(vertex)) {
-        return info.second;
-    }
-    return info.first;
-}
-
-std::vector<int> matchingEdges(const std::vector<BoundaryEdgeInfo>& edges, const std::set<int>& remaining, const TopoDS_Vertex& vertex) {
-    std::vector<int> matches;
-    for (const auto index : remaining) {
-        if (sharesVertex(edges[static_cast<std::size_t>(index)], vertex)) {
-            matches.push_back(index);
+int vertexIndex(std::vector<TopoDS_Vertex>& vertices, const TopoDS_Vertex& vertex) {
+    for (int index = 0; index < static_cast<int>(vertices.size()); ++index) {
+        if (vertices[static_cast<std::size_t>(index)].IsSame(vertex)) {
+            return index;
         }
     }
-    return matches;
+    vertices.push_back(vertex);
+    return static_cast<int>(vertices.size() - 1);
+}
+
+int otherVertexIndex(const BoundaryEdgeInfo& info, int vertex) {
+    if (info.first_vertex == vertex) {
+        return info.second_vertex;
+    }
+    if (info.second_vertex == vertex) {
+        return info.first_vertex;
+    }
+    return -1;
 }
 
 bool orderBoundaryLoops(
     const std::vector<BoundaryEdgeInfo>& edges,
     std::vector<std::vector<EdgeId>>& loops,
-    std::vector<EdgeId>& orderedEdges,
-    bool& hasNonManifoldEdges) {
+    std::vector<EdgeId>& orderedEdges) {
     std::set<int> remaining;
     for (int index = 0; index < static_cast<int>(edges.size()); ++index) {
         remaining.insert(index);
@@ -110,16 +110,21 @@ bool orderBoundaryLoops(
         remaining.erase(firstIndex);
         const auto& firstEdge = edges[static_cast<std::size_t>(firstIndex)];
         std::vector<EdgeId> loop {firstEdge.id};
-        TopoDS_Vertex startVertex = firstEdge.first;
-        TopoDS_Vertex currentVertex = firstEdge.second;
+        const int startVertex = firstEdge.first_vertex;
+        int currentVertex = firstEdge.second_vertex;
 
-        while (!currentVertex.IsSame(startVertex)) {
-            const auto matches = matchingEdges(edges, remaining, currentVertex);
+        while (currentVertex != startVertex) {
+            std::vector<int> matches;
+            for (const auto index : remaining) {
+                const auto& edge = edges[static_cast<std::size_t>(index)];
+                if (edge.first_vertex == currentVertex || edge.second_vertex == currentVertex) {
+                    matches.push_back(index);
+                }
+            }
             if (matches.empty()) {
                 return false;
             }
             if (matches.size() > 1) {
-                hasNonManifoldEdges = true;
                 return false;
             }
 
@@ -127,7 +132,10 @@ bool orderBoundaryLoops(
             remaining.erase(nextIndex);
             const auto& nextEdge = edges[static_cast<std::size_t>(nextIndex)];
             loop.push_back(nextEdge.id);
-            currentVertex = otherVertex(nextEdge, currentVertex);
+            currentVertex = otherVertexIndex(nextEdge, currentVertex);
+            if (currentVertex < 0) {
+                return false;
+            }
         }
 
         orderedEdges.insert(orderedEdges.end(), loop.begin(), loop.end());
@@ -145,6 +153,10 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
         fail(analysis, RegionMergeFailureReason::NotSupported, "Region boundary analysis requires a loaded shape.");
         return analysis;
     }
+    if (candidate.faces.empty()) {
+        fail(analysis, RegionMergeFailureReason::InvalidCandidate, "Candidate has no faces.");
+        return analysis;
+    }
     if (candidate.boundary_edges.empty()) {
         fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate has no boundary edges.");
         return analysis;
@@ -160,9 +172,15 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
 
     std::vector<BoundaryEdgeInfo> boundaryEdges;
     boundaryEdges.reserve(candidate.boundary_edges.size());
+    std::set<EdgeId> seenBoundaryEdges;
     for (const auto edgeId : candidate.boundary_edges) {
         if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
             fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate references a missing boundary edge.");
+            return analysis;
+        }
+        if (!seenBoundaryEdges.insert(edgeId).second) {
+            analysis.has_non_manifold_edges = true;
+            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary references an edge more than once.");
             return analysis;
         }
         const auto* adjacency = topology.adjacencyForEdge(edgeId);
@@ -179,6 +197,11 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
             fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary contains an edge without two vertices.");
             return analysis;
         }
+        if (first.IsSame(second)) {
+            analysis.has_non_manifold_edges = true;
+            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary contains a degenerate edge.");
+            return analysis;
+        }
         boundaryEdges.push_back(BoundaryEdgeInfo {edgeId, first, second});
     }
 
@@ -189,10 +212,29 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
         return analysis;
     }
 
-    bool hasNonManifoldEdges = false;
-    analysis.boundary_closed = orderBoundaryLoops(boundaryEdges, analysis.boundary_loops, analysis.ordered_boundary_edges, hasNonManifoldEdges);
-    analysis.has_non_manifold_edges = hasNonManifoldEdges;
-    if (analysis.has_non_manifold_edges) {
+    std::vector<TopoDS_Vertex> boundaryVertices;
+    std::vector<std::vector<int>> incidentEdges;
+    for (int index = 0; index < static_cast<int>(boundaryEdges.size()); ++index) {
+        auto& edge = boundaryEdges[static_cast<std::size_t>(index)];
+        edge.first_vertex = vertexIndex(boundaryVertices, edge.first);
+        edge.second_vertex = vertexIndex(boundaryVertices, edge.second);
+        const auto requiredSize = static_cast<std::size_t>(std::max(edge.first_vertex, edge.second_vertex) + 1);
+        if (incidentEdges.size() < requiredSize) {
+            incidentEdges.resize(requiredSize);
+        }
+        incidentEdges[static_cast<std::size_t>(edge.first_vertex)].push_back(index);
+        incidentEdges[static_cast<std::size_t>(edge.second_vertex)].push_back(index);
+    }
+
+    analysis.boundary_closed = true;
+    for (const auto& incident : incidentEdges) {
+        if (incident.size() > 2) {
+            analysis.has_branching_boundary = true;
+        } else if (incident.size() != 2) {
+            analysis.boundary_closed = false;
+        }
+    }
+    if (analysis.has_branching_boundary) {
         fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary has a branching vertex.");
         return analysis;
     }
@@ -201,11 +243,17 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
         return analysis;
     }
 
+    if (!orderBoundaryLoops(boundaryEdges, analysis.boundary_loops, analysis.ordered_boundary_edges)) {
+        analysis.boundary_closed = false;
+        fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary edges do not form closed loops.");
+        return analysis;
+    }
+
     analysis.outer_wire_count = analysis.boundary_loops.empty() ? 0 : 1;
     analysis.inner_wire_count = analysis.boundary_loops.size() > 1 ? static_cast<int>(analysis.boundary_loops.size() - 1) : 0;
     analysis.has_holes = analysis.inner_wire_count > 0;
     if (analysis.has_holes) {
-        fail(analysis, RegionMergeFailureReason::InnerLoopsNotSupported, "Candidate boundary contains inner loops or holes.");
+        fail(analysis, RegionMergeFailureReason::InnerLoopsNotSupported, "Candidate boundary contains inner loops, holes, or multiple closed boundary loops.");
         return analysis;
     }
 

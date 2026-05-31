@@ -17,6 +17,7 @@ struct RegionBoundaryAnalysis {
     bool boundary_closed = false;
     bool has_holes = false;
     bool has_non_manifold_edges = false;
+    bool has_branching_boundary = false;
     std::vector<EdgeId> ordered_boundary_edges;
     std::vector<std::vector<EdgeId>> boundary_loops;
     RegionMergeFailureReason failure_reason = RegionMergeFailureReason::None;
