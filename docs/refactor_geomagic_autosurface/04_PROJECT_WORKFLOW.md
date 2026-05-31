@@ -1,7 +1,7 @@
 # STEP-PATCH-OPTIMIZER 项目流程文档
 
-> 草案版本：v0.1  
-> 用途：定义从 STP + 原始 STL 输入，到局部 patch 生成、预览、替换和验证的完整流程。
+> 草案版本：v0.2-preview-then-apply  
+> 用途：定义从 STP + 原始 STL 输入，到候选预览、Geomagic patch 生成、patch 叠加预览、用户 Apply、真实贴回和验证的完整流程。
 
 ---
 
@@ -23,11 +23,15 @@
     8. 根据 candidate bbox / boundary 从原始 STL 裁剪 local STL，允许 margin。
     9. 调用 wrapCore.exe + AutoSurface，生成 local IGS / STEP patch。
     10. OCCT 导入 local patch。
-    11. Viewer 叠加预览 patch。
-    12. 用户确认后，使用原 STP boundary wire 进行 patch replacement。
-    13. StrictTopologyGate 验证。
-    14. 合法则提交 Command；不合法则回滚。
-    15. 导出最终 STEP，并做 STEP roundtrip。
+    11. Viewer 叠加预览 patch，原 candidate 高亮保持。
+    12. 输出 patch preview report。
+    13. 用户检查 overlay 后点击 Apply。
+    14. 使用原 STP boundary wire 进行 boundary-constrained patch replacement。
+    15. 执行 sewing / ShapeFix / SameParameter。
+    16. StrictTopologyGate 验证。
+    17. 合法则提交 Command；不合法则 rollback。
+    18. 成功后可 undo/redo。
+    19. 导出最终 STEP，并做 STEP roundtrip。
 ```
 
 核心原则：
@@ -36,7 +40,8 @@
 STP 边界负责拓扑。
 STL 点集负责几何。
 Geomagic 负责拟合。
-OCCT 负责替换与验证。
+OCCT 负责导入、预览、替换与验证。
+用户 Apply 是 patch preview 和真实贴回之间的硬分界线。
 ```
 
 ---
@@ -73,7 +78,7 @@ bbox size ratio
 
 ```text
 Detect Feature Edges
-Preview Merge Candidates
+Preview FeatureBoundedRegion Candidates
 ```
 
 内部：
@@ -92,17 +97,15 @@ FeatureBoundedRegionBuilder
 
 ```text
 Candidate ID
+Candidate Type
 Face count
 Boundary edge count
 Protected edge count
 Boundary validity
 Risk level
-Status
+Candidate status
+Patch status
 ```
-
----
-
-### 2.3 用户筛选候选区域
 
 候选状态：
 
@@ -113,21 +116,27 @@ Rejected
 Hidden
 ```
 
-交互建议：
+注意：
+
+```text
+Preview Candidates 不启动 Geomagic。
+Candidate status 变化不修改主 ShapeDocument。
+```
+
+---
+
+### 2.3 用户筛选候选区域
+
+推荐交互：
 
 ```text
 1. 先只显示 Top N 大候选区域。
 2. 用户点击 candidate 查看 inspect 信息。
 3. 用户接受少量低风险 candidate。
-4. 只对 Accepted candidate 运行 Geomagic。
+4. 只对 Accepted candidate 运行 Geomagic patch generation。
 ```
 
-注意：
-
-```text
-Preview Candidates 不启动 Geomagic。
-Accepted 也不自动替换。
-```
+candidate 被 accepted 后，仍然不会自动替换主模型。
 
 ---
 
@@ -148,6 +157,7 @@ boundary closed = true
 inner wire count = 0
 has holes = false
 has non-manifold edges = false
+has branching boundary = false
 ```
 
 失败处理：
@@ -155,7 +165,14 @@ has non-manifold edges = false
 ```text
 status = Rejected 或 HighRisk
 不进入 STL crop
+不进入 Geomagic
 报告 failure_reason
+```
+
+通过后：
+
+```text
+BoundaryWireBuilder 根据 ordered_boundary_edges 构造 original STP outer boundary wire。
 ```
 
 ---
@@ -189,8 +206,8 @@ minMargin = 0.1 mm
 输出：
 
 ```text
-workspace/region_XXXX/local_input.stl
-workspace/region_XXXX/crop_report.json
+workspace/session_YYYYMMDD_HHMMSS/region_XXXX/local_input.stl
+workspace/session_YYYYMMDD_HHMMSS/region_XXXX/crop_report.json
 ```
 
 重点：
@@ -252,12 +269,13 @@ autosurface_result.json
 记录 error_msg。
 保留 stdout/stderr。
 candidate job status = Failed。
-不导入 patch，不替换。
+不导入 patch。
+不允许 Apply。
 ```
 
 ---
 
-## 6. Patch 导入与预览
+## 6. Patch 导入与叠加预览
 
 优先导入：
 
@@ -275,9 +293,10 @@ local_output.igs
 
 ```text
 ImportedPatchInfo
+PatchPreviewReport
 ```
 
-字段：
+`ImportedPatchInfo` 字段：
 
 ```text
 candidate_id
@@ -290,28 +309,56 @@ has_usable_face
 message
 ```
 
+`PatchPreviewReport` 字段：
+
+```text
+candidate id
+source face count
+source boundary edge count
+patch path
+patch face count
+patch edge count
+candidate bbox
+patch bbox
+bbox deviation
+import BRepCheck result
+recommended action
+```
+
 Viewer 显示：
 
 ```text
 原 STP candidate 保持高亮。
 imported patch 作为 overlay 显示。
-用户可以显示/隐藏 patch。
+用户可以显示/隐藏/清除 patch。
 ```
 
 注意：
 
 ```text
 patch preview 不修改主 ShapeDocument。
+Patch PreviewReady 后，Apply 按钮才可启用。
 ```
 
 ---
 
-## 7. Patch Replacement
+## 7. Apply 与 Patch Replacement
 
-用户确认后：
+用户确认 overlay 后点击：
 
 ```text
-Replace Candidate With Patch
+Apply Current Patch To Candidate
+```
+
+Apply 前检查：
+
+```text
+selected candidate 存在。
+candidate status == Accepted。
+patch status == PreviewReady。
+boundary analysis 仍然 valid。
+imported patch valid。
+patch bbox 未明显异常。
 ```
 
 输入：
@@ -325,12 +372,14 @@ imported patch shape
 目标路径：
 
 ```text
-1. 从原模型中删除 candidate source faces。
+1. 保存 beforeDocument。
 2. 从 imported patch 中提取 underlying surface / usable faces。
 3. 优先使用 original STP boundary wire 构造 replacement face / patch。
-4. 将 replacement patch 接回原 shell。
-5. 执行 ShapeFix / SameParameter / Sewing。
-6. 得到 after ShapeDocument。
+4. 从原模型中替换 candidate source faces。
+5. 将 replacement patch 接回原 shell。
+6. 执行 ShapeFix / SameParameter / Sewing。
+7. 得到临时 after ShapeDocument。
+8. 送入 StrictTopologyGate。
 ```
 
 禁止：
@@ -339,6 +388,7 @@ imported patch shape
 不要直接把 Geomagic patch 的外边界当作最终边界。
 不要直接用 STL 裁剪边界作为最终边界。
 不要绕过 StrictTopologyGate 提交。
+不要在 patch preview 前自动 Apply。
 ```
 
 MVP 限制：
@@ -347,7 +397,7 @@ MVP 限制：
 单一 closed outer wire。
 无 holes。
 单 patch 或少量 patch。
-失败直接回滚。
+失败直接 rollback。
 ```
 
 ---
@@ -391,6 +441,16 @@ accepted = false
 rollback_applied = true
 CommandContext.document 保持 beforeDocument
 GUI 显示失败原因
+workspace 写 validation_report.json
+```
+
+成功处理：
+
+```text
+CommandContext.document = afterDocument
+candidate patch status = Applied
+进入 undo 栈
+允许导出最终 STEP
 ```
 
 ---
@@ -418,6 +478,8 @@ workspace/
       local_output.igs
       local_output.step
       patch_import_report.json
+      patch_preview_report.json
+      replacement_report.json
       validation_report.json
 ```
 
@@ -427,14 +489,15 @@ workspace/
 
 ```text
 Pending
+→ AnalyzingBoundary
 → CroppingStl
-→ WaitingForGeomagic
 → RunningGeomagic
 → ImportingPatch
 → PreviewReady
+→ ApplyPending
 → Replacing
 → Validating
-→ Accepted
+→ Applied
 ```
 
 失败分支：
@@ -443,6 +506,7 @@ Pending
 Failed
 Rejected
 Cancelled
+ApplyFailed
 ```
 
 默认并发：
@@ -475,49 +539,87 @@ AutoSurface parameters
 autosurface_pipeline.py version
 ```
 
-缓存命中：
+缓存命中条件：
 
 ```text
 local STL 已存在且 crop_report success。
 autosurface_result success。
 output patch exists。
 patch import report valid。
+patch preview report valid。
 ```
 
 命中后：
 
 ```text
 跳过 STL crop 和 Geomagic。
-直接进入 patch import / preview。
+直接进入 patch import / overlay preview。
+```
+
+注意：
+
+```text
+缓存命中不代表可以自动 Apply。
+Apply 仍需用户确认。
 ```
 
 ---
 
 ## 12. MVP 验收
 
-### MVP-1
+### MVP-A：Candidate Preview
+
+```text
+1. 打开 STP。
+2. 检测特征边。
+3. 生成 FeatureBoundedRegion candidates。
+4. 显示 candidate overlay。
+5. candidate 可 accepted / rejected / hidden。
+```
+
+### MVP-B：Patch Generation + Overlay Preview
 
 ```text
 1. 打开 STP。
 2. 打开 STL。
-3. 检测特征边。
-4. 生成 FeatureBoundedRegion candidates。
-5. 接受一个低风险 candidate。
-6. BoundaryAnalyzer 通过。
-7. 导出 local STL。
-8. 调用 Geomagic 输出 local IGS / STEP。
-9. 导入 patch。
-10. Viewer 叠加显示 patch。
-11. 输出完整日志。
+3. 接受一个低风险 candidate。
+4. BoundaryAnalyzer 通过。
+5. 导出 local STL。
+6. 调用 Geomagic 输出 local IGS / STEP。
+7. 导入 patch。
+8. Viewer 叠加显示 patch。
+9. 输出 patch_preview_report。
+10. 主 ShapeDocument 不变。
 ```
 
-### MVP-2
+### MVP-C：Apply + Replacement
 
 ```text
-1. 对单 closed boundary candidate 执行 replacement。
-2. StrictTopologyGate 通过。
-3. Command 可 undo/redo。
-4. 导出 STEP。
-5. STEP roundtrip 通过。
-6. Creo 手动打开无缺面。
+1. 对 PreviewReady candidate 点击 Apply。
+2. 执行 PatchReplacementCommand。
+3. StrictTopologyGate 通过。
+4. Command 可 undo/redo。
+5. 导出 STEP。
+6. STEP roundtrip 通过。
+```
+
+---
+
+## 13. 最小手动验证流程
+
+```text
+STP + STL
+→ Preview FeatureBoundedRefit candidates
+→ Accept one low-risk candidate
+→ Analyze boundary
+→ Crop local STL
+→ Run Geomagic AutoSurface
+→ Import local STEP / IGS
+→ Overlay preview patch
+→ Click Apply
+→ Replacement + sewing
+→ StrictTopologyGate
+→ Undo / Redo
+→ Export STEP
+→ STEP roundtrip
 ```
