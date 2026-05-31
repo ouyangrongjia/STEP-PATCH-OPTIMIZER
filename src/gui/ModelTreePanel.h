@@ -24,6 +24,7 @@ public:
         int rejectedCandidateCount = 0,
         int hiddenCandidateCount = 0,
         int currentMergeCandidateId = -1,
+        const MergeCandidate* currentMergeCandidate = nullptr,
         const CandidateTypeCounts* candidateTypeCounts = nullptr,
         const FeatureEdgeDetectionResult* featureEdges = nullptr);
 

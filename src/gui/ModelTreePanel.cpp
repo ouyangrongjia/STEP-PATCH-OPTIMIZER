@@ -6,6 +6,22 @@
 
 namespace spo {
 
+namespace {
+
+QString riskLevelText(MergeRiskLevel risk) {
+    switch (risk) {
+    case MergeRiskLevel::Low:
+        return "Low";
+    case MergeRiskLevel::Medium:
+        return "Medium";
+    case MergeRiskLevel::High:
+        return "High";
+    }
+    return "Unknown";
+}
+
+}
+
 ModelTreePanel::ModelTreePanel(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -35,6 +51,7 @@ void ModelTreePanel::showDocument(
     int rejectedCandidateCount,
     int hiddenCandidateCount,
     int currentMergeCandidateId,
+    const MergeCandidate* currentMergeCandidate,
     const CandidateTypeCounts* candidateTypeCounts,
     const FeatureEdgeDetectionResult* featureEdges) {
     tree_->clear();
@@ -77,6 +94,7 @@ void ModelTreePanel::showDocument(
             new QTreeWidgetItem(candidates, QStringList() << QString("SphereLike：%1").arg(candidateTypeCounts->sphere_like));
             new QTreeWidgetItem(candidates, QStringList() << QString("ConeLike：%1").arg(candidateTypeCounts->cone_like));
             new QTreeWidgetItem(candidates, QStringList() << QString("TorusLike：%1").arg(candidateTypeCounts->torus_like));
+            new QTreeWidgetItem(candidates, QStringList() << QString("FeatureBoundedRefit：%1").arg(candidateTypeCounts->feature_bounded_refit));
             new QTreeWidgetItem(candidates, QStringList() << QString("FreeformG1：%1").arg(candidateTypeCounts->freeform_g1));
             new QTreeWidgetItem(candidates, QStringList() << QString("FreeformG2：%1").arg(candidateTypeCounts->freeform_g2));
             new QTreeWidgetItem(candidates, QStringList() << QString("Unknown：%1").arg(candidateTypeCounts->unknown));
@@ -87,6 +105,15 @@ void ModelTreePanel::showDocument(
         new QTreeWidgetItem(candidates, QStringList() << QString("已隐藏：%1").arg(hiddenCandidateCount));
         new QTreeWidgetItem(candidates, QStringList() << QString("当前高亮：%1").arg(visibleMergeCandidateCount));
         new QTreeWidgetItem(candidates, QStringList() << QString("当前候选 ID：%1").arg(currentMergeCandidateId >= 0 ? QString::number(currentMergeCandidateId) : "无"));
+        if (currentMergeCandidate != nullptr) {
+            auto* current = new QTreeWidgetItem(candidates, QStringList() << "当前候选详情");
+            new QTreeWidgetItem(current, QStringList() << QString("candidate id：%1").arg(currentMergeCandidate->candidate_id));
+            new QTreeWidgetItem(current, QStringList() << QString("candidate type：%1").arg(QString::fromLatin1(toString(currentMergeCandidate->candidate_type))));
+            new QTreeWidgetItem(current, QStringList() << QString("face count：%1").arg(currentMergeCandidate->face_count));
+            new QTreeWidgetItem(current, QStringList() << QString("boundary edge count：%1").arg(currentMergeCandidate->boundary_edge_count));
+            new QTreeWidgetItem(current, QStringList() << QString("risk level：%1").arg(riskLevelText(currentMergeCandidate->risk_level)));
+            new QTreeWidgetItem(current, QStringList() << QString("status：%1").arg(QString::fromLatin1(toString(currentMergeCandidate->status))));
+        }
     } else {
         new QTreeWidgetItem(candidates, QStringList() << "尚未生成候选区域");
     }

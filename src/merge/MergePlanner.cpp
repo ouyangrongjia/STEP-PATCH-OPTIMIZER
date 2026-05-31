@@ -1,10 +1,12 @@
 #include "merge/MergePlanner.h"
 
 #include "brep/ShapeDocument.h"
+#include "brep/TopologyGraph.h"
+#include "merge/FeatureBoundedRegionBuilder.h"
 #include "merge/MergeRegionGrower.h"
 
-#include <set>
 #include <iterator>
+#include <set>
 
 namespace spo {
 
@@ -48,9 +50,29 @@ MergePlannerResult MergePlanner::plan(
     for (const auto& edge : featureEdges.edges) {
         protectedEdges.insert(edge.edge);
     }
+    const auto& topology = document.topology();
+    for (EdgeId edge = 0; edge < topology.edgeCount(); ++edge) {
+        const auto* adjacency = topology.adjacencyForEdge(edge);
+        if (adjacency == nullptr || adjacency->faces.size() != 2) {
+            protectedEdges.insert(edge);
+        }
+    }
     result.protected_edge_count = static_cast<int>(protectedEdges.size());
 
     MergeRegionGrower grower;
+    if (options.enable_feature_bounded_refit_candidates) {
+        FeatureBoundedRegionBuilder builder;
+        appendCandidates(
+            result.candidates,
+            builder.build(
+                document,
+                protectedEdges,
+                options.min_feature_bounded_region_faces),
+            nullptr,
+            nullptr,
+            result.visited_faces,
+            result.rejected_regions);
+    }
     if (options.enable_plane_candidates) {
         int visited = 0;
         int rejected = 0;

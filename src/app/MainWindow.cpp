@@ -57,6 +57,8 @@ QString candidateTypeText(MergeCandidateType type) {
         return "SphereLike";
     case MergeCandidateType::TorusLike:
         return "TorusLike";
+    case MergeCandidateType::FeatureBoundedRefit:
+        return "FeatureBoundedRefit";
     case MergeCandidateType::FreeformG1:
         return "FreeformG1";
     case MergeCandidateType::FreeformG2:
@@ -74,6 +76,7 @@ std::vector<MergeCandidateType> displayCandidateTypes() {
         MergeCandidateType::SphereLike,
         MergeCandidateType::ConeLike,
         MergeCandidateType::TorusLike,
+        MergeCandidateType::FeatureBoundedRefit,
         MergeCandidateType::FreeformG1,
         MergeCandidateType::FreeformG2,
         MergeCandidateType::Unknown
@@ -752,10 +755,11 @@ void MainWindow::previewMergeCandidates() {
     const auto beforeStats = controller_.document().stats();
     const auto params = parameterPanel_->parameters();
     MergePlannerOptions options;
+    options.enable_plane_candidates = false;
     options.max_plane_distance = params.linear_tolerance;
     options.min_region_faces = 2;
     options.enable_cylinder_candidates = true;
-    options.enable_sphere_candidates = true;
+    options.enable_sphere_candidates = false;
     options.enable_cone_candidates = true;
     options.enable_torus_candidates = true;
     options.min_analytic_region_faces = 2;
@@ -780,13 +784,14 @@ void MainWindow::previewMergeCandidates() {
     const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
     const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
 
-    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFreeformG1：%7\nFreeformG2：%8\nUnknown：%9\nPending：%10\nAccepted：%11\nRejected：%12\nHidden：%13\n保护边数量：%14\n访问 face 数量：%15\n拒绝区域数量：%16\n最大候选区域 face 数：%17\n总候选 face 数：%18\n预览前 face/edge：%19/%20\n预览后 face/edge：%21/%22")
+    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFeatureBoundedRefit：%7\nFreeformG1：%8\nFreeformG2：%9\nUnknown：%10\nPending：%11\nAccepted：%12\nRejected：%13\nHidden：%14\n保护边数量：%15\n访问 face 数量：%16\n拒绝区域数量：%17\n最大候选区域 face 数：%18\n总候选 face 数：%19\n预览前 face/edge：%20/%21\n预览后 face/edge：%22/%23")
         .arg(result.candidates.size())
         .arg(typeCounts.plane_like)
         .arg(typeCounts.cylinder_like)
         .arg(typeCounts.sphere_like)
         .arg(typeCounts.cone_like)
         .arg(typeCounts.torus_like)
+        .arg(typeCounts.feature_bounded_refit)
         .arg(typeCounts.freeform_g1)
         .arg(typeCounts.freeform_g2)
         .arg(typeCounts.unknown)
@@ -839,8 +844,9 @@ void MainWindow::previewMergeCandidates() {
     toggleFeaturesAction_->setChecked(true);
     refreshModelTree();
     inspectPanel_->showReport(report);
-    logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，保护边 %2，访问 face %3，拒绝 %4")
+    logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，FeatureBoundedRefit %2 个，保护边 %3，访问 face %4，拒绝 %5")
         .arg(result.candidates.size())
+        .arg(typeCounts.feature_bounded_refit)
         .arg(result.protected_edge_count)
         .arg(result.visited_faces)
         .arg(result.rejected_regions));
@@ -1733,6 +1739,7 @@ void MainWindow::refreshModelTree() {
         counts.rejected,
         counts.hidden,
         currentMergeCandidateId_,
+        currentMergeCandidate(),
         &typeCounts,
         hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr);
 }
@@ -1787,7 +1794,7 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
         if (!hasCandidatePreview) {
             report += "\nNote：当前尚未生成合并候选，请先点击“预览合并”。";
         } else {
-            report += "\nNote：当前候选检测已启用 PlaneLike / CylinderLike / SphereLike / ConeLike。若该面仍未进入候选，通常是因为该面为 BSpline 近似曲面、区域面数不足，或邻接 protected/locked edge 阻断。";
+            report += "\nNote：当前候选检测已启用 FeatureBoundedRefit / CylinderLike / ConeLike / TorusLike。若该面仍未进入候选，通常是因为区域面数不足，或邻接 protected/locked edge 阻断。";
         }
     }
 
@@ -1869,12 +1876,13 @@ void MainWindow::showFilteredMergeCandidates(MergeCandidateStatus status) {
 
 void MainWindow::showCandidateStatusReport(const QString& title) {
     const auto counts = countCandidateStatuses(lastMergeCandidates_);
+    const auto* candidate = currentMergeCandidate();
     QString currentStatus = "无";
-    if (const auto* candidate = currentMergeCandidate()) {
+    if (candidate != nullptr) {
         currentStatus = candidateStatusText(candidate->status);
     }
 
-    inspectPanel_->showReport(QString("%1\n当前候选 ID：%2\n当前候选状态：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n当前显示候选数量：%8")
+    QString report = QString("%1\n当前候选 ID：%2\n当前候选状态：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n当前显示候选数量：%8")
         .arg(title)
         .arg(currentMergeCandidateId_ >= 0 ? QString::number(currentMergeCandidateId_) : "无")
         .arg(currentStatus)
@@ -1882,14 +1890,33 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
         .arg(counts.accepted)
         .arg(counts.rejected)
         .arg(counts.hidden)
-        .arg(visibleMergeCandidateCount_));
-    logPanel_->appendInfo(QString("%1：Pending %2，Accepted %3，Rejected %4，Hidden %5，当前显示 %6")
+        .arg(visibleMergeCandidateCount_);
+    if (candidate != nullptr) {
+        report += QString("\n当前候选类型：%1\nface count：%2\nboundary edge count：%3\nrisk level：%4")
+            .arg(candidateTypeText(candidate->candidate_type))
+            .arg(candidate->face_count)
+            .arg(candidate->boundary_edge_count)
+            .arg(riskLevelText(candidate->risk_level));
+    }
+
+    inspectPanel_->showReport(report);
+    QString logMessage = QString("%1：Pending %2，Accepted %3，Rejected %4，Hidden %5，当前显示 %6")
         .arg(title)
         .arg(counts.pending)
         .arg(counts.accepted)
         .arg(counts.rejected)
         .arg(counts.hidden)
-        .arg(visibleMergeCandidateCount_));
+        .arg(visibleMergeCandidateCount_);
+    if (candidate != nullptr) {
+        logMessage += QString("，当前候选 ID %1，类型 %2，face %3，boundary edge %4，risk %5，status %6")
+            .arg(candidate->candidate_id)
+            .arg(candidateTypeText(candidate->candidate_type))
+            .arg(candidate->face_count)
+            .arg(candidate->boundary_edge_count)
+            .arg(riskLevelText(candidate->risk_level))
+            .arg(candidateStatusText(candidate->status));
+    }
+    logPanel_->appendInfo(logMessage);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

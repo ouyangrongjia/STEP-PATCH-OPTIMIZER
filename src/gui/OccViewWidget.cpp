@@ -60,6 +60,8 @@ Quantity_Color candidateColor(MergeCandidateType type, std::size_t index) {
         return Quantity_Color(0.72 + shade, 0.12, 0.95, Quantity_TOC_RGB);
     case MergeCandidateType::TorusLike:
         return Quantity_Color(0.00, 0.78 + shade, 0.85, Quantity_TOC_RGB);
+    case MergeCandidateType::FeatureBoundedRefit:
+        return Quantity_Color(0.95, 0.95, 0.10 + shade, Quantity_TOC_RGB);
     case MergeCandidateType::FreeformG1:
         return Quantity_Color(0.36, 0.52 + shade, 0.68, Quantity_TOC_RGB);
     case MergeCandidateType::FreeformG2:

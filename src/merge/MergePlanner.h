@@ -29,12 +29,14 @@ struct MergePlannerOptions {
     double max_torus_minor_radius_delta = 0.02;
     int min_region_faces = 2;
     int min_analytic_region_faces = 2;
+    int min_feature_bounded_region_faces = 2;
 
     bool enable_plane_candidates = true;
     bool enable_cylinder_candidates = false;
     bool enable_sphere_candidates = false;
     bool enable_cone_candidates = false;
     bool enable_torus_candidates = false;
+    bool enable_feature_bounded_refit_candidates = true;
     bool enable_freeform_candidates = false;
 };
 
