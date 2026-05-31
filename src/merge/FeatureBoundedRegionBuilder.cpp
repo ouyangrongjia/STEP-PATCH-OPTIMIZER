@@ -26,15 +26,25 @@ bool allAdjacentFacesInRegion(const EdgeAdjacency& adjacency, const std::set<Fac
 std::vector<MergeCandidate> FeatureBoundedRegionBuilder::build(
     const ShapeDocument& document,
     const std::set<EdgeId>& protectedEdges,
-    int minRegionFaces) const {
+    int minRegionFaces,
+    int* visitedFaces,
+    int* rejectedRegions) const {
     std::vector<MergeCandidate> candidates;
     if (!document.hasShape()) {
+        if (visitedFaces != nullptr) {
+            *visitedFaces = 0;
+        }
+        if (rejectedRegions != nullptr) {
+            *rejectedRegions = 0;
+        }
         return candidates;
     }
 
     const auto& topology = document.topology();
     std::vector<bool> visited(topology.faceCount(), false);
     const auto minFaces = std::max(1, minRegionFaces);
+    int visitedCount = 0;
+    int rejectedCount = 0;
 
     for (FaceId seed = 0; seed < topology.faceCount(); ++seed) {
         if (visited[seed]) {
@@ -44,6 +54,7 @@ std::vector<MergeCandidate> FeatureBoundedRegionBuilder::build(
         std::queue<FaceId> queue;
         std::set<FaceId> regionFaces;
         visited[seed] = true;
+        ++visitedCount;
         queue.push(seed);
         regionFaces.insert(seed);
 
@@ -62,6 +73,7 @@ std::vector<MergeCandidate> FeatureBoundedRegionBuilder::build(
                         continue;
                     }
                     visited[next] = true;
+                    ++visitedCount;
                     queue.push(next);
                     regionFaces.insert(next);
                 }
@@ -69,6 +81,7 @@ std::vector<MergeCandidate> FeatureBoundedRegionBuilder::build(
         }
 
         if (static_cast<int>(regionFaces.size()) < minFaces) {
+            ++rejectedCount;
             continue;
         }
 
@@ -106,6 +119,12 @@ std::vector<MergeCandidate> FeatureBoundedRegionBuilder::build(
         candidates.push_back(std::move(candidate));
     }
 
+    if (visitedFaces != nullptr) {
+        *visitedFaces = visitedCount;
+    }
+    if (rejectedRegions != nullptr) {
+        *rejectedRegions = rejectedCount;
+    }
     return candidates;
 }
 

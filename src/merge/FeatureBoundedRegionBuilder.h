@@ -14,7 +14,9 @@ public:
     std::vector<MergeCandidate> build(
         const ShapeDocument& document,
         const std::set<EdgeId>& protectedEdges,
-        int minRegionFaces = 2) const;
+        int minRegionFaces = 2,
+        int* visitedFaces = nullptr,
+        int* rejectedRegions = nullptr) const;
 };
 
 }

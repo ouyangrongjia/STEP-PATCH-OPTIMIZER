@@ -61,15 +61,19 @@ MergePlannerResult MergePlanner::plan(
 
     MergeRegionGrower grower;
     if (options.enable_feature_bounded_refit_candidates) {
+        int visited = 0;
+        int rejected = 0;
         FeatureBoundedRegionBuilder builder;
         appendCandidates(
             result.candidates,
             builder.build(
                 document,
                 protectedEdges,
-                options.min_feature_bounded_region_faces),
-            nullptr,
-            nullptr,
+                options.min_feature_bounded_region_faces,
+                &visited,
+                &rejected),
+            &visited,
+            &rejected,
             result.visited_faces,
             result.rejected_regions);
     }

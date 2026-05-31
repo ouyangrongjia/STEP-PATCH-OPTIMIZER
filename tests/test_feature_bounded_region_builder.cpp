@@ -144,6 +144,20 @@ void test_min_region_faces_filters_small_regions() {
     assert(candidates.empty());
 }
 
+void test_builder_reports_visited_faces_and_rejected_regions() {
+    const auto fixture = make_two_face_fixture();
+    const spo::FeatureBoundedRegionBuilder builder;
+    const std::set<spo::EdgeId> protectedEdges {fixture.shared_edge};
+    int visitedFaces = 0;
+    int rejectedRegions = 0;
+
+    const auto candidates = builder.build(fixture.document, protectedEdges, 2, &visitedFaces, &rejectedRegions);
+
+    assert(candidates.empty());
+    assert(visitedFaces == 2);
+    assert(rejectedRegions == 2);
+}
+
 }
 
 void run_feature_bounded_region_builder_tests() {
@@ -151,4 +165,5 @@ void run_feature_bounded_region_builder_tests() {
     test_free_edges_and_model_boundary_are_boundary_edges();
     test_protected_shared_edge_splits_regions();
     test_min_region_faces_filters_small_regions();
+    test_builder_reports_visited_faces_and_rejected_regions();
 }

@@ -355,6 +355,8 @@ void test_min_feature_bounded_region_faces_filters_candidates() {
     strict.min_feature_bounded_region_faces = 3;
     const auto strictResult = planner.plan(fixture.document, featureEdges, {}, strict);
     assert(candidates_of_type(strictResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
+    assert(strictResult.visited_faces == 2);
+    assert(strictResult.rejected_regions == 1);
 }
 
 void test_locked_edges_and_feature_edges_bound_feature_bounded_regions() {
