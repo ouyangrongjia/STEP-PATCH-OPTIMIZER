@@ -72,6 +72,7 @@ add_library(spo_core STATIC
     src/stl/StlRegionExtractor.cpp
     src/merge/SurfaceRefitter.cpp
     src/merge/TorusRegionMerger.cpp
+    src/patch/PatchImportService.cpp
     src/validate/ErrorMetric.cpp
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
@@ -84,6 +85,7 @@ target_link_libraries(spo_core
     PUBLIC
         Qt6::Core
         TKDESTEP
+        TKDEIGES
         TKXSBase
         TKernel
 )
@@ -164,6 +166,7 @@ if(SPO_BUILD_TESTS)
         tests/test_geomagic_autosurface_config.cpp
         tests/test_geomagic_backend_mock.cpp
         tests/test_geomagic_pipeline_script.cpp
+        tests/test_patch_import_service.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )

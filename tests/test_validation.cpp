@@ -22,6 +22,7 @@ void run_geomagic_output_path_resolver_tests();
 void run_geomagic_autosurface_config_tests();
 void run_geomagic_backend_mock_tests();
 void run_geomagic_pipeline_script_tests();
+void run_patch_import_service_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -93,6 +94,7 @@ int main() {
     run_geomagic_autosurface_config_tests();
     run_geomagic_backend_mock_tests();
     run_geomagic_pipeline_script_tests();
+    run_patch_import_service_tests();
     run_validation_tests();
     return 0;
 }
