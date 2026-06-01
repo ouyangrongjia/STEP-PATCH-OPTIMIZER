@@ -18,6 +18,8 @@ void run_sphere_region_merge_command_tests();
 void run_stl_io_tests();
 void run_stl_mesh_tests();
 void run_stl_region_extractor_tests();
+void run_geomagic_output_path_resolver_tests();
+void run_geomagic_autosurface_config_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -85,6 +87,8 @@ int main() {
     run_stl_io_tests();
     run_stl_mesh_tests();
     run_stl_region_extractor_tests();
+    run_geomagic_output_path_resolver_tests();
+    run_geomagic_autosurface_config_tests();
     run_validation_tests();
     return 0;
 }

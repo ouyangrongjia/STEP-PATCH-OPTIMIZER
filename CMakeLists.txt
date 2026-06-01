@@ -44,6 +44,9 @@ add_library(spo_core STATIC
     src/feature/CurvatureEstimator.cpp
     src/feature/FeatureEdgeDetector.cpp
     src/feature/UserConstraintSet.cpp
+    src/external/geomagic/GeomagicOutputPathResolver.cpp
+    src/external/geomagic/GeomagicAutoSurfaceConfig.cpp
+    src/external/geomagic/GeomagicAutoSurfaceResult.cpp
     src/io/ProjectSerializer.cpp
     src/io/StepReader.cpp
     src/io/StepWriter.cpp
@@ -156,6 +159,8 @@ if(SPO_BUILD_TESTS)
         tests/test_stl_io.cpp
         tests/test_stl_mesh.cpp
         tests/test_stl_region_extractor.cpp
+        tests/test_geomagic_output_path_resolver.cpp
+        tests/test_geomagic_autosurface_config.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
