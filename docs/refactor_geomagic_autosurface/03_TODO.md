@@ -1,8 +1,8 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.3-preview-then-apply  
-> 当前主线：**候选区域预览 → 接入 Geomagic 后端生成 STP/IGS patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：不直接在 Geomagic patch 生成后立即替换主模型；必须先叠加预览，用户确认后再执行真实贴回。
+> 草案版本：v0.4-geomagic-env-output-dirs  
+> 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；`config.json` 主要用于 workspace/report 记录，不作为真实 wrapCore 调用的唯一参数来源。
 
 ---
 
@@ -18,14 +18,15 @@
 3. 用户接受 / 选择一个 candidate。
 4. 对 candidate 提取并验证原 STP closed boundary wire。
 5. 从原始 STL 中裁剪对应 local STL，允许 margin。
-6. 调用 wrapCore.exe + AutoSurface，生成 local IGS / STEP patch。
-7. OCCT 导入 Geomagic 输出 patch。
-8. 在 Viewer 中把 patch 与原 candidate 区域叠加预览。
-9. 用户点击“应用 / Apply”。
-10. 使用原 STP boundary wire 约束 patch 替换。
-11. 尝试 sewing / ShapeFix / SameParameter。
-12. StrictTopologyGate 验证。
-13. 合法则提交 Command；不合法则 rollback。
+6. 将 local STL 写入 data/crop_stl。
+7. 调用 wrapCore.exe + AutoSurface，生成同步目录下的 local IGS / local STP patch。
+8. OCCT 导入 Geomagic 输出 patch。
+9. 在 Viewer 中把 patch 与原 candidate 区域叠加预览。
+10. 用户点击“应用 / Apply”。
+11. 使用原 STP boundary wire 约束 patch 替换。
+12. 尝试 sewing / ShapeFix / SameParameter。
+13. StrictTopologyGate 验证。
+14. 合法则提交 Command；不合法则 rollback。
 ```
 
 ### 0.2 核心原则
@@ -47,6 +48,51 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 不要绕过用户确认执行真实替换。
 不要绕过 StrictTopologyGate 提交模型。
 不要让 redo 重新运行 Geomagic。
+```
+
+### 0.3 crop 输出目录规范
+
+T3/T4 后续统一使用以下目录约定：
+
+```text
+data/
+  crop_stl/
+    ... local region STL files
+  crop_stp/
+    ... Geomagic output STEP/STP files
+  crop_igs/
+    ... Geomagic output IGES files
+```
+
+同步导出规则：
+
+```text
+输入 local STL:
+data/crop_stl/<relative_dir>/<name>.stl
+
+对应输出 STP:
+data/crop_stp/<relative_dir>/<name>.stp
+
+对应输出 IGS:
+data/crop_igs/<relative_dir>/<name>.igs
+```
+
+示例：
+
+```text
+data/crop_stl/03_配件_Clay/candidate_0007.stl
+→ data/crop_stp/03_配件_Clay/candidate_0007.stp
+→ data/crop_igs/03_配件_Clay/candidate_0007.igs
+```
+
+要求：
+
+```text
+1. relative_dir 必须从 data/crop_stl 下的相对路径推导。
+2. 输出目录不存在时自动创建。
+3. 不允许把 Geomagic 输出文件写回 data/crop_stl。
+4. 不允许覆盖原始 data/stl。
+5. T4 后端应支持显式传入 outputStepPath / outputIgesPath；若未显式传入，则按 crop_stl → crop_stp / crop_igs 规则推导。
 ```
 
 ---
@@ -72,15 +118,13 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 4. GUI 能显示 candidate face count / boundary count / risk。
 ```
 
----
-
 ### MVP-B：Geomagic patch 生成 + 叠加预览
 
 ```text
 用户选择一个 accepted candidate
 → RegionBoundaryAnalyzer 通过
-→ 裁剪 local STL
-→ wrapCore.exe + AutoSurface 生成 local IGS / STEP
+→ 裁剪 local STL 到 data/crop_stl
+→ wrapCore.exe + AutoSurface 生成 data/crop_igs / data/crop_stp
 → PatchImportService 导入 patch
 → Viewer 叠加预览 patch
 → 输出完整 workspace 和日志
@@ -90,15 +134,13 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 
 ```text
 1. local STL 成功生成。
-2. Geomagic 输出 local_output.igs / local_output.step。
+2. Geomagic 输出对应的 crop_igs/*.igs 和 crop_stp/*.stp。
 3. result.json 可解析。
 4. patch 能导入 OCCT。
 5. Viewer 能叠加显示 patch。
 6. 清除 overlay 后主模型不变。
 7. 此阶段不修改主 ShapeDocument。
 ```
-
----
 
 ### MVP-C：用户点击应用后的单候选真实贴回
 
@@ -124,8 +166,6 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 6. undo/redo 正常。
 7. redo 不重新运行 Geomagic。
 ```
-
----
 
 ### MVP-D：批量与工程化增强
 
@@ -167,8 +207,6 @@ GUI/报告可显示 FeatureBoundedRefit。
 现有 Plane/Sphere 测试不受影响。
 ```
 
----
-
 ## T1.2 新增 FeatureBoundedRegionBuilder
 
 文件：
@@ -199,8 +237,6 @@ feature edge 不可跨越。
 free edge / model boundary 成为区域边界。
 ```
 
----
-
 ## T1.3 MergePlanner 接入新开关
 
 文件：
@@ -224,8 +260,6 @@ int min_feature_bounded_region_faces = 2;
 开关开启时生成 FeatureBoundedRefit。
 不破坏现有 PlaneLike / CylinderLike / SphereLike 入口。
 ```
-
----
 
 ## T1.4 GUI 候选区域预览入口
 
@@ -307,8 +341,6 @@ branch boundary 拒绝。
 失败原因可读。
 ```
 
----
-
 ## T2.2 BoundaryWireBuilder
 
 文件：
@@ -362,8 +394,6 @@ StlMesh 可保存 triangle list。
 空 mesh 返回 invalid bbox。
 ```
 
----
-
 ## T3.2 新增 StlReader / StlWriter
 
 文件：
@@ -381,7 +411,7 @@ CMakeLists.txt
 
 ```text
 读取原始 STL。
-写出 local_region_XXXX/local_input.stl。
+写出 local region STL。
 第一版优先支持 binary STL；ASCII STL 可后置。
 ```
 
@@ -392,9 +422,8 @@ CMakeLists.txt
 写出后再次读取成功。
 triangle count 保持。
 不存在文件返回失败。
+optional real STL test 文件不存在时跳过。
 ```
-
----
 
 ## T3.3 新增 StlRegionExtractor
 
@@ -432,7 +461,8 @@ double minMargin = 0.1;
 local STL triangle count > 0。
 margin 增大，triangle count 不减少。
 空结果返回失败。
-local STL bbox 覆盖 candidate bbox。
+local STL bbox 与 candidate bbox / expanded bbox 有合理交集。
+真实 STP + STL optional integration test 文件不存在时跳过。
 ```
 
 注意：
@@ -442,57 +472,319 @@ STL 裁剪只用于曲面拟合采样。
 STL 裁剪边界不是最终 CAD 边界。
 ```
 
----
+## T3.4 GUI 裁剪与 crop_stl 导出
 
-# P0：Geomagic AutoSurface 后端
-
-## T4.1 配置和结果结构
+> T3.4 是当前工程中已超出原始 T3.3 的 GUI 能力，保留为 TODO 文档中的正式子任务。
 
 文件：
 
 ```text
-src/external/geomagic/GeomagicAutoSurfaceConfig.h
-src/external/geomagic/GeomagicAutoSurfaceResult.h
+src/app/AppController.h
+src/app/AppController.cpp
+src/gui/MainWindow.h
+src/gui/MainWindow.cpp
+src/gui/OccViewWidget.h
+src/gui/OccViewWidget.cpp
+tests/test_commands.cpp
 ```
 
 任务：
 
 ```text
-定义 wrapCorePath、scriptPath、input/output、numPatches、fallback、detail、geometry、timeout、logPath。
+1. GUI 支持打开原始 STL。
+2. Viewer 可显示源 STL。
+3. 用户选择 FeatureBoundedRefit candidate 后可裁剪当前候选 STL。
+4. 裁剪在后台执行，不阻塞 GUI。
+5. 裁剪结果可显示 cropped STL 和 expanded bbox。
+6. 裁剪结果默认写入 data/crop_stl。
+```
+
+导出命名建议：
+
+```text
+data/crop_stl/<source_model_name>/candidate_<candidate_id>.stl
+```
+
+验收：
+
+```text
+打开 STP 后可打开对应原始 STL。
+候选区域生成后可选择一个 FeatureBoundedRefit candidate。
+点击裁剪后生成 local STL。
+Viewer 可显示 local STL 和 crop bbox。
+报告面板显示 source triangle count、output triangle count、candidate bbox、expanded bbox、output bbox。
+此阶段不运行 Geomagic。
+此阶段不修改主 ShapeDocument。
+```
+
+---
+
+# P0：Geomagic AutoSurface 后端
+
+> 本阶段目标是把 T3 裁剪得到的 local STL 交给 Geomagic Wrap 后台 AutoSurface，生成 local IGS / local STEP patch，并输出 result.json / log。  
+> T4 只负责“生成 Geomagic patch 文件”，不导入 patch，不做 overlay，不做 Apply，不做 replacement face，不修改主 ShapeDocument。
+
+## T4 总体定位
+
+输入：
+
+```text
+FeatureBoundedRefit candidate
+→ T2 boundary analysis valid
+→ T3 local STL crop
+→ data/crop_stl/<relative_dir>/<name>.stl
+```
+
+输出：
+
+```text
+data/crop_igs/<relative_dir>/<name>.igs
+data/crop_stp/<relative_dir>/<name>.stp
+autosurface_result.json
+autosurface_stdout.log
+autosurface_stderr.log
+fit_region.log
+```
+
+Geomagic 最小处理链：
+
+```text
+ReadFile(.stl)
+→ optional Remesh / QuickSmooth / Relax
+→ AutoSurface(.igs)
+→ ReadFile(.igs).cadModel
+→ WriteFile(.stp, filterId=5)
+```
+
+明确不做：
+
+```text
+Solidify
+RepairMesh
+healCAD
+BestFitFreeform
+STEP 主模型替换
+OCCT sewing
+OCCT ShapeFix
+patch overlay
+Apply
+StrictTopologyGate
+```
+
+重要原则：
+
+```text
+Geomagic 输出的 IGS/STP 是“拟合曲面来源”。
+STL 裁剪边界不是最终 CAD 边界。
+最终 trim / replacement 仍必须使用原 STP boundary wire。
+```
+
+真实 wrapCore 路径默认设为：
+
+```text
+E:\Geomagic Wrap\wrapCore.exe
+```
+
+注意：工具名是 `wrapCore.exe`，不是 `warpCore.exe`。
+
+## T4.0 crop_stl → crop_stp / crop_igs 输出路径推导
+
+文件：
+
+```text
+src/external/geomagic/GeomagicOutputPathResolver.h
+src/external/geomagic/GeomagicOutputPathResolver.cpp
+tests/test_geomagic_output_path_resolver.cpp
+CMakeLists.txt
+```
+
+任务：
+
+```text
+根据 inputStlPath 推导 outputStepPath / outputIgesPath。
+```
+
+路径规则：
+
+```text
+输入：
+data/crop_stl/<relative_dir>/<name>.stl
+
+输出：
+data/crop_stp/<relative_dir>/<name>.stp
+data/crop_igs/<relative_dir>/<name>.igs
+```
+
+要求：
+
+```text
+1. 只对位于 data/crop_stl 下的 inputStlPath 自动推导。
+2. 如果 inputStlPath 不在 data/crop_stl 下，返回失败或要求显式传入 outputStepPath / outputIgesPath。
+3. 保留 relative_dir。
+4. 输出目录不存在时自动创建。
+5. 不写入 data/crop_stl。
+6. 不覆盖原始 data/stl。
+```
+
+建议接口：
+
+```cpp
+struct GeomagicOutputPaths {
+    bool success = false;
+    std::filesystem::path outputStepPath;
+    std::filesystem::path outputIgesPath;
+    std::string message;
+};
+
+GeomagicOutputPaths resolveGeomagicOutputPathsFromCropStl(
+    const std::filesystem::path& inputStlPath,
+    const std::filesystem::path& cropStlRoot = std::filesystem::path("data/crop_stl"),
+    const std::filesystem::path& cropStpRoot = std::filesystem::path("data/crop_stp"),
+    const std::filesystem::path& cropIgsRoot = std::filesystem::path("data/crop_igs"));
+```
+
+验收：
+
+```text
+data/crop_stl/a/b/candidate_0001.stl 可推导到 data/crop_stp/a/b/candidate_0001.stp 和 data/crop_igs/a/b/candidate_0001.igs。
+中文路径可处理。
+非 crop_stl 输入返回明确失败。
+输出目录自动创建。
+```
+
+## T4.1 Geomagic AutoSurface 配置和结果结构
+
+文件：
+
+```text
+src/external/geomagic/GeomagicAutoSurfaceConfig.h
+src/external/geomagic/GeomagicAutoSurfaceConfig.cpp
+src/external/geomagic/GeomagicAutoSurfaceResult.h
+src/external/geomagic/GeomagicAutoSurfaceResult.cpp
+tests/test_geomagic_autosurface_config.cpp
+CMakeLists.txt
+```
+
+任务：
+
+```text
+1. 定义 GeomagicAutoSurfaceConfig。
+2. 定义 GeomagicAutoSurfaceResult。
+3. 支持 config 写入 JSON。
+4. 支持 result 写入 / 读取 JSON。
+5. 支持基础 validation。
+6. 不调用 QProcess。
+7. 不调用真实 Geomagic。
 ```
 
 建议结构：
 
 ```cpp
 struct GeomagicAutoSurfaceConfig {
-    std::filesystem::path wrapCorePath;
+    std::filesystem::path wrapCorePath = std::filesystem::path("E:/Geomagic Wrap/wrapCore.exe");
     std::filesystem::path scriptPath;
+
     std::filesystem::path inputStlPath;
     std::filesystem::path outputIgesPath;
     std::filesystem::path outputStepPath;
     std::filesystem::path workDir;
 
+    std::filesystem::path configJsonPath;
+    std::filesystem::path resultJsonPath;
+    std::filesystem::path stdoutLogPath;
+    std::filesystem::path stderrLogPath;
+    std::filesystem::path fitRegionLogPath;
+
+    bool keepTemp = true;
+    bool skipRemesh = true;
+    bool quickSmooth = false;
+    bool relax = false;
+    int relaxIterations = 2;
+    double relaxStrength = 0.25;
+
     bool adaptiveFit = false;
     bool autoMerge = true;
+    bool strictPatchTarget = true;
+
     int numPatches = 1;
     std::vector<int> fallbackNumPatches = {2, 4, 8};
-    double detail = 0.35;
-    double tolerance = 0.05;
+
+    double detail = 0.10;
+    double tolerance = 0.03;
     std::string geometry = "Organic";
+
     bool convertIgesToStep = true;
     int timeoutSeconds = 1800;
 };
+```
+
+```cpp
+struct GeomagicAutoSurfaceResult {
+    bool success = false;
+    bool timedOut = false;
+
+    int exitCode = -1;
+    int bodies = 0;
+    int openLoops = 0;
+
+    std::string message;
+    std::string errorMessage;
+    std::string failedStage;
+
+    std::filesystem::path inputStlPath;
+    std::filesystem::path outputIgesPath;
+    std::filesystem::path outputStepPath;
+    std::filesystem::path preservedIgesPath;
+    std::filesystem::path configJsonPath;
+    std::filesystem::path resultJsonPath;
+    std::filesystem::path stdoutLogPath;
+    std::filesystem::path stderrLogPath;
+    std::filesystem::path fitRegionLogPath;
+
+    long long durationMs = 0;
+};
+```
+
+JSON 字段使用 snake_case。
+
+validation 要求：
+
+```text
+wrapCorePath 不为空。
+scriptPath 不为空。
+inputStlPath 不为空。
+outputStepPath 不为空。
+outputIgesPath 不为空。
+workDir 不为空。
+resultJsonPath 不为空。
+numPatches > 0。
+timeoutSeconds > 0。
+tolerance > 0。
+detail 在 [0, 1]。
+geometry 只能是 Organic 或 Mechanical。
+fallbackNumPatches 中每个 patch 数 > 0。
+```
+
+注意：
+
+```text
+T4.1 不检查 wrapCorePath 是否真实存在。
+真实存在性检查放到 T4.2 runtime 或手动验证。
+autoMerge=true 且 adaptiveFit=true 时，不建议在 validation 阶段直接失败；backend / Python 脚本应强制 adaptiveFit=false。
 ```
 
 验收：
 
 ```text
 config 可写入 JSON。
+result 可写入 JSON。
 result 可从 JSON 读取。
 路径为空时返回配置错误。
+非法数值参数返回配置错误。
+默认 wrapCorePath 为 E:/Geomagic Wrap/wrapCore.exe。
+默认 detail=0.10，tolerance=0.03。
+不调用真实 Geomagic。
 ```
-
----
 
 ## T4.2 GeomagicAutoSurfaceBackend
 
@@ -508,12 +800,102 @@ CMakeLists.txt
 任务：
 
 ```text
-QProcess 调用 wrapCore.exe。
-传入 autosurface_pipeline.py 和 config.json。
-捕获 stdout/stderr。
-读取 result.json。
-支持 timeout。
-支持 mock executable。
+1. 用 QProcess 调用 wrapCore.exe。
+2. program = config.wrapCorePath。
+3. arguments = ["--script", config.scriptPath]。
+4. 通过 FIT_REGION_* 环境变量传参。
+5. 捕获 stdout / stderr。
+6. 写 stdout / stderr log。
+7. 支持 timeout。
+8. 读取 result.json。
+9. 支持 mock executable / mock cmd 测试。
+10. 真实 Geomagic 不进入自动测试。
+```
+
+建议接口：
+
+```cpp
+class GeomagicAutoSurfaceBackend {
+public:
+    GeomagicAutoSurfaceResult run(const GeomagicAutoSurfaceConfig& config) const;
+};
+```
+
+QProcess 调用要求：
+
+```text
+program: config.wrapCorePath
+arguments: --script config.scriptPath
+workingDirectory: config.workDir
+environment: 系统原环境 + FIT_REGION_* 变量
+```
+
+必须设置的环境变量：
+
+```text
+FIT_REGION_INPUT = config.inputStlPath
+FIT_REGION_OUTPUT = config.outputStepPath
+FIT_REGION_WORK_DIR = config.workDir
+FIT_REGION_LOG_FILE = config.fitRegionLogPath
+FIT_REGION_RESULT_JSON = config.resultJsonPath
+FIT_REGION_KEEP_TEMP = 1/0
+FIT_REGION_SKIP_REMESH = 1/0
+FIT_REGION_QUICK_SMOOTH = 1/0
+FIT_REGION_RELAX = 1/0
+FIT_REGION_RELAX_ITERATION = config.relaxIterations
+FIT_REGION_RELAX_STRENGTH = config.relaxStrength
+FIT_REGION_AUTOSURFACE_TARGET = config.numPatches
+FIT_REGION_AUTOSURFACE_TOLERANCE = config.tolerance
+FIT_REGION_DETAIL_LEVEL = config.detail
+FIT_REGION_GEOMETRY_MODE = config.geometry
+FIT_REGION_AUTO_MERGE = 1/0
+FIT_REGION_ADAPTIVE_FIT = 1/0
+FIT_REGION_STRICT_PATCH_TARGET = 1/0
+FIT_REGION_OUTPUT_IGES = config.outputIgesPath
+FIT_REGION_CONFIG_JSON = config.configJsonPath
+```
+
+autoMerge / adaptiveFit 处理：
+
+```text
+如果 config.autoMerge == true 且 config.adaptiveFit == true：
+  backend 传给进程的 FIT_REGION_ADAPTIVE_FIT 必须为 0。
+  result.message 或 stdout log 中记录：autoMerge=True forces adaptiveFit=False。
+```
+
+runtime 检查：
+
+```text
+1. validateGeomagicAutoSurfaceConfig(config) 必须通过。
+2. inputStlPath 必须存在。
+3. scriptPath 必须存在。
+4. workDir 不存在时尝试创建。
+5. configJsonPath 若非空，写出 config JSON。
+6. stdoutLogPath / stderrLogPath 父目录不存在时尝试创建。
+7. resultJsonPath 父目录不存在时尝试创建。
+8. outputStepPath / outputIgesPath 父目录不存在时尝试创建。
+```
+
+result.json 策略：
+
+```text
+1. 如果 resultJsonPath 存在：优先读取 result.json。
+2. 如果 result.json 不存在：exitCode == 0 且 outputStepPath 存在时 success=true，否则 success=false。
+3. outputStepPath 不存在时必须 success=false。
+4. outputIgesPath 不存在时标记 warning；若 outputStepPath 已成功生成，不一定失败。
+```
+
+mock 测试至少覆盖：
+
+```text
+mock success。
+mock failure。
+timeout。
+missing input STL。
+missing script file。
+output file missing。
+crop_stl → crop_stp / crop_igs 路径规则。
+autoMerge + adaptiveFit 时 FIT_REGION_ADAPTIVE_FIT == 0。
 ```
 
 验收：
@@ -523,10 +905,9 @@ mock success 通过。
 mock failure 通过。
 timeout 通过。
 输出文件不存在判失败。
+crop_stl → crop_stp / crop_igs 路径规则通过。
 真实 Geomagic 不参与自动测试。
 ```
-
----
 
 ## T4.3 Geomagic Python 脚本
 
@@ -536,38 +917,166 @@ timeout 通过。
 scripts/geomagic_wrap/autosurface_pipeline.py
 scripts/geomagic_wrap/autosurface_config.example.json
 scripts/geomagic_wrap/README.md
+tests/test_geomagic_pipeline_script.cpp   # 可选，仅做静态检查
+CMakeLists.txt                            # 如新增测试则修改
 ```
 
 任务：
 
 ```text
-读取 config.json。
-ReadFile 输入 local STL。
-AutoSurface 输出 IGS。
-可选 ReadFile(IGS).cadModel + WriteFile(STEP214)。
-写 result.json。
+1. 新增 Geomagic Wrap 内置 Python 环境可执行脚本。
+2. 通过环境变量读取参数。
+3. ReadFile 输入 local STL。
+4. optional Remesh / QuickSmooth / Relax。
+5. AutoSurface 输出临时 IGS。
+6. 保存 IGS 到 FIT_REGION_OUTPUT_IGES。
+7. ReadFile(IGS).cadModel。
+8. WriteFile(STEP214) 输出 STP 到 FIT_REGION_OUTPUT。
+9. 写 result.json。
+10. 写诊断 log。
 ```
 
-默认参数：
+脚本入口：
+
+```text
+wrapCore.exe --script scripts/geomagic_wrap/autosurface_pipeline.py
+```
+
+真实默认路径：
+
+```text
+E:\Geomagic Wrap\wrapCore.exe
+```
+
+必填环境变量：
+
+```text
+FIT_REGION_INPUT
+FIT_REGION_OUTPUT
+FIT_REGION_OUTPUT_IGES
+```
+
+默认 AutoSurface 策略：
+
+```text
+numPatches = 1
+autoMerge = True
+adaptiveFit = False
+detail = 0.10
+geometry = Organic
+tolerance = 0.03
+```
+
+fallback 策略：
+
+```text
+第一轮：requested one-patch autoMerge
+然后尝试：
+  one-patch autoMerge detail=0.0
+  one-patch autoMerge Mechanical
+  one-patch autoMerge larger tolerance=max(tolerance, 0.08)
+  one-patch no autoMerge
+如果 FIT_REGION_STRICT_PATCH_TARGET=0：
+  fallback numPatches=2/4/8
+  fallback automatic numPatches，如 Geomagic 支持 0 则尝试，否则跳过
+```
+
+IGS 临时路径策略：
+
+```text
+为避免中文路径导致 Geomagic 输出 IGS 不稳定，AutoSurface.fileName 优先写入 ASCII 临时路径：
+scripts/geomagic_wrap/fit_region_temp/<safe_name>_<uuid>.igs
+或：FIT_REGION_WORK_DIR/fit_region_temp/<safe_name>_<uuid>.igs
+```
+
+IGS 保存策略：
+
+```text
+1. AutoSurface 输出 temp IGS。
+2. 如果 FIT_REGION_KEEP_TEMP=1：将 temp IGS copy 到 FIT_REGION_OUTPUT_IGES。
+3. FIT_REGION_OUTPUT_IGES 必须对应 data/crop_igs 下路径。
+```
+
+IGS → STP：
+
+```python
+reader = ReadFile()
+reader.filename = temp_igs_path
+reader.run()
+cad_model = reader.cadModel
+
+writer = WriteFile()
+writer.cadModel = cad_model
+writer.filename = output_stp
+writer.filterId = 5
+writer.run()
+```
+
+result.json 至少包含：
 
 ```json
 {
-  "adaptive_fit": false,
-  "auto_merge": true,
-  "num_patches": 1,
-  "fallback_num_patches": [2, 4, 8],
-  "detail": 0.35,
-  "geometry": "Organic",
-  "convert_iges_to_step": true
+  "success": true,
+  "timed_out": false,
+  "exit_code": 0,
+  "bodies": 0,
+  "open_loops": 0,
+  "message": "",
+  "error_message": "",
+  "failed_stage": "",
+  "input_stl_path": "",
+  "output_iges_path": "",
+  "output_step_path": "",
+  "preserved_iges_path": "",
+  "config_json_path": "",
+  "result_json_path": "",
+  "fit_region_log_path": "",
+  "duration_ms": 0
 }
+```
+
+成功条件：
+
+```text
+1. input STL 存在。
+2. ReadFile(STL) 成功并得到 mesh。
+3. AutoSurface 生成 IGS。
+4. temp IGS 成功复制到 FIT_REGION_OUTPUT_IGES。
+5. ReadFile(IGS) 成功并得到 cadModel。
+6. WriteFile(STEP214) 成功。
+7. output STP 文件存在。
+```
+
+README 要求：
+
+```text
+1. 说明脚本定位：local STL patch → IGS/STP，不做 final CAD replacement。
+2. 说明 wrapCore 路径：E:\Geomagic Wrap\wrapCore.exe。
+3. 给出默认运行命令。
+4. 给出 crop 目录同步规则：data/crop_stl → data/crop_stp / data/crop_igs。
+5. 给出放宽 patch 数命令：FIT_REGION_STRICT_PATCH_TARGET=0。
+6. 给出实验性平滑命令。
+7. 说明小 patch 默认不建议 remesh / relax / quick smooth。
+8. 说明 STL 裁剪边界不是最终 CAD 边界。
+9. 说明 STP 原始 boundary wire 才是后续 trim/replacement 依据。
+10. 说明 AutoSurface 输出 STP/IGS 是拟合曲面来源，不是最终贴回结果。
+```
+
+手动验证命令示例：
+
+```bat
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\03_配件_Clay\candidate_0007.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\candidate_0007.stp" && set "FIT_REGION_OUTPUT_IGES=D:\pyProject\step-patch-optimizer\data\crop_igs\03_配件_Clay\candidate_0007.igs" && set "FIT_REGION_RESULT_JSON=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\candidate_0007_autosurface_result.json" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
 验收：
 
 ```text
-真实 Geomagic 环境手动验证。
+真实 Geomagic 环境可手动验证。
 result.json 可被 C++ backend 解析。
-失败时 error_msg 不为空。
+失败时 error_message 不为空。
+成功时 output STP 存在。
+成功时 output IGS 存在于 data/crop_igs。
+自动测试不调用真实 Geomagic。
 ```
 
 ---
@@ -592,7 +1101,8 @@ CMakeLists.txt
 任务：
 
 ```text
-导入 Geomagic 输出 STEP 或 IGS。
+导入 T4 生成的 Geomagic 输出 STEP 或 IGS。
+优先使用 GeomagicAutoSurfaceResult。
 返回 patch shape、face count、edge count、bbox、BRepCheck。
 不修改主 ShapeDocument。
 ```
@@ -600,8 +1110,9 @@ CMakeLists.txt
 优先级：
 
 ```text
-优先导入 local_output.step。
-如果 STEP 不存在或导入失败，再尝试 local_output.igs。
+1. 优先导入 result.outputStepPath，即 data/crop_stp/<relative_dir>/<name>.stp。
+2. 如果 STEP 不存在或导入失败，再尝试 result.outputIgesPath / result.preservedIgesPath，即 data/crop_igs/<relative_dir>/<name>.igs。
+3. 导入失败不影响主模型。
 ```
 
 验收：
@@ -612,8 +1123,6 @@ CMakeLists.txt
 bbox 和 face count 可显示。
 patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 ```
-
----
 
 ## T5.2 Patch overlay 叠加预览
 
@@ -644,8 +1153,6 @@ candidate highlight 与 patch overlay 可同时存在。
 多次导入不残留旧 AIS 对象。
 ```
 
----
-
 ## T5.3 Patch preview report
 
 文件：
@@ -664,7 +1171,9 @@ src/gui/ModelTreePanel.cpp
 - candidate id
 - source face count
 - source boundary edge count
-- patch path
+- local STL path
+- patch STEP path
+- patch IGS path
 - patch face count
 - patch edge count
 - patch bbox
@@ -681,8 +1190,6 @@ src/gui/ModelTreePanel.cpp
 patch import 失败时报告明确。
 patch bbox 明显异常时阻止 Apply 或标记 HighRisk。
 ```
-
----
 
 ## T5.4 Apply 按钮和候选状态
 
@@ -765,12 +1272,12 @@ CMakeLists.txt
 4. 对 replacement face 做 ShapeFix_Face / SameParameter。
 ```
 
-允许实验 fallback：
+关键原则：
 
 ```text
-若无法从 imported patch 抽取可用 underlying surface，
-允许进入 direct patch sewing fallback，
-但必须标记为 experimental，并必须通过 StrictTopologyGate。
+Geomagic 输出 patch 只提供拟合 surface / patch geometry。
+最终 replacement face 必须使用原 STP boundary wire trim。
+不要直接把 Geomagic STP 的外边界当作最终贴回边界。
 ```
 
 验收：
@@ -780,9 +1287,8 @@ CMakeLists.txt
 boundary invalid 时失败。
 imported patch 无可用 face 时失败。
 不直接使用 STL 裁剪边界作为最终边界。
+不直接使用 Geomagic patch 外边界作为最终边界。
 ```
-
----
 
 ## T6.2 PatchReplacementCommand
 
@@ -807,6 +1313,7 @@ CMakeLists.txt
 7. Gate 成功才提交 afterDocument。
 8. Gate 失败 rollback。
 9. 支持 undo/redo。
+10. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
 ```
 
 限制：
@@ -828,8 +1335,6 @@ redo 不重新运行 Geomagic。
 失败报告包含 rollback_applied=true。
 ```
 
----
-
 ## T6.3 Sewing / ShapeFix 集成
 
 文件：
@@ -850,14 +1355,6 @@ src/validate/StrictTopologyGate.cpp
 - 可选 BRepBuilderAPI_Sewing
 ```
 
-执行标准：
-
-```text
-1. sewing 只作用于临时 shape。
-2. sewing 后必须重新统计 free edges / multiple edges。
-3. sewing 不能掩盖拓扑破坏；Gate 仍是最终裁决。
-```
-
 验收：
 
 ```text
@@ -865,8 +1362,6 @@ src/validate/StrictTopologyGate.cpp
 sewing 成功但 BRepCheck 失败，Gate 拒绝。
 sewing 后 solid count 改变，Gate 拒绝。
 ```
-
----
 
 ## T6.4 StrictTopologyGate 最小可用版
 
@@ -901,8 +1396,6 @@ report 可写入 JSON。
 gate 失败不允许 Command 提交。
 STEP roundtrip 失败时拒绝。
 ```
-
----
 
 ## T6.5 AppController / GUI 接入 Apply 流程
 
@@ -961,12 +1454,24 @@ workspace/session_YYYYMMDD_HHMMSS/region_0001/
     autosurface_stdout.log
     autosurface_stderr.log
     autosurface_result.json
+    fit_region.log
     local_output.igs
-    local_output.step
+    local_output.stp
+    crop_stl_path.txt
+    crop_igs_path.txt
+    crop_stp_path.txt
     patch_import_report.json
     patch_preview_report.json
     replacement_report.json
     validation_report.json
+```
+
+data 目录镜像输出：
+
+```text
+data/crop_stl/<relative_dir>/<name>.stl
+data/crop_igs/<relative_dir>/<name>.igs
+data/crop_stp/<relative_dir>/<name>.stp
 ```
 
 验收：
@@ -975,9 +1480,8 @@ workspace/session_YYYYMMDD_HHMMSS/region_0001/
 失败时能根据 workspace 复盘。
 成功时能保存完整过程文件。
 每个阶段都有 report。
+workspace 中记录 data/crop_stl、data/crop_igs、data/crop_stp 的真实路径。
 ```
-
----
 
 ## T7.2 最小同步 RegionPatchJob
 
@@ -1006,21 +1510,15 @@ Failed
 Cancelled
 ```
 
-说明：
-
-```text
-第一版可以同步执行，不必须完整异步队列。
-但必须保留状态枚举和日志。
-```
-
 验收：
 
 ```text
 成功路径状态顺序正确：
 Pending → AnalyzingBoundary → CroppingStl → RunningGeomagic → ImportingPatch → PreviewReady → ApplyPending → Replacing → Validating → Applied。
-
 失败路径进入 Failed 或 Rejected。
 Cancelled 不继续执行后续阶段。
+redo 不重新运行 Geomagic。
+redo 复用已有 autosurface_result.json、crop_igs、crop_stp 文件。
 ```
 
 ---
@@ -1056,8 +1554,6 @@ CMakeLists.txt
 GUI 能查看每个 candidate 状态。
 ```
 
----
-
 ## T8.2 GeomagicJobCache
 
 文件：
@@ -1072,11 +1568,19 @@ cache key：
 ```text
 source STEP hash
 source STL hash
+local crop STL hash
 candidate face ids
 boundary edge ids
 crop margin
 AutoSurface 参数
 autosurface_pipeline.py version
+```
+
+说明：
+
+```text
+不能只按 candidate id 缓存。
+如果 local STL、crop margin 或 AutoSurface 参数变化，必须缓存失效。
 ```
 
 验收：
@@ -1085,9 +1589,8 @@ autosurface_pipeline.py version
 cache 命中不重复运行 wrapCore。
 参数变化后 cache 失效。
 candidate 变化后 cache 失效。
+local crop STL 内容变化后 cache 失效。
 ```
-
----
 
 ## T8.3 批量 patch 生成与批量应用
 
@@ -1099,28 +1602,24 @@ src/gui/MainWindow.cpp
 src/gui/LogPanel.cpp
 ```
 
-新增：
+任务：
 
 ```text
-Generate Patches For Accepted Candidates
-Apply Previewed Patches
-```
-
-限制：
-
-```text
-默认只处理 LowRisk accepted candidates。
-HighRisk 必须手动单独执行。
-默认 Geomagic worker = 1。
-批量 Apply 前必须保证每个 candidate 都处于 PreviewReady。
+1. 对多个 accepted candidates 批量生成 local STL。
+2. 批量运行 Geomagic backend。
+3. 将输出同步写入 data/crop_stl、data/crop_igs、data/crop_stp。
+4. 批量导入 patch。
+5. 用户逐个或批量预览。
+6. 用户确认后逐个或批量 Apply。
 ```
 
 验收：
 
 ```text
-批量生成有总报告。
-每个 candidate 有独立 patch preview report。
-批量 Apply 中失败 candidate 不污染成功 candidate。
+批量生成失败不会破坏已有成功结果。
+批量 Apply 前必须能逐个查看 preview。
+任一 Apply 失败不影响其他未 Apply candidate。
+批量 redo 不重新运行 Geomagic。
 ```
 
 ---
@@ -1137,104 +1636,6 @@ HighRisk 必须手动单独执行。
 7. 不把临时 STL / IGS / STEP / log 提交到仓库。
 8. 不在单候选 Apply 闭环稳定前做全模型批量自动合并。
 9. 不删除 Plane/Sphere 旧代码，只保留为 experimental / baseline。
-```
-
----
-
-# 建议 Codex 执行顺序
-
-```text
-Commit 1:
-T1.1 FeatureBoundedRefit enum/string/statistics.
-
-Commit 2:
-T1.2 FeatureBoundedRegionBuilder + tests.
-
-Commit 3:
-T1.3 MergePlanner switch + GUI/Report display.
-
-Commit 4:
-T1.4 GUI candidate preview route.
-
-Commit 5:
-T2.1 RegionBoundaryAnalyzer strengthen.
-
-Commit 6:
-T2.2 BoundaryWireBuilder.
-
-Commit 7:
-T3.1/T3.2 STL mesh + reader/writer.
-
-Commit 8:
-T3.3 StlRegionExtractor.
-
-Commit 9:
-T4.1/T4.2 Geomagic backend config/result/mock.
-
-Commit 10:
-T4.3 autosurface_pipeline.py + manual Geomagic validation.
-
-Commit 11:
-T5.1 PatchImportService.
-
-Commit 12:
-T5.2/T5.3 patch overlay + preview report.
-
-Commit 13:
-T5.4 Apply button / candidate patch status.
-
-Commit 14:
-T6.1 BoundaryConstrainedPatchBuilder.
-
-Commit 15:
-T6.2 PatchReplacementCommand.
-
-Commit 16:
-T6.3 Sewing / ShapeFix integration.
-
-Commit 17:
-T6.4 StrictTopologyGate minimal.
-
-Commit 18:
-T6.5 GUI Apply flow.
-
-Commit 19:
-T7.1 workspace reports.
-
-Commit 20:
-T7.2 minimal RegionPatchJob.
-
-Commit 21:
-P2 batch/cache.
-```
-
----
-
-# 每阶段必须运行
-
-```powershell
-.\scripts\build_debug.ps1
-.\scripts\test.ps1
-```
-
-真实 Geomagic 手动验证：
-
-```powershell
-.\scripts\run_gui.ps1
-```
-
-至少验证一个完整单候选区域：
-
-```text
-STP + STL
-→ FeatureBoundedRefit candidate preview
-→ accepted candidate
-→ local STL crop
-→ Geomagic local STEP / IGS
-→ patch overlay preview
-→ Apply
-→ PatchReplacementCommand
-→ StrictTopologyGate
-→ undo/redo
-→ STEP roundtrip
+10. 不把真实 Geomagic 调用加入自动单元测试。
+11. 不让 redo 重新运行 Geomagic。
 ```
