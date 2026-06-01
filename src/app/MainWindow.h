@@ -39,6 +39,8 @@ private:
     void openStepFile();
     void saveProject();
     void exportStepFile();
+    void openSourceStlFile();
+    void cropCurrentCandidateStl();
     void detectFeatureEdges();
     void previewMergeCandidates();
     void showAllMergeCandidates();
@@ -81,6 +83,7 @@ private:
     bool setCurrentMergeCandidateStatus(MergeCandidateStatus status);
     void showFilteredMergeCandidates(MergeCandidateStatus status);
     void showCandidateStatusReport(const QString& title);
+    void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -96,12 +99,18 @@ private:
     QDockWidget* parameterDock_ = nullptr;
     QDockWidget* bottomDock_ = nullptr;
     QMenu* viewMenu_ = nullptr;
+    QMenu* stlMenu_ = nullptr;
     QMenu* planeMergeMenu_ = nullptr;
     QMenu* sphereMergeMenu_ = nullptr;
 
     QAction* openStepAction_ = nullptr;
     QAction* saveProjectAction_ = nullptr;
     QAction* exportStepAction_ = nullptr;
+    QAction* openSourceStlAction_ = nullptr;
+    QAction* cropCurrentCandidateStlAction_ = nullptr;
+    QAction* showSourceStlAction_ = nullptr;
+    QAction* showCroppedStlAction_ = nullptr;
+    QAction* showStlCropBoxAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* selectFaceAction_ = nullptr;
     QAction* selectEdgeAction_ = nullptr;
@@ -138,6 +147,7 @@ private:
     int visibleMergeCandidateCount_ = 0;
     int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;
+    bool stlCropInProgress_ = false;
 };
 
 }

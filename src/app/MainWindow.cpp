@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QFutureWatcher>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -27,6 +28,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
 #include <filesystem>
@@ -109,6 +111,19 @@ QString regionMergeFailureText(RegionMergeFailureReason reason) {
 
 QString regionMergeDocumentStateText(const RegionMergeResult& result) {
     return result.success ? "document updated" : "document was not modified / rollback applied";
+}
+
+QString stlBoundingBoxText(const StlBoundingBox& bbox) {
+    if (!bbox.valid) {
+        return "invalid";
+    }
+    return QString("min=(%1, %2, %3), max=(%4, %5, %6)")
+        .arg(QString::number(bbox.min.x, 'g', 8))
+        .arg(QString::number(bbox.min.y, 'g', 8))
+        .arg(QString::number(bbox.min.z, 'g', 8))
+        .arg(QString::number(bbox.max.x, 'g', 8))
+        .arg(QString::number(bbox.max.y, 'g', 8))
+        .arg(QString::number(bbox.max.z, 'g', 8));
 }
 
 bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
@@ -316,6 +331,21 @@ void MainWindow::createActions() {
     exportStepAction_ = new QAction("导出 STEP", this);
     exportStepAction_->setShortcut(QKeySequence("Ctrl+E"));
 
+    openSourceStlAction_ = new QAction("打开原始 STL", this);
+    cropCurrentCandidateStlAction_ = new QAction("裁剪当前候选 STL", this);
+    showSourceStlAction_ = new QAction("显示源 STL", this);
+    showSourceStlAction_->setCheckable(true);
+    showSourceStlAction_->setChecked(true);
+    showSourceStlAction_->setEnabled(false);
+    showCroppedStlAction_ = new QAction("显示裁剪 STL", this);
+    showCroppedStlAction_->setCheckable(true);
+    showCroppedStlAction_->setChecked(true);
+    showCroppedStlAction_->setEnabled(false);
+    showStlCropBoxAction_ = new QAction("显示裁剪 bbox", this);
+    showStlCropBoxAction_->setCheckable(true);
+    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setEnabled(false);
+
     exitAction_ = new QAction("退出", this);
     exitAction_->setShortcut(QKeySequence::Quit);
 
@@ -402,6 +432,14 @@ void MainWindow::createMenus() {
 
     auto* detectMenu = menuBar()->addMenu("检测");
     detectMenu->addAction(detectAction_);
+
+    stlMenu_ = menuBar()->addMenu("STL");
+    stlMenu_->addAction(openSourceStlAction_);
+    stlMenu_->addAction(cropCurrentCandidateStlAction_);
+    stlMenu_->addSeparator();
+    stlMenu_->addAction(showSourceStlAction_);
+    stlMenu_->addAction(showCroppedStlAction_);
+    stlMenu_->addAction(showStlCropBoxAction_);
 
     auto* mergeMenu = menuBar()->addMenu("合并");
     mergeMenu->addAction(previewMergeAction_);
@@ -501,6 +539,14 @@ void MainWindow::createToolBars() {
     mergeToolMenu->addSeparator();
     mergeToolMenu->addAction(applyMergeAction_);
 
+    auto* stlToolMenu = new QMenu(this);
+    stlToolMenu->addAction(openSourceStlAction_);
+    stlToolMenu->addAction(cropCurrentCandidateStlAction_);
+    stlToolMenu->addSeparator();
+    stlToolMenu->addAction(showSourceStlAction_);
+    stlToolMenu->addAction(showCroppedStlAction_);
+    stlToolMenu->addAction(showStlCropBoxAction_);
+
     auto* validateExportMenu = new QMenu(this);
     validateExportMenu->addAction(validateAction_);
     validateExportMenu->addAction(exportStepAction_);
@@ -520,6 +566,7 @@ void MainWindow::createToolBars() {
     toolBar->addAction(detectAction_);
     addMenuButton("候选显示", candidateViewMenu);
     addMenuButton("候选状态", candidateStateMenu);
+    addMenuButton("STL", stlToolMenu);
     addMenuButton("合并", mergeToolMenu);
     addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
@@ -586,6 +633,11 @@ void MainWindow::connectActions() {
     connect(openStepAction_, &QAction::triggered, this, [this]() { openStepFile(); });
     connect(saveProjectAction_, &QAction::triggered, this, [this]() { saveProject(); });
     connect(exportStepAction_, &QAction::triggered, this, [this]() { exportStepFile(); });
+    connect(openSourceStlAction_, &QAction::triggered, this, [this]() { openSourceStlFile(); });
+    connect(cropCurrentCandidateStlAction_, &QAction::triggered, this, [this]() { cropCurrentCandidateStl(); });
+    connect(showSourceStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setSourceStlVisible);
+    connect(showCroppedStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setCroppedStlVisible);
+    connect(showStlCropBoxAction_, &QAction::toggled, viewer_, &OccViewWidget::setStlCropBoxVisible);
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
 
     connect(selectFaceAction_, &QAction::triggered, this, [this]() {
@@ -657,6 +709,12 @@ void MainWindow::openStepFile() {
         refreshUndoRedoActions();
         return;
     }
+    showSourceStlAction_->setChecked(true);
+    showSourceStlAction_->setEnabled(false);
+    showCroppedStlAction_->setChecked(true);
+    showCroppedStlAction_->setEnabled(false);
+    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setEnabled(false);
     syncLockedEdges();
     QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
     QTimer::singleShot(100, viewer_, &OccViewWidget::fitAll);
@@ -718,6 +776,167 @@ void MainWindow::exportStepFile() {
     inspectPanel_->showValidation(QString("导出后二次读取校验通过\n文件：%1").arg(filePath));
     setStatus("STEP 已导出并通过校验");
     refreshUndoRedoActions();
+}
+
+void MainWindow::openSourceStlFile() {
+    if (!controller_.hasDocument()) {
+        QMessageBox::information(this, "打开原始 STL", "请先打开对应的 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    const auto filePath = QFileDialog::getOpenFileName(
+        this, "打开原始 STL", QString(), "STL 文件 (*.stl *.STL);;所有文件 (*.*)");
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const auto result = controller_.openStlFile(pathFromQString(filePath));
+    if (!result.success()) {
+        const auto message = QString::fromStdString(result.message());
+        QMessageBox::critical(this, "打开 STL 失败", message);
+        logPanel_->appendError(QString("打开 STL 失败：%1").arg(message));
+        setStatus("打开 STL 失败");
+        return;
+    }
+
+    const auto bbox = controller_.sourceStlBoundingBox();
+    showSourceStlAction_->setChecked(true);
+    showSourceStlAction_->setEnabled(true);
+    showCroppedStlAction_->setChecked(true);
+    showCroppedStlAction_->setEnabled(false);
+    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setEnabled(false);
+    viewer_->showSourceStl(controller_.sourceStlMesh());
+    viewer_->clearCroppedStl();
+    viewer_->clearStlCropBox();
+
+    inspectPanel_->showReport(QString("原始 STL 已加载\n文件：%1\ntriangle count：%2\nviewer displayed triangles：%3\nbbox：%4")
+        .arg(filePath)
+        .arg(controller_.sourceStlTriangleCount())
+        .arg(viewer_->sourceStlDisplayedTriangleCount())
+        .arg(stlBoundingBoxText(bbox)));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    logPanel_->appendInfo(QString("已打开原始 STL：%1，triangle %2")
+        .arg(filePath)
+        .arg(controller_.sourceStlTriangleCount()));
+    setStatus("原始 STL 已加载");
+}
+
+void MainWindow::cropCurrentCandidateStl() {
+    if (stlCropInProgress_) {
+        inspectPanel_->showReport("STL 裁剪正在后台运行，请等待当前任务完成。");
+        setStatus("STL 裁剪进行中");
+        return;
+    }
+
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先在候选选择模式下点击一个候选区域，或按 ID 高亮一个候选区域。");
+        logPanel_->appendWarning("裁剪 STL 前未选择候选区域。");
+        setStatus("未选择候选区域");
+        return;
+    }
+
+    if (candidate->candidate_type != MergeCandidateType::FeatureBoundedRefit) {
+        inspectPanel_->showReport(QString("当前候选不是 FeatureBoundedRefit，不能执行 STL 裁剪。\n候选 ID：%1\n候选类型：%2")
+            .arg(candidate->candidate_id)
+            .arg(candidateTypeText(candidate->candidate_type)));
+        setStatus("当前候选不能裁剪 STL");
+        return;
+    }
+
+    if (!controller_.hasSourceStl()) {
+        inspectPanel_->showReport("请先通过 STL -> 打开原始 STL 加载源 STL。");
+        logPanel_->appendWarning("裁剪 STL 前未加载源 STL。");
+        setStatus("未加载源 STL");
+        return;
+    }
+
+    const auto defaultName = QString("local_candidate_%1.stl")
+        .arg(candidate->candidate_id, 4, 10, QLatin1Char('0'));
+    const auto defaultPath = std::filesystem::temp_directory_path() /
+        std::filesystem::path(defaultName.toStdWString());
+    const auto filePath = QFileDialog::getSaveFileName(
+        this, "写出 local STL", pathToQString(defaultPath), "STL 文件 (*.stl);;所有文件 (*.*)");
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const auto candidateSnapshot = *candidate;
+    const auto outputPath = pathFromQString(filePath);
+    const auto sourceStlPath = controller_.sourceStlPath();
+    const auto documentSnapshot = controller_.document();
+    const auto sourceMeshSnapshot = controller_.sourceStlMesh();
+
+    setStlCropInProgress(true);
+    inspectPanel_->showReport(QString("STL 裁剪正在后台运行\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4")
+        .arg(pathToQString(sourceStlPath))
+        .arg(filePath)
+        .arg(candidateSnapshot.candidate_id)
+        .arg(candidateTypeText(candidateSnapshot.candidate_type)));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    logPanel_->appendInfo(QString("开始后台裁剪 STL：候选 %1，输出 %2")
+        .arg(candidateSnapshot.candidate_id)
+        .arg(filePath));
+    setStatus("STL 裁剪进行中");
+
+    auto* watcher = new QFutureWatcher<StlCandidateCropResult>(this);
+    connect(watcher, &QFutureWatcher<StlCandidateCropResult>::finished, this, [this, watcher, candidateSnapshot, filePath, sourceStlPath]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+
+        const auto& report = result.extract.report;
+        if (!result.success) {
+            const auto message = QString::fromStdString(result.message);
+            inspectPanel_->showReport(QString("STL 裁剪失败\n候选 ID：%1\n候选类型：%2\n消息：%3")
+                .arg(candidateSnapshot.candidate_id)
+                .arg(candidateTypeText(candidateSnapshot.candidate_type))
+                .arg(message));
+            logPanel_->appendWarning(QString("STL 裁剪失败：候选 %1，%2")
+                .arg(candidateSnapshot.candidate_id)
+                .arg(message));
+            setStatus("STL 裁剪失败");
+            return;
+        }
+
+        showCroppedStlAction_->setChecked(true);
+        showCroppedStlAction_->setEnabled(true);
+        showStlCropBoxAction_->setChecked(true);
+        showStlCropBoxAction_->setEnabled(true);
+        viewer_->showCroppedStl(result.extract.localMesh);
+        viewer_->showStlCropBox(report.expanded_bbox);
+
+        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\nsource triangle count：%6\noutput triangle count：%7\nviewer displayed cropped triangles：%8\nmargin：%9\ncandidate bbox：%10\nexpanded bbox：%11\noutput bbox：%12\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
+            .arg(pathToQString(sourceStlPath))
+            .arg(filePath)
+            .arg(candidateSnapshot.candidate_id)
+            .arg(candidateTypeText(candidateSnapshot.candidate_type))
+            .arg(candidateStatusText(candidateSnapshot.status))
+            .arg(report.source_triangle_count)
+            .arg(report.output_triangle_count)
+            .arg(viewer_->croppedStlDisplayedTriangleCount())
+            .arg(QString::number(report.margin, 'g', 8))
+            .arg(stlBoundingBoxText(report.candidate_bbox))
+            .arg(stlBoundingBoxText(report.expanded_bbox))
+            .arg(stlBoundingBoxText(report.output_bbox)));
+        bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+        logPanel_->appendInfo(QString("STL 裁剪完成：候选 %1，输出 %2，triangle %3")
+            .arg(candidateSnapshot.candidate_id)
+            .arg(filePath)
+            .arg(report.output_triangle_count));
+        setStatus("STL 裁剪完成");
+    });
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath]() {
+        return AppController::cropStlForCandidateData(documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath);
+    }));
 }
 
 void MainWindow::detectFeatureEdges() {
@@ -1917,6 +2136,15 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
             .arg(candidateStatusText(candidate->status));
     }
     logPanel_->appendInfo(logMessage);
+}
+
+void MainWindow::setStlCropInProgress(bool inProgress) {
+    stlCropInProgress_ = inProgress;
+    openStepAction_->setEnabled(!inProgress);
+    openSourceStlAction_->setEnabled(!inProgress);
+    cropCurrentCandidateStlAction_->setEnabled(!inProgress);
+    previewMergeAction_->setEnabled(!inProgress);
+    highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

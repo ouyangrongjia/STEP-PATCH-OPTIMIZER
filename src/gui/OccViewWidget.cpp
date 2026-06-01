@@ -3,9 +3,12 @@
 #include <AIS_SelectionScheme.hxx>
 #include <Aspect_Handle.hxx>
 #include <Aspect_TypeOfLine.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
 #include <Graphic3d_GraphicDriver.hxx>
 #include <Graphic3d_NameOfMaterial.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Poly_Triangle.hxx>
+#include <Poly_Triangulation.hxx>
 #include <Prs3d_LineAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <SelectMgr_EntityOwner.hxx>
@@ -38,6 +41,9 @@
 namespace spo {
 
 namespace {
+
+constexpr std::size_t kMaxSourceStlOverlayTriangles = 250000;
+constexpr std::size_t kMaxCroppedStlOverlayTriangles = 500000;
 
 TopoDS_Shape shapeFromOwner(const Handle(SelectMgr_EntityOwner)& owner) {
     const auto brepOwner = Handle(StdSelect_BRepOwner)::DownCast(owner);
@@ -78,6 +84,83 @@ std::string occtMessage(const Standard_Failure& error) {
     return message != nullptr ? message : "unknown OCCT error";
 }
 
+gp_Pnt pointFromStl(const StlVec3& point) {
+    return gp_Pnt(point.x, point.y, point.z);
+}
+
+Handle(Poly_Triangulation) makeTriangulation(
+    const StlMesh& mesh,
+    std::size_t maxTriangles,
+    std::size_t& displayedTriangleCount) {
+    displayedTriangleCount = 0;
+    const auto totalTriangles = mesh.triangleCount();
+    if (totalTriangles == 0 || maxTriangles == 0) {
+        return {};
+    }
+
+    const auto sampleStep = std::max<std::size_t>(1, (totalTriangles + maxTriangles - 1) / maxTriangles);
+    const auto displayTriangles = (totalTriangles + sampleStep - 1) / sampleStep;
+    auto triangulation = new Poly_Triangulation(
+        static_cast<Standard_Integer>(displayTriangles * 3),
+        static_cast<Standard_Integer>(displayTriangles),
+        Standard_False,
+        Standard_False);
+
+    Standard_Integer nodeIndex = 1;
+    Standard_Integer triangleIndex = 1;
+    const auto& triangles = mesh.triangles();
+    for (std::size_t index = 0; index < triangles.size(); index += sampleStep) {
+        const auto& triangle = triangles[index];
+        triangulation->SetNode(nodeIndex, pointFromStl(triangle.v0));
+        triangulation->SetNode(nodeIndex + 1, pointFromStl(triangle.v1));
+        triangulation->SetNode(nodeIndex + 2, pointFromStl(triangle.v2));
+        triangulation->SetTriangle(triangleIndex, Poly_Triangle(nodeIndex, nodeIndex + 1, nodeIndex + 2));
+        nodeIndex += 3;
+        ++triangleIndex;
+        ++displayedTriangleCount;
+    }
+
+    triangulation->UpdateCachedMinMax();
+    return triangulation;
+}
+
+TopoDS_Shape makeBoundingBoxShape(const StlBoundingBox& bbox) {
+    if (!bbox.valid) {
+        return {};
+    }
+
+    const auto x0 = bbox.min.x;
+    const auto y0 = bbox.min.y;
+    const auto z0 = bbox.min.z;
+    const auto x1 = bbox.max.x;
+    const auto y1 = bbox.max.y;
+    const auto z1 = bbox.max.z;
+
+    const std::array<gp_Pnt, 8> points = {
+        gp_Pnt(x0, y0, z0),
+        gp_Pnt(x1, y0, z0),
+        gp_Pnt(x1, y1, z0),
+        gp_Pnt(x0, y1, z0),
+        gp_Pnt(x0, y0, z1),
+        gp_Pnt(x1, y0, z1),
+        gp_Pnt(x1, y1, z1),
+        gp_Pnt(x0, y1, z1)
+    };
+    constexpr std::array<std::pair<int, int>, 12> edges = {{
+        {0, 1}, {1, 2}, {2, 3}, {3, 0},
+        {4, 5}, {5, 6}, {6, 7}, {7, 4},
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}
+    }};
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto& edge : edges) {
+        builder.Add(compound, BRepBuilderAPI_MakeEdge(points[edge.first], points[edge.second]).Edge());
+    }
+    return compound;
+}
+
 }
 
 OccViewWidget::OccViewWidget(QWidget* parent) : QWidget(parent) {
@@ -98,6 +181,9 @@ OccViewWidget::~OccViewWidget() {
     hoverShape_.Nullify();
     featureEdgeShape_.Nullify();
     lockedEdgeShape_.Nullify();
+    sourceStlShape_.Nullify();
+    croppedStlShape_.Nullify();
+    stlCropBoxShape_.Nullify();
     context_.Nullify();
     view_.Nullify();
     viewer_.Nullify();
@@ -128,6 +214,11 @@ Result OccViewWidget::displayDocument(const ShapeDocument& document) {
         hoverShape_.Nullify();
         featureEdgeShape_.Nullify();
         lockedEdgeShape_.Nullify();
+        sourceStlShape_.Nullify();
+        croppedStlShape_.Nullify();
+        stlCropBoxShape_.Nullify();
+        sourceStlDisplayedTriangleCount_ = 0;
+        croppedStlDisplayedTriangleCount_ = 0;
         mergeCandidateShapes_.clear();
         mergeCandidateFaceColors_.clear();
         mergePreviewVisible_ = false;
@@ -174,6 +265,11 @@ void OccViewWidget::clearDocument() {
     hoverShape_.Nullify();
     featureEdgeShape_.Nullify();
     lockedEdgeShape_.Nullify();
+    sourceStlShape_.Nullify();
+    croppedStlShape_.Nullify();
+    stlCropBoxShape_.Nullify();
+    sourceStlDisplayedTriangleCount_ = 0;
+    croppedStlDisplayedTriangleCount_ = 0;
     mergeCandidateShapes_.clear();
     mergeCandidateFaceColors_.clear();
     mergePreviewVisible_ = false;
@@ -351,6 +447,164 @@ void OccViewWidget::clearMergeCandidates() {
     mergeCandidateFaceColors_.clear();
     applyCustomAspects();
     redrawView();
+}
+
+void OccViewWidget::showSourceStl(const StlMesh& mesh) {
+    initializeOcct();
+    clearSourceStl();
+    if (context_.IsNull() || mesh.empty()) {
+        return;
+    }
+
+    std::size_t displayedTriangles = 0;
+    const auto triangulation = makeTriangulation(mesh, kMaxSourceStlOverlayTriangles, displayedTriangles);
+    if (triangulation.IsNull()) {
+        return;
+    }
+
+    sourceStlShape_ = new AIS_Triangulation(triangulation);
+    sourceStlShape_->SetColor(Quantity_Color(0.20, 0.60, 1.00, Quantity_TOC_RGB));
+    sourceStlShape_->SetTransparency(0.72);
+    sourceStlShape_->SetDisplayMode(AIS_Shaded);
+    context_->Display(sourceStlShape_, Standard_False);
+    context_->Deactivate(sourceStlShape_);
+    sourceStlDisplayedTriangleCount_ = displayedTriangles;
+    if (!sourceStlVisible_) {
+        context_->Erase(sourceStlShape_, Standard_False);
+    }
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::clearSourceStl() {
+    if (!context_.IsNull() && !sourceStlShape_.IsNull()) {
+        context_->Remove(sourceStlShape_, Standard_False);
+        context_->UpdateCurrentViewer();
+    }
+    sourceStlShape_.Nullify();
+    sourceStlDisplayedTriangleCount_ = 0;
+    redrawView();
+}
+
+void OccViewWidget::showCroppedStl(const StlMesh& mesh) {
+    initializeOcct();
+    clearCroppedStl();
+    if (context_.IsNull() || mesh.empty()) {
+        return;
+    }
+
+    std::size_t displayedTriangles = 0;
+    const auto triangulation = makeTriangulation(mesh, kMaxCroppedStlOverlayTriangles, displayedTriangles);
+    if (triangulation.IsNull()) {
+        return;
+    }
+
+    croppedStlShape_ = new AIS_Triangulation(triangulation);
+    croppedStlShape_->SetColor(Quantity_Color(0.00, 0.95, 0.80, Quantity_TOC_RGB));
+    croppedStlShape_->SetTransparency(0.18);
+    croppedStlShape_->SetDisplayMode(AIS_Shaded);
+    context_->Display(croppedStlShape_, Standard_False);
+    context_->Deactivate(croppedStlShape_);
+    croppedStlDisplayedTriangleCount_ = displayedTriangles;
+    if (!croppedStlVisible_) {
+        context_->Erase(croppedStlShape_, Standard_False);
+    }
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::clearCroppedStl() {
+    if (!context_.IsNull() && !croppedStlShape_.IsNull()) {
+        context_->Remove(croppedStlShape_, Standard_False);
+        context_->UpdateCurrentViewer();
+    }
+    croppedStlShape_.Nullify();
+    croppedStlDisplayedTriangleCount_ = 0;
+    redrawView();
+}
+
+void OccViewWidget::showStlCropBox(const StlBoundingBox& bbox) {
+    initializeOcct();
+    clearStlCropBox();
+    if (context_.IsNull() || !bbox.valid) {
+        return;
+    }
+
+    const auto shape = makeBoundingBoxShape(bbox);
+    if (shape.IsNull()) {
+        return;
+    }
+
+    stlCropBoxShape_ = new AIS_Shape(shape);
+    stlCropBoxShape_->SetDisplayMode(AIS_WireFrame);
+    stlCropBoxShape_->SetColor(Quantity_Color(0.00, 1.00, 0.20, Quantity_TOC_RGB));
+    stlCropBoxShape_->SetWidth(3.0);
+    context_->Display(stlCropBoxShape_, Standard_False);
+    context_->Deactivate(stlCropBoxShape_);
+    if (!stlCropBoxVisible_) {
+        context_->Erase(stlCropBoxShape_, Standard_False);
+    }
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::clearStlCropBox() {
+    if (!context_.IsNull() && !stlCropBoxShape_.IsNull()) {
+        context_->Remove(stlCropBoxShape_, Standard_False);
+        context_->UpdateCurrentViewer();
+    }
+    stlCropBoxShape_.Nullify();
+    redrawView();
+}
+
+void OccViewWidget::setSourceStlVisible(bool visible) {
+    sourceStlVisible_ = visible;
+    if (!context_.IsNull() && !sourceStlShape_.IsNull()) {
+        if (visible) {
+            context_->Display(sourceStlShape_, Standard_False);
+            context_->Deactivate(sourceStlShape_);
+        } else {
+            context_->Erase(sourceStlShape_, Standard_False);
+        }
+        context_->UpdateCurrentViewer();
+    }
+    redrawView();
+}
+
+void OccViewWidget::setCroppedStlVisible(bool visible) {
+    croppedStlVisible_ = visible;
+    if (!context_.IsNull() && !croppedStlShape_.IsNull()) {
+        if (visible) {
+            context_->Display(croppedStlShape_, Standard_False);
+            context_->Deactivate(croppedStlShape_);
+        } else {
+            context_->Erase(croppedStlShape_, Standard_False);
+        }
+        context_->UpdateCurrentViewer();
+    }
+    redrawView();
+}
+
+void OccViewWidget::setStlCropBoxVisible(bool visible) {
+    stlCropBoxVisible_ = visible;
+    if (!context_.IsNull() && !stlCropBoxShape_.IsNull()) {
+        if (visible) {
+            context_->Display(stlCropBoxShape_, Standard_False);
+            context_->Deactivate(stlCropBoxShape_);
+        } else {
+            context_->Erase(stlCropBoxShape_, Standard_False);
+        }
+        context_->UpdateCurrentViewer();
+    }
+    redrawView();
+}
+
+std::size_t OccViewWidget::sourceStlDisplayedTriangleCount() const {
+    return sourceStlDisplayedTriangleCount_;
+}
+
+std::size_t OccViewWidget::croppedStlDisplayedTriangleCount() const {
+    return croppedStlDisplayedTriangleCount_;
 }
 
 void OccViewWidget::setFeatureLinesVisible(bool visible) {

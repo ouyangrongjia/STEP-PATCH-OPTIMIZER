@@ -12,6 +12,7 @@
 #include "merge/RegionMergeResult.h"
 #include "merge/SameDomainUnifier.h"
 #include "merge/SphereRegionMerger.h"
+#include "stl/StlRegionExtractor.h"
 #include "validate/ShapeValidator.h"
 
 #include <filesystem>
@@ -20,6 +21,13 @@
 #include <vector>
 
 namespace spo {
+
+struct StlCandidateCropResult {
+    bool success = false;
+    StlRegionExtractResult extract;
+    std::filesystem::path outputPath;
+    std::string message;
+};
 
 class AppController {
 public:
@@ -32,6 +40,22 @@ public:
     Result openStepFile(const std::filesystem::path& path);
     Result exportStepFile(const std::filesystem::path& path);
     Result verifyStepFileReadable(const std::filesystem::path& path);
+    Result openStlFile(const std::filesystem::path& path);
+    bool hasSourceStl() const;
+    const std::filesystem::path& sourceStlPath() const;
+    const StlMesh& sourceStlMesh() const;
+    std::size_t sourceStlTriangleCount() const;
+    StlBoundingBox sourceStlBoundingBox() const;
+    StlCandidateCropResult cropStlForCandidate(
+        const MergeCandidate& candidate,
+        const std::filesystem::path& outputPath,
+        const StlRegionExtractorOptions& options = {}) const;
+    static StlCandidateCropResult cropStlForCandidateData(
+        const ShapeDocument& document,
+        const StlMesh& sourceMesh,
+        const MergeCandidate& candidate,
+        const std::filesystem::path& outputPath,
+        const StlRegionExtractorOptions& options = {});
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
     MergePlannerResult previewMergeCandidates(
         double angularThresholdDegrees,
@@ -66,6 +90,8 @@ public:
 private:
     CommandContext context_;
     CommandHistory history_;
+    StlMesh sourceStlMesh_;
+    std::filesystem::path sourceStlPath_;
 };
 
 }

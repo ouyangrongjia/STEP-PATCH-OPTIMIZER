@@ -17,11 +17,40 @@ void run_sphere_region_merger_tests();
 void run_sphere_region_merge_command_tests();
 void run_stl_io_tests();
 void run_stl_mesh_tests();
+void run_stl_region_extractor_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
 
 #include <cassert>
+#include <cstdlib>
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
+#if defined(_MSC_VER)
+#include <crtdbg.h>
+#endif
+
+namespace {
+
+void configure_test_process_error_reporting() {
+#if defined(_WIN32)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#endif
+
+#if defined(_MSC_VER)
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+#endif
+}
+
+}
 
 void run_validation_tests() {
     const spo::ShapeDocument document;
@@ -34,6 +63,8 @@ void run_validation_tests() {
 }
 
 int main() {
+    configure_test_process_error_reporting();
+
     run_step_io_tests();
     run_topology_graph_tests();
     run_feature_edges_tests();
@@ -53,6 +84,7 @@ int main() {
     run_sphere_region_merge_command_tests();
     run_stl_io_tests();
     run_stl_mesh_tests();
+    run_stl_region_extractor_tests();
     run_validation_tests();
     return 0;
 }

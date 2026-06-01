@@ -5,6 +5,7 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "gui/GuiTypes.h"
 #include "merge/MergeCandidate.h"
+#include "stl/StlMesh.h"
 
 #include <QPoint>
 #include <QWidget>
@@ -12,6 +13,7 @@
 #include <AIS_ColoredShape.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Shape.hxx>
+#include <AIS_Triangulation.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Quantity_Color.hxx>
 #include <TopoDS_Shape.hxx>
@@ -43,6 +45,17 @@ public:
         bool showAll = false);
     bool showMergeCandidateById(const std::vector<MergeCandidate>& candidates, int candidateId);
     void clearMergeCandidates();
+    void showSourceStl(const StlMesh& mesh);
+    void clearSourceStl();
+    void showCroppedStl(const StlMesh& mesh);
+    void clearCroppedStl();
+    void showStlCropBox(const StlBoundingBox& bbox);
+    void clearStlCropBox();
+    void setSourceStlVisible(bool visible);
+    void setCroppedStlVisible(bool visible);
+    void setStlCropBoxVisible(bool visible);
+    std::size_t sourceStlDisplayedTriangleCount() const;
+    std::size_t croppedStlDisplayedTriangleCount() const;
     void setFeatureLinesVisible(bool visible);
     void setMergePreviewVisible(bool visible);
     void resetView();
@@ -100,6 +113,9 @@ private:
     Handle(AIS_Shape) hoverShape_;
     Handle(AIS_Shape) featureEdgeShape_;
     Handle(AIS_Shape) lockedEdgeShape_;
+    Handle(AIS_Triangulation) sourceStlShape_;
+    Handle(AIS_Triangulation) croppedStlShape_;
+    Handle(AIS_Shape) stlCropBoxShape_;
     std::vector<Handle(AIS_Shape)> mergeCandidateShapes_;
     std::vector<std::pair<FaceId, Quantity_Color>> mergeCandidateFaceColors_;
     SelectionMode selectionMode_ = SelectionMode::Face;
@@ -112,6 +128,11 @@ private:
     bool panning_ = false;
     bool featureLinesVisible_ = true;
     bool mergePreviewVisible_ = false;
+    bool sourceStlVisible_ = true;
+    bool croppedStlVisible_ = true;
+    bool stlCropBoxVisible_ = true;
+    std::size_t sourceStlDisplayedTriangleCount_ = 0;
+    std::size_t croppedStlDisplayedTriangleCount_ = 0;
     std::set<FaceId> selectedFaces_;
     std::set<EdgeId> selectedEdges_;
     int lastSelectedFace_ = -1;

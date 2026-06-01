@@ -11,9 +11,15 @@
 #include "command/MergePatchCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
+#include "io/StlReader.h"
+#include "io/StlWriter.h"
 #include "io/StepWriter.h"
 
 #include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepTools.hxx>
+#include <BRep_Tool.hxx>
+#include <Geom_Surface.hxx>
+#include <gp_Pnt.hxx>
 
 #include <cassert>
 #include <chrono>
@@ -70,6 +76,66 @@ std::vector<spo::LockedEdgeRef> locked_refs(std::initializer_list<spo::EdgeId> i
         refs.push_back(spo::LockedEdgeRef {id, {}});
     }
     return refs;
+}
+
+spo::MergeCandidate make_first_face_candidate(const spo::ShapeDocument& document) {
+    spo::MergeCandidate candidate;
+    candidate.candidate_id = 3;
+    candidate.candidate_type = spo::MergeCandidateType::FeatureBoundedRefit;
+    candidate.faces = {0};
+    candidate.face_count = 1;
+    candidate.boundary_edges = document.topology().edgesForFace(0);
+    candidate.boundary_edge_count = static_cast<int>(candidate.boundary_edges.size());
+    return candidate;
+}
+
+spo::StlTriangle make_triangle(
+    spo::StlVec3 normal,
+    spo::StlVec3 v0,
+    spo::StlVec3 v1,
+    spo::StlVec3 v2) {
+    spo::StlTriangle triangle;
+    triangle.normal = normal;
+    triangle.v0 = v0;
+    triangle.v1 = v1;
+    triangle.v2 = v2;
+    return triangle;
+}
+
+spo::StlVec3 to_vec3(const gp_Pnt& point) {
+    return {point.X(), point.Y(), point.Z()};
+}
+
+std::filesystem::path create_test_stl_for_first_face(const spo::ShapeDocument& document) {
+    const auto& face = document.topology().face(0);
+    const auto surface = BRep_Tool::Surface(face);
+    assert(!surface.IsNull());
+
+    double uMin = 0.0;
+    double uMax = 0.0;
+    double vMin = 0.0;
+    double vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    const auto u0 = uMin + (uMax - uMin) * 0.25;
+    const auto u1 = uMin + (uMax - uMin) * 0.75;
+    const auto v0 = vMin + (vMax - vMin) * 0.25;
+    const auto v1 = vMin + (vMax - vMin) * 0.75;
+
+    spo::StlMesh mesh;
+    mesh.addTriangle(make_triangle(
+        {0.0, 0.0, 1.0},
+        to_vec3(surface->Value(u0, v0)),
+        to_vec3(surface->Value(u1, v0)),
+        to_vec3(surface->Value(u0, v1))));
+    mesh.addTriangle(make_triangle(
+        {0.0, 0.0, 1.0},
+        {100.0, 100.0, 100.0},
+        {101.0, 100.0, 100.0},
+        {100.0, 101.0, 100.0}));
+
+    const auto path = temp_step_path(".stl");
+    assert(spo::StlWriter().write(mesh, path).success);
+    return path;
 }
 
 }
@@ -226,6 +292,47 @@ void run_command_tests() {
         assert(!controller.canRedo());
         assert(controller.lockedEdges().empty());
         std::filesystem::remove(secondSample);
+    }
+
+    {
+        spo::AppController controller;
+        assert(controller.openStepFile(sample).success());
+        const auto candidate = make_first_face_candidate(controller.document());
+        const auto output = temp_step_path("-local.stl");
+
+        const auto result = controller.cropStlForCandidate(candidate, output);
+
+        assert(!result.success);
+        assert(!result.message.empty());
+        std::filesystem::remove(output);
+    }
+
+    {
+        spo::AppController controller;
+        assert(controller.openStepFile(sample).success());
+        const auto stlPath = create_test_stl_for_first_face(controller.document());
+        const auto loadStl = controller.openStlFile(stlPath);
+        assert(loadStl.success());
+        assert(controller.hasSourceStl());
+        assert(controller.sourceStlPath() == stlPath);
+        assert(controller.sourceStlMesh().triangleCount() == 2);
+
+        const auto candidate = make_first_face_candidate(controller.document());
+        const auto output = temp_step_path("-local.stl");
+        const auto result = controller.cropStlForCandidate(candidate, output);
+
+        assert(result.success);
+        assert(result.extract.success);
+        assert(result.extract.report.success);
+        assert(result.extract.report.output_triangle_count > 0);
+        assert(result.outputPath == output);
+        assert(std::filesystem::exists(output));
+
+        const auto roundTrip = spo::StlReader().read(output);
+        assert(roundTrip.success);
+        assert(roundTrip.mesh.triangleCount() == result.extract.localMesh.triangleCount());
+        std::filesystem::remove(output);
+        std::filesystem::remove(stlPath);
     }
 
     std::filesystem::remove(sample);

@@ -12,11 +12,29 @@
 #include "command/SphereRegionMergeCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
+#include "io/StlReader.h"
+#include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
+#include "merge/RegionBoundaryAnalyzer.h"
 
 #include <utility>
 
 namespace spo {
+
+namespace {
+
+StlCandidateCropResult crop_error(
+    const std::filesystem::path& outputPath,
+    StlRegionExtractResult extract,
+    std::string message) {
+    StlCandidateCropResult result;
+    result.outputPath = outputPath;
+    result.extract = std::move(extract);
+    result.message = std::move(message);
+    return result;
+}
+
+}
 
 const char* AppController::applicationName() const {
     return kApplicationName;
@@ -47,6 +65,8 @@ Result AppController::openStepFile(const std::filesystem::path& path) {
     if (result.success()) {
         history_.clear();
         context_.lockedEdges.clear();
+        sourceStlMesh_.clear();
+        sourceStlPath_.clear();
     }
     return result;
 }
@@ -59,6 +79,91 @@ Result AppController::verifyStepFileReadable(const std::filesystem::path& path) 
     CommandContext readContext;
     LoadStepCommand command(path);
     return command.execute(readContext);
+}
+
+Result AppController::openStlFile(const std::filesystem::path& path) {
+    const auto result = StlReader().read(path);
+    if (!result.success) {
+        return Result::error(result.message);
+    }
+
+    sourceStlMesh_ = result.mesh;
+    sourceStlPath_ = path;
+    return Result::ok();
+}
+
+bool AppController::hasSourceStl() const {
+    return !sourceStlMesh_.empty();
+}
+
+const std::filesystem::path& AppController::sourceStlPath() const {
+    return sourceStlPath_;
+}
+
+const StlMesh& AppController::sourceStlMesh() const {
+    return sourceStlMesh_;
+}
+
+std::size_t AppController::sourceStlTriangleCount() const {
+    return sourceStlMesh_.triangleCount();
+}
+
+StlBoundingBox AppController::sourceStlBoundingBox() const {
+    return sourceStlMesh_.boundingBox();
+}
+
+StlCandidateCropResult AppController::cropStlForCandidate(
+    const MergeCandidate& candidate,
+    const std::filesystem::path& outputPath,
+    const StlRegionExtractorOptions& options) const {
+    return cropStlForCandidateData(context_.document, sourceStlMesh_, candidate, outputPath, options);
+}
+
+StlCandidateCropResult AppController::cropStlForCandidateData(
+    const ShapeDocument& document,
+    const StlMesh& sourceMesh,
+    const MergeCandidate& candidate,
+    const std::filesystem::path& outputPath,
+    const StlRegionExtractorOptions& options) {
+    if (!document.hasShape()) {
+        return crop_error(outputPath, {}, "Open a STEP/STP document before cropping STL.");
+    }
+    if (sourceMesh.empty()) {
+        return crop_error(outputPath, {}, "Open the source STL before cropping.");
+    }
+    if (outputPath.empty()) {
+        return crop_error(outputPath, {}, "Output STL path is empty.");
+    }
+    if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
+        return crop_error(outputPath, {}, "Current candidate is not FeatureBoundedRefit.");
+    }
+    if (candidate.status == MergeCandidateStatus::Rejected || candidate.status == MergeCandidateStatus::Hidden) {
+        return crop_error(outputPath, {}, "Current candidate is rejected or hidden.");
+    }
+
+    const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+    if (!boundary.valid) {
+        return crop_error(outputPath, {}, "Candidate boundary is not a valid single closed loop: " + boundary.message);
+    }
+
+    auto extract = StlRegionExtractor().extract(document, candidate, sourceMesh, options);
+    if (!extract.success) {
+        const auto message = extract.report.message.empty()
+            ? std::string("STL crop failed.")
+            : extract.report.message;
+        return crop_error(outputPath, std::move(extract), message);
+    }
+
+    const auto write = StlWriter().write(extract.localMesh, outputPath);
+    if (!write.success) {
+        return crop_error(outputPath, std::move(extract), write.message);
+    }
+
+    StlCandidateCropResult result;
+    result.success = true;
+    result.extract = std::move(extract);
+    result.outputPath = outputPath;
+    return result;
 }
 
 FeatureEdgeDetectionResult AppController::detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength) {
