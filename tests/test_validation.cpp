@@ -15,6 +15,7 @@ void run_feature_bounded_region_builder_tests();
 void run_boundary_wire_builder_tests();
 void run_sphere_region_merger_tests();
 void run_sphere_region_merge_command_tests();
+void run_stl_io_tests();
 void run_stl_mesh_tests();
 
 #include "brep/ShapeDocument.h"
@@ -50,6 +51,7 @@ int main() {
     run_boundary_wire_builder_tests();
     run_sphere_region_merger_tests();
     run_sphere_region_merge_command_tests();
+    run_stl_io_tests();
     run_stl_mesh_tests();
     run_validation_tests();
     return 0;

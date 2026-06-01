@@ -47,6 +47,8 @@ add_library(spo_core STATIC
     src/io/ProjectSerializer.cpp
     src/io/StepReader.cpp
     src/io/StepWriter.cpp
+    src/io/StlReader.cpp
+    src/io/StlWriter.cpp
     src/merge/FaceInspectInfo.cpp
     src/merge/FaceInspector.cpp
     src/merge/FeatureBoundedRegionBuilder.cpp
@@ -148,6 +150,7 @@ if(SPO_BUILD_TESTS)
         tests/test_sphere_region_merger.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
+        tests/test_stl_io.cpp
         tests/test_stl_mesh.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
