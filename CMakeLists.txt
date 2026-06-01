@@ -15,7 +15,7 @@ option(SPO_BUILD_TOOLS "Build command-line tools" ON)
 option(SPO_BUILD_TESTS "Build tests" ON)
 
 find_package(OpenCASCADE CONFIG REQUIRED)
-find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Widgets OpenGLWidgets)
+find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Widgets OpenGLWidgets Concurrent)
 
 set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
@@ -63,7 +63,9 @@ add_library(spo_core STATIC
     src/merge/RegionMergeStub.cpp
     src/merge/SameDomainUnifier.cpp
     src/merge/SphereRegionMerger.cpp
+    src/stl/StlCropReport.cpp
     src/stl/StlMesh.cpp
+    src/stl/StlRegionExtractor.cpp
     src/merge/SurfaceRefitter.cpp
     src/merge/TorusRegionMerger.cpp
     src/validate/ErrorMetric.cpp
@@ -99,6 +101,7 @@ if(SPO_BUILD_APP)
     target_link_libraries(step-patch-optimizer
         PRIVATE
             spo_core
+            Qt6::Concurrent
             Qt6::Widgets
             Qt6::OpenGLWidgets
             TKV3d
@@ -152,10 +155,12 @@ if(SPO_BUILD_TESTS)
         tests/test_step_io.cpp
         tests/test_stl_io.cpp
         tests/test_stl_mesh.cpp
+        tests/test_stl_region_extractor.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
 
     target_link_libraries(spo_tests PRIVATE spo_core)
     add_test(NAME spo_tests COMMAND spo_tests)
+    set_tests_properties(spo_tests PROPERTIES TIMEOUT 120)
 endif()
