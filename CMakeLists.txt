@@ -61,6 +61,7 @@ add_library(spo_core STATIC
     src/merge/RegionMergeStub.cpp
     src/merge/SameDomainUnifier.cpp
     src/merge/SphereRegionMerger.cpp
+    src/stl/StlMesh.cpp
     src/merge/SurfaceRefitter.cpp
     src/merge/TorusRegionMerger.cpp
     src/validate/ErrorMetric.cpp
@@ -147,6 +148,7 @@ if(SPO_BUILD_TESTS)
         tests/test_sphere_region_merger.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
+        tests/test_stl_mesh.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
