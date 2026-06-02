@@ -167,6 +167,7 @@ if(SPO_BUILD_TESTS)
         tests/test_geomagic_backend_mock.cpp
         tests/test_geomagic_pipeline_script.cpp
         tests/test_patch_import_service.cpp
+        tests/test_patch_import_service_real.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
