@@ -264,7 +264,7 @@ GeomagicAutoSurfaceResult load_result_or_fallback(
             result.errorMessage = readError;
         }
     } else {
-        result.success = exitCode == 0 && std::filesystem::exists(config.outputStepPath);
+        result.success = std::filesystem::exists(config.outputStepPath);
         result.exitCode = exitCode;
         result.message = result.success ? "Geomagic process completed without result JSON." : "Geomagic process did not produce result JSON.";
         if (!result.success) {
@@ -296,7 +296,7 @@ GeomagicAutoSurfaceResult load_result_or_fallback(
         append_message(result.message, "Warning: Geomagic output IGES file was not created.");
     }
 
-    if (exitCode != 0 && result.errorMessage.empty()) {
+    if (exitCode != 0 && !result.success && result.errorMessage.empty()) {
         result.errorMessage = bytearray_to_string(stderrData);
         if (result.errorMessage.empty()) {
             result.errorMessage = "Geomagic AutoSurface process failed.";

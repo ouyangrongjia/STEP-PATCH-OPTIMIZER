@@ -1,45 +1,34 @@
 # Geomagic AutoSurface Pipeline
 
-`autosurface_pipeline.py` is the T4.3 Geomagic-side script copied from the verified `fit_region.py` flow with light integration changes only. It keeps the existing AutoSurface fallback strategy and exports both IGES and STEP.
+`autosurface_pipeline.py` is the Geomagic-side script copied from the verified `fit_region.py` flow. It keeps the AutoSurface fallback strategy, writes one diagnostic log, and exports STEP. When temp files are kept, the intermediate IGES is preserved beside the STEP as `<name>_autosurface.igs`.
 
 Official crop path rule:
 
 ```text
 data/crop_stl/<relative>/<name>.stl -> data/crop_stp/<relative>/<name>.stp
-data/crop_stl/<relative>/<name>.stl -> data/crop_igs/<relative>/<name>.igs
 ```
 
-Manual run from the repository root:
+Manual run from `cmd.exe`:
 
-```powershell
-$env:FIT_REGION_INPUT = "data/crop_stl/example/candidate_0001.stl"
-$env:FIT_REGION_OUTPUT = "data/crop_stp/example/candidate_0001.stp"
-$env:FIT_REGION_OUTPUT_IGES = "data/crop_igs/example/candidate_0001.igs"
-$env:FIT_REGION_RESULT_JSON = "data/geomagic_work/example/autosurface_result.json"
-$env:FIT_REGION_LOG_FILE = "data/geomagic_work/example/fit_region.log"
-$env:FIT_REGION_WORK_DIR = "data/geomagic_work/example"
-$env:FIT_REGION_CONFIG_JSON = "data/geomagic_work/example/autosurface_config.json"
-$env:FIT_REGION_STRICT_PATCH_TARGET = "0"
-& "E:\Geomagic Wrap\wrapCore.exe" --script "scripts/geomagic_wrap/autosurface_pipeline.py"
+```cmd
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\example\candidate_0001.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
-`FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. The default path is still one-patch AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`.
+`FIT_REGION_REPAIR_MESH=1` enables the default pre-AutoSurface repair step for small holes, non-manifold edges, and non-manifold vertices. `FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. The default path is one-patch Mechanical AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`. `numPatches=1` is Geomagic's approximate AutoSurface target, not a guarantee that the exported STEP will contain one B-rep face.
 
 Required environment variables:
 
 ```text
 FIT_REGION_INPUT
 FIT_REGION_OUTPUT
-FIT_REGION_OUTPUT_IGES
 ```
 
-Optional integration variables:
+Optional variables:
 
 ```text
-FIT_REGION_RESULT_JSON
 FIT_REGION_LOG_FILE
 FIT_REGION_WORK_DIR
-FIT_REGION_CONFIG_JSON
+FIT_REGION_REPAIR_MESH
 FIT_REGION_KEEP_TEMP
 FIT_REGION_SKIP_REMESH
 FIT_REGION_QUICK_SMOOTH
@@ -53,7 +42,7 @@ FIT_REGION_AUTO_MERGE
 FIT_REGION_STRICT_PATCH_TARGET
 ```
 
-The result JSON is written on success and best-effort failure. It includes `success`, `timed_out`, `exit_code`, `bodies`, `open_loops`, `message`, `error_message`, `failed_stage`, `input_stl_path`, `output_iges_path`, `output_step_path`, `preserved_iges_path`, `config_json_path`, `result_json_path`, `fit_region_log_path`, and `duration_ms`.
+The script does not write result JSON. Diagnostics go to `FIT_REGION_LOG_FILE`, or to `<output>_fit_region.log` when that variable is omitted.
 
 Scope notes:
 

@@ -133,6 +133,14 @@ std::string missing_output_cmd_body() {
         "exit /b 0\n";
 }
 
+std::string step_without_result_json_cmd_body() {
+    return
+        "@echo off\n"
+        "echo standard fit_region success\n"
+        "type nul > \"%FIT_REGION_OUTPUT%\"\n"
+        "exit /b 1\n";
+}
+
 std::string launch_marker_cmd_body(const std::filesystem::path& markerPath) {
     const auto marker = markerPath.generic_string();
     return
@@ -239,6 +247,23 @@ void test_missing_output_step_forces_failure() {
     assert(!result.success);
     assert(!std::filesystem::exists(config.outputStepPath));
     assert(!result.message.empty() || !result.errorMessage.empty());
+
+    remove_temp_root(root);
+}
+
+void test_output_step_without_result_json_is_success() {
+    const auto root = temp_root("spo_geomagic_backend_step_without_json");
+    const auto mock = write_mock_cmd(root, "mock_step_without_json.cmd", step_without_result_json_cmd_body());
+    auto config = make_config(root, mock);
+
+    const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
+
+    assert(result.success);
+    assert(result.exitCode == 1);
+    assert(std::filesystem::exists(config.outputStepPath));
+    assert(!std::filesystem::exists(config.resultJsonPath));
+    assert(!std::filesystem::exists(config.outputIgesPath));
+    assert(result.errorMessage.empty());
 
     remove_temp_root(root);
 }
@@ -360,6 +385,7 @@ void run_geomagic_backend_mock_tests() {
     test_missing_input_stl_does_not_start_process();
     test_missing_script_does_not_start_process();
     test_missing_output_step_forces_failure();
+    test_output_step_without_result_json_is_success();
     test_auto_resolves_crop_paths_and_writes_config_json();
     test_auto_resolves_chinese_crop_path();
     test_non_crop_input_without_explicit_outputs_fails_before_process();

@@ -3,12 +3,13 @@
 This script intentionally keeps the pipeline minimal:
 
     STL mesh
+    -> optional RepairMesh / RemoveNonManifoldVertices / FillSmallHoles
     -> optional Remesh / QuickSmooth / Relax
     -> AutoSurface to temporary IGS
     -> ReadFile(IGS)
     -> WriteFile(STP)
 
-It does not run Solidify, RepairMesh, or healCAD.
+It does not run Solidify or healCAD.
 
 Default AutoSurface strategy:
 
@@ -21,16 +22,14 @@ This matches the API constraint that autoMerge cannot be combined with adaptiveF
 wrapCore.exe may not forward command-line arguments after --script to sys.argv.
 When sys.argv is empty, pass parameters through environment variables instead:
 
-    set "FIT_REGION_INPUT=data/crop_stl/model/candidate_0001.stl" && set "FIT_REGION_OUTPUT=data/crop_stp/model/candidate_0001.stp" && set "FIT_REGION_OUTPUT_IGES=data/crop_igs/model/candidate_0001.igs" && wrapCore.exe --script scripts/geomagic_wrap/autosurface_pipeline.py
+    set "FIT_REGION_INPUT=data/crop_stl/model/candidate_0001.stl" && set "FIT_REGION_OUTPUT=data/crop_stp/model/candidate_0001.stp" && set "FIT_REGION_REPAIR_MESH=1" && wrapCore.exe --script fit_region.py
 
 Main environment variables:
     FIT_REGION_INPUT
     FIT_REGION_OUTPUT
-    FIT_REGION_OUTPUT_IGES
-    FIT_REGION_RESULT_JSON
-    FIT_REGION_LOG_FILE
-    FIT_REGION_WORK_DIR
-    FIT_REGION_CONFIG_JSON
+    FIT_REGION_REPAIR_MESH             default: 1
+    FIT_REGION_FILL_HOLE_MAX_EDGES     default: 80
+    FIT_REGION_FILL_HOLE_LENGTH_RATIO  default: 1.0
     FIT_REGION_KEEP_TEMP                default: 1
     FIT_REGION_SKIP_REMESH              default: 1
     FIT_REGION_QUICK_SMOOTH             default: 0
@@ -38,14 +37,13 @@ Main environment variables:
     FIT_REGION_AUTOSURFACE_TARGET       default: 1
     FIT_REGION_AUTOSURFACE_TOLERANCE    default: 0.03
     FIT_REGION_DETAIL_LEVEL             default: 0.10
-    FIT_REGION_GEOMETRY_MODE            default: Organic
+    FIT_REGION_GEOMETRY_MODE            default: Mechanical
     FIT_REGION_ADAPTIVE_FIT             default: 0
     FIT_REGION_AUTO_MERGE               default: 1
     FIT_REGION_STRICT_PATCH_TARGET      default: 1
 """
 
 import argparse
-import json
 import os
 import shutil
 import sys
@@ -67,12 +65,16 @@ WriteFile = None
 AutoSurface = None
 QuickSmooth = None
 Relax = None
+RepairMesh = None
+RepairStrategy = None
+RemoveNonManifoldVertices = None
+FillSmallHoles = None
+Analyze = None
 
 
 class PipelineExit(Exception):
-    def __init__(self, code, message=None):
-        self.message = message or "Pipeline exited with code {}".format(code)
-        Exception.__init__(self, self.message)
+    def __init__(self, code):
+        Exception.__init__(self, "Pipeline exited with code {}".format(code))
         self.code = code
 
 
@@ -141,7 +143,7 @@ def print_flush(message="", stream=None):
 
 def fatal(message, code):
     print_flush(message, stream=sys.stderr)
-    raise PipelineExit(code, message)
+    raise PipelineExit(code)
 
 
 def set_stage(stage):
@@ -176,9 +178,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="AutoSurface an STL region and export as STP")
     parser.add_argument("-i", "--input", default=None)
     parser.add_argument("-o", "--output", default=None)
-    parser.add_argument("--output-iges", default=None)
-    parser.add_argument("--result-json", default=None)
-    parser.add_argument("--config-json", default=None)
     parser.add_argument("-e", "--target-edge-length", type=float, default=None)
     parser.add_argument("-w", "--work-dir", default=None)
     parser.add_argument("--log-file", default=None)
@@ -186,6 +185,10 @@ def parse_args():
     parser.add_argument("--skip-remesh", action="store_true", default=False)
     parser.add_argument("--quick-smooth", action="store_true", default=False)
     parser.add_argument("--relax", action="store_true", default=False)
+    parser.add_argument("--repair-mesh", dest="repair_mesh", action="store_true", default=None)
+    parser.add_argument("--no-repair-mesh", dest="repair_mesh", action="store_false")
+    parser.add_argument("--fill-hole-max-edges", type=int, default=None)
+    parser.add_argument("--fill-hole-length-ratio", type=float, default=None)
     parser.add_argument("--relax-iteration", type=int, default=None)
     parser.add_argument("--relax-strength", type=float, default=None)
     parser.add_argument("--autosurface-target", type=int, default=None)
@@ -206,13 +209,14 @@ def parse_args():
 
     args.input = args.input or os.environ.get("FIT_REGION_INPUT")
     args.output = args.output or os.environ.get("FIT_REGION_OUTPUT")
-    args.output_iges = args.output_iges or os.environ.get("FIT_REGION_OUTPUT_IGES")
-    args.result_json = args.result_json or os.environ.get("FIT_REGION_RESULT_JSON")
-    args.config_json = args.config_json or os.environ.get("FIT_REGION_CONFIG_JSON")
     args.target_edge_length = args.target_edge_length if args.target_edge_length is not None else env_float("FIT_REGION_TARGET_EDGE_LENGTH", 0.0)
     args.work_dir = args.work_dir or os.environ.get("FIT_REGION_WORK_DIR")
     args.log_file = args.log_file or os.environ.get("FIT_REGION_LOG_FILE")
     args.keep_temp = args.keep_temp or env_bool("FIT_REGION_KEEP_TEMP", True)
+    if args.repair_mesh is None:
+        args.repair_mesh = env_bool("FIT_REGION_REPAIR_MESH", True)
+    args.fill_hole_max_edges = args.fill_hole_max_edges if args.fill_hole_max_edges is not None else env_int("FIT_REGION_FILL_HOLE_MAX_EDGES", 80)
+    args.fill_hole_length_ratio = args.fill_hole_length_ratio if args.fill_hole_length_ratio is not None else env_float("FIT_REGION_FILL_HOLE_LENGTH_RATIO", 1.0)
 
     # Conservative defaults for tiny open STL patches.
     args.skip_remesh = args.skip_remesh or env_bool("FIT_REGION_SKIP_REMESH", True)
@@ -224,7 +228,7 @@ def parse_args():
     args.autosurface_target = args.autosurface_target if args.autosurface_target is not None else env_int("FIT_REGION_AUTOSURFACE_TARGET", 1)
     args.autosurface_tolerance = args.autosurface_tolerance if args.autosurface_tolerance is not None else env_float("FIT_REGION_AUTOSURFACE_TOLERANCE", 0.03)
     args.detail_level = args.detail_level if args.detail_level is not None else env_float("FIT_REGION_DETAIL_LEVEL", 0.10)
-    args.geometry_mode = args.geometry_mode or os.environ.get("FIT_REGION_GEOMETRY_MODE", "Organic")
+    args.geometry_mode = args.geometry_mode or os.environ.get("FIT_REGION_GEOMETRY_MODE", "Mechanical")
     args.adaptive_fit = args.adaptive_fit or env_bool("FIT_REGION_ADAPTIVE_FIT", False)
     args.auto_merge = args.auto_merge or env_bool("FIT_REGION_AUTO_MERGE", True)
     args.strict_patch_target = args.strict_patch_target or env_bool("FIT_REGION_STRICT_PATCH_TARGET", True)
@@ -232,10 +236,7 @@ def parse_args():
     if args.auto_merge and args.adaptive_fit:
         # Geomagic API explicitly disallows autoMerge combined with adaptiveFit.
         bootstrap_write("autoMerge=True forces adaptiveFit=False")
-        args.adaptive_fit_forced_message = "autoMerge=True forces adaptiveFit=False"
         args.adaptive_fit = False
-    else:
-        args.adaptive_fit_forced_message = ""
 
     bootstrap_write("resolved args input={} output={} log_file={}".format(args.input, args.output, args.log_file))
     return args
@@ -257,61 +258,6 @@ def default_log_file(args):
     return os.path.join(script_dir(), "fit_region.log")
 
 
-def default_result_json(args):
-    if getattr(args, "result_json", None):
-        return os.path.abspath(args.result_json)
-    if getattr(args, "output", None):
-        output_abs = os.path.abspath(args.output)
-        output_dir = os.path.dirname(output_abs)
-        output_base = os.path.splitext(os.path.basename(output_abs))[0]
-        return os.path.join(output_dir, output_base + "_autosurface_result.json")
-    if getattr(args, "input", None):
-        input_abs = os.path.abspath(args.input)
-        input_dir = os.path.dirname(input_abs)
-        input_base = os.path.splitext(os.path.basename(input_abs))[0]
-        return os.path.join(input_dir, input_base + "_autosurface_result.json")
-    return os.path.join(script_dir(), "autosurface_result.json")
-
-
-def ensure_parent_dir(path):
-    directory = os.path.dirname(os.path.abspath(path))
-    if directory and not os.path.isdir(directory):
-        os.makedirs(directory)
-
-
-def write_result_json(args, success, exit_code, message, error_message, failed_stage,
-                      bodies, open_loops, preserved_iges_path, log_file, start_time):
-    try:
-        result_json = default_result_json(args)
-        ensure_parent_dir(result_json)
-        if not success and not error_message:
-            error_message = message or "Geomagic AutoSurface pipeline failed"
-        duration_ms = int((time.time() - start_time) * 1000.0)
-        data = {
-            "success": bool(success),
-            "timed_out": False,
-            "exit_code": int(exit_code),
-            "bodies": int(bodies or 0),
-            "open_loops": int(open_loops or 0),
-            "message": message or "",
-            "error_message": error_message or "",
-            "failed_stage": failed_stage or "",
-            "input_stl_path": os.path.abspath(args.input) if getattr(args, "input", None) else "",
-            "output_iges_path": os.path.abspath(args.output_iges) if getattr(args, "output_iges", None) else "",
-            "output_step_path": os.path.abspath(args.output) if getattr(args, "output", None) else "",
-            "preserved_iges_path": os.path.abspath(preserved_iges_path) if preserved_iges_path else "",
-            "config_json_path": os.path.abspath(args.config_json) if getattr(args, "config_json", None) else "",
-            "result_json_path": result_json,
-            "fit_region_log_path": os.path.abspath(log_file) if log_file else "",
-            "duration_ms": duration_ms,
-        }
-        with open(result_json, "w", encoding="utf-8") as fp:
-            json.dump(data, fp, indent=2, ensure_ascii=False)
-        bootstrap_write("result_json={}".format(result_json))
-    except Exception:
-        bootstrap_write("failed to write result_json: {}".format(traceback.format_exc()))
-
-
 def setup_diagnostics(log_file):
     global _TEE_FILE
     log_dir = os.path.dirname(os.path.abspath(log_file))
@@ -330,9 +276,9 @@ def setup_diagnostics(log_file):
     print_flush("argv: {}".format(sys.argv))
     print_flush("FIT_REGION_INPUT: {}".format(os.environ.get("FIT_REGION_INPUT")))
     print_flush("FIT_REGION_OUTPUT: {}".format(os.environ.get("FIT_REGION_OUTPUT")))
-    print_flush("FIT_REGION_OUTPUT_IGES: {}".format(os.environ.get("FIT_REGION_OUTPUT_IGES")))
-    print_flush("FIT_REGION_RESULT_JSON: {}".format(os.environ.get("FIT_REGION_RESULT_JSON")))
-    print_flush("FIT_REGION_CONFIG_JSON: {}".format(os.environ.get("FIT_REGION_CONFIG_JSON")))
+    print_flush("FIT_REGION_REPAIR_MESH: {}".format(os.environ.get("FIT_REGION_REPAIR_MESH")))
+    print_flush("FIT_REGION_FILL_HOLE_MAX_EDGES: {}".format(os.environ.get("FIT_REGION_FILL_HOLE_MAX_EDGES")))
+    print_flush("FIT_REGION_FILL_HOLE_LENGTH_RATIO: {}".format(os.environ.get("FIT_REGION_FILL_HOLE_LENGTH_RATIO")))
     print_flush("FIT_REGION_AUTO_MERGE: {}".format(os.environ.get("FIT_REGION_AUTO_MERGE")))
     print_flush("FIT_REGION_ADAPTIVE_FIT: {}".format(os.environ.get("FIT_REGION_ADAPTIVE_FIT")))
     print_flush("")
@@ -370,45 +316,32 @@ def validate_args(args):
         fatal("Error: missing input. Use -i/--input or FIT_REGION_INPUT.", 10)
     if not args.output:
         fatal("Error: missing output. Use -o/--output or FIT_REGION_OUTPUT.", 11)
-    if not args.output_iges:
-        fatal("Error: missing output IGES. Use --output-iges or FIT_REGION_OUTPUT_IGES.", 14)
     args.input = os.path.abspath(args.input)
     args.output = os.path.abspath(args.output)
-    args.output_iges = os.path.abspath(args.output_iges)
-    args.result_json = default_result_json(args)
-    if args.config_json:
-        args.config_json = os.path.abspath(args.config_json)
     if args.work_dir is None:
-        args.work_dir = os.path.dirname(args.output)
+        args.work_dir = os.path.dirname(args.input)
     args.work_dir = os.path.abspath(args.work_dir)
     if not os.path.isfile(args.input):
         fatal("Error: input file not found: {}".format(args.input), 1)
     if not os.path.isdir(args.work_dir):
-        os.makedirs(args.work_dir)
-    ensure_parent_dir(args.output)
-    ensure_parent_dir(args.output_iges)
-    ensure_parent_dir(args.result_json)
+        fatal("Error: work directory not found: {}".format(args.work_dir), 12)
+    output_dir = os.path.dirname(args.output)
+    if output_dir and not os.path.isdir(output_dir):
+        fatal("Error: output directory not found: {}".format(output_dir), 13)
     if args.autosurface_target <= 0:
         fatal("Error: AutoSurface target must be positive: {}".format(args.autosurface_target), 15)
     if args.autosurface_tolerance <= 0.0:
         fatal("Error: AutoSurface tolerance must be positive: {}".format(args.autosurface_tolerance), 16)
     if args.detail_level < 0.0 or args.detail_level > 1.0:
         fatal("Error: detail level must be in [0, 1]: {}".format(args.detail_level), 18)
+    if args.fill_hole_max_edges < 0:
+        fatal("Error: fill hole max edges must be non-negative: {}".format(args.fill_hole_max_edges), 19)
+    if args.fill_hole_length_ratio < 0.0:
+        fatal("Error: fill hole length ratio must be non-negative: {}".format(args.fill_hole_length_ratio), 21)
 
 
-def path_is_ascii(path):
-    try:
-        path.encode("ascii")
-        return True
-    except Exception:
-        return False
-
-
-def safe_ascii_temp_igs(input_path, work_dir=None):
-    if work_dir and path_is_ascii(os.path.abspath(work_dir)):
-        temp_root = os.path.join(os.path.abspath(work_dir), "fit_region_temp")
-    else:
-        temp_root = os.path.join(script_dir(), "fit_region_temp")
+def safe_ascii_temp_igs(input_path):
+    temp_root = os.path.join(script_dir(), "fit_region_temp")
     if not os.path.isdir(temp_root):
         os.makedirs(temp_root)
     base = os.path.splitext(os.path.basename(input_path))[0]
@@ -419,14 +352,18 @@ def safe_ascii_temp_igs(input_path, work_dir=None):
     return os.path.join(temp_root, safe_base + "_" + uuid.uuid4().hex[:8] + ".igs")
 
 
-def desired_igs_path(args):
-    return os.path.abspath(args.output_iges)
+def desired_igs_path(output_path):
+    output_abs = os.path.abspath(output_path)
+    output_dir = os.path.dirname(output_abs)
+    output_base = os.path.splitext(os.path.basename(output_abs))[0]
+    return os.path.join(output_dir, output_base + "_autosurface.igs")
 
 
 def print_args(args, temp_igs_path, final_igs_path, log_file):
     print_flush("Resolved arguments:")
     for name in [
-        "input", "output", "output_iges", "result_json", "config_json", "target_edge_length", "skip_remesh", "quick_smooth", "relax",
+        "input", "output", "target_edge_length", "repair_mesh", "fill_hole_max_edges",
+        "fill_hole_length_ratio", "skip_remesh", "quick_smooth", "relax",
         "relax_iteration", "relax_strength", "autosurface_target", "autosurface_tolerance",
         "detail_level", "geometry_mode", "adaptive_fit", "auto_merge", "strict_patch_target",
         "work_dir", "keep_temp"
@@ -435,9 +372,9 @@ def print_args(args, temp_igs_path, final_igs_path, log_file):
     print_flush("  temp_iges_ascii: {}".format(temp_igs_path))
     print_flush("  saved_iges: {}".format(final_igs_path))
     print_flush("  log_file: {}".format(log_file))
-    print_flush("  note: Solidify, RepairMesh, and healCAD are disabled")
+    print_flush("  note: Solidify and healCAD are disabled")
+    print_flush("  note: mesh repair targets small holes, non-manifold edges, and non-manifold vertices")
     print_flush("  note: autoMerge=True forces adaptiveFit=False")
-    print_flush("  note: crop_stl -> crop_stp / crop_igs paths are supplied by FIT_REGION_OUTPUT and FIT_REGION_OUTPUT_IGES")
     print_flush("")
 
 
@@ -459,6 +396,7 @@ def apply_mm_file_open_options(reader):
 def ensure_geomagic_api_imported():
     global _GEOMAGIC_API_IMPORTED
     global geo, ReadFile, Remesh, CalculateTargetEdgeLength, WriteFile, AutoSurface, QuickSmooth, Relax
+    global RepairMesh, RepairStrategy, RemoveNonManifoldVertices, FillSmallHoles, Analyze
     if _GEOMAGIC_API_IMPORTED:
         return
     set_stage("Importing Geomagic API")
@@ -471,6 +409,11 @@ def ensure_geomagic_api_imported():
         from geomagic.api.v3 import AutoSurface as _AutoSurface
         from geomagic.api.v3 import QuickSmooth as _QuickSmooth
         from geomagic.api.v3 import Relax as _Relax
+        from geomagic.api.v3 import RepairMesh as _RepairMesh
+        from geomagic.api.v3 import RepairStrategy as _RepairStrategy
+        from geomagic.api.v3 import RemoveNonManifoldVertices as _RemoveNonManifoldVertices
+        from geomagic.api.v3 import FillSmallHoles as _FillSmallHoles
+        from geomagic.api.v3 import Analyze as _Analyze
     except Exception:
         print_flush("Error: failed to import geomagic.api.v3", stream=sys.stderr)
         traceback.print_exc(file=sys.stderr)
@@ -483,6 +426,11 @@ def ensure_geomagic_api_imported():
     AutoSurface = _AutoSurface
     QuickSmooth = _QuickSmooth
     Relax = _Relax
+    RepairMesh = _RepairMesh
+    RepairStrategy = _RepairStrategy
+    RemoveNonManifoldVertices = _RemoveNonManifoldVertices
+    FillSmallHoles = _FillSmallHoles
+    Analyze = _Analyze
     _GEOMAGIC_API_IMPORTED = True
     print_flush("  Geomagic API imported successfully.")
 
@@ -496,6 +444,119 @@ def step_import_stl(filename):
     mesh = getattr(reader, "mesh", None)
     if mesh is None:
         fatal("Error: failed to import mesh from {}".format(filename), 2)
+    return mesh
+
+
+def describe_mesh_health(mesh, label):
+    try:
+        analyzer = Analyze()
+        analyzer.mesh = mesh
+        analyzer.run()
+        print_flush(
+            "  {}: manifold={}, open={}, openEdges={}, boundaryCycles={}, nonManifoldEdges={}, "
+            "nonManifoldVertices={}, degenerateTriangles={}, components={}, maxHoleLength={}".format(
+                label,
+                get_attr_safe(analyzer, "isManifold", "?"),
+                get_attr_safe(analyzer, "isOpen", "?"),
+                get_attr_safe(analyzer, "numOpenEdges", "?"),
+                get_attr_safe(analyzer, "numBoundaryCycles", "?"),
+                get_attr_safe(analyzer, "numNonManifoldEdges", "?"),
+                get_attr_safe(analyzer, "numNonManifoldVertices", "?"),
+                get_attr_safe(analyzer, "numDegenerateTriangles", "?"),
+                get_attr_safe(analyzer, "numComponents", "?"),
+                get_attr_safe(analyzer, "maxHoleLength", "?"),
+            )
+        )
+    except Exception as exc:
+        print_flush("  Warning: Analyze failed for {}: {}".format(label, exc), stream=sys.stderr)
+
+
+def mesh_max_hole_length(mesh):
+    try:
+        analyzer = Analyze()
+        analyzer.mesh = mesh
+        analyzer.run()
+        return float(get_attr_safe(analyzer, "maxHoleLength", 0.0) or 0.0)
+    except Exception as exc:
+        print_flush("  Warning: Analyze failed while reading maxHoleLength: {}".format(exc), stream=sys.stderr)
+        return 0.0
+
+
+def step_fill_small_holes(mesh, max_edges, length_ratio):
+    if max_edges <= 0 or length_ratio <= 0.0:
+        print_flush("  FillSmallHoles disabled by threshold")
+        return mesh
+    max_hole_length = mesh_max_hole_length(mesh)
+    if max_hole_length <= 0.0:
+        print_flush("  FillSmallHoles skipped: maxHoleLength is 0")
+        return mesh
+    try:
+        limit = max_hole_length * float(length_ratio)
+        filler = FillSmallHoles()
+        filler.mesh = mesh
+        filler.maxNumEdges = int(max_edges)
+        filler.maxHoleLength = limit
+        filler.run()
+        mesh = getattr(filler, "mesh", mesh)
+        print_flush(
+            "  FillSmallHoles finished. maxNumEdges={}, maxHoleLength={:.9f}, numFilled={}, triangles={}".format(
+                int(max_edges),
+                limit,
+                get_attr_safe(filler, "numFilled", 0),
+                get_attr_safe(mesh, "numTriangles", 0),
+            )
+        )
+    except Exception as exc:
+        print_flush("  Warning: FillSmallHoles failed and was skipped: {}".format(exc), stream=sys.stderr)
+    return mesh
+
+
+def step_repair_mesh(mesh, args):
+    describe_mesh_health(mesh, "Before RepairMesh")
+    try:
+        strategy = RepairStrategy()
+        for name in ["spikeVertices", "smallComponents", "smallTunnels", "intersections", "spikeEdges"]:
+            try:
+                setattr(strategy, name, False)
+            except Exception:
+                pass
+        strategy.smallHoles = True
+        strategy.nonManifoldEdges = True
+
+        repair = RepairMesh()
+        repair.mesh = mesh
+        repair.strategy = strategy
+        try:
+            repair.forceUpdate = True
+        except Exception:
+            pass
+
+        repair.run()
+        mesh = getattr(repair, "mesh", mesh)
+        print_flush(
+            "  RepairMesh finished. smallHoles={}, nonManifoldEdges={}, totalProblems={}, triangles={}".format(
+                get_attr_safe(repair, "numSmallHoles", 0),
+                get_attr_safe(repair, "numNonManifoldEdges", 0),
+                get_attr_safe(repair, "totalProblems", 0),
+                get_attr_safe(mesh, "numTriangles", 0),
+            )
+        )
+    except Exception as exc:
+        print_flush("  Warning: RepairMesh failed and was skipped: {}".format(exc), stream=sys.stderr)
+    try:
+        remover = RemoveNonManifoldVertices()
+        remover.mesh = mesh
+        try:
+            remover.globalAlgorithm = True
+        except Exception:
+            pass
+        remover.run()
+        mesh = getattr(remover, "mesh", mesh)
+        print_flush("  RemoveNonManifoldVertices finished. triangles={}".format(get_attr_safe(mesh, "numTriangles", 0)))
+    except Exception as exc:
+        print_flush("  Warning: RemoveNonManifoldVertices failed and was skipped: {}".format(exc), stream=sys.stderr)
+    mesh = step_fill_small_holes(mesh, args.fill_hole_max_edges, args.fill_hole_length_ratio)
+    describe_mesh_health(mesh, "After RepairMesh")
     return mesh
 
 
@@ -551,7 +612,7 @@ def step_relax(mesh, iteration, strength):
 
 def set_autosurface_geometry(autosurf, mode):
     try:
-        mode_norm = (mode or "Organic").strip().lower()
+        mode_norm = (mode or "Mechanical").strip().lower()
         if mode_norm == "mechanical":
             autosurf.geometry = geo.AutoSurface.Mechanical
             return "Mechanical"
@@ -636,8 +697,10 @@ def build_autosurface_attempts(args):
                 return
         attempts.append((key, label, geometry, adaptive, patches, tolerance, detail_level, auto_merge))
 
-    # First: the desired one-patch merge strategy.
-    add("requested one-patch autoMerge", geom, False, target, tol, detail, True)
+    requested_auto_merge = bool(args.auto_merge)
+
+    # First: the requested one-patch strategy.
+    add("requested autoMerge={}".format(requested_auto_merge), geom, False, target, tol, detail, requested_auto_merge)
 
     # Then keep numPatches=1 but vary detail/geometry/tolerance before relaxing patch count.
     add("one-patch autoMerge detail=0.0", geom, False, target, tol, 0.0, True)
@@ -677,7 +740,7 @@ def run_autosurface(mesh, igs_path, args):
 
 
 def convert_igs_to_stp_plain(igs_path, stp_path):
-    set_stage("Step 5/6: IGS to STEP via ReadFile + WriteFile")
+    set_stage("Step 6/7: IGS to STEP via ReadFile + WriteFile")
     try:
         reader = ReadFile()
         reader.filename = igs_path
@@ -725,19 +788,25 @@ def preserve_igs(temp_igs, final_igs):
 
 def run_pipeline(args, temp_igs_path, final_igs_path):
     ensure_geomagic_api_imported()
-    set_stage("Step 1/6: Importing STL")
+    set_stage("Step 1/7: Importing STL")
     mesh = step_import_stl(args.input)
     print_flush("  Imported mesh: {} triangles, {} points".format(get_attr_safe(mesh, "numTriangles", 0), get_attr_safe(mesh, "numPoints", 0)))
 
+    set_stage("Step 2/7: Optional mesh repair")
+    if args.repair_mesh:
+        mesh = step_repair_mesh(mesh, args)
+    else:
+        print_flush("  RepairMesh disabled")
+
     if args.skip_remesh:
-        set_stage("Step 2/6: Skipping Remesh")
+        set_stage("Step 3/7: Skipping Remesh")
         print_flush("  Remesh skipped")
     else:
-        set_stage("Step 2/6: Remeshing")
+        set_stage("Step 3/7: Remeshing")
         mesh = step_remesh(mesh, args.target_edge_length)
         print_flush("  Remeshed: {} triangles".format(get_attr_safe(mesh, "numTriangles", 0)))
 
-    set_stage("Step 3/6: Optional mesh smoothing")
+    set_stage("Step 4/7: Optional mesh smoothing")
     if args.quick_smooth:
         mesh = step_quick_smooth(mesh)
     else:
@@ -747,81 +816,33 @@ def run_pipeline(args, temp_igs_path, final_igs_path):
     else:
         print_flush("  Relax disabled")
 
-    set_stage("Step 4/6: AutoSurface to IGES")
+    set_stage("Step 5/7: AutoSurface to IGES")
     run_autosurface(mesh, temp_igs_path, args)
-    preserved_igs = preserve_igs(temp_igs_path, final_igs_path)
-    if not os.path.isfile(final_igs_path):
-        fatal("Error: output IGES was not created: {}".format(final_igs_path), 18)
+    if args.keep_temp:
+        preserve_igs(temp_igs_path, final_igs_path)
 
     success, bodies, loops, err = convert_igs_to_stp_plain(temp_igs_path, args.output)
     if not success:
         fatal("Error: plain IGS to STEP failed: {}".format(err), 17)
 
-    set_stage("Step 6/6: Done")
+    set_stage("Step 7/7: Done")
     print_flush("  Saved STEP: {}".format(args.output))
-    print_flush("  Saved IGES: {}".format(final_igs_path))
     print_flush("  bodies={}, openLoops={}".format(bodies, loops))
-    return bodies, loops, preserved_igs
-
-
-def result_args_from_environment():
-    class ResultArgs(object):
-        pass
-
-    args = ResultArgs()
-    args.input = os.environ.get("FIT_REGION_INPUT")
-    args.output = os.environ.get("FIT_REGION_OUTPUT")
-    args.output_iges = os.environ.get("FIT_REGION_OUTPUT_IGES")
-    args.result_json = os.environ.get("FIT_REGION_RESULT_JSON")
-    args.config_json = os.environ.get("FIT_REGION_CONFIG_JSON")
-    args.log_file = os.environ.get("FIT_REGION_LOG_FILE")
-    return args
 
 
 def main():
-    start_time = time.time()
-    args = None
-    log_file = None
-    temp_igs_path = None
-    final_igs_path = None
-    bodies = 0
-    loops = 0
-    preserved_igs = None
+    args = parse_args()
+    log_file = default_log_file(args)
+    setup_diagnostics(log_file)
+    validate_args(args)
+    temp_igs_path = safe_ascii_temp_igs(args.input)
+    final_igs_path = desired_igs_path(args.output)
+    print_args(args, temp_igs_path, final_igs_path, log_file)
     try:
-        args = parse_args()
-        log_file = default_log_file(args)
-        setup_diagnostics(log_file)
-        set_stage("Argument validation")
-        validate_args(args)
-        temp_igs_path = safe_ascii_temp_igs(args.input, args.work_dir)
-        final_igs_path = desired_igs_path(args)
-        print_args(args, temp_igs_path, final_igs_path, log_file)
-        bodies, loops, preserved_igs = run_pipeline(args, temp_igs_path, final_igs_path)
-        success_message = "Pipeline finished successfully."
-        if getattr(args, "adaptive_fit_forced_message", ""):
-            success_message += " " + args.adaptive_fit_forced_message
-        write_result_json(args, True, 0, success_message, "", "", bodies, loops, preserved_igs, log_file, start_time)
-    except PipelineExit as exc:
-        result_args = args or result_args_from_environment()
-        if log_file is None:
-            log_file = default_log_file(result_args)
-        write_result_json(
-            result_args, False, exc.code, "Geomagic AutoSurface pipeline failed.",
-            exc.message, _LAST_STAGE, bodies, loops, preserved_igs, log_file, start_time
-        )
-        raise
-    except Exception:
-        result_args = args or result_args_from_environment()
-        if log_file is None:
-            log_file = default_log_file(result_args)
-        write_result_json(
-            result_args, False, 99, "Unhandled exception in Geomagic AutoSurface pipeline.",
-            traceback.format_exc(), _LAST_STAGE, bodies, loops, preserved_igs, log_file, start_time
-        )
-        raise
+        run_pipeline(args, temp_igs_path, final_igs_path)
     finally:
-        if temp_igs_path and os.path.isfile(temp_igs_path):
-            if args is not None and args.keep_temp:
+        if os.path.isfile(temp_igs_path):
+            if args.keep_temp:
                 print_flush("Keeping ASCII temporary IGES: {}".format(temp_igs_path))
             else:
                 try:
@@ -833,7 +854,6 @@ def main():
 
 if __name__ == "__main__":
     exit_code = 0
-    _START_TIME = time.time()
     try:
         main()
         print_flush("\nPipeline finished successfully.")
@@ -851,4 +871,3 @@ if __name__ == "__main__":
             pass
         bootstrap_write("final exit code={} stage={}".format(exit_code, _LAST_STAGE))
         close_diagnostics()
-        sys.exit(exit_code)

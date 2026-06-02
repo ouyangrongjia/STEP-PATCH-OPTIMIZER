@@ -37,7 +37,7 @@ struct GeomagicAutoSurfaceConfig {
 
     double detail = 0.10;
     double tolerance = 0.03;
-    std::string geometry = "Organic";
+    std::string geometry = "Mechanical";
 
     bool convertIgesToStep = true;
     int timeoutSeconds = 1800;

@@ -68,7 +68,7 @@ void test_default_config_values() {
     assert((config.fallbackNumPatches == std::vector<int>{2, 4, 8}));
     assert(std::fabs(config.detail - 0.10) <= kTolerance);
     assert(std::fabs(config.tolerance - 0.03) <= kTolerance);
-    assert(config.geometry == "Organic");
+    assert(config.geometry == "Mechanical");
     assert(config.timeoutSeconds == 1800);
     assert(config.keepTemp);
     assert(config.skipRemesh);
