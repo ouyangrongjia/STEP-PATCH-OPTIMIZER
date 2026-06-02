@@ -1,8 +1,8 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.5-geomagic-repair-mechanical
+> 草案版本：v0.6-patch-artifact-locator
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。
 
 ---
 
@@ -48,6 +48,8 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 不要绕过用户确认执行真实替换。
 不要绕过 StrictTopologyGate 提交模型。
 不要让 redo 重新运行 Geomagic。
+不要在生产逻辑中写死 `local_candidate_0179_mechanical.stp`、`local_candidate_0179` 或任何固定 candidate 文件名。
+当前真实样例只能作为 optional integration test / manual verification fixture。
 ```
 
 ### 0.3 crop 输出目录规范
@@ -99,6 +101,77 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 6. 当前真实脚本以 outputStepPath 为唯一必需产物；outputIgesPath 是兼容字段，脚本不再要求 FIT_REGION_OUTPUT_IGES。
 ```
 
+
+### 0.4 Patch artifact 动态定位规则
+
+当前真实样例：
+
+```text
+data/crop_stl/local_candidate_0179.stl
+data/crop_stp/local_candidate_0179_mechanical.stp
+data/crop_stp/local_candidate_0179_mechanical_autosurface.igs
+data/crop_stp/local_candidate_0179_mechanical_fit_region.log
+```
+
+定位原则：
+
+```text
+这些文件只能作为 optional integration test / manual GUI verification 的样例。
+生产流程不得写死 `local_candidate_0179`、`0179`、`mechanical` 或任何固定 patch 文件名。
+正式流程必须根据 local STL / GeomagicAutoSurfaceResult / selected candidate 动态定位对应 patch。
+```
+
+建议引入 `PatchArtifactLocator`，负责把 T3/T4 产物转化为 T5 可导入的 patch artifact：
+
+```text
+selected candidate
+→ localStlPath
+→ PatchArtifactLocator
+→ patchStepPath / patchIgesSidecarPath / fitRegionLogPath
+→ PatchImportService
+→ patch overlay
+→ PatchPreviewReport
+→ Apply
+```
+
+定位优先级：
+
+```text
+1. 如果存在 GeomagicAutoSurfaceResult：
+   - 优先使用 result.outputStepPath。
+   - result.outputIgesPath / result.preservedIgesPath 作为兼容 fallback。
+   - result.inputStlPath 用于溯源。
+
+2. 如果只有 local STL：
+   - 根据 data/crop_stl/<relative>/<stem>.stl 定位：
+     - data/crop_stp/<relative>/<stem>.stp
+     - data/crop_stp/<relative>/<stem>_mechanical.stp
+     - data/crop_stp/<relative>/<stem>_organic.stp
+     - data/crop_stp/<relative>/<stem>_*.stp
+
+3. 如果存在多个 patch：
+   - 优先选择 *_mechanical.stp。
+   - 然后选择最近修改的 .stp/.step。
+   - 如果修改时间不可用，则使用固定字典序策略。
+   - 不允许随机选择。
+
+4. sidecar 文件：
+   - 对于 patchStepPath = data/crop_stp/<relative>/<patch_stem>.stp
+   - 优先寻找：
+     - data/crop_stp/<relative>/<patch_stem>_autosurface.igs
+     - data/crop_stp/<relative>/<patch_stem>_fit_region.log
+   - data/crop_igs 只作为兼容 fallback，不作为唯一来源。
+```
+
+后续约束：
+
+```text
+T5.2/T5.3 不得直接从固定路径导入 patch。
+T5.4/T6 Apply / replacement 不得直接从固定路径读取 patch。
+Apply 所使用的 patch 必须来自当前 candidate 关联的 PatchArtifactPaths、PatchPreviewReport 或 GeomagicAutoSurfaceResult。
+```
+
+
 ---
 
 ## 1. MVP 定义
@@ -129,6 +202,7 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 → RegionBoundaryAnalyzer 通过
 → 裁剪 local STL 到 data/crop_stl
 → wrapCore.exe + AutoSurface 生成 data/crop_stp，并可保留 IGS sidecar
+→ PatchArtifactLocator 根据 local STL / result 动态定位 patch
 → PatchImportService 导入 patch
 → Viewer 叠加预览 patch
 → 输出完整 workspace 和日志
@@ -140,10 +214,12 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 1. local STL 成功生成。
 2. Geomagic 输出对应的 crop_stp/*.stp。
 3. fit_region log 可定位 mesh repair、AutoSurface 参数和最终退出状态。
-4. patch 能导入 OCCT。
-5. Viewer 能叠加显示 patch。
+4. PatchArtifactLocator 能根据 local STL / result 动态定位 patch，不写死样例文件。
+5. patch 能导入 OCCT。
+6. Viewer 能叠加显示 patch.
 6. 清除 overlay 后主模型不变。
-7. 此阶段不修改主 ShapeDocument。
+7. 清除 overlay 后主模型不变。
+8. 此阶段不修改主 ShapeDocument。
 ```
 
 ### MVP-C：用户点击应用后的单候选真实贴回
@@ -1135,8 +1211,9 @@ CMakeLists.txt
 
 ```text
 输入 STL：data/crop_stl/local_candidate_0179.stl
-输出 STEP：data/crop_stp/local_candidate_0179.stp
-fit_region log：data/crop_stp/local_candidate_0179_fit_region.log
+输出 STEP：data/crop_stp/local_candidate_0179_mechanical.stp
+IGS sidecar：data/crop_stp/local_candidate_0179_mechanical_autosurface.igs
+fit_region log：data/crop_stp/local_candidate_0179_mechanical_fit_region.log
 
 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 后：
 boundaryCycles: 11 -> 1
@@ -1165,6 +1242,117 @@ bbox 和 face count 可显示。
 patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 ```
 
+
+## T5.2.0 PatchArtifactLocator
+
+文件：
+
+```text
+src/patch/PatchArtifactLocator.h
+src/patch/PatchArtifactLocator.cpp
+tests/test_patch_artifact_locator.cpp
+CMakeLists.txt
+```
+
+目标：
+
+```text
+根据 local STL / GeomagicAutoSurfaceResult / selected candidate artifact 动态定位 Geomagic patch。
+生产逻辑不得写死当前真实样例 `local_candidate_0179_mechanical.stp` 或任何固定 candidate 文件名。
+当前真实样例只能作为 optional integration test / manual verification fixture。
+```
+
+建议结构：
+
+```cpp
+struct PatchArtifactPaths {
+    bool success = false;
+    std::string message;
+
+    std::filesystem::path localStlPath;
+    std::filesystem::path patchStepPath;
+    std::filesystem::path patchIgesSidecarPath;
+    std::filesystem::path fitRegionLogPath;
+
+    bool foundStep = false;
+    bool foundIgesSidecar = false;
+    bool foundFitLog = false;
+};
+
+class PatchArtifactLocator {
+public:
+    PatchArtifactPaths locateFromResult(const GeomagicAutoSurfaceResult& result) const;
+    PatchArtifactPaths locateFromLocalStl(const std::filesystem::path& localStlPath) const;
+};
+```
+
+定位规则：
+
+```text
+1. locateFromResult(result)：
+   - 优先使用 result.outputStepPath。
+   - 如果 result.outputStepPath 存在，则 patchStepPath = result.outputStepPath。
+   - localStlPath = result.inputStlPath。
+   - IGS sidecar 优先寻找 patchStepPath.parent_path() / (patchStepPath.stem() + "_autosurface.igs")。
+   - fit log 优先寻找 patchStepPath.parent_path() / (patchStepPath.stem() + "_fit_region.log")。
+   - result.outputIgesPath / result.preservedIgesPath 仅作为兼容 fallback。
+
+2. locateFromLocalStl(localStlPath)：
+   - localStlPath 必须位于 data/crop_stl。
+   - stem = localStlPath.stem()。
+   - relative_dir = data/crop_stl 下的相对目录。
+   - 先找 data/crop_stp/<relative_dir>/<stem>.stp。
+   - 再找 data/crop_stp/<relative_dir>/<stem>_mechanical.stp。
+   - 再找 data/crop_stp/<relative_dir>/<stem>_organic.stp。
+   - 再找 data/crop_stp/<relative_dir>/<stem>_*.stp。
+   - 多个匹配时优先 mechanical，然后按最近修改时间选择最新。
+   - 不允许随机选择。
+
+3. sidecar：
+   - data/crop_stp/<relative_dir>/<patch_step_stem>_autosurface.igs
+   - data/crop_stp/<relative_dir>/<patch_step_stem>_fit_region.log
+   - data/crop_igs 只作为兼容 fallback。
+```
+
+测试要求：
+
+```text
+1. 通用命名：
+   crop_stl/a/candidate_0001.stl
+   crop_stp/a/candidate_0001.stp
+   → locateFromLocalStl 成功。
+
+2. 策略后缀：
+   crop_stl/a/candidate_0002.stl
+   crop_stp/a/candidate_0002_mechanical.stp
+   → locateFromLocalStl 成功。
+
+3. 多策略：
+   同时存在 candidate_0003_organic.stp 和 candidate_0003_mechanical.stp
+   → 优先 mechanical。
+
+4. 缺失 patch：
+   只有 crop STL，没有 crop STP
+   → success=false，message 非空，不崩溃。
+
+5. optional real test：
+   如果存在 data/crop_stl/local_candidate_0179.stl 和 data/crop_stp/local_candidate_0179_mechanical.stp，
+   则 locator 应能动态定位该真实样例。
+   该样例只能出现在测试和 manual verification 中，不允许写入生产逻辑。
+```
+
+验收：
+
+```text
+不写死任何具体 candidate 文件名。
+能从 localStlPath 找到对应 patch。
+能从 GeomagicAutoSurfaceResult 找到对应 patch。
+能识别 strategy suffix，例如 _mechanical / _organic。
+能找到 IGS sidecar 和 fit log。
+找不到 patch 时返回失败信息，不崩溃。
+```
+
+
 ## T5.2 Patch overlay 叠加预览
 
 文件：
@@ -1179,6 +1367,8 @@ src/app/AppController.cpp
 任务：
 
 ```text
+通过 PatchArtifactLocator 动态定位当前 candidate 对应的 patch。
+调用 PatchImportService 导入 patch。
 显示 imported patch overlay。
 保持原 candidate 高亮。
 支持显示 / 隐藏 / 清除 patch overlay。
@@ -1188,6 +1378,7 @@ src/app/AppController.cpp
 验收：
 
 ```text
+Import Patch For Current Candidate 不写死样例文件。
 patch overlay 能显示。
 candidate highlight 与 patch overlay 可同时存在。
 清除 overlay 后主模型不变。
@@ -1214,7 +1405,8 @@ src/gui/ModelTreePanel.cpp
 - source boundary edge count
 - local STL path
 - patch STEP path
-- patch IGS path
+- patch IGS sidecar path
+- fit_region log path
 - patch face count
 - patch edge count
 - patch bbox
@@ -1230,6 +1422,7 @@ src/gui/ModelTreePanel.cpp
 用户在 Apply 前能看到 patch 是否明显偏离原 candidate。
 patch import 失败时报告明确。
 patch bbox 明显异常时阻止 Apply 或标记 HighRisk。
+multi-face patch 不直接判失败；当前真实样例 faces=12 应作为 warning，而不是 overlay 阻塞条件。
 ```
 
 ## T5.4 Apply 按钮和候选状态
@@ -1265,7 +1458,9 @@ enum class RegionPatchStatus {
 1. patch overlay preview ready 后，GUI 启用 Apply。
 2. Apply 只对当前 selected candidate 生效。
 3. Apply 前再次检查 candidate boundary 和 imported patch 有效性。
-4. Apply 后进入 PatchReplacementCommand。
+4. Apply 使用当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
+5. Apply 不允许从固定路径读取 patch。
+6. Apply 后进入 PatchReplacementCommand。
 ```
 
 验收：
@@ -1345,16 +1540,17 @@ CMakeLists.txt
 任务：
 
 ```text
-1. 输入 candidate + imported patch。
-2. 保存 beforeDocument。
-3. 删除 / 替换 candidate source faces。
-4. 接入 BoundaryConstrainedPatchBuilder。
-5. 尝试 sewing / ShapeFix / SameParameter。
-6. 调用 StrictTopologyGate。
-7. Gate 成功才提交 afterDocument。
-8. Gate 失败 rollback。
-9. 支持 undo/redo。
-10. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
+1. 输入 candidate + imported patch，imported patch 必须来自当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
+2. 不允许写死 data/crop_stp/local_candidate_0179_mechanical.stp 或任何固定 patch 路径。
+3. 保存 beforeDocument。
+4. 删除 / 替换 candidate source faces。
+5. 接入 BoundaryConstrainedPatchBuilder。
+6. 尝试 sewing / ShapeFix / SameParameter。
+7. 调用 StrictTopologyGate。
+8. Gate 成功才提交 afterDocument。
+9. Gate 失败 rollback。
+10. 支持 undo/redo。
+11. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
 ```
 
 限制：
@@ -1498,6 +1694,7 @@ workspace/session_YYYYMMDD_HHMMSS/region_0001/
     local_output_autosurface.igs
     crop_stl_path.txt
     crop_stp_path.txt
+    patch_artifact_report.json
     patch_import_report.json
     patch_preview_report.json
     replacement_report.json
@@ -1510,6 +1707,7 @@ data 目录镜像输出：
 data/crop_stl/<relative_dir>/<name>.stl
 data/crop_stp/<relative_dir>/<name>.stp
 data/crop_stp/<relative_dir>/<name>_autosurface.igs
+# strategy suffix is allowed, e.g. <name>_mechanical.stp / <name>_mechanical_autosurface.igs
 ```
 
 验收：
@@ -1676,4 +1874,5 @@ src/gui/LogPanel.cpp
 9. 不删除 Plane/Sphere 旧代码，只保留为 experimental / baseline。
 10. 不把真实 Geomagic 调用加入自动单元测试。
 11. 不让 redo 重新运行 Geomagic。
+12. 不在生产逻辑中写死 `local_candidate_0179_mechanical.stp` 或任何当前样例路径。
 ```
