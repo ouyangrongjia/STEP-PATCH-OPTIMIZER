@@ -271,12 +271,14 @@ scripts/geomagic_wrap/README.md
 
 ```text
 1. QProcess 调用 wrapCore.exe。
-2. 传入 autosurface_pipeline.py 和 config.json。
+2. 通过 --script 传入 autosurface_pipeline.py，通过 FIT_REGION_* 环境变量传参。
 3. 捕获 stdout/stderr。
-4. 读取 result.json。
+4. 当前真实脚本写单一 fit_region log，不写 result.json；后端保留 result.json 读取兼容。
 5. 支持 timeout。
 6. 支持 mock executable。
 7. 真实 Geomagic 只做手动集成测试。
+8. Python 脚本默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+9. 默认 AutoSurface 使用 Mechanical + autoMerge=true + adaptiveFit=false + numPatches=1。
 ```
 
 验收：
@@ -286,7 +288,9 @@ mock success 通过。
 mock failure 通过。
 timeout 通过。
 输出文件不存在判失败。
-真实 Geomagic 环境能生成 local_output.igs / local_output.step。
+真实 Geomagic 环境能生成 data/crop_stp/*.stp。
+fit_region log 能显示补洞、非流形修复、AutoSurface 参数和最终退出状态。
+PatchImportService 能导入生成的 STEP 并统计 face/edge/bbox/BRepCheck。
 ```
 
 ---
@@ -315,8 +319,8 @@ src/gui/ModelTreePanel.cpp
 实现要求：
 
 ```text
-1. 优先导入 local_output.step。
-2. STEP 失败时尝试 local_output.igs。
+1. 优先导入 data/crop_stp/<relative>/<name>.stp。
+2. STEP 失败时尝试 `<output_stp_stem>_autosurface.igs` 或兼容 result 中的 IGES 路径。
 3. 返回 patch shape、face count、edge count、bbox、BRepCheck。
 4. Viewer 中以 overlay 显示 patch。
 5. 原 candidate 高亮保留。
@@ -328,6 +332,7 @@ src/gui/ModelTreePanel.cpp
 
 ```text
 导入 patch 成功。
+真实 crop 样例已验证：Mechanical + autoMerge 输出 faces=12、edges=50、BRepCheck valid。
 patch overlay 可显示/隐藏/清除。
 清除 overlay 后主模型不变。
 patch bbox 异常时标记 HighRisk 或阻止 Apply。

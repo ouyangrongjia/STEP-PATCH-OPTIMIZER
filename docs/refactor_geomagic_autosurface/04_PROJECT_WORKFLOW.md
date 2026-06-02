@@ -226,28 +226,31 @@ local STL 只用于拟合。
 
 ```text
 local_input.stl
-autosurface_config.json
+FIT_REGION_INPUT / FIT_REGION_OUTPUT / FIT_REGION_LOG_FILE
 ```
 
 调用：
 
 ```text
-wrapCore.exe autosurface_pipeline.py autosurface_config.json
+wrapCore.exe --script autosurface_pipeline.py
 ```
 
 推荐配置：
 
 ```json
 {
-  "input_stl": "workspace/region_0001/local_input.stl",
-  "output_igs": "workspace/region_0001/local_output.igs",
-  "output_step": "workspace/region_0001/local_output.step",
+  "input_stl": "data/crop_stl/region_0001/local_input.stl",
+  "output_step": "data/crop_stp/region_0001/local_output.stp",
+  "fit_region_log": "data/crop_stp/region_0001/local_output_fit_region.log",
+  "repair_mesh": true,
+  "fill_hole_max_edges": 80,
+  "fill_hole_length_ratio": 1.0,
   "adaptive_fit": false,
   "auto_merge": true,
   "num_patches": 1,
   "fallback_num_patches": [2, 4, 8],
-  "detail": 0.35,
-  "geometry": "Organic",
+  "detail": 0.10,
+  "geometry": "Mechanical",
   "convert_iges_to_step": true,
   "timeout_seconds": 1800
 }
@@ -256,21 +259,29 @@ wrapCore.exe autosurface_pipeline.py autosurface_config.json
 输出：
 
 ```text
-local_output.igs
-local_output.step
+data/crop_stp/<relative>/<name>.stp
+data/crop_stp/<relative>/<name>_autosurface.igs   # keepTemp 时保留
 autosurface_stdout.log
 autosurface_stderr.log
-autosurface_result.json
+fit_region.log
 ```
 
 失败处理：
 
 ```text
 记录 error_msg。
-保留 stdout/stderr。
+保留 stdout/stderr 和 fit_region log。
 candidate job status = Failed。
 不导入 patch。
 不允许 Apply。
+```
+
+当前真实样例结论：
+
+```text
+RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 负责处理 STL 内孔和非流形顶点。
+Mechanical + autoMerge=true 是当前 crop STL 的默认最佳组合；Organic 会导致 STEP face 数量过高。
+numPatches=1 只是 Geomagic AutoSurface 的近似目标，不保证最终 STEP face count 等于 1。
 ```
 
 ---
@@ -280,13 +291,14 @@ candidate job status = Failed。
 优先导入：
 
 ```text
-local_output.step
+data/crop_stp/<relative>/<name>.stp
 ```
 
 如果失败，再尝试：
 
 ```text
-local_output.igs
+<output_stp_stem>_autosurface.igs
+或兼容字段中的 data/crop_igs/<relative>/<name>.igs
 ```
 
 导入后生成：
@@ -471,12 +483,11 @@ workspace/
       boundary_report.json
       local_input.stl
       crop_report.json
-      autosurface_config.json
       autosurface_stdout.log
       autosurface_stderr.log
-      autosurface_result.json
-      local_output.igs
-      local_output.step
+      fit_region.log
+      local_output.stp
+      local_output_autosurface.igs
       patch_import_report.json
       patch_preview_report.json
       replacement_report.json
@@ -543,8 +554,7 @@ autosurface_pipeline.py version
 
 ```text
 local STL 已存在且 crop_report success。
-autosurface_result success。
-output patch exists。
+fit_region.log 存在且 output STEP exists。
 patch import report valid。
 patch preview report valid。
 ```

@@ -31,4 +31,13 @@
 MVP-1：local STL 裁剪 + Geomagic AutoSurface patch generation + Viewer overlay preview。
 ```
 
+当前进度：
+
+```text
+已跑通：crop STL → Geomagic AutoSurface → crop STP → PatchImportService。
+已修正：Geomagic 脚本默认 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+已修正：默认 AutoSurface 组合为 Mechanical + autoMerge=true。
+仍待做：Viewer overlay preview、Apply、Boundary-constrained replacement、StrictTopologyGate 接入。
+```
+
 暂时不要直接做大规模真实贴回。

@@ -1,8 +1,8 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.4-geomagic-env-output-dirs  
+> 草案版本：v0.5-geomagic-repair-mechanical
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；`config.json` 主要用于 workspace/report 记录，不作为真实 wrapCore 调用的唯一参数来源。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。
 
 ---
 
@@ -61,10 +61,10 @@ data/
   crop_stp/
     ... Geomagic output STEP/STP files
   crop_igs/
-    ... Geomagic output IGES files
+    ... optional / compatibility IGES files
 ```
 
-同步导出规则：
+当前同步导出规则：
 
 ```text
 输入 local STL:
@@ -73,7 +73,10 @@ data/crop_stl/<relative_dir>/<name>.stl
 对应输出 STP:
 data/crop_stp/<relative_dir>/<name>.stp
 
-对应输出 IGS:
+当前脚本保留的中间 IGS sidecar:
+data/crop_stp/<relative_dir>/<name>_autosurface.igs
+
+兼容路径推导仍保留:
 data/crop_igs/<relative_dir>/<name>.igs
 ```
 
@@ -82,7 +85,7 @@ data/crop_igs/<relative_dir>/<name>.igs
 ```text
 data/crop_stl/03_配件_Clay/candidate_0007.stl
 → data/crop_stp/03_配件_Clay/candidate_0007.stp
-→ data/crop_igs/03_配件_Clay/candidate_0007.igs
+→ data/crop_stp/03_配件_Clay/candidate_0007_autosurface.igs
 ```
 
 要求：
@@ -93,6 +96,7 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 3. 不允许把 Geomagic 输出文件写回 data/crop_stl。
 4. 不允许覆盖原始 data/stl。
 5. T4 后端应支持显式传入 outputStepPath / outputIgesPath；若未显式传入，则按 crop_stl → crop_stp / crop_igs 规则推导。
+6. 当前真实脚本以 outputStepPath 为唯一必需产物；outputIgesPath 是兼容字段，脚本不再要求 FIT_REGION_OUTPUT_IGES。
 ```
 
 ---
@@ -124,7 +128,7 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 用户选择一个 accepted candidate
 → RegionBoundaryAnalyzer 通过
 → 裁剪 local STL 到 data/crop_stl
-→ wrapCore.exe + AutoSurface 生成 data/crop_igs / data/crop_stp
+→ wrapCore.exe + AutoSurface 生成 data/crop_stp，并可保留 IGS sidecar
 → PatchImportService 导入 patch
 → Viewer 叠加预览 patch
 → 输出完整 workspace 和日志
@@ -134,8 +138,8 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 
 ```text
 1. local STL 成功生成。
-2. Geomagic 输出对应的 crop_igs/*.igs 和 crop_stp/*.stp。
-3. result.json 可解析。
+2. Geomagic 输出对应的 crop_stp/*.stp。
+3. fit_region log 可定位 mesh repair、AutoSurface 参数和最终退出状态。
 4. patch 能导入 OCCT。
 5. Viewer 能叠加显示 patch。
 6. 清除 overlay 后主模型不变。
@@ -521,7 +525,7 @@ Viewer 可显示 local STL 和 crop bbox。
 
 # P0：Geomagic AutoSurface 后端
 
-> 本阶段目标是把 T3 裁剪得到的 local STL 交给 Geomagic Wrap 后台 AutoSurface，生成 local IGS / local STEP patch，并输出 result.json / log。  
+> 本阶段目标是把 T3 裁剪得到的 local STL 交给 Geomagic Wrap 后台 AutoSurface，先做最小网格修复，再生成 local STEP patch，并输出单一 fit_region log。
 > T4 只负责“生成 Geomagic patch 文件”，不导入 patch，不做 overlay，不做 Apply，不做 replacement face，不修改主 ShapeDocument。
 
 ## T4 总体定位
@@ -538,9 +542,8 @@ FeatureBoundedRefit candidate
 输出：
 
 ```text
-data/crop_igs/<relative_dir>/<name>.igs
 data/crop_stp/<relative_dir>/<name>.stp
-autosurface_result.json
+data/crop_stp/<relative_dir>/<name>_autosurface.igs   # keepTemp 时保留
 autosurface_stdout.log
 autosurface_stderr.log
 fit_region.log
@@ -550,6 +553,7 @@ Geomagic 最小处理链：
 
 ```text
 ReadFile(.stl)
+→ RepairMesh / RemoveNonManifoldVertices / FillSmallHoles
 → optional Remesh / QuickSmooth / Relax
 → AutoSurface(.igs)
 → ReadFile(.igs).cadModel
@@ -560,7 +564,6 @@ ReadFile(.stl)
 
 ```text
 Solidify
-RepairMesh
 healCAD
 BestFitFreeform
 STEP 主模型替换
@@ -577,6 +580,8 @@ StrictTopologyGate
 Geomagic 输出的 IGS/STP 是“拟合曲面来源”。
 STL 裁剪边界不是最终 CAD 边界。
 最终 trim / replacement 仍必须使用原 STP boundary wire。
+`numPatches=1` 是 Geomagic 的近似 NURBS patch 目标，不保证最终 STEP 只有一个 B-rep face。
+当前真实样例以 `geometry=Mechanical + autoMerge=true` 作为默认组合；Organic 在同一 crop STL 上会产生过多 STEP face。
 ```
 
 真实 wrapCore 路径默认设为：
@@ -711,7 +716,7 @@ struct GeomagicAutoSurfaceConfig {
 
     double detail = 0.10;
     double tolerance = 0.03;
-    std::string geometry = "Organic";
+    std::string geometry = "Mechanical";
 
     bool convertIgesToStep = true;
     int timeoutSeconds = 1800;
@@ -783,6 +788,7 @@ result 可从 JSON 读取。
 非法数值参数返回配置错误。
 默认 wrapCorePath 为 E:/Geomagic Wrap/wrapCore.exe。
 默认 detail=0.10，tolerance=0.03。
+默认 geometry=Mechanical，autoMerge=true，adaptiveFit=false。
 不调用真实 Geomagic。
 ```
 
@@ -807,7 +813,7 @@ CMakeLists.txt
 5. 捕获 stdout / stderr。
 6. 写 stdout / stderr log。
 7. 支持 timeout。
-8. 读取 result.json。
+8. 若存在 result.json 则读取；当前真实脚本不输出 result.json 时，按 outputStepPath 是否存在兜底判断。
 9. 支持 mock executable / mock cmd 测试。
 10. 真实 Geomagic 不进入自动测试。
 ```
@@ -837,7 +843,6 @@ FIT_REGION_INPUT = config.inputStlPath
 FIT_REGION_OUTPUT = config.outputStepPath
 FIT_REGION_WORK_DIR = config.workDir
 FIT_REGION_LOG_FILE = config.fitRegionLogPath
-FIT_REGION_RESULT_JSON = config.resultJsonPath
 FIT_REGION_KEEP_TEMP = 1/0
 FIT_REGION_SKIP_REMESH = 1/0
 FIT_REGION_QUICK_SMOOTH = 1/0
@@ -851,8 +856,17 @@ FIT_REGION_GEOMETRY_MODE = config.geometry
 FIT_REGION_AUTO_MERGE = 1/0
 FIT_REGION_ADAPTIVE_FIT = 1/0
 FIT_REGION_STRICT_PATCH_TARGET = 1/0
-FIT_REGION_OUTPUT_IGES = config.outputIgesPath
-FIT_REGION_CONFIG_JSON = config.configJsonPath
+FIT_REGION_REPAIR_MESH = 1/0
+FIT_REGION_FILL_HOLE_MAX_EDGES = 80
+FIT_REGION_FILL_HOLE_LENGTH_RATIO = 1.0
+```
+
+兼容环境变量：
+
+```text
+FIT_REGION_OUTPUT_IGES = config.outputIgesPath      # 当前 Python 脚本不再要求
+FIT_REGION_CONFIG_JSON = config.configJsonPath      # 当前 Python 脚本不再读取
+FIT_REGION_RESULT_JSON = config.resultJsonPath      # 当前 Python 脚本不再写出
 ```
 
 autoMerge / adaptiveFit 处理：
@@ -880,7 +894,7 @@ result.json 策略：
 
 ```text
 1. 如果 resultJsonPath 存在：优先读取 result.json。
-2. 如果 result.json 不存在：exitCode == 0 且 outputStepPath 存在时 success=true，否则 success=false。
+2. 如果 result.json 不存在：outputStepPath 存在时 success=true，即使 wrapCore.exe 进程 exitCode 非 0。
 3. outputStepPath 不存在时必须 success=false。
 4. outputIgesPath 不存在时标记 warning；若 outputStepPath 已成功生成，不一定失败。
 ```
@@ -927,13 +941,13 @@ CMakeLists.txt                            # 如新增测试则修改
 1. 新增 Geomagic Wrap 内置 Python 环境可执行脚本。
 2. 通过环境变量读取参数。
 3. ReadFile 输入 local STL。
-4. optional Remesh / QuickSmooth / Relax。
-5. AutoSurface 输出临时 IGS。
-6. 保存 IGS 到 FIT_REGION_OUTPUT_IGES。
-7. ReadFile(IGS).cadModel。
-8. WriteFile(STEP214) 输出 STP 到 FIT_REGION_OUTPUT。
-9. 写 result.json。
-10. 写诊断 log。
+4. 默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+5. optional Remesh / QuickSmooth / Relax。
+6. AutoSurface 输出临时 IGS。
+7. keepTemp 时保留 `<output>_autosurface.igs`。
+8. ReadFile(IGS).cadModel。
+9. WriteFile(STEP214) 输出 STP 到 FIT_REGION_OUTPUT。
+10. 写单一诊断 log，不写 result.json。
 ```
 
 脚本入口：
@@ -953,7 +967,7 @@ E:\Geomagic Wrap\wrapCore.exe
 ```text
 FIT_REGION_INPUT
 FIT_REGION_OUTPUT
-FIT_REGION_OUTPUT_IGES
+FIT_REGION_LOG_FILE
 ```
 
 默认 AutoSurface 策略：
@@ -963,14 +977,17 @@ numPatches = 1
 autoMerge = True
 adaptiveFit = False
 detail = 0.10
-geometry = Organic
+geometry = Mechanical
 tolerance = 0.03
+repairMesh = True
+fillHoleMaxEdges = 80
+fillHoleLengthRatio = 1.0
 ```
 
 fallback 策略：
 
 ```text
-第一轮：requested one-patch autoMerge
+第一轮：requested autoMerge=<FIT_REGION_AUTO_MERGE>
 然后尝试：
   one-patch autoMerge detail=0.0
   one-patch autoMerge Mechanical
@@ -993,8 +1010,8 @@ IGS 保存策略：
 
 ```text
 1. AutoSurface 输出 temp IGS。
-2. 如果 FIT_REGION_KEEP_TEMP=1：将 temp IGS copy 到 FIT_REGION_OUTPUT_IGES。
-3. FIT_REGION_OUTPUT_IGES 必须对应 data/crop_igs 下路径。
+2. 如果 FIT_REGION_KEEP_TEMP=1：将 temp IGS copy 到 `<output_stp_stem>_autosurface.igs`。
+3. 当前脚本不要求 FIT_REGION_OUTPUT_IGES。
 ```
 
 IGS → STP：
@@ -1012,27 +1029,16 @@ writer.filterId = 5
 writer.run()
 ```
 
-result.json 至少包含：
+日志至少包含：
 
-```json
-{
-  "success": true,
-  "timed_out": false,
-  "exit_code": 0,
-  "bodies": 0,
-  "open_loops": 0,
-  "message": "",
-  "error_message": "",
-  "failed_stage": "",
-  "input_stl_path": "",
-  "output_iges_path": "",
-  "output_step_path": "",
-  "preserved_iges_path": "",
-  "config_json_path": "",
-  "result_json_path": "",
-  "fit_region_log_path": "",
-  "duration_ms": 0
-}
+```text
+FIT_REGION_INPUT / FIT_REGION_OUTPUT / FIT_REGION_LOG_FILE
+Before RepairMesh / After RepairMesh
+FillSmallHoles numFilled
+AutoSurface attempt label
+geometry / tolerance / detail / adaptiveFit / autoMerge / numPatches
+WriteFile STEP result
+Final exit code
 ```
 
 成功条件：
@@ -1040,11 +1046,12 @@ result.json 至少包含：
 ```text
 1. input STL 存在。
 2. ReadFile(STL) 成功并得到 mesh。
-3. AutoSurface 生成 IGS。
-4. temp IGS 成功复制到 FIT_REGION_OUTPUT_IGES。
+3. 修复后内部孔洞 / 非流形顶点数量下降，至少不恶化。
+4. AutoSurface 生成 IGS。
 5. ReadFile(IGS) 成功并得到 cadModel。
 6. WriteFile(STEP214) 成功。
 7. output STP 文件存在。
+8. PatchImportService 能导入 output STP 并给出 face/edge/bbox/BRepCheck 统计。
 ```
 
 README 要求：
@@ -1053,29 +1060,29 @@ README 要求：
 1. 说明脚本定位：local STL patch → IGS/STP，不做 final CAD replacement。
 2. 说明 wrapCore 路径：E:\Geomagic Wrap\wrapCore.exe。
 3. 给出默认运行命令。
-4. 给出 crop 目录同步规则：data/crop_stl → data/crop_stp / data/crop_igs。
+4. 给出 crop 目录同步规则：data/crop_stl → data/crop_stp。
 5. 给出放宽 patch 数命令：FIT_REGION_STRICT_PATCH_TARGET=0。
 6. 给出实验性平滑命令。
 7. 说明小 patch 默认不建议 remesh / relax / quick smooth。
 8. 说明 STL 裁剪边界不是最终 CAD 边界。
 9. 说明 STP 原始 boundary wire 才是后续 trim/replacement 依据。
 10. 说明 AutoSurface 输出 STP/IGS 是拟合曲面来源，不是最终贴回结果。
+11. 说明默认 Mechanical + autoMerge 的原因：真实 crop 样例中 Organic 会产生大量 STEP face。
 ```
 
 手动验证命令示例：
 
 ```bat
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\03_配件_Clay\candidate_0007.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\candidate_0007.stp" && set "FIT_REGION_OUTPUT_IGES=D:\pyProject\step-patch-optimizer\data\crop_igs\03_配件_Clay\candidate_0007.igs" && set "FIT_REGION_RESULT_JSON=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\candidate_0007_autosurface_result.json" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\local_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_AUTO_MERGE=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
 验收：
 
 ```text
 真实 Geomagic 环境可手动验证。
-result.json 可被 C++ backend 解析。
-失败时 error_message 不为空。
+fit_region log 可定位失败阶段。
 成功时 output STP 存在。
-成功时 output IGS 存在于 data/crop_igs。
+成功时 PatchImportService 可导入 output STP。
 自动测试不调用真实 Geomagic。
 ```
 
@@ -1088,6 +1095,14 @@ result.json 可被 C++ backend 解析。
 
 ## T5.1 PatchImportService
 
+状态：
+
+```text
+已完成。
+已拆分纯单元测试与真实文件/真实 Geomagic 接入测试。
+真实 Geomagic 测试通过 SPO_ENABLE_REAL_GEOMAGIC_TESTS=1 显式启用，默认 ctest 不调用 wrapCore.exe。
+```
+
 文件：
 
 ```text
@@ -1095,6 +1110,7 @@ src/patch/ImportedPatchInfo.h
 src/patch/PatchImportService.h
 src/patch/PatchImportService.cpp
 tests/test_patch_import_service.cpp
+tests/test_patch_import_service_real.cpp
 CMakeLists.txt
 ```
 
@@ -1113,6 +1129,31 @@ CMakeLists.txt
 1. 优先导入 result.outputStepPath，即 data/crop_stp/<relative_dir>/<name>.stp。
 2. 如果 STEP 不存在或导入失败，再尝试 result.outputIgesPath / result.preservedIgesPath，即 data/crop_igs/<relative_dir>/<name>.igs。
 3. 导入失败不影响主模型。
+```
+
+当前真实样例验证：
+
+```text
+输入 STL：data/crop_stl/local_candidate_0179.stl
+输出 STEP：data/crop_stp/local_candidate_0179.stp
+fit_region log：data/crop_stp/local_candidate_0179_fit_region.log
+
+RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 后：
+boundaryCycles: 11 -> 1
+nonManifoldVertices: 2 -> 0
+FillSmallHoles numFilled: 22
+
+默认 AutoSurface：
+geometry=Mechanical
+autoMerge=True
+adaptiveFit=False
+numPatches=1
+
+PatchImportService / step_stats：
+faces=12
+edges=50
+shells=1
+BRepCheck valid=true
 ```
 
 验收：
@@ -1450,15 +1491,12 @@ workspace/session_YYYYMMDD_HHMMSS/region_0001/
     boundary_report.json
     local_input.stl
     crop_report.json
-    autosurface_config.json
     autosurface_stdout.log
     autosurface_stderr.log
-    autosurface_result.json
     fit_region.log
-    local_output.igs
     local_output.stp
+    local_output_autosurface.igs
     crop_stl_path.txt
-    crop_igs_path.txt
     crop_stp_path.txt
     patch_import_report.json
     patch_preview_report.json
@@ -1470,8 +1508,8 @@ data 目录镜像输出：
 
 ```text
 data/crop_stl/<relative_dir>/<name>.stl
-data/crop_igs/<relative_dir>/<name>.igs
 data/crop_stp/<relative_dir>/<name>.stp
+data/crop_stp/<relative_dir>/<name>_autosurface.igs
 ```
 
 验收：
@@ -1518,7 +1556,7 @@ Pending → AnalyzingBoundary → CroppingStl → RunningGeomagic → ImportingP
 失败路径进入 Failed 或 Rejected。
 Cancelled 不继续执行后续阶段。
 redo 不重新运行 Geomagic。
-redo 复用已有 autosurface_result.json、crop_igs、crop_stp 文件。
+redo 复用已有 fit_region.log、crop_stp 文件和导入后的 patch 信息。
 ```
 
 ---

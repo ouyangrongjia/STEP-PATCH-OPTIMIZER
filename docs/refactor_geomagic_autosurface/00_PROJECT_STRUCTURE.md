@@ -97,11 +97,12 @@ scripts/geomagic_wrap/
 职责：
 
 ```text
-1. 接收 C++ 端生成的 config.json。
+1. 接收 C++ 端通过 FIT_REGION_* 注入的 input/output/log 参数。
 2. 通过 Geomagic ReadFile 读取 local STL。
-3. 通过 AutoSurface 生成 local IGS。
-4. 可选将 IGS 再读回为 cadModel 并 WriteFile 为 STEP214。
-5. 输出 autosurface_result.json。
+3. 默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+4. 通过 Mechanical AutoSurface + autoMerge 生成临时 IGS。
+5. 将 IGS 再读回为 cadModel 并 WriteFile 为 STEP214。
+6. 输出单一 fit_region log；不再写 autosurface_result.json。
 ```
 
 ---
@@ -124,10 +125,10 @@ src/external/geomagic/
 
 ```text
 1. 通过 QProcess 调用 wrapCore.exe。
-2. 传入 autosurface_pipeline.py 与 autosurface_config.json。
+2. 传入 autosurface_pipeline.py，并设置 FIT_REGION_* 环境变量。
 3. 捕获 stdout/stderr。
-4. 读取 result.json。
-5. 管理 timeout、失败原因和 mock 测试。
+4. 若 result.json 存在则读取；当前真实脚本无 result.json 时按 output STEP 存在兜底。
+5. 管理 timeout、失败原因和 mock/真实接入测试。
 6. 不直接修改 ShapeDocument。
 ```
 
@@ -179,7 +180,7 @@ src/patch/
 职责：
 
 ```text
-1. 导入 local_output.step / local_output.igs。
+1. 导入 data/crop_stp 下的 STEP，必要时回退到 sidecar / 兼容 IGES。
 2. 提取 patch shape、face count、edge count、bbox、BRepCheck 状态。
 3. 生成 patch preview report。
 4. 在真实 Apply 前，只作为 overlay 叠加预览。
@@ -385,9 +386,9 @@ geomagic_workspace/
 *.patch.step
 *.patch.stp
 local_input.stl
-local_output.step
-local_output.igs
-autosurface_result.json
+local_output.stp
+local_output_autosurface.igs
+fit_region.log
 ```
 
 建议 `.gitignore` 增加：
@@ -403,6 +404,7 @@ geomagic_workspace/
 *.patch.stp
 autosurface_stdout.log
 autosurface_stderr.log
+fit_region.log
 ```
 
 ---

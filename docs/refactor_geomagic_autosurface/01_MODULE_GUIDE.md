@@ -307,11 +307,13 @@ GeomagicJobCache
 
 ```text
 1. 通过 QProcess 调用 wrapCore.exe。
-2. 传入 autosurface_pipeline.py 与 config.json。
-3. 输出 local_output.igs / local_output.step。
-4. 输出 autosurface_result.json。
+2. 传入 autosurface_pipeline.py，并通过 FIT_REGION_* 环境变量传参。
+3. 输出 local STEP；keepTemp 时保留 `<output>_autosurface.igs`。
+4. 输出 fit_region log；result.json 只作为后端兼容结构保留，不是当前脚本产物。
 5. 捕获 stdout/stderr。
 6. 支持 timeout 和 mock executable。
+7. 默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+8. 默认 AutoSurface 为 Mechanical + autoMerge=true + adaptiveFit=false。
 ```
 
 执行标准：
@@ -330,6 +332,7 @@ GeomagicJobCache
 2. mock failure。
 3. timeout。
 4. 输出文件缺失。
+5. result.json 缺失但 STEP 存在时按真实 wrapCore 行为判定成功。
 ```
 
 ---
@@ -377,6 +380,8 @@ PatchPreviewModel
 1. 导入 patch 不改变主模型。
 2. 清除 overlay 不改变主模型。
 3. 多次导入不残留旧 AIS 对象。
+4. 真实 crop STEP/IGS 存在时可导入并输出统计。
+5. `SPO_ENABLE_REAL_GEOMAGIC_TESTS=1` 时可跑通 crop STL → Geomagic → STEP → PatchImportService。
 ```
 
 ---

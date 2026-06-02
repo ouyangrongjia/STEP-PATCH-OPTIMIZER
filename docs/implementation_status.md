@@ -25,9 +25,10 @@ STEP 读取
 当前重点已经从”搭建项目结构”转向：
 
 ```text
-1. Stage 3A-Fix：PlaneRegionMerge 导出稳定性收口（唯一优先级）。
-2. 暂停扩展球面/圆柱/圆锥/自由曲面真实合并。
-3. 冻结候选检测增强和自由曲面路线。
+1. Geomagic AutoSurface refactor：STL-guided patch generation / import / preview / apply 主线。
+2. Stage 3A-Fix / A6 保留为旧 OCCT 近似平面路线的诊断与研究分支。
+3. 暂停扩展球面/圆柱/圆锥/自由曲面真实合并。
+4. 冻结候选检测增强和自由曲面路线。
 ```
 
 ### 1.1 当前关键诊断（2026-05-27）
@@ -41,8 +42,44 @@ GUI 显示”看起来连续” ≠ STEP/B-rep 拓扑合法。
 这不是渲染问题，而是 B-rep 拓扑 / 裁剪边界不稳定问题。
 ```
 
-因此当前唯一优先级是 Stage 3A-Fix：
+因此旧 OCCT 近似平面路线的安全收口项是 Stage 3A-Fix：
 PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
+
+---
+
+### 1.2 Geomagic AutoSurface 当前关键诊断（2026-06-02）
+
+```text
+Geomagic AutoSurface “运行成功”不等于 patch 可接受。
+
+已确认两个独立问题：
+
+1. STL 局部裁剪结果若带内部孔洞 / 非流形顶点，会传递到 AutoSurface 输出。
+   当前脚本默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
+
+2. AutoSurface.numPatches=1 只是 Geomagic 的近似 NURBS patch 目标，
+   不保证导出的 STEP 只有 1 个 B-rep face。
+   对当前 crop STL，Mechanical + autoMerge=true 明显优于 Organic。
+```
+
+真实样例验证结果：
+
+```text
+输入：data/crop_stl/local_candidate_0179.stl
+输出：data/crop_stp/local_candidate_0179.stp
+日志：data/crop_stp/local_candidate_0179_fit_region.log
+
+修复前：boundaryCycles=11, nonManifoldVertices=2
+修复后：boundaryCycles=1, nonManifoldVertices=0, FillSmallHoles numFilled=22
+
+Mechanical + autoMerge=true + numPatches=1:
+faces=12, edges=50, BRepCheck valid=true
+
+对比：
+Organic + autoMerge=true: faces≈273
+Organic + autoMerge=false: faces≈494
+Organic detail/tolerance 调参：face count 仍≈273
+```
 
 ---
 
@@ -78,6 +115,14 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 25. Stage 3A-Approx A3 已完成：strict native Plane 与 approximate B-spline planar rebuild 统一使用 `RegionBoundaryAnalyzer`；构造 boundary wire 时只使用 `analysis.ordered_boundary_edges`，不依赖原始 `candidate.boundary_edges` 顺序；open/disconnected/multiple-loop/hole/non-manifold/branching boundary 仍按 strict 策略拒绝，不做 ShapeFix 或 pcurve 深度修复。
 26. Stage 3A-Approx A4 已完成：GUI 新增“实验性合并当前近似平面候选”和“实验性合并全部近似平面候选”入口；原 strict 平面合并入口保持 `allow_approximate_planar_surfaces=false`，实验入口显式开启 `allow_approximate_planar_surfaces=true` 并在报告中输出 mode、approximate_plane_max_deviation、失败原因、文档回滚状态、统计和 BRepCheck。
 27. Stage 3A-Approx A5 已完成：补齐 strict/approx 自动测试和阶段收口验证；覆盖 B-spline backed PlaneLike strict 拒绝、approx 低误差成功、高误差失败、RegionBoundaryAnalyzer invalid boundary failure、batch approx mixed valid/invalid 跳过语义、全部 invalid failure、STEP roundtrip failure、失败 rollback 和 command undo/redo 既有路径。
+28. Geomagic AutoSurface T4 路径已改为真实 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量；真实脚本不再要求 `config.json` 作为调用输入。
+29. Geomagic Python 脚本已对齐标准 `fit_region.py` 风格：只输出一个 fit_region log，不再写大量 result JSON；中间 IGES keepTemp 时作为 `<output>_autosurface.igs` sidecar 保留。
+30. Geomagic Python 脚本已加入默认网格修复：`RepairMesh`、`RemoveNonManifoldVertices`、`FillSmallHoles`；默认 `FIT_REGION_REPAIR_MESH=1`。
+31. Geomagic AutoSurface 默认参数已改为 `geometry=Mechanical`、`autoMerge=true`、`adaptiveFit=false`、`numPatches=1`；真实 crop 样例 face count 从 Organic 的约 273 降到 Mechanical 的 12。
+32. GeomagicAutoSurfaceBackend 已支持无 result JSON 兜底：真实脚本产出 STEP 即可判定成功，避免 wrapCore.exe 非零 exit code 误判。
+33. PatchImportService 已完成：可导入 STEP/STP/IGS/IGES，返回 shape、face/edge/shell/solid 统计、bbox、BRepCheck；不接受或修改 ShapeDocument。
+34. PatchImportService 真实接入测试已拆分：默认测试只导入已有 crop_stp / crop_igs 文件；设置 `SPO_ENABLE_REAL_GEOMAGIC_TESTS=1` 时跑通 crop STL → Geomagic → STEP → PatchImportService。
+35. `tools/step_stats` 已可用于导入 STEP/IGS 并输出 face/edge/shell/solid/bbox/BRepCheck 统计，用于判断 Geomagic 输出是否适合继续 overlay / Apply。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -256,6 +301,10 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 | Analytic Candidate Detection 测试 | 已完成增强 B | 覆盖 CylinderLike 原生与 NURBS-backed 近似检测、SphereLike/ConeLike 基础检测、NURBS-backed ConeLike 近似检测、近似圆柱不误判为 ConeLike、protected edge 阻断和 ID 唯一 |
 | Candidate Type Statistics 测试 | 已完成基础版 | 覆盖多类型统计、Hidden 过滤、按类型筛选和 PlaneLike 合并过滤 |
 | SphereLike 一键合并过滤测试 | 已完成基础版 | 覆盖一键球面候选过滤会跳过 High risk 和单 face 候选；球面合并不再依赖 boundary wire 闭合，而是基于候选内部边做同域合并 |
+| Geomagic backend mock 测试 | 已完成 | 覆盖 mock success/failure/timeout、缺输入、缺脚本、缺输出、result JSON 缺失但 STEP 存在的真实脚本兜底 |
+| Geomagic pipeline script 静态契约测试 | 已完成 | 覆盖 FIT_REGION 输入输出、RepairMesh、RemoveNonManifoldVertices、FillSmallHoles、Mechanical 默认、无 result JSON 输出契约 |
+| PatchImportService 测试 | 已完成 | 覆盖 STEP/STP/IGS/IGES 导入、bbox/face/edge/BRepCheck 统计、从 Geomagic result 导入、失败不修改 ShapeDocument |
+| PatchImportService 真实文件测试 | 已完成 | 默认导入 data/crop_stp/data/crop_igs 中已有文件；`SPO_ENABLE_REAL_GEOMAGIC_TESTS=1` 时跑通真实 wrapCore.exe 链路 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -316,6 +365,28 @@ PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild。
 → 合法性检查
 → 导出 STEP
 → 二次读取校验
+```
+
+### 4.4 Geomagic patch 生成 / 导入闭环
+
+```text
+data/crop_stl/local_candidate_0179.stl
+→ wrapCore.exe --script scripts/geomagic_wrap/autosurface_pipeline.py
+→ RepairMesh / RemoveNonManifoldVertices / FillSmallHoles
+→ AutoSurface geometry=Mechanical, autoMerge=true, numPatches=1
+→ data/crop_stp/local_candidate_0179.stp
+→ PatchImportService 导入
+→ step_stats 输出 faces=12, edges=50, BRepCheck valid=true
+```
+
+当前验证命令：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target spo_tests
+ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
+$env:SPO_ENABLE_REAL_GEOMAGIC_TESTS='1'; ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
+cmake --build --preset windows-msvc-debug --target step_stats
+.\build\windows-msvc-debug\Debug\step_stats.exe data\crop_stp\local_candidate_0179.stp
 ```
 
 ---
@@ -538,7 +609,7 @@ Stage 3-S Shared Primitive Fields：已完成
 SphereRegionMerge：已完成稳定版调整（标记为实验性）
 ```
 
-**当前唯一优先级 → Stage 3A-Fix：**
+**旧 OCCT 近似平面路线优先级 → Stage 3A-Fix：**
 
 ```text
 PlaneRegionMerge Export-Stable Validation + Safe Boundary Rebuild
@@ -573,6 +644,9 @@ SphereRegionMerge 已完成稳定版调整（基于 same-domain unifier）。
 
 当前唯一待收口项是 Stage 3A-Fix：PlaneRegionMerge 导出稳定性验证与安全边界重建。
 在平面合并做到"导出后重读仍然对"之前，暂停所有其他合并类型的扩展。
+
+Geomagic AutoSurface refactor 已成为当前 patch generation / import / preview / apply 的主线。
+Stage 3A-Fix 现在定位为旧 OCCT 近似平面合并路线的安全收口与诊断分支。
 ```
 
 ---
