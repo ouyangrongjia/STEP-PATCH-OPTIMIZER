@@ -12,6 +12,11 @@
 #include "merge/RegionMergeResult.h"
 #include "merge/SameDomainUnifier.h"
 #include "merge/SphereRegionMerger.h"
+#include "external/geomagic/GeomagicAutoSurfaceConfig.h"
+#include "external/geomagic/GeomagicAutoSurfaceResult.h"
+#include "patch/ImportedPatchInfo.h"
+#include "patch/PatchArtifactLocator.h"
+#include "patch/PatchPreviewReport.h"
 #include "stl/StlRegionExtractor.h"
 #include "validate/ShapeValidator.h"
 
@@ -26,6 +31,13 @@ struct StlCandidateCropResult {
     bool success = false;
     StlRegionExtractResult extract;
     std::filesystem::path outputPath;
+    std::string message;
+};
+
+struct PatchPreviewPipelineResult {
+    bool success = false;
+    StlCandidateCropResult crop;
+    GeomagicAutoSurfaceResult geomagic;
     std::string message;
 };
 
@@ -56,6 +68,13 @@ public:
         const MergeCandidate& candidate,
         const std::filesystem::path& outputPath,
         const StlRegionExtractorOptions& options = {});
+    static PatchPreviewPipelineResult cropAndRunGeomagicForCandidateData(
+        const ShapeDocument& document,
+        const StlMesh& sourceMesh,
+        const MergeCandidate& candidate,
+        const std::filesystem::path& workspaceRoot,
+        GeomagicAutoSurfaceConfig config = {},
+        const StlRegionExtractorOptions& options = {});
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
     MergePlannerResult previewMergeCandidates(
         double angularThresholdDegrees,
@@ -78,6 +97,20 @@ public:
     RegionMergeResult mergeSphereCandidates(
         const std::vector<MergeCandidate>& candidates,
         const SphereRegionMergeOptions& options);
+    Result importPatchForCurrentCandidateFromLocalStl(
+        const std::filesystem::path& localStlPath,
+        const MergeCandidate* candidate = nullptr);
+    Result importPatchResultForCurrentCandidate(
+        const GeomagicAutoSurfaceResult& result,
+        const MergeCandidate* candidate = nullptr);
+    Result importPatchFromFileForCurrentCandidate(
+        const std::filesystem::path& patchPath,
+        const MergeCandidate* candidate = nullptr);
+    void clearCurrentPatchOverlay();
+    bool patchPreviewReady() const;
+    const PatchArtifactPaths& currentPatchArtifactPaths() const;
+    const ImportedPatchInfo& currentImportedPatchInfo() const;
+    const PatchPreviewReport& currentPatchPreviewReport() const;
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;
@@ -92,6 +125,10 @@ private:
     CommandHistory history_;
     StlMesh sourceStlMesh_;
     std::filesystem::path sourceStlPath_;
+    PatchArtifactPaths currentPatchArtifactPaths_;
+    ImportedPatchInfo currentImportedPatchInfo_;
+    PatchPreviewReport currentPatchPreviewReport_;
+    bool patchPreviewReady_ = false;
 };
 
 }

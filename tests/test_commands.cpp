@@ -24,6 +24,7 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <set>
 #include <stdexcept>
 
@@ -41,6 +42,47 @@ std::filesystem::path create_test_step() {
     const spo::ShapeDocument document(shape, path);
     const spo::StepWriter writer;
     assert(writer.write(document, path).success());
+    return path;
+}
+
+std::filesystem::path temp_root(const char* name) {
+    const auto path = std::filesystem::temp_directory_path() /
+        (std::string(name) + "-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::remove_all(path);
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+void write_text_file(const std::filesystem::path& path, const std::string& content) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+    assert(stream);
+    stream << content;
+}
+
+std::string read_text_file(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    assert(stream);
+    return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+}
+
+std::string trim_line(std::string text) {
+    while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) {
+        text.pop_back();
+    }
+    return text;
+}
+
+std::filesystem::path write_mock_geomagic_cmd(const std::filesystem::path& root) {
+    const auto path = root / "mock_geomagic.cmd";
+    const auto cwdPath = (root / "mock_geomagic_cwd.txt").string();
+    write_text_file(
+        path,
+        "@echo off\n"
+        "echo mock geomagic success\n"
+        "echo %CD%>\"" + cwdPath + "\"\n"
+        "type nul > \"%FIT_REGION_OUTPUT%\"\n"
+        "exit /b 0\n");
     return path;
 }
 
@@ -332,6 +374,112 @@ void run_command_tests() {
         assert(roundTrip.success);
         assert(roundTrip.mesh.triangleCount() == result.extract.localMesh.triangleCount());
         std::filesystem::remove(output);
+        std::filesystem::remove(stlPath);
+    }
+
+    {
+        const auto root = temp_root("spo-patch-preview-pipeline-no-document");
+        const auto result = spo::AppController::cropAndRunGeomagicForCandidateData(
+            {},
+            {},
+            {},
+            root,
+            {});
+
+        assert(!result.success);
+        assert(!result.message.empty());
+        std::filesystem::remove_all(root);
+    }
+
+    {
+        const auto root = temp_root("spo-patch-preview-pipeline-empty-source");
+        spo::AppController controller;
+        assert(controller.openStepFile(sample).success());
+        const auto candidate = make_first_face_candidate(controller.document());
+
+        const auto result = spo::AppController::cropAndRunGeomagicForCandidateData(
+            controller.document(),
+            {},
+            candidate,
+            root,
+            {});
+
+        assert(!result.success);
+        assert(!result.message.empty());
+        std::filesystem::remove_all(root);
+    }
+
+    {
+        const auto root = temp_root("spo-patch-preview-pipeline-non-feature");
+        spo::AppController controller;
+        assert(controller.openStepFile(sample).success());
+        const auto stlPath = create_test_stl_for_first_face(controller.document());
+        assert(controller.openStlFile(stlPath).success());
+        auto candidate = make_first_face_candidate(controller.document());
+        candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+
+        const auto result = spo::AppController::cropAndRunGeomagicForCandidateData(
+            controller.document(),
+            controller.sourceStlMesh(),
+            candidate,
+            root,
+            {});
+
+        assert(!result.success);
+        assert(!result.message.empty());
+        std::filesystem::remove_all(root);
+        std::filesystem::remove(stlPath);
+    }
+
+    {
+        const auto root = temp_root("spo-patch-preview-pipeline-success");
+        const auto mock = write_mock_geomagic_cmd(root);
+        const auto script = root / "mock_script.py";
+        write_text_file(script, "# mock script placeholder\n");
+
+        spo::AppController controller;
+        assert(controller.openStepFile(sample).success());
+        const auto stlPath = create_test_stl_for_first_face(controller.document());
+        assert(controller.openStlFile(stlPath).success());
+        const auto candidate = make_first_face_candidate(controller.document());
+
+        spo::GeomagicAutoSurfaceConfig config;
+        config.wrapCorePath = mock;
+        config.scriptPath = script;
+        config.timeoutSeconds = 20;
+        config.strictPatchTarget = true;
+
+        const auto result = spo::AppController::cropAndRunGeomagicForCandidateData(
+            controller.document(),
+            controller.sourceStlMesh(),
+            candidate,
+            root,
+            config);
+
+        const auto documentStem = sample.stem();
+        const auto expectedBase = documentStem.string() + "_candidate_0003";
+        const auto expectedLocalStl = root / "data" / "crop_stl" / documentStem / (expectedBase + ".stl");
+        const auto expectedStep = root / "data" / "crop_stp" / documentStem / (expectedBase + ".stp");
+        const auto expectedIges = root / "data" / "crop_igs" / documentStem / (expectedBase + ".igs");
+        const auto expectedFitLog = root / "data" / "crop_stp" / documentStem / (expectedBase + "_fit_region.log");
+
+        assert(result.success);
+        assert(result.crop.success);
+        assert(result.crop.outputPath == expectedLocalStl);
+        assert(result.geomagic.success);
+        assert(result.geomagic.outputStepPath == expectedStep);
+        assert(result.geomagic.outputIgesPath == expectedIges);
+        assert(result.geomagic.fitRegionLogPath == expectedFitLog);
+        assert(std::filesystem::exists(expectedLocalStl));
+        assert(std::filesystem::exists(expectedStep));
+        assert(!std::filesystem::exists(expectedIges));
+        assert(!std::filesystem::exists(expectedStep.parent_path() / (expectedBase + "_autosurface_config.json")));
+        assert(!std::filesystem::exists(expectedStep.parent_path() / (expectedBase + "_autosurface_result.json")));
+        assert(!std::filesystem::exists(expectedStep.parent_path() / (expectedBase + "_autosurface_stdout.log")));
+        assert(!std::filesystem::exists(expectedStep.parent_path() / (expectedBase + "_autosurface_stderr.log")));
+        assert(std::filesystem::path(trim_line(read_text_file(root / "mock_geomagic_cwd.txt"))).lexically_normal() == root.lexically_normal());
+
+        std::filesystem::remove_all(root);
         std::filesystem::remove(stlPath);
     }
 

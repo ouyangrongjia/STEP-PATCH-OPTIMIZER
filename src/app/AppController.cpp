@@ -12,11 +12,21 @@
 #include "command/SphereRegionMergeCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
+#include "external/geomagic/GeomagicAutoSurfaceBackend.h"
+#include "external/geomagic/GeomagicOutputPathResolver.h"
 #include "io/StlReader.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
+#include "patch/PatchImportService.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <system_error>
 #include <utility>
 
 namespace spo {
@@ -30,6 +40,73 @@ StlCandidateCropResult crop_error(
     StlCandidateCropResult result;
     result.outputPath = outputPath;
     result.extract = std::move(extract);
+    result.message = std::move(message);
+    return result;
+}
+
+std::string lowercase_extension(const std::filesystem::path& path) {
+    auto extension = path.extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char value) {
+        return static_cast<char>(std::tolower(value));
+    });
+    return extension;
+}
+
+std::filesystem::path document_output_stem(const ShapeDocument& document) {
+    const auto stem = document.sourcePath().stem();
+    if (!stem.empty()) {
+        return stem;
+    }
+    return std::filesystem::path("document");
+}
+
+std::filesystem::path candidate_patch_filename(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const char* extension) {
+    std::ostringstream stream;
+    stream << "_candidate_" << std::setfill('0') << std::setw(4) << candidate.candidate_id << extension;
+    auto filename = document_output_stem(document);
+    filename += stream.str();
+    return filename;
+}
+
+std::filesystem::path default_pipeline_local_stl_path(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const std::filesystem::path& workspaceRoot) {
+    const auto root = workspaceRoot.empty()
+        ? std::filesystem::absolute(std::filesystem::current_path()).lexically_normal()
+        : std::filesystem::absolute(workspaceRoot).lexically_normal();
+    return root / "data" / "crop_stl" / document_output_stem(document) / candidate_patch_filename(document, candidate, ".stl");
+}
+
+std::filesystem::path sidecar_path(const std::filesystem::path& outputStepPath, const char* suffix) {
+    return outputStepPath.parent_path() / (outputStepPath.stem().wstring() + std::wstring(suffix, suffix + std::strlen(suffix)));
+}
+
+bool ensure_parent_directory(const std::filesystem::path& path, std::string& message) {
+    const auto parent = path.parent_path();
+    if (parent.empty()) {
+        return true;
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(parent, error);
+    if (error) {
+        message = "Could not create output directory: " + error.message();
+        return false;
+    }
+    return true;
+}
+
+PatchPreviewPipelineResult pipeline_error(
+    StlCandidateCropResult crop,
+    GeomagicAutoSurfaceResult geomagic,
+    std::string message) {
+    PatchPreviewPipelineResult result;
+    result.crop = std::move(crop);
+    result.geomagic = std::move(geomagic);
     result.message = std::move(message);
     return result;
 }
@@ -67,6 +144,7 @@ Result AppController::openStepFile(const std::filesystem::path& path) {
         context_.lockedEdges.clear();
         sourceStlMesh_.clear();
         sourceStlPath_.clear();
+        clearCurrentPatchOverlay();
     }
     return result;
 }
@@ -166,6 +244,61 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
     return result;
 }
 
+PatchPreviewPipelineResult AppController::cropAndRunGeomagicForCandidateData(
+    const ShapeDocument& document,
+    const StlMesh& sourceMesh,
+    const MergeCandidate& candidate,
+    const std::filesystem::path& workspaceRoot,
+    GeomagicAutoSurfaceConfig config,
+    const StlRegionExtractorOptions& options) {
+    const auto localStlPath = default_pipeline_local_stl_path(document, candidate, workspaceRoot);
+
+    std::string directoryMessage;
+    if (!ensure_parent_directory(localStlPath, directoryMessage)) {
+        return pipeline_error({}, {}, directoryMessage);
+    }
+
+    auto crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, options);
+    if (!crop.success) {
+        return pipeline_error(std::move(crop), {}, crop.message);
+    }
+
+    const auto root = workspaceRoot.empty()
+        ? std::filesystem::absolute(std::filesystem::current_path()).lexically_normal()
+        : std::filesystem::absolute(workspaceRoot).lexically_normal();
+    const auto outputPaths = resolveGeomagicOutputPathsFromCropStl(
+        crop.outputPath,
+        root / "data" / "crop_stl",
+        root / "data" / "crop_stp",
+        root / "data" / "crop_igs");
+    if (!outputPaths.success) {
+        return pipeline_error(std::move(crop), {}, outputPaths.message);
+    }
+
+    config.inputStlPath = crop.outputPath;
+    config.outputStepPath = outputPaths.outputStepPath;
+    config.outputIgesPath = outputPaths.outputIgesPath;
+    config.workDir = root;
+    config.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
+    config.geometry = "Mechanical";
+    config.autoMerge = true;
+    config.adaptiveFit = false;
+    config.strictPatchTarget = false;
+
+    auto geomagic = GeomagicAutoSurfaceBackend().run(config);
+    if (!geomagic.success) {
+        const auto message = geomagic.errorMessage.empty() ? geomagic.message : geomagic.errorMessage;
+        return pipeline_error(std::move(crop), std::move(geomagic), message.empty() ? "Geomagic AutoSurface failed." : message);
+    }
+
+    PatchPreviewPipelineResult result;
+    result.success = true;
+    result.crop = std::move(crop);
+    result.geomagic = std::move(geomagic);
+    result.message = "Patch preview pipeline completed.";
+    return result;
+}
+
 FeatureEdgeDetectionResult AppController::detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength) {
     const auto result = execute(std::make_unique<DetectFeatureCommand>(angularThresholdDegrees, minEdgeLength));
     if (!result.success()) {
@@ -253,6 +386,118 @@ RegionMergeResult AppController::mergeSphereCandidates(
         return result;
     }
     return result;
+}
+
+Result AppController::importPatchForCurrentCandidateFromLocalStl(
+    const std::filesystem::path& localStlPath,
+    const MergeCandidate* candidate) {
+    const auto artifacts = PatchArtifactLocator().locateFromLocalStl(localStlPath);
+    if (!artifacts.success) {
+        clearCurrentPatchOverlay();
+        return Result::error(artifacts.message);
+    }
+
+    const auto importPath = artifacts.foundStep
+        ? artifacts.patchStepPath
+        : artifacts.patchIgesSidecarPath;
+    auto imported = PatchImportService().importPatch(importPath);
+    if (!imported.success) {
+        clearCurrentPatchOverlay();
+        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+    }
+
+    currentPatchArtifactPaths_ = artifacts;
+    currentImportedPatchInfo_ = std::move(imported);
+    currentPatchPreviewReport_ = buildPatchPreviewReport(
+        hasDocument() ? &context_.document : nullptr,
+        candidate,
+        currentImportedPatchInfo_,
+        currentPatchArtifactPaths_);
+    patchPreviewReady_ = currentPatchPreviewReport_.success;
+    return Result::ok();
+}
+
+Result AppController::importPatchResultForCurrentCandidate(
+    const GeomagicAutoSurfaceResult& result,
+    const MergeCandidate* candidate) {
+    const auto artifacts = PatchArtifactLocator().locateFromResult(result);
+    if (!artifacts.success) {
+        clearCurrentPatchOverlay();
+        return Result::error(artifacts.message);
+    }
+
+    const auto importPath = artifacts.foundStep
+        ? artifacts.patchStepPath
+        : artifacts.patchIgesSidecarPath;
+    auto imported = PatchImportService().importPatch(importPath);
+    if (!imported.success) {
+        clearCurrentPatchOverlay();
+        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+    }
+
+    currentPatchArtifactPaths_ = artifacts;
+    currentImportedPatchInfo_ = std::move(imported);
+    currentPatchPreviewReport_ = buildPatchPreviewReport(
+        hasDocument() ? &context_.document : nullptr,
+        candidate,
+        currentImportedPatchInfo_,
+        currentPatchArtifactPaths_);
+    patchPreviewReady_ = currentPatchPreviewReport_.success;
+    return Result::ok();
+}
+
+Result AppController::importPatchFromFileForCurrentCandidate(
+    const std::filesystem::path& patchPath,
+    const MergeCandidate* candidate) {
+    PatchArtifactPaths artifacts;
+    artifacts.success = true;
+    const auto extension = lowercase_extension(patchPath);
+    if (extension == ".igs" || extension == ".iges") {
+        artifacts.patchIgesSidecarPath = patchPath;
+        artifacts.foundIgesSidecar = true;
+    } else {
+        artifacts.patchStepPath = patchPath;
+        artifacts.foundStep = true;
+    }
+
+    auto imported = PatchImportService().importPatch(patchPath);
+    if (!imported.success) {
+        clearCurrentPatchOverlay();
+        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+    }
+
+    currentPatchArtifactPaths_ = artifacts;
+    currentImportedPatchInfo_ = std::move(imported);
+    currentPatchPreviewReport_ = buildPatchPreviewReport(
+        hasDocument() ? &context_.document : nullptr,
+        candidate,
+        currentImportedPatchInfo_,
+        currentPatchArtifactPaths_);
+    patchPreviewReady_ = currentPatchPreviewReport_.success;
+    return Result::ok();
+}
+
+void AppController::clearCurrentPatchOverlay() {
+    currentPatchArtifactPaths_ = {};
+    currentImportedPatchInfo_ = {};
+    currentPatchPreviewReport_ = {};
+    patchPreviewReady_ = false;
+}
+
+bool AppController::patchPreviewReady() const {
+    return patchPreviewReady_;
+}
+
+const PatchArtifactPaths& AppController::currentPatchArtifactPaths() const {
+    return currentPatchArtifactPaths_;
+}
+
+const ImportedPatchInfo& AppController::currentImportedPatchInfo() const {
+    return currentImportedPatchInfo_;
+}
+
+const PatchPreviewReport& AppController::currentPatchPreviewReport() const {
+    return currentPatchPreviewReport_;
 }
 
 bool AppController::hasDocument() const {

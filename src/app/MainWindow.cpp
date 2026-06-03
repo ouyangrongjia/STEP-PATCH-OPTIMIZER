@@ -126,6 +126,30 @@ QString stlBoundingBoxText(const StlBoundingBox& bbox) {
         .arg(QString::number(bbox.max.z, 'g', 8));
 }
 
+QString bboxText(
+    bool valid,
+    double minX,
+    double minY,
+    double minZ,
+    double maxX,
+    double maxY,
+    double maxZ) {
+    if (!valid) {
+        return "invalid";
+    }
+    return QString("min=(%1, %2, %3), max=(%4, %5, %6)")
+        .arg(QString::number(minX, 'g', 8))
+        .arg(QString::number(minY, 'g', 8))
+        .arg(QString::number(minZ, 'g', 8))
+        .arg(QString::number(maxX, 'g', 8))
+        .arg(QString::number(maxY, 'g', 8))
+        .arg(QString::number(maxZ, 'g', 8));
+}
+
+QString boolText(bool value) {
+    return value ? "true" : "false";
+}
+
 bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
     if (!document.hasShape() || !candidate.valid ||
         candidate.candidate_type != MergeCandidateType::PlaneLike ||
@@ -345,6 +369,10 @@ void MainWindow::createActions() {
     showStlCropBoxAction_->setCheckable(true);
     showStlCropBoxAction_->setChecked(true);
     showStlCropBoxAction_->setEnabled(false);
+    generateAndPreviewCurrentPatchAction_ = new QAction("生成并预览当前 Patch", this);
+    importPatchForCurrentCandidateAction_ = new QAction("导入当前候选 Patch（local STL）", this);
+    importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
+    clearPatchOverlayAction_ = new QAction("清除 Patch Overlay", this);
 
     exitAction_ = new QAction("退出", this);
     exitAction_->setShortcut(QKeySequence::Quit);
@@ -440,6 +468,14 @@ void MainWindow::createMenus() {
     stlMenu_->addAction(showSourceStlAction_);
     stlMenu_->addAction(showCroppedStlAction_);
     stlMenu_->addAction(showStlCropBoxAction_);
+
+    patchMenu_ = menuBar()->addMenu("Patch");
+    patchMenu_->addAction(generateAndPreviewCurrentPatchAction_);
+    patchMenu_->addSeparator();
+    patchMenu_->addAction(importPatchForCurrentCandidateAction_);
+    patchMenu_->addAction(importPatchFromFileAction_);
+    patchMenu_->addSeparator();
+    patchMenu_->addAction(clearPatchOverlayAction_);
 
     auto* mergeMenu = menuBar()->addMenu("合并");
     mergeMenu->addAction(previewMergeAction_);
@@ -547,6 +583,14 @@ void MainWindow::createToolBars() {
     stlToolMenu->addAction(showCroppedStlAction_);
     stlToolMenu->addAction(showStlCropBoxAction_);
 
+    auto* patchToolMenu = new QMenu(this);
+    patchToolMenu->addAction(generateAndPreviewCurrentPatchAction_);
+    patchToolMenu->addSeparator();
+    patchToolMenu->addAction(importPatchForCurrentCandidateAction_);
+    patchToolMenu->addAction(importPatchFromFileAction_);
+    patchToolMenu->addSeparator();
+    patchToolMenu->addAction(clearPatchOverlayAction_);
+
     auto* validateExportMenu = new QMenu(this);
     validateExportMenu->addAction(validateAction_);
     validateExportMenu->addAction(exportStepAction_);
@@ -567,6 +611,7 @@ void MainWindow::createToolBars() {
     addMenuButton("候选显示", candidateViewMenu);
     addMenuButton("候选状态", candidateStateMenu);
     addMenuButton("STL", stlToolMenu);
+    addMenuButton("Patch", patchToolMenu);
     addMenuButton("合并", mergeToolMenu);
     addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
@@ -635,6 +680,10 @@ void MainWindow::connectActions() {
     connect(exportStepAction_, &QAction::triggered, this, [this]() { exportStepFile(); });
     connect(openSourceStlAction_, &QAction::triggered, this, [this]() { openSourceStlFile(); });
     connect(cropCurrentCandidateStlAction_, &QAction::triggered, this, [this]() { cropCurrentCandidateStl(); });
+    connect(generateAndPreviewCurrentPatchAction_, &QAction::triggered, this, [this]() { generateAndPreviewCurrentPatch(); });
+    connect(importPatchForCurrentCandidateAction_, &QAction::triggered, this, [this]() { importPatchForCurrentCandidate(); });
+    connect(importPatchFromFileAction_, &QAction::triggered, this, [this]() { importPatchFromFile(); });
+    connect(clearPatchOverlayAction_, &QAction::triggered, this, [this]() { clearPatchOverlay(); });
     connect(showSourceStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setSourceStlVisible);
     connect(showCroppedStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setCroppedStlVisible);
     connect(showStlCropBoxAction_, &QAction::toggled, viewer_, &OccViewWidget::setStlCropBoxVisible);
@@ -859,7 +908,12 @@ void MainWindow::cropCurrentCandidateStl() {
         return;
     }
 
-    const auto defaultName = QString("local_candidate_%1.stl")
+    auto documentStem = pathToQString(controller_.document().sourcePath().stem());
+    if (documentStem.isEmpty()) {
+        documentStem = "document";
+    }
+    const auto defaultName = QString("%1_candidate_%2.stl")
+        .arg(documentStem)
         .arg(candidate->candidate_id, 4, 10, QLatin1Char('0'));
     const auto defaultPath = std::filesystem::temp_directory_path() /
         std::filesystem::path(defaultName.toStdWString());
@@ -937,6 +991,253 @@ void MainWindow::cropCurrentCandidateStl() {
     watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath]() {
         return AppController::cropStlForCandidateData(documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath);
     }));
+}
+
+void MainWindow::generateAndPreviewCurrentPatch() {
+    if (stlCropInProgress_) {
+        inspectPanel_->showReport("STL 裁剪或 Patch 生成正在后台运行，请等待当前任务完成。");
+        setStatus("Patch 预览生成中");
+        return;
+    }
+
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先在候选选择模式下点击一个候选区域，或按 ID 高亮一个候选区域。");
+        logPanel_->appendWarning("生成 Patch 前未选择候选区域。");
+        setStatus("未选择候选区域");
+        return;
+    }
+
+    if (candidate->candidate_type != MergeCandidateType::FeatureBoundedRefit) {
+        inspectPanel_->showReport(QString("当前候选不是 FeatureBoundedRefit，不能生成 Geomagic patch。\n候选 ID：%1\n候选类型：%2")
+            .arg(candidate->candidate_id)
+            .arg(candidateTypeText(candidate->candidate_type)));
+        setStatus("当前候选不能生成 Patch");
+        return;
+    }
+
+    if (!controller_.hasSourceStl()) {
+        inspectPanel_->showReport("请先通过 STL -> 打开原始 STL 加载源 STL。");
+        logPanel_->appendWarning("生成 Patch 前未加载源 STL。");
+        setStatus("未加载源 STL");
+        return;
+    }
+
+    const auto candidateSnapshot = *candidate;
+    const auto sourceStlPath = controller_.sourceStlPath();
+    const auto documentSnapshot = controller_.document();
+    const auto sourceMeshSnapshot = controller_.sourceStlMesh();
+    const auto workspaceRoot = std::filesystem::current_path();
+
+    setStlCropInProgress(true);
+    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
+        .arg(pathToQString(sourceStlPath))
+        .arg(candidateSnapshot.candidate_id)
+        .arg(candidateTypeText(candidateSnapshot.candidate_type)));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
+    setStatus("Patch 预览生成中");
+
+    auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
+    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+
+        if (!result.success) {
+            viewer_->clearPatchOverlay();
+            const auto message = QString::fromStdString(result.message);
+            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nlocal STL：%3\noutput STEP：%4\nfit_region log：%5\n消息：%6")
+                .arg(pathToQString(sourceStlPath))
+                .arg(candidateSnapshot.candidate_id)
+                .arg(pathToQString(result.crop.outputPath))
+                .arg(pathToQString(result.geomagic.outputStepPath))
+                .arg(pathToQString(result.geomagic.fitRegionLogPath))
+                .arg(message));
+            bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+            logPanel_->appendWarning(QString("Patch 预览链路失败：候选 %1，%2")
+                .arg(candidateSnapshot.candidate_id)
+                .arg(message));
+            setStatus("Patch 预览生成失败");
+            return;
+        }
+
+        showCroppedStlAction_->setChecked(true);
+        showCroppedStlAction_->setEnabled(true);
+        showStlCropBoxAction_->setChecked(true);
+        showStlCropBoxAction_->setEnabled(true);
+        viewer_->showCroppedStl(result.crop.extract.localMesh);
+        viewer_->showStlCropBox(result.crop.extract.report.expanded_bbox);
+
+        const auto import = controller_.importPatchResultForCurrentCandidate(result.geomagic, &candidateSnapshot);
+        if (!import.success()) {
+            viewer_->clearPatchOverlay();
+            const auto message = QString::fromStdString(import.message());
+            inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\noutput STEP：%2\n错误：%3")
+                .arg(pathToQString(result.crop.outputPath))
+                .arg(pathToQString(result.geomagic.outputStepPath))
+                .arg(message));
+            bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+            logPanel_->appendWarning(QString("Patch 导入失败：候选 %1，%2")
+                .arg(candidateSnapshot.candidate_id)
+                .arg(message));
+            setStatus("Patch 导入失败");
+            return;
+        }
+
+        viewer_->showPatchCutoutPreview(candidateSnapshot.faces);
+        viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
+        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true);
+        logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
+            .arg(candidateSnapshot.candidate_id)
+            .arg(pathToQString(result.crop.outputPath))
+            .arg(pathToQString(result.geomagic.outputStepPath)));
+        setStatus("Patch cutout overlay 已显示");
+    });
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot]() {
+        GeomagicAutoSurfaceConfig config;
+        config.strictPatchTarget = false;
+        return AppController::cropAndRunGeomagicForCandidateData(
+            documentSnapshot,
+            sourceMeshSnapshot,
+            candidateSnapshot,
+            workspaceRoot,
+            config);
+    }));
+}
+
+void MainWindow::importPatchForCurrentCandidate() {
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先选择一个候选区域，再导入当前候选对应的 Geomagic patch。");
+        logPanel_->appendWarning("导入当前候选 Patch 前未选择候选区域。");
+        setStatus("未选择候选区域");
+        return;
+    }
+
+    const auto defaultRoot = std::filesystem::current_path() / "data" / "crop_stl";
+    const auto filePath = QFileDialog::getOpenFileName(
+        this,
+        "选择当前候选 local STL",
+        pathToQString(defaultRoot),
+        "STL 文件 (*.stl *.STL);;所有文件 (*.*)");
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const auto result = controller_.importPatchForCurrentCandidateFromLocalStl(pathFromQString(filePath), candidate);
+    if (!result.success()) {
+        viewer_->clearPatchOverlay();
+        const auto message = QString::fromStdString(result.message());
+        inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\n错误：%2")
+            .arg(filePath)
+            .arg(message));
+        logPanel_->appendWarning(QString("Patch 导入失败：%1").arg(message));
+        setStatus("Patch 导入失败");
+        return;
+    }
+
+    viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
+    showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    logPanel_->appendInfo(QString("Patch overlay 已导入：%1")
+        .arg(pathToQString(controller_.currentPatchPreviewReport().patchStepPath)));
+    setStatus("Patch overlay 已显示");
+}
+
+void MainWindow::importPatchFromFile() {
+    const auto filePath = QFileDialog::getOpenFileName(
+        this,
+        "选择 Geomagic Patch",
+        pathToQString(std::filesystem::current_path()),
+        "CAD Patch (*.stp *.step *.igs *.iges *.STP *.STEP *.IGS *.IGES);;所有文件 (*.*)");
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    const auto result = controller_.importPatchFromFileForCurrentCandidate(pathFromQString(filePath), currentMergeCandidate());
+    if (!result.success()) {
+        viewer_->clearPatchOverlay();
+        const auto message = QString::fromStdString(result.message());
+        inspectPanel_->showReport(QString("Patch 文件导入失败\npatch：%1\n错误：%2")
+            .arg(filePath)
+            .arg(message));
+        logPanel_->appendWarning(QString("Patch 文件导入失败：%1").arg(message));
+        setStatus("Patch 导入失败");
+        return;
+    }
+
+    viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
+    showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    logPanel_->appendInfo(QString("Patch overlay 已从文件导入：%1").arg(filePath));
+    setStatus("Patch overlay 已显示");
+}
+
+void MainWindow::clearPatchOverlay() {
+    viewer_->clearPatchOverlay();
+    controller_.clearCurrentPatchOverlay();
+    inspectPanel_->showReport("Patch overlay 已清除。\n主模型未修改。");
+    logPanel_->appendInfo("Patch overlay 已清除，主模型未修改。");
+    setStatus("Patch overlay 已清除");
+}
+
+void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview) {
+    const auto warning = QString::fromStdString(report.warningMessage);
+    const auto recommendedAction = QString::fromStdString(report.recommendedAction);
+    const auto message = QString::fromStdString(report.message);
+    const auto previewMode = visualCutoutPreview
+        ? QString("visual-only cutout preview：Viewer 临时隐藏当前 candidate source faces，并叠加 patch；主 ShapeDocument 未修改。")
+        : QString("patch overlay preview：Viewer 叠加 patch；主 ShapeDocument 未修改。");
+
+    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\ncandidate id：%3\nsource face count：%4\nsource boundary edge count：%5\nlocal STL：%6\npatch STEP：%7\npatch IGS sidecar：%8\nfit_region log：%9\npatch face count：%10\npatch edge count：%11\npatch shell count：%12\npatch solid count：%13\npatch bbox：%14\ncandidate bbox：%15\nbbox center distance：%16\nbbox diagonal ratio：%17\nimport BRepCheck valid：%18\nwarning：%19\nrecommended action：%20\nmessage：%21\npreview mode：%22\n说明：当前只做 Apply 前预览，不执行 sewing、STEP 替换或最终导出。")
+        .arg(boolText(report.success))
+        .arg(boolText(report.highRisk))
+        .arg(report.candidateId)
+        .arg(report.sourceFaceCount)
+        .arg(report.sourceBoundaryEdgeCount)
+        .arg(pathToQString(report.localStlPath))
+        .arg(pathToQString(report.patchStepPath))
+        .arg(pathToQString(report.patchIgesSidecarPath))
+        .arg(pathToQString(report.fitRegionLogPath))
+        .arg(report.patchFaceCount)
+        .arg(report.patchEdgeCount)
+        .arg(report.patchShellCount)
+        .arg(report.patchSolidCount)
+        .arg(bboxText(
+            report.patchBboxValid,
+            report.patchBBoxMinX,
+            report.patchBBoxMinY,
+            report.patchBBoxMinZ,
+            report.patchBBoxMaxX,
+            report.patchBBoxMaxY,
+            report.patchBBoxMaxZ))
+        .arg(bboxText(
+            report.candidateBboxValid,
+            report.candidateBBoxMinX,
+            report.candidateBBoxMinY,
+            report.candidateBBoxMinZ,
+            report.candidateBBoxMaxX,
+            report.candidateBBoxMaxY,
+            report.candidateBBoxMaxZ))
+        .arg(QString::number(report.bboxCenterDistance, 'g', 8))
+        .arg(QString::number(report.bboxDiagonalRatio, 'g', 8))
+        .arg(boolText(report.patchBRepCheckValid))
+        .arg(warning)
+        .arg(recommendedAction)
+        .arg(message)
+        .arg(previewMode));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+
+    if (report.highRisk) {
+        logPanel_->appendWarning(QString("Patch preview HighRisk：%1").arg(warning.isEmpty() ? message : warning));
+    } else if (!warning.isEmpty()) {
+        logPanel_->appendWarning(QString("Patch preview warning：%1").arg(warning));
+    }
 }
 
 void MainWindow::detectFeatureEdges() {
@@ -2143,6 +2444,9 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     openStepAction_->setEnabled(!inProgress);
     openSourceStlAction_->setEnabled(!inProgress);
     cropCurrentCandidateStlAction_->setEnabled(!inProgress);
+    generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
+    importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
+    importPatchFromFileAction_->setEnabled(!inProgress);
     previewMergeAction_->setEnabled(!inProgress);
     highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
 }

@@ -184,6 +184,7 @@ OccViewWidget::~OccViewWidget() {
     sourceStlShape_.Nullify();
     croppedStlShape_.Nullify();
     stlCropBoxShape_.Nullify();
+    patchOverlayShape_.Nullify();
     context_.Nullify();
     view_.Nullify();
     viewer_.Nullify();
@@ -217,6 +218,8 @@ Result OccViewWidget::displayDocument(const ShapeDocument& document) {
         sourceStlShape_.Nullify();
         croppedStlShape_.Nullify();
         stlCropBoxShape_.Nullify();
+        patchCutoutPreviewShape_.Nullify();
+        patchOverlayShape_.Nullify();
         sourceStlDisplayedTriangleCount_ = 0;
         croppedStlDisplayedTriangleCount_ = 0;
         mergeCandidateShapes_.clear();
@@ -268,6 +271,8 @@ void OccViewWidget::clearDocument() {
     sourceStlShape_.Nullify();
     croppedStlShape_.Nullify();
     stlCropBoxShape_.Nullify();
+    patchCutoutPreviewShape_.Nullify();
+    patchOverlayShape_.Nullify();
     sourceStlDisplayedTriangleCount_ = 0;
     croppedStlDisplayedTriangleCount_ = 0;
     mergeCandidateShapes_.clear();
@@ -555,6 +560,93 @@ void OccViewWidget::clearStlCropBox() {
     }
     stlCropBoxShape_.Nullify();
     redrawView();
+}
+
+void OccViewWidget::showPatchCutoutPreview(const std::vector<FaceId>& hiddenFaces) {
+    initializeOcct();
+    clearPatchCutoutPreview();
+    if (context_.IsNull() || topology_ == nullptr || displayedShape_.IsNull()) {
+        return;
+    }
+
+    std::set<FaceId> hidden(hiddenFaces.begin(), hiddenFaces.end());
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    bool hasVisibleFace = false;
+    for (FaceId faceId = 0; faceId < topology_->faceCount(); ++faceId) {
+        if (hidden.contains(faceId)) {
+            continue;
+        }
+        builder.Add(compound, topology_->face(faceId));
+        hasVisibleFace = true;
+    }
+
+    context_->Erase(displayedShape_, Standard_False);
+    if (hasVisibleFace) {
+        patchCutoutPreviewShape_ = new AIS_Shape(compound);
+        patchCutoutPreviewShape_->SetDisplayMode(AIS_Shaded);
+        patchCutoutPreviewShape_->SetMaterial(Graphic3d_NOM_PLASTIC);
+        patchCutoutPreviewShape_->SetColor(Quantity_Color(1.0, 0.74, 0.16, Quantity_TOC_RGB));
+        patchCutoutPreviewShape_->Attributes()->SetFaceBoundaryDraw(Standard_True);
+        patchCutoutPreviewShape_->Attributes()->SetFaceBoundaryAspect(
+            new Prs3d_LineAspect(Quantity_Color(0.08, 0.08, 0.08, Quantity_TOC_RGB), Aspect_TOL_SOLID, 1.0));
+        context_->Display(patchCutoutPreviewShape_, Standard_False);
+        context_->Deactivate(patchCutoutPreviewShape_);
+    }
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::showPatchOverlay(const TopoDS_Shape& patchShape) {
+    initializeOcct();
+    clearPatchOverlayShape();
+    if (context_.IsNull() || patchShape.IsNull()) {
+        return;
+    }
+
+    patchOverlayShape_ = new AIS_Shape(patchShape);
+    patchOverlayShape_->SetDisplayMode(AIS_Shaded);
+    patchOverlayShape_->SetColor(Quantity_Color(0.0, 0.95, 0.35, Quantity_TOC_RGB));
+    patchOverlayShape_->SetTransparency(0.35);
+    patchOverlayShape_->Attributes()->SetFaceBoundaryDraw(Standard_True);
+    patchOverlayShape_->Attributes()->SetFaceBoundaryAspect(
+        new Prs3d_LineAspect(Quantity_Color(0.0, 0.25, 0.08, Quantity_TOC_RGB), Aspect_TOL_SOLID, 2.0));
+    context_->Display(patchOverlayShape_, Standard_False);
+    context_->Deactivate(patchOverlayShape_);
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
+void OccViewWidget::clearPatchOverlayShape() {
+    if (!context_.IsNull() && !patchOverlayShape_.IsNull()) {
+        context_->Remove(patchOverlayShape_, Standard_False);
+        context_->UpdateCurrentViewer();
+    }
+    patchOverlayShape_.Nullify();
+}
+
+void OccViewWidget::clearPatchCutoutPreview() {
+    if (!context_.IsNull() && !patchCutoutPreviewShape_.IsNull()) {
+        context_->Remove(patchCutoutPreviewShape_, Standard_False);
+        patchCutoutPreviewShape_.Nullify();
+        if (!displayedShape_.IsNull()) {
+            context_->Display(displayedShape_, Standard_False);
+        }
+        context_->UpdateCurrentViewer();
+    } else {
+        patchCutoutPreviewShape_.Nullify();
+    }
+}
+
+void OccViewWidget::clearPatchOverlay() {
+    clearPatchOverlayShape();
+    clearPatchCutoutPreview();
+    redrawView();
+}
+
+bool OccViewWidget::hasPatchOverlay() const {
+    return !patchOverlayShape_.IsNull();
 }
 
 void OccViewWidget::setSourceStlVisible(bool visible) {

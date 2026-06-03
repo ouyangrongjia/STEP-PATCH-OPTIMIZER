@@ -51,6 +51,10 @@ public:
     void clearCroppedStl();
     void showStlCropBox(const StlBoundingBox& bbox);
     void clearStlCropBox();
+    void showPatchCutoutPreview(const std::vector<FaceId>& hiddenFaces);
+    void showPatchOverlay(const TopoDS_Shape& patchShape);
+    void clearPatchOverlay();
+    bool hasPatchOverlay() const;
     void setSourceStlVisible(bool visible);
     void setCroppedStlVisible(bool visible);
     void setStlCropBoxVisible(bool visible);
@@ -93,6 +97,8 @@ private:
     void clearHoverShape();
     void clearFeatureEdgeShape();
     void clearLockedEdgeShape();
+    void clearPatchOverlayShape();
+    void clearPatchCutoutPreview();
     void selectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
     void redrawSelectedShapes();
     void applyCustomAspects();
@@ -116,6 +122,8 @@ private:
     Handle(AIS_Triangulation) sourceStlShape_;
     Handle(AIS_Triangulation) croppedStlShape_;
     Handle(AIS_Shape) stlCropBoxShape_;
+    Handle(AIS_Shape) patchCutoutPreviewShape_;
+    Handle(AIS_Shape) patchOverlayShape_;
     std::vector<Handle(AIS_Shape)> mergeCandidateShapes_;
     std::vector<std::pair<FaceId, Quantity_Color>> mergeCandidateFaceColors_;
     SelectionMode selectionMode_ = SelectionMode::Face;

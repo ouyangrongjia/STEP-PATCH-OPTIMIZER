@@ -41,6 +41,10 @@ private:
     void exportStepFile();
     void openSourceStlFile();
     void cropCurrentCandidateStl();
+    void generateAndPreviewCurrentPatch();
+    void importPatchForCurrentCandidate();
+    void importPatchFromFile();
+    void clearPatchOverlay();
     void detectFeatureEdges();
     void previewMergeCandidates();
     void showAllMergeCandidates();
@@ -83,6 +87,7 @@ private:
     bool setCurrentMergeCandidateStatus(MergeCandidateStatus status);
     void showFilteredMergeCandidates(MergeCandidateStatus status);
     void showCandidateStatusReport(const QString& title);
+    void showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview = false);
     void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
@@ -100,6 +105,7 @@ private:
     QDockWidget* bottomDock_ = nullptr;
     QMenu* viewMenu_ = nullptr;
     QMenu* stlMenu_ = nullptr;
+    QMenu* patchMenu_ = nullptr;
     QMenu* planeMergeMenu_ = nullptr;
     QMenu* sphereMergeMenu_ = nullptr;
 
@@ -111,6 +117,10 @@ private:
     QAction* showSourceStlAction_ = nullptr;
     QAction* showCroppedStlAction_ = nullptr;
     QAction* showStlCropBoxAction_ = nullptr;
+    QAction* generateAndPreviewCurrentPatchAction_ = nullptr;
+    QAction* importPatchForCurrentCandidateAction_ = nullptr;
+    QAction* importPatchFromFileAction_ = nullptr;
+    QAction* clearPatchOverlayAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* selectFaceAction_ = nullptr;
     QAction* selectEdgeAction_ = nullptr;
