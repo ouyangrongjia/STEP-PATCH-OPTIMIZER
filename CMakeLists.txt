@@ -73,6 +73,8 @@ add_library(spo_core STATIC
     src/merge/SurfaceRefitter.cpp
     src/merge/TorusRegionMerger.cpp
     src/patch/PatchImportService.cpp
+    src/patch/PatchArtifactLocator.cpp
+    src/patch/PatchPreviewReport.cpp
     src/validate/ErrorMetric.cpp
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
@@ -168,6 +170,8 @@ if(SPO_BUILD_TESTS)
         tests/test_geomagic_pipeline_script.cpp
         tests/test_patch_import_service.cpp
         tests/test_patch_import_service_real.cpp
+        tests/test_patch_artifact_locator.cpp
+        tests/test_patch_preview_report.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
