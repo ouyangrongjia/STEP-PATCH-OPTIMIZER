@@ -718,7 +718,7 @@ def build_autosurface_attempts(args):
     return attempts
 
 
-def run_autosurface(mesh, igs_path, args):
+def log_autosurface_attrs():
     try:
         sample = AutoSurface()
         attrs = [name for name in dir(sample) if not name.startswith("_")]
@@ -729,6 +729,9 @@ def run_autosurface(mesh, igs_path, args):
     except Exception:
         pass
 
+
+def run_autosurface(mesh, igs_path, args):
+    log_autosurface_attrs()
     errors = []
     for _, label, geometry, adaptive, patches, tolerance, detail, auto_merge in build_autosurface_attempts(args):
         ok, err = run_autosurface_once(mesh, igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, label)
@@ -739,8 +742,39 @@ def run_autosurface(mesh, igs_path, args):
     fatal("Error: all AutoSurface attempts failed: " + " | ".join(errors), 16)
 
 
+def run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
+    log_autosurface_attrs()
+    errors = []
+    saw_step_write_failure = False
+
+    for _, label, geometry, adaptive, patches, tolerance, detail, auto_merge in build_autosurface_attempts(args):
+        set_stage("Step 5/7: AutoSurface to IGES")
+        ok, err = run_autosurface_once(mesh, temp_igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, label)
+        if not ok:
+            errors.append("{} => {}".format(label, err))
+            continue
+
+        success, bodies, loops, err = convert_igs_to_stp_plain(temp_igs_path, args.output)
+        if success:
+            if args.keep_temp:
+                preserve_igs(temp_igs_path, final_igs_path)
+            return bodies, loops
+
+        saw_step_write_failure = True
+        print_flush(
+            "  STEP write failed for this AutoSurface attempt: openLoops={}, error={}".format(loops, err),
+            stream=sys.stderr,
+        )
+        errors.append("{} => STEP write failed (openLoops={}): {}".format(label, loops, err))
+
+    exit_code = 17 if saw_step_write_failure else 16
+    fatal("Error: all AutoSurface to STEP attempts failed: " + " | ".join(errors), exit_code)
+
+
 def convert_igs_to_stp_plain(igs_path, stp_path):
     set_stage("Step 6/7: IGS to STEP via ReadFile + WriteFile")
+    bodies = 0
+    loops = 0
     try:
         reader = ReadFile()
         reader.filename = igs_path
@@ -767,7 +801,7 @@ def convert_igs_to_stp_plain(igs_path, stp_path):
         return False, bodies, loops, "WriteFile did not create STEP"
     except Exception as exc:
         print_flush("  plain IGS to STEP failed: {}".format(exc), stream=sys.stderr)
-        return False, 0, 0, str(exc)
+        return False, bodies, loops, str(exc)
 
 
 def preserve_igs(temp_igs, final_igs):
@@ -816,14 +850,7 @@ def run_pipeline(args, temp_igs_path, final_igs_path):
     else:
         print_flush("  Relax disabled")
 
-    set_stage("Step 5/7: AutoSurface to IGES")
-    run_autosurface(mesh, temp_igs_path, args)
-    if args.keep_temp:
-        preserve_igs(temp_igs_path, final_igs_path)
-
-    success, bodies, loops, err = convert_igs_to_stp_plain(temp_igs_path, args.output)
-    if not success:
-        fatal("Error: plain IGS to STEP failed: {}".format(err), 17)
+    bodies, loops = run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args)
 
     set_stage("Step 7/7: Done")
     print_flush("  Saved STEP: {}".format(args.output))

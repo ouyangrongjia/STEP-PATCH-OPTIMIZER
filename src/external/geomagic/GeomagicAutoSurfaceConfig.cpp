@@ -125,14 +125,8 @@ GeomagicAutoSurfaceConfigValidation validateGeomagicAutoSurfaceConfig(
     if (config.outputStepPath.empty()) {
         return invalid_config("outputStepPath must not be empty.");
     }
-    if (config.outputIgesPath.empty()) {
-        return invalid_config("outputIgesPath must not be empty.");
-    }
     if (config.workDir.empty()) {
         return invalid_config("workDir must not be empty.");
-    }
-    if (config.resultJsonPath.empty()) {
-        return invalid_config("resultJsonPath must not be empty.");
     }
     if (config.numPatches <= 0) {
         return invalid_config("numPatches must be greater than zero.");

@@ -1,9 +1,5 @@
 #include "external/geomagic/GeomagicAutoSurfaceBackend.h"
 
-#include <QFile>
-#include <QJsonDocument>
-#include <QJsonObject>
-
 #include <cassert>
 #include <filesystem>
 #include <fstream>
@@ -36,23 +32,10 @@ void remove_temp_root(const std::filesystem::path& path) {
     std::filesystem::remove_all(path, error);
 }
 
-QString path_to_qstring(const std::filesystem::path& path) {
-    const auto utf8Path = path.generic_u8string();
-    return QString::fromUtf8(reinterpret_cast<const char*>(utf8Path.c_str()), static_cast<qsizetype>(utf8Path.size()));
-}
-
 std::string read_text_file(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
     assert(stream);
     return {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-}
-
-QJsonObject read_json_object(const std::filesystem::path& path) {
-    QFile file(path_to_qstring(path));
-    assert(file.open(QIODevice::ReadOnly));
-    const auto document = QJsonDocument::fromJson(file.readAll());
-    assert(document.isObject());
-    return document.object();
 }
 
 void write_text_file(const std::filesystem::path& path, const std::string& text) {
@@ -100,14 +83,35 @@ spo::GeomagicAutoSurfaceConfig make_config(
     return config;
 }
 
-std::string success_cmd_body() {
+std::string success_cmd_body(const std::filesystem::path& root) {
+    const auto scriptArg = (root / "script_arg.txt").string();
+    const auto legacyEnvMarker = (root / "legacy_env_present.txt").string();
     return
         "@echo off\n"
         "echo mock stdout\n"
-        "echo FIT_REGION_ADAPTIVE_FIT=%FIT_REGION_ADAPTIVE_FIT%\n"
+        "echo FIT_REGION_STRICT_PATCH_TARGET=%FIT_REGION_STRICT_PATCH_TARGET%\n"
+        "echo FIT_REGION_INPUT=%FIT_REGION_INPUT%\n"
+        "echo FIT_REGION_OUTPUT=%FIT_REGION_OUTPUT%\n"
+        "echo %2 > \"" + scriptArg + "\"\n"
+        "if defined FIT_REGION_CONFIG_JSON type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_RESULT_JSON type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_OUTPUT_IGES type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_WORK_DIR type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_LOG_FILE type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_REPAIR_MESH type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_KEEP_TEMP type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_SKIP_REMESH type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_QUICK_SMOOTH type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_RELAX type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_RELAX_ITERATION type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_RELAX_STRENGTH type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_AUTOSURFACE_TARGET type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_AUTOSURFACE_TOLERANCE type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_DETAIL_LEVEL type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_GEOMETRY_MODE type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_AUTO_MERGE type nul > \"" + legacyEnvMarker + "\"\n"
+        "if defined FIT_REGION_ADAPTIVE_FIT type nul > \"" + legacyEnvMarker + "\"\n"
         "type nul > \"%FIT_REGION_OUTPUT%\"\n"
-        "type nul > \"%FIT_REGION_OUTPUT_IGES%\"\n"
-        "> \"%FIT_REGION_RESULT_JSON%\" echo {\"success\":true,\"timed_out\":false,\"exit_code\":0,\"bodies\":1,\"open_loops\":0,\"message\":\"mock success\"}\n"
         "exit /b 0\n";
 }
 
@@ -115,7 +119,6 @@ std::string failure_cmd_body() {
     return
         "@echo off\n"
         "echo mock failure 1>&2\n"
-        "> \"%FIT_REGION_RESULT_JSON%\" echo {\"success\":false,\"timed_out\":false,\"exit_code\":2,\"error_message\":\"mock failure\"}\n"
         "exit /b 2\n";
 }
 
@@ -129,7 +132,7 @@ std::string timeout_cmd_body() {
 std::string missing_output_cmd_body() {
     return
         "@echo off\n"
-        "> \"%FIT_REGION_RESULT_JSON%\" echo {\"success\":true,\"timed_out\":false,\"exit_code\":0,\"message\":\"mock success without output\"}\n"
+        "echo mock success without output\n"
         "exit /b 0\n";
 }
 
@@ -156,7 +159,7 @@ void assert_failure_message(const spo::GeomagicAutoSurfaceResult& result) {
 
 void test_mock_success() {
     const auto root = temp_root("spo_geomagic_backend_success");
-    const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body());
+    const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body(root));
     auto config = make_config(root, mock);
 
     const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
@@ -164,13 +167,14 @@ void test_mock_success() {
     assert(result.success);
     assert(result.exitCode == 0);
     assert(std::filesystem::exists(config.outputStepPath));
-    assert(std::filesystem::exists(config.outputIgesPath));
-    assert(std::filesystem::exists(config.resultJsonPath));
-    assert(std::filesystem::exists(config.stdoutLogPath));
-    assert(std::filesystem::exists(config.stderrLogPath));
-    assert(result.bodies == 1);
-    assert(result.openLoops == 0);
-    assert(result.message.find("mock success") != std::string::npos);
+    assert(!std::filesystem::exists(config.outputIgesPath));
+    assert(!std::filesystem::exists(config.configJsonPath));
+    assert(!std::filesystem::exists(config.resultJsonPath));
+    assert(!std::filesystem::exists(config.stdoutLogPath));
+    assert(!std::filesystem::exists(config.stderrLogPath));
+    assert(!std::filesystem::exists(root / "legacy_env_present.txt"));
+    assert(std::filesystem::path(read_text_file(root / "script_arg.txt")).is_absolute());
+    assert(result.message.find("mock stdout") != std::string::npos);
 
     remove_temp_root(root);
 }
@@ -184,9 +188,11 @@ void test_mock_failure() {
 
     assert(!result.success);
     assert(result.exitCode != 0);
-    assert(!result.errorMessage.empty() || !result.message.empty());
-    assert(std::filesystem::exists(config.stderrLogPath));
-    assert(read_text_file(config.stderrLogPath).find("mock failure") != std::string::npos);
+    assert(result.errorMessage.find("mock failure") != std::string::npos);
+    assert(!std::filesystem::exists(config.configJsonPath));
+    assert(!std::filesystem::exists(config.resultJsonPath));
+    assert(!std::filesystem::exists(config.stdoutLogPath));
+    assert(!std::filesystem::exists(config.stderrLogPath));
 
     remove_temp_root(root);
 }
@@ -268,11 +274,11 @@ void test_output_step_without_result_json_is_success() {
     remove_temp_root(root);
 }
 
-void test_auto_resolves_crop_paths_and_writes_config_json() {
+void test_auto_resolves_crop_paths_without_writing_sidecar_json() {
     const auto root = temp_root("spo_geomagic_backend_autoresolve");
     {
         const ScopedCurrentPath cwd(root);
-        const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body());
+        const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body(root));
         auto config = make_config(root, mock);
         config.inputStlPath = std::filesystem::path("data") / "crop_stl" / "model" / "candidate_0001.stl";
         config.outputStepPath.clear();
@@ -288,19 +294,16 @@ void test_auto_resolves_crop_paths_and_writes_config_json() {
         const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
         const auto expectedStep = std::filesystem::path("data") / "crop_stp" / "model" / "candidate_0001.stp";
         const auto expectedIges = std::filesystem::path("data") / "crop_igs" / "model" / "candidate_0001.igs";
-        const auto expectedConfigJson = std::filesystem::path("data") / "crop_stp" / "model" / "candidate_0001_autosurface_config.json";
 
         assert(result.success);
         assert(result.outputStepPath.lexically_normal() == expectedStep);
         assert(result.outputIgesPath.lexically_normal() == expectedIges);
-        assert(result.configJsonPath.lexically_normal() == expectedConfigJson);
         assert(std::filesystem::exists(expectedStep));
-        assert(std::filesystem::exists(expectedIges));
-        assert(std::filesystem::exists(expectedConfigJson));
-
-        const auto object = read_json_object(expectedConfigJson);
-        assert(object.value("output_step_path").toString() == path_to_qstring(expectedStep));
-        assert(object.value("output_iges_path").toString() == path_to_qstring(expectedIges));
+        assert(!std::filesystem::exists(expectedIges));
+        assert(result.configJsonPath.empty());
+        assert(result.resultJsonPath.empty());
+        assert(result.stdoutLogPath.empty());
+        assert(result.stderrLogPath.empty());
     }
 
     remove_temp_root(root);
@@ -310,7 +313,7 @@ void test_auto_resolves_chinese_crop_path() {
     const auto root = temp_root("spo_geomagic_backend_chinese");
     {
         const ScopedCurrentPath cwd(root);
-        const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body());
+        const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body(root));
         auto config = make_config(root, mock);
         config.inputStlPath = std::filesystem::path("data") / "crop_stl" / L"03_配件_Clay" / "candidate_0007.stl";
         config.outputStepPath.clear();
@@ -358,9 +361,9 @@ void test_non_crop_input_without_explicit_outputs_fails_before_process() {
     remove_temp_root(root);
 }
 
-void test_auto_merge_forces_adaptive_fit_environment_to_zero() {
+void test_config_fitting_flags_do_not_expand_backend_environment() {
     const auto root = temp_root("spo_geomagic_backend_adaptive_fit");
-    const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body());
+    const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body(root));
     auto config = make_config(root, mock);
     config.autoMerge = true;
     config.adaptiveFit = true;
@@ -368,9 +371,8 @@ void test_auto_merge_forces_adaptive_fit_environment_to_zero() {
     const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
 
     assert(result.success);
-    const auto stdoutText = read_text_file(config.stdoutLogPath);
-    assert(stdoutText.find("FIT_REGION_ADAPTIVE_FIT=0") != std::string::npos);
-    assert(result.message.find("autoMerge=True forces adaptiveFit=False") != std::string::npos);
+    assert(result.message.find("FIT_REGION_ADAPTIVE_FIT") == std::string::npos);
+    assert(!std::filesystem::exists(root / "legacy_env_present.txt"));
 
     remove_temp_root(root);
 }
@@ -386,9 +388,9 @@ void run_geomagic_backend_mock_tests() {
     test_missing_script_does_not_start_process();
     test_missing_output_step_forces_failure();
     test_output_step_without_result_json_is_success();
-    test_auto_resolves_crop_paths_and_writes_config_json();
+    test_auto_resolves_crop_paths_without_writing_sidecar_json();
     test_auto_resolves_chinese_crop_path();
     test_non_crop_input_without_explicit_outputs_fails_before_process();
-    test_auto_merge_forces_adaptive_fit_environment_to_zero();
+    test_config_fitting_flags_do_not_expand_backend_environment();
 #endif
 }

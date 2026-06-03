@@ -101,15 +101,7 @@ void test_empty_required_paths_are_invalid() {
     assert_invalid(config);
 
     config = make_valid_config(root);
-    config.outputIgesPath.clear();
-    assert_invalid(config);
-
-    config = make_valid_config(root);
     config.workDir.clear();
-    assert_invalid(config);
-
-    config = make_valid_config(root);
-    config.resultJsonPath.clear();
     assert_invalid(config);
 
     std::filesystem::remove_all(root);

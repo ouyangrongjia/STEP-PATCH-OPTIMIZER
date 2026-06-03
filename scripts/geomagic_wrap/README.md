@@ -11,10 +11,10 @@ data/crop_stl/<relative>/<name>.stl -> data/crop_stp/<relative>/<name>.stp
 Manual run from `cmd.exe`:
 
 ```cmd
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\example\candidate_0001.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\example\candidate_0001.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001.stp" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
-`FIT_REGION_REPAIR_MESH=1` enables the default pre-AutoSurface repair step for small holes, non-manifold edges, and non-manifold vertices. `FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. The default path is one-patch Mechanical AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`. `numPatches=1` is Geomagic's approximate AutoSurface target, not a guarantee that the exported STEP will contain one B-rep face.
+The backend follows the same minimal environment protocol: `FIT_REGION_INPUT`, `FIT_REGION_OUTPUT`, and `FIT_REGION_STRICT_PATCH_TARGET`. The script derives `<output>_fit_region.log` automatically. `FIT_REGION_REPAIR_MESH=1` is the script default and enables the pre-AutoSurface repair step for small holes, non-manifold edges, and non-manifold vertices. `FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. The default path is one-patch Mechanical AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`. `numPatches=1` is Geomagic's approximate AutoSurface target, not a guarantee that the exported STEP will contain one B-rep face.
 
 Required environment variables:
 

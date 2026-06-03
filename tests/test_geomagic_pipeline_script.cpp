@@ -56,6 +56,9 @@ void test_geomagic_pipeline_script_mentions_required_contract() {
     assert_contains(script, "FIT_REGION_GEOMETRY_MODE");
     assert_contains(script, "Mechanical");
     assert_contains(script, "requested autoMerge={}");
+    assert_contains(script, "run_autosurface_to_step");
+    assert_contains(script, "STEP write failed");
+    assert_contains(script, "all AutoSurface to STEP attempts failed");
     assert_contains(script, "numFilled");
     assert_contains(script, "smallHoles");
     assert_contains(script, "nonManifoldEdges");

@@ -91,8 +91,6 @@ void print_geomagic_failure(
         << "message: " << result.message << "\n"
         << "error: " << result.errorMessage << "\n"
         << "fit_region_log: " << path_to_string(result.fitRegionLogPath) << "\n"
-        << "stdout_log: " << path_to_string(result.stdoutLogPath) << "\n"
-        << "stderr_log: " << path_to_string(result.stderrLogPath) << "\n"
         << "input_stl: " << path_to_string(config.inputStlPath) << "\n"
         << "output_step: " << path_to_string(config.outputStepPath) << "\n";
 }
@@ -166,11 +164,7 @@ void test_real_geomagic_crop_stl_to_imported_patch() {
     config.inputStlPath = inputStlPath;
     config.outputStepPath = paths.outputStepPath;
     config.outputIgesPath = paths.outputIgesPath;
-    config.workDir = paths.outputStepPath.parent_path();
-    config.configJsonPath = sidecar_path(paths.outputStepPath, "_autosurface_config.json");
-    config.resultJsonPath = sidecar_path(paths.outputStepPath, "_autosurface_result.json");
-    config.stdoutLogPath = sidecar_path(paths.outputStepPath, "_autosurface_stdout.log");
-    config.stderrLogPath = sidecar_path(paths.outputStepPath, "_autosurface_stderr.log");
+    config.workDir = root;
     config.fitRegionLogPath = sidecar_path(paths.outputStepPath, "_fit_region.log");
     config.skipRemesh = true;
     config.quickSmooth = false;
@@ -194,8 +188,6 @@ void test_real_geomagic_crop_stl_to_imported_patch() {
         << "PatchImportService real Geomagic chain output STEP: " << path_to_string(paths.outputStepPath) << "\n"
         << "PatchImportService real Geomagic chain sidecar IGES: " << path_to_string(sidecarIgesPath) << "\n"
         << "PatchImportService real Geomagic chain fit log: " << path_to_string(config.fitRegionLogPath) << "\n"
-        << "PatchImportService real Geomagic chain stdout log: " << path_to_string(config.stdoutLogPath) << "\n"
-        << "PatchImportService real Geomagic chain stderr log: " << path_to_string(config.stderrLogPath) << "\n"
         << "PatchImportService import success: " << imported.success << "\n"
         << "PatchImportService import faceCount: " << imported.faceCount << "\n"
         << "PatchImportService import edgeCount: " << imported.edgeCount << "\n"
