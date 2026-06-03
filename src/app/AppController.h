@@ -16,6 +16,7 @@
 #include "external/geomagic/GeomagicAutoSurfaceResult.h"
 #include "patch/ImportedPatchInfo.h"
 #include "patch/PatchArtifactLocator.h"
+#include "patch/PatchApplyState.h"
 #include "patch/PatchPreviewReport.h"
 #include "stl/StlRegionExtractor.h"
 #include "validate/ShapeValidator.h"
@@ -111,6 +112,10 @@ public:
     const PatchArtifactPaths& currentPatchArtifactPaths() const;
     const ImportedPatchInfo& currentImportedPatchInfo() const;
     const PatchPreviewReport& currentPatchPreviewReport() const;
+    RegionPatchStatus currentPatchStatus() const;
+    const std::string& currentPatchStatusMessage() const;
+    PatchApplyDecision currentPatchApplyDecision() const;
+    Result requestApplyCurrentPatchPreview();
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;
@@ -129,6 +134,10 @@ private:
     ImportedPatchInfo currentImportedPatchInfo_;
     PatchPreviewReport currentPatchPreviewReport_;
     bool patchPreviewReady_ = false;
+    RegionPatchStatus currentPatchStatus_ = RegionPatchStatus::NotGenerated;
+    std::string currentPatchStatusMessage_;
+
+    void updateCurrentPatchApplyState();
 };
 
 }

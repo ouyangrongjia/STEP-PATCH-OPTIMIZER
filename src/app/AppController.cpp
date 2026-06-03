@@ -414,6 +414,7 @@ Result AppController::importPatchForCurrentCandidateFromLocalStl(
         currentImportedPatchInfo_,
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
+    updateCurrentPatchApplyState();
     return Result::ok();
 }
 
@@ -443,6 +444,7 @@ Result AppController::importPatchResultForCurrentCandidate(
         currentImportedPatchInfo_,
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
+    updateCurrentPatchApplyState();
     return Result::ok();
 }
 
@@ -474,6 +476,7 @@ Result AppController::importPatchFromFileForCurrentCandidate(
         currentImportedPatchInfo_,
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
+    updateCurrentPatchApplyState();
     return Result::ok();
 }
 
@@ -482,6 +485,8 @@ void AppController::clearCurrentPatchOverlay() {
     currentImportedPatchInfo_ = {};
     currentPatchPreviewReport_ = {};
     patchPreviewReady_ = false;
+    currentPatchStatus_ = RegionPatchStatus::NotGenerated;
+    currentPatchStatusMessage_ = "Patch preview cleared.";
 }
 
 bool AppController::patchPreviewReady() const {
@@ -498,6 +503,31 @@ const ImportedPatchInfo& AppController::currentImportedPatchInfo() const {
 
 const PatchPreviewReport& AppController::currentPatchPreviewReport() const {
     return currentPatchPreviewReport_;
+}
+
+RegionPatchStatus AppController::currentPatchStatus() const {
+    return currentPatchStatus_;
+}
+
+const std::string& AppController::currentPatchStatusMessage() const {
+    return currentPatchStatusMessage_;
+}
+
+PatchApplyDecision AppController::currentPatchApplyDecision() const {
+    return evaluatePatchApplyReadiness(patchPreviewReady_, currentPatchPreviewReport_);
+}
+
+Result AppController::requestApplyCurrentPatchPreview() {
+    const auto decision = currentPatchApplyDecision();
+    if (!decision.canRequestApply) {
+        currentPatchStatus_ = decision.status;
+        currentPatchStatusMessage_ = decision.reason;
+        return Result::error(decision.reason);
+    }
+
+    currentPatchStatus_ = RegionPatchStatus::ApplyPending;
+    currentPatchStatusMessage_ = "Patch Apply request accepted, but T6 replacement is not implemented yet.";
+    return Result::error("T6 replacement is not implemented yet. No ShapeDocument mutation was performed.");
 }
 
 bool AppController::hasDocument() const {
@@ -534,6 +564,12 @@ std::set<EdgeId> AppController::lockedEdges() const {
 
 const CommandHistory& AppController::history() const {
     return history_;
+}
+
+void AppController::updateCurrentPatchApplyState() {
+    const auto decision = currentPatchApplyDecision();
+    currentPatchStatus_ = decision.status;
+    currentPatchStatusMessage_ = decision.canRequestApply ? decision.message : decision.reason;
 }
 
 }

@@ -75,6 +75,7 @@ add_library(spo_core STATIC
     src/patch/PatchImportService.cpp
     src/patch/PatchArtifactLocator.cpp
     src/patch/PatchPreviewReport.cpp
+    src/patch/PatchApplyState.cpp
     src/validate/ErrorMetric.cpp
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
@@ -172,6 +173,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_import_service_real.cpp
         tests/test_patch_artifact_locator.cpp
         tests/test_patch_preview_report.cpp
+        tests/test_patch_apply_state.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )

@@ -1505,25 +1505,38 @@ Geomagic 后端使用 workspace root 作为工作目录，并通过绝对路径�
 
 ## T5.4 Apply 按钮和候选状态
 
+状态：
+
+```text
+已完成。
+本阶段只实现 Patch Apply 前状态机、AppController Apply 请求入口和 GUI 按钮门控。
+点击“应用当前 Patch（T6 占位）”后只进入 ApplyPending，并返回“T6 replacement is not implemented”。
+不修改 ShapeDocument，不创建 Command，不执行 replacement / sewing / ShapeFix / StrictTopologyGate，不导出最终 STEP。
+```
+
 文件：
 
 ```text
-src/gui/MainWindow.cpp
-src/gui/ModelTreePanel.cpp
+src/patch/PatchApplyState.h
+src/patch/PatchApplyState.cpp
+tests/test_patch_apply_state.cpp
+src/app/MainWindow.h
+src/app/MainWindow.cpp
 src/app/AppController.h
 src/app/AppController.cpp
-src/merge/MergeCandidate.h
-src/merge/MergeCandidate.cpp
+CMakeLists.txt
+tests/test_validation.cpp
 ```
 
-新增状态建议：
+新增状态：
 
 ```cpp
 enum class RegionPatchStatus {
     NotGenerated,
-    Generating,
     Generated,
     PreviewReady,
+    PreviewHighRisk,
+    ApplyBlocked,
     ApplyPending,
     Applied,
     ApplyFailed
@@ -1533,12 +1546,12 @@ enum class RegionPatchStatus {
 任务：
 
 ```text
-1. patch overlay preview ready 后，GUI 启用 Apply。
-2. Apply 只对当前 selected candidate 生效。
-3. Apply 前再次检查 candidate boundary 和 imported patch 有效性。
-4. Apply 使用当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
-5. Apply 不允许从固定路径读取 patch。
-6. Apply 后进入 PatchReplacementCommand。
+1. Patch preview ready 后，根据 PatchPreviewReport 计算 PatchApplyDecision。
+2. 未生成 preview、preview report 失败、HighRisk、bbox 无效、BRepCheck 失败、face count <= 0 时禁用 Apply。
+3. multi-face patch 不阻止 T5.4 Apply request，只保留 PatchPreviewReport warning。
+4. AppController::requestApplyCurrentPatchPreview() 只更新状态到 ApplyPending，并返回 T6 未实现错误。
+5. GUI Apply 入口是 Geomagic patch apply 占位，不复用或修改旧 applyMergeAction_。
+6. Report 中显示 patch status、canRequestApply 和 decision reason/message。
 ```
 
 验收：
@@ -1547,7 +1560,9 @@ enum class RegionPatchStatus {
 未生成 patch 时 Apply 禁用。
 patch import 失败时 Apply 禁用。
 PreviewReady 后 Apply 可点击。
-Apply 失败后主模型不变。
+PreviewHighRisk / ApplyBlocked 时 Apply 禁用并显示原因。
+点击 T6 占位 Apply 后状态为 ApplyPending。
+Apply 请求不会修改主模型，不会导出最终 STEP，不会调用 Geomagic。
 ```
 
 ---

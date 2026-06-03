@@ -372,6 +372,8 @@ void MainWindow::createActions() {
     generateAndPreviewCurrentPatchAction_ = new QAction("生成并预览当前 Patch", this);
     importPatchForCurrentCandidateAction_ = new QAction("导入当前候选 Patch（local STL）", this);
     importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
+    applyCurrentPatchAction_ = new QAction("应用当前 Patch（T6 占位）", this);
+    applyCurrentPatchAction_->setEnabled(false);
     clearPatchOverlayAction_ = new QAction("清除 Patch Overlay", this);
 
     exitAction_ = new QAction("退出", this);
@@ -474,6 +476,8 @@ void MainWindow::createMenus() {
     patchMenu_->addSeparator();
     patchMenu_->addAction(importPatchForCurrentCandidateAction_);
     patchMenu_->addAction(importPatchFromFileAction_);
+    patchMenu_->addSeparator();
+    patchMenu_->addAction(applyCurrentPatchAction_);
     patchMenu_->addSeparator();
     patchMenu_->addAction(clearPatchOverlayAction_);
 
@@ -589,6 +593,8 @@ void MainWindow::createToolBars() {
     patchToolMenu->addAction(importPatchForCurrentCandidateAction_);
     patchToolMenu->addAction(importPatchFromFileAction_);
     patchToolMenu->addSeparator();
+    patchToolMenu->addAction(applyCurrentPatchAction_);
+    patchToolMenu->addSeparator();
     patchToolMenu->addAction(clearPatchOverlayAction_);
 
     auto* validateExportMenu = new QMenu(this);
@@ -683,6 +689,7 @@ void MainWindow::connectActions() {
     connect(generateAndPreviewCurrentPatchAction_, &QAction::triggered, this, [this]() { generateAndPreviewCurrentPatch(); });
     connect(importPatchForCurrentCandidateAction_, &QAction::triggered, this, [this]() { importPatchForCurrentCandidate(); });
     connect(importPatchFromFileAction_, &QAction::triggered, this, [this]() { importPatchFromFile(); });
+    connect(applyCurrentPatchAction_, &QAction::triggered, this, [this]() { applyCurrentPatchPreview(); });
     connect(clearPatchOverlayAction_, &QAction::triggered, this, [this]() { clearPatchOverlay(); });
     connect(showSourceStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setSourceStlVisible);
     connect(showCroppedStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setCroppedStlVisible);
@@ -784,6 +791,7 @@ void MainWindow::openStepFile() {
     logPanel_->appendInfo(QString("已打开 STEP/STP：%1").arg(filePath));
     setStatus("STEP/STP 已加载");
     refreshUndoRedoActions();
+    refreshPatchApplyAction();
 }
 
 void MainWindow::saveProject() {
@@ -1052,6 +1060,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
 
         if (!result.success) {
             viewer_->clearPatchOverlay();
+            controller_.clearCurrentPatchOverlay();
             const auto message = QString::fromStdString(result.message);
             inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nlocal STL：%3\noutput STEP：%4\nfit_region log：%5\n消息：%6")
                 .arg(pathToQString(sourceStlPath))
@@ -1065,6 +1074,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
                 .arg(candidateSnapshot.candidate_id)
                 .arg(message));
             setStatus("Patch 预览生成失败");
+            refreshPatchApplyAction();
             return;
         }
 
@@ -1088,12 +1098,14 @@ void MainWindow::generateAndPreviewCurrentPatch() {
                 .arg(candidateSnapshot.candidate_id)
                 .arg(message));
             setStatus("Patch 导入失败");
+            refreshPatchApplyAction();
             return;
         }
 
         viewer_->showPatchCutoutPreview(candidateSnapshot.faces);
         viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
         showPatchPreviewReport(controller_.currentPatchPreviewReport(), true);
+        refreshPatchApplyAction();
         logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
             .arg(candidateSnapshot.candidate_id)
             .arg(pathToQString(result.crop.outputPath))
@@ -1140,11 +1152,13 @@ void MainWindow::importPatchForCurrentCandidate() {
             .arg(message));
         logPanel_->appendWarning(QString("Patch 导入失败：%1").arg(message));
         setStatus("Patch 导入失败");
+        refreshPatchApplyAction();
         return;
     }
 
     viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
     showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    refreshPatchApplyAction();
     logPanel_->appendInfo(QString("Patch overlay 已导入：%1")
         .arg(pathToQString(controller_.currentPatchPreviewReport().patchStepPath)));
     setStatus("Patch overlay 已显示");
@@ -1169,13 +1183,50 @@ void MainWindow::importPatchFromFile() {
             .arg(message));
         logPanel_->appendWarning(QString("Patch 文件导入失败：%1").arg(message));
         setStatus("Patch 导入失败");
+        refreshPatchApplyAction();
         return;
     }
 
     viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
     showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    refreshPatchApplyAction();
     logPanel_->appendInfo(QString("Patch overlay 已从文件导入：%1").arg(filePath));
     setStatus("Patch overlay 已显示");
+}
+
+void MainWindow::applyCurrentPatchPreview() {
+    const auto beforeDecision = controller_.currentPatchApplyDecision();
+    const auto result = controller_.requestApplyCurrentPatchPreview();
+    const auto& report = controller_.currentPatchPreviewReport();
+    const auto patchPath = report.patchStepPath.empty()
+        ? report.patchIgesSidecarPath
+        : report.patchStepPath;
+    const auto decisionText = beforeDecision.canRequestApply
+        ? QString::fromStdString(beforeDecision.message)
+        : QString::fromStdString(beforeDecision.reason);
+    const auto resultText = QString::fromStdString(result.message());
+    const auto statusText = QString::fromUtf8(toString(controller_.currentPatchStatus()));
+    const auto statusMessage = QString::fromStdString(controller_.currentPatchStatusMessage());
+
+    inspectPanel_->showReport(QString("Patch Apply request（T6 占位）\npatch status：%1\npatch path：%2\ncan request apply：%3\nHighRisk：%4\nwarning：%5\npreview message：%6\napply message：%7\nstatus message：%8\n说明：T6 replacement is not implemented. ShapeDocument was not modified.")
+        .arg(statusText)
+        .arg(pathToQString(patchPath))
+        .arg(boolText(beforeDecision.canRequestApply))
+        .arg(boolText(report.highRisk))
+        .arg(QString::fromStdString(report.warningMessage))
+        .arg(decisionText)
+        .arg(resultText)
+        .arg(statusMessage));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+
+    if (beforeDecision.canRequestApply) {
+        logPanel_->appendWarning(QString("Patch Apply 已进入 T6 占位状态：%1").arg(resultText));
+        setStatus("Patch Apply T6 占位");
+    } else {
+        logPanel_->appendWarning(QString("Patch Apply 被阻止：%1").arg(statusMessage));
+        setStatus("Patch Apply 被阻止");
+    }
+    refreshPatchApplyAction();
 }
 
 void MainWindow::clearPatchOverlay() {
@@ -1184,19 +1235,28 @@ void MainWindow::clearPatchOverlay() {
     inspectPanel_->showReport("Patch overlay 已清除。\n主模型未修改。");
     logPanel_->appendInfo("Patch overlay 已清除，主模型未修改。");
     setStatus("Patch overlay 已清除");
+    refreshPatchApplyAction();
 }
 
 void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview) {
     const auto warning = QString::fromStdString(report.warningMessage);
     const auto recommendedAction = QString::fromStdString(report.recommendedAction);
     const auto message = QString::fromStdString(report.message);
+    const auto decision = controller_.currentPatchApplyDecision();
+    const auto decisionText = decision.canRequestApply
+        ? QString::fromStdString(decision.message)
+        : QString::fromStdString(decision.reason);
+    const auto patchStatus = QString::fromUtf8(toString(controller_.currentPatchStatus()));
     const auto previewMode = visualCutoutPreview
         ? QString("visual-only cutout preview：Viewer 临时隐藏当前 candidate source faces，并叠加 patch；主 ShapeDocument 未修改。")
         : QString("patch overlay preview：Viewer 叠加 patch；主 ShapeDocument 未修改。");
 
-    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\ncandidate id：%3\nsource face count：%4\nsource boundary edge count：%5\nlocal STL：%6\npatch STEP：%7\npatch IGS sidecar：%8\nfit_region log：%9\npatch face count：%10\npatch edge count：%11\npatch shell count：%12\npatch solid count：%13\npatch bbox：%14\ncandidate bbox：%15\nbbox center distance：%16\nbbox diagonal ratio：%17\nimport BRepCheck valid：%18\nwarning：%19\nrecommended action：%20\nmessage：%21\npreview mode：%22\n说明：当前只做 Apply 前预览，不执行 sewing、STEP 替换或最终导出。")
+    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：当前只做 Apply 前预览，不执行 sewing、STEP 替换或最终导出。")
         .arg(boolText(report.success))
         .arg(boolText(report.highRisk))
+        .arg(patchStatus)
+        .arg(boolText(decision.canRequestApply))
+        .arg(decisionText)
         .arg(report.candidateId)
         .arg(report.sourceFaceCount)
         .arg(report.sourceBoundaryEdgeCount)
@@ -2215,6 +2275,21 @@ void MainWindow::refreshUndoRedoActions() {
     redoAction_->setEnabled(controller_.canRedo());
 }
 
+void MainWindow::refreshPatchApplyAction() {
+    if (applyCurrentPatchAction_ == nullptr) {
+        return;
+    }
+
+    const auto decision = controller_.currentPatchApplyDecision();
+    const auto statusText = QString::fromUtf8(toString(controller_.currentPatchStatus()));
+    const auto detail = decision.canRequestApply
+        ? QString::fromStdString(decision.message)
+        : QString::fromStdString(decision.reason);
+
+    applyCurrentPatchAction_->setEnabled(decision.canRequestApply && !stlCropInProgress_);
+    applyCurrentPatchAction_->setToolTip(QString("Patch status：%1\n%2").arg(statusText, detail));
+}
+
 void MainWindow::refreshDocumentViews() {
     if (!controller_.hasDocument()) {
         return;
@@ -2272,6 +2347,7 @@ void MainWindow::clearMergeCandidateState() {
     if (viewer_ != nullptr) {
         viewer_->clearMergeCandidates();
     }
+    refreshPatchApplyAction();
 }
 
 void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCandidatePreview) {
@@ -2447,6 +2523,11 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
     importPatchFromFileAction_->setEnabled(!inProgress);
+    if (inProgress) {
+        applyCurrentPatchAction_->setEnabled(false);
+    } else {
+        refreshPatchApplyAction();
+    }
     previewMergeAction_->setEnabled(!inProgress);
     highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
 }

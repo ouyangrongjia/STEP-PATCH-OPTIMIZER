@@ -44,6 +44,7 @@ private:
     void generateAndPreviewCurrentPatch();
     void importPatchForCurrentCandidate();
     void importPatchFromFile();
+    void applyCurrentPatchPreview();
     void clearPatchOverlay();
     void detectFeatureEdges();
     void previewMergeCandidates();
@@ -88,6 +89,7 @@ private:
     void showFilteredMergeCandidates(MergeCandidateStatus status);
     void showCandidateStatusReport(const QString& title);
     void showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview = false);
+    void refreshPatchApplyAction();
     void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
@@ -120,6 +122,7 @@ private:
     QAction* generateAndPreviewCurrentPatchAction_ = nullptr;
     QAction* importPatchForCurrentCandidateAction_ = nullptr;
     QAction* importPatchFromFileAction_ = nullptr;
+    QAction* applyCurrentPatchAction_ = nullptr;
     QAction* clearPatchOverlayAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* selectFaceAction_ = nullptr;
