@@ -127,6 +127,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 37. Geomagic AutoSurface T5.2 patch overlay 已完成基础版：GUI 支持从当前候选 local STL 或手动文件导入 patch，Viewer 以独立 AIS_Shape 叠加显示，清除或重复导入不会修改主 ShapeDocument。
 38. Geomagic AutoSurface T5.3 PatchPreviewReport 已完成基础版：报告 candidate/source 统计、artifact 路径、patch 拓扑统计、bbox deviation、BRepCheck、warning 和 recommended action；multi-face patch 仅作为 warning，明显异常标记 HighRisk。
 39. Geomagic AutoSurface T5.3.1 一键 Patch cutout overlay preview 已完成：GUI 可对当前 FeatureBoundedRefit candidate 自动裁剪 local STL、运行 Geomagic、导入 patch，并在 Viewer 中以 visual-only 方式隐藏 source faces 后叠加 patch；主 ShapeDocument 不修改。
+40. 仓库脚本已补齐：`scripts/verify_spo.ps1` 作为本地统一验证入口，`scripts/run_geomagic_patch.ps1` 作为手动复现 Geomagic patch 生成入口；`verify_spo.ps1` 会在 Geomagic/Patch 相关代码或仓库脚本变更但进度文档未同步时失败，避免后续遗漏文档同步。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -386,11 +387,11 @@ data/crop_stl/<step文件stem>/<step文件stem>_candidate_0179.stl
 当前验证命令：
 
 ```powershell
-cmake --build --preset windows-msvc-debug --target spo_tests
-ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
-$env:SPO_ENABLE_REAL_GEOMAGIC_TESTS='1'; ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
-cmake --build --preset windows-msvc-debug --target step_stats
-.\build\windows-msvc-debug\Debug\step_stats.exe "data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp"
+.\scripts\verify_spo.ps1
+.\scripts\verify_spo.ps1 -Gui
+.\scripts\verify_spo.ps1 -RealGeomagic
+.\scripts\verify_spo.ps1 -StepStats -StepStatsPath "data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp"
+.\scripts\run_geomagic_patch.ps1 -InputStl "data\crop_stl\03_配件_Clay\03_配件_Clay_candidate_0179.stl"
 ```
 
 ---

@@ -171,6 +171,35 @@ T5.4/T6 Apply / replacement 不得直接从固定路径读取 patch。
 Apply 所使用的 patch 必须来自当前 candidate 关联的 PatchArtifactPaths、PatchPreviewReport 或 GeomagicAutoSurfaceResult。
 ```
 
+### 0.5 仓库脚本与文档同步检查
+
+标准本地验证入口：
+
+```powershell
+.\scripts\verify_spo.ps1
+.\scripts\verify_spo.ps1 -Gui
+.\scripts\verify_spo.ps1 -RealGeomagic
+.\scripts\verify_spo.ps1 -StepStats -StepStatsPath "data\crop_stp\<relative_dir>\<name>.stp"
+```
+
+手动复现单个 Geomagic patch 导出：
+
+```powershell
+.\scripts\run_geomagic_patch.ps1 -InputStl "data\crop_stl\<relative_dir>\<name>.stl"
+.\scripts\run_geomagic_patch.ps1 -InputStl "data\crop_stl\<relative_dir>\<name>.stl" -OutputStep "data\crop_stp\<relative_dir>\<name>.stp"
+```
+
+同步规则：
+
+```text
+Geomagic/Patch 相关代码、测试、脚本变更时，必须同步更新：
+docs/implementation_status.md
+docs/refactor_geomagic_autosurface/03_TODO.md
+
+verify_spo.ps1 会自动检查这一点。
+如果只是临时实验，可显式传入 -SkipDocsSyncCheck。
+```
+
 
 ---
 
