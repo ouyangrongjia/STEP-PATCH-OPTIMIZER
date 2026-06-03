@@ -1149,7 +1149,7 @@ README 要求：
 手动验证命令示例：
 
 ```bat
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\local_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_AUTO_MERGE=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\03_配件_Clay\03_配件_Clay_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
 验收：
@@ -1244,6 +1244,14 @@ patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 
 
 ## T5.2.0 PatchArtifactLocator
+
+状态：
+
+```text
+已完成。
+已新增 PatchArtifactLocator，根据 local STL / GeomagicAutoSurfaceResult 动态定位 patch STEP/IGES sidecar/fit_region log。
+生产逻辑不写死 local_candidate_0179 或任何固定 candidate 文件名；真实样例仅保留为 optional test fixture。
+```
 
 文件：
 
@@ -1355,6 +1363,15 @@ public:
 
 ## T5.2 Patch overlay 叠加预览
 
+状态：
+
+```text
+已完成基础版。
+GUI 已提供“导入当前候选 Patch（local STL）”、“从文件导入 Patch”和“清除 Patch Overlay”入口。
+OccViewWidget 使用独立 AIS_Shape 显示 patch overlay，多次导入会先清理旧 overlay，清除 overlay 不修改主 ShapeDocument。
+当前阶段只做 overlay 预览，不执行 Apply / replacement / sewing。
+```
+
 文件：
 
 ```text
@@ -1362,6 +1379,8 @@ src/gui/OccViewWidget.h
 src/gui/OccViewWidget.cpp
 src/app/AppController.h
 src/app/AppController.cpp
+src/app/MainWindow.h
+src/app/MainWindow.cpp
 ```
 
 任务：
@@ -1387,13 +1406,22 @@ candidate highlight 与 patch overlay 可同时存在。
 
 ## T5.3 Patch preview report
 
+状态：
+
+```text
+已完成基础版。
+PatchPreviewReport 输出 candidate/source 统计、artifact 路径、patch 拓扑统计、candidate/patch bbox、bbox deviation、BRepCheck、warning 和 recommended action。
+multi-face patch 只作为 warning；明显 bbox 偏离、BRepCheck 失败或 face count 过高标记 HighRisk。
+GUI Inspect/Log 面板已显示报告；Apply 仍留到 T5.4/T6。
+```
+
 文件：
 
 ```text
 src/patch/PatchPreviewReport.h
 src/patch/PatchPreviewReport.cpp
-src/gui/LogPanel.cpp
-src/gui/ModelTreePanel.cpp
+src/app/MainWindow.h
+src/app/MainWindow.cpp
 ```
 
 任务：
@@ -1423,6 +1451,27 @@ src/gui/ModelTreePanel.cpp
 patch import 失败时报告明确。
 patch bbox 明显异常时阻止 Apply 或标记 HighRisk。
 multi-face patch 不直接判失败；当前真实样例 faces=12 应作为 warning，而不是 overlay 阻塞条件。
+```
+
+## T5.3.1 一键 Patch cutout overlay preview
+
+状态：
+
+```text
+已完成。
+GUI 新增“生成并预览当前 Patch”入口：自动裁剪当前 FeatureBoundedRefit candidate 的 local STL、调用 Geomagic 后端、动态导入 patch，并显示 visual-only cutout overlay。
+Viewer cutout 只临时隐藏 candidate source faces 的显示，不修改 ShapeDocument，不执行 sewing，不导出最终 STEP。
+默认输出路径为 data/crop_stl/<step文件stem>/<step文件stem>_candidate_%04d.stl 及对应 data/crop_stp / data/crop_igs 文件。
+Geomagic 后端使用 workspace root 作为工作目录，并通过绝对路径传递输入 STL、输出 STEP 和脚本路径，避免 FileWrite 受 crop_stp 工作目录影响。
+```
+
+任务边界：
+
+```text
+不实现 Apply。
+不实现 PatchReplacementCommand。
+不从 B-rep 删除 source faces。
+不让 redo 重新运行 Geomagic。
 ```
 
 ## T5.4 Apply 按钮和候选状态

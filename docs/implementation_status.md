@@ -65,9 +65,9 @@ Geomagic AutoSurface “运行成功”不等于 patch 可接受。
 真实样例验证结果：
 
 ```text
-输入：data/crop_stl/local_candidate_0179.stl
-输出：data/crop_stp/local_candidate_0179.stp
-日志：data/crop_stp/local_candidate_0179_fit_region.log
+输入：data/crop_stl/<step文件stem>/<step文件stem>_candidate_0179.stl
+输出：data/crop_stp/<step文件stem>/<step文件stem>_candidate_0179.stp
+日志：data/crop_stp/<step文件stem>/<step文件stem>_candidate_0179_fit_region.log
 
 修复前：boundaryCycles=11, nonManifoldVertices=2
 修复后：boundaryCycles=1, nonManifoldVertices=0, FillSmallHoles numFilled=22
@@ -123,6 +123,10 @@ Organic detail/tolerance 调参：face count 仍≈273
 33. PatchImportService 已完成：可导入 STEP/STP/IGS/IGES，返回 shape、face/edge/shell/solid 统计、bbox、BRepCheck；不接受或修改 ShapeDocument。
 34. PatchImportService 真实接入测试已拆分：默认测试只导入已有 crop_stp / crop_igs 文件；设置 `SPO_ENABLE_REAL_GEOMAGIC_TESTS=1` 时跑通 crop STL → Geomagic → STEP → PatchImportService。
 35. `tools/step_stats` 已可用于导入 STEP/IGS 并输出 face/edge/shell/solid/bbox/BRepCheck 统计，用于判断 Geomagic 输出是否适合继续 overlay / Apply。
+36. Geomagic AutoSurface T5.2.0 PatchArtifactLocator 已完成：可从 local STL / GeomagicAutoSurfaceResult 动态定位 patch STEP、IGES sidecar 和 fit_region log；生产逻辑不写死当前真实样例文件名。
+37. Geomagic AutoSurface T5.2 patch overlay 已完成基础版：GUI 支持从当前候选 local STL 或手动文件导入 patch，Viewer 以独立 AIS_Shape 叠加显示，清除或重复导入不会修改主 ShapeDocument。
+38. Geomagic AutoSurface T5.3 PatchPreviewReport 已完成基础版：报告 candidate/source 统计、artifact 路径、patch 拓扑统计、bbox deviation、BRepCheck、warning 和 recommended action；multi-face patch 仅作为 warning，明显异常标记 HighRisk。
+39. Geomagic AutoSurface T5.3.1 一键 Patch cutout overlay preview 已完成：GUI 可对当前 FeatureBoundedRefit candidate 自动裁剪 local STL、运行 Geomagic、导入 patch，并在 Viewer 中以 visual-only 方式隐藏 source faces 后叠加 patch；主 ShapeDocument 不修改。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -370,11 +374,11 @@ Organic detail/tolerance 调参：face count 仍≈273
 ### 4.4 Geomagic patch 生成 / 导入闭环
 
 ```text
-data/crop_stl/local_candidate_0179.stl
+data/crop_stl/<step文件stem>/<step文件stem>_candidate_0179.stl
 → wrapCore.exe --script scripts/geomagic_wrap/autosurface_pipeline.py
 → RepairMesh / RemoveNonManifoldVertices / FillSmallHoles
 → AutoSurface geometry=Mechanical, autoMerge=true, numPatches=1
-→ data/crop_stp/local_candidate_0179.stp
+→ data/crop_stp/<step文件stem>/<step文件stem>_candidate_0179.stp
 → PatchImportService 导入
 → step_stats 输出 faces=12, edges=50, BRepCheck valid=true
 ```
@@ -386,7 +390,7 @@ cmake --build --preset windows-msvc-debug --target spo_tests
 ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
 $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS='1'; ctest --preset windows-msvc-debug -R spo_tests --output-on-failure
 cmake --build --preset windows-msvc-debug --target step_stats
-.\build\windows-msvc-debug\Debug\step_stats.exe data\crop_stp\local_candidate_0179.stp
+.\build\windows-msvc-debug\Debug\step_stats.exe "data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp"
 ```
 
 ---
