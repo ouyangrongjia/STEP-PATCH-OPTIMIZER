@@ -1,5 +1,7 @@
 #include "app/AppController.h"
 #include "brep/ShapeDocument.h"
+#include "command/Command.h"
+#include "command/CommandContext.h"
 #include "io/StepWriter.h"
 #include "patch/PatchApplyState.h"
 #include "patch/PatchPreviewReport.h"
@@ -8,6 +10,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <memory>
 #include <string>
 
 namespace {
@@ -26,6 +29,29 @@ void remove_temp_root(const std::filesystem::path& path) {
 TopoDS_Shape make_test_box() {
     return BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape();
 }
+
+class NoopUndoableCommand final : public spo::Command {
+public:
+    const char* name() const override {
+        return "NoopUndoableCommand";
+    }
+
+    spo::Result execute(spo::CommandContext&) override {
+        return spo::Result::ok();
+    }
+
+    bool undoable() const override {
+        return true;
+    }
+
+    spo::Result undo(spo::CommandContext&) override {
+        return spo::Result::ok();
+    }
+
+    spo::Result redo(spo::CommandContext&) override {
+        return spo::Result::ok();
+    }
+};
 
 void write_step_file(const std::filesystem::path& path) {
     const spo::ShapeDocument document(make_test_box(), {});
@@ -167,6 +193,65 @@ void test_app_controller_request_apply_with_valid_preview_sets_pending_without_d
     remove_temp_root(root);
 }
 
+void test_app_controller_open_step_clears_patch_preview_state() {
+    const auto root = temp_root("spo_patch_apply_controller_open_step_clear");
+    const auto path = root / "patch.stp";
+    write_step_file(path);
+
+    spo::AppController controller;
+    assert(controller.importPatchFromFileForCurrentCandidate(path).success());
+    assert(controller.patchPreviewReady());
+
+    assert(controller.openStepFile(path).success());
+
+    assert(!controller.patchPreviewReady());
+    assert(controller.currentPatchStatus() == spo::RegionPatchStatus::NotGenerated);
+
+    remove_temp_root(root);
+}
+
+void test_app_controller_undo_redo_clear_patch_preview_state() {
+    const auto root = temp_root("spo_patch_apply_controller_undo_redo_clear");
+    const auto path = root / "patch.stp";
+    write_step_file(path);
+
+    spo::AppController controller;
+    assert(controller.execute(std::make_unique<NoopUndoableCommand>()).success());
+
+    assert(controller.importPatchFromFileForCurrentCandidate(path).success());
+    assert(controller.patchPreviewReady());
+    assert(controller.undo().success());
+    assert(!controller.patchPreviewReady());
+    assert(controller.currentPatchStatus() == spo::RegionPatchStatus::NotGenerated);
+
+    assert(controller.importPatchFromFileForCurrentCandidate(path).success());
+    assert(controller.patchPreviewReady());
+    assert(controller.redo().success());
+    assert(!controller.patchPreviewReady());
+    assert(controller.currentPatchStatus() == spo::RegionPatchStatus::NotGenerated);
+
+    remove_temp_root(root);
+}
+
+void test_app_controller_same_domain_merge_clears_patch_preview_state() {
+    const auto root = temp_root("spo_patch_apply_controller_merge_clear");
+    const auto path = root / "model.stp";
+    write_step_file(path);
+
+    spo::AppController controller;
+    assert(controller.openStepFile(path).success());
+    assert(controller.importPatchFromFileForCurrentCandidate(path).success());
+    assert(controller.patchPreviewReady());
+
+    const auto result = controller.unifySameDomain(25.0, 0.0, 0.001, false);
+
+    assert(result.document.hasShape());
+    assert(!controller.patchPreviewReady());
+    assert(controller.currentPatchStatus() == spo::RegionPatchStatus::NotGenerated);
+
+    remove_temp_root(root);
+}
+
 }
 
 void run_patch_apply_state_tests() {
@@ -181,4 +266,7 @@ void run_patch_apply_state_tests() {
     test_app_controller_clear_resets_status();
     test_app_controller_request_apply_without_preview();
     test_app_controller_request_apply_with_valid_preview_sets_pending_without_document_mutation();
+    test_app_controller_open_step_clears_patch_preview_state();
+    test_app_controller_undo_redo_clear_patch_preview_state();
+    test_app_controller_same_domain_merge_clears_patch_preview_state();
 }

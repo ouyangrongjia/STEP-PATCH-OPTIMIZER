@@ -2295,6 +2295,10 @@ void MainWindow::refreshDocumentViews() {
         return;
     }
 
+    viewer_->clearPatchOverlay();
+    controller_.clearCurrentPatchOverlay();
+    refreshPatchApplyAction();
+
     const auto& document = controller_.document();
     clearMergeCandidateState();
     hasFeatureEdgeResult_ = false;

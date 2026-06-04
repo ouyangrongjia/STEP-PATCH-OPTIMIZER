@@ -1,8 +1,8 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.6-patch-artifact-locator
+> 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。
 
 ---
 
@@ -23,7 +23,7 @@
 8. OCCT 导入 Geomagic 输出 patch。
 9. 在 Viewer 中把 patch 与原 candidate 区域叠加预览。
 10. 用户点击“应用 / Apply”。
-11. 使用原 STP boundary wire 约束 patch 替换。
+11. 使用原 STP boundary wire 约束 Geomagic patch 替换，支持 multi-face patch fragment。
 12. 尝试 sewing / ShapeFix / SameParameter。
 13. StrictTopologyGate 验证。
 14. 合法则提交 Command；不合法则 rollback。
@@ -171,35 +171,6 @@ T5.4/T6 Apply / replacement 不得直接从固定路径读取 patch。
 Apply 所使用的 patch 必须来自当前 candidate 关联的 PatchArtifactPaths、PatchPreviewReport 或 GeomagicAutoSurfaceResult。
 ```
 
-### 0.5 仓库脚本与文档同步检查
-
-标准本地验证入口：
-
-```powershell
-.\scripts\verify_spo.ps1
-.\scripts\verify_spo.ps1 -Gui
-.\scripts\verify_spo.ps1 -RealGeomagic
-.\scripts\verify_spo.ps1 -StepStats -StepStatsPath "data\crop_stp\<relative_dir>\<name>.stp"
-```
-
-手动复现单个 Geomagic patch 导出：
-
-```powershell
-.\scripts\run_geomagic_patch.ps1 -InputStl "data\crop_stl\<relative_dir>\<name>.stl"
-.\scripts\run_geomagic_patch.ps1 -InputStl "data\crop_stl\<relative_dir>\<name>.stl" -OutputStep "data\crop_stp\<relative_dir>\<name>.stp"
-```
-
-同步规则：
-
-```text
-Geomagic/Patch 相关代码、测试、脚本变更时，必须同步更新：
-docs/implementation_status.md
-docs/refactor_geomagic_autosurface/03_TODO.md
-
-verify_spo.ps1 会自动检查这一点。
-如果只是临时实验，可显式传入 -SkipDocsSyncCheck。
-```
-
 
 ---
 
@@ -245,18 +216,18 @@ verify_spo.ps1 会自动检查这一点。
 3. fit_region log 可定位 mesh repair、AutoSurface 参数和最终退出状态。
 4. PatchArtifactLocator 能根据 local STL / result 动态定位 patch，不写死样例文件。
 5. patch 能导入 OCCT。
-6. Viewer 能叠加显示 patch.
-6. 清除 overlay 后主模型不变。
+6. Viewer 能叠加显示 patch。
 7. 清除 overlay 后主模型不变。
 8. 此阶段不修改主 ShapeDocument。
 ```
 
-### MVP-C：用户点击应用后的单候选真实贴回
+### MVP-C：用户点击应用后的单候选真实贴回（multi-face patch 主路径）
 
 ```text
 用户在 patch overlay 预览后点击 Apply
 → PatchReplacementCommand
-→ BoundaryConstrainedPatchBuilder
+→ MultiFacePatchAnalyzer
+→ BoundaryConstrainedPatchBuilder 生成 multi-face replacement fragment
 → sewing / ShapeFix / SameParameter
 → StrictTopologyGate
 → 成功提交 Command
@@ -270,10 +241,11 @@ verify_spo.ps1 会自动检查这一点。
 1. 只处理单 closed outer boundary candidate。
 2. 无 holes。
 3. 无 non-manifold boundary。
-4. Gate 失败时主模型不变。
-5. Gate 成功后可导出 STEP 并 roundtrip。
-6. undo/redo 正常。
-7. redo 不重新运行 Geomagic。
+4. Geomagic patch 可以是 multi-face / multi-shell，不允许因 patchFaceCount > 1 直接拒绝。
+5. Gate 失败时主模型不变。
+6. Gate 成功后可导出 STEP 并 roundtrip。
+7. undo/redo 正常。
+8. redo 不重新运行 Geomagic。
 ```
 
 ### MVP-D：批量与工程化增强
@@ -1178,7 +1150,7 @@ README 要求：
 手动验证命令示例：
 
 ```bat
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\03_配件_Clay\03_配件_Clay_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\local_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_AUTO_MERGE=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
 验收：
@@ -1196,7 +1168,8 @@ fit_region log 可定位失败阶段。
 # P1：Geomagic patch 导入与叠加预览
 
 > 本阶段是“应用前确认”阶段。  
-> 它不是长期停留点，但必须存在：用户需要看到 Geomagic 得到的 STP/IGS patch 与原 candidate 的空间关系，然后再点击 Apply。
+> 用户必须先看到 Geomagic 得到的 STP/IGS patch 与原 candidate 的空间关系，再进入 Apply。  
+> T5 已经完成 patch 导入、artifact 动态定位、overlay、preview report 和 Apply 占位状态机；T6 从 `ApplyPending` 入口开始做真实贴回。
 
 ## T5.1 PatchImportService
 
@@ -1270,7 +1243,6 @@ BRepCheck valid=true
 bbox 和 face count 可显示。
 patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 ```
-
 
 ## T5.2.0 PatchArtifactLocator
 
@@ -1351,33 +1323,6 @@ public:
    - data/crop_igs 只作为兼容 fallback。
 ```
 
-测试要求：
-
-```text
-1. 通用命名：
-   crop_stl/a/candidate_0001.stl
-   crop_stp/a/candidate_0001.stp
-   → locateFromLocalStl 成功。
-
-2. 策略后缀：
-   crop_stl/a/candidate_0002.stl
-   crop_stp/a/candidate_0002_mechanical.stp
-   → locateFromLocalStl 成功。
-
-3. 多策略：
-   同时存在 candidate_0003_organic.stp 和 candidate_0003_mechanical.stp
-   → 优先 mechanical。
-
-4. 缺失 patch：
-   只有 crop STL，没有 crop STP
-   → success=false，message 非空，不崩溃。
-
-5. optional real test：
-   如果存在 data/crop_stl/local_candidate_0179.stl 和 data/crop_stp/local_candidate_0179_mechanical.stp，
-   则 locator 应能动态定位该真实样例。
-   该样例只能出现在测试和 manual verification 中，不允许写入生产逻辑。
-```
-
 验收：
 
 ```text
@@ -1389,16 +1334,15 @@ public:
 找不到 patch 时返回失败信息，不崩溃。
 ```
 
-
 ## T5.2 Patch overlay 叠加预览
 
 状态：
 
 ```text
-已完成基础版。
+已完成。
 GUI 已提供“导入当前候选 Patch（local STL）”、“从文件导入 Patch”和“清除 Patch Overlay”入口。
 OccViewWidget 使用独立 AIS_Shape 显示 patch overlay，多次导入会先清理旧 overlay，清除 overlay 不修改主 ShapeDocument。
-当前阶段只做 overlay 预览，不执行 Apply / replacement / sewing。
+当前阶段只做 overlay 预览，不执行真实 replacement / sewing。
 ```
 
 文件：
@@ -1438,10 +1382,10 @@ candidate highlight 与 patch overlay 可同时存在。
 状态：
 
 ```text
-已完成基础版。
+已完成。
 PatchPreviewReport 输出 candidate/source 统计、artifact 路径、patch 拓扑统计、candidate/patch bbox、bbox deviation、BRepCheck、warning 和 recommended action。
 multi-face patch 只作为 warning；明显 bbox 偏离、BRepCheck 失败或 face count 过高标记 HighRisk。
-GUI Inspect/Log 面板已显示报告；Apply 仍留到 T5.4/T6。
+GUI Inspect/Log 面板已显示报告。
 ```
 
 文件：
@@ -1497,7 +1441,7 @@ Geomagic 后端使用 workspace root 作为工作目录，并通过绝对路径�
 任务边界：
 
 ```text
-不实现 Apply。
+不实现真实 Apply。
 不实现 PatchReplacementCommand。
 不从 B-rep 删除 source faces。
 不让 redo 重新运行 Geomagic。
@@ -1565,11 +1509,177 @@ PreviewHighRisk / ApplyBlocked 时 Apply 禁用并显示原因。
 Apply 请求不会修改主模型，不会导出最终 STEP，不会调用 Geomagic。
 ```
 
+## T5.4.1 stale patch state 安全清理
+
+状态：
+
+```text
+待实现。
+进入 T6 前必须补齐，防止旧 patch preview state 跨 STEP 文件、跨 undo/redo 或跨模型刷新残留。
+```
+
+文件：
+
+```text
+src/app/MainWindow.cpp
+src/app/AppController.h
+src/app/AppController.cpp
+tests/test_patch_apply_state.cpp 或 tests/test_commands.cpp
+```
+
+任务：
+
+```text
+1. 打开新 STEP 成功后，必须清除 viewer patch overlay 和 AppController patch state。
+2. refreshDocumentViews() 刷新主 ShapeDocument 后，必须清除 patch overlay 和 patch state。
+3. undo / redo 成功后，必须清除 patch overlay 和 patch state。
+4. 任意旧合并命令成功修改主 ShapeDocument 后，必须清除 patch overlay 和 patch state。
+5. 清除后 refreshPatchApplyAction()，Apply Patch 按钮必须禁用。
+```
+
+建议新增 helper：
+
+```cpp
+void MainWindow::clearPatchPreviewStateOnly();
+```
+
+语义：
+
+```text
+viewer_->clearPatchOverlay();
+controller_.clearCurrentPatchOverlay();
+refreshPatchApplyAction();
+```
+
+验收：
+
+```text
+打开新 STEP 后 patchPreviewReady=false，currentPatchStatus=NotGenerated。
+undo / redo 后 patchPreviewReady=false，Apply Patch 按钮禁用。
+旧 patch 不可能被用于新 ShapeDocument 的 T6 replacement。
+清理逻辑不删除 data/crop_stp / data/crop_stl 文件，只清理当前 UI/controller 状态。
+```
+
 ---
 
 # P1：用户点击 Apply 后的真实贴回
 
-## T6.1 BoundaryConstrainedPatchBuilder
+> T6 是第一个真正修改 `ShapeDocument` 的阶段。  
+> 与早期设想不同，T6 **不能假设 Geomagic 只输出 1 个 face**。当前真实 Mechanical + AutoMerge 样例约为 12 faces，后续任何真实流程都不能因为 `patchFaceCount > 1` 直接拒绝。  
+> T6 的基础目标是：支持 Geomagic 输出的 multi-face / multi-shell patch，以“多面片 replacement fragment”为主路径；one-face patch 只是特例。
+
+## T6 总体原则：复杂 patch / multi-face patch 必须是主路径
+
+必须支持：
+
+```text
+1. imported patch shape 是 TopoDS_Compound / TopoDS_Shell / TopoDS_Solid / TopoDS_Face 任一形式。
+2. patchFaceCount 可以大于 1；不能以 patchFaceCount > 1 作为 unsupported。
+3. Geomagic patch 内部 seam / internal edges 允许保留，作为 replacement fragment 的内部拓扑。
+4. T6 不追求强制合成 1 张 B-spline face。
+5. 真实贴回后允许 candidate 区域被一个 multi-face patch fragment 替换。
+6. 是否接受最终结果由 StrictTopologyGate 判断，而不是由 patch face 数直接判断。
+```
+
+仍然禁止：
+
+```text
+1. 不直接信任 Geomagic patch 外边界作为最终 CAD 边界。
+2. 不使用 STL 裁剪边界作为最终 CAD 边界。
+3. 不绕过原 STP boundary wire。
+4. 不绕过 StrictTopologyGate 提交结果。
+5. 不让 redo 重新运行 Geomagic。
+6. 不从固定路径读取 patch。
+```
+
+T6 推进顺序：
+
+```text
+T5.4.1 stale patch state cleanup
+→ T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer
+→ T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
+→ T6.2 StrictTopologyGate 最小可用版
+→ T6.3 PatchReplacementCommand
+→ T6.4 Sewing / ShapeFix / SameParameter 集成
+→ T6.5 AppController / GUI 接入真实 Apply
+```
+
+## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
+
+文件：
+
+```text
+src/patch/PatchReplacementInput.h
+src/patch/PatchReplacementReport.h
+src/patch/MultiFacePatchAnalyzer.h
+src/patch/MultiFacePatchAnalyzer.cpp
+tests/test_multiface_patch_analyzer.cpp
+CMakeLists.txt
+```
+
+目标：
+
+```text
+在真正构造 replacement 之前，先把当前 candidate、boundary、imported patch、preview report、artifact paths 统一成一个不可歧义的输入结构，并分析 imported patch 的多面片拓扑。
+```
+
+建议结构：
+
+```cpp
+struct PatchReplacementInput {
+    const ShapeDocument* document = nullptr;
+    const MergeCandidate* candidate = nullptr;
+    const RegionBoundaryAnalysis* boundary = nullptr;
+    const ImportedPatchInfo* importedPatch = nullptr;
+    const PatchArtifactPaths* artifactPaths = nullptr;
+    const PatchPreviewReport* previewReport = nullptr;
+};
+
+struct MultiFacePatchAnalysis {
+    bool success = false;
+    std::string message;
+
+    int faceCount = 0;
+    int edgeCount = 0;
+    int shellCount = 0;
+    int solidCount = 0;
+
+    std::vector<TopoDS_Face> faces;
+    std::vector<TopoDS_Edge> outerEdges;
+    std::vector<TopoDS_Edge> internalEdges;
+
+    bool bboxValid = false;
+    bool brepCheckValid = false;
+    bool hasAtLeastOneFace = false;
+    bool isSingleFace = false;
+    bool isMultiFace = false;
+};
+```
+
+任务：
+
+```text
+1. validatePatchReplacementInput：检查 document/candidate/boundary/importedPatch/previewReport 是否齐全。
+2. 检查 candidate boundary 必须是单 closed outer wire，无 holes，无 non-manifold / branch boundary。
+3. 检查 previewReport.success=true 且 highRisk=false。
+4. 检查 importedPatch.success=true，shape 非空，bbox valid，BRepCheck valid。
+5. MultiFacePatchAnalyzer 从 importedPatch.shape 提取所有 face/edge/shell/solid。
+6. patchFaceCount > 1 必须 success=true，只设置 isMultiFace=true。
+7. 输出 MultiFacePatchAnalysis，供 T6.1 构造 replacement fragment。
+```
+
+验收：
+
+```text
+one-face patch 可分析成功。
+multi-face box / shell / Geomagic patch 可分析成功。
+empty patch 失败，reason 清楚。
+BRepCheck 失败时失败，reason 清楚。
+patchFaceCount > 1 不失败。
+输入缺失不崩溃。
+```
+
+## T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
 
 文件：
 
@@ -1580,46 +1690,127 @@ tests/test_boundary_constrained_patch_builder.cpp
 CMakeLists.txt
 ```
 
-任务：
+输入：
 
 ```text
-输入：
+- PatchReplacementInput
+- MultiFacePatchAnalysis
 - candidate source faces
 - original STP outer boundary wire
-- imported Geomagic patch shape
+- imported Geomagic patch shape / patch faces
+```
 
 输出：
-- replacement patch / replacement face / replacement shell fragment
-```
-
-第一版实现策略：
 
 ```text
-1. 从 imported patch 中选择可用 face/surface。
-2. 使用原 STP outer boundary wire 作为优先边界。
-3. 尝试构造 replacement face。
-4. 对 replacement face 做 ShapeFix_Face / SameParameter。
+- replacementShape：TopoDS_Shape，可为 Face / Shell / Compound
+- replacementFaces：multi-face replacement fragment 的 faces
+- sourceFaceIds：被替换的原 candidate faces
+- internalPatchEdges：保留的 patch 内部 seam / internal edges
+- report：构造过程、失败原因、是否使用 multi-face path
 ```
 
-关键原则：
+核心策略：
 
 ```text
-Geomagic 输出 patch 只提供拟合 surface / patch geometry。
-最终 replacement face 必须使用原 STP boundary wire trim。
-不要直接把 Geomagic STP 的外边界当作最终贴回边界。
+1. one-face patch 走简单 face surface replacement path。
+2. multi-face patch 走主路径：保留 Geomagic patch 的内部 face network，构造 replacement fragment。
+3. replacement fragment 的外部边界必须最终与原 STP candidate outer boundary 对齐或可 sewing。
+4. Geomagic patch 的外边界只作为辅助几何，不作为最终合法性依据。
+5. 不强制把 multi-face patch 合并为 1 张面。
+6. 不因为 patchFaceCount > 1 返回 unsupported。
+7. 如果无法在原 boundary 内构造可 sewing fragment，应返回明确失败原因，而不是 silent fallback。
+```
+
+第一版允许的工程化策略：
+
+```text
+A. 直接 multi-face fragment strategy：
+   - 提取 imported patch 的所有有效 faces。
+   - 根据 candidate bbox / patch bbox 过滤明显离群 faces。
+   - 构造 TopoDS_Compound 或 TopoDS_Shell 作为 replacement fragment。
+   - 保留 patch 内部边。
+   - 后续由 T6.4 sewing + T6.2 gate 判断是否可提交。
+
+B. Boundary bridge strategy：
+   - 原 STP outer boundary wire 必须作为最终边界参考。
+   - 如果 patch outer boundary 与 original outer wire 不一致，记录 boundary mismatch。
+   - 可以生成需要 sewing 的 replacement fragment，但不能直接提交；必须经过 StrictTopologyGate。
+
+C. one-face special strategy：
+   - 如果 imported patch 只有一个 face，可使用该 face surface 与原 boundary wire 构造 replacement face。
+   - 这是特例，不是 T6 主假设。
+```
+
+明确不做：
+
+```text
+不实现全自动自由曲面重拟合。
+不要求 multi-face patch 被合并成单面。
+不绕过 StrictTopologyGate。
+不直接把 Geomagic patch outer wire 当作最终 boundary。
+不使用 STL 裁剪边界作为最终 boundary。
 ```
 
 验收：
 
 ```text
-单 patch + 单 closed outer wire 可生成 replacement。
+one-face patch 可生成 replacement face 或 fragment。
+multi-face patch 可生成 replacement fragment，至少不因 faceCount>1 被拒绝。
+replacement fragment 保留内部 patch seam 信息。
 boundary invalid 时失败。
-imported patch 无可用 face 时失败。
-不直接使用 STL 裁剪边界作为最终边界。
-不直接使用 Geomagic patch 外边界作为最终边界。
+imported patch 无 face 时失败。
+失败 reason 可读。
+不修改主 ShapeDocument。
 ```
 
-## T6.2 PatchReplacementCommand
+## T6.2 StrictTopologyGate 最小可用版
+
+> StrictTopologyGate 应提前于 PatchReplacementCommand 落地。只要 T6 开始修改模型，就必须先有 gate，否则真实替换失败很难回滚和定位。
+
+文件：
+
+```text
+src/validate/StrictTopologyGate.h
+src/validate/StrictTopologyGate.cpp
+tests/test_strict_topology_gate.cpp
+CMakeLists.txt
+```
+
+检查：
+
+```text
+BRepCheck。
+free edge 不增加。
+multiple edge 不增加。
+solid count 不变或符合 explicit fragment replacement 规则。
+shell closure。
+bbox 异常。
+STEP export。
+STEP roundtrip。
+source face count 与 replacement face count 记录，但 replacement face count > 1 不是失败条件。
+```
+
+multi-face 规则：
+
+```text
+1. replacementFaceCount 可以大于 1。
+2. Gate 不以 replacementFaceCount > 1 作为失败。
+3. Gate 重点检查拓扑合法性、free edges、multiple edges、shell/solid 一致性和 STEP roundtrip。
+4. 如果 face count 没有下降，也不一定失败；先记录 warning，由后续优化策略决定。
+```
+
+验收：
+
+```text
+gate 失败返回清晰原因。
+report 可写入 JSON。
+gate 失败不允许 Command 提交。
+STEP roundtrip 失败时拒绝。
+multi-face replacement fragment 可进入 gate。
+```
+
+## T6.3 PatchReplacementCommand
 
 文件：
 
@@ -1633,27 +1824,28 @@ CMakeLists.txt
 任务：
 
 ```text
-1. 输入 candidate + imported patch，imported patch 必须来自当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
+1. 输入 PatchReplacementInput，imported patch 必须来自当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
 2. 不允许写死 data/crop_stp/local_candidate_0179_mechanical.stp 或任何固定 patch 路径。
 3. 保存 beforeDocument。
 4. 删除 / 替换 candidate source faces。
 5. 接入 BoundaryConstrainedPatchBuilder。
-6. 尝试 sewing / ShapeFix / SameParameter。
-7. 调用 StrictTopologyGate。
-8. Gate 成功才提交 afterDocument。
-9. Gate 失败 rollback。
-10. 支持 undo/redo。
-11. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
+6. 支持 multi-face replacement fragment。
+7. 尝试 sewing / ShapeFix / SameParameter。
+8. 调用 StrictTopologyGate。
+9. Gate 成功才提交 afterDocument。
+10. Gate 失败 rollback。
+11. 支持 undo/redo。
+12. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
 ```
 
 限制：
 
 ```text
-只处理单 closed outer wire。
-无 holes。
-不处理复杂多 patch。
-不处理 boundary 自交。
-不处理跨 shell candidate。
+第一版只处理单 closed outer wire candidate。
+第一版不处理 holes。
+第一版不处理 boundary 自交。
+第一版不处理跨 shell candidate。
+但第一版必须处理 multi-face imported patch，不能把 multi-face 归类为 unsupported。
 ```
 
 验收：
@@ -1663,9 +1855,10 @@ CMakeLists.txt
 gate 失败不改变 document。
 redo 不重新运行 Geomagic。
 失败报告包含 rollback_applied=true。
+multi-face patch replacement path 至少有 synthetic test 覆盖。
 ```
 
-## T6.3 Sewing / ShapeFix 集成
+## T6.4 Sewing / ShapeFix 集成
 
 文件：
 
@@ -1685,46 +1878,22 @@ src/validate/StrictTopologyGate.cpp
 - 可选 BRepBuilderAPI_Sewing
 ```
 
+multi-face 要求：
+
+```text
+1. sewing 必须允许 replacement fragment 内部存在多张 patch faces。
+2. 内部 seam 不应被当作 free edge 直接判错。
+3. 只有 replacement fragment 与周围原模型连接处产生新的 free edge / multiple edge 时，才应由 Gate 拒绝。
+4. sewing 前后必须记录 face/edge/shell/solid 统计。
+```
+
 验收：
 
 ```text
 替换后如果 free edge 增加，Gate 拒绝。
 sewing 成功但 BRepCheck 失败，Gate 拒绝。
-sewing 后 solid count 改变，Gate 拒绝。
-```
-
-## T6.4 StrictTopologyGate 最小可用版
-
-文件：
-
-```text
-src/validate/StrictTopologyGate.h
-src/validate/StrictTopologyGate.cpp
-tests/test_strict_topology_gate.cpp
-CMakeLists.txt
-```
-
-检查：
-
-```text
-BRepCheck。
-free edge 不增加。
-multiple edge 不增加。
-solid count 不变。
-shell closure。
-bbox 异常。
-STEP export。
-STEP roundtrip。
-source face count > patch face count 或局部 face count 减少。
-```
-
-验收：
-
-```text
-gate 失败返回清晰原因。
-report 可写入 JSON。
-gate 失败不允许 Command 提交。
-STEP roundtrip 失败时拒绝。
+sewing 后 solid count 非预期改变，Gate 拒绝。
+multi-face patch 内部 seam 可保留。
 ```
 
 ## T6.5 AppController / GUI 接入 Apply 流程
@@ -1752,6 +1921,9 @@ selected candidate
 → check PreviewReady
 → check boundary analysis
 → check imported patch
+→ build PatchReplacementInput
+→ MultiFacePatchAnalyzer
+→ BoundaryConstrainedPatchBuilder
 → PatchReplacementCommand
 → StrictTopologyGate
 → report
@@ -1764,9 +1936,9 @@ selected candidate
 单候选区域可以从 GUI 完成真实贴回。
 失败时日志可复盘。
 成功后模型更新且 undo/redo 可用。
+multi-face patch 可进入真实 Apply 流程。
 ```
 
----
 
 # P1：workspace 与日志规范
 
@@ -1790,6 +1962,8 @@ workspace/session_YYYYMMDD_HHMMSS/region_0001/
     patch_artifact_report.json
     patch_import_report.json
     patch_preview_report.json
+    patch_apply_state.json
+    multiface_patch_analysis.json
     replacement_report.json
     validation_report.json
 ```
@@ -1831,6 +2005,7 @@ RunningGeomagic
 ImportingPatch
 PreviewReady
 ApplyPending
+AnalyzingPatch
 Replacing
 Validating
 Applied
@@ -1843,7 +2018,7 @@ Cancelled
 
 ```text
 成功路径状态顺序正确：
-Pending → AnalyzingBoundary → CroppingStl → RunningGeomagic → ImportingPatch → PreviewReady → ApplyPending → Replacing → Validating → Applied。
+Pending → AnalyzingBoundary → CroppingStl → RunningGeomagic → ImportingPatch → PreviewReady → ApplyPending → AnalyzingPatch → Replacing → Validating → Applied。
 失败路径进入 Failed 或 Rejected。
 Cancelled 不继续执行后续阶段。
 redo 不重新运行 Geomagic。
@@ -1967,5 +2142,6 @@ src/gui/LogPanel.cpp
 9. 不删除 Plane/Sphere 旧代码，只保留为 experimental / baseline。
 10. 不把真实 Geomagic 调用加入自动单元测试。
 11. 不让 redo 重新运行 Geomagic。
+12. 不把 T6 设计成只支持 one-face patch；multi-face / complex patch 必须作为主路径。
 12. 不在生产逻辑中写死 `local_candidate_0179_mechanical.stp` 或任何当前样例路径。
 ```

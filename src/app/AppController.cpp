@@ -122,11 +122,19 @@ Result AppController::execute(std::unique_ptr<Command> command) {
 }
 
 Result AppController::undo() {
-    return history_.undo(context_);
+    const auto result = history_.undo(context_);
+    if (result.success()) {
+        clearCurrentPatchOverlay();
+    }
+    return result;
 }
 
 Result AppController::redo() {
-    return history_.redo(context_);
+    const auto result = history_.redo(context_);
+    if (result.success()) {
+        clearCurrentPatchOverlay();
+    }
+    return result;
 }
 
 bool AppController::canUndo() const {
@@ -337,7 +345,11 @@ SameDomainUnifyResult AppController::unifySameDomain(
     if (!status.success()) {
         return {};
     }
-    return commandPtr->result();
+    const auto result = commandPtr->result();
+    if (result.document.hasShape()) {
+        clearCurrentPatchOverlay();
+    }
+    return result;
 }
 
 RegionMergeResult AppController::mergePlaneCandidate(
@@ -348,6 +360,9 @@ RegionMergeResult AppController::mergePlaneCandidate(
     const auto status = execute(std::move(command));
     if (!status.success()) {
         return result;
+    }
+    if (result.success) {
+        clearCurrentPatchOverlay();
     }
     return result;
 }
@@ -361,6 +376,9 @@ RegionMergeResult AppController::mergePlaneCandidates(
     if (!status.success()) {
         return result;
     }
+    if (result.success) {
+        clearCurrentPatchOverlay();
+    }
     return result;
 }
 
@@ -373,6 +391,9 @@ RegionMergeResult AppController::mergeSphereCandidate(
     if (!status.success()) {
         return result;
     }
+    if (result.success) {
+        clearCurrentPatchOverlay();
+    }
     return result;
 }
 
@@ -384,6 +405,9 @@ RegionMergeResult AppController::mergeSphereCandidates(
     const auto status = execute(std::move(command));
     if (!status.success()) {
         return result;
+    }
+    if (result.success) {
+        clearCurrentPatchOverlay();
     }
     return result;
 }
