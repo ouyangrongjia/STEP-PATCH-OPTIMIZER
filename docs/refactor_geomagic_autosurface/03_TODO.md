@@ -1591,8 +1591,8 @@ T6 推进顺序：
 ```text
 T5.4.1 stale patch state cleanup（DONE）
 → T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer（DONE）
+→ T6.2 StrictTopologyGate 最小可用版（DONE，提前于 T6.1 落地）
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
-→ T6.2 StrictTopologyGate 最小可用版
 → T6.3 PatchReplacementCommand
 → T6.4 Sewing / ShapeFix / SameParameter 集成
 → T6.5 AppController / GUI 接入真实 Apply
@@ -1786,6 +1786,14 @@ imported patch 无 face 时失败。
 
 > StrictTopologyGate 应提前于 PatchReplacementCommand 落地。只要 T6 开始修改模型，就必须先有 gate，否则真实替换失败很难回滚和定位。
 
+状态：
+
+```text
+已完成。
+本阶段实现 StrictTopologyGate 最小可用版，并按更稳推进顺序提前于 T6.1 / PatchReplacementCommand 落地。
+Gate 只评估 before/after ShapeDocument 与 replacement report，不修改 ShapeDocument，不构造 replacement，不调用 Geomagic，不重新裁剪 STL。
+```
+
 文件：
 
 ```text
@@ -1793,39 +1801,47 @@ src/validate/StrictTopologyGate.h
 src/validate/StrictTopologyGate.cpp
 tests/test_strict_topology_gate.cpp
 CMakeLists.txt
+tests/test_validation.cpp
 ```
 
 检查：
 
 ```text
-BRepCheck。
-free edge 不增加。
-multiple edge 不增加。
-solid count 不变或符合 explicit fragment replacement 规则。
-shell closure。
-bbox 异常。
-STEP export。
-STEP roundtrip。
-source face count 与 replacement face count 记录，但 replacement face count > 1 不是失败条件。
+[x] beforeDocument / afterDocument 必须存在且有 shape。
+[x] afterDocument 必须通过 BRepCheck。
+[x] after free edge 不得比 before 增加。
+[x] after multiple edge 不得比 before 增加。
+[x] solid count 默认必须不变。
+[x] before 有 shell 时 after shell count 不能变成 0。
+[x] before/after bbox 必须有效，且 after bbox 不能相对 before 异常偏移或缩放。
+[x] requireStepRoundtrip=true 时必须 STEP export 成功并 readback 通过 BRepCheck。
+[x] source face count 与 replacement face count 记录，但 replacement face count > 1 不是失败条件。
 ```
 
 multi-face 规则：
 
 ```text
-1. replacementFaceCount 可以大于 1。
-2. Gate 不以 replacementFaceCount > 1 作为失败。
-3. Gate 重点检查拓扑合法性、free edges、multiple edges、shell/solid 一致性和 STEP roundtrip。
-4. 如果 face count 没有下降，也不一定失败；先记录 warning，由后续优化策略决定。
+[x] replacementFaceCount 可以大于 1。
+[x] Gate 不以 replacementFaceCount > 1 作为失败。
+[x] replacementFaceCount > 1 时设置 multiFaceReplacement=true，并记录 warning。
+[x] Gate 重点检查拓扑合法性、free edges、multiple edges、shell/solid 一致性和 STEP roundtrip。
+[x] 如果 face count 没有下降，不失败，只记录 warning，由后续优化策略决定。
 ```
 
 验收：
 
 ```text
-gate 失败返回清晰原因。
-report 可写入 JSON。
-gate 失败不允许 Command 提交。
-STEP roundtrip 失败时拒绝。
-multi-face replacement fragment 可进入 gate。
+[x] gate 失败返回清晰 reason/message。
+[x] report 结构包含 before/after stats、free/multiple edge、BRepCheck、STEP export/roundtrip 和 replacementFaceCount。
+[x] gate 失败不允许后续 Command 提交。
+[x] STEP roundtrip 失败时拒绝。
+[x] multi-face replacement fragment 可进入 gate。
+[x] identical valid box passes。
+[x] missing after shape fails。
+[x] free edge increase fails。
+[x] multi-face replacement accepted。
+[x] face count not reduced only warns。
+[x] valid box export + roundtrip passes。
 ```
 
 ## T6.3 PatchReplacementCommand

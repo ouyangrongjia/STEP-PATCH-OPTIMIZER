@@ -612,6 +612,10 @@ T6.0 已完成 replacement 前置输入与 imported patch 拓扑分析。
 当前可以在真正 replacement 前统一校验 document、candidate、boundary、imported patch 和 preview report。
 MultiFacePatchAnalyzer 已支持 TopoDS_Face / TopoDS_Shell / TopoDS_Solid / TopoDS_Compound 形态下的 one-face 与 multi-face patch。
 patchFaceCount > 1 不作为失败条件；multi-face patch 是后续 T6.1 replacement fragment 的主路径输入。
+T6.2 已完成 StrictTopologyGate 最小可用版，并提前于 T6.1 / PatchReplacementCommand 落地。
+StrictTopologyGate 检查 after BRepCheck、free/multiple edge 增量、solid/shell 一致性、bbox、STEP export 和 STEP roundtrip。
+replacementFaceCount > 1 不作为失败条件；multi-face replacement 只记录 multiFaceReplacement 和 warning。
+Gate 本身不修改 ShapeDocument，不调用 Geomagic，不重新裁剪 STL。
 ```
 
 ```text

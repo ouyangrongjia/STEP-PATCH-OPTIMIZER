@@ -81,6 +81,7 @@ add_library(spo_core STATIC
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
     src/validate/ShapeValidator.cpp
+    src/validate/StrictTopologyGate.cpp
 )
 
 target_include_directories(spo_core PUBLIC "${SPO_INCLUDE_DIR}")
@@ -176,6 +177,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_preview_report.cpp
         tests/test_patch_apply_state.cpp
         tests/test_multiface_patch_analyzer.cpp
+        tests/test_strict_topology_gate.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
