@@ -130,6 +130,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 40. 仓库脚本已补齐：`scripts/verify_spo.ps1` 作为本地统一验证入口，`scripts/run_geomagic_patch.ps1` 作为手动复现 Geomagic patch 生成入口；`verify_spo.ps1` 会在 Geomagic/Patch 相关代码或仓库脚本变更但进度文档未同步时失败，避免后续遗漏文档同步。
 41. Geomagic AutoSurface T5.4 Patch Apply 状态机与按钮门控已完成：新增 `RegionPatchStatus` / `PatchApplyDecision`，GUI 新增“应用当前 Patch（T6 占位）”；只有 PreviewReady 且非 HighRisk、bbox/BRepCheck/face count 合法时允许请求 Apply。点击后仅进入 ApplyPending 并提示 T6 未实现，不修改 ShapeDocument，不执行 replacement / sewing / ShapeFix / StrictTopologyGate。
 42. Geomagic AutoSurface T5.4.1 patch preview 生命周期安全修正已完成：打开新 STEP、undo/redo 成功、旧 SameDomain/Plane/Sphere 合并成功修改主模型、GUI refreshDocumentViews 刷新主模型时会清空旧 patch preview 状态和 viewer overlay，避免旧 patch 被误用于新模型。
+43. Geomagic AutoSurface T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer 已完成：新增 `PatchReplacementInput` / `PatchReplacementReport` / `PatchReplacementFailureReason` / `MultiFacePatchAnalyzer`，在真实 replacement 前统一校验 document、candidate、boundary、imported patch 和 preview report，并分析 TopoDS_Face / Shell / Solid / Compound 形态下的 imported patch 多面片拓扑；`patchFaceCount > 1` 不作为失败条件，multi-face patch 标记为主路径输入；本阶段不修改 ShapeDocument，不实现 Command / GUI / sewing / ShapeFix / StrictTopologyGate。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -313,6 +314,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | PatchImportService 测试 | 已完成 | 覆盖 STEP/STP/IGS/IGES 导入、bbox/face/edge/BRepCheck 统计、从 Geomagic result 导入、失败不修改 ShapeDocument |
 | PatchImportService 真实文件测试 | 已完成 | 默认导入 data/crop_stp/data/crop_igs 中已有文件；`SPO_ENABLE_REAL_GEOMAGIC_TESTS=1` 时跑通真实 wrapCore.exe 链路 |
 | Patch Apply 状态机测试 | 已完成 | 覆盖 NotGenerated、ApplyBlocked、PreviewHighRisk、PreviewReady、multi-face 不阻塞、clear 重置、T6 占位 ApplyPending，以及 open STEP / undo / redo / SameDomain 合并后的旧 preview 清理 |
+| MultiFacePatchAnalyzer / PatchReplacement input validation 测试 | 已完成 | 覆盖 empty patch、one-face patch、multi-face box patch、compound patch、缺失输入、invalid boundary、multi-face accepted 和 highRisk rejected |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |

@@ -1590,7 +1590,7 @@ T6 推进顺序：
 
 ```text
 T5.4.1 stale patch state cleanup（DONE）
-→ T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer
+→ T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer（DONE）
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
 → T6.2 StrictTopologyGate 最小可用版
 → T6.3 PatchReplacementCommand
@@ -1599,6 +1599,14 @@ T5.4.1 stale patch state cleanup（DONE）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
+
+状态：
+
+```text
+已完成。
+本阶段只实现 PatchReplacementInput、PatchReplacementReport、validatePatchReplacementInput 和 MultiFacePatchAnalyzer。
+未构造 replacement，未修改 ShapeDocument，未接入 Command / GUI / StrictTopologyGate / sewing / ShapeFix。
+```
 
 文件：
 
@@ -1609,6 +1617,7 @@ src/patch/MultiFacePatchAnalyzer.h
 src/patch/MultiFacePatchAnalyzer.cpp
 tests/test_multiface_patch_analyzer.cpp
 CMakeLists.txt
+tests/test_validation.cpp
 ```
 
 目标：
@@ -1639,6 +1648,7 @@ struct MultiFacePatchAnalysis {
     int solidCount = 0;
 
     std::vector<TopoDS_Face> faces;
+    std::vector<TopoDS_Edge> edges;
     std::vector<TopoDS_Edge> outerEdges;
     std::vector<TopoDS_Edge> internalEdges;
 
@@ -1648,6 +1658,18 @@ struct MultiFacePatchAnalysis {
     bool isSingleFace = false;
     bool isMultiFace = false;
 };
+```
+
+当前实现：
+
+```text
+[x] PatchReplacementInput 只保存 const 指针输入：document / candidate / boundary / importedPatch / artifactPaths / previewReport。
+[x] PatchReplacementReport 记录 candidate/source 统计、patch 统计、replacement 统计、failureReason、message 和 warningMessage。
+[x] PatchReplacementFailureReason 已覆盖缺失输入、invalid boundary、preview not ready / high risk、import failed、empty patch shape、invalid BRep/bbox、no patch faces 等 T6.0 失败原因。
+[x] validatePatchReplacementInput 不要求 patchFaceCount == 1；patchFaceCount > 1 设置 usedMultiFacePatch=true 并允许继续。
+[x] MultiFacePatchAnalyzer 遍历 importedPatch.shape 中的 TopoDS_Face / TopoDS_Edge / TopoDS_Shell / TopoDS_Solid。
+[x] MultiFacePatchAnalysis 保存 faces 和 edges，并设置 bboxValid / brepCheckValid / hasAtLeastOneFace / isSingleFace / isMultiFace。
+[x] outerEdges / internalEdges 第一版按 edge usage count 粗分：被一个 face 使用为 outer，被两个及以上 face 使用为 internal。
 ```
 
 任务：
@@ -1665,12 +1687,14 @@ struct MultiFacePatchAnalysis {
 验收：
 
 ```text
-one-face patch 可分析成功。
-multi-face box / shell / Geomagic patch 可分析成功。
-empty patch 失败，reason 清楚。
-BRepCheck 失败时失败，reason 清楚。
-patchFaceCount > 1 不失败。
-输入缺失不崩溃。
+[x] one-face patch 可分析成功。
+[x] multi-face box patch 可分析成功。
+[x] compound patch 可分析成功。
+[x] empty patch 失败，message 清楚。
+[x] BRepCheck 失败时 input validation 失败，reason 清楚。
+[x] patchFaceCount > 1 不失败。
+[x] 输入缺失不崩溃。
+[x] highRisk preview 被拒绝。
 ```
 
 ## T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment

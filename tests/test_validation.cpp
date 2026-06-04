@@ -27,6 +27,7 @@ void run_patch_import_service_real_tests();
 void run_patch_artifact_locator_tests();
 void run_patch_preview_report_tests();
 void run_patch_apply_state_tests();
+void run_multiface_patch_analyzer_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -103,6 +104,7 @@ int main() {
     run_patch_artifact_locator_tests();
     run_patch_preview_report_tests();
     run_patch_apply_state_tests();
+    run_multiface_patch_analyzer_tests();
     run_validation_tests();
     return 0;
 }

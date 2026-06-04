@@ -604,6 +604,16 @@ Apply 仍需用户确认。
 
 ### MVP-C：Apply + Replacement
 
+当前实现状态：
+
+```text
+T6.0 已完成 replacement 前置输入与 imported patch 拓扑分析。
+已新增 PatchReplacementInput / PatchReplacementReport / MultiFacePatchAnalyzer。
+当前可以在真正 replacement 前统一校验 document、candidate、boundary、imported patch 和 preview report。
+MultiFacePatchAnalyzer 已支持 TopoDS_Face / TopoDS_Shell / TopoDS_Solid / TopoDS_Compound 形态下的 one-face 与 multi-face patch。
+patchFaceCount > 1 不作为失败条件；multi-face patch 是后续 T6.1 replacement fragment 的主路径输入。
+```
+
 ```text
 1. 对 PreviewReady candidate 点击 Apply。
 2. 执行 PatchReplacementCommand。
