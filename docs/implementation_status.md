@@ -132,6 +132,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 42. Geomagic AutoSurface T5.4.1 patch preview 生命周期安全修正已完成：打开新 STEP、undo/redo 成功、旧 SameDomain/Plane/Sphere 合并成功修改主模型、GUI refreshDocumentViews 刷新主模型时会清空旧 patch preview 状态和 viewer overlay，避免旧 patch 被误用于新模型。
 43. Geomagic AutoSurface T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer 已完成：新增 `PatchReplacementInput` / `PatchReplacementReport` / `PatchReplacementFailureReason` / `MultiFacePatchAnalyzer`，在真实 replacement 前统一校验 document、candidate、boundary、imported patch 和 preview report，并分析 TopoDS_Face / Shell / Solid / Compound 形态下的 imported patch 多面片拓扑；`patchFaceCount > 1` 不作为失败条件，multi-face patch 标记为主路径输入；本阶段不修改 ShapeDocument，不实现 Command / GUI / sewing / ShapeFix / StrictTopologyGate。
 44. Geomagic AutoSurface T6.2 StrictTopologyGate 最小可用版已完成：新增 `StrictTopologyGateInput` / `StrictTopologyGateReport` / `StrictTopologyFailureReason` / `StrictTopologyGate`，在 PatchReplacementCommand 提交前评估 before/after ShapeDocument；Gate 检查 after BRepCheck、free edge / multiple edge 增量、solid/shell 一致性、bbox、STEP export 和 STEP roundtrip；`replacementFaceCount > 1` 不作为失败条件，multi-face replacement 只记录 warning；本阶段不修改 ShapeDocument，不实现 PatchReplacementCommand / GUI / Geomagic 调用 / STL 重新裁剪。
+45. Geomagic AutoSurface T6.1 BoundaryConstrainedPatchBuilder 已完成：新增 `BoundaryConstrainedPatchBuilder` / `BoundaryConstrainedPatchBuildOptions` / `BoundaryConstrainedPatchBuildResult`，可基于 `PatchReplacementInput` 与 `MultiFacePatchAnalysis` 构造 one-face fragment 或 multi-face compound replacement fragment；multi-face patch 是主路径，不因 `patchFaceCount > 1` 返回 unsupported；内部 patch seam 会保留到 `internalPatchEdges`；boundary mismatch 只记录 warning，最终可提交性留给 StrictTopologyGate / 后续 sewing；本阶段不修改 ShapeDocument，不实现 Command / GUI / Geomagic 调用。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -317,6 +318,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | Patch Apply 状态机测试 | 已完成 | 覆盖 NotGenerated、ApplyBlocked、PreviewHighRisk、PreviewReady、multi-face 不阻塞、clear 重置、T6 占位 ApplyPending，以及 open STEP / undo / redo / SameDomain 合并后的旧 preview 清理 |
 | MultiFacePatchAnalyzer / PatchReplacement input validation 测试 | 已完成 | 覆盖 empty patch、one-face patch、multi-face box patch、compound patch、缺失输入、invalid boundary、multi-face accepted 和 highRisk rejected |
 | StrictTopologyGate 测试 | 已完成 | 覆盖 identical valid box、missing after shape、free edge increase、multi-face replacement accepted / disallowed、face count non-reduction warning、STEP export + roundtrip |
+| BoundaryConstrainedPatchBuilder 测试 | 已完成 | 覆盖 one-face fragment、multi-face box fragment、empty analysis、invalid boundary、synthetic patchFaceCount=12、internal seam retention 和 ShapeDocument 不变 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |

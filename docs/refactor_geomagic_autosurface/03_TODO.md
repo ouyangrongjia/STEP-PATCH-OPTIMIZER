@@ -1592,7 +1592,7 @@ T6 推进顺序：
 T5.4.1 stale patch state cleanup（DONE）
 → T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer（DONE）
 → T6.2 StrictTopologyGate 最小可用版（DONE，提前于 T6.1 落地）
-→ T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
+→ T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment（DONE）
 → T6.3 PatchReplacementCommand
 → T6.4 Sewing / ShapeFix / SameParameter 集成
 → T6.5 AppController / GUI 接入真实 Apply
@@ -1699,6 +1699,16 @@ struct MultiFacePatchAnalysis {
 
 ## T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
 
+状态：
+
+```text
+已完成。
+本阶段实现 BoundaryConstrainedPatchBuilder 最小可用版。
+multi-face patch 走主路径：从 MultiFacePatchAnalysis.faces 构造 replacement compound fragment，并保留 internal patch seams。
+one-face patch 走特例路径：直接复用 imported patch face 作为 replacement fragment，并记录后续仍需 StrictTopologyGate 验证的 warning。
+本阶段不修改 ShapeDocument，不创建 Command，不调用 Geomagic，不接入 GUI，不做 sewing / ShapeFix / final submit。
+```
+
 文件：
 
 ```text
@@ -1706,6 +1716,7 @@ src/patch/BoundaryConstrainedPatchBuilder.h
 src/patch/BoundaryConstrainedPatchBuilder.cpp
 tests/test_boundary_constrained_patch_builder.cpp
 CMakeLists.txt
+tests/test_validation.cpp
 ```
 
 输入：
@@ -1731,23 +1742,23 @@ CMakeLists.txt
 核心策略：
 
 ```text
-1. one-face patch 走简单 face surface replacement path。
-2. multi-face patch 走主路径：保留 Geomagic patch 的内部 face network，构造 replacement fragment。
-3. replacement fragment 的外部边界必须最终与原 STP candidate outer boundary 对齐或可 sewing。
-4. Geomagic patch 的外边界只作为辅助几何，不作为最终合法性依据。
-5. 不强制把 multi-face patch 合并为 1 张面。
-6. 不因为 patchFaceCount > 1 返回 unsupported。
-7. 如果无法在原 boundary 内构造可 sewing fragment，应返回明确失败原因，而不是 silent fallback。
+[x] one-face patch 走简单 face fragment special path。
+[x] multi-face patch 走主路径：保留 Geomagic patch 的内部 face network，构造 replacement compound fragment。
+[x] replacement fragment 的外部边界仍以原 STP candidate outer boundary 为参考。
+[x] Geomagic patch 的外边界只作为辅助几何，不作为最终合法性依据。
+[x] 不强制把 multi-face patch 合并为 1 张面。
+[x] 不因为 patchFaceCount > 1 返回 unsupported。
+[x] 如果输入或 boundary 不合法，返回明确失败原因，而不是 silent fallback。
 ```
 
 第一版允许的工程化策略：
 
 ```text
 A. 直接 multi-face fragment strategy：
-   - 提取 imported patch 的所有有效 faces。
-   - 根据 candidate bbox / patch bbox 过滤明显离群 faces。
-   - 构造 TopoDS_Compound 或 TopoDS_Shell 作为 replacement fragment。
-   - 保留 patch 内部边。
+   - [x] 提取 imported patch 的所有有效 faces。
+   - [x] 根据 candidate bbox / patch bbox 做基本 mismatch warning，不作为最终提交依据。
+   - [x] 构造 TopoDS_Compound 作为 replacement fragment。
+   - [x] 保留 patch 内部边。
    - 后续由 T6.4 sewing + T6.2 gate 判断是否可提交。
 
 B. Boundary bridge strategy：
@@ -1756,8 +1767,9 @@ B. Boundary bridge strategy：
    - 可以生成需要 sewing 的 replacement fragment，但不能直接提交；必须经过 StrictTopologyGate。
 
 C. one-face special strategy：
-   - 如果 imported patch 只有一个 face，可使用该 face surface 与原 boundary wire 构造 replacement face。
+   - [x] 如果 imported patch 只有一个 face，第一版直接使用该 face 作为 replacement fragment。
    - 这是特例，不是 T6 主假设。
+   - [x] 未重新 trim 时记录 warning，后续仍必须经过 StrictTopologyGate。
 ```
 
 明确不做：
@@ -1773,13 +1785,14 @@ C. one-face special strategy：
 验收：
 
 ```text
-one-face patch 可生成 replacement face 或 fragment。
-multi-face patch 可生成 replacement fragment，至少不因 faceCount>1 被拒绝。
-replacement fragment 保留内部 patch seam 信息。
-boundary invalid 时失败。
-imported patch 无 face 时失败。
-失败 reason 可读。
-不修改主 ShapeDocument。
+[x] one-face patch 可生成 replacement face 或 fragment。
+[x] multi-face box patch 可生成 replacement fragment，且不因 faceCount>1 被拒绝。
+[x] synthetic patchFaceCount=12 不因 multi-face 被拒绝。
+[x] replacement fragment 保留内部 patch seam 信息。
+[x] boundary invalid 时失败。
+[x] imported patch analysis 无 face 时失败。
+[x] 失败 reason/message 可读。
+[x] 不修改主 ShapeDocument。
 ```
 
 ## T6.2 StrictTopologyGate 最小可用版

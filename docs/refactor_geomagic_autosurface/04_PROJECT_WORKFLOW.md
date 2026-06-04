@@ -616,6 +616,9 @@ T6.2 已完成 StrictTopologyGate 最小可用版，并提前于 T6.1 / PatchRep
 StrictTopologyGate 检查 after BRepCheck、free/multiple edge 增量、solid/shell 一致性、bbox、STEP export 和 STEP roundtrip。
 replacementFaceCount > 1 不作为失败条件；multi-face replacement 只记录 multiFaceReplacement 和 warning。
 Gate 本身不修改 ShapeDocument，不调用 Geomagic，不重新裁剪 STL。
+T6.1 已完成 BoundaryConstrainedPatchBuilder 最小可用版。
+BoundaryConstrainedPatchBuilder 可从 MultiFacePatchAnalysis 构造 one-face fragment 或 multi-face compound replacement fragment，保留 internal patch seams，并仅把 boundary mismatch 作为 warning。
+Builder 本身不修改 ShapeDocument，不创建 Command，不接入 GUI，不调用 Geomagic。
 ```
 
 ```text

@@ -29,6 +29,7 @@ void run_patch_preview_report_tests();
 void run_patch_apply_state_tests();
 void run_multiface_patch_analyzer_tests();
 void run_strict_topology_gate_tests();
+void run_boundary_constrained_patch_builder_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -107,6 +108,7 @@ int main() {
     run_patch_apply_state_tests();
     run_multiface_patch_analyzer_tests();
     run_strict_topology_gate_tests();
+    run_boundary_constrained_patch_builder_tests();
     run_validation_tests();
     return 0;
 }
