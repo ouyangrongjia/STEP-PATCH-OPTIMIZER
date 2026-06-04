@@ -1,10 +1,10 @@
-# STEP-PATCH-OPTIMIZER 当前 TODO：Stage 3A-Fix → Stage 3A-Approx 路线调整版
+# STEP-PATCH-OPTIMIZER 当前 TODO：Geomagic AutoSurface → T6 replacement 路线
 
 > 文档定位：这是当前执行 TODO 文档，用于随开发进度持续更新、替换和勾选。  
 > 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
-> 当前阶段：`Stage 3A-Approx：B-spline backed planar-like rebuild`  
-> 更新时间：2026-05-27  
-> 当前判断：T1-T4 已形成安全底座；由于 Geomagic Wrap 输出的 STP 中几乎没有 OCCT 原生 `GeomAbs_Plane`，需要从“原生 Plane strict merge”转向“B-spline 近似平面重构”。
+> 当前阶段：Geomagic AutoSurface T6 前置准备；T5.4 / T5.4.1 已完成，下一步进入 T6.0 patch replacement 输入结构与 multi-face patch 分析。
+> 更新时间：2026-06-05
+> 当前判断：旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支；当前主线转向 `docs/refactor_geomagic_autosurface/03_TODO.md` 中的 Geomagic patch preview → T6 replacement 路线。
 
 ---
 

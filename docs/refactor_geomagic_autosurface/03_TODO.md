@@ -2,7 +2,7 @@
 
 > 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。
 
 ---
 
@@ -1514,8 +1514,8 @@ Apply 请求不会修改主模型，不会导出最终 STEP，不会调用 Geoma
 状态：
 
 ```text
-待实现。
-进入 T6 前必须补齐，防止旧 patch preview state 跨 STEP 文件、跨 undo/redo 或跨模型刷新残留。
+已完成。
+进入 T6 前已补齐，防止旧 patch preview state 跨 STEP 文件、跨 undo/redo、跨旧合并命令或跨模型刷新残留。
 ```
 
 文件：
@@ -1530,34 +1530,28 @@ tests/test_patch_apply_state.cpp 或 tests/test_commands.cpp
 任务：
 
 ```text
-1. 打开新 STEP 成功后，必须清除 viewer patch overlay 和 AppController patch state。
-2. refreshDocumentViews() 刷新主 ShapeDocument 后，必须清除 patch overlay 和 patch state。
-3. undo / redo 成功后，必须清除 patch overlay 和 patch state。
-4. 任意旧合并命令成功修改主 ShapeDocument 后，必须清除 patch overlay 和 patch state。
-5. 清除后 refreshPatchApplyAction()，Apply Patch 按钮必须禁用。
+[x] 打开新 STEP 成功后，清除 viewer patch overlay 和 AppController patch state。
+[x] refreshDocumentViews() 刷新主 ShapeDocument 时，清除 patch overlay 和 patch state。
+[x] undo / redo 成功后，清除 patch overlay 和 patch state。
+[x] 旧 SameDomain / Plane / Sphere 合并命令成功修改主 ShapeDocument 后，清除 patch overlay 和 patch state。
+[x] 清除后 refreshPatchApplyAction()，Apply Patch 按钮禁用。
 ```
 
-建议新增 helper：
-
-```cpp
-void MainWindow::clearPatchPreviewStateOnly();
-```
-
-语义：
+当前实现：
 
 ```text
-viewer_->clearPatchOverlay();
-controller_.clearCurrentPatchOverlay();
-refreshPatchApplyAction();
+1. AppController 在 openStepFile / undo / redo / 旧合并命令成功后清理 current patch state。
+2. MainWindow::refreshDocumentViews() 刷新主模型时清理 viewer overlay 和 controller patch state。
+3. 清理后刷新 Patch Apply 按钮门控。
 ```
 
 验收：
 
 ```text
-打开新 STEP 后 patchPreviewReady=false，currentPatchStatus=NotGenerated。
-undo / redo 后 patchPreviewReady=false，Apply Patch 按钮禁用。
-旧 patch 不可能被用于新 ShapeDocument 的 T6 replacement。
-清理逻辑不删除 data/crop_stp / data/crop_stl 文件，只清理当前 UI/controller 状态。
+[x] 打开新 STEP 后 patchPreviewReady=false，currentPatchStatus=NotGenerated。
+[x] undo / redo 后 patchPreviewReady=false，Apply Patch 按钮禁用。
+[x] 旧 patch 不可能被用于新 ShapeDocument 的 T6 replacement。
+[x] 清理逻辑不删除 data/crop_stp / data/crop_stl 文件，只清理当前 UI/controller 状态。
 ```
 
 ---
@@ -1595,7 +1589,7 @@ undo / redo 后 patchPreviewReady=false，Apply Patch 按钮禁用。
 T6 推进顺序：
 
 ```text
-T5.4.1 stale patch state cleanup
+T5.4.1 stale patch state cleanup（DONE）
 → T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment
 → T6.2 StrictTopologyGate 最小可用版
