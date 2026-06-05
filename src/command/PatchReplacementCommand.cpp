@@ -4,9 +4,17 @@
 #include "patch/BoundaryConstrainedPatchBuilder.h"
 #include "patch/MultiFacePatchAnalyzer.h"
 #include "validate/StrictTopologyGate.h"
+#include "validate/ShapeValidator.h"
 
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepLib.hxx>
+#include <BRepTools_ReShape.hxx>
+#include <ShapeFix_Face.hxx>
+#include <ShapeFix_Wire.hxx>
+#include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 
 #include <string>
 #include <utility>
@@ -61,6 +69,247 @@ std::string gate_failure_message(const StrictTopologyGateReport& gateReport) {
         message += gateReport.message;
     }
     return message;
+}
+
+std::string occt_message(const Standard_Failure& error) {
+    const auto* message = error.GetMessageString();
+    if (message == nullptr || std::string(message).empty()) {
+        return "unknown OCCT failure";
+    }
+    return message;
+}
+
+void append_repair_warning(PatchReplacementRepairReport& report, const std::string& warning) {
+    if (warning.empty()) {
+        return;
+    }
+    if (!report.warningMessage.empty()) {
+        report.warningMessage += " ";
+    }
+    report.warningMessage += warning;
+}
+
+void capture_repair_stats(
+    const TopoDS_Shape& shape,
+    int& faceCount,
+    int& edgeCount,
+    int& shellCount,
+    int& solidCount,
+    int& freeEdges,
+    int& multipleEdges) {
+    const ShapeDocument document(shape, {});
+    const auto validation = ShapeValidator().validate(document);
+    faceCount = validation.stats.faces;
+    edgeCount = validation.stats.edges;
+    shellCount = validation.stats.shells;
+    solidCount = validation.stats.solids;
+    freeEdges = validation.free_edges;
+    multipleEdges = validation.multiple_edges;
+}
+
+struct ReplacementAssemblyResult {
+    bool success = false;
+    TopoDS_Shape shape;
+    std::string message;
+};
+
+ReplacementAssemblyResult assemble_replacement_shape(
+    const ShapeDocument& beforeDocument,
+    const BoundaryConstrainedPatchBuildResult& buildResult) {
+    ReplacementAssemblyResult result;
+    if (!beforeDocument.hasShape()) {
+        result.message = "Patch replacement assembly requires a before document.";
+        return result;
+    }
+    if (buildResult.replacementShape.IsNull()) {
+        result.message = "Patch replacement assembly requires a non-empty replacement shape.";
+        return result;
+    }
+    if (buildResult.sourceFaceIds.empty()) {
+        result.message = "Patch replacement assembly requires source faces.";
+        return result;
+    }
+
+    BRepTools_ReShape reshaper;
+    const auto& topology = beforeDocument.topology();
+    bool replacedFirstFace = false;
+    for (const auto faceId : buildResult.sourceFaceIds) {
+        if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
+            result.message = "Patch replacement assembly source face id is out of range.";
+            return result;
+        }
+        const auto& sourceFace = topology.face(faceId);
+        if (!replacedFirstFace) {
+            reshaper.Replace(sourceFace, buildResult.replacementShape);
+            replacedFirstFace = true;
+        } else {
+            reshaper.Remove(sourceFace);
+        }
+    }
+
+    result.shape = reshaper.Apply(beforeDocument.shape());
+    if (result.shape.IsNull()) {
+        result.message = "Patch replacement assembly produced an empty shape.";
+        return result;
+    }
+    result.success = true;
+    result.message = "Assembled replacement shape with BRepTools_ReShape.";
+    return result;
+}
+
+void run_shape_fix_wire(const TopoDS_Shape& shape, double tolerance) {
+    for (TopExp_Explorer faceExplorer(shape, TopAbs_FACE); faceExplorer.More(); faceExplorer.Next()) {
+        const auto face = TopoDS::Face(faceExplorer.Current());
+        for (TopExp_Explorer wireExplorer(face, TopAbs_WIRE); wireExplorer.More(); wireExplorer.Next()) {
+            ShapeFix_Wire wireFixer;
+            wireFixer.Load(TopoDS::Wire(wireExplorer.Current()));
+            wireFixer.SetFace(face);
+            wireFixer.SetPrecision(tolerance);
+            wireFixer.FixReorder();
+            wireFixer.FixConnected();
+            wireFixer.FixClosed();
+        }
+    }
+}
+
+TopoDS_Shape run_shape_fix_face(const TopoDS_Shape& shape, double tolerance) {
+    BRepTools_ReShape reshaper;
+    bool replacedAnyFace = false;
+    for (TopExp_Explorer explorer(shape, TopAbs_FACE); explorer.More(); explorer.Next()) {
+        const auto face = TopoDS::Face(explorer.Current());
+        ShapeFix_Face faceFixer(face);
+        faceFixer.SetPrecision(tolerance);
+        faceFixer.Perform();
+        const auto fixedFace = faceFixer.Face();
+        if (!fixedFace.IsNull()) {
+            reshaper.Replace(face, fixedFace);
+            replacedAnyFace = true;
+        }
+    }
+    if (!replacedAnyFace) {
+        return shape;
+    }
+    auto fixedShape = reshaper.Apply(shape);
+    return fixedShape.IsNull() ? shape : fixedShape;
+}
+
+bool should_adopt_sewed_shape(const TopoDS_Shape& beforeSewing, const TopoDS_Shape& sewedShape) {
+    if (sewedShape.IsNull()) {
+        return false;
+    }
+    const ShapeDocument beforeDocument(beforeSewing, {});
+    const ShapeDocument sewedDocument(sewedShape, {});
+    if (beforeDocument.stats().solids > 0 && sewedDocument.stats().solids < beforeDocument.stats().solids) {
+        return false;
+    }
+    return sewedDocument.hasShape() && sewedDocument.stats().faces > 0;
+}
+
+struct RepairPipelineResult {
+    bool success = false;
+    TopoDS_Shape shape;
+    PatchReplacementRepairReport report;
+};
+
+RepairPipelineResult repair_replacement_shape(
+    const TopoDS_Shape& inputShape,
+    const PatchReplacementRepairOptions& options) {
+    RepairPipelineResult result;
+    result.shape = inputShape;
+    if (inputShape.IsNull()) {
+        result.report.message = "Repair pipeline requires a non-empty shape.";
+        return result;
+    }
+
+    try {
+        capture_repair_stats(
+            result.shape,
+            result.report.faceCountBeforeRepair,
+            result.report.edgeCountBeforeRepair,
+            result.report.shellCountBeforeRepair,
+            result.report.solidCountBeforeRepair,
+            result.report.freeEdgesBeforeRepair,
+            result.report.multipleEdgesBeforeRepair);
+
+        if (options.runSameParameter) {
+            BRepLib::SameParameter(result.shape, options.sewingTolerance, Standard_True);
+            result.report.sameParameterApplied = true;
+        }
+        if (options.runShapeFixWire) {
+            run_shape_fix_wire(result.shape, options.sewingTolerance);
+            result.report.shapeFixWireApplied = true;
+        }
+        if (options.runShapeFixFace) {
+            result.shape = run_shape_fix_face(result.shape, options.sewingTolerance);
+            result.report.shapeFixFaceApplied = true;
+        }
+        if (options.runSewing) {
+            BRepBuilderAPI_Sewing sewing(options.sewingTolerance);
+            sewing.Add(result.shape);
+            sewing.Perform();
+            const auto sewedShape = sewing.SewedShape();
+            result.report.sewingApplied = true;
+            if (should_adopt_sewed_shape(result.shape, sewedShape)) {
+                result.shape = sewedShape;
+            } else {
+                append_repair_warning(result.report, "Sewing result was not adopted because it was empty or lost solid topology.");
+            }
+        }
+
+        capture_repair_stats(
+            result.shape,
+            result.report.faceCountAfterRepair,
+            result.report.edgeCountAfterRepair,
+            result.report.shellCountAfterRepair,
+            result.report.solidCountAfterRepair,
+            result.report.freeEdgesAfterRepair,
+            result.report.multipleEdgesAfterRepair);
+
+        result.success = !result.shape.IsNull();
+        result.report.success = result.success;
+        result.report.message = result.success
+            ? "Patch replacement repair pipeline completed."
+            : "Patch replacement repair pipeline produced an empty shape.";
+        return result;
+    } catch (const Standard_Failure& error) {
+        result.report.message = std::string("Patch replacement repair pipeline failed: ") + occt_message(error);
+    } catch (const std::exception& error) {
+        result.report.message = std::string("Patch replacement repair pipeline failed: ") + error.what();
+    } catch (...) {
+        result.report.message = "Patch replacement repair pipeline failed: unknown exception.";
+    }
+
+    result.success = false;
+    result.report.success = false;
+    return result;
+}
+
+void copy_repair_report(
+    PatchReplacementReport& report,
+    const PatchReplacementRepairReport& repairReport) {
+    report.repairApplied = true;
+    report.sameParameterApplied = repairReport.sameParameterApplied;
+    report.shapeFixFaceApplied = repairReport.shapeFixFaceApplied;
+    report.shapeFixWireApplied = repairReport.shapeFixWireApplied;
+    report.shapeFixApplied = report.shapeFixFaceApplied || report.shapeFixWireApplied;
+    report.sewingApplied = repairReport.sewingApplied;
+    report.repairRunCount += 1;
+
+    report.faceCountBeforeRepair = repairReport.faceCountBeforeRepair;
+    report.edgeCountBeforeRepair = repairReport.edgeCountBeforeRepair;
+    report.shellCountBeforeRepair = repairReport.shellCountBeforeRepair;
+    report.solidCountBeforeRepair = repairReport.solidCountBeforeRepair;
+    report.faceCountAfterRepair = repairReport.faceCountAfterRepair;
+    report.edgeCountAfterRepair = repairReport.edgeCountAfterRepair;
+    report.shellCountAfterRepair = repairReport.shellCountAfterRepair;
+    report.solidCountAfterRepair = repairReport.solidCountAfterRepair;
+
+    report.freeEdgesBeforeRepair = repairReport.freeEdgesBeforeRepair;
+    report.freeEdgesAfterRepair = repairReport.freeEdgesAfterRepair;
+    report.multipleEdgesBeforeRepair = repairReport.multipleEdgesBeforeRepair;
+    report.multipleEdgesAfterRepair = repairReport.multipleEdgesAfterRepair;
+    report.repairWarningMessage = repairReport.warningMessage;
+    append_warning(report, repairReport.warningMessage);
 }
 
 }
@@ -157,14 +406,31 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
         return Result::error(report_.message);
     }
 
-    afterDocument_ = ShapeDocument(input_.importedPatch->shape, beforeDocument_.sourcePath());
-    append_warning(
-        report_,
-        "T6.3 uses the imported patch top-level shape as a gated afterDocument candidate; source-face deletion, sewing, ShapeFix, and SameParameter are deferred.");
+    const auto assemblyResult = assemble_replacement_shape(beforeDocument_, buildResult);
+    if (!assemblyResult.success) {
+        report_.success = false;
+        report_.failureReason = PatchReplacementFailureReason::BuildFailed;
+        report_.message = assemblyResult.message;
+        publishReport();
+        return Result::error(report_.message);
+    }
+    report_.sourceFacesReplaced = true;
+
+    const auto repairResult = repair_replacement_shape(assemblyResult.shape, PatchReplacementRepairOptions {});
+    copy_repair_report(report_, repairResult.report);
+    if (!repairResult.success) {
+        report_.success = false;
+        report_.failureReason = PatchReplacementFailureReason::BuildFailed;
+        report_.message = repairResult.report.message;
+        publishReport();
+        return Result::error(report_.message);
+    }
+
+    afterDocument_ = ShapeDocument(repairResult.shape, beforeDocument_.sourcePath());
     if (!afterDocument_.hasShape()) {
         report_.success = false;
         report_.failureReason = PatchReplacementFailureReason::BuildFailed;
-        report_.message = "Patch replacement command did not construct an after document.";
+        report_.message = "Patch replacement command did not construct an after document after repair.";
         publishReport();
         return Result::error(report_.message);
     }

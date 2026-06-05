@@ -1594,7 +1594,7 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.2 StrictTopologyGate 最小可用版（DONE，提前于 T6.1 落地）
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment（DONE）
 → T6.3 PatchReplacementCommand（DONE，最小可用 Command 管线）
-→ T6.4 Sewing / ShapeFix / SameParameter 集成
+→ T6.4 Sewing / ShapeFix / SameParameter 集成（DONE，最小 repair + gate 管线）
 → T6.5 AppController / GUI 接入真实 Apply
 ```
 
@@ -1922,40 +1922,65 @@ tests/test_validation.cpp
 
 ## T6.4 Sewing / ShapeFix 集成
 
+状态：
+
+```text
+已完成最小可用版。
+PatchReplacementCommand 现在在 BoundaryConstrainedPatchBuilder 构造 replacement fragment 后，使用 BRepTools_ReShape 对 candidate source faces 执行真实替换尝试：第一个 source face Replace 为 replacementShape，其余 source faces Remove。
+replacementShape 可以是 Face / Compound / Shell；multi-face compound fragment 不作为 unsupported。
+随后对临时 after shape 执行 repair pipeline：BRepLib::SameParameter、ShapeFix_Wire、ShapeFix_Face、BRepBuilderAPI_Sewing。
+repair 前后记录 face/edge/shell/solid、free edge、multiple edge 统计，并写入 PatchReplacementReport。
+StrictTopologyGate 仍是最终提交门：Gate passed 才提交 afterDocument，Gate failed 必须 rollback，主 ShapeDocument 不变。
+redo 仍只复用缓存 afterDocument，不重新运行 Geomagic、不重新裁剪 STL、不重新读取 patch、不重新运行 repair pipeline。
+本阶段不接 GUI，不调用 Geomagic，不读取固定 patch 路径，不绕过用户确认，不把 STL crop boundary 或 Geomagic patch outer boundary 当作最终 CAD boundary。
+```
+
 文件：
 
 ```text
-src/patch/BoundaryConstrainedPatchBuilder.cpp
+src/patch/PatchReplacementReport.h
+src/command/PatchReplacementCommand.h
 src/command/PatchReplacementCommand.cpp
-src/validate/StrictTopologyGate.cpp
+tests/test_patch_replacement_command.cpp
+CMakeLists.txt
+tests/test_validation.cpp
 ```
 
 任务：
 
 ```text
 对替换后的临时 shape 执行必要修复：
-- BRepLib::SameParameter
-- ShapeFix_Face
-- ShapeFix_Wire
-- 可选 BRepBuilderAPI_Sewing
+- [x] BRepTools_ReShape 替换第一个 candidate source face，并移除其余 source faces。
+- [x] BRepLib::SameParameter。
+- [x] ShapeFix_Wire 遍历 after shape 中的 wires。
+- [x] ShapeFix_Face 遍历 after shape 中的 faces，并通过 ReShape 写回 fixed face。
+- [x] BRepBuilderAPI_Sewing 尝试 sewing；如果 sewing 结果为空或丢失 solid 拓扑，则记录 warning 并保留 pre-sewing shape。
+- [x] repair 前后统计写入 PatchReplacementReport。
+- [x] StrictTopologyGate passed 才提交 afterDocument。
+- [x] StrictTopologyGate failed 时 rollback。
 ```
 
 multi-face 要求：
 
 ```text
-1. sewing 必须允许 replacement fragment 内部存在多张 patch faces。
-2. 内部 seam 不应被当作 free edge 直接判错。
-3. 只有 replacement fragment 与周围原模型连接处产生新的 free edge / multiple edge 时，才应由 Gate 拒绝。
-4. sewing 前后必须记录 face/edge/shell/solid 统计。
+1. [x] sewing / repair 允许 replacement fragment 内部存在多张 patch faces。
+2. [x] 内部 seam 不作为 unsupported；PatchReplacementCommand 不因为 internalEdges 或 patchFaceCount > 1 失败。
+3. [x] replacement fragment 与周围原模型连接后若产生新的 free edge / multiple edge，由 StrictTopologyGate 拒绝。
+4. [x] repair 前后记录 face/edge/shell/solid、free edge、multiple edge 统计。
 ```
 
 验收：
 
 ```text
-替换后如果 free edge 增加，Gate 拒绝。
-sewing 成功但 BRepCheck 失败，Gate 拒绝。
-sewing 后 solid count 非预期改变，Gate 拒绝。
-multi-face patch 内部 seam 可保留。
+[x] invalid input 失败且不修改 document。
+[x] multi-face patch 仍不作为 unsupported。
+[x] repair pipeline 在最小成功路径中被调用，并记录 SameParameter / ShapeFix / Sewing 字段。
+[x] undo/redo 正常；redo 不重新运行 repair pipeline。
+[x] repair 后 Gate 失败 rollback。
+[x] 替换后如果 free edge 增加，Gate 拒绝，主 document 不变。
+[x] sewing / repair 后 BRepCheck、solid/shell、bbox、STEP roundtrip 仍由 StrictTopologyGate 最终判断。
+[x] multi-face patch 内部 seam 可保留，不作为 unsupported。
+[x] production command source 不包含当前真实样例固定 patch 文件名。
 ```
 
 ## T6.5 AppController / GUI 接入 Apply 流程

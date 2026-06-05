@@ -10,11 +10,16 @@
 #include "patch/PatchReplacementReport.h"
 
 #include <BRepBndLib.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <Bnd_Box.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Pnt.hxx>
 
 #include <cassert>
 #include <filesystem>
@@ -26,6 +31,20 @@ namespace {
 
 TopoDS_Shape make_box(double size = 10.0) {
     return BRepPrimAPI_MakeBox(size, size, size).Shape();
+}
+
+TopoDS_Face make_open_face(double size = 10.0) {
+    const gp_Pnt p00(0.0, 0.0, 0.0);
+    const gp_Pnt p10(size, 0.0, 0.0);
+    const gp_Pnt p11(size, size, 0.0);
+    const gp_Pnt p01(0.0, size, 0.0);
+
+    BRepBuilderAPI_MakeWire wire;
+    wire.Add(BRepBuilderAPI_MakeEdge(p00, p10).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p10, p11).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p11, p01).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p01, p00).Edge());
+    return BRepBuilderAPI_MakeFace(wire.Wire()).Face();
 }
 
 bool same_stats(const spo::ShapeStats& lhs, const spo::ShapeStats& rhs) {
@@ -135,6 +154,16 @@ struct CommandFixture {
         input.previewReport = &preview;
         return input;
     }
+
+    void set_patch(const TopoDS_Shape& patchShape) {
+        imported = imported_patch(patchShape);
+        preview.patchFaceCount = imported.faceCount;
+        preview.patchEdgeCount = imported.edgeCount;
+        preview.patchShellCount = imported.shellCount;
+        preview.patchSolidCount = imported.solidCount;
+        preview.patchBRepCheckValid = true;
+        preview.patchBboxValid = imported.bboxValid;
+    }
 };
 
 void assert_invalid_input_does_not_mutate(
@@ -227,8 +256,11 @@ void test_gate_failure_rolls_back() {
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
-void test_successful_path_supports_undo_redo_without_reimport() {
+void test_repair_pipeline_invoked_on_successful_minimal_path() {
     CommandFixture fixture(make_box(10.0));
+    fixture.candidate.faces = {0};
+    fixture.candidate.face_count = 1;
+    fixture.set_patch(fixture.inputDocument.topology().face(0));
     const auto beforeStats = fixture.context.document.stats();
     spo::PatchReplacementReport report;
     spo::PatchReplacementCommand command(fixture.input(), &report);
@@ -237,8 +269,15 @@ void test_successful_path_supports_undo_redo_without_reimport() {
     assert(executeResult.success());
     assert(report.success);
     assert(report.failureReason == spo::PatchReplacementFailureReason::None);
-    assert(report.usedMultiFacePatch);
-    assert(report.replacementFaceCount > 1);
+    assert(report.repairApplied);
+    assert(report.sameParameterApplied);
+    assert(report.shapeFixApplied);
+    assert(report.shapeFixFaceApplied);
+    assert(report.shapeFixWireApplied);
+    assert(report.sewingApplied);
+    assert(report.repairRunCount == 1);
+    assert(report.faceCountBeforeRepair > 0);
+    assert(report.faceCountAfterRepair > 0);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 
     const auto undoResult = command.undo(fixture.context);
@@ -248,7 +287,43 @@ void test_successful_path_supports_undo_redo_without_reimport() {
     const auto redoResult = command.redo(fixture.context);
     assert(redoResult.success());
     assert(same_stats(fixture.context.document.stats(), beforeStats));
+    assert(command.report().repairRunCount == 1);
     assert(report.success);
+}
+
+void test_free_edge_increase_after_repair_is_rejected() {
+    CommandFixture fixture(make_open_face(10.0));
+    fixture.candidate.faces = {0};
+    fixture.candidate.face_count = 1;
+    const auto beforeStats = fixture.context.document.stats();
+    spo::PatchReplacementReport report;
+    spo::PatchReplacementCommand command(fixture.input(), &report);
+
+    const auto result = command.execute(fixture.context);
+
+    assert(!result.success());
+    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
+    assert(report.rollbackApplied);
+    assert(report.repairApplied);
+    assert(report.freeEdgesAfterRepair > 0);
+    assert(same_stats(fixture.context.document.stats(), beforeStats));
+}
+
+void test_multi_face_internal_seams_are_not_unsupported() {
+    CommandFixture fixture(make_box(10.0));
+    const auto beforeStats = fixture.context.document.stats();
+    spo::PatchReplacementReport report;
+    spo::PatchReplacementCommand command(fixture.input(), &report);
+
+    const auto result = command.execute(fixture.context);
+
+    assert(!result.success());
+    assert(report.failureReason != spo::PatchReplacementFailureReason::UnsupportedCandidate);
+    assert(report.usedMultiFacePatch);
+    assert(report.replacementFaceCount > 1);
+    assert(report.repairApplied);
+    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
+    assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
 void test_no_hard_coded_real_sample_path_in_command_sources() {
@@ -271,6 +346,8 @@ void run_patch_replacement_command_tests() {
     test_invalid_input_fails_and_does_not_mutate_document();
     test_multi_face_patch_is_not_unsupported();
     test_gate_failure_rolls_back();
-    test_successful_path_supports_undo_redo_without_reimport();
+    test_repair_pipeline_invoked_on_successful_minimal_path();
+    test_free_edge_increase_after_repair_is_rejected();
+    test_multi_face_internal_seams_are_not_unsupported();
     test_no_hard_coded_real_sample_path_in_command_sources();
 }
