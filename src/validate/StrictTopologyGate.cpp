@@ -115,15 +115,29 @@ bool ensure_parent_directory(const std::filesystem::path& path) {
     return !error;
 }
 
-bool step_roundtrip_valid(const std::filesystem::path& path) {
+struct StepRoundtripValidation {
+    bool readable = false;
+    ShapeStats stats;
+    int freeEdges = 0;
+    int multipleEdges = 0;
+    bool brepCheckValid = false;
+};
+
+StepRoundtripValidation validate_step_roundtrip(const std::filesystem::path& path) {
+    StepRoundtripValidation result;
     const StepReader reader;
     const auto read = reader.read(path);
     if (!read.status.success() || !read.document.hasShape()) {
-        return false;
+        return result;
     }
 
     const auto validation = ShapeValidator().validate(read.document);
-    return validation.has_shape && validation.brep_check_valid;
+    result.readable = validation.has_shape;
+    result.stats = validation.stats;
+    result.freeEdges = validation.free_edges;
+    result.multipleEdges = validation.multiple_edges;
+    result.brepCheckValid = validation.brep_check_valid;
+    return result;
 }
 
 }
@@ -162,6 +176,8 @@ const char* toString(StrictTopologyFailureReason reason) {
 
 StrictTopologyGateReport StrictTopologyGate::evaluate(const StrictTopologyGateInput& input) const {
     StrictTopologyGateReport report;
+    report.watertightSolidRequired = input.requireWatertightSolid;
+    report.roundtripWatertightRequired = input.requireRoundtripWatertight;
 
     if (input.replacementReport != nullptr) {
         report.replacementFaceCount = input.replacementReport->replacementFaceCount;
@@ -192,11 +208,20 @@ StrictTopologyGateReport StrictTopologyGate::evaluate(const StrictTopologyGateIn
     if (report.afterFreeEdges > report.beforeFreeEdges) {
         return fail(report, StrictTopologyFailureReason::FreeEdgeIncreased, "After document has more free edges than before document.");
     }
+    if (input.requireZeroFreeEdges && report.afterFreeEdges != 0) {
+        return fail(report, StrictTopologyFailureReason::FreeEdgeIncreased, "After document has free edges, but watertight apply requires zero free edges.");
+    }
     if (report.afterMultipleEdges > report.beforeMultipleEdges) {
         return fail(report, StrictTopologyFailureReason::MultipleEdgeIncreased, "After document has more multiple edges than before document.");
     }
+    if (input.requireZeroMultipleEdges && report.afterMultipleEdges != 0) {
+        return fail(report, StrictTopologyFailureReason::MultipleEdgeIncreased, "After document has multiple edges, but watertight apply requires zero multiple edges.");
+    }
     if (report.afterStats.solids != report.beforeStats.solids) {
         return fail(report, StrictTopologyFailureReason::SolidCountChangedUnexpectedly, "After document solid count changed unexpectedly.");
+    }
+    if (input.requireWatertightSolid && report.beforeStats.solids > 0 && report.afterStats.solids <= 0) {
+        return fail(report, StrictTopologyFailureReason::SolidCountChangedUnexpectedly, "Before document is a solid model, but after document has no solids.");
     }
     if (report.beforeStats.shells > 0 && report.afterStats.shells <= 0) {
         return fail(report, StrictTopologyFailureReason::ShellCountInvalid, "After document shell count is invalid.");
@@ -243,13 +268,41 @@ StrictTopologyGateReport StrictTopologyGate::evaluate(const StrictTopologyGateIn
             return fail(report, StrictTopologyFailureReason::StepExportFailed, exportResult.message());
         }
 
-        report.stepRoundtripOk = step_roundtrip_valid(stepPath);
+        const auto roundtrip = validate_step_roundtrip(stepPath);
+        report.roundtripStats = roundtrip.stats;
+        report.roundtripFreeEdges = roundtrip.freeEdges;
+        report.roundtripMultipleEdges = roundtrip.multipleEdges;
+        report.roundtripBRepCheckValid = roundtrip.brepCheckValid;
+        report.stepRoundtripOk = roundtrip.readable && roundtrip.brepCheckValid;
         if (!report.stepRoundtripOk) {
             if (!requestedPath) {
                 std::error_code error;
                 std::filesystem::remove(stepPath, error);
             }
             return fail(report, StrictTopologyFailureReason::StepRoundtripFailed, "Exported STEP failed roundtrip readback validation.");
+        }
+        if (input.requireRoundtripWatertight) {
+            if (report.beforeStats.solids > 0 && report.roundtripStats.solids != report.beforeStats.solids) {
+                if (!requestedPath) {
+                    std::error_code error;
+                    std::filesystem::remove(stepPath, error);
+                }
+                return fail(report, StrictTopologyFailureReason::StepRoundtripFailed, "Roundtrip STEP solid count does not match the before document.");
+            }
+            if (report.roundtripFreeEdges != 0) {
+                if (!requestedPath) {
+                    std::error_code error;
+                    std::filesystem::remove(stepPath, error);
+                }
+                return fail(report, StrictTopologyFailureReason::StepRoundtripFailed, "Roundtrip STEP has free edges, but watertight apply requires zero free edges.");
+            }
+            if (report.roundtripMultipleEdges != 0) {
+                if (!requestedPath) {
+                    std::error_code error;
+                    std::filesystem::remove(stepPath, error);
+                }
+                return fail(report, StrictTopologyFailureReason::StepRoundtripFailed, "Roundtrip STEP has multiple edges, but watertight apply requires zero multiple edges.");
+            }
         }
 
         if (!requestedPath) {

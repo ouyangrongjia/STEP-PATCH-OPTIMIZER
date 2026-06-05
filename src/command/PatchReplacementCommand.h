@@ -12,11 +12,19 @@
 
 namespace spo {
 
+struct PatchReplacementCommandOptions {
+    bool requireWatertightSolidGate = false;
+    bool requireZeroFreeEdges = false;
+    bool requireZeroMultipleEdges = false;
+    bool requireRoundtripWatertight = false;
+};
+
 class PatchReplacementCommand final : public Command {
 public:
     explicit PatchReplacementCommand(
         PatchReplacementInput input,
-        PatchReplacementReport* outReport = nullptr);
+        PatchReplacementReport* outReport = nullptr,
+        PatchReplacementCommandOptions options = {});
 
     const char* name() const override;
     Result execute(CommandContext& context) override;
@@ -33,6 +41,7 @@ private:
     PatchReplacementInput input_;
     PatchReplacementReport report_;
     PatchReplacementReport* outReport_ = nullptr;
+    PatchReplacementCommandOptions options_;
 
     ShapeDocument documentSnapshot_;
     MergeCandidate candidateSnapshot_;

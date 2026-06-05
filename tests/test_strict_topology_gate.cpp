@@ -43,12 +43,17 @@ spo::StrictTopologyGateReport evaluate(
     const spo::ShapeDocument& before,
     const spo::ShapeDocument& after,
     const spo::PatchReplacementReport* replacementReport = nullptr,
-    const std::filesystem::path& stepPath = {}) {
+    const std::filesystem::path& stepPath = {},
+    bool strictWatertight = false) {
     spo::StrictTopologyGateInput input;
     input.beforeDocument = &before;
     input.afterDocument = &after;
     input.replacementReport = replacementReport;
     input.temporaryStepPath = stepPath;
+    input.requireWatertightSolid = strictWatertight;
+    input.requireZeroFreeEdges = strictWatertight;
+    input.requireZeroMultipleEdges = strictWatertight;
+    input.requireRoundtripWatertight = strictWatertight;
     return spo::StrictTopologyGate().evaluate(input);
 }
 
@@ -152,6 +157,35 @@ void test_step_export_and_roundtrip_use_requested_path() {
     std::filesystem::remove(path);
 }
 
+void test_watertight_solid_gate_records_roundtrip_stats() {
+    const spo::ShapeDocument before(make_box(), {});
+    const spo::ShapeDocument after(make_box(), {});
+
+    const auto report = evaluate(before, after, nullptr, {}, true);
+
+    assert(report.passed);
+    assert(report.watertightSolidRequired);
+    assert(report.roundtripWatertightRequired);
+    assert(report.afterStats.solids == report.beforeStats.solids);
+    assert(report.afterFreeEdges == 0);
+    assert(report.afterMultipleEdges == 0);
+    assert(report.roundtripBRepCheckValid);
+    assert(report.roundtripStats.solids == report.beforeStats.solids);
+    assert(report.roundtripFreeEdges == 0);
+    assert(report.roundtripMultipleEdges == 0);
+}
+
+void test_watertight_solid_gate_rejects_shell_only_after() {
+    const spo::ShapeDocument before(make_box(), {});
+    const spo::ShapeDocument after(make_open_face(), {});
+
+    const auto report = evaluate(before, after, nullptr, {}, true);
+
+    assert(!report.passed);
+    assert(report.failureReason == spo::StrictTopologyFailureReason::FreeEdgeIncreased ||
+        report.failureReason == spo::StrictTopologyFailureReason::SolidCountChangedUnexpectedly);
+}
+
 }
 
 void run_strict_topology_gate_tests() {
@@ -162,4 +196,6 @@ void run_strict_topology_gate_tests() {
     test_multi_face_replacement_can_be_disallowed();
     test_face_count_not_reduced_warns_without_failing();
     test_step_export_and_roundtrip_use_requested_path();
+    test_watertight_solid_gate_records_roundtrip_stats();
+    test_watertight_solid_gate_rejects_shell_only_after();
 }

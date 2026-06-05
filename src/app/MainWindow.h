@@ -79,7 +79,7 @@ private:
     void undo();
     void redo();
     void refreshUndoRedoActions();
-    void refreshDocumentViews();
+    void refreshDocumentViews(bool clearPatchState = true);
     void syncLockedEdges();
     void refreshModelTree();
     void clearMergeCandidateState();

@@ -35,6 +35,10 @@ struct StrictTopologyGateInput {
     bool requireStepRoundtrip = true;
     bool allowMultiFaceReplacement = true;
     bool allowFaceCountIncrease = true;
+    bool requireWatertightSolid = false;
+    bool requireZeroFreeEdges = false;
+    bool requireZeroMultipleEdges = false;
+    bool requireRoundtripWatertight = false;
 
     std::filesystem::path temporaryStepPath;
 };
@@ -45,16 +49,22 @@ struct StrictTopologyGateReport {
 
     ShapeStats beforeStats;
     ShapeStats afterStats;
+    ShapeStats roundtripStats;
 
     int beforeFreeEdges = 0;
     int afterFreeEdges = 0;
+    int roundtripFreeEdges = 0;
     int beforeMultipleEdges = 0;
     int afterMultipleEdges = 0;
+    int roundtripMultipleEdges = 0;
 
     bool beforeBRepCheckValid = false;
     bool afterBRepCheckValid = false;
+    bool roundtripBRepCheckValid = false;
     bool stepExportOk = false;
     bool stepRoundtripOk = false;
+    bool watertightSolidRequired = false;
+    bool roundtripWatertightRequired = false;
 
     bool multiFaceReplacement = false;
     int replacementFaceCount = 0;

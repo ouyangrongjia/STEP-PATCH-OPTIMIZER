@@ -6,6 +6,7 @@
 #include "command/LockedEdgeRef.h"
 #include "command/LockEdgeCommand.h"
 #include "command/MergePatchCommand.h"
+#include "command/PatchReplacementCommand.h"
 #include "command/PlaneRegionBatchMergeCommand.h"
 #include "command/PlaneRegionMergeCommand.h"
 #include "command/SphereRegionBatchMergeCommand.h"
@@ -109,6 +110,27 @@ PatchPreviewPipelineResult pipeline_error(
     result.geomagic = std::move(geomagic);
     result.message = std::move(message);
     return result;
+}
+
+void publish_apply_failure(
+    PatchReplacementReport* outReport,
+    PatchReplacementFailureReason reason,
+    const MergeCandidate* candidate,
+    std::string message) {
+    if (outReport == nullptr) {
+        return;
+    }
+    *outReport = {};
+    outReport->success = false;
+    outReport->failureReason = reason;
+    outReport->candidateId = candidate != nullptr ? candidate->candidate_id : -1;
+    outReport->sourceFaceCount = candidate != nullptr
+        ? (candidate->face_count > 0 ? candidate->face_count : static_cast<int>(candidate->faces.size()))
+        : 0;
+    outReport->sourceBoundaryEdgeCount = candidate != nullptr
+        ? (candidate->boundary_edge_count > 0 ? candidate->boundary_edge_count : static_cast<int>(candidate->boundary_edges.size()))
+        : 0;
+    outReport->message = std::move(message);
 }
 
 }
@@ -549,9 +571,113 @@ Result AppController::requestApplyCurrentPatchPreview() {
         return Result::error(decision.reason);
     }
 
-    currentPatchStatus_ = RegionPatchStatus::ApplyPending;
-    currentPatchStatusMessage_ = "Patch Apply request accepted, but T6 replacement is not implemented yet.";
-    return Result::error("T6 replacement is not implemented yet. No ShapeDocument mutation was performed.");
+    currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+    currentPatchStatusMessage_ = "Patch Apply requires an explicit current candidate.";
+    return Result::error("Patch Apply requires an explicit current candidate.");
+}
+
+Result AppController::applyCurrentPatchToCurrentCandidate(
+    const MergeCandidate& candidate,
+    PatchReplacementReport* outReport) {
+    if (!hasDocument()) {
+        const std::string message = "Open a STEP/STP document before applying a patch.";
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::MissingDocument, &candidate, message);
+        return Result::error(message);
+    }
+
+    const auto decision = currentPatchApplyDecision();
+    if (!decision.canRequestApply) {
+        currentPatchStatus_ = decision.status;
+        currentPatchStatusMessage_ = decision.reason;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::MissingPreviewReport, &candidate, decision.reason);
+        return Result::error(decision.reason);
+    }
+    if (candidate.faces.empty()) {
+        const std::string message = "Current candidate has no source faces.";
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::MissingCandidate, &candidate, message);
+        return Result::error(message);
+    }
+    if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
+        const std::string message = "Current candidate is not FeatureBoundedRefit.";
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        return Result::error(message);
+    }
+    if (candidate.status == MergeCandidateStatus::Rejected || candidate.status == MergeCandidateStatus::Hidden) {
+        const std::string message = "Current candidate is rejected or hidden.";
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        return Result::error(message);
+    }
+
+    const auto candidateFaceCount = candidate.face_count > 0
+        ? candidate.face_count
+        : static_cast<int>(candidate.faces.size());
+    if (currentPatchPreviewReport_.candidateId != candidate.candidate_id ||
+        currentPatchPreviewReport_.sourceFaceCount != candidateFaceCount) {
+        const std::string message = "Patch preview does not match current candidate.";
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        return Result::error(message);
+    }
+
+    const auto boundary = RegionBoundaryAnalyzer().analyze(context_.document, candidate);
+    if (!boundary.valid ||
+        boundary.connected_component_count != 1 ||
+        boundary.outer_wire_count != 1 ||
+        boundary.inner_wire_count != 0 ||
+        !boundary.boundary_closed ||
+        boundary.has_holes ||
+        boundary.has_non_manifold_edges ||
+        boundary.has_branching_boundary ||
+        boundary.ordered_boundary_edges.empty()) {
+        const auto message = boundary.message.empty()
+            ? std::string("Candidate boundary is not a valid single closed outer wire.")
+            : std::string("Candidate boundary is not valid for patch apply: ") + boundary.message;
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = message;
+        publish_apply_failure(outReport, PatchReplacementFailureReason::InvalidBoundary, &candidate, message);
+        return Result::error(message);
+    }
+
+    PatchReplacementInput input;
+    input.document = &context_.document;
+    input.candidate = &candidate;
+    input.boundary = &boundary;
+    input.importedPatch = &currentImportedPatchInfo_;
+    input.artifactPaths = &currentPatchArtifactPaths_;
+    input.previewReport = &currentPatchPreviewReport_;
+
+    PatchReplacementCommandOptions options;
+    options.requireWatertightSolidGate = true;
+    options.requireZeroFreeEdges = true;
+    options.requireZeroMultipleEdges = true;
+    options.requireRoundtripWatertight = true;
+
+    auto command = std::make_unique<PatchReplacementCommand>(input, outReport, options);
+    const auto result = execute(std::move(command));
+    if (!result.success()) {
+        currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
+        currentPatchStatusMessage_ = outReport != nullptr && !outReport->message.empty()
+            ? outReport->message
+            : result.message();
+        return result;
+    }
+
+    currentPatchArtifactPaths_ = {};
+    currentImportedPatchInfo_ = {};
+    currentPatchPreviewReport_ = {};
+    patchPreviewReady_ = false;
+    currentPatchStatus_ = RegionPatchStatus::Applied;
+    currentPatchStatusMessage_ = "Patch Apply completed and committed after StrictTopologyGate passed.";
+    return Result::ok();
 }
 
 bool AppController::hasDocument() const {

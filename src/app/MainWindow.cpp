@@ -372,7 +372,7 @@ void MainWindow::createActions() {
     generateAndPreviewCurrentPatchAction_ = new QAction("生成并预览当前 Patch", this);
     importPatchForCurrentCandidateAction_ = new QAction("导入当前候选 Patch（local STL）", this);
     importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
-    applyCurrentPatchAction_ = new QAction("应用当前 Patch（T6 占位）", this);
+    applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
     applyCurrentPatchAction_->setEnabled(false);
     clearPatchOverlayAction_ = new QAction("清除 Patch Overlay", this);
 
@@ -1195,38 +1195,60 @@ void MainWindow::importPatchFromFile() {
 }
 
 void MainWindow::applyCurrentPatchPreview() {
-    const auto beforeDecision = controller_.currentPatchApplyDecision();
-    const auto result = controller_.requestApplyCurrentPatchPreview();
-    const auto& report = controller_.currentPatchPreviewReport();
-    const auto patchPath = report.patchStepPath.empty()
-        ? report.patchIgesSidecarPath
-        : report.patchStepPath;
-    const auto decisionText = beforeDecision.canRequestApply
-        ? QString::fromStdString(beforeDecision.message)
-        : QString::fromStdString(beforeDecision.reason);
-    const auto resultText = QString::fromStdString(result.message());
+    auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr) {
+        inspectPanel_->showReport("请先选择候选区域。");
+        logPanel_->appendWarning("Patch Apply 被阻止：未选择候选区域。");
+        setStatus("Patch Apply 被阻止");
+        refreshPatchApplyAction();
+        return;
+    }
+
+    PatchReplacementReport report;
+    const auto result = controller_.applyCurrentPatchToCurrentCandidate(*candidate, &report);
     const auto statusText = QString::fromUtf8(toString(controller_.currentPatchStatus()));
     const auto statusMessage = QString::fromStdString(controller_.currentPatchStatusMessage());
 
-    inspectPanel_->showReport(QString("Patch Apply request（T6 占位）\npatch status：%1\npatch path：%2\ncan request apply：%3\nHighRisk：%4\nwarning：%5\npreview message：%6\napply message：%7\nstatus message：%8\n说明：T6 replacement is not implemented. ShapeDocument was not modified.")
+    inspectPanel_->showReport(QString("Patch Apply report\npatch status：%1\ncandidate id：%2\nsource face count：%3\nsource boundary edge count：%4\npatch face count：%5\nreplacement face count：%6\nused multi-face patch：%7\nsource faces replaced：%8\nrepair applied：%9\nSameParameter applied：%10\nShapeFix_Face applied：%11\nShapeFix_Wire applied：%12\nSewing applied：%13\nfree edges before repair：%14\nfree edges after repair：%15\nmultiple edges before repair：%16\nmultiple edges after repair：%17\nfailure reason：%18\nrollback applied：%19\nmessage：%20\nwarning：%21\nrepair warning：%22\nStrictTopologyGate：%23\nsolid/watertight：%24")
         .arg(statusText)
-        .arg(pathToQString(patchPath))
-        .arg(boolText(beforeDecision.canRequestApply))
-        .arg(boolText(report.highRisk))
+        .arg(report.candidateId)
+        .arg(report.sourceFaceCount)
+        .arg(report.sourceBoundaryEdgeCount)
+        .arg(report.patchFaceCount)
+        .arg(report.replacementFaceCount)
+        .arg(boolText(report.usedMultiFacePatch))
+        .arg(boolText(report.sourceFacesReplaced))
+        .arg(boolText(report.repairApplied))
+        .arg(boolText(report.sameParameterApplied))
+        .arg(boolText(report.shapeFixFaceApplied))
+        .arg(boolText(report.shapeFixWireApplied))
+        .arg(boolText(report.sewingApplied))
+        .arg(report.freeEdgesBeforeRepair)
+        .arg(report.freeEdgesAfterRepair)
+        .arg(report.multipleEdgesBeforeRepair)
+        .arg(report.multipleEdgesAfterRepair)
+        .arg(QString::fromUtf8(toString(report.failureReason)))
+        .arg(boolText(report.rollbackApplied))
+        .arg(QString::fromStdString(report.message.empty() ? result.message() : report.message))
         .arg(QString::fromStdString(report.warningMessage))
-        .arg(decisionText)
-        .arg(resultText)
-        .arg(statusMessage));
+        .arg(QString::fromStdString(report.repairWarningMessage))
+        .arg(report.success ? "passed" : "not passed")
+        .arg(report.success ? "after STEP roundtrip kept solid topology with zero free/multiple edges" : statusMessage));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
 
-    if (beforeDecision.canRequestApply) {
-        logPanel_->appendWarning(QString("Patch Apply 已进入 T6 占位状态：%1").arg(resultText));
-        setStatus("Patch Apply T6 占位");
+    if (result.success()) {
+        viewer_->clearPatchOverlay();
+        refreshDocumentViews(false);
+        refreshUndoRedoActions();
+        refreshPatchApplyAction();
+        logPanel_->appendInfo(QString("Patch Apply 完成：候选 %1 已通过 StrictTopologyGate 并提交。").arg(report.candidateId));
+        setStatus("Patch Apply 完成");
     } else {
-        logPanel_->appendWarning(QString("Patch Apply 被阻止：%1").arg(statusMessage));
-        setStatus("Patch Apply 被阻止");
+        refreshUndoRedoActions();
+        refreshPatchApplyAction();
+        logPanel_->appendWarning(QString("Patch Apply 失败：%1").arg(statusMessage));
+        setStatus("Patch Apply 失败");
     }
-    refreshPatchApplyAction();
 }
 
 void MainWindow::clearPatchOverlay() {
@@ -1251,7 +1273,7 @@ void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool v
         ? QString("visual-only cutout preview：Viewer 临时隐藏当前 candidate source faces，并叠加 patch；主 ShapeDocument 未修改。")
         : QString("patch overlay preview：Viewer 叠加 patch；主 ShapeDocument 未修改。");
 
-    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：当前只做 Apply 前预览，不执行 sewing、STEP 替换或最终导出。")
+    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：Apply 将执行真实 replacement，并通过 StrictTopologyGate 验证后才提交。")
         .arg(boolText(report.success))
         .arg(boolText(report.highRisk))
         .arg(patchStatus)
@@ -2290,13 +2312,15 @@ void MainWindow::refreshPatchApplyAction() {
     applyCurrentPatchAction_->setToolTip(QString("Patch status：%1\n%2").arg(statusText, detail));
 }
 
-void MainWindow::refreshDocumentViews() {
+void MainWindow::refreshDocumentViews(bool clearPatchState) {
     if (!controller_.hasDocument()) {
         return;
     }
 
     viewer_->clearPatchOverlay();
-    controller_.clearCurrentPatchOverlay();
+    if (clearPatchState) {
+        controller_.clearCurrentPatchOverlay();
+    }
     refreshPatchApplyAction();
 
     const auto& document = controller_.document();

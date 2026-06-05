@@ -1,5 +1,6 @@
 #include "command/PatchReplacementCommand.h"
 
+#include "brep/BoundaryWireBuilder.h"
 #include "command/CommandContext.h"
 #include "patch/BoundaryConstrainedPatchBuilder.h"
 #include "patch/MultiFacePatchAnalyzer.h"
@@ -7,7 +8,9 @@
 #include "validate/ShapeValidator.h"
 
 #include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepLib.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepTools_ReShape.hxx>
 #include <ShapeFix_Face.hxx>
 #include <ShapeFix_Wire.hxx>
@@ -111,10 +114,42 @@ struct ReplacementAssemblyResult {
     bool success = false;
     TopoDS_Shape shape;
     std::string message;
+    std::string warning;
 };
+
+TopoDS_Shape boundary_trimmed_patch_face(
+    const ShapeDocument& beforeDocument,
+    const RegionBoundaryAnalysis& boundary,
+    const TopoDS_Face& sourceFace,
+    const TopoDS_Face& patchFace,
+    std::string& message) {
+    const auto surface = BRep_Tool::Surface(patchFace);
+    if (surface.IsNull()) {
+        message = "Imported one-face patch has no usable surface.";
+        return {};
+    }
+
+    const auto wire = BoundaryWireBuilder().buildOuterWire(beforeDocument, boundary);
+    if (!wire.success) {
+        message = wire.message;
+        return {};
+    }
+
+    BRepBuilderAPI_MakeFace faceBuilder(surface, wire.wire, Standard_True);
+    if (!faceBuilder.IsDone()) {
+        message = "Could not trim imported patch surface with the original CAD boundary wire.";
+        return {};
+    }
+
+    auto face = faceBuilder.Face();
+    face.Orientation(sourceFace.Orientation());
+    message = "Trimmed one-face patch surface with the original CAD boundary wire.";
+    return face;
+}
 
 ReplacementAssemblyResult assemble_replacement_shape(
     const ShapeDocument& beforeDocument,
+    const RegionBoundaryAnalysis& boundary,
     const BoundaryConstrainedPatchBuildResult& buildResult) {
     ReplacementAssemblyResult result;
     if (!beforeDocument.hasShape()) {
@@ -132,6 +167,7 @@ ReplacementAssemblyResult assemble_replacement_shape(
 
     BRepTools_ReShape reshaper;
     const auto& topology = beforeDocument.topology();
+    TopoDS_Shape replacementShape = buildResult.replacementShape;
     bool replacedFirstFace = false;
     for (const auto faceId : buildResult.sourceFaceIds) {
         if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
@@ -140,7 +176,22 @@ ReplacementAssemblyResult assemble_replacement_shape(
         }
         const auto& sourceFace = topology.face(faceId);
         if (!replacedFirstFace) {
-            reshaper.Replace(sourceFace, buildResult.replacementShape);
+            if (buildResult.sourceFaceIds.size() == 1 && buildResult.replacementFaces.size() == 1) {
+                std::string trimMessage;
+                const auto trimmedFace = boundary_trimmed_patch_face(
+                    beforeDocument,
+                    boundary,
+                    sourceFace,
+                    buildResult.replacementFaces.front(),
+                    trimMessage);
+                if (!trimmedFace.IsNull()) {
+                    replacementShape = trimmedFace;
+                    result.warning = trimMessage;
+                } else if (!trimMessage.empty()) {
+                    result.warning = trimMessage;
+                }
+            }
+            reshaper.Replace(sourceFace, replacementShape);
             replacedFirstFace = true;
         } else {
             reshaper.Remove(sourceFace);
@@ -316,8 +367,10 @@ void copy_repair_report(
 
 PatchReplacementCommand::PatchReplacementCommand(
     PatchReplacementInput input,
-    PatchReplacementReport* outReport)
-    : outReport_(outReport) {
+    PatchReplacementReport* outReport,
+    PatchReplacementCommandOptions options)
+    : outReport_(outReport),
+      options_(options) {
     hasDocumentInput_ = input.document != nullptr;
     hasCandidateInput_ = input.candidate != nullptr;
     hasBoundaryInput_ = input.boundary != nullptr;
@@ -406,7 +459,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
         return Result::error(report_.message);
     }
 
-    const auto assemblyResult = assemble_replacement_shape(beforeDocument_, buildResult);
+    const auto assemblyResult = assemble_replacement_shape(beforeDocument_, *input_.boundary, buildResult);
     if (!assemblyResult.success) {
         report_.success = false;
         report_.failureReason = PatchReplacementFailureReason::BuildFailed;
@@ -415,6 +468,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
         return Result::error(report_.message);
     }
     report_.sourceFacesReplaced = true;
+    append_warning(report_, assemblyResult.warning);
 
     const auto repairResult = repair_replacement_shape(assemblyResult.shape, PatchReplacementRepairOptions {});
     copy_repair_report(report_, repairResult.report);
@@ -442,6 +496,10 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     gateInput.allowMultiFaceReplacement = true;
     gateInput.allowFaceCountIncrease = true;
     gateInput.requireStepRoundtrip = true;
+    gateInput.requireWatertightSolid = options_.requireWatertightSolidGate;
+    gateInput.requireZeroFreeEdges = options_.requireZeroFreeEdges;
+    gateInput.requireZeroMultipleEdges = options_.requireZeroMultipleEdges;
+    gateInput.requireRoundtripWatertight = options_.requireRoundtripWatertight;
 
     const auto gateReport = StrictTopologyGate().evaluate(gateInput);
     append_warning(report_, gateReport.warningMessage);

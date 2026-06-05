@@ -293,8 +293,6 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
 
 void test_free_edge_increase_after_repair_is_rejected() {
     CommandFixture fixture(make_open_face(10.0));
-    fixture.candidate.faces = {0};
-    fixture.candidate.face_count = 1;
     const auto beforeStats = fixture.context.document.stats();
     spo::PatchReplacementReport report;
     spo::PatchReplacementCommand command(fixture.input(), &report);

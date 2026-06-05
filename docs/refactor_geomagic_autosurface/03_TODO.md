@@ -1456,6 +1456,7 @@ Geomagic 后端使用 workspace root 作为工作目录，并通过绝对路径�
 本阶段只实现 Patch Apply 前状态机、AppController Apply 请求入口和 GUI 按钮门控。
 点击“应用当前 Patch（T6 占位）”后只进入 ApplyPending，并返回“T6 replacement is not implemented”。
 不修改 ShapeDocument，不创建 Command，不执行 replacement / sewing / ShapeFix / StrictTopologyGate，不导出最终 STEP。
+T6.5 已将该占位入口替换为真实 AppController / GUI Apply 流程。
 ```
 
 文件：
@@ -1595,7 +1596,7 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment（DONE）
 → T6.3 PatchReplacementCommand（DONE，最小可用 Command 管线）
 → T6.4 Sewing / ShapeFix / SameParameter 集成（DONE，最小 repair + gate 管线）
-→ T6.5 AppController / GUI 接入真实 Apply
+→ T6.5 AppController / GUI 接入真实 Apply（DONE，真实 Apply 已接入 CommandHistory + 严格水密 Gate）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
@@ -1705,7 +1706,7 @@ struct MultiFacePatchAnalysis {
 已完成。
 本阶段实现 BoundaryConstrainedPatchBuilder 最小可用版。
 multi-face patch 走主路径：从 MultiFacePatchAnalysis.faces 构造 replacement compound fragment，并保留 internal patch seams。
-one-face patch 走特例路径：直接复用 imported patch face 作为 replacement fragment，并记录后续仍需 StrictTopologyGate 验证的 warning。
+one-face patch 走特例路径：BoundaryConstrainedPatchBuilder 先输出 imported patch face 作为 replacement fragment，并记录后续仍需 StrictTopologyGate 验证的 warning；T6.5 PatchReplacementCommand 会在 one-face source / one-face patch 场景中用 imported surface + 原 STP boundary wire 重建 trimmed face。
 本阶段不修改 ShapeDocument，不创建 Command，不调用 Geomagic，不接入 GUI，不做 sewing / ShapeFix / final submit。
 ```
 
@@ -1769,7 +1770,7 @@ B. Boundary bridge strategy：
 C. one-face special strategy：
    - [x] 如果 imported patch 只有一个 face，第一版直接使用该 face 作为 replacement fragment。
    - 这是特例，不是 T6 主假设。
-   - [x] 未重新 trim 时记录 warning，后续仍必须经过 StrictTopologyGate。
+   - [x] Builder 未直接 trim 时记录 warning；T6.5 Command 层可使用原 STP boundary wire 重新 trim，后续仍必须经过 StrictTopologyGate。
 ```
 
 明确不做：
@@ -1985,14 +1986,19 @@ multi-face 要求：
 
 ## T6.5 AppController / GUI 接入 Apply 流程
 
+状态：DONE。
+
 文件：
 
 ```text
 src/app/AppController.h
 src/app/AppController.cpp
-src/gui/MainWindow.cpp
-src/gui/ModelTreePanel.cpp
-src/gui/LogPanel.cpp
+src/app/MainWindow.h
+src/app/MainWindow.cpp
+src/validate/StrictTopologyGate.h
+src/validate/StrictTopologyGate.cpp
+tests/test_patch_apply_state.cpp
+tests/test_strict_topology_gate.cpp
 ```
 
 新增操作：
@@ -2016,6 +2022,47 @@ selected candidate
 → report
 ```
 
+已完成：
+
+```text
+AppController::applyCurrentPatchToCurrentCandidate(candidate, outReport) 已接入真实 PatchReplacementCommand。
+Apply 前会重新用当前 ShapeDocument 对当前 candidate 执行 RegionBoundaryAnalyzer。
+preview report 的 candidateId / sourceFaceCount 必须与当前 candidate 一致，否则阻止 Apply。
+boundary 必须是 single closed outer wire，不允许 holes / non-manifold / branching。
+GUI Apply 按钮从占位入口改为调用真实 Controller Apply。
+成功后主 ShapeDocument 更新为 Command 提交的 afterDocument，viewer 清除 patch overlay。
+成功后清除 cached patch artifact / imported patch / preview report，patchPreviewReady=false，状态置为 Applied，防止 stale patch 重复 Apply。
+失败后主 ShapeDocument 保持不变，patch overlay / preview state 保留，状态置为 ApplyFailed。
+CommandHistory 已接入，成功后 undo/redo 可切换 before/after document。
+redo 只复用 PatchReplacementCommand 缓存 afterDocument，不重新运行 Geomagic、不重新裁剪 STL、不重新导入 patch、不重新 repair。
+```
+
+严格水密提交规则：
+
+```text
+StrictTopologyGateInput 新增 requireWatertightSolid / requireZeroFreeEdges / requireZeroMultipleEdges / requireRoundtripWatertight。
+GUI Apply 路径启用这些严格选项。
+before 是 solid 时，after solid count 必须保持一致。
+after BRepCheck 必须通过。
+after free edges 必须为 0。
+after multiple edges 必须为 0。
+STEP export 必须成功。
+STEP roundtrip readback 必须成功。
+roundtrip 后 BRepCheck 必须通过。
+roundtrip 后 solid count 必须保持 before solid count。
+roundtrip 后 free edges / multiple edges 必须为 0。
+```
+
+replacement 边界策略：
+
+```text
+multi-face patch fragment 仍然进入主路径，不因 patchFaceCount > 1 或 internal seams 返回 unsupported。
+multi-face fragment 是否最终提交仍由 repair + StrictTopologyGate 判断。
+one-face replacement 成功路径新增最小边界重建：使用 imported patch face 的 surface，加原 STP candidate boundary wire 重新 trim replacement face。
+STL crop boundary 不作为最终 CAD boundary。
+Geomagic patch outer boundary 不作为最终合法性依据。
+```
+
 验收：
 
 ```text
@@ -2024,6 +2071,7 @@ selected candidate
 失败时日志可复盘。
 成功后模型更新且 undo/redo 可用。
 multi-face patch 可进入真实 Apply 流程。
+成功提交必须保持 solid / watertight；否则 GateFailed rollback。
 ```
 
 

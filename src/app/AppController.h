@@ -18,6 +18,7 @@
 #include "patch/PatchArtifactLocator.h"
 #include "patch/PatchApplyState.h"
 #include "patch/PatchPreviewReport.h"
+#include "patch/PatchReplacementReport.h"
 #include "stl/StlRegionExtractor.h"
 #include "validate/ShapeValidator.h"
 
@@ -116,6 +117,9 @@ public:
     const std::string& currentPatchStatusMessage() const;
     PatchApplyDecision currentPatchApplyDecision() const;
     Result requestApplyCurrentPatchPreview();
+    Result applyCurrentPatchToCurrentCandidate(
+        const MergeCandidate& candidate,
+        PatchReplacementReport* outReport = nullptr);
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;

@@ -205,8 +205,8 @@ PatchPreviewReport buildPatchPreviewReport(const PatchPreviewReportInput& input)
 
     if (report.recommendedAction.empty()) {
         report.recommendedAction = report.highRisk
-            ? "Review the warning before allowing Apply in later stages."
-            : "Patch overlay preview may proceed. Apply/replacement is intentionally not part of T5.3.";
+            ? "Review the warning before applying the patch."
+            : "Patch overlay preview may proceed. Apply will run replacement and StrictTopologyGate before commit.";
     }
 
     return report;

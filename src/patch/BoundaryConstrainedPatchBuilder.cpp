@@ -212,7 +212,7 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
         }
         result.replacementShape = result.replacementFaces.front();
         result.usedOneFaceSpecialPath = true;
-        append_warning(result, "One-face special path reuses the imported patch face without retrimming; StrictTopologyGate must still validate the final document.");
+        append_warning(result, "One-face special path starts from the imported patch face; PatchReplacementCommand may re-trim it with the original CAD boundary, and StrictTopologyGate must still validate the final document.");
     } else {
         if (!options.allowMultiFaceFragment) {
             return fail(result, BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed, "Multi-face replacement fragment path is disabled.");
