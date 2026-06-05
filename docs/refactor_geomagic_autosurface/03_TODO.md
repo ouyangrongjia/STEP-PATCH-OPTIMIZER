@@ -1593,7 +1593,7 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.0 PatchReplacement 输入/报告结构 + MultiFacePatchAnalyzer（DONE）
 → T6.2 StrictTopologyGate 最小可用版（DONE，提前于 T6.1 落地）
 → T6.1 BoundaryConstrainedPatchBuilder：multi-face replacement fragment（DONE）
-→ T6.3 PatchReplacementCommand
+→ T6.3 PatchReplacementCommand（DONE，最小可用 Command 管线）
 → T6.4 Sewing / ShapeFix / SameParameter 集成
 → T6.5 AppController / GUI 接入真实 Apply
 ```
@@ -1859,6 +1859,17 @@ multi-face 规则：
 
 ## T6.3 PatchReplacementCommand
 
+状态：
+
+```text
+已完成最小可用版。
+本阶段新增 PatchReplacementCommand，通过 Command 层执行 PatchReplacementInput 校验、MultiFacePatchAnalyzer 分析、BoundaryConstrainedPatchBuilder 构造 replacement fragment、StrictTopologyGate 验证、成功提交 afterDocument、失败 rollback，并支持 undo/redo。
+multi-face imported patch 是主路径：patchFaceCount > 1 不作为 unsupported，report.usedMultiFacePatch / replacementFaceCount 会记录 multi-face fragment。
+当前最小 afterDocument 策略：保留 imported patch top-level shape 作为 gated afterDocument candidate；若它不能保持 before/after 拓扑、bbox、solid/shell、STEP roundtrip，StrictTopologyGate 会失败并 rollback，主 ShapeDocument 不变。
+当前没有删除 candidate source faces，没有执行 sewing / ShapeFix / SameParameter，没有接入 GUI，没有调用 Geomagic，没有重新裁剪 STL，没有从固定路径读取 patch。
+redo 只重新提交缓存的 afterDocument，不重新运行 Geomagic、不重新读取 patch、不重新裁剪 STL。
+```
+
 文件：
 
 ```text
@@ -1866,23 +1877,24 @@ src/command/PatchReplacementCommand.h
 src/command/PatchReplacementCommand.cpp
 tests/test_patch_replacement_command.cpp
 CMakeLists.txt
+tests/test_validation.cpp
 ```
 
 任务：
 
 ```text
-1. 输入 PatchReplacementInput，imported patch 必须来自当前 candidate 关联的 PatchArtifactPaths / PatchPreviewReport / GeomagicAutoSurfaceResult。
-2. 不允许写死 data/crop_stp/local_candidate_0179_mechanical.stp 或任何固定 patch 路径。
-3. 保存 beforeDocument。
-4. 删除 / 替换 candidate source faces。
-5. 接入 BoundaryConstrainedPatchBuilder。
-6. 支持 multi-face replacement fragment。
-7. 尝试 sewing / ShapeFix / SameParameter。
-8. 调用 StrictTopologyGate。
-9. Gate 成功才提交 afterDocument。
-10. Gate 失败 rollback。
-11. 支持 undo/redo。
-12. redo 不重新运行 Geomagic，只复用已生成的 T4 result 和 patch 文件。
+1. [x] 输入 PatchReplacementInput，并在 Command 构造时复制 candidate / boundary / importedPatch / artifactPaths / previewReport，避免持有 GUI 临时对象裸指针。
+2. [x] 不允许写死 data/crop_stp/local_candidate_0179_mechanical.stp 或任何固定 patch 路径。
+3. [x] execute 从 CommandContext 保存 beforeDocument。
+4. [ ] 删除 / 替换 candidate source faces 留给 T6.4；T6.3 仅构造 replacement fragment 并构造 gated afterDocument candidate。
+5. [x] 接入 BoundaryConstrainedPatchBuilder。
+6. [x] 支持 multi-face replacement fragment，不因 patchFaceCount > 1 返回 unsupported。
+7. [ ] sewing / ShapeFix / SameParameter 留给 T6.4。
+8. [x] 调用 StrictTopologyGate。
+9. [x] Gate 成功才提交 afterDocument。
+10. [x] Gate 失败 rollback，主 ShapeDocument 不变。
+11. [x] 支持 undo/redo。
+12. [x] redo 不重新运行 Geomagic、不重新裁剪 STL、不重新读取固定 patch 路径，只复用缓存 afterDocument。
 ```
 
 限制：
@@ -1898,11 +1910,14 @@ CMakeLists.txt
 验收：
 
 ```text
-成功替换可 undo/redo。
-gate 失败不改变 document。
-redo 不重新运行 Geomagic。
-失败报告包含 rollback_applied=true。
-multi-face patch replacement path 至少有 synthetic test 覆盖。
+[x] invalid input 失败且不修改 document。
+[x] multi-face patch 不作为 unsupported。
+[x] gate 失败不改变 document。
+[x] gate 失败报告包含 rollbackApplied=true，failureReason=GateFailed。
+[x] 最小成功路径可 undo/redo。
+[x] redo 不重新运行 Geomagic、不依赖固定文件路径。
+[x] multi-face patch replacement path 有 synthetic test 覆盖。
+[x] production command source 不包含当前真实样例固定 patch 文件名。
 ```
 
 ## T6.4 Sewing / ShapeFix 集成

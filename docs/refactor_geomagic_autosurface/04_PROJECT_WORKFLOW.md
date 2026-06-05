@@ -619,6 +619,8 @@ Gate 本身不修改 ShapeDocument，不调用 Geomagic，不重新裁剪 STL。
 T6.1 已完成 BoundaryConstrainedPatchBuilder 最小可用版。
 BoundaryConstrainedPatchBuilder 可从 MultiFacePatchAnalysis 构造 one-face fragment 或 multi-face compound replacement fragment，保留 internal patch seams，并仅把 boundary mismatch 作为 warning。
 Builder 本身不修改 ShapeDocument，不创建 Command，不接入 GUI，不调用 Geomagic。
+T6.3 已完成 PatchReplacementCommand 最小可用版：Command 会执行 input validation、MultiFacePatchAnalyzer、BoundaryConstrainedPatchBuilder、StrictTopologyGate，Gate 成功才提交 afterDocument，Gate 失败 rollback，undo/redo 复用缓存文档且 redo 不重新运行 Geomagic。
+T6.3 当前未真正删除 candidate source faces，未执行 sewing / ShapeFix / SameParameter，未接入 GUI；普通局部 patch 若无法通过 StrictTopologyGate 会失败并保持主 ShapeDocument 不变。
 ```
 
 ```text

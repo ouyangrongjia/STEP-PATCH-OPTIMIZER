@@ -34,6 +34,7 @@ add_library(spo_core STATIC
     src/command/LockedEdgeRef.cpp
     src/command/LockEdgeCommand.cpp
     src/command/MergePatchCommand.cpp
+    src/command/PatchReplacementCommand.cpp
     src/command/PlaneRegionBatchMergeCommand.cpp
     src/command/PlaneRegionMergeCommand.cpp
     src/command/SphereRegionBatchMergeCommand.cpp
@@ -180,11 +181,13 @@ if(SPO_BUILD_TESTS)
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
         tests/test_boundary_constrained_patch_builder.cpp
+        tests/test_patch_replacement_command.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
 
     target_link_libraries(spo_tests PRIVATE spo_core)
+    target_compile_definitions(spo_tests PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME spo_tests COMMAND spo_tests)
     set_tests_properties(spo_tests PROPERTIES TIMEOUT 120)
 endif()
