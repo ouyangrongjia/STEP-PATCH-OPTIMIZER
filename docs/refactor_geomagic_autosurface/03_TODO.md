@@ -2138,7 +2138,7 @@ GUI Patch Apply report 现在显示 repair 前后 face/edge/shell/solid、repair
 
 ## T6.6 Industrial Adaptive Sewing 集成
 
-状态：TODO。
+状态：DONE。
 
 来源：
 
@@ -2236,6 +2236,18 @@ scripts/industrial_sew.py
 6. free edge 无法消除时仍 GateFailed rollback。
 7. redo 不重新运行 adaptive sewing。
 8. GUI report 能显示 selected tolerance、attempt count、best result stats。
+```
+
+完成记录：
+
+```text
+已新增 src/patch/PatchReplacementRepair.h/.cpp，将 T6.4 匿名 repair 管线升级为可测试的 industrial repair pipeline。
+默认 repair 顺序为：ShapeFix_Shape → SameParameter → ShapeFix_Wire → ShapeFix_Face → ShapeUpgrade_UnifySameDomain → shell-to-solid 尝试 → adaptive Sewing tolerance loop → ShapeFix_Solid → final ShapeUpgrade_UnifySameDomain → StrictTopologyGate。
+adaptive Sewing 会按 bbox 自适应 tolerance、preferredSewingTolerance=0.007、min/max tolerance 生成多组尝试，并记录 selected tolerance、attempt count、best sewing face/edge/shell/solid、free/multiple edge、BRepCheck 和 collapsed 状态。
+结果选择规则保持严格：优先 preferred tolerance 下 valid solid 且未塌缩的结果；否则选 valid solid、未塌缩、free edge 最少的结果；没有 valid non-collapsed solid 时只保留诊断，不把塌缩或丢 solid 的 sewing result 作为可提交成功。
+PatchReplacementCommand 已改为调用 PatchReplacementRepair 模块，redo 仍只复用缓存 afterDocument，不重新运行 repair / adaptive sewing。
+GUI Patch Apply report 已显示 selected sewing tolerance、sewing attempt count、best sewing stats、best BRepCheck 和 collapsed。
+本阶段未放宽 StrictTopologyGate，未调用 Geomagic，未重新裁剪 STL，未写死真实样例路径。
 ```
 
 

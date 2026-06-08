@@ -287,6 +287,13 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(report.shapeFixWireApplied);
     assert(report.sewingApplied);
     assert(report.repairRunCount == 1);
+    assert(report.shapeFixShapeApplied);
+    assert(report.unifySameDomainApplied);
+    assert(report.sewingAttemptCount > 1);
+    assert(report.selectedSewingTolerance > 0.0);
+    assert(report.bestSewingFaceCount > 0);
+    assert(report.bestSewingEdgeCount > 0);
+    assert(report.bestSewingSolidCount > 0);
     assert(report.faceCountBeforeRepair > 0);
     assert(report.faceCountAfterRepair > 0);
     assert(report.gateEvaluated);
@@ -310,6 +317,7 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(redoResult.success());
     assert(same_stats(fixture.context.document.stats(), beforeStats));
     assert(command.report().repairRunCount == 1);
+    assert(command.report().sewingAttemptCount == report.sewingAttemptCount);
     assert(report.success);
 }
 

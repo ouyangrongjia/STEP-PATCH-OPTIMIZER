@@ -30,19 +30,31 @@ const char* toString(PatchReplacementFailureReason reason);
 
 struct PatchReplacementRepairOptions {
     bool runSameParameter = true;
+    bool runShapeFixShape = true;
     bool runShapeFixFace = true;
     bool runShapeFixWire = true;
     bool runSewing = true;
+    bool runUnifySameDomain = true;
+    bool runAdaptiveSewing = true;
+    bool runShellToSolid = true;
     double sewingTolerance = 1.0e-4;
+    double preferredSewingTolerance = 0.007;
+    double minSewingTolerance = 0.001;
+    double maxSewingTolerance = 0.1;
+    double collapseFaceRatio = 0.5;
     bool keepInternalPatchSeams = true;
 };
 
 struct PatchReplacementRepairReport {
     bool success = false;
     bool sameParameterApplied = false;
+    bool shapeFixShapeApplied = false;
     bool shapeFixFaceApplied = false;
     bool shapeFixWireApplied = false;
+    bool unifySameDomainApplied = false;
     bool sewingApplied = false;
+    bool adaptiveSewingApplied = false;
+    bool shellToSolidApplied = false;
 
     int faceCountBeforeRepair = 0;
     int edgeCountBeforeRepair = 0;
@@ -58,6 +70,17 @@ struct PatchReplacementRepairReport {
     int multipleEdgesBeforeRepair = 0;
     int multipleEdgesAfterRepair = 0;
 
+    double selectedSewingTolerance = 0.0;
+    int sewingAttemptCount = 0;
+    int bestSewingFreeEdges = 0;
+    int bestSewingMultipleEdges = 0;
+    int bestSewingFaceCount = 0;
+    int bestSewingEdgeCount = 0;
+    int bestSewingShellCount = 0;
+    int bestSewingSolidCount = 0;
+    bool bestSewingBRepCheckValid = false;
+    bool bestSewingCollapsed = false;
+
     std::string message;
     std::string warningMessage;
 };
@@ -71,9 +94,13 @@ struct PatchReplacementReport {
     bool repairApplied = false;
     bool sameParameterApplied = false;
     bool shapeFixApplied = false;
+    bool shapeFixShapeApplied = false;
     bool shapeFixFaceApplied = false;
     bool shapeFixWireApplied = false;
+    bool unifySameDomainApplied = false;
     bool sewingApplied = false;
+    bool adaptiveSewingApplied = false;
+    bool shellToSolidApplied = false;
     int repairRunCount = 0;
 
     int candidateId = -1;
@@ -132,6 +159,17 @@ struct PatchReplacementReport {
     int gateBeforeMultipleEdges = 0;
     int gateAfterMultipleEdges = 0;
     int gateRoundtripMultipleEdges = 0;
+
+    double selectedSewingTolerance = 0.0;
+    int sewingAttemptCount = 0;
+    int bestSewingFreeEdges = 0;
+    int bestSewingMultipleEdges = 0;
+    int bestSewingFaceCount = 0;
+    int bestSewingEdgeCount = 0;
+    int bestSewingShellCount = 0;
+    int bestSewingSolidCount = 0;
+    bool bestSewingBRepCheckValid = false;
+    bool bestSewingCollapsed = false;
 
     PatchReplacementFailureReason failureReason = PatchReplacementFailureReason::None;
 

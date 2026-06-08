@@ -79,6 +79,7 @@ add_library(spo_core STATIC
     src/patch/PatchApplyState.cpp
     src/patch/MultiFacePatchAnalyzer.cpp
     src/patch/BoundaryConstrainedPatchBuilder.cpp
+    src/patch/PatchReplacementRepair.cpp
     src/validate/ErrorMetric.cpp
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
@@ -181,6 +182,7 @@ if(SPO_BUILD_TESTS)
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
         tests/test_boundary_constrained_patch_builder.cpp
+        tests/test_patch_replacement_repair.cpp
         tests/test_patch_replacement_command.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp

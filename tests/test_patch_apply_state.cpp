@@ -334,6 +334,12 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(report.sameParameterApplied);
     assert(report.sewingApplied);
     assert(report.repairRunCount == 1);
+    assert(report.shapeFixShapeApplied);
+    assert(report.unifySameDomainApplied);
+    assert(report.sewingAttemptCount > 1);
+    assert(report.selectedSewingTolerance > 0.0);
+    assert(report.bestSewingFaceCount > 0);
+    assert(report.bestSewingEdgeCount > 0);
     assert(report.gateEvaluated);
     assert(report.gatePassed);
     assert(report.gateBeforeSolidCount == beforeStats.solids);
@@ -457,6 +463,9 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(allText.find(bannedMechanical) == std::string::npos);
     assert(allText.find(bannedClay) == std::string::npos);
     assert(mainWindowSource.find("repair before face/edge/shell/solid") != std::string::npos);
+    assert(mainWindowSource.find("selected sewing tolerance") != std::string::npos);
+    assert(mainWindowSource.find("sewing attempt count") != std::string::npos);
+    assert(mainWindowSource.find("best sewing face/edge/shell/solid") != std::string::npos);
     assert(mainWindowSource.find("gate after face/edge/shell/solid") != std::string::npos);
     assert(mainWindowSource.find("gate roundtrip face/edge/shell/solid") != std::string::npos);
     assert(mainWindowSource.find("STEP roundtrip ok") != std::string::npos);
