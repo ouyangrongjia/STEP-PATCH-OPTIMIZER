@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "app/ProcessStatus.h"
 #include "brep/ShapeDocument.h"
 #include "command/Command.h"
 #include "command/CommandContext.h"
@@ -233,6 +234,9 @@ void test_multi_face_valid_patch_is_preview_ready() {
 void test_status_to_string() {
     assert(std::string(spo::toString(spo::RegionPatchStatus::NotGenerated)) == "NotGenerated");
     assert(std::string(spo::toString(spo::RegionPatchStatus::ApplyPending)) == "ApplyPending");
+    assert(std::string(spo::toString(spo::ProcessStage::Idle)) == "Idle");
+    assert(std::string(spo::toString(spo::ProcessStage::PreviewReady)) == "PreviewReady");
+    assert(std::string(spo::toString(spo::ProcessStage::CachedRedo)) == "CachedRedo");
 }
 
 void test_app_controller_clear_resets_status() {
@@ -251,6 +255,8 @@ void test_app_controller_clear_resets_status() {
 
     assert(!controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::NotGenerated);
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::Idle);
+    assert(controller.currentProcessStatus().latestMessage == "Patch preview cleared.");
 
     remove_temp_root(root);
 }
@@ -303,6 +309,10 @@ void test_app_controller_preview_candidate_mismatch_blocks_apply() {
     assert(report.failureReason == spo::PatchReplacementFailureReason::UnsupportedCandidate);
     assert(controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::ApplyFailed);
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::ApplyFailed);
+    assert(controller.currentProcessStatus().candidateId == currentCandidate.candidate_id);
+    assert(controller.currentProcessStatus().sourceFaceCount == currentCandidate.face_count);
+    assert(controller.currentProcessStatus().latestMessage == "Patch preview does not match current candidate.");
     assert(controller.history().executedCommands().size() == commandCountBefore);
     assert(same_stats(controller.document().stats(), beforeStats));
 
@@ -355,6 +365,16 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(controller.history().executedCommands().size() == commandCountBefore + 1);
     assert(!controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::Applied);
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::Applied);
+    assert(controller.currentProcessStatus().candidateId == candidate.candidate_id);
+    assert(controller.currentProcessStatus().sourceFaceCount == candidate.face_count);
+    assert(controller.currentProcessStatus().boundaryEdgeCount == candidate.boundary_edge_count);
+    assert(controller.currentProcessStatus().repairRunCount == 1);
+    assert(controller.currentProcessStatus().sewingAttemptCount == report.sewingAttemptCount);
+    assert(controller.currentProcessStatus().selectedSewingTolerance == report.selectedSewingTolerance);
+    assert(controller.currentProcessStatus().bestFreeEdges == report.bestSewingFreeEdges);
+    assert(controller.currentProcessStatus().gateEvaluated);
+    assert(controller.currentProcessStatus().gatePassed);
 
     const auto afterStats = controller.document().stats();
     const auto validation = spo::ShapeValidator().validate(controller.document());
@@ -365,8 +385,12 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(validation.stats.solids == beforeStats.solids);
 
     assert(controller.undo().success());
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::CachedUndo);
+    assert(controller.currentProcessStatus().latestMessage.find("cached undo") != std::string::npos);
     assert(same_stats(controller.document().stats(), beforeStats));
     assert(controller.redo().success());
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::CachedRedo);
+    assert(controller.currentProcessStatus().latestMessage.find("cached redo") != std::string::npos);
     assert(same_stats(controller.document().stats(), afterStats));
     assert(report.repairRunCount == 1);
 
@@ -398,8 +422,47 @@ void test_app_controller_failed_apply_keeps_document_and_preview_state() {
     assert(report.failureReason == spo::PatchReplacementFailureReason::InvalidBoundary);
     assert(controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::ApplyFailed);
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::ApplyFailed);
+    assert(controller.currentProcessStatus().candidateId == candidate.candidate_id);
+    assert(controller.currentProcessStatus().latestMessage.find("valid") != std::string::npos);
     assert(controller.history().executedCommands().size() == commandCountBefore);
     assert(same_stats(controller.document().stats(), beforeStats));
+
+    remove_temp_root(root);
+}
+
+void test_process_status_keeps_gate_failure_diagnostics_after_apply_failed() {
+    const auto root = temp_root("spo_patch_process_status_gate_failure");
+    const auto modelPath = root / "model.stp";
+    const auto patchPath = root / "patch.stp";
+    write_step_file(modelPath);
+
+    spo::AppController controller;
+    assert(controller.openStepFile(modelPath).success());
+    const auto candidate = make_feature_candidate(controller.document(), first_adjacent_face_pair(controller.document()));
+    write_shape_step_file(BRepPrimAPI_MakeBox(10.0, 20.0, 30.0).Shape(), patchPath);
+
+    assert(controller.importPatchFromFileForCurrentCandidate(patchPath, &candidate).success());
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::PreviewReady);
+    assert(controller.currentProcessStatus().candidateId == candidate.candidate_id);
+    assert(!controller.currentProcessStatus().patchStepPath.empty());
+
+    spo::PatchReplacementReport report;
+    const auto result = controller.applyCurrentPatchToCurrentCandidate(candidate, &report);
+
+    assert(!result.success());
+    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
+    assert(controller.currentPatchStatus() == spo::RegionPatchStatus::ApplyFailed);
+    assert(controller.currentProcessStatus().stage == spo::ProcessStage::ApplyFailed);
+    assert(controller.currentProcessStatus().candidateId == candidate.candidate_id);
+    assert(controller.currentProcessStatus().repairRunCount == report.repairRunCount);
+    assert(controller.currentProcessStatus().sewingAttemptCount == report.sewingAttemptCount);
+    assert(controller.currentProcessStatus().selectedSewingTolerance == report.selectedSewingTolerance);
+    assert(controller.currentProcessStatus().bestFreeEdges == report.bestSewingFreeEdges);
+    assert(controller.currentProcessStatus().gateEvaluated);
+    assert(!controller.currentProcessStatus().gatePassed);
+    assert(!controller.currentProcessStatus().latestGateFailureReason.empty());
+    assert(controller.currentProcessStatus().latestMessage.find("StrictTopologyGate") != std::string::npos);
 
     remove_temp_root(root);
 }
@@ -547,6 +610,7 @@ void run_patch_apply_state_tests() {
     test_app_controller_preview_candidate_mismatch_blocks_apply();
     test_app_controller_valid_preview_applies_through_command_history_and_undo_redo();
     test_app_controller_failed_apply_keeps_document_and_preview_state();
+    test_process_status_keeps_gate_failure_diagnostics_after_apply_failed();
     test_app_controller_multi_face_patch_enters_apply_path_without_unsupported();
     test_no_hard_coded_real_sample_path_in_apply_sources();
     test_app_controller_open_step_clears_patch_preview_state();

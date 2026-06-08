@@ -5,6 +5,7 @@
 #include "gui/ModelTreePanel.h"
 #include "gui/OccViewWidget.h"
 #include "gui/ParameterPanel.h"
+#include "gui/ProcessStatusPanel.h"
 #include "io/StlReader.h"
 #include "merge/CandidateFilters.h"
 #include "merge/FaceInspector.h"
@@ -688,9 +689,11 @@ void MainWindow::createDocks() {
 
     inspectPanel_ = new InspectPanel(this);
     logPanel_ = new LogPanel(this);
+    processStatusPanel_ = new ProcessStatusPanel(this);
 
     bottomTabs_ = new QTabWidget(this);
     bottomTabs_->addTab(logPanel_, "日志");
+    bottomTabs_->addTab(processStatusPanel_, "进程");
     bottomTabs_->addTab(inspectPanel_, "检查");
     bottomTabs_->addTab(inspectPanel_->validationWidget(), "验证");
     bottomTabs_->addTab(inspectPanel_->reportWidget(), "报告");
@@ -837,6 +840,7 @@ void MainWindow::openStepFile() {
     setStatus("STEP/STP 已加载");
     refreshUndoRedoActions();
     refreshPatchApplyAction();
+    refreshProcessStatusPanel();
 }
 
 void MainWindow::saveProject() {
@@ -923,6 +927,7 @@ void MainWindow::openSourceStlFile() {
         .arg(filePath)
         .arg(controller_.sourceStlTriangleCount()));
     setStatus("原始 STL 已加载");
+    refreshProcessStatusPanel();
 }
 
 void MainWindow::cropCurrentCandidateStl() {
@@ -982,6 +987,14 @@ void MainWindow::cropCurrentCandidateStl() {
     const auto documentSnapshot = controller_.document();
     const auto sourceMeshSnapshot = controller_.sourceStlMesh();
 
+    ProcessStatusSnapshot cropStatus = makeProcessStatus(ProcessStage::CroppingStl, "STL crop started for current candidate.");
+    cropStatus.candidateId = candidateSnapshot.candidate_id;
+    cropStatus.sourceFaceCount = candidateSnapshot.face_count;
+    cropStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+    cropStatus.localStlPath = outputPath;
+    controller_.updateProcessStatus(cropStatus);
+    refreshProcessStatusPanel();
+
     setStlCropInProgress(true);
     inspectPanel_->showReport(QString("STL 裁剪正在后台运行\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4")
         .arg(pathToQString(sourceStlPath))
@@ -1002,6 +1015,14 @@ void MainWindow::cropCurrentCandidateStl() {
 
         const auto& report = result.extract.report;
         if (!result.success) {
+            ProcessStatusSnapshot cropFailed = makeProcessStatus(ProcessStage::CroppingStl, result.message);
+            cropFailed.candidateId = candidateSnapshot.candidate_id;
+            cropFailed.sourceFaceCount = candidateSnapshot.face_count;
+            cropFailed.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+            cropFailed.localStlPath = pathFromQString(filePath);
+            cropFailed.latestWarning = result.message;
+            controller_.updateProcessStatus(cropFailed);
+            refreshProcessStatusPanel();
             const auto message = QString::fromStdString(result.message);
             inspectPanel_->showReport(QString("STL 裁剪失败\n候选 ID：%1\n候选类型：%2\n消息：%3")
                 .arg(candidateSnapshot.candidate_id)
@@ -1020,6 +1041,13 @@ void MainWindow::cropCurrentCandidateStl() {
         showStlCropBoxAction_->setEnabled(true);
         viewer_->showCroppedStl(result.extract.localMesh);
         viewer_->showStlCropBox(report.expanded_bbox);
+        ProcessStatusSnapshot cropDone = makeProcessStatus(ProcessStage::CroppingStl, "STL crop completed.");
+        cropDone.candidateId = candidateSnapshot.candidate_id;
+        cropDone.sourceFaceCount = candidateSnapshot.face_count;
+        cropDone.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+        cropDone.localStlPath = result.outputPath;
+        controller_.updateProcessStatus(cropDone);
+        refreshProcessStatusPanel();
 
         inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\nsource triangle count：%6\noutput triangle count：%7\nviewer displayed cropped triangles：%8\nmargin：%9\ncandidate bbox：%10\nexpanded bbox：%11\noutput bbox：%12\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
             .arg(pathToQString(sourceStlPath))
@@ -1088,6 +1116,15 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto sourceMeshSnapshot = controller_.sourceStlMesh();
     const auto workspaceRoot = std::filesystem::current_path();
 
+    ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
+        ProcessStage::RunningGeomagic,
+        "Patch preview pipeline started: crop local STL and run Geomagic.");
+    pipelineStatus.candidateId = candidateSnapshot.candidate_id;
+    pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
+    pipelineStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+    controller_.updateProcessStatus(pipelineStatus);
+    refreshProcessStatusPanel();
+
     setStlCropInProgress(true);
     inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
         .arg(pathToQString(sourceStlPath))
@@ -1106,6 +1143,19 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         if (!result.success) {
             viewer_->clearPatchOverlay();
             controller_.clearCurrentPatchOverlay();
+            ProcessStatusSnapshot failedStatus = makeProcessStatus(
+                result.crop.success ? ProcessStage::RunningGeomagic : ProcessStage::CroppingStl,
+                result.message);
+            failedStatus.candidateId = candidateSnapshot.candidate_id;
+            failedStatus.sourceFaceCount = candidateSnapshot.face_count;
+            failedStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+            failedStatus.localStlPath = result.crop.outputPath;
+            failedStatus.patchStepPath = result.geomagic.outputStepPath;
+            failedStatus.patchIgesPath = result.geomagic.outputIgesPath;
+            failedStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
+            failedStatus.latestWarning = result.message;
+            controller_.updateProcessStatus(failedStatus);
+            refreshProcessStatusPanel();
             const auto message = QString::fromStdString(result.message);
             inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nlocal STL：%3\noutput STEP：%4\nfit_region log：%5\n消息：%6")
                 .arg(pathToQString(sourceStlPath))
@@ -1130,9 +1180,21 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         viewer_->showCroppedStl(result.crop.extract.localMesh);
         viewer_->showStlCropBox(result.crop.extract.report.expanded_bbox);
 
+        ProcessStatusSnapshot importingStatus = makeProcessStatus(ProcessStage::ImportingPatch, "Importing Geomagic patch result.");
+        importingStatus.candidateId = candidateSnapshot.candidate_id;
+        importingStatus.sourceFaceCount = candidateSnapshot.face_count;
+        importingStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+        importingStatus.localStlPath = result.crop.outputPath;
+        importingStatus.patchStepPath = result.geomagic.outputStepPath;
+        importingStatus.patchIgesPath = result.geomagic.outputIgesPath;
+        importingStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
+        controller_.updateProcessStatus(importingStatus);
+        refreshProcessStatusPanel();
+
         const auto import = controller_.importPatchResultForCurrentCandidate(result.geomagic, &candidateSnapshot);
         if (!import.success()) {
             viewer_->clearPatchOverlay();
+            refreshProcessStatusPanel();
             const auto message = QString::fromStdString(import.message());
             inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\noutput STEP：%2\n错误：%3")
                 .arg(pathToQString(result.crop.outputPath))
@@ -1155,6 +1217,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
         showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics);
         refreshPatchApplyAction();
+        refreshProcessStatusPanel();
         logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
             .arg(candidateSnapshot.candidate_id)
             .arg(pathToQString(result.crop.outputPath))
@@ -1195,6 +1258,7 @@ void MainWindow::importPatchForCurrentCandidate() {
     const auto result = controller_.importPatchForCurrentCandidateFromLocalStl(pathFromQString(filePath), candidate);
     if (!result.success()) {
         viewer_->clearPatchOverlay();
+        refreshProcessStatusPanel();
         const auto message = QString::fromStdString(result.message());
         inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\n错误：%2")
             .arg(filePath)
@@ -1217,6 +1281,7 @@ void MainWindow::importPatchForCurrentCandidate() {
     viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
     showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, &diagnostics);
     refreshPatchApplyAction();
+    refreshProcessStatusPanel();
     logPanel_->appendInfo(QString("Patch overlay 已导入：%1")
         .arg(pathToQString(controller_.currentPatchPreviewReport().patchStepPath)));
     setStatus("Patch overlay 已显示");
@@ -1235,6 +1300,7 @@ void MainWindow::importPatchFromFile() {
     const auto result = controller_.importPatchFromFileForCurrentCandidate(pathFromQString(filePath), currentMergeCandidate());
     if (!result.success()) {
         viewer_->clearPatchOverlay();
+        refreshProcessStatusPanel();
         const auto message = QString::fromStdString(result.message());
         inspectPanel_->showReport(QString("Patch 文件导入失败\npatch：%1\n错误：%2")
             .arg(filePath)
@@ -1253,6 +1319,7 @@ void MainWindow::importPatchFromFile() {
     viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
     showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, candidate != nullptr ? &diagnostics : nullptr);
     refreshPatchApplyAction();
+    refreshProcessStatusPanel();
     logPanel_->appendInfo(QString("Patch overlay 已从文件导入：%1").arg(filePath));
     setStatus("Patch overlay 已显示");
 }
@@ -1260,12 +1327,25 @@ void MainWindow::importPatchFromFile() {
 void MainWindow::applyCurrentPatchPreview() {
     auto* candidate = currentMergeCandidate();
     if (candidate == nullptr) {
+        controller_.updateProcessStatus(makeProcessStatus(ProcessStage::ApplyFailed, "Patch Apply requires a selected candidate."));
+        refreshProcessStatusPanel();
         inspectPanel_->showReport("请先选择候选区域。");
         logPanel_->appendWarning("Patch Apply 被阻止：未选择候选区域。");
         setStatus("Patch Apply 被阻止");
         refreshPatchApplyAction();
         return;
     }
+
+    ProcessStatusSnapshot applyingStatus = makeProcessStatus(ProcessStage::ApplyingPatch, "Patch Apply started.");
+    applyingStatus.candidateId = candidate->candidate_id;
+    applyingStatus.sourceFaceCount = candidate->face_count;
+    applyingStatus.boundaryEdgeCount = candidate->boundary_edge_count;
+    applyingStatus.localStlPath = controller_.currentPatchArtifactPaths().localStlPath;
+    applyingStatus.patchStepPath = controller_.currentPatchArtifactPaths().patchStepPath;
+    applyingStatus.patchIgesPath = controller_.currentPatchArtifactPaths().patchIgesSidecarPath;
+    applyingStatus.fitRegionLogPath = controller_.currentPatchArtifactPaths().fitRegionLogPath;
+    controller_.updateProcessStatus(applyingStatus);
+    refreshProcessStatusPanel();
 
     PatchReplacementReport report;
     const auto result = controller_.applyCurrentPatchToCurrentCandidate(*candidate, &report);
@@ -1364,6 +1444,7 @@ void MainWindow::applyCurrentPatchPreview() {
             : statusMessage);
     inspectPanel_->showReport(reportLines.join('\n'));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    refreshProcessStatusPanel();
 
     if (result.success()) {
         viewer_->clearPatchOverlay();
@@ -1387,6 +1468,7 @@ void MainWindow::clearPatchOverlay() {
     logPanel_->appendInfo("Patch overlay 已清除，主模型未修改。");
     setStatus("Patch overlay 已清除");
     refreshPatchApplyAction();
+    refreshProcessStatusPanel();
 }
 
 void MainWindow::showPatchPreviewReport(
@@ -2407,7 +2489,7 @@ void MainWindow::undo() {
         return;
     }
 
-    refreshDocumentViews();
+    refreshDocumentViews(false);
     logPanel_->appendInfo("已撤销上一条编辑命令。");
     setStatus("已撤销");
     refreshUndoRedoActions();
@@ -2422,7 +2504,7 @@ void MainWindow::redo() {
         return;
     }
 
-    refreshDocumentViews();
+    refreshDocumentViews(false);
     logPanel_->appendInfo("已重做上一条编辑命令。");
     setStatus("已重做");
     refreshUndoRedoActions();
@@ -2448,6 +2530,12 @@ void MainWindow::refreshPatchApplyAction() {
     applyCurrentPatchAction_->setToolTip(QString("Patch status：%1\n%2").arg(statusText, detail));
 }
 
+void MainWindow::refreshProcessStatusPanel() {
+    if (processStatusPanel_ != nullptr) {
+        processStatusPanel_->showStatus(controller_.currentProcessStatus());
+    }
+}
+
 void MainWindow::refreshDocumentViews(bool clearPatchState) {
     if (!controller_.hasDocument()) {
         return;
@@ -2458,6 +2546,7 @@ void MainWindow::refreshDocumentViews(bool clearPatchState) {
         controller_.clearCurrentPatchOverlay();
     }
     refreshPatchApplyAction();
+    refreshProcessStatusPanel();
 
     const auto& document = controller_.document();
     clearMergeCandidateState();

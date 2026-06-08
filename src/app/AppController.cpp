@@ -148,6 +148,9 @@ Result AppController::undo() {
     const auto result = history_.undo(context_);
     if (result.success()) {
         clearCurrentPatchOverlay();
+        processStatus_ = makeProcessStatus(
+            ProcessStage::CachedUndo,
+            "cached undo applied; Geomagic / STL crop / patch import / repair were not rerun.");
     }
     return result;
 }
@@ -156,6 +159,9 @@ Result AppController::redo() {
     const auto result = history_.redo(context_);
     if (result.success()) {
         clearCurrentPatchOverlay();
+        processStatus_ = makeProcessStatus(
+            ProcessStage::CachedRedo,
+            "cached redo applied; Geomagic / STL crop / patch import / repair were not rerun.");
     }
     return result;
 }
@@ -176,6 +182,7 @@ Result AppController::openStepFile(const std::filesystem::path& path) {
         sourceStlMesh_.clear();
         sourceStlPath_.clear();
         clearCurrentPatchOverlay();
+        processStatus_ = makeProcessStatus(ProcessStage::Idle, "STEP/STP loaded; patch preview cleared.");
     }
     return result;
 }
@@ -198,6 +205,7 @@ Result AppController::openStlFile(const std::filesystem::path& path) {
 
     sourceStlMesh_ = result.mesh;
     sourceStlPath_ = path;
+    processStatus_ = makeProcessStatus(ProcessStage::Idle, "Source STL loaded.");
     return Result::ok();
 }
 
@@ -438,9 +446,23 @@ RegionMergeResult AppController::mergeSphereCandidates(
 Result AppController::importPatchForCurrentCandidateFromLocalStl(
     const std::filesystem::path& localStlPath,
     const MergeCandidate* candidate) {
+    ProcessStatusSnapshot importing = makeProcessStatus(ProcessStage::ImportingPatch, "Importing patch from local STL artifacts.");
+    importing.localStlPath = localStlPath;
+    if (candidate != nullptr) {
+        importing.candidateId = candidate->candidate_id;
+        importing.sourceFaceCount = candidate->face_count > 0
+            ? candidate->face_count
+            : static_cast<int>(candidate->faces.size());
+        importing.boundaryEdgeCount = candidate->boundary_edge_count > 0
+            ? candidate->boundary_edge_count
+            : static_cast<int>(candidate->boundary_edges.size());
+    }
+    processStatus_ = std::move(importing);
+
     const auto artifacts = PatchArtifactLocator().locateFromLocalStl(localStlPath);
     if (!artifacts.success) {
         clearCurrentPatchOverlay();
+        publishProcessStatusForCandidate(ProcessStage::ImportingPatch, candidate, artifacts.message);
         return Result::error(artifacts.message);
     }
 
@@ -450,7 +472,9 @@ Result AppController::importPatchForCurrentCandidateFromLocalStl(
     auto imported = PatchImportService().importPatch(importPath);
     if (!imported.success) {
         clearCurrentPatchOverlay();
-        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+        const auto message = imported.errorMessage.empty() ? imported.message : imported.errorMessage;
+        publishProcessStatusForCandidate(ProcessStage::ImportingPatch, candidate, message);
+        return Result::error(message);
     }
 
     currentPatchArtifactPaths_ = artifacts;
@@ -462,15 +486,37 @@ Result AppController::importPatchForCurrentCandidateFromLocalStl(
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
     updateCurrentPatchApplyState();
+    publishProcessStatusForCandidate(
+        ProcessStage::PreviewReady,
+        candidate,
+        currentPatchStatusMessage_,
+        currentPatchPreviewReport_.warningMessage);
     return Result::ok();
 }
 
 Result AppController::importPatchResultForCurrentCandidate(
     const GeomagicAutoSurfaceResult& result,
     const MergeCandidate* candidate) {
+    ProcessStatusSnapshot importing = makeProcessStatus(ProcessStage::ImportingPatch, "Importing patch from Geomagic result.");
+    importing.localStlPath = result.inputStlPath;
+    importing.patchStepPath = result.outputStepPath;
+    importing.patchIgesPath = result.outputIgesPath;
+    importing.fitRegionLogPath = result.fitRegionLogPath;
+    if (candidate != nullptr) {
+        importing.candidateId = candidate->candidate_id;
+        importing.sourceFaceCount = candidate->face_count > 0
+            ? candidate->face_count
+            : static_cast<int>(candidate->faces.size());
+        importing.boundaryEdgeCount = candidate->boundary_edge_count > 0
+            ? candidate->boundary_edge_count
+            : static_cast<int>(candidate->boundary_edges.size());
+    }
+    processStatus_ = std::move(importing);
+
     const auto artifacts = PatchArtifactLocator().locateFromResult(result);
     if (!artifacts.success) {
         clearCurrentPatchOverlay();
+        publishProcessStatusForCandidate(ProcessStage::ImportingPatch, candidate, artifacts.message);
         return Result::error(artifacts.message);
     }
 
@@ -480,7 +526,9 @@ Result AppController::importPatchResultForCurrentCandidate(
     auto imported = PatchImportService().importPatch(importPath);
     if (!imported.success) {
         clearCurrentPatchOverlay();
-        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+        const auto message = imported.errorMessage.empty() ? imported.message : imported.errorMessage;
+        publishProcessStatusForCandidate(ProcessStage::ImportingPatch, candidate, message);
+        return Result::error(message);
     }
 
     currentPatchArtifactPaths_ = artifacts;
@@ -492,27 +540,48 @@ Result AppController::importPatchResultForCurrentCandidate(
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
     updateCurrentPatchApplyState();
+    publishProcessStatusForCandidate(
+        ProcessStage::PreviewReady,
+        candidate,
+        currentPatchStatusMessage_,
+        currentPatchPreviewReport_.warningMessage);
     return Result::ok();
 }
 
 Result AppController::importPatchFromFileForCurrentCandidate(
     const std::filesystem::path& patchPath,
     const MergeCandidate* candidate) {
+    ProcessStatusSnapshot importing = makeProcessStatus(ProcessStage::ImportingPatch, "Importing patch from selected file.");
+    if (candidate != nullptr) {
+        importing.candidateId = candidate->candidate_id;
+        importing.sourceFaceCount = candidate->face_count > 0
+            ? candidate->face_count
+            : static_cast<int>(candidate->faces.size());
+        importing.boundaryEdgeCount = candidate->boundary_edge_count > 0
+            ? candidate->boundary_edge_count
+            : static_cast<int>(candidate->boundary_edges.size());
+    }
+
     PatchArtifactPaths artifacts;
     artifacts.success = true;
     const auto extension = lowercase_extension(patchPath);
     if (extension == ".igs" || extension == ".iges") {
         artifacts.patchIgesSidecarPath = patchPath;
         artifacts.foundIgesSidecar = true;
+        importing.patchIgesPath = patchPath;
     } else {
         artifacts.patchStepPath = patchPath;
         artifacts.foundStep = true;
+        importing.patchStepPath = patchPath;
     }
+    processStatus_ = std::move(importing);
 
     auto imported = PatchImportService().importPatch(patchPath);
     if (!imported.success) {
         clearCurrentPatchOverlay();
-        return Result::error(imported.errorMessage.empty() ? imported.message : imported.errorMessage);
+        const auto message = imported.errorMessage.empty() ? imported.message : imported.errorMessage;
+        publishProcessStatusForCandidate(ProcessStage::ImportingPatch, candidate, message);
+        return Result::error(message);
     }
 
     currentPatchArtifactPaths_ = artifacts;
@@ -524,6 +593,11 @@ Result AppController::importPatchFromFileForCurrentCandidate(
         currentPatchArtifactPaths_);
     patchPreviewReady_ = currentPatchPreviewReport_.success;
     updateCurrentPatchApplyState();
+    publishProcessStatusForCandidate(
+        ProcessStage::PreviewReady,
+        candidate,
+        currentPatchStatusMessage_,
+        currentPatchPreviewReport_.warningMessage);
     return Result::ok();
 }
 
@@ -534,6 +608,7 @@ void AppController::clearCurrentPatchOverlay() {
     patchPreviewReady_ = false;
     currentPatchStatus_ = RegionPatchStatus::NotGenerated;
     currentPatchStatusMessage_ = "Patch preview cleared.";
+    processStatus_ = makeProcessStatus(ProcessStage::Idle, currentPatchStatusMessage_);
 }
 
 bool AppController::patchPreviewReady() const {
@@ -560,6 +635,14 @@ const std::string& AppController::currentPatchStatusMessage() const {
     return currentPatchStatusMessage_;
 }
 
+const ProcessStatusSnapshot& AppController::currentProcessStatus() const {
+    return processStatus_;
+}
+
+void AppController::updateProcessStatus(ProcessStatusSnapshot status) {
+    processStatus_ = std::move(status);
+}
+
 PatchApplyDecision AppController::currentPatchApplyDecision() const {
     return evaluatePatchApplyReadiness(patchPreviewReady_, currentPatchPreviewReport_);
 }
@@ -569,22 +652,30 @@ Result AppController::requestApplyCurrentPatchPreview() {
     if (!decision.canRequestApply) {
         currentPatchStatus_ = decision.status;
         currentPatchStatusMessage_ = decision.reason;
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, nullptr, decision.reason);
         return Result::error(decision.reason);
     }
 
     currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
     currentPatchStatusMessage_ = "Patch Apply requires an explicit current candidate.";
+    publishProcessStatusForCandidate(ProcessStage::ApplyFailed, nullptr, currentPatchStatusMessage_);
     return Result::error("Patch Apply requires an explicit current candidate.");
 }
 
 Result AppController::applyCurrentPatchToCurrentCandidate(
     const MergeCandidate& candidate,
     PatchReplacementReport* outReport) {
+    publishProcessStatusForCandidate(
+        ProcessStage::ApplyingPatch,
+        &candidate,
+        "Patch Apply started.");
+
     if (!hasDocument()) {
         const std::string message = "Open a STEP/STP document before applying a patch.";
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingDocument, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
 
@@ -593,6 +684,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = decision.status;
         currentPatchStatusMessage_ = decision.reason;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingPreviewReport, &candidate, decision.reason);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, decision.reason);
         return Result::error(decision.reason);
     }
     if (candidate.faces.empty()) {
@@ -600,6 +692,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingCandidate, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
     if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
@@ -607,6 +700,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
     if (candidate.status == MergeCandidateStatus::Rejected || candidate.status == MergeCandidateStatus::Hidden) {
@@ -614,6 +708,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
 
@@ -626,9 +721,14 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
 
+    publishProcessStatusForCandidate(
+        ProcessStage::AnalyzingBoundary,
+        &candidate,
+        "Analyzing original CAD boundary before Patch Apply.");
     const auto boundary = RegionBoundaryAnalyzer().analyze(context_.document, candidate);
     if (!boundary.valid ||
         boundary.connected_component_count != 1 ||
@@ -645,6 +745,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::InvalidBoundary, &candidate, message);
+        publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
         return Result::error(message);
     }
 
@@ -662,16 +763,28 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
     options.requireZeroMultipleEdges = true;
     options.requireRoundtripWatertight = true;
 
-    auto command = std::make_unique<PatchReplacementCommand>(input, outReport, options);
+    PatchReplacementReport localReport;
+    auto* reportTarget = outReport != nullptr ? outReport : &localReport;
+    auto command = std::make_unique<PatchReplacementCommand>(input, reportTarget, options);
+    publishProcessStatusForCandidate(
+        ProcessStage::BuildingReplacement,
+        &candidate,
+        "Building replacement and running repair before StrictTopologyGate.");
     const auto result = execute(std::move(command));
+    const auto& finalReport = *reportTarget;
     if (!result.success()) {
         currentPatchStatus_ = RegionPatchStatus::ApplyFailed;
-        currentPatchStatusMessage_ = outReport != nullptr && !outReport->message.empty()
-            ? outReport->message
+        currentPatchStatusMessage_ = !finalReport.message.empty()
+            ? finalReport.message
             : result.message();
+        publishProcessStatusFromReplacementReport(ProcessStage::ApplyFailed, finalReport, currentPatchStatusMessage_);
         return result;
     }
 
+    publishProcessStatusFromReplacementReport(
+        ProcessStage::Applied,
+        finalReport,
+        "Patch Apply completed and committed after StrictTopologyGate passed.");
     currentPatchArtifactPaths_ = {};
     currentImportedPatchInfo_ = {};
     currentPatchPreviewReport_ = {};
@@ -747,6 +860,95 @@ std::set<EdgeId> AppController::lockedEdges() const {
 
 const CommandHistory& AppController::history() const {
     return history_;
+}
+
+void AppController::publishProcessStatusForCandidate(
+    ProcessStage stage,
+    const MergeCandidate* candidate,
+    std::string message,
+    std::string warning) {
+    ProcessStatusSnapshot snapshot;
+    snapshot.stage = stage;
+    snapshot.latestMessage = std::move(message);
+    snapshot.latestWarning = std::move(warning);
+    snapshot.localStlPath = currentPatchArtifactPaths_.localStlPath;
+    snapshot.patchStepPath = currentPatchArtifactPaths_.patchStepPath;
+    snapshot.patchIgesPath = currentPatchArtifactPaths_.patchIgesSidecarPath;
+    snapshot.fitRegionLogPath = currentPatchArtifactPaths_.fitRegionLogPath;
+
+    if (candidate != nullptr) {
+        snapshot.candidateId = candidate->candidate_id;
+        snapshot.sourceFaceCount = candidate->face_count > 0
+            ? candidate->face_count
+            : static_cast<int>(candidate->faces.size());
+        snapshot.boundaryEdgeCount = candidate->boundary_edge_count > 0
+            ? candidate->boundary_edge_count
+            : static_cast<int>(candidate->boundary_edges.size());
+    } else if (currentPatchPreviewReport_.candidateId >= 0) {
+        snapshot.candidateId = currentPatchPreviewReport_.candidateId;
+        snapshot.sourceFaceCount = currentPatchPreviewReport_.sourceFaceCount;
+        snapshot.boundaryEdgeCount = currentPatchPreviewReport_.sourceBoundaryEdgeCount;
+    }
+
+    processStatus_ = std::move(snapshot);
+}
+
+void AppController::publishProcessStatusFromReplacementReport(
+    ProcessStage stage,
+    const PatchReplacementReport& report,
+    std::string fallbackMessage) {
+    ProcessStatusSnapshot snapshot;
+    snapshot.stage = stage;
+    snapshot.candidateId = report.candidateId;
+    snapshot.sourceFaceCount = report.sourceFaceCount;
+    snapshot.boundaryEdgeCount = report.sourceBoundaryEdgeCount;
+    snapshot.localStlPath = currentPatchArtifactPaths_.localStlPath;
+    snapshot.patchStepPath = currentPatchArtifactPaths_.patchStepPath;
+    snapshot.patchIgesPath = currentPatchArtifactPaths_.patchIgesSidecarPath;
+    snapshot.fitRegionLogPath = currentPatchArtifactPaths_.fitRegionLogPath;
+
+    snapshot.selectedSewingTolerance = report.selectedSewingTolerance;
+    snapshot.sewingAttemptCount = report.sewingAttemptCount;
+    snapshot.sewingAttemptIndex = report.sewingAttemptCount;
+    snapshot.bestFreeEdges = report.bestSewingFreeEdges;
+    snapshot.bestMultipleEdges = report.bestSewingMultipleEdges;
+    snapshot.bestFaceCount = report.bestSewingFaceCount;
+    snapshot.bestEdgeCount = report.bestSewingEdgeCount;
+    snapshot.bestShellCount = report.bestSewingShellCount;
+    snapshot.bestSolidCount = report.bestSewingSolidCount;
+    snapshot.bestBRepCheckValid = report.bestSewingBRepCheckValid;
+    snapshot.repairRunCount = report.repairRunCount;
+    snapshot.adaptiveSewingApplied = report.adaptiveSewingApplied;
+    snapshot.repairApplied = report.repairApplied;
+    snapshot.gateEvaluated = report.gateEvaluated;
+    snapshot.gatePassed = report.gatePassed;
+    snapshot.latestGateFailureReason = report.gateFailureReason;
+    if (snapshot.latestGateFailureReason.empty() &&
+        report.failureReason == PatchReplacementFailureReason::GateFailed) {
+        snapshot.latestGateFailureReason = toString(report.failureReason);
+    }
+
+    snapshot.latestMessage = !fallbackMessage.empty() ? std::move(fallbackMessage) : report.message;
+    if (snapshot.latestMessage.empty()) {
+        snapshot.latestMessage = report.gateMessage;
+    }
+    if (report.failureReason == PatchReplacementFailureReason::GateFailed &&
+        snapshot.latestMessage.find("StrictTopologyGate") == std::string::npos) {
+        const auto detail = snapshot.latestGateFailureReason.empty()
+            ? std::string("Gate failed.")
+            : snapshot.latestGateFailureReason;
+        snapshot.latestMessage = "StrictTopologyGate failed: " + detail;
+    }
+
+    snapshot.latestWarning = report.warningMessage;
+    if (snapshot.latestWarning.empty()) {
+        snapshot.latestWarning = report.repairWarningMessage;
+    }
+    if (snapshot.latestWarning.empty()) {
+        snapshot.latestWarning = report.gateWarningMessage;
+    }
+
+    processStatus_ = std::move(snapshot);
 }
 
 void AppController::updateCurrentPatchApplyState() {

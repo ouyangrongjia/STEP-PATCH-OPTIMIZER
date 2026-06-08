@@ -2338,7 +2338,7 @@ GUI 截图显示 Geomagic patch / local STL 对应区域在原 STP boundary loop
 
 ## T6.6.2 Process Status Panel / 当前进程状态面板
 
-状态：TODO。
+状态：DONE。
 
 背景：
 
@@ -2383,6 +2383,8 @@ tests/test_patch_apply_state.cpp
    - ValidatingGate
    - Applied
    - ApplyFailed
+   - CachedUndo
+   - CachedRedo
 2. 状态面板显示：
    - current stage
    - candidate id
@@ -2421,6 +2423,19 @@ tests/test_patch_apply_state.cpp
 adaptive sewing 过程中能看到 tolerance attempt 和当前 best stats。
 ApplyFailed 后，面板保留失败阶段、Gate reason、free edge / solid / BRepCheck 摘要。
 redo 只显示 cached redo，不显示 RunningGeomagic / CroppingStl / AdaptiveSewing。
+```
+
+完成记录：
+
+```text
+已新增 src/app/ProcessStatus.h/.cpp，定义 ProcessStage / ProcessStatusSnapshot，并由 AppController 保留当前进程状态快照。
+已新增 src/gui/ProcessStatusPanel.h/.cpp，在 GUI 底部输出区加入“进程”页，显示 stage、candidate id、source face count、boundary edge count、local STL、patch STEP/IGS、fit_region log、selected sewing tolerance、sewing attempt index/count、best sewing free/multiple edge、best face/edge/shell/solid、best BRepCheck、repair/adaptive sewing、StrictTopologyGate evaluated/passed/failure、message 和 warning。
+MainWindow 已在 STL crop start/finish/failure、Geomagic preview pipeline start/failure、patch import start/finish/failure、Apply start/finish/failure、clear overlay、undo/redo 后刷新面板。
+AppController 在 import、preview ready、Apply 早退失败、replacement build、PatchReplacementCommand 成功/失败、undo/redo 后同步状态；ApplyFailed 后保留 PatchReplacementReport 中的 repair/adaptive sewing/Gate 参数。
+undo/redo 显示 CachedUndo / CachedRedo，并明确不重新运行 Geomagic、STL crop、patch import 或 repair；redo 仍只复用缓存 afterDocument。
+第一版为阶段级 UI 状态面板；PatchReplacementCommand 当前仍同步执行，因此 adaptive sewing 每个 tolerance attempt 的逐步实时刷新未做，后续若引入 job/progress callback 再细化。
+本阶段不改变 CommandHistory 语义，不调用 Geomagic，不重新裁剪 STL，不放宽 StrictTopologyGate，不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary。
+已扩展 tests/test_patch_apply_state.cpp，覆盖 ProcessStage 字符串、PreviewReady 状态、Apply success/failure 后参数保留、GateFailed 后 repair/Gate 诊断保留，以及 undo/redo cached 状态。
 ```
 
 

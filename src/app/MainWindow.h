@@ -20,6 +20,7 @@ class LogPanel;
 class ModelTreePanel;
 class OccViewWidget;
 class ParameterPanel;
+class ProcessStatusPanel;
 
 class MainWindow final : public QMainWindow {
 public:
@@ -93,6 +94,7 @@ private:
         bool visualCutoutPreview = false,
         const CropBoundaryDiagnosticsReport* diagnostics = nullptr);
     void refreshPatchApplyAction();
+    void refreshProcessStatusPanel();
     void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
@@ -104,6 +106,7 @@ private:
     ParameterPanel* parameterPanel_ = nullptr;
     InspectPanel* inspectPanel_ = nullptr;
     LogPanel* logPanel_ = nullptr;
+    ProcessStatusPanel* processStatusPanel_ = nullptr;
     QTabWidget* bottomTabs_ = nullptr;
     QDockWidget* modelDock_ = nullptr;
     QDockWidget* parameterDock_ = nullptr;

@@ -14,6 +14,7 @@
 #include "merge/SphereRegionMerger.h"
 #include "external/geomagic/GeomagicAutoSurfaceConfig.h"
 #include "external/geomagic/GeomagicAutoSurfaceResult.h"
+#include "app/ProcessStatus.h"
 #include "patch/ImportedPatchInfo.h"
 #include "patch/CropBoundaryDiagnostics.h"
 #include "patch/PatchArtifactLocator.h"
@@ -116,6 +117,8 @@ public:
     const PatchPreviewReport& currentPatchPreviewReport() const;
     RegionPatchStatus currentPatchStatus() const;
     const std::string& currentPatchStatusMessage() const;
+    const ProcessStatusSnapshot& currentProcessStatus() const;
+    void updateProcessStatus(ProcessStatusSnapshot status);
     PatchApplyDecision currentPatchApplyDecision() const;
     Result requestApplyCurrentPatchPreview();
     Result applyCurrentPatchToCurrentCandidate(
@@ -151,8 +154,18 @@ private:
     bool patchPreviewReady_ = false;
     RegionPatchStatus currentPatchStatus_ = RegionPatchStatus::NotGenerated;
     std::string currentPatchStatusMessage_;
+    ProcessStatusSnapshot processStatus_ = makeProcessStatus(ProcessStage::Idle, "Idle.");
 
     void updateCurrentPatchApplyState();
+    void publishProcessStatusForCandidate(
+        ProcessStage stage,
+        const MergeCandidate* candidate,
+        std::string message,
+        std::string warning = {});
+    void publishProcessStatusFromReplacementReport(
+        ProcessStage stage,
+        const PatchReplacementReport& report,
+        std::string fallbackMessage = {});
 };
 
 }

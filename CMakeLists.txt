@@ -21,6 +21,7 @@ set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(spo_core STATIC
     src/app/AppController.cpp
+    src/app/ProcessStatus.cpp
     src/brep/BoundaryWireBuilder.cpp
     src/brep/EdgeIndex.cpp
     src/brep/FaceIndex.cpp
@@ -110,6 +111,7 @@ if(SPO_BUILD_APP)
         src/gui/ModelTreePanel.cpp
         src/gui/OccViewWidget.cpp
         src/gui/ParameterPanel.cpp
+        src/gui/ProcessStatusPanel.cpp
     )
 
     target_include_directories(step-patch-optimizer PRIVATE "${SPO_INCLUDE_DIR}")
