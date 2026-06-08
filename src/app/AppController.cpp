@@ -808,7 +808,8 @@ CropBoundaryDiagnosticsReport AppController::diagnoseCropBoundaryForCurrentPatch
         candidate,
         localStlMesh,
         currentImportedPatchInfo_.shape,
-        options);
+        options,
+        sourceStlMesh_.empty() ? nullptr : &sourceStlMesh_);
 }
 
 CropBoundaryDiagnosticsReport AppController::diagnoseCropBoundaryData(
@@ -816,12 +817,15 @@ CropBoundaryDiagnosticsReport AppController::diagnoseCropBoundaryData(
     const MergeCandidate& candidate,
     const StlMesh* localStlMesh,
     const TopoDS_Shape& importedPatchShape,
-    const CropBoundaryDiagnosticsOptions& options) {
+    const CropBoundaryDiagnosticsOptions& options,
+    const StlMesh* sourceStlMesh) {
     const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
     CropBoundaryDiagnosticsInput input;
     input.document = &document;
+    input.candidate = &candidate;
     input.boundary = &boundary;
     input.localStlMesh = localStlMesh;
+    input.sourceStlMesh = sourceStlMesh;
     input.importedPatchShape = &importedPatchShape;
     return CropBoundaryDiagnostics().analyze(input, options);
 }

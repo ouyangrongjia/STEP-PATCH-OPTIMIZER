@@ -92,10 +92,13 @@ bool find_crop_stl_root(
 
 std::filesystem::path with_stem_suffix(
     const std::filesystem::path& directory,
-    const std::string& stem,
+    const std::filesystem::path& stem,
     const std::string& suffix,
     const char* extension) {
-    return directory / (stem + suffix + extension);
+    auto filename = stem;
+    filename += suffix;
+    filename += extension;
+    return directory / filename;
 }
 
 std::string stem_string(const std::filesystem::path& path) {
@@ -175,63 +178,65 @@ std::optional<std::filesystem::path> choose_best_match(std::vector<std::filesyst
 
 std::optional<std::filesystem::path> find_step_for_local_stl(
     const std::filesystem::path& cropStpDir,
-    const std::string& stem) {
-    const auto exactStp = with_stem_suffix(cropStpDir, stem, "", ".stp");
+    const std::filesystem::path& stemPath,
+    const std::string& stemKey) {
+    const auto exactStp = with_stem_suffix(cropStpDir, stemPath, "", ".stp");
     if (regular_file_exists(exactStp)) {
         return exactStp;
     }
 
-    const auto mechanicalStp = with_stem_suffix(cropStpDir, stem, "_mechanical", ".stp");
+    const auto mechanicalStp = with_stem_suffix(cropStpDir, stemPath, "_mechanical", ".stp");
     if (regular_file_exists(mechanicalStp)) {
         return mechanicalStp;
     }
 
-    const auto organicStp = with_stem_suffix(cropStpDir, stem, "_organic", ".stp");
+    const auto organicStp = with_stem_suffix(cropStpDir, stemPath, "_organic", ".stp");
     if (regular_file_exists(organicStp)) {
         return organicStp;
     }
 
-    if (const auto wildcardStp = choose_best_match(matching_wildcard_steps(cropStpDir, stem, ".stp"))) {
+    if (const auto wildcardStp = choose_best_match(matching_wildcard_steps(cropStpDir, stemKey, ".stp"))) {
         return wildcardStp;
     }
 
-    const auto exactStep = with_stem_suffix(cropStpDir, stem, "", ".step");
+    const auto exactStep = with_stem_suffix(cropStpDir, stemPath, "", ".step");
     if (regular_file_exists(exactStep)) {
         return exactStep;
     }
 
-    return choose_best_match(matching_wildcard_steps(cropStpDir, stem, ".step"));
+    return choose_best_match(matching_wildcard_steps(cropStpDir, stemKey, ".step"));
 }
 
 std::optional<std::filesystem::path> find_iges_fallback(
     const std::filesystem::path& cropIgsDir,
-    const std::string& stem) {
-    const auto exactIgs = with_stem_suffix(cropIgsDir, stem, "", ".igs");
+    const std::filesystem::path& stemPath,
+    const std::string& stemKey) {
+    const auto exactIgs = with_stem_suffix(cropIgsDir, stemPath, "", ".igs");
     if (regular_file_exists(exactIgs)) {
         return exactIgs;
     }
 
-    if (const auto wildcardIgs = choose_best_match(matching_wildcard_steps(cropIgsDir, stem, ".igs"))) {
+    if (const auto wildcardIgs = choose_best_match(matching_wildcard_steps(cropIgsDir, stemKey, ".igs"))) {
         return wildcardIgs;
     }
 
-    const auto exactIges = with_stem_suffix(cropIgsDir, stem, "", ".iges");
+    const auto exactIges = with_stem_suffix(cropIgsDir, stemPath, "", ".iges");
     if (regular_file_exists(exactIges)) {
         return exactIges;
     }
 
-    return choose_best_match(matching_wildcard_steps(cropIgsDir, stem, ".iges"));
+    return choose_best_match(matching_wildcard_steps(cropIgsDir, stemKey, ".iges"));
 }
 
 void attach_sidecars(PatchArtifactPaths& result) {
     if (!result.patchStepPath.empty()) {
-        const auto sidecar = result.patchStepPath.parent_path() / (stem_string(result.patchStepPath) + "_autosurface.igs");
+        const auto sidecar = with_stem_suffix(result.patchStepPath.parent_path(), result.patchStepPath.stem(), "_autosurface", ".igs");
         if (regular_file_exists(sidecar)) {
             result.patchIgesSidecarPath = sidecar;
             result.foundIgesSidecar = true;
         }
 
-        const auto log = result.patchStepPath.parent_path() / (stem_string(result.patchStepPath) + "_fit_region.log");
+        const auto log = with_stem_suffix(result.patchStepPath.parent_path(), result.patchStepPath.stem(), "_fit_region", ".log");
         if (regular_file_exists(log)) {
             result.fitRegionLogPath = log;
             result.foundFitLog = true;
@@ -299,14 +304,15 @@ PatchArtifactPaths PatchArtifactLocator::locateFromLocalStl(const std::filesyste
 
     const auto relativePath = input.lexically_relative(cropStlRoot);
     const auto relativeDir = relativePath.parent_path();
-    const auto stem = stem_string(input);
+    const auto stemPath = input.stem();
+    const auto stemKey = stem_string(input);
     const auto cropStpDir = dataRoot / "crop_stp" / relativeDir;
     const auto cropIgsDir = dataRoot / "crop_igs" / relativeDir;
 
     PatchArtifactPaths result;
     result.localStlPath = input;
 
-    if (const auto step = find_step_for_local_stl(cropStpDir, stem)) {
+    if (const auto step = find_step_for_local_stl(cropStpDir, stemPath, stemKey)) {
         result.patchStepPath = *step;
         result.foundStep = true;
         result.success = true;
@@ -315,7 +321,7 @@ PatchArtifactPaths PatchArtifactLocator::locateFromLocalStl(const std::filesyste
         return result;
     }
 
-    if (const auto iges = find_iges_fallback(cropIgsDir, stem)) {
+    if (const auto iges = find_iges_fallback(cropIgsDir, stemPath, stemKey)) {
         result.patchIgesSidecarPath = *iges;
         result.foundIgesSidecar = true;
         result.success = true;

@@ -133,7 +133,8 @@ public:
         const MergeCandidate& candidate,
         const StlMesh* localStlMesh,
         const TopoDS_Shape& importedPatchShape,
-        const CropBoundaryDiagnosticsOptions& options = {});
+        const CropBoundaryDiagnosticsOptions& options = {},
+        const StlMesh* sourceStlMesh = nullptr);
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;

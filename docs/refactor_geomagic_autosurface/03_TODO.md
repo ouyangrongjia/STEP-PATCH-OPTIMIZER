@@ -2,7 +2,7 @@
 
 > 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：真实 Geomagic GUI 观察确认 local STL 在候选边角存在可见缺面，T6.6.1 的 boundary point 最近距离 coverage 指标存在漏检 boundary-band / 内侧缺面风险；下一步优先推进 T6.6.3 STL Crop Boundary-Band Diagnostics 与 T6.6.4 STL Region Extractor 保守裁剪修复，修复后再重新生成 Geomagic patch 并评估是否需要 patch boundary re-trim。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：真实 Geomagic GUI 观察确认 local STL 在候选边角存在可见缺面，T6.6.1 的 boundary point 最近距离 coverage 指标存在漏检 boundary-band / 内侧缺面风险；T6.6.3 已补充 boundary-band 与 triangle rejection 诊断，下一步优先推进 T6.6.4 STL Region Extractor 保守裁剪修复，修复后再重新生成 Geomagic patch 并评估是否需要 patch boundary re-trim。
 
 ---
 
@@ -1251,6 +1251,7 @@ patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 ```text
 已完成。
 已新增 PatchArtifactLocator，根据 local STL / GeomagicAutoSurfaceResult 动态定位 patch STEP/IGES sidecar/fit_region log。
+Windows 中文目录 / 中文 stem 查找已使用 native std::filesystem::path 拼接，避免把 UTF-8 narrow string 重新构造成文件名导致同名 patch 查找失败。
 生产逻辑不写死 local_candidate_0179 或任何固定 candidate 文件名；真实样例仅保留为 optional test fixture。
 ```
 
@@ -1340,7 +1341,8 @@ public:
 
 ```text
 已完成。
-GUI 已提供“导入当前候选 Patch（local STL）”、“从文件导入 Patch”和“清除 Patch Overlay”入口。
+GUI 已提供“从 local STL 定位并导入 Patch”、“从文件导入 Patch”和“清除 Patch Overlay”入口。
+“从 local STL 定位并导入 Patch”不是把 STL 当作 patch 导入，而是选择 local STL 作为 artifact key，自动定位同 stem 的 STEP/STP/IGS/IGES patch，并保留 local STL 给 crop diagnostics 使用。
 OccViewWidget 使用独立 AIS_Shape 显示 patch overlay，多次导入会先清理旧 overlay，清除 overlay 不修改主 ShapeDocument。
 当前阶段只做 overlay 预览，不执行真实 replacement / sewing。
 ```
@@ -1601,7 +1603,7 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.6 Industrial Adaptive Sewing（DONE，最小 C++ adaptive repair 已接入）
 → T6.6.1 Crop Boundary Diagnostics（DONE，验证原 STP loop → STL crop → Geomagic patch 是否丢边界；当前已发现 boundary-point coverage 存在漏检内侧缺面的盲区）
 → T6.6.2 Process Status Panel（DONE，阶段级进程状态面板已接入）
-→ T6.6.3 STL Crop Boundary-Band Diagnostics（NEXT，专门诊断 local STL 边界内侧缺面 / 被错误丢弃三角片）
+→ T6.6.3 STL Crop Boundary-Band Diagnostics（DONE，已诊断 local STL 边界内侧 band 缺面和 centroid-only triangle rejection）
 → T6.6.4 STL Region Extractor 保守裁剪修复（NEXT，根据 T6.6.3 结果修复 centroid-only / 过严裁剪策略）
 → T6.6.5 Regenerate Geomagic Patch + Apply Verification（NEXT，重新生成 patch，复测 patch boundary mismatch 与 StrictTopologyGate）
 ```
@@ -2466,7 +2468,17 @@ undo/redo 显示 CachedUndo / CachedRedo，并明确不重新运行 Geomagic、S
 
 ## T6.6.3 STL Crop Boundary-Band Diagnostics / 局部 STL 边界带缺面诊断
 
-状态：NEXT。
+状态：DONE。
+
+完成摘要：
+
+```text
+已在 CropBoundaryDiagnostics 中扩展 boundary-band coverage 与 source triangle rejection audit。
+GUI patch preview / import 后的诊断报告新增 boundary-band sample/missing/max distance、source triangle audit count、rejected near-boundary triangle count、conservative keep candidate count 和 suspected crop hole edge ids。
+Overlay 新增橙色 boundary-band missing area 与紫色 near-boundary rejected triangles；不新增 bbox 诊断 overlay。
+裁剪 bbox 线框仍保留菜单开关，但默认隐藏，避免遮挡 local STL、原 STP loop 与诊断 segment。
+本阶段只做诊断，不改变 StlRegionExtractor 正式输出，不调用 Geomagic，不重新生成 patch，不修改 ShapeDocument，不放宽 StrictTopologyGate。
+```
 
 背景：
 
@@ -2657,7 +2669,7 @@ T6.6.1 的 stlCoverageMissingPointCount 很低，但它只检查原 boundary sam
 
 ## T6.6.4 STL Region Extractor 保守裁剪修复
 
-状态：PENDING，必须在 T6.6.3 诊断确认后执行。
+状态：NEXT，必须在 T6.6.3 诊断确认后执行。
 
 背景：
 

@@ -95,6 +95,7 @@ private:
         const CropBoundaryDiagnosticsReport* diagnostics = nullptr);
     void refreshPatchApplyAction();
     void refreshProcessStatusPanel();
+    void publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics);
     void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);

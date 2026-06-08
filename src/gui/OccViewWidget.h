@@ -130,7 +130,9 @@ private:
     Handle(AIS_Shape) cropOriginalBoundaryShape_;
     Handle(AIS_Shape) cropPatchOuterBoundaryShape_;
     Handle(AIS_Shape) cropStlIssueShape_;
+    Handle(AIS_Shape) cropBandIssueShape_;
     Handle(AIS_Shape) cropPatchIssueShape_;
+    Handle(AIS_Shape) cropRejectedTriangleShape_;
     std::vector<Handle(AIS_Shape)> mergeCandidateShapes_;
     std::vector<std::pair<FaceId, Quantity_Color>> mergeCandidateFaceColors_;
     SelectionMode selectionMode_ = SelectionMode::Face;

@@ -60,6 +60,13 @@ void ProcessStatusPanel::showStatus(const ProcessStatusSnapshot& snapshot) {
         {"StrictTopologyGate evaluated", boolText(snapshot.gateEvaluated)},
         {"StrictTopologyGate passed", boolText(snapshot.gatePassed)},
         {"StrictTopologyGate failure", QString::fromStdString(snapshot.latestGateFailureReason)},
+        {"crop band evaluated", boolText(snapshot.cropBoundaryBandEvaluated)},
+        {"crop band sample count", QString::number(snapshot.cropBoundaryBandSampleCount)},
+        {"crop band missing points", QString::number(snapshot.cropBoundaryBandMissingPointCount)},
+        {"crop band max distance", QString::number(snapshot.cropBoundaryBandMaxDistance, 'g', 8)},
+        {"crop triangle audit evaluated", boolText(snapshot.cropSourceTriangleAuditEvaluated)},
+        {"crop rejected near-boundary triangles", QString::number(snapshot.cropRejectedNearBoundaryTriangleCount)},
+        {"crop conservative keep candidates", QString::number(snapshot.cropConservativeKeepCandidateCount)},
         {"message", QString::fromStdString(snapshot.latestMessage)},
         {"warning", QString::fromStdString(snapshot.latestWarning)}
     });

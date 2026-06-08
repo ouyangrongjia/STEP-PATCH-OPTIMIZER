@@ -53,6 +53,14 @@ struct ProcessStatusSnapshot {
     bool gateEvaluated = false;
     bool gatePassed = false;
 
+    bool cropBoundaryBandEvaluated = false;
+    bool cropSourceTriangleAuditEvaluated = false;
+    int cropBoundaryBandSampleCount = 0;
+    int cropBoundaryBandMissingPointCount = 0;
+    double cropBoundaryBandMaxDistance = 0.0;
+    int cropRejectedNearBoundaryTriangleCount = 0;
+    int cropConservativeKeepCandidateCount = 0;
+
     std::string latestGateFailureReason;
     std::string latestMessage;
     std::string latestWarning;

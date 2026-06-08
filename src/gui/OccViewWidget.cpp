@@ -132,6 +132,27 @@ TopoDS_Shape makeGapSampleShape(const std::vector<CropBoundaryGapSegment>& segme
     return compound;
 }
 
+TopoDS_Shape makeRejectedTriangleShape(const std::vector<StlTriangleCropDecision>& decisions) {
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto& decision : decisions) {
+        const auto p0 = pointFromCropSample(decision.v0);
+        const auto p1 = pointFromCropSample(decision.v1);
+        const auto p2 = pointFromCropSample(decision.v2);
+        if (p0.SquareDistance(p1) > 1.0e-18) {
+            builder.Add(compound, BRepBuilderAPI_MakeEdge(p0, p1).Edge());
+        }
+        if (p1.SquareDistance(p2) > 1.0e-18) {
+            builder.Add(compound, BRepBuilderAPI_MakeEdge(p1, p2).Edge());
+        }
+        if (p2.SquareDistance(p0) > 1.0e-18) {
+            builder.Add(compound, BRepBuilderAPI_MakeEdge(p2, p0).Edge());
+        }
+    }
+    return compound;
+}
+
 void displayDiagnosticShape(
     const Handle(AIS_InteractiveContext)& context,
     Handle(AIS_Shape)& handle,
@@ -251,7 +272,9 @@ OccViewWidget::~OccViewWidget() {
     cropOriginalBoundaryShape_.Nullify();
     cropPatchOuterBoundaryShape_.Nullify();
     cropStlIssueShape_.Nullify();
+    cropBandIssueShape_.Nullify();
     cropPatchIssueShape_.Nullify();
+    cropRejectedTriangleShape_.Nullify();
     context_.Nullify();
     view_.Nullify();
     viewer_.Nullify();
@@ -290,7 +313,9 @@ Result OccViewWidget::displayDocument(const ShapeDocument& document) {
         cropOriginalBoundaryShape_.Nullify();
         cropPatchOuterBoundaryShape_.Nullify();
         cropStlIssueShape_.Nullify();
+        cropBandIssueShape_.Nullify();
         cropPatchIssueShape_.Nullify();
+        cropRejectedTriangleShape_.Nullify();
         sourceStlDisplayedTriangleCount_ = 0;
         croppedStlDisplayedTriangleCount_ = 0;
         mergeCandidateShapes_.clear();
@@ -347,7 +372,9 @@ void OccViewWidget::clearDocument() {
     cropOriginalBoundaryShape_.Nullify();
     cropPatchOuterBoundaryShape_.Nullify();
     cropStlIssueShape_.Nullify();
+    cropBandIssueShape_.Nullify();
     cropPatchIssueShape_.Nullify();
+    cropRejectedTriangleShape_.Nullify();
     sourceStlDisplayedTriangleCount_ = 0;
     croppedStlDisplayedTriangleCount_ = 0;
     mergeCandidateShapes_.clear();
@@ -721,10 +748,22 @@ void OccViewWidget::showCropBoundaryDiagnosticsOverlay(const CropBoundaryDiagnos
         7.0);
     displayDiagnosticShape(
         context_,
+        cropBandIssueShape_,
+        makeGapSampleShape(report.suspectedGapSegments, "Band"),
+        Quantity_Color(1.0, 0.48, 0.02, Quantity_TOC_RGB),
+        7.0);
+    displayDiagnosticShape(
+        context_,
         cropPatchIssueShape_,
         makeGapSampleShape(report.suspectedGapSegments, "Patch"),
         Quantity_Color(1.0, 0.0, 0.90, Quantity_TOC_RGB),
         6.0);
+    displayDiagnosticShape(
+        context_,
+        cropRejectedTriangleShape_,
+        makeRejectedTriangleShape(report.rejectedNearBoundaryTriangles),
+        Quantity_Color(0.62, 0.08, 1.0, Quantity_TOC_RGB),
+        3.0);
 
     context_->UpdateCurrentViewer();
     redrawView();
@@ -740,11 +779,13 @@ void OccViewWidget::clearPatchOverlayShape() {
 
 void OccViewWidget::clearCropBoundaryDiagnosticsOverlay() {
     if (!context_.IsNull()) {
-        const std::array<Handle(AIS_Shape)*, 4> handles = {{
+        const std::array<Handle(AIS_Shape)*, 6> handles = {{
             &cropOriginalBoundaryShape_,
             &cropPatchOuterBoundaryShape_,
             &cropStlIssueShape_,
-            &cropPatchIssueShape_
+            &cropBandIssueShape_,
+            &cropPatchIssueShape_,
+            &cropRejectedTriangleShape_
         }};
         bool removed = false;
         for (auto* handle : handles) {
@@ -761,7 +802,9 @@ void OccViewWidget::clearCropBoundaryDiagnosticsOverlay() {
         cropOriginalBoundaryShape_.Nullify();
         cropPatchOuterBoundaryShape_.Nullify();
         cropStlIssueShape_.Nullify();
+        cropBandIssueShape_.Nullify();
         cropPatchIssueShape_.Nullify();
+        cropRejectedTriangleShape_.Nullify();
     }
 }
 

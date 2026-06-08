@@ -123,6 +123,30 @@ void test_detects_sidecar_and_fit_log() {
     remove_temp_root(root);
 }
 
+void test_locates_non_ascii_crop_step_and_sidecars() {
+    const auto root = temp_root("spo_patch_artifact_non_ascii");
+    const auto stl = root / "data" / "crop_stl" / L"零件" / L"零件_candidate_0008.stl";
+    const auto step = root / "data" / "crop_stp" / L"零件" / L"零件_candidate_0008.stp";
+    const auto sidecar = root / "data" / "crop_stp" / L"零件" / L"零件_candidate_0008_autosurface.igs";
+    const auto log = root / "data" / "crop_stp" / L"零件" / L"零件_candidate_0008_fit_region.log";
+    touch(stl);
+    touch(step);
+    touch(sidecar);
+    touch(log);
+
+    const auto result = spo::PatchArtifactLocator().locateFromLocalStl(stl);
+
+    assert(result.success);
+    assert(result.foundStep);
+    assert(result.foundIgesSidecar);
+    assert(result.foundFitLog);
+    assert(result.patchStepPath == step);
+    assert(result.patchIgesSidecarPath == sidecar);
+    assert(result.fitRegionLogPath == log);
+
+    remove_temp_root(root);
+}
+
 void test_missing_patch_fails_with_message() {
     const auto root = temp_root("spo_patch_artifact_missing");
     const auto stl = root / "data" / "crop_stl" / "a" / "candidate_0006.stl";
@@ -188,6 +212,7 @@ void run_patch_artifact_locator_tests() {
     test_prefers_mechanical_over_organic();
     test_uses_wildcard_fallback();
     test_detects_sidecar_and_fit_log();
+    test_locates_non_ascii_crop_step_and_sidecars();
     test_missing_patch_fails_with_message();
     test_locates_from_geomagic_result();
     test_optional_real_fixture_is_discovery_based();

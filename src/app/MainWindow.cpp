@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <utility>
 
 namespace spo {
 
@@ -180,6 +181,20 @@ QString cropBoundaryDiagnosticsText(const CropBoundaryDiagnosticsReport& report)
             .arg(QString::number(report.stlCoverageMinDistance, 'g', 8))
             .arg(QString::number(report.stlCoverageMaxDistance, 'g', 8))
             .arg(QString::number(report.stlCoverageAverageDistance, 'g', 8))
+        << QString("boundary-band evaluated：%1").arg(boolText(report.boundaryBandEvaluated))
+        << QString("boundary-band offset：%1").arg(QString::number(report.boundaryBandOffset, 'g', 8))
+        << QString("boundary-band tolerance：%1").arg(QString::number(report.boundaryBandCoverageTolerance, 'g', 8))
+        << QString("boundary-band sample count：%1").arg(report.boundaryBandSampleCount)
+        << QString("boundary-band missing point count：%1").arg(report.boundaryBandMissingPointCount)
+        << QString("boundary-band min/max/avg distance：%1 / %2 / %3")
+            .arg(QString::number(report.boundaryBandMinDistance, 'g', 8))
+            .arg(QString::number(report.boundaryBandMaxDistance, 'g', 8))
+            .arg(QString::number(report.boundaryBandAverageDistance, 'g', 8))
+        << QString("source triangle audit evaluated：%1").arg(boolText(report.sourceTriangleAuditEvaluated))
+        << QString("source triangle audit count：%1").arg(report.sourceTriangleAuditCount)
+        << QString("rejected near-boundary triangle count：%1").arg(report.rejectedNearBoundaryTriangleCount)
+        << QString("conservative keep candidate count：%1").arg(report.conservativeKeepCandidateCount)
+        << QString("suspected crop hole edge ids：%1").arg(gapEdgeIdsText(report.suspectedCropHoleEdgeIds))
         << QString("patch boundary evaluated：%1").arg(boolText(report.patchBoundaryEvaluated))
         << QString("patch outer edge count：%1").arg(report.patchOuterEdgeCount)
         << QString("patch boundary tolerance：%1").arg(QString::number(report.patchBoundaryTolerance, 'g', 8))
@@ -192,7 +207,7 @@ QString cropBoundaryDiagnosticsText(const CropBoundaryDiagnosticsReport& report)
         << QString("suspected gap edge ids：%1").arg(gapEdgeIdsText(report.suspectedGapEdgeIds))
         << QString("diagnostics message：%1").arg(QString::fromStdString(report.message))
         << QString("diagnostics warning：%1").arg(QString::fromStdString(report.warningMessage))
-        << "overlay：yellow=original CAD boundary, cyan=imported patch outer boundary, red=local STL coverage issue, magenta=patch boundary mismatch";
+        << "overlay：yellow=original CAD boundary, cyan=imported patch outer boundary, red=local STL coverage issue, orange=boundary-band missing area, magenta=patch boundary mismatch, purple=near-boundary rejected triangles";
     return lines.join('\n');
 }
 
@@ -413,10 +428,10 @@ void MainWindow::createActions() {
     showCroppedStlAction_->setEnabled(false);
     showStlCropBoxAction_ = new QAction("显示裁剪 bbox", this);
     showStlCropBoxAction_->setCheckable(true);
-    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setChecked(false);
     showStlCropBoxAction_->setEnabled(false);
     generateAndPreviewCurrentPatchAction_ = new QAction("生成并预览当前 Patch", this);
-    importPatchForCurrentCandidateAction_ = new QAction("导入当前候选 Patch（local STL）", this);
+    importPatchForCurrentCandidateAction_ = new QAction("从 local STL 定位并导入 Patch", this);
     importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
     applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
     applyCurrentPatchAction_->setEnabled(false);
@@ -817,7 +832,7 @@ void MainWindow::openStepFile() {
     showSourceStlAction_->setEnabled(false);
     showCroppedStlAction_->setChecked(true);
     showCroppedStlAction_->setEnabled(false);
-    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setChecked(false);
     showStlCropBoxAction_->setEnabled(false);
     syncLockedEdges();
     QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
@@ -911,7 +926,7 @@ void MainWindow::openSourceStlFile() {
     showSourceStlAction_->setEnabled(true);
     showCroppedStlAction_->setChecked(true);
     showCroppedStlAction_->setEnabled(false);
-    showStlCropBoxAction_->setChecked(true);
+    showStlCropBoxAction_->setChecked(false);
     showStlCropBoxAction_->setEnabled(false);
     viewer_->showSourceStl(controller_.sourceStlMesh());
     viewer_->clearCroppedStl();
@@ -1037,7 +1052,7 @@ void MainWindow::cropCurrentCandidateStl() {
 
         showCroppedStlAction_->setChecked(true);
         showCroppedStlAction_->setEnabled(true);
-        showStlCropBoxAction_->setChecked(true);
+        showStlCropBoxAction_->setChecked(false);
         showStlCropBoxAction_->setEnabled(true);
         viewer_->showCroppedStl(result.extract.localMesh);
         viewer_->showStlCropBox(report.expanded_bbox);
@@ -1175,7 +1190,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
 
         showCroppedStlAction_->setChecked(true);
         showCroppedStlAction_->setEnabled(true);
-        showStlCropBoxAction_->setChecked(true);
+        showStlCropBoxAction_->setChecked(false);
         showStlCropBoxAction_->setEnabled(true);
         viewer_->showCroppedStl(result.crop.extract.localMesh);
         viewer_->showStlCropBox(result.crop.extract.report.expanded_bbox);
@@ -1216,6 +1231,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             &result.crop.extract.localMesh);
         viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
         showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics);
+        publishCropBoundaryDiagnosticsStatus(diagnostics);
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
         logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
@@ -1248,7 +1264,7 @@ void MainWindow::importPatchForCurrentCandidate() {
     const auto defaultRoot = std::filesystem::current_path() / "data" / "crop_stl";
     const auto filePath = QFileDialog::getOpenFileName(
         this,
-        "选择当前候选 local STL",
+        "选择当前候选 local STL（用于定位同名 Patch）",
         pathToQString(defaultRoot),
         "STL 文件 (*.stl *.STL);;所有文件 (*.*)");
     if (filePath.isEmpty()) {
@@ -1280,6 +1296,7 @@ void MainWindow::importPatchForCurrentCandidate() {
     }
     viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
     showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, &diagnostics);
+    publishCropBoundaryDiagnosticsStatus(diagnostics);
     refreshPatchApplyAction();
     refreshProcessStatusPanel();
     logPanel_->appendInfo(QString("Patch overlay 已导入：%1")
@@ -1318,6 +1335,9 @@ void MainWindow::importPatchFromFile() {
         : CropBoundaryDiagnosticsReport {};
     viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
     showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, candidate != nullptr ? &diagnostics : nullptr);
+    if (candidate != nullptr) {
+        publishCropBoundaryDiagnosticsStatus(diagnostics);
+    }
     refreshPatchApplyAction();
     refreshProcessStatusPanel();
     logPanel_->appendInfo(QString("Patch overlay 已从文件导入：%1").arg(filePath));
@@ -2534,6 +2554,24 @@ void MainWindow::refreshProcessStatusPanel() {
     if (processStatusPanel_ != nullptr) {
         processStatusPanel_->showStatus(controller_.currentProcessStatus());
     }
+}
+
+void MainWindow::publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics) {
+    auto status = controller_.currentProcessStatus();
+    status.cropBoundaryBandEvaluated = diagnostics.boundaryBandEvaluated;
+    status.cropSourceTriangleAuditEvaluated = diagnostics.sourceTriangleAuditEvaluated;
+    status.cropBoundaryBandSampleCount = diagnostics.boundaryBandSampleCount;
+    status.cropBoundaryBandMissingPointCount = diagnostics.boundaryBandMissingPointCount;
+    status.cropBoundaryBandMaxDistance = diagnostics.boundaryBandMaxDistance;
+    status.cropRejectedNearBoundaryTriangleCount = diagnostics.rejectedNearBoundaryTriangleCount;
+    status.cropConservativeKeepCandidateCount = diagnostics.conservativeKeepCandidateCount;
+    if (!diagnostics.message.empty()) {
+        status.latestMessage = diagnostics.message;
+    }
+    if (!diagnostics.warningMessage.empty()) {
+        status.latestWarning = diagnostics.warningMessage;
+    }
+    controller_.updateProcessStatus(std::move(status));
 }
 
 void MainWindow::refreshDocumentViews(bool clearPatchState) {
