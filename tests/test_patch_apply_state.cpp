@@ -334,6 +334,18 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(report.sameParameterApplied);
     assert(report.sewingApplied);
     assert(report.repairRunCount == 1);
+    assert(report.gateEvaluated);
+    assert(report.gatePassed);
+    assert(report.gateBeforeSolidCount == beforeStats.solids);
+    assert(report.gateAfterSolidCount == beforeStats.solids);
+    assert(report.gateRoundtripSolidCount == beforeStats.solids);
+    assert(report.gateAfterFreeEdges == 0);
+    assert(report.gateAfterMultipleEdges == 0);
+    assert(report.gateRoundtripFreeEdges == 0);
+    assert(report.gateRoundtripMultipleEdges == 0);
+    assert(report.gateStepExportOk);
+    assert(report.gateStepRoundtripOk);
+    assert(report.gateRoundtripBRepCheckValid);
     assert(controller.history().executedCommands().size() == commandCountBefore + 1);
     assert(!controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::Applied);
@@ -409,11 +421,18 @@ void test_app_controller_multi_face_patch_enters_apply_path_without_unsupported(
     assert(report.usedMultiFacePatch || report.replacementFaceCount > 1);
     if (result.success()) {
         assert(report.success);
+        assert(report.gateEvaluated);
+        assert(report.gatePassed);
         assert(!controller.patchPreviewReady());
     } else {
         assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed ||
             report.failureReason == spo::PatchReplacementFailureReason::BuildFailed ||
             report.failureReason == spo::PatchReplacementFailureReason::InvalidBoundary);
+        if (report.failureReason == spo::PatchReplacementFailureReason::GateFailed) {
+            assert(report.gateEvaluated);
+            assert(!report.gatePassed);
+            assert(!report.gateFailureReason.empty());
+        }
         assert(same_stats(controller.document().stats(), beforeStats));
     }
 
@@ -437,6 +456,10 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(allText.find(bannedLocalCandidate) == std::string::npos);
     assert(allText.find(bannedMechanical) == std::string::npos);
     assert(allText.find(bannedClay) == std::string::npos);
+    assert(mainWindowSource.find("repair before face/edge/shell/solid") != std::string::npos);
+    assert(mainWindowSource.find("gate after face/edge/shell/solid") != std::string::npos);
+    assert(mainWindowSource.find("gate roundtrip face/edge/shell/solid") != std::string::npos);
+    assert(mainWindowSource.find("STEP roundtrip ok") != std::string::npos);
 #endif
 }
 

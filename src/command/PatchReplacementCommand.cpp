@@ -363,6 +363,44 @@ void copy_repair_report(
     append_warning(report, repairReport.warningMessage);
 }
 
+void copy_gate_report(
+    PatchReplacementReport& report,
+    const StrictTopologyGateReport& gateReport) {
+    report.gateEvaluated = true;
+    report.gatePassed = gateReport.passed;
+    report.gateFailureReason = toString(gateReport.failureReason);
+    report.gateMessage = gateReport.message;
+    report.gateWarningMessage = gateReport.warningMessage;
+
+    report.gateBeforeFaceCount = gateReport.beforeStats.faces;
+    report.gateBeforeEdgeCount = gateReport.beforeStats.edges;
+    report.gateBeforeShellCount = gateReport.beforeStats.shells;
+    report.gateBeforeSolidCount = gateReport.beforeStats.solids;
+    report.gateAfterFaceCount = gateReport.afterStats.faces;
+    report.gateAfterEdgeCount = gateReport.afterStats.edges;
+    report.gateAfterShellCount = gateReport.afterStats.shells;
+    report.gateAfterSolidCount = gateReport.afterStats.solids;
+    report.gateRoundtripFaceCount = gateReport.roundtripStats.faces;
+    report.gateRoundtripEdgeCount = gateReport.roundtripStats.edges;
+    report.gateRoundtripShellCount = gateReport.roundtripStats.shells;
+    report.gateRoundtripSolidCount = gateReport.roundtripStats.solids;
+
+    report.gateBeforeFreeEdges = gateReport.beforeFreeEdges;
+    report.gateAfterFreeEdges = gateReport.afterFreeEdges;
+    report.gateRoundtripFreeEdges = gateReport.roundtripFreeEdges;
+    report.gateBeforeMultipleEdges = gateReport.beforeMultipleEdges;
+    report.gateAfterMultipleEdges = gateReport.afterMultipleEdges;
+    report.gateRoundtripMultipleEdges = gateReport.roundtripMultipleEdges;
+
+    report.gateBeforeBRepCheckValid = gateReport.beforeBRepCheckValid;
+    report.gateAfterBRepCheckValid = gateReport.afterBRepCheckValid;
+    report.gateRoundtripBRepCheckValid = gateReport.roundtripBRepCheckValid;
+    report.gateStepExportOk = gateReport.stepExportOk;
+    report.gateStepRoundtripOk = gateReport.stepRoundtripOk;
+    report.gateWatertightSolidRequired = gateReport.watertightSolidRequired;
+    report.gateRoundtripWatertightRequired = gateReport.roundtripWatertightRequired;
+}
+
 }
 
 PatchReplacementCommand::PatchReplacementCommand(
@@ -502,6 +540,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     gateInput.requireRoundtripWatertight = options_.requireRoundtripWatertight;
 
     const auto gateReport = StrictTopologyGate().evaluate(gateInput);
+    copy_gate_report(report_, gateReport);
     append_warning(report_, gateReport.warningMessage);
     if (!gateReport.passed) {
         report_.success = false;

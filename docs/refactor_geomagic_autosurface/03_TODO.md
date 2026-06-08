@@ -2076,7 +2076,7 @@ multi-face patch 可进入真实 Apply 流程。
 
 ## T6.5.1 Apply 失败诊断增强
 
-状态：TODO。
+状态：DONE。
 
 背景：
 
@@ -2123,6 +2123,17 @@ Command 已执行 source face replacement、SameParameter、ShapeFix_Face、Shap
 ApplyFailed report 中能看到 repair 前后 solid/shell/face/edge、after gate stats、roundtrip stats。
 对 candidate 179 这类失败样例，GUI 能明确显示 free edge 未消除、after BRepCheck failed、是否保留/丢失 solid。
 失败后主 ShapeDocument 不变，overlay / preview state 保留。
+```
+
+完成记录：
+
+```text
+已把 StrictTopologyGateReport 的关键 before / after / STEP roundtrip 统计写入 PatchReplacementReport：
+face / edge / shell / solid、free edge、multiple edge、BRepCheck、STEP export 和 STEP roundtrip。
+PatchReplacementCommand 在 Gate 通过或失败时都会保留 gate failure reason、message、warning 和 gate stats。
+GUI Patch Apply report 现在显示 repair 前后 face/edge/shell/solid、repair free/multiple edge、Gate before/after/roundtrip stats 和 watertight 选项。
+本阶段未放宽 StrictTopologyGate，未重新运行 Geomagic，未重新裁剪 STL，未写死真实样例路径。
+可选 rejected after debug STEP artifact 本阶段未实现，留给后续需要更强复盘证据时再加。
 ```
 
 ## T6.6 Industrial Adaptive Sewing 集成

@@ -624,7 +624,7 @@ T6.3 当前未真正删除 candidate source faces，未执行 sewing / ShapeFix 
 T6.4 已完成最小 repair + gate 管线：PatchReplacementCommand 使用 BRepTools_ReShape 尝试替换 candidate source faces，然后执行 SameParameter、ShapeFix_Wire、ShapeFix_Face 和 Sewing，并记录 repair 前后拓扑统计。
 T6.4 仍由 StrictTopologyGate 作为最终提交门；Gate 失败 rollback，redo 只复用缓存 afterDocument，不重新运行 Geomagic、不裁剪 STL、不读取 patch、不重新 repair。
 T6.5 已完成 AppController / GUI 真实 Apply 接入：GUI 按钮调用 AppController::applyCurrentPatchToCurrentCandidate，并通过 CommandHistory 执行 PatchReplacementCommand。成功后主 ShapeDocument 显示 afterDocument 并清除 patch overlay / preview state；失败后主 ShapeDocument 不变且保留 overlay / preview state。GUI Apply 启用严格水密 Gate，要求 after 与 STEP roundtrip 后都通过 BRepCheck、solid count 保持、free edge=0、multiple edge=0。one-face path 会用 imported patch surface + 原 STP candidate boundary wire 重建 trimmed face；multi-face fragment 仍进入主路径，最终提交性由 repair + StrictTopologyGate 判断。redo 仍只复用缓存 afterDocument，不重新运行 Geomagic、不裁剪 STL、不导入 patch、不重新 repair。
-T6.5 后续路线已根据 scripts/industrial_sew.py 研究结果调整：先做 T6.5.1 Apply/Gate 失败诊断增强，把 repair 前后 stats、Gate before/after stats、STEP roundtrip stats、BRepCheck/free/multiple edge 和 rejected after debug artifact 路径写入 report / GUI；再做 T6.6 Industrial Adaptive Sewing，把 ShapeFix_Shape、ShapeUpgrade_UnifySameDomain、多 tolerance Sewing loop、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid、collapsed guard 和 best-result selection 迁移进 C++ repair pipeline。该路线只增强 repair 和诊断，不放宽 StrictTopologyGate，不绕过 rollback，不信任 STL crop boundary 或 Geomagic patch outer boundary。
+T6.5.1 Apply/Gate 失败诊断增强已完成：PatchReplacementReport 记录 repair 前后 stats、Gate before/after stats、STEP roundtrip stats、BRepCheck/free/multiple edge 和 watertight 选项，GUI Patch Apply report 会直接展示这些字段；可选 rejected after debug artifact 路径尚未实现。下一步是 T6.6 Industrial Adaptive Sewing，把 ShapeFix_Shape、ShapeUpgrade_UnifySameDomain、多 tolerance Sewing loop、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid、collapsed guard 和 best-result selection 迁移进 C++ repair pipeline。该路线只增强 repair 和诊断，不放宽 StrictTopologyGate，不绕过 rollback，不信任 STL crop boundary 或 Geomagic patch outer boundary。
 ```
 
 ```text
@@ -660,12 +660,12 @@ STP + STL
 ### 13.1 T6.5 后续工业级 sewing 路线
 
 ```text
-T6.5.1:
+T6.5.1 DONE:
 ApplyFailed
 → PatchReplacementReport 展示 repair 前后 face/edge/shell/solid
 → 展示 StrictTopologyGate before/after stats
 → 展示 STEP roundtrip stats
-→ 可选导出 rejected after debug STEP
+→ 可选导出 rejected after debug STEP 尚未实现
 
 T6.6:
 assembled after candidate

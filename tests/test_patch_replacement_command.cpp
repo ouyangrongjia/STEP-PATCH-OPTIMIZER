@@ -238,6 +238,11 @@ void test_multi_face_patch_is_not_unsupported() {
     assert(report.patchFaceCount > 1);
     assert(report.replacementFaceCount > 1);
     assert(report.rollbackApplied);
+    assert(report.gateEvaluated);
+    assert(!report.gatePassed);
+    assert(!report.gateFailureReason.empty());
+    assert(report.gateBeforeSolidCount == beforeStats.solids);
+    assert(report.gateAfterFaceCount > 0);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
@@ -253,6 +258,12 @@ void test_gate_failure_rolls_back() {
     assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
     assert(report.rollbackApplied);
     assert(!report.message.empty());
+    assert(report.gateEvaluated);
+    assert(!report.gatePassed);
+    assert(!report.gateFailureReason.empty());
+    assert(report.gateBeforeFaceCount == beforeStats.faces);
+    assert(report.gateBeforeEdgeCount == beforeStats.edges);
+    assert(report.gateAfterFaceCount > 0);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
@@ -278,6 +289,17 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(report.repairRunCount == 1);
     assert(report.faceCountBeforeRepair > 0);
     assert(report.faceCountAfterRepair > 0);
+    assert(report.gateEvaluated);
+    assert(report.gatePassed);
+    assert(report.gateFailureReason == "None");
+    assert(report.gateBeforeSolidCount == beforeStats.solids);
+    assert(report.gateAfterSolidCount == beforeStats.solids);
+    assert(report.gateRoundtripSolidCount == beforeStats.solids);
+    assert(report.gateBeforeBRepCheckValid);
+    assert(report.gateAfterBRepCheckValid);
+    assert(report.gateStepExportOk);
+    assert(report.gateStepRoundtripOk);
+    assert(report.gateRoundtripBRepCheckValid);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 
     const auto undoResult = command.undo(fixture.context);
@@ -304,6 +326,10 @@ void test_free_edge_increase_after_repair_is_rejected() {
     assert(report.rollbackApplied);
     assert(report.repairApplied);
     assert(report.freeEdgesAfterRepair > 0);
+    assert(report.gateEvaluated);
+    assert(!report.gatePassed);
+    assert(report.gateAfterFreeEdges > 0);
+    assert(report.gateAfterFaceCount > 0);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
@@ -321,6 +347,8 @@ void test_multi_face_internal_seams_are_not_unsupported() {
     assert(report.replacementFaceCount > 1);
     assert(report.repairApplied);
     assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
+    assert(report.gateEvaluated);
+    assert(!report.gatePassed);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
