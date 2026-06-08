@@ -2,7 +2,7 @@
 
 > 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：真实 Geomagic GUI 观察确认 local STL 在候选边角存在可见缺面，T6.6.1 的 boundary point 最近距离 coverage 指标存在漏检 boundary-band / 内侧缺面风险；下一步优先推进 T6.6.3 STL Crop Boundary-Band Diagnostics 与 T6.6.4 STL Region Extractor 保守裁剪修复，修复后再重新生成 Geomagic patch 并评估是否需要 patch boundary re-trim。
 
 ---
 
@@ -1599,8 +1599,11 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.5 AppController / GUI 接入真实 Apply（DONE，真实 Apply 已接入 CommandHistory + 严格水密 Gate）
 → T6.5.1 Apply failure diagnostics（DONE，repair / Gate / roundtrip 诊断已进入 GUI report）
 → T6.6 Industrial Adaptive Sewing（DONE，最小 C++ adaptive repair 已接入）
-→ T6.6.1 Crop Boundary Diagnostics（DONE，验证原 STP loop → STL crop → Geomagic patch 是否丢边界）
-→ T6.6.2 Process Status Panel（TODO，实时显示当前阶段和参数）
+→ T6.6.1 Crop Boundary Diagnostics（DONE，验证原 STP loop → STL crop → Geomagic patch 是否丢边界；当前已发现 boundary-point coverage 存在漏检内侧缺面的盲区）
+→ T6.6.2 Process Status Panel（DONE，阶段级进程状态面板已接入）
+→ T6.6.3 STL Crop Boundary-Band Diagnostics（NEXT，专门诊断 local STL 边界内侧缺面 / 被错误丢弃三角片）
+→ T6.6.4 STL Region Extractor 保守裁剪修复（NEXT，根据 T6.6.3 结果修复 centroid-only / 过严裁剪策略）
+→ T6.6.5 Regenerate Geomagic Patch + Apply Verification（NEXT，重新生成 patch，复测 patch boundary mismatch 与 StrictTopologyGate）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
@@ -2271,6 +2274,27 @@ Patch preview report 已追加 T6.6.1 字段：originalBoundarySampleCount、stl
 已新增 tests/test_crop_boundary_diagnostics.cpp，覆盖完整覆盖、STL 缺覆盖、patch outer boundary mismatch、无 local STL 时的 patch-only 诊断和 GUI overlay 字段扫描。
 ```
 
+路线修正记录：
+
+```text
+真实 Geomagic GUI 复查 local STL 后，确认 candidate 179 的 local STL 在右上角边界附近存在可见缺面。
+这说明 T6.6.1 当前的 stlCoverageMissingPointCount / stlCoverageMaxDistance 不能单独证明 STL crop 完整。
+
+原因：
+当前 STL coverage 诊断主要检查“原 STP boundary sample point 到 local STL triangle 的最近距离”。
+该指标能发现 boundary 采样点附近完全无三角片的情况，但可能漏检以下问题：
+1. boundary 采样点附近有残留三角片，但 boundary 内侧 band 区域缺三角片。
+2. 三角片跨越候选区域边界，但因 centroid 落在 candidate 外而被 StlRegionExtractor 丢弃。
+3. crop local STL 的 bbox / boundary sample 指标看似合理，但 Geomagic 实际看到的是缺角或内侧孔洞。
+4. patchBoundaryMissingPointCount 较大可能是 local STL 缺面的下游结果，而不是独立的 patch trim 问题。
+
+当前真实 GUI 结论：
+- stlCoverageMissingPointCount=1 不能排除 crop 问题。
+- Geomagic 中可见 local STL 缺面具有更高诊断优先级。
+- patch boundary mismatch 很可能由 local STL 缺面传导产生。
+- 下一步不应优先做 patch boundary re-trim，而应先做 STL crop boundary-band diagnostics 与 crop extraction fix。
+```
+
 背景：
 
 ```text
@@ -2334,6 +2358,7 @@ GUI 截图显示 Geomagic patch / local STL 对应区域在原 STP boundary loop
 3. imported patch outer boundary 是否在某些 segment 附近缺口或偏离过大。
 4. 26 条 free edges 是否集中在 suspected gap 附近。
 如果诊断证明 crop 没问题，则下一步不能继续怪 STL 裁剪，必须转向 replacement boundary trim / sewing 策略。
+但在真实 Geomagic GUI 已经直接观察到 local STL 缺面时，不能只依赖 stlCoverageMissingPointCount 很低来判定 crop 没问题；必须补做 boundary-band / triangle rejection 级别诊断。
 ```
 
 ## T6.6.2 Process Status Panel / 当前进程状态面板
@@ -2436,6 +2461,421 @@ undo/redo 显示 CachedUndo / CachedRedo，并明确不重新运行 Geomagic、S
 第一版为阶段级 UI 状态面板；PatchReplacementCommand 当前仍同步执行，因此 adaptive sewing 每个 tolerance attempt 的逐步实时刷新未做，后续若引入 job/progress callback 再细化。
 本阶段不改变 CommandHistory 语义，不调用 Geomagic，不重新裁剪 STL，不放宽 StrictTopologyGate，不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary。
 已扩展 tests/test_patch_apply_state.cpp，覆盖 ProcessStage 字符串、PreviewReady 状态、Apply success/failure 后参数保留、GateFailed 后 repair/Gate 诊断保留，以及 undo/redo cached 状态。
+```
+
+
+## T6.6.3 STL Crop Boundary-Band Diagnostics / 局部 STL 边界带缺面诊断
+
+状态：NEXT。
+
+背景：
+
+```text
+真实 Geomagic GUI 观察显示，candidate 179 的 local STL 在右上角边界附近存在可见缺面。
+此前 T6.6.1 报告中 stlCoverageMissingPointCount=1、stlCoverageMaxDistance≈0.1069，看似 STL coverage 基本正常；
+但 patchBoundaryMissingPointCount=21、patchBoundaryMaxDistance≈0.1519，且 Geomagic 中 local STL 实际缺角。
+这说明 T6.6.1 的 boundary sample 最近距离诊断存在盲区：
+它只能检查原 STP boundary 点附近是否存在三角面，不能保证 boundary 内侧一圈 band 区域完整。
+```
+
+核心判断：
+
+```text
+当前优先路线从 patch boundary re-trim 修正为 STL crop extraction 诊断与修复。
+在修复 local STL 缺面之前，不应继续盲目调整 sewing tolerance 或优先开发 patch boundary re-trim。
+```
+
+目标：
+
+```text
+证明或否定“StlRegionExtractor 在候选边界附近错误丢弃三角片，导致 local STL 缺面，进而导致 Geomagic patch outer boundary 缺口和 ApplyFailed”。
+```
+
+重点诊断对象：
+
+```text
+src/stl/StlRegionExtractor.h
+src/stl/StlRegionExtractor.cpp
+src/stl/StlCropReport.h
+src/patch/CropBoundaryDiagnostics.h
+src/patch/CropBoundaryDiagnostics.cpp
+src/app/AppController.h
+src/app/AppController.cpp
+src/app/MainWindow.cpp
+src/gui/OccViewWidget.h
+src/gui/OccViewWidget.cpp
+tests/test_stl_region_extractor.cpp
+tests/test_crop_boundary_diagnostics.cpp
+tests/test_validation.cpp
+CMakeLists.txt
+```
+
+已知风险点：
+
+```text
+当前 StlRegionExtractor 的核心筛选策略是：
+1. triangle bbox 与 expanded candidate bbox 相交；
+2. triangle centroid 投影到 candidate face region 内。
+
+该策略可能导致跨边界三角片被错误丢弃：
+- 三角片部分覆盖 candidate 内侧，但 centroid 落在 candidate 外；
+- 三角片靠近原 STP boundary，但投影 / FaceClassifier 因 tolerance 或曲面片分裂失败；
+- 候选区域由多 face 组成，三角片跨越相邻 source faces 或边界角点时，centroid-only 判据过严；
+- local STL 边界点附近仍有三角片，因此 T6.6.1 boundary point coverage 不报警，但内侧 band 已经缺面。
+```
+
+新增诊断报告建议：
+
+```cpp
+struct StlTriangleCropDecision {
+    int triangleIndex = -1;
+    bool bboxIntersectsExpandedCandidate = false;
+    bool centroidInsideCandidate = false;
+    bool anyVertexInsideCandidate = false;
+    bool anyEdgeMidpointInsideCandidate = false;
+    bool nearOriginalBoundaryBand = false;
+    bool keptByCurrentExtractor = false;
+    bool shouldKeepConservative = false;
+    std::string rejectReason;
+};
+
+struct BoundaryBandCoverageReport {
+    bool success = false;
+    int boundarySampleCount = 0;
+    int bandSampleCount = 0;
+    int bandMissingPointCount = 0;
+    double bandCoverageTolerance = 0.0;
+    double bandMaxDistance = 0.0;
+    double bandAverageDistance = 0.0;
+    int rejectedNearBoundaryTriangleCount = 0;
+    int conservativeKeepCandidateCount = 0;
+    std::vector<EdgeId> bandMissingEdgeIds;
+    std::vector<StlTriangleCropDecision> triangleDecisions;
+    std::string message;
+    std::string warningMessage;
+};
+```
+
+任务：
+
+```text
+1. 在 CropBoundaryDiagnostics 或新增 StlCropBoundaryBandDiagnostics 中增加 boundary-band 采样：
+   - 不只采样原 STP boundary curve 本身；
+   - 还要沿候选区域内侧生成一圈 band samples；
+   - 对 band samples 到 local STL triangle 做最近距离统计；
+   - 输出 bandMissingPointCount、bandMaxDistance、bandMissingEdgeIds。
+
+2. 增加 source STL triangle rejection audit：
+   - 对 expanded bbox 内的源 STL triangles 逐个记录是否被当前 extractor 保留；
+   - 记录未保留原因：bbox miss / centroid outside / projection failed / classifier outside / invalid face region；
+   - 对 near boundary band 但被拒绝的 triangles 单独计数。
+
+3. 增加 conservative keep candidate 预判：
+   - 如果 triangle bbox intersects expanded candidate bbox；
+   - 且任一 vertex / edge midpoint / centroid 位于 candidate region；
+   - 或 triangle 到原 STP boundary band 距离小于 tolerance；
+   - 则标记 shouldKeepConservative=true。
+   - 这一步只做诊断，不改变正式 crop 输出。
+
+4. GUI overlay 增强：
+   - 黄色：原 STP boundary loop；
+   - 青色：Geomagic imported patch outer boundary；
+   - 红色：T6.6.1 boundary-point STL coverage issue；
+   - 橙色：T6.6.3 boundary-band missing area；
+   - 紫色或粉色：near-boundary rejected triangles / suspected crop hole；
+   - 保持 visual-only，不修改 ShapeDocument。
+
+5. 报告增强：
+   - Patch preview report 显示：
+     - bandSampleCount
+     - bandMissingPointCount
+     - bandMaxDistance
+     - rejectedNearBoundaryTriangleCount
+     - conservativeKeepCandidateCount
+     - suspectedCropHoleEdgeIds
+   - ProcessStatusPanel 显示 crop diagnostics 摘要。
+
+6. 不调用 Geomagic。
+7. 不重新生成 patch。
+8. 不修改 ShapeDocument。
+9. 不放宽 StrictTopologyGate。
+10. 不把真实 candidate 179 路径写死进生产逻辑。
+```
+
+验收：
+
+```text
+1. 对 synthetic triangle-crossing-boundary 案例，能发现 centroid-only 会丢弃应保留三角片。
+2. 对 boundary 内侧缺面案例，boundary point coverage 可以正常，但 boundary-band coverage 必须报警。
+3. 对完整 local STL，bandMissingPointCount=0 或接近 0。
+4. 报告中能看到 rejectedNearBoundaryTriangleCount 和 conservativeKeepCandidateCount。
+5. GUI overlay 能定位 local STL 可见缺面区域。
+6. 不改变当前 crop 输出，不影响 redo / Apply / StrictTopologyGate。
+7. 真实样例只能作为 optional manual verification，不进入默认单元测试依赖。
+```
+
+Codex prompt：
+
+```text
+你现在接手 STEP-PATCH-OPTIMIZER 的 T6.6.3。
+
+先读取：
+docs/refactor_geomagic_autosurface/03_TODO.md
+src/stl/StlRegionExtractor.h
+src/stl/StlRegionExtractor.cpp
+src/stl/StlCropReport.h
+src/patch/CropBoundaryDiagnostics.h
+src/patch/CropBoundaryDiagnostics.cpp
+src/app/AppController.h
+src/app/AppController.cpp
+src/app/MainWindow.cpp
+src/gui/OccViewWidget.h
+src/gui/OccViewWidget.cpp
+tests/test_stl_region_extractor.cpp
+tests/test_crop_boundary_diagnostics.cpp
+tests/test_validation.cpp
+CMakeLists.txt
+
+背景：
+真实 Geomagic GUI 中 local STL 在 candidate 179 右上角出现可见缺面。
+T6.6.1 的 stlCoverageMissingPointCount 很低，但它只检查原 boundary sample 到 STL triangle 的最近距离，可能漏检 boundary 内侧 band 缺面。
+当前优先路线是诊断 STL crop extraction，而不是先做 patch boundary re-trim。
+
+任务：
+实现 STL crop boundary-band diagnostics 和 triangle rejection audit。
+不要修改正式 StlRegionExtractor 输出，不运行 Geomagic，不修改 ShapeDocument，不放宽 StrictTopologyGate。
+
+必须覆盖：
+1. boundary-band sampling。
+2. band samples 到 local STL 的距离统计。
+3. source triangle rejection audit。
+4. near-boundary rejected triangles 统计。
+5. conservative keep candidate 统计。
+6. GUI/report 展示诊断结果。
+7. synthetic tests 覆盖 centroid-only 漏裁剪。
+```
+
+## T6.6.4 STL Region Extractor 保守裁剪修复
+
+状态：PENDING，必须在 T6.6.3 诊断确认后执行。
+
+背景：
+
+```text
+如果 T6.6.3 证明 local STL 缺面来自 StlRegionExtractor 当前 centroid-only / 过严 face classifier 策略，
+则需要修复正式 crop extraction。
+修复目标不是让 STL 边界成为最终 CAD 边界，而是保证 Geomagic AutoSurface 输入拥有完整局部几何采样。
+```
+
+目标：
+
+```text
+让 local STL 在原 STP candidate boundary 附近保守保留足够三角片，避免 Geomagic 输入缺角 / 缺面。
+```
+
+禁止：
+
+```text
+1. 不把 STL crop boundary 当作最终 CAD boundary。
+2. 不用 STL 裁剪结果绕过原 STP boundary wire。
+3. 不绕过 PatchReplacementCommand。
+4. 不绕过 StrictTopologyGate。
+5. 不写死 candidate 179 或任何真实样例路径。
+6. 不在默认测试中调用真实 Geomagic。
+```
+
+建议修改文件：
+
+```text
+src/stl/StlRegionExtractor.h
+src/stl/StlRegionExtractor.cpp
+src/stl/StlCropReport.h
+src/stl/StlCropReport.cpp
+tests/test_stl_region_extractor.cpp
+tests/test_validation.cpp
+```
+
+建议扩展参数：
+
+```cpp
+struct StlRegionExtractorOptions {
+    double bboxMarginRatio = 0.01;
+    double minMargin = 0.1;
+
+    bool includeIntersectingTriangles = true;
+    bool includeVertexInsideTriangles = true;
+    bool includeEdgeMidpointInsideTriangles = true;
+    bool includeBoundaryBandTriangles = true;
+
+    double boundaryBandTolerance = 0.2;
+    double surfaceToleranceMultiplier = 1.0;
+    double maxConservativeLeakRatio = 3.0;
+
+    bool recordTriangleDecisions = false;
+};
+```
+
+建议新 inclusion 规则：
+
+```text
+一个 triangle 只要满足以下任一条件，即可进入 local STL：
+1. triangle bbox 与 expanded candidate bbox 相交，且 centroid inside candidate region；
+2. triangle bbox 与 expanded candidate bbox 相交，且任一 vertex inside candidate region；
+3. triangle bbox 与 expanded candidate bbox 相交，且任一 edge midpoint inside candidate region；
+4. triangle bbox 与 expanded candidate bbox 相交，且 triangle 到原 STP candidate boundary band 距离小于 boundaryBandTolerance；
+5. triangle bbox 与 expanded candidate bbox 相交，且 triangle bbox 与任一 candidate face bbox 在 margin 内相交，同时未超过 conservative leak guard。
+
+其中 1 是现有路径，2/3/4 是修复边界缺面所需的保守补充。
+```
+
+leak guard：
+
+```text
+保守裁剪不能无限扩大 local STL。
+需要记录并限制：
+- output_triangle_count / old_centroid_only_triangle_count
+- output bbox 与 expanded bbox 的关系
+- output bbox 不得明显超过 expanded bbox，除非显式 debug mode
+- conservativeKeepTriangleCount
+- rejectedOutsideExpandedBBoxTriangleCount
+```
+
+StlCropReport 增强：
+
+```text
+source_triangle_count
+output_triangle_count
+centroid_keep_triangle_count
+vertex_keep_triangle_count
+edge_midpoint_keep_triangle_count
+boundary_band_keep_triangle_count
+conservative_keep_triangle_count
+rejected_outside_bbox_count
+rejected_outside_candidate_count
+candidate_bbox
+expanded_bbox
+output_bbox
+warning_message
+```
+
+测试要求：
+
+```text
+1. triangle centroid outside but vertex inside candidate region：旧策略会丢，新策略保留。
+2. triangle centroid outside but edge midpoint inside candidate region：新策略保留。
+3. triangle near original boundary band：新策略保留。
+4. margin 增大时 output triangle count 不减少。
+5. conservative crop 不产生明显 bbox 泄漏。
+6. 空 source mesh 仍失败。
+7. candidate 无 faces 仍失败。
+8. 中文路径 / data/crop_stl 输出规则不受影响。
+9. 当前真实样例只做 optional manual verification。
+```
+
+验收：
+
+```text
+1. 修复后 local STL 不应在 Geomagic 中出现原先红框位置的可见缺面。
+2. T6.6.3 bandMissingPointCount 明显下降。
+3. 重新运行 Geomagic 后 patchBoundaryMissingPointCount / suspectedGapCount 应下降。
+4. 如果 patch boundary mismatch 仍存在，才能进入 patch boundary constrained trim / seam repair。
+```
+
+Codex prompt：
+
+```text
+你现在接手 STEP-PATCH-OPTIMIZER 的 T6.6.4。
+
+前置条件：
+T6.6.3 已确认 StlRegionExtractor 当前裁剪策略会在 candidate boundary 附近错误丢弃三角片。
+
+任务：
+修复 StlRegionExtractor，使 local STL crop 对 boundary-adjacent triangles 采用保守保留策略。
+核心修复是不要只依赖 triangle centroid inside candidate region。
+
+必须修改：
+src/stl/StlRegionExtractor.h
+src/stl/StlRegionExtractor.cpp
+src/stl/StlCropReport.h
+tests/test_stl_region_extractor.cpp
+tests/test_validation.cpp
+CMakeLists.txt 如需要
+
+必须实现：
+1. vertex-inside inclusion。
+2. edge-midpoint-inside inclusion。
+3. boundary-band inclusion。
+4. conservative leak guard。
+5. crop report 中记录各类 keep/reject count。
+6. synthetic tests 覆盖 centroid-only 漏裁剪。
+7. 不改变 final CAD boundary 原则。
+8. 不调用 Geomagic。
+9. 不修改 ShapeDocument。
+10. 不放宽 StrictTopologyGate。
+```
+
+## T6.6.5 Regenerate Geomagic Patch + Apply Verification / 重新生成 patch 并验证路线
+
+状态：PENDING，必须在 T6.6.4 后执行。
+
+目标：
+
+```text
+用修复后的 StlRegionExtractor 重新生成 local STL，再重新运行 Geomagic AutoSurface，验证：
+1. local STL 可见缺面是否消失；
+2. patch boundary mismatch 是否下降；
+3. replacement / repair / StrictTopologyGate 是否更接近成功。
+```
+
+手动验证流程：
+
+```text
+1. 打开当前真实 STP。
+2. 打开对应原始 STL。
+3. 重新生成 candidate 179 或同类 FeatureBoundedRefit candidate。
+4. 用修复后的 StlRegionExtractor 裁剪 local STL。
+5. 在 Geomagic 中打开 local STL，确认红框位置缺面是否消失。
+6. 重新运行 Geomagic AutoSurface。
+7. 重新导入 patch。
+8. 查看 Patch preview report：
+   - stlCoverageMissingPointCount
+   - bandMissingPointCount
+   - patchBoundaryMissingPointCount
+   - patchBoundaryMaxDistance
+   - suspectedGapCount
+   - suspectedGapEdgeIds
+9. 点击 Apply。
+10. 查看 PatchReplacementReport：
+   - repairBefore/After free edges
+   - bestSewingFreeEdges
+   - bestSewingSolidCount
+   - Gate failure reason
+   - after BRepCheck
+   - after free/multiple edges
+   - roundtrip stats。
+```
+
+判断标准：
+
+```text
+如果 local STL 缺面消失，且 patchBoundaryMissingPointCount / suspectedGapCount 明显下降：
+  说明 STL crop 是主要根因，继续完善 T6.6.4 / workspace / batch flow。
+
+如果 local STL 缺面消失，但 patch boundary mismatch 仍明显：
+  再进入 patch boundary constrained trim / replacement seam repair。
+
+如果 local STL 仍缺面：
+  回到 T6.6.4，继续修复 crop extraction 或源 STL / face classifier / projection tolerance。
+```
+
+注意：
+
+```text
+1. T6.6.5 是验证阶段，不应放宽 StrictTopologyGate。
+2. Apply 成功必须保持 solid / watertight。
+3. 失败时主 ShapeDocument 必须 rollback。
+4. redo 仍不得重新运行 Geomagic / STL crop / patch import / repair。
+5. 不得把真实样例路径写死进生产逻辑。
 ```
 
 
@@ -2643,4 +3083,6 @@ src/gui/LogPanel.cpp
 11. 不让 redo 重新运行 Geomagic。
 12. 不把 T6 设计成只支持 one-face patch；multi-face / complex patch 必须作为主路径。
 12. 不在生产逻辑中写死 `local_candidate_0179_mechanical.stp` 或任何当前样例路径。
+13. 不要只根据 T6.6.1 的 stlCoverageMissingPointCount 很低就判定 STL crop 没问题；真实 Geomagic GUI 已见 local STL 缺面时，必须优先补做 boundary-band / triangle rejection 诊断。
+14. 不要在 local STL 缺面未修复前优先投入 patch boundary re-trim 或继续盲目调 sewing tolerance。
 ```
