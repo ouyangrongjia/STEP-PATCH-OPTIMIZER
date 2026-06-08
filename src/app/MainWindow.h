@@ -88,7 +88,10 @@ private:
     bool setCurrentMergeCandidateStatus(MergeCandidateStatus status);
     void showFilteredMergeCandidates(MergeCandidateStatus status);
     void showCandidateStatusReport(const QString& title);
-    void showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview = false);
+    void showPatchPreviewReport(
+        const PatchPreviewReport& report,
+        bool visualCutoutPreview = false,
+        const CropBoundaryDiagnosticsReport* diagnostics = nullptr);
     void refreshPatchApplyAction();
     void setStlCropInProgress(bool inProgress);
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);

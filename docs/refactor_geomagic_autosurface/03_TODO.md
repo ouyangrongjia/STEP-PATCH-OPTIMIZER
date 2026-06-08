@@ -1599,7 +1599,7 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.5 AppController / GUI 接入真实 Apply（DONE，真实 Apply 已接入 CommandHistory + 严格水密 Gate）
 → T6.5.1 Apply failure diagnostics（DONE，repair / Gate / roundtrip 诊断已进入 GUI report）
 → T6.6 Industrial Adaptive Sewing（DONE，最小 C++ adaptive repair 已接入）
-→ T6.6.1 Crop Boundary Diagnostics（TODO，验证原 STP loop → STL crop → Geomagic patch 是否丢边界）
+→ T6.6.1 Crop Boundary Diagnostics（DONE，验证原 STP loop → STL crop → Geomagic patch 是否丢边界）
 → T6.6.2 Process Status Panel（TODO，实时显示当前阶段和参数）
 ```
 
@@ -2256,7 +2256,20 @@ GUI Patch Apply report 已显示 selected sewing tolerance、sewing attempt coun
 
 ## T6.6.1 Crop Boundary Diagnostics / 局部 STL 裁剪边界诊断
 
-状态：TODO。
+状态：DONE。
+
+完成记录：
+
+```text
+已新增 CropBoundaryDiagnostics 模块，输入 ShapeDocument、RegionBoundaryAnalysis、local STL crop mesh 和 imported patch shape，输出 CropBoundaryDiagnosticsReport。
+诊断会先通过 BoundaryWireBuilder 确认原 STP candidate boundary 是 single closed outer loop，再按 ordered boundary edge 采样，记录 edge id、sample count、3D point、edge length 和 singleClosedOuterLoop。
+local STL coverage 通过原 boundary sample 到 local STL triangle 的最近距离统计 min / max / average、missing point count、连续超限区间和 suspected gap segment。
+patch boundary coverage 通过原 boundary sample 到 imported patch outerEdges 采样 polyline 的最近距离统计 missing / mismatch segment、max distance 和 suspected gap edge ids。
+GUI patch preview 成功后会自动显示诊断 overlay：黄色为原 STP boundary loop，青色为 imported patch outer boundary，红色为 local STL crop coverage issue，洋红为 patch boundary mismatch。
+Patch preview report 已追加 T6.6.1 字段：originalBoundarySampleCount、stlCoverageMissingPointCount、stlCoverageMaxDistance、patchBoundaryMissingPointCount、patchBoundaryMaxDistance、suspectedGapCount、suspectedGapEdgeIds、message / warningMessage。
+本阶段不修改 ShapeDocument，不调用 Geomagic，不重新裁剪 STL，不改变 PatchReplacementCommand / StrictTopologyGate / redo 语义，不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary。
+已新增 tests/test_crop_boundary_diagnostics.cpp，覆盖完整覆盖、STL 缺覆盖、patch outer boundary mismatch、无 local STL 时的 patch-only 诊断和 GUI overlay 字段扫描。
+```
 
 背景：
 

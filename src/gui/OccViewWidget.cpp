@@ -88,6 +88,68 @@ gp_Pnt pointFromStl(const StlVec3& point) {
     return gp_Pnt(point.x, point.y, point.z);
 }
 
+gp_Pnt pointFromCropSample(const CropBoundarySamplePoint& point) {
+    return gp_Pnt(point.x, point.y, point.z);
+}
+
+void addPolyline(
+    BRep_Builder& builder,
+    TopoDS_Compound& compound,
+    const std::vector<CropBoundarySamplePoint>& samples) {
+    if (samples.size() < 2) {
+        return;
+    }
+
+    for (std::size_t index = 1; index < samples.size(); ++index) {
+        const auto start = pointFromCropSample(samples[index - 1]);
+        const auto end = pointFromCropSample(samples[index]);
+        if (start.SquareDistance(end) <= 1.0e-18) {
+            continue;
+        }
+        builder.Add(compound, BRepBuilderAPI_MakeEdge(start, end).Edge());
+    }
+}
+
+TopoDS_Shape makeBoundarySampleShape(const std::vector<CropBoundaryEdgeSample>& edges) {
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto& edge : edges) {
+        addPolyline(builder, compound, edge.samples);
+    }
+    return compound;
+}
+
+TopoDS_Shape makeGapSampleShape(const std::vector<CropBoundaryGapSegment>& segments, const std::string& source) {
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto& segment : segments) {
+        if (segment.source == source) {
+            addPolyline(builder, compound, segment.samples);
+        }
+    }
+    return compound;
+}
+
+void displayDiagnosticShape(
+    const Handle(AIS_InteractiveContext)& context,
+    Handle(AIS_Shape)& handle,
+    const TopoDS_Shape& shape,
+    const Quantity_Color& color,
+    double width) {
+    if (context.IsNull() || shape.IsNull()) {
+        return;
+    }
+
+    handle = new AIS_Shape(shape);
+    handle->SetDisplayMode(AIS_WireFrame);
+    handle->SetColor(color);
+    handle->SetWidth(width);
+    context->Display(handle, Standard_False);
+    context->Deactivate(handle);
+}
+
 Handle(Poly_Triangulation) makeTriangulation(
     const StlMesh& mesh,
     std::size_t maxTriangles,
@@ -184,7 +246,12 @@ OccViewWidget::~OccViewWidget() {
     sourceStlShape_.Nullify();
     croppedStlShape_.Nullify();
     stlCropBoxShape_.Nullify();
+    patchCutoutPreviewShape_.Nullify();
     patchOverlayShape_.Nullify();
+    cropOriginalBoundaryShape_.Nullify();
+    cropPatchOuterBoundaryShape_.Nullify();
+    cropStlIssueShape_.Nullify();
+    cropPatchIssueShape_.Nullify();
     context_.Nullify();
     view_.Nullify();
     viewer_.Nullify();
@@ -220,6 +287,10 @@ Result OccViewWidget::displayDocument(const ShapeDocument& document) {
         stlCropBoxShape_.Nullify();
         patchCutoutPreviewShape_.Nullify();
         patchOverlayShape_.Nullify();
+        cropOriginalBoundaryShape_.Nullify();
+        cropPatchOuterBoundaryShape_.Nullify();
+        cropStlIssueShape_.Nullify();
+        cropPatchIssueShape_.Nullify();
         sourceStlDisplayedTriangleCount_ = 0;
         croppedStlDisplayedTriangleCount_ = 0;
         mergeCandidateShapes_.clear();
@@ -273,6 +344,10 @@ void OccViewWidget::clearDocument() {
     stlCropBoxShape_.Nullify();
     patchCutoutPreviewShape_.Nullify();
     patchOverlayShape_.Nullify();
+    cropOriginalBoundaryShape_.Nullify();
+    cropPatchOuterBoundaryShape_.Nullify();
+    cropStlIssueShape_.Nullify();
+    cropPatchIssueShape_.Nullify();
     sourceStlDisplayedTriangleCount_ = 0;
     croppedStlDisplayedTriangleCount_ = 0;
     mergeCandidateShapes_.clear();
@@ -601,6 +676,7 @@ void OccViewWidget::showPatchCutoutPreview(const std::vector<FaceId>& hiddenFace
 void OccViewWidget::showPatchOverlay(const TopoDS_Shape& patchShape) {
     initializeOcct();
     clearPatchOverlayShape();
+    clearCropBoundaryDiagnosticsOverlay();
     if (context_.IsNull() || patchShape.IsNull()) {
         return;
     }
@@ -618,12 +694,75 @@ void OccViewWidget::showPatchOverlay(const TopoDS_Shape& patchShape) {
     redrawView();
 }
 
+void OccViewWidget::showCropBoundaryDiagnosticsOverlay(const CropBoundaryDiagnosticsReport& report) {
+    initializeOcct();
+    clearCropBoundaryDiagnosticsOverlay();
+    if (context_.IsNull() || !report.originalBoundarySampled) {
+        return;
+    }
+
+    displayDiagnosticShape(
+        context_,
+        cropOriginalBoundaryShape_,
+        makeBoundarySampleShape(report.originalBoundaryEdges),
+        Quantity_Color(1.0, 0.94, 0.10, Quantity_TOC_RGB),
+        4.0);
+    displayDiagnosticShape(
+        context_,
+        cropPatchOuterBoundaryShape_,
+        makeBoundarySampleShape(report.patchOuterEdges),
+        Quantity_Color(0.10, 0.74, 1.0, Quantity_TOC_RGB),
+        3.0);
+    displayDiagnosticShape(
+        context_,
+        cropStlIssueShape_,
+        makeGapSampleShape(report.suspectedGapSegments, "STL"),
+        Quantity_Color(1.0, 0.05, 0.02, Quantity_TOC_RGB),
+        7.0);
+    displayDiagnosticShape(
+        context_,
+        cropPatchIssueShape_,
+        makeGapSampleShape(report.suspectedGapSegments, "Patch"),
+        Quantity_Color(1.0, 0.0, 0.90, Quantity_TOC_RGB),
+        6.0);
+
+    context_->UpdateCurrentViewer();
+    redrawView();
+}
+
 void OccViewWidget::clearPatchOverlayShape() {
     if (!context_.IsNull() && !patchOverlayShape_.IsNull()) {
         context_->Remove(patchOverlayShape_, Standard_False);
         context_->UpdateCurrentViewer();
     }
     patchOverlayShape_.Nullify();
+}
+
+void OccViewWidget::clearCropBoundaryDiagnosticsOverlay() {
+    if (!context_.IsNull()) {
+        const std::array<Handle(AIS_Shape)*, 4> handles = {{
+            &cropOriginalBoundaryShape_,
+            &cropPatchOuterBoundaryShape_,
+            &cropStlIssueShape_,
+            &cropPatchIssueShape_
+        }};
+        bool removed = false;
+        for (auto* handle : handles) {
+            if (!handle->IsNull()) {
+                context_->Remove(*handle, Standard_False);
+                handle->Nullify();
+                removed = true;
+            }
+        }
+        if (removed) {
+            context_->UpdateCurrentViewer();
+        }
+    } else {
+        cropOriginalBoundaryShape_.Nullify();
+        cropPatchOuterBoundaryShape_.Nullify();
+        cropStlIssueShape_.Nullify();
+        cropPatchIssueShape_.Nullify();
+    }
 }
 
 void OccViewWidget::clearPatchCutoutPreview() {
@@ -641,6 +780,7 @@ void OccViewWidget::clearPatchCutoutPreview() {
 
 void OccViewWidget::clearPatchOverlay() {
     clearPatchOverlayShape();
+    clearCropBoundaryDiagnosticsOverlay();
     clearPatchCutoutPreview();
     redrawView();
 }

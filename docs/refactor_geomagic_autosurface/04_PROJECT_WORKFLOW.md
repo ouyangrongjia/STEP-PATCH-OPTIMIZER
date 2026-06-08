@@ -681,13 +681,14 @@ assembled after candidate
 → collapsed guard / best-result selection
 → StrictTopologyGate
 
-T6.6.1 TODO:
+T6.6.1 DONE:
 original STP candidate outer loop
 → per-edge boundary sampling
 → compare with local STL crop coverage
 → compare with imported patch outer boundary
 → suspected gap segment report
 → GUI overlay highlights original loop / STL coverage issue / patch outer boundary / gap
+→ patch preview report includes CropBoundaryDiagnosticsReport fields
 
 T6.6.2 TODO:
 GUI process status panel
@@ -706,5 +707,6 @@ adaptive sewing 不能替代 StrictTopologyGate。
 free edge 变 0 但 face count 严重塌缩的结果不能提交。
 multi-face patch 内部 seam 可以保留；外边界是否能形成实体由 repair + gate 判断。
 redo 只复用缓存 afterDocument，不重新运行 adaptive sewing。
+T6.6.1 overlay 只显示诊断几何，不参与 replacement，不改变 ShapeDocument。
 如果 T6.6.1 证明 STL crop 或 patch outer boundary 有缺口，修复应优先发生在 crop / boundary sampling / patch generation 输入层，而不是继续放宽 Gate 或强行采用 sewing result。
 ```

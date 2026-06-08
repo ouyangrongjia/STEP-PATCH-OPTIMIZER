@@ -5,6 +5,7 @@
 #include "gui/ModelTreePanel.h"
 #include "gui/OccViewWidget.h"
 #include "gui/ParameterPanel.h"
+#include "io/StlReader.h"
 #include "merge/CandidateFilters.h"
 #include "merge/FaceInspector.h"
 #include "merge/SphereRegionMerger.h"
@@ -149,6 +150,49 @@ QString bboxText(
 
 QString boolText(bool value) {
     return value ? "true" : "false";
+}
+
+QString gapEdgeIdsText(const std::vector<EdgeId>& edgeIds) {
+    if (edgeIds.empty()) {
+        return "none";
+    }
+
+    QStringList ids;
+    for (const auto edgeId : edgeIds) {
+        ids << QString::number(edgeId);
+    }
+    return ids.join(", ");
+}
+
+QString cropBoundaryDiagnosticsText(const CropBoundaryDiagnosticsReport& report) {
+    QStringList lines;
+    lines
+        << "Crop Boundary diagnostics"
+        << QString("diagnostics success：%1").arg(boolText(report.success))
+        << QString("single closed outer loop：%1").arg(boolText(report.singleClosedOuterLoop))
+        << QString("original boundary sample count：%1").arg(report.originalBoundarySampleCount)
+        << QString("original boundary edge count：%1").arg(report.originalBoundaryEdges.size())
+        << QString("STL coverage evaluated：%1").arg(boolText(report.stlCoverageEvaluated))
+        << QString("STL coverage tolerance：%1").arg(QString::number(report.stlCoverageTolerance, 'g', 8))
+        << QString("STL coverage missing point count：%1").arg(report.stlCoverageMissingPointCount)
+        << QString("STL coverage min/max/avg distance：%1 / %2 / %3")
+            .arg(QString::number(report.stlCoverageMinDistance, 'g', 8))
+            .arg(QString::number(report.stlCoverageMaxDistance, 'g', 8))
+            .arg(QString::number(report.stlCoverageAverageDistance, 'g', 8))
+        << QString("patch boundary evaluated：%1").arg(boolText(report.patchBoundaryEvaluated))
+        << QString("patch outer edge count：%1").arg(report.patchOuterEdgeCount)
+        << QString("patch boundary tolerance：%1").arg(QString::number(report.patchBoundaryTolerance, 'g', 8))
+        << QString("patch boundary missing point count：%1").arg(report.patchBoundaryMissingPointCount)
+        << QString("patch boundary min/max/avg distance：%1 / %2 / %3")
+            .arg(QString::number(report.patchBoundaryMinDistance, 'g', 8))
+            .arg(QString::number(report.patchBoundaryMaxDistance, 'g', 8))
+            .arg(QString::number(report.patchBoundaryAverageDistance, 'g', 8))
+        << QString("suspected gap count：%1").arg(report.suspectedGapCount)
+        << QString("suspected gap edge ids：%1").arg(gapEdgeIdsText(report.suspectedGapEdgeIds))
+        << QString("diagnostics message：%1").arg(QString::fromStdString(report.message))
+        << QString("diagnostics warning：%1").arg(QString::fromStdString(report.warningMessage))
+        << "overlay：yellow=original CAD boundary, cyan=imported patch outer boundary, red=local STL coverage issue, magenta=patch boundary mismatch";
+    return lines.join('\n');
 }
 
 bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
@@ -1105,7 +1149,11 @@ void MainWindow::generateAndPreviewCurrentPatch() {
 
         viewer_->showPatchCutoutPreview(candidateSnapshot.faces);
         viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
-        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true);
+        const auto diagnostics = controller_.diagnoseCropBoundaryForCurrentPatch(
+            candidateSnapshot,
+            &result.crop.extract.localMesh);
+        viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
+        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics);
         refreshPatchApplyAction();
         logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
             .arg(candidateSnapshot.candidate_id)
@@ -1158,7 +1206,16 @@ void MainWindow::importPatchForCurrentCandidate() {
     }
 
     viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
-    showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    const auto localStl = StlReader().read(pathFromQString(filePath));
+    const StlMesh* localStlMesh = localStl.success ? &localStl.mesh : nullptr;
+    auto diagnostics = controller_.diagnoseCropBoundaryForCurrentPatch(*candidate, localStlMesh);
+    if (!localStl.success) {
+        diagnostics.warningMessage = diagnostics.warningMessage.empty()
+            ? localStl.message
+            : diagnostics.warningMessage + " " + localStl.message;
+    }
+    viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
+    showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, &diagnostics);
     refreshPatchApplyAction();
     logPanel_->appendInfo(QString("Patch overlay 已导入：%1")
         .arg(pathToQString(controller_.currentPatchPreviewReport().patchStepPath)));
@@ -1189,7 +1246,12 @@ void MainWindow::importPatchFromFile() {
     }
 
     viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
-    showPatchPreviewReport(controller_.currentPatchPreviewReport());
+    const auto* candidate = currentMergeCandidate();
+    const auto diagnostics = candidate != nullptr
+        ? controller_.diagnoseCropBoundaryForCurrentPatch(*candidate, nullptr)
+        : CropBoundaryDiagnosticsReport {};
+    viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
+    showPatchPreviewReport(controller_.currentPatchPreviewReport(), false, candidate != nullptr ? &diagnostics : nullptr);
     refreshPatchApplyAction();
     logPanel_->appendInfo(QString("Patch overlay 已从文件导入：%1").arg(filePath));
     setStatus("Patch overlay 已显示");
@@ -1327,7 +1389,10 @@ void MainWindow::clearPatchOverlay() {
     refreshPatchApplyAction();
 }
 
-void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool visualCutoutPreview) {
+void MainWindow::showPatchPreviewReport(
+    const PatchPreviewReport& report,
+    bool visualCutoutPreview,
+    const CropBoundaryDiagnosticsReport* diagnostics) {
     const auto warning = QString::fromStdString(report.warningMessage);
     const auto recommendedAction = QString::fromStdString(report.recommendedAction);
     const auto message = QString::fromStdString(report.message);
@@ -1340,7 +1405,7 @@ void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool v
         ? QString("visual-only cutout preview：Viewer 临时隐藏当前 candidate source faces，并叠加 patch；主 ShapeDocument 未修改。")
         : QString("patch overlay preview：Viewer 叠加 patch；主 ShapeDocument 未修改。");
 
-    inspectPanel_->showReport(QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：Apply 将执行真实 replacement，并通过 StrictTopologyGate 验证后才提交。")
+    QString reportText = QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：Apply 将执行真实 replacement，并通过 StrictTopologyGate 验证后才提交。")
         .arg(boolText(report.success))
         .arg(boolText(report.highRisk))
         .arg(patchStatus)
@@ -1379,7 +1444,11 @@ void MainWindow::showPatchPreviewReport(const PatchPreviewReport& report, bool v
         .arg(warning)
         .arg(recommendedAction)
         .arg(message)
-        .arg(previewMode));
+        .arg(previewMode);
+    if (diagnostics != nullptr) {
+        reportText += "\n\n" + cropBoundaryDiagnosticsText(*diagnostics);
+    }
+    inspectPanel_->showReport(reportText);
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
 
     if (report.highRisk) {

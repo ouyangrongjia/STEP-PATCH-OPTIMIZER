@@ -5,6 +5,7 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "gui/GuiTypes.h"
 #include "merge/MergeCandidate.h"
+#include "patch/CropBoundaryDiagnostics.h"
 #include "stl/StlMesh.h"
 
 #include <QPoint>
@@ -53,6 +54,7 @@ public:
     void clearStlCropBox();
     void showPatchCutoutPreview(const std::vector<FaceId>& hiddenFaces);
     void showPatchOverlay(const TopoDS_Shape& patchShape);
+    void showCropBoundaryDiagnosticsOverlay(const CropBoundaryDiagnosticsReport& report);
     void clearPatchOverlay();
     bool hasPatchOverlay() const;
     void setSourceStlVisible(bool visible);
@@ -98,6 +100,7 @@ private:
     void clearFeatureEdgeShape();
     void clearLockedEdgeShape();
     void clearPatchOverlayShape();
+    void clearCropBoundaryDiagnosticsOverlay();
     void clearPatchCutoutPreview();
     void selectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
     void redrawSelectedShapes();
@@ -124,6 +127,10 @@ private:
     Handle(AIS_Shape) stlCropBoxShape_;
     Handle(AIS_Shape) patchCutoutPreviewShape_;
     Handle(AIS_Shape) patchOverlayShape_;
+    Handle(AIS_Shape) cropOriginalBoundaryShape_;
+    Handle(AIS_Shape) cropPatchOuterBoundaryShape_;
+    Handle(AIS_Shape) cropStlIssueShape_;
+    Handle(AIS_Shape) cropPatchIssueShape_;
     std::vector<Handle(AIS_Shape)> mergeCandidateShapes_;
     std::vector<std::pair<FaceId, Quantity_Color>> mergeCandidateFaceColors_;
     SelectionMode selectionMode_ = SelectionMode::Face;

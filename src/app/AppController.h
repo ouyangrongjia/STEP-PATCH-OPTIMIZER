@@ -15,6 +15,7 @@
 #include "external/geomagic/GeomagicAutoSurfaceConfig.h"
 #include "external/geomagic/GeomagicAutoSurfaceResult.h"
 #include "patch/ImportedPatchInfo.h"
+#include "patch/CropBoundaryDiagnostics.h"
 #include "patch/PatchArtifactLocator.h"
 #include "patch/PatchApplyState.h"
 #include "patch/PatchPreviewReport.h"
@@ -120,6 +121,16 @@ public:
     Result applyCurrentPatchToCurrentCandidate(
         const MergeCandidate& candidate,
         PatchReplacementReport* outReport = nullptr);
+    CropBoundaryDiagnosticsReport diagnoseCropBoundaryForCurrentPatch(
+        const MergeCandidate& candidate,
+        const StlMesh* localStlMesh = nullptr,
+        const CropBoundaryDiagnosticsOptions& options = {}) const;
+    static CropBoundaryDiagnosticsReport diagnoseCropBoundaryData(
+        const ShapeDocument& document,
+        const MergeCandidate& candidate,
+        const StlMesh* localStlMesh,
+        const TopoDS_Shape& importedPatchShape,
+        const CropBoundaryDiagnosticsOptions& options = {});
     bool hasDocument() const;
     const ShapeDocument& document() const;
     const FeatureEdgeDetectionResult& featureEdges() const;

@@ -139,7 +139,8 @@ Organic detail/tolerance 调参：face count 仍≈273
 49. Geomagic AutoSurface T6.5.1 Apply failure diagnostics 已完成：`PatchReplacementReport` 现在记录 `StrictTopologyGateReport` 的 before / after / STEP roundtrip face/edge/shell/solid、free edge、multiple edge、BRepCheck、STEP export、STEP roundtrip 和 watertight 选项；`PatchReplacementCommand` 在 Gate 成功或失败时都会把 gate failure reason、message、warning 和 stats 写入 report；GUI Patch Apply report 会显示 repair 前后 face/edge/shell/solid、repair free/multiple edge、Gate before/after/roundtrip stats 和 solid/watertight 判断。失败后仍保持主 `ShapeDocument` 不变且保留 overlay / preview state；本阶段未放宽 `StrictTopologyGate`，未重新运行 Geomagic，未重新裁剪 STL，未写死真实样例路径；可选 rejected after debug STEP artifact 未实现。
 50. Geomagic AutoSurface T6.6 Industrial Adaptive Sewing 路线已根据 `scripts/industrial_sew.py` 确定：将三阶段策略迁移到 C++ repair pipeline，包括 `ShapeFix_Shape` / face orientation 修复、`ShapeUpgrade_UnifySameDomain`、多 tolerance `BRepBuilderAPI_Sewing` loop、`ShapeFix_Shell`、`BRepBuilderAPI_MakeSolid`、`ShapeFix_Solid`、collapsed guard 和 best-result selection。该路线不放宽 StrictTopologyGate，不绕过 rollback，不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary，multi-face patch 仍是主路径，redo 仍只复用缓存 afterDocument。
 51. Geomagic AutoSurface T6.6 Industrial Adaptive Sewing 已完成最小 C++ 集成：新增 `PatchReplacementRepair` 模块并由 `PatchReplacementCommand` 调用，repair 顺序覆盖 `ShapeFix_Shape`、`SameParameter`、`ShapeFix_Wire`、`ShapeFix_Face`、`ShapeUpgrade_UnifySameDomain`、adaptive `BRepBuilderAPI_Sewing` tolerance loop、`ShapeFix_Shell` / `BRepBuilderAPI_MakeSolid` shell-to-solid、`ShapeFix_Solid` 和 final unify。`PatchReplacementReport` 会记录 selected sewing tolerance、sewing attempt count、best sewing face/edge/shell/solid、best free/multiple edge、best BRepCheck、collapsed 状态、shapeFixShape/unify/shellToSolid/adaptiveSewing 是否执行；GUI Apply report 已展示这些字段。结果选择保持严格：preferred tolerance=0.007 的 valid non-collapsed solid 优先，否则选择 valid solid、未塌缩、free edge 最少的结果；没有 valid non-collapsed solid 时只保留 best attempt 诊断，不把塌缩或丢 solid 的 sewing result 当成功提交，最终仍由 `StrictTopologyGate` 决定提交或 rollback。redo 仍只复用缓存 afterDocument，不重新运行 repair / adaptive sewing / Geomagic / STL crop / patch import。
-52. Geomagic AutoSurface 下一步拆成两个明确任务：T6.6.1 Crop Boundary Diagnostics 和 T6.6.2 Process Status Panel。T6.6.1 用原 STP candidate outer boundary loop 采样点去量化 local STL crop 覆盖和 imported patch outer boundary 覆盖，输出 suspected gap segment、STL/patch boundary max distance、missing point count，并在 GUI overlay 高亮原 STP loop、STL crop coverage issue、patch outer boundary 和 suspected gap；目标是证明或否定“STL 裁剪边界缺口导致 replacement seam 无法闭合”的假设。T6.6.2 增加轻量进程状态面板，实时显示当前阶段、candidate、路径、Geomagic / crop / import / replacement / repair / adaptive sewing / StrictTopologyGate 参数和最近失败原因；redo 必须显示 cached redo，不伪装成重新运行 Geomagic / crop / import / repair。
+52. Geomagic AutoSurface T6.6.1 Crop Boundary Diagnostics 已完成第一版：新增 `CropBoundaryDiagnostics` / `CropBoundaryDiagnosticsReport`，基于 `RegionBoundaryAnalysis` 与 `BoundaryWireBuilder` 对原 STP candidate outer boundary loop 按 edge 采样，记录 edge id、sample count、3D point、edge length 和 single closed outer loop 状态；将原 boundary sample 分别与 local STL crop mesh、imported patch outerEdges 做最近距离统计，输出 min / max / average distance、missing point count、连续超限 segment、suspected gap edge ids、message / warning。GUI patch preview / import 成功后会自动显示 T6.6.1 overlay：黄色原 STP boundary loop、青色 imported patch outer boundary、红色 local STL crop coverage issue、洋红 patch boundary mismatch；Patch preview report 同步显示 T6.6.1 数值字段。本阶段不修改 `ShapeDocument`，不调用 Geomagic，不重新裁剪 STL，不改变 `PatchReplacementCommand` / `StrictTopologyGate` / redo 语义，不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary。
+53. Geomagic AutoSurface 下一步保持为 T6.6.2 Process Status Panel：增加轻量进程状态面板，实时显示当前阶段、candidate、路径、Geomagic / crop / import / replacement / repair / adaptive sewing / StrictTopologyGate 参数和最近失败原因；redo 必须显示 cached redo，不伪装成重新运行 Geomagic / crop / import / repair。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -172,6 +173,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | 合并候选预览 | 已完成基础版 | 后端 MergePlanner 已接入，可高亮候选区域 |
 | 候选区域点击选择 | 已完成基础版 | 选择候选区域模式下点击面片可选中所属候选 |
 | 候选区域接受/拒绝/隐藏/恢复 | 已完成基础版 | 管理运行时候选状态，不修改 B-rep |
+| Crop Boundary Diagnostics overlay | 已完成基础版 | Patch preview/import 成功后显示原 STP boundary、patch outer boundary、STL coverage issue 和 patch mismatch 诊断线 |
 | undo/redo 按钮 | 已完成 | 已接入 Ctrl+Z / Ctrl+Y |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
 
@@ -188,6 +190,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | 锁边 / 解锁边 | 已完成 | `lockEdges` / `unlockEdges` |
 | undo / redo | 已完成 | `undo` / `redo` |
 | undo/redo 状态查询 | 已完成 | `canUndo` / `canRedo` |
+| Crop Boundary Diagnostics | 已完成基础版 | `diagnoseCropBoundaryForCurrentPatch` / `diagnoseCropBoundaryData` 输出 T6.6.1 report，不修改文档 |
 
 ### 3.3 Command 模块
 
@@ -327,7 +330,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | StrictTopologyGate 测试 | 已完成 | 覆盖 identical valid box、missing after shape、free edge increase、multi-face replacement accepted / disallowed、face count non-reduction warning、STEP export + roundtrip、严格 watertight solid gate、roundtrip 后 BRepCheck / solid count / zero free edge / zero multiple edge 统计 |
 | BoundaryConstrainedPatchBuilder 测试 | 已完成 | 覆盖 one-face fragment、multi-face box fragment、empty analysis、invalid boundary、synthetic patchFaceCount=12、internal seam retention 和 ShapeDocument 不变 |
 | PatchReplacementRepair / T6.6 测试 | 已完成 | 覆盖 adaptive sewing 多 tolerance 尝试、preferred tolerance 优先、collapsed result 只作为诊断、closed shell 的 shell-to-solid path、Command report 字段、multi-face 不 unsupported、GateFailed rollback、redo 不重跑 repair；T6.5.1 的 rejected after debug artifact 仍未实现，若后续需要可补为可选诊断 artifact |
-| T6.6.1 Crop Boundary Diagnostics 测试计划 | 待实现 | 覆盖原 STP boundary loop 采样、STL crop 最近距离覆盖检查、imported patch outer boundary 覆盖检查、suspected gap segment 报告、GUI overlay 标签、失败样例不修改 ShapeDocument |
+| T6.6.1 Crop Boundary Diagnostics 测试 | 已完成 | 覆盖原 STP boundary loop 采样、STL crop 最近距离覆盖检查、imported patch outer boundary 覆盖检查、suspected gap segment 报告、无 local STL 的 patch-only 诊断、GUI overlay 标签和禁止真实样例路径硬编码 |
 | T6.6.2 Process Status Panel 测试计划 | 待实现 | 覆盖状态阶段流转、ApplyFailed 保留最后失败阶段和参数、adaptive sewing attempt 状态显示、redo 不显示 Geomagic / crop / import / repair 重跑 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |

@@ -19,6 +19,7 @@
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
+#include "patch/CropBoundaryDiagnostics.h"
 #include "patch/PatchImportService.h"
 
 #include <algorithm>
@@ -678,6 +679,38 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
     currentPatchStatus_ = RegionPatchStatus::Applied;
     currentPatchStatusMessage_ = "Patch Apply completed and committed after StrictTopologyGate passed.";
     return Result::ok();
+}
+
+CropBoundaryDiagnosticsReport AppController::diagnoseCropBoundaryForCurrentPatch(
+    const MergeCandidate& candidate,
+    const StlMesh* localStlMesh,
+    const CropBoundaryDiagnosticsOptions& options) const {
+    if (!patchPreviewReady_ || currentImportedPatchInfo_.shape.IsNull()) {
+        CropBoundaryDiagnosticsReport report;
+        report.message = "Crop boundary diagnostics requires a ready imported patch preview.";
+        return report;
+    }
+    return diagnoseCropBoundaryData(
+        context_.document,
+        candidate,
+        localStlMesh,
+        currentImportedPatchInfo_.shape,
+        options);
+}
+
+CropBoundaryDiagnosticsReport AppController::diagnoseCropBoundaryData(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const StlMesh* localStlMesh,
+    const TopoDS_Shape& importedPatchShape,
+    const CropBoundaryDiagnosticsOptions& options) {
+    const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+    CropBoundaryDiagnosticsInput input;
+    input.document = &document;
+    input.boundary = &boundary;
+    input.localStlMesh = localStlMesh;
+    input.importedPatchShape = &importedPatchShape;
+    return CropBoundaryDiagnostics().analyze(input, options);
 }
 
 bool AppController::hasDocument() const {
