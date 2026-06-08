@@ -626,6 +626,7 @@ T6.4 仍由 StrictTopologyGate 作为最终提交门；Gate 失败 rollback，re
 T6.5 已完成 AppController / GUI 真实 Apply 接入：GUI 按钮调用 AppController::applyCurrentPatchToCurrentCandidate，并通过 CommandHistory 执行 PatchReplacementCommand。成功后主 ShapeDocument 显示 afterDocument 并清除 patch overlay / preview state；失败后主 ShapeDocument 不变且保留 overlay / preview state。GUI Apply 启用严格水密 Gate，要求 after 与 STEP roundtrip 后都通过 BRepCheck、solid count 保持、free edge=0、multiple edge=0。one-face path 会用 imported patch surface + 原 STP candidate boundary wire 重建 trimmed face；multi-face fragment 仍进入主路径，最终提交性由 repair + StrictTopologyGate 判断。redo 仍只复用缓存 afterDocument，不重新运行 Geomagic、不裁剪 STL、不导入 patch、不重新 repair。
 T6.5.1 Apply/Gate 失败诊断增强已完成：PatchReplacementReport 记录 repair 前后 stats、Gate before/after stats、STEP roundtrip stats、BRepCheck/free/multiple edge 和 watertight 选项，GUI Patch Apply report 会直接展示这些字段；可选 rejected after debug artifact 路径尚未实现。
 T6.6 Industrial Adaptive Sewing 已完成最小 C++ 集成：PatchReplacementRepair 执行 ShapeFix_Shape、ShapeUpgrade_UnifySameDomain、多 tolerance Sewing loop、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid、collapsed guard 和 best-result selection，并把 selected tolerance、attempt count、best stats 写入 report / GUI。该路线只增强 repair 和诊断，不放宽 StrictTopologyGate，不绕过 rollback，不信任 STL crop boundary 或 Geomagic patch outer boundary。
+T6.6 后续不应继续盲目调 sewing tolerance。下一步先做 T6.6.1 Crop Boundary Diagnostics：用原 STP candidate outer boundary loop 采样点验证 local STL crop 和 imported patch outer boundary 是否存在缺口或覆盖不足；再做 T6.6.2 Process Status Panel：把 crop、Geomagic、import、replacement、repair、adaptive sewing、StrictTopologyGate 的当前阶段和关键参数实时显示到 GUI。
 ```
 
 ```text
@@ -679,6 +680,23 @@ assembled after candidate
 → ShapeFix_Solid
 → collapsed guard / best-result selection
 → StrictTopologyGate
+
+T6.6.1 TODO:
+original STP candidate outer loop
+→ per-edge boundary sampling
+→ compare with local STL crop coverage
+→ compare with imported patch outer boundary
+→ suspected gap segment report
+→ GUI overlay highlights original loop / STL coverage issue / patch outer boundary / gap
+
+T6.6.2 TODO:
+GUI process status panel
+→ current stage
+→ candidate id / paths / counts
+→ Geomagic / crop / import / Apply params
+→ adaptive sewing tolerance attempt and best stats
+→ StrictTopologyGate reason
+→ redo displayed as cached redo, not rerun
 ```
 
 注意：
@@ -688,4 +706,5 @@ adaptive sewing 不能替代 StrictTopologyGate。
 free edge 变 0 但 face count 严重塌缩的结果不能提交。
 multi-face patch 内部 seam 可以保留；外边界是否能形成实体由 repair + gate 判断。
 redo 只复用缓存 afterDocument，不重新运行 adaptive sewing。
+如果 T6.6.1 证明 STL crop 或 patch outer boundary 有缺口，修复应优先发生在 crop / boundary sampling / patch generation 输入层，而不是继续放宽 Gate 或强行采用 sewing result。
 ```

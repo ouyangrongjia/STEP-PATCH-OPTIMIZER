@@ -1597,6 +1597,10 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.3 PatchReplacementCommand（DONE，最小可用 Command 管线）
 → T6.4 Sewing / ShapeFix / SameParameter 集成（DONE，最小 repair + gate 管线）
 → T6.5 AppController / GUI 接入真实 Apply（DONE，真实 Apply 已接入 CommandHistory + 严格水密 Gate）
+→ T6.5.1 Apply failure diagnostics（DONE，repair / Gate / roundtrip 诊断已进入 GUI report）
+→ T6.6 Industrial Adaptive Sewing（DONE，最小 C++ adaptive repair 已接入）
+→ T6.6.1 Crop Boundary Diagnostics（TODO，验证原 STP loop → STL crop → Geomagic patch 是否丢边界）
+→ T6.6.2 Process Status Panel（TODO，实时显示当前阶段和参数）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
@@ -2248,6 +2252,162 @@ adaptive Sewing 会按 bbox 自适应 tolerance、preferredSewingTolerance=0.007
 PatchReplacementCommand 已改为调用 PatchReplacementRepair 模块，redo 仍只复用缓存 afterDocument，不重新运行 repair / adaptive sewing。
 GUI Patch Apply report 已显示 selected sewing tolerance、sewing attempt count、best sewing stats、best BRepCheck 和 collapsed。
 本阶段未放宽 StrictTopologyGate，未调用 Geomagic，未重新裁剪 STL，未写死真实样例路径。
+```
+
+## T6.6.1 Crop Boundary Diagnostics / 局部 STL 裁剪边界诊断
+
+状态：TODO。
+
+背景：
+
+```text
+T6.6 后 candidate 179 仍 ApplyFailed，但失败形态已经更清楚：
+adaptive sewing 将 free edges 从 38 降到 26，best sewing BRepCheck=true 且未塌缩，但 best sewing solid=0，最终 after solid=1 仍有 26 条 free edges，StrictTopologyGate 以 BRepCheckFailed rollback。
+GUI 截图显示 Geomagic patch / local STL 对应区域在原 STP boundary loop 附近疑似存在小缺口。
+这说明继续盲目调 sewing tolerance 价值有限，必须先量化原 STP boundary loop、STL crop 覆盖和 imported patch outer boundary 之间的偏差。
+```
+
+目标：
+
+```text
+证明或否定“局部 STL 裁剪未完整覆盖原 STP boundary loop，导致 Geomagic patch 边界缺口，最终 replacement seam 无法闭合”这个假设。
+```
+
+任务：
+
+```text
+1. 基于 RegionBoundaryAnalysis / BoundaryWireBuilder，对原 STP candidate outer boundary wire 按 edge 采样。
+2. 对每条 boundary edge 记录：
+   - edge id
+   - 采样点数量
+   - 采样点 3D 坐标
+   - edge length
+   - 是否属于 single closed outer loop
+3. 将 boundary 采样点与 local STL crop mesh 做最近距离检查：
+   - min / max / average distance
+   - 超过 tolerance 的点数量
+   - 连续超限区间
+   - 疑似 gap segment 的 edge id 和参数区间
+4. 将原 STP boundary 采样点与 imported patch outerEdges 做最近距离检查：
+   - patch outer boundary 是否覆盖原 STP loop
+   - patch outer boundary 与原 loop 的最大偏差
+   - 缺口 segment / mismatch segment
+5. 输出 CropBoundaryDiagnosticsReport：
+   - originalBoundarySampleCount
+   - stlCoverageMissingPointCount
+   - stlCoverageMaxDistance
+   - patchBoundaryMissingPointCount
+   - patchBoundaryMaxDistance
+   - suspectedGapCount
+   - suspectedGapEdgeIds
+   - message / warningMessage
+6. GUI overlay 增加诊断显示：
+   - 原 STP boundary loop
+   - local STL crop boundary / coverage issue
+   - imported patch outer boundary
+   - suspected gap segment 高亮
+7. 不修改 ShapeDocument。
+8. 不绕过 StrictTopologyGate。
+9. 不把 STL crop boundary 或 Geomagic patch outer boundary 当最终 CAD boundary。
+10. 不写死 candidate 179 或任何真实样例路径。
+```
+
+验收：
+
+```text
+对 candidate 179 这类失败样例，GUI / report 能明确说明：
+1. 原 STP boundary loop 是否完整。
+2. STL crop 是否在某些 boundary segment 附近缺覆盖。
+3. imported patch outer boundary 是否在某些 segment 附近缺口或偏离过大。
+4. 26 条 free edges 是否集中在 suspected gap 附近。
+如果诊断证明 crop 没问题，则下一步不能继续怪 STL 裁剪，必须转向 replacement boundary trim / sewing 策略。
+```
+
+## T6.6.2 Process Status Panel / 当前进程状态面板
+
+状态：TODO。
+
+背景：
+
+```text
+当前 GUI 中 Patch Apply / merge / Geomagic 相关操作缺少过程级反馈。
+用户只能看到最终 ApplyFailed report，看不到当前卡在 crop、Geomagic、import、replacement build、repair、adaptive sewing 还是 StrictTopologyGate。
+这会导致真实样例调试时只能凭最终报告和截图猜。
+```
+
+目标：
+
+```text
+增加一个轻量进程状态面板，实时显示当前正在执行的阶段、candidate、关键参数和最近事件。
+```
+
+建议文件：
+
+```text
+src/gui/ProcessStatusPanel.h
+src/gui/ProcessStatusPanel.cpp
+src/app/AppController.h
+src/app/AppController.cpp
+src/app/MainWindow.h
+src/app/MainWindow.cpp
+tests/test_patch_apply_state.cpp
+```
+
+任务：
+
+```text
+1. 定义 ProcessStage / ProcessStatusSnapshot：
+   - Idle
+   - AnalyzingBoundary
+   - CroppingStl
+   - RunningGeomagic
+   - ImportingPatch
+   - PreviewReady
+   - ApplyingPatch
+   - BuildingReplacement
+   - Repairing
+   - AdaptiveSewing
+   - ValidatingGate
+   - Applied
+   - ApplyFailed
+2. 状态面板显示：
+   - current stage
+   - candidate id
+   - source face count
+   - boundary edge count
+   - local STL path
+   - patch STEP / IGS path
+   - current sewing tolerance
+   - sewing attempt index / count
+   - best free edges
+   - best solid count
+   - latest Gate failure reason
+   - latest message / warning
+3. AppController / MainWindow 在关键阶段更新状态：
+   - boundary analysis start / finish
+   - STL crop start / finish
+   - Geomagic start / finish
+   - patch import start / finish
+   - Apply start
+   - replacement build
+   - repair start
+   - adaptive sewing attempt
+   - StrictTopologyGate start / finish
+   - success / failure
+4. 长任务至少做到阶段级实时刷新；adaptive sewing 如果在 GUI 线程可见，应显示每次 tolerance 尝试结果。
+5. 失败后状态面板保留最后失败阶段和参数，不自动清空。
+6. undo / redo 不应伪装成重新运行 Geomagic / crop / import / repair。
+7. 不改变 CommandHistory 语义。
+8. 不绕过用户确认。
+```
+
+验收：
+
+```text
+点击 Apply 后，用户能看到当前执行到 replacement build、repair、adaptive sewing 或 StrictTopologyGate。
+adaptive sewing 过程中能看到 tolerance attempt 和当前 best stats。
+ApplyFailed 后，面板保留失败阶段、Gate reason、free edge / solid / BRepCheck 摘要。
+redo 只显示 cached redo，不显示 RunningGeomagic / CroppingStl / AdaptiveSewing。
 ```
 
 
