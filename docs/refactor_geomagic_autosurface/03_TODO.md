@@ -2074,6 +2074,159 @@ multi-face patch 可进入真实 Apply 流程。
 成功提交必须保持 solid / watertight；否则 GateFailed rollback。
 ```
 
+## T6.5.1 Apply 失败诊断增强
+
+状态：TODO。
+
+背景：
+
+```text
+GUI 真实样例验证中，candidate 179 的 multi-face patch 已进入 Apply 主路径：
+sourceFaceCount=49，sourceBoundaryEdgeCount=26，patchFaceCount=12，replacementFaceCount=12。
+Command 已执行 source face replacement、SameParameter、ShapeFix_Face、ShapeFix_Wire、Sewing。
+但 repair 前后 free edges 均为 38，Sewing result 因为空或丢失 solid 拓扑未被采用，最终 StrictTopologyGate 以 BRepCheckFailed rollback。
+这说明失败点不是 patchFaceCount > 1 unsupported，而是 replacement fragment 与主模型没有形成水密拓扑。
+```
+
+目标：
+
+```text
+让 GUI Apply failure report 可以直接判断失败是 solid 数丢失、shell 异常、free edge 未消除、multiple edge、BRepCheck、STEP export，还是 STEP roundtrip 后再次破坏。
+```
+
+任务：
+
+```text
+1. GUI Patch Apply report 显示 PatchReplacementReport 已有 repair 前后 face/edge/shell/solid 字段。
+2. PatchReplacementReport 记录 StrictTopologyGateReport 关键字段：
+   - before / after face edge shell solid
+   - before / after free edge
+   - before / after multiple edge
+   - before / after BRepCheck
+   - stepExportOk
+   - stepRoundtripOk
+   - roundtrip face edge shell solid
+   - roundtrip free edge
+   - roundtrip multiple edge
+   - roundtrip BRepCheck
+3. GateFailed message 保留明确 failureReason，同时把 gate stats 写入 report，供 GUI 和日志展示。
+4. 可选 debug artifact：GateFailed 时把 rejected after shape 导出到临时/工作区 debug STEP，路径只写入 report，不作为生产输入，不影响 undo/redo。
+5. 不放宽 StrictTopologyGate。
+6. 不重新运行 Geomagic。
+7. 不重新裁剪 STL。
+8. 不把真实样例路径写死进生产逻辑。
+```
+
+验收：
+
+```text
+ApplyFailed report 中能看到 repair 前后 solid/shell/face/edge、after gate stats、roundtrip stats。
+对 candidate 179 这类失败样例，GUI 能明确显示 free edge 未消除、after BRepCheck failed、是否保留/丢失 solid。
+失败后主 ShapeDocument 不变，overlay / preview state 保留。
+```
+
+## T6.6 Industrial Adaptive Sewing 集成
+
+状态：TODO。
+
+来源：
+
+```text
+scripts/industrial_sew.py
+```
+
+研究结论：
+
+```text
+老师脚本能缝成实体的关键不是单个 API，而是三阶段策略：
+1. Geometry fix：ShapeFix_Shape 修复 base / patch，并对 face 做 ShapeFix_Face orientation。
+2. Topology unify：ShapeUpgrade_UnifySameDomain 统一 base / patch 的同域拓扑。
+3. Adaptive sewing loop：多容差试跑 Sewing，记录每次结果，再按有效 Solid、free edge、BRepCheck、face collapse 选择最佳结果。
+
+当前 T6.5 C++ repair pipeline 只执行一次固定 tolerance sewing，缺少 adaptive tolerance loop、ShapeUpgrade_UnifySameDomain、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid 和 collapsed guard。
+```
+
+必须保持的原则：
+
+```text
+1. 不绕过 StrictTopologyGate。
+2. 不因为 patchFaceCount > 1 返回 unsupported。
+3. multi-face replacement fragment 仍是主路径。
+4. internal patch seams 允许保留。
+5. STL crop boundary 不作为最终 CAD boundary。
+6. Geomagic patch outer boundary 不作为最终合法性依据。
+7. 最终提交仍必须以原 STP candidate boundary / topology 为参考，并通过 watertight solid gate。
+8. redo 不能重新运行 industrial sewing；redo 只复用缓存 afterDocument。
+```
+
+推荐实现路线：
+
+```text
+1. 新增 PatchReplacementRepairOptions 字段：
+   - bool runShapeFixShape = true
+   - bool runUnifySameDomain = true
+   - bool runAdaptiveSewing = true
+   - bool runShellToSolid = true
+   - double preferredSewingTolerance = 0.007
+   - double minSewingTolerance
+   - double maxSewingTolerance
+   - double collapseFaceRatio = 0.5
+
+2. 扩展 PatchReplacementRepairReport：
+   - selectedSewingTolerance
+   - sewingAttemptCount
+   - bestSewingFreeEdges
+   - bestSewingFaceCount
+   - bestSewingEdgeCount
+   - bestSewingShellCount
+   - bestSewingSolidCount
+   - bestSewingBRepCheckValid
+   - bestSewingCollapsed
+   - shellToSolidApplied
+   - unifySameDomainApplied
+   - shapeFixShapeApplied
+
+3. repair pipeline 顺序：
+   input after shape
+   → ShapeFix_Shape
+   → ShapeFix_Face orientation / ShapeFix_Wire / ShapeFix_Face
+   → ShapeUpgrade_UnifySameDomain
+   → adaptive BRepBuilderAPI_Sewing tolerance loop
+   → ShapeFix_Shell
+   → BRepBuilderAPI_MakeSolid
+   → ShapeFix_Solid
+   → ShapeUpgrade_UnifySameDomain
+   → 记录 stats
+   → StrictTopologyGate
+
+4. Sewing 每次尝试必须记录：
+   - tolerance
+   - face/edge/shell/solid
+   - free edge
+   - multiple edge
+   - BRepCheck
+   - collapsed
+
+5. 结果选择规则：
+   - 优先 preferred tolerance=0.007 且 valid solid、未塌缩。
+   - 否则选择 valid solid、未塌缩、free edge 最少、face count 最接近输入的结果。
+   - 如果没有 valid solid，则只允许作为失败诊断，不可绕过 StrictTopologyGate 提交。
+   - Face 数严重塌缩的零自由边结果不能被当成成功。
+```
+
+测试要求：
+
+```text
+1. adaptive sewing 会尝试多组 tolerance，并记录 selected tolerance / attempt count。
+2. preferred tolerance 可用时优先选择 preferred tolerance。
+3. collapsed result 不会被当成成功。
+4. shell-to-solid path 对可闭合 shell 能生成 solid。
+5. multi-face patch 不因 internal seam 或 patchFaceCount > 1 被拒绝。
+6. free edge 无法消除时仍 GateFailed rollback。
+7. redo 不重新运行 adaptive sewing。
+8. GUI report 能显示 selected tolerance、attempt count、best result stats。
+```
+
 
 # P1：workspace 与日志规范
 
