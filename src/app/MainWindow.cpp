@@ -418,6 +418,9 @@ void MainWindow::createActions() {
 
     openSourceStlAction_ = new QAction("打开原始 STL", this);
     cropCurrentCandidateStlAction_ = new QAction("裁剪当前候选 STL", this);
+    useConservativeStlCropAction_ = new QAction("启用保守边界裁剪", this);
+    useConservativeStlCropAction_->setCheckable(true);
+    useConservativeStlCropAction_->setChecked(false);
     showSourceStlAction_ = new QAction("显示源 STL", this);
     showSourceStlAction_->setCheckable(true);
     showSourceStlAction_->setChecked(true);
@@ -527,6 +530,7 @@ void MainWindow::createMenus() {
     stlMenu_ = menuBar()->addMenu("STL");
     stlMenu_->addAction(openSourceStlAction_);
     stlMenu_->addAction(cropCurrentCandidateStlAction_);
+    stlMenu_->addAction(useConservativeStlCropAction_);
     stlMenu_->addSeparator();
     stlMenu_->addAction(showSourceStlAction_);
     stlMenu_->addAction(showCroppedStlAction_);
@@ -643,6 +647,7 @@ void MainWindow::createToolBars() {
     auto* stlToolMenu = new QMenu(this);
     stlToolMenu->addAction(openSourceStlAction_);
     stlToolMenu->addAction(cropCurrentCandidateStlAction_);
+    stlToolMenu->addAction(useConservativeStlCropAction_);
     stlToolMenu->addSeparator();
     stlToolMenu->addAction(showSourceStlAction_);
     stlToolMenu->addAction(showCroppedStlAction_);
@@ -1001,8 +1006,14 @@ void MainWindow::cropCurrentCandidateStl() {
     const auto sourceStlPath = controller_.sourceStlPath();
     const auto documentSnapshot = controller_.document();
     const auto sourceMeshSnapshot = controller_.sourceStlMesh();
+    const auto cropOptions = currentStlCropOptions();
+    const auto cropMode = cropOptions.mode == StlCropMode::ConservativeBoundaryBand
+        ? QString("conservative-boundary-band")
+        : QString("centroid-only");
 
-    ProcessStatusSnapshot cropStatus = makeProcessStatus(ProcessStage::CroppingStl, "STL crop started for current candidate.");
+    ProcessStatusSnapshot cropStatus = makeProcessStatus(
+        ProcessStage::CroppingStl,
+        QString("STL crop started for current candidate. mode=%1").arg(cropMode).toStdString());
     cropStatus.candidateId = candidateSnapshot.candidate_id;
     cropStatus.sourceFaceCount = candidateSnapshot.face_count;
     cropStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
@@ -1011,11 +1022,12 @@ void MainWindow::cropCurrentCandidateStl() {
     refreshProcessStatusPanel();
 
     setStlCropInProgress(true);
-    inspectPanel_->showReport(QString("STL 裁剪正在后台运行\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4")
+    inspectPanel_->showReport(QString("STL 裁剪正在后台运行\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncrop mode：%5")
         .arg(pathToQString(sourceStlPath))
         .arg(filePath)
         .arg(candidateSnapshot.candidate_id)
-        .arg(candidateTypeText(candidateSnapshot.candidate_type)));
+        .arg(candidateTypeText(candidateSnapshot.candidate_type))
+        .arg(cropMode));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     logPanel_->appendInfo(QString("开始后台裁剪 STL：候选 %1，输出 %2")
         .arg(candidateSnapshot.candidate_id)
@@ -1023,7 +1035,7 @@ void MainWindow::cropCurrentCandidateStl() {
     setStatus("STL 裁剪进行中");
 
     auto* watcher = new QFutureWatcher<StlCandidateCropResult>(this);
-    connect(watcher, &QFutureWatcher<StlCandidateCropResult>::finished, this, [this, watcher, candidateSnapshot, filePath, sourceStlPath]() {
+    connect(watcher, &QFutureWatcher<StlCandidateCropResult>::finished, this, [this, watcher, candidateSnapshot, filePath, sourceStlPath, cropMode]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1064,19 +1076,31 @@ void MainWindow::cropCurrentCandidateStl() {
         controller_.updateProcessStatus(cropDone);
         refreshProcessStatusPanel();
 
-        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\nsource triangle count：%6\noutput triangle count：%7\nviewer displayed cropped triangles：%8\nmargin：%9\ncandidate bbox：%10\nexpanded bbox：%11\noutput bbox：%12\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
+        const auto cropWarning = report.warning_message.empty()
+            ? QString("-")
+            : QString::fromStdString(report.warning_message);
+        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\ncrop mode：%6\nsource triangle count：%7\noutput triangle count：%8\nviewer displayed cropped triangles：%9\ncentroid keep triangles：%10\nvertex conservative keep triangles：%11\nedge-midpoint conservative keep triangles：%12\nboundary-band conservative keep triangles：%13\nconservative keep total：%14\nrejected outside bbox：%15\nrejected outside candidate：%16\nmargin：%17\ncandidate bbox：%18\nexpanded bbox：%19\noutput bbox：%20\nwarning：%21\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
             .arg(pathToQString(sourceStlPath))
             .arg(filePath)
             .arg(candidateSnapshot.candidate_id)
             .arg(candidateTypeText(candidateSnapshot.candidate_type))
             .arg(candidateStatusText(candidateSnapshot.status))
+            .arg(cropMode)
             .arg(report.source_triangle_count)
             .arg(report.output_triangle_count)
             .arg(viewer_->croppedStlDisplayedTriangleCount())
+            .arg(report.centroid_keep_triangle_count)
+            .arg(report.vertex_keep_triangle_count)
+            .arg(report.edge_midpoint_keep_triangle_count)
+            .arg(report.boundary_band_keep_triangle_count)
+            .arg(report.conservative_keep_triangle_count)
+            .arg(report.rejected_outside_bbox_count)
+            .arg(report.rejected_outside_candidate_count)
             .arg(QString::number(report.margin, 'g', 8))
             .arg(stlBoundingBoxText(report.candidate_bbox))
             .arg(stlBoundingBoxText(report.expanded_bbox))
-            .arg(stlBoundingBoxText(report.output_bbox)));
+            .arg(stlBoundingBoxText(report.output_bbox))
+            .arg(cropWarning));
         bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
         logPanel_->appendInfo(QString("STL 裁剪完成：候选 %1，输出 %2，triangle %3")
             .arg(candidateSnapshot.candidate_id)
@@ -1084,8 +1108,13 @@ void MainWindow::cropCurrentCandidateStl() {
             .arg(report.output_triangle_count));
         setStatus("STL 裁剪完成");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath]() {
-        return AppController::cropStlForCandidateData(documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath);
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath, cropOptions]() {
+        return AppController::cropStlForCandidateData(
+            documentSnapshot,
+            sourceMeshSnapshot,
+            candidateSnapshot,
+            outputPath,
+            cropOptions);
     }));
 }
 
@@ -1130,10 +1159,14 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto documentSnapshot = controller_.document();
     const auto sourceMeshSnapshot = controller_.sourceStlMesh();
     const auto workspaceRoot = std::filesystem::current_path();
+    const auto cropOptions = currentStlCropOptions();
+    const auto cropMode = cropOptions.mode == StlCropMode::ConservativeBoundaryBand
+        ? QString("conservative-boundary-band")
+        : QString("centroid-only");
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::RunningGeomagic,
-        "Patch preview pipeline started: crop local STL and run Geomagic.");
+        QString("Patch preview pipeline started: crop local STL and run Geomagic. crop_mode=%1").arg(cropMode).toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
     pipelineStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
@@ -1141,16 +1174,17 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     refreshProcessStatusPanel();
 
     setStlCropInProgress(true);
-    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
+    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\ncrop mode：%4\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
-        .arg(candidateTypeText(candidateSnapshot.candidate_type)));
+        .arg(candidateTypeText(candidateSnapshot.candidate_type))
+        .arg(cropMode));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
 
     auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
-    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath]() {
+    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, cropMode]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1172,9 +1206,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             controller_.updateProcessStatus(failedStatus);
             refreshProcessStatusPanel();
             const auto message = QString::fromStdString(result.message);
-            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nlocal STL：%3\noutput STEP：%4\nfit_region log：%5\n消息：%6")
+            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\ncrop mode：%3\nlocal STL：%4\noutput STEP：%5\nfit_region log：%6\n消息：%7")
                 .arg(pathToQString(sourceStlPath))
                 .arg(candidateSnapshot.candidate_id)
+                .arg(cropMode)
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
                 .arg(pathToQString(result.geomagic.fitRegionLogPath))
@@ -1230,7 +1265,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             candidateSnapshot,
             &result.crop.extract.localMesh);
         viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
-        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics);
+        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics, cropMode);
         publishCropBoundaryDiagnosticsStatus(diagnostics);
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
@@ -1240,7 +1275,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             .arg(pathToQString(result.geomagic.outputStepPath)));
         setStatus("Patch cutout overlay 已显示");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot]() {
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
         return AppController::cropAndRunGeomagicForCandidateData(
@@ -1248,7 +1283,8 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             sourceMeshSnapshot,
             candidateSnapshot,
             workspaceRoot,
-            config);
+            config,
+            cropOptions);
     }));
 }
 
@@ -1494,7 +1530,8 @@ void MainWindow::clearPatchOverlay() {
 void MainWindow::showPatchPreviewReport(
     const PatchPreviewReport& report,
     bool visualCutoutPreview,
-    const CropBoundaryDiagnosticsReport* diagnostics) {
+    const CropBoundaryDiagnosticsReport* diagnostics,
+    const QString& cropMode) {
     const auto warning = QString::fromStdString(report.warningMessage);
     const auto recommendedAction = QString::fromStdString(report.recommendedAction);
     const auto message = QString::fromStdString(report.message);
@@ -1547,6 +1584,9 @@ void MainWindow::showPatchPreviewReport(
         .arg(recommendedAction)
         .arg(message)
         .arg(previewMode);
+    if (!cropMode.isEmpty()) {
+        reportText += QString("\ncrop mode：%1").arg(cropMode);
+    }
     if (diagnostics != nullptr) {
         reportText += "\n\n" + cropBoundaryDiagnosticsText(*diagnostics);
     }
@@ -2811,6 +2851,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     openStepAction_->setEnabled(!inProgress);
     openSourceStlAction_->setEnabled(!inProgress);
     cropCurrentCandidateStlAction_->setEnabled(!inProgress);
+    useConservativeStlCropAction_->setEnabled(!inProgress);
     generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
     importPatchFromFileAction_->setEnabled(!inProgress);
@@ -2821,6 +2862,14 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     }
     previewMergeAction_->setEnabled(!inProgress);
     highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
+}
+
+StlRegionExtractorOptions MainWindow::currentStlCropOptions() const {
+    StlRegionExtractorOptions options;
+    if (useConservativeStlCropAction_ != nullptr && useConservativeStlCropAction_->isChecked()) {
+        options.mode = StlCropMode::ConservativeBoundaryBand;
+    }
+    return options;
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

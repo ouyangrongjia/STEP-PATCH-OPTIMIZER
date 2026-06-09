@@ -2,7 +2,7 @@
 
 > 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：真实 Geomagic GUI 观察确认 local STL 在候选边角存在可见缺面，T6.6.1 的 boundary point 最近距离 coverage 指标存在漏检 boundary-band / 内侧缺面风险；T6.6.3 已补充 boundary-band 与 triangle rejection 诊断，下一步优先推进 T6.6.4 STL Region Extractor 保守裁剪修复，修复后再重新生成 Geomagic patch 并评估是否需要 patch boundary re-trim。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；直接使用 AutoSurface multi-face patch outer boundary 替换原 CAD 区域会稳定产生 boundary mismatch / free edges。下一步主线改为 T6.7 Boundary-Constrained Surface Re-trim：从 Geomagic patch 借 surface / 曲面趋势，用原 STP candidate outer boundary wire 重新 trim / rebuild replacement，再进入 repair 与 StrictTopologyGate。
 
 ---
 
@@ -1604,8 +1604,10 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.6.1 Crop Boundary Diagnostics（DONE，验证原 STP loop → STL crop → Geomagic patch 是否丢边界；当前已发现 boundary-point coverage 存在漏检内侧缺面的盲区）
 → T6.6.2 Process Status Panel（DONE，阶段级进程状态面板已接入）
 → T6.6.3 STL Crop Boundary-Band Diagnostics（DONE，已诊断 local STL 边界内侧 band 缺面和 centroid-only triangle rejection）
-→ T6.6.4 STL Region Extractor 保守裁剪修复（NEXT，根据 T6.6.3 结果修复 centroid-only / 过严裁剪策略）
-→ T6.6.5 Regenerate Geomagic Patch + Apply Verification（NEXT，重新生成 patch，复测 patch boundary mismatch 与 StrictTopologyGate）
+→ T6.6.4 STL Region Extractor 保守裁剪修复（DONE，正式 crop 已支持 vertex / edge-midpoint / boundary-band 保守保留和 leak guard）
+→ T6.6.4.1 STL Crop Mode Switch（DONE，默认 legacy centroid-only，GUI 可显式开启 conservative-boundary-band）
+→ T6.6.5 Regenerate Geomagic Patch + Apply Verification（DONE，手动验证否定 direct AutoSurface outer-boundary replacement）
+→ T6.7 Boundary-Constrained Surface Re-trim（NEXT，用 Geomagic surface + 原 STP outer boundary 重建 replacement）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
@@ -2669,7 +2671,20 @@ T6.6.1 的 stlCoverageMissingPointCount 很低，但它只检查原 boundary sam
 
 ## T6.6.4 STL Region Extractor 保守裁剪修复
 
-状态：NEXT，必须在 T6.6.3 诊断确认后执行。
+状态：DONE，`StlRegionExtractor` 已支持 legacy centroid-only 与 conservative-boundary-band 两种模式；默认模式已回到 legacy centroid-only，保守裁剪需在 GUI 中显式开启。
+
+实现结果：
+
+```text
+1. StlRegionExtractorOptions 新增 vertex-inside、edge-midpoint-inside、boundary-band inclusion 开关。
+2. StlRegionExtractorOptions 新增 crop mode：CentroidOnly / ConservativeBoundaryBand。
+3. boundary-band 使用原 STP candidate boundary loop 采样线段，只作为 STL crop inclusion 的局部补充，不作为最终 CAD boundary。
+4. StlCropReport 记录 centroid / vertex / edge-midpoint / boundary-band keep count、conservative keep total、bbox/candidate reject count 和 warning。
+5. 增加 output bbox leak guard 与 output/centroid triangle ratio guard，避免无限扩大 local STL。
+6. GUI “STL 裁剪完成”报告显示 crop mode 与新增 keep/reject 统计。
+7. GUI STL 菜单新增“启用保守边界裁剪”开关，默认关闭；单独裁剪和“生成并预览当前 Patch”使用同一个开关。
+8. synthetic tests 覆盖 centroid outside but vertex inside、edge midpoint inside、boundary-band 命中、默认 centroid-only 旧谓词和 crop report 字段。
+```
 
 背景：
 
@@ -2773,15 +2788,15 @@ warning_message
 测试要求：
 
 ```text
-1. triangle centroid outside but vertex inside candidate region：旧策略会丢，新策略保留。
-2. triangle centroid outside but edge midpoint inside candidate region：新策略保留。
-3. triangle near original boundary band：新策略保留。
-4. margin 增大时 output triangle count 不减少。
-5. conservative crop 不产生明显 bbox 泄漏。
-6. 空 source mesh 仍失败。
-7. candidate 无 faces 仍失败。
-8. 中文路径 / data/crop_stl 输出规则不受影响。
-9. 当前真实样例只做 optional manual verification。
+1. triangle centroid outside but vertex inside candidate region：旧策略会丢，新策略保留。（DONE）
+2. triangle centroid outside but edge midpoint inside candidate region：新策略保留。（DONE）
+3. triangle near original boundary band：新策略保留。（DONE）
+4. margin 增大时 output triangle count 不减少。（DONE）
+5. conservative crop 不产生明显 bbox 泄漏。（DONE，bbox / count guard）
+6. 空 source mesh 仍失败。（DONE）
+7. candidate 无 faces 仍失败。（DONE）
+8. 中文路径 / data/crop_stl 输出规则不受影响。（DONE，已有中文路径 locator 测试保持通过）
+9. 当前真实样例只做 optional manual verification。（DONE，T6.6.5 已完成手动验证并转向 T6.7）
 ```
 
 验收：
@@ -2791,6 +2806,29 @@ warning_message
 2. T6.6.3 bandMissingPointCount 明显下降。
 3. 重新运行 Geomagic 后 patchBoundaryMissingPointCount / suspectedGapCount 应下降。
 4. 如果 patch boundary mismatch 仍存在，才能进入 patch boundary constrained trim / seam repair。
+5. 代码级验证：`.\scripts\build_debug.ps1` 与 `.\scripts\test.ps1` 通过。
+```
+
+手动验证结论：
+
+```text
+1. conservative-boundary-band 模式能补齐 local STL 边界附近缺面，说明 T6.6.3 诊断和 T6.6.4 inclusion 逻辑本身成立。
+2. 但该模式会把边缘褶皱 / 多余三角片带入 AutoSurface，可能显著增加 patch face count，并导致 imported patch outer boundary 与原 STP candidate boundary 全环偏离。
+3. 因此当前不能把 conservative-boundary-band 作为默认生产路径；默认应回到 legacy centroid-only，保守模式只作为诊断和 A/B 对照。
+```
+
+## T6.6.4.1 STL Crop Mode Switch / 裁剪模式开关
+
+状态：DONE。
+
+实现：
+
+```text
+1. `StlRegionExtractorOptions::mode` 默认 `CentroidOnly`，等价旧 crop。
+2. `ConservativeBoundaryBand` 模式保留 T6.6.4 vertex / midpoint / boundary-band inclusion。
+3. GUI `STL -> 启用保守边界裁剪` 控制单独裁剪和自动 Patch 生成 pipeline。
+4. 裁剪报告与自动 Patch 生成报告显示 crop mode，避免误判使用了哪条路径。
+5. 该开关不修改 ShapeDocument，不调用 Geomagic 以外的新流程，不改变 Apply / StrictTopologyGate / redo 语义。
 ```
 
 Codex prompt：
@@ -2828,12 +2866,12 @@ CMakeLists.txt 如需要
 
 ## T6.6.5 Regenerate Geomagic Patch + Apply Verification / 重新生成 patch 并验证路线
 
-状态：PENDING，必须在 T6.6.4 后执行。
+状态：DONE，真实 GUI A/B 验证已完成，结论是否定继续依赖 Geomagic patch outer boundary 的 replacement 路线。
 
 目标：
 
 ```text
-用修复后的 StlRegionExtractor 重新生成 local STL，再重新运行 Geomagic AutoSurface，验证：
+用可切换 crop mode 重新生成 local STL，再重新运行 Geomagic AutoSurface，验证：
 1. local STL 可见缺面是否消失；
 2. patch boundary mismatch 是否下降；
 3. replacement / repair / StrictTopologyGate 是否更接近成功。
@@ -2844,7 +2882,7 @@ CMakeLists.txt 如需要
 ```text
 1. 打开当前真实 STP。
 2. 打开对应原始 STL。
-3. 重新生成 candidate 179 或同类 FeatureBoundedRefit candidate。
+3. 重新生成同类 FeatureBoundedRefit candidate。
 4. 用修复后的 StlRegionExtractor 裁剪 local STL。
 5. 在 Geomagic 中打开 local STL，确认红框位置缺面是否消失。
 6. 重新运行 Geomagic AutoSurface。
@@ -2880,6 +2918,15 @@ CMakeLists.txt 如需要
   回到 T6.6.4，继续修复 crop extraction 或源 STL / face classifier / projection tolerance。
 ```
 
+实际验证结论：
+
+```text
+1. legacy centroid-only crop 可生成较简单的 AutoSurface patch，但 imported patch outer boundary 仍存在局部 mismatch；Apply 后 replacement seam 仍有 free edges，StrictTopologyGate 正确失败。
+2. conservative-boundary-band crop 可补齐 local STL 缺面，但会把边缘褶皱 / 邻接特征带入 AutoSurface，导致 patch face count 显著增加，并让 imported patch outer boundary 全环偏离原 STP candidate boundary。
+3. 两条 crop mode 的共同结论是：Geomagic patch outer boundary 不能作为最终 replacement boundary。
+4. 继续调 STL crop 或 sewing tolerance 不会解决 CAD 级边界一致性；下一步必须回到最初设计：最终边界由原 STP candidate outer boundary wire 决定。
+```
+
 注意：
 
 ```text
@@ -2888,6 +2935,72 @@ CMakeLists.txt 如需要
 3. 失败时主 ShapeDocument 必须 rollback。
 4. redo 仍不得重新运行 Geomagic / STL crop / patch import / repair。
 5. 不得把真实样例路径写死进生产逻辑。
+```
+
+## T6.7 Boundary-Constrained Surface Re-trim / 原 STP 边界约束曲面重裁剪
+
+状态：NEXT。
+
+路线判断：
+
+```text
+Geomagic AutoSurface 结果仍有价值，但价值是提供 replacement surface / 曲面趋势，不是提供最终 CAD outer boundary。
+最终 CAD boundary 必须来自原 STP candidate outer boundary wire。
+```
+
+目标：
+
+```text
+从 imported Geomagic patch 中选择或拟合可覆盖原 STP candidate boundary 的 surface，
+使用原 STP candidate outer boundary wire 重新 trim / rebuild replacement face 或 replacement shell，
+再进入 PatchReplacementRepair 和 StrictTopologyGate。
+```
+
+禁止：
+
+```text
+1. 不把 STL crop boundary 当最终 CAD boundary。
+2. 不把 Geomagic patch outer boundary 当最终 CAD boundary。
+3. 不绕过 StrictTopologyGate。
+4. 不放宽 Apply / rollback / redo 语义。
+5. 不写死真实样例路径或 candidate id。
+```
+
+建议实现分阶段：
+
+```text
+T6.7.1 Surface Coverage Diagnostics
+→ 评估 imported patch faces / surfaces 是否覆盖原 STP candidate outer boundary sample。
+→ 输出每个 patch face 到 original boundary sample 的 projection success / max distance / coverage ratio。
+→ 区分“单一 surface 可覆盖”和“需要 multi-surface 分段重建”。
+
+T6.7.2 Main Surface Selection
+→ 从 imported patch 中选主 surface 或主 face set。
+→ 不使用 patch outer boundary 决定 CAD 边界。
+→ 只把 surface 几何作为 replacement 候选。
+
+T6.7.3 Original Boundary Re-trim
+→ 将原 STP candidate outer boundary wire 投影 / 建立 pcurve 到选中 surface。
+→ 用该 wire 构造 trimmed replacement face。
+→ 若单一 surface 无法覆盖，明确失败并输出诊断，不强行 sewing。
+
+T6.7.4 Multi-surface Boundary-Constrained Shell
+→ 如果单面覆盖失败，按 patch surface domains 和原 boundary 分段构建 bounded multi-face shell。
+→ 外边界仍必须来自原 STP loop。
+
+T6.7.5 Apply / Gate Integration
+→ replacement 后仍走 PatchReplacementRepair。
+→ StrictTopologyGate 必须看到 free edges 降为 0、BRepCheck 通过、solid/watertight 保持。
+```
+
+验收：
+
+```text
+1. Patch preview diagnostics 不再以 patchBoundaryMissingPointCount 作为是否可 Apply 的核心依据。
+2. 新 diagnostics 能回答：Geomagic surface 是否覆盖原 STP boundary。
+3. replacement 后 gate after free edges 必须从 source boundary 数量级降到 0。
+4. after BRepCheck 必须为 true。
+5. STEP export / roundtrip 必须恢复成功。
 ```
 
 

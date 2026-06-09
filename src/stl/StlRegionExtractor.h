@@ -7,9 +7,21 @@
 
 namespace spo {
 
+enum class StlCropMode {
+    CentroidOnly,
+    ConservativeBoundaryBand
+};
+
 struct StlRegionExtractorOptions {
+    StlCropMode mode = StlCropMode::CentroidOnly;
     double bboxMarginRatio = 0.01;
     double minMargin = 0.1;
+    bool includeVertexInsideTriangles = true;
+    bool includeEdgeMidpointInsideTriangles = true;
+    bool includeBoundaryBandTriangles = true;
+    double boundaryBandTolerance = 0.2;
+    double surfaceToleranceMultiplier = 1.0;
+    double maxConservativeLeakRatio = 3.0;
 };
 
 struct StlRegionExtractResult {

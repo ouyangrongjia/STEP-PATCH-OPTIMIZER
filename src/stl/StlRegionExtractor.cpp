@@ -2,18 +2,23 @@
 
 #include <BRepBndLib.hxx>
 #include <BRepClass_FaceClassifier.hxx>
+#include <BRepGProp.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
+#include <GProp_GProps.hxx>
 #include <TopAbs_State.hxx>
 #include <TopoDS_Face.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Pnt2d.hxx>
 
+#include "merge/RegionBoundaryAnalyzer.h"
+
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 #include <string>
 #include <utility>
@@ -87,6 +92,23 @@ gp_Pnt triangle_centroid(const StlTriangle& triangle) {
         (triangle.v0.z + triangle.v1.z + triangle.v2.z) / 3.0);
 }
 
+gp_Pnt midpoint(const StlVec3& lhs, const StlVec3& rhs) {
+    return gp_Pnt(
+        (lhs.x + rhs.x) * 0.5,
+        (lhs.y + rhs.y) * 0.5,
+        (lhs.z + rhs.z) * 0.5);
+}
+
+gp_Pnt to_point(const StlVec3& point) {
+    return gp_Pnt(point.x, point.y, point.z);
+}
+
+double edge_length(const TopoDS_Edge& edge) {
+    GProp_GProps properties;
+    BRepGProp::LinearProperties(edge, properties);
+    return std::max(0.0, properties.Mass());
+}
+
 StlRegionExtractResult fail(StlCropReport report, std::string message) {
     report.success = false;
     report.message = std::move(message);
@@ -126,6 +148,11 @@ struct CandidateFaceRegion {
     double vMax = 0.0;
 };
 
+struct BoundarySegment {
+    gp_Pnt start;
+    gp_Pnt end;
+};
+
 bool make_face_region(const TopoDS_Face& face, CandidateFaceRegion& region) {
     region.face = face;
     region.surface = BRep_Tool::Surface(face);
@@ -144,6 +171,45 @@ bool make_face_region(const TopoDS_Face& face, CandidateFaceRegion& region) {
         std::isfinite(region.vMax) &&
         region.uMin <= region.uMax &&
         region.vMin <= region.vMax;
+}
+
+std::vector<BoundarySegment> boundary_segments(
+    const ShapeDocument& document,
+    const RegionBoundaryAnalysis& boundary,
+    double targetSpacing) {
+    std::vector<BoundarySegment> segments;
+    const auto& topology = document.topology();
+    const auto spacing = std::max(targetSpacing, 1.0e-4);
+    for (const auto edgeId : boundary.ordered_boundary_edges) {
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            continue;
+        }
+        const auto& edge = topology.edge(edgeId);
+        double firstParameter = 0.0;
+        double lastParameter = 0.0;
+        const auto curve = BRep_Tool::Curve(edge, firstParameter, lastParameter);
+        if (curve.IsNull()) {
+            continue;
+        }
+
+        const auto length = edge_length(edge);
+        const auto count = std::clamp(static_cast<int>(std::ceil(length / spacing)) + 1, 2, 64);
+        gp_Pnt previous;
+        bool hasPrevious = false;
+        for (int index = 0; index < count; ++index) {
+            const double ratio = count == 1
+                ? 0.0
+                : static_cast<double>(index) / static_cast<double>(count - 1);
+            const auto parameter = firstParameter + (lastParameter - firstParameter) * ratio;
+            const auto point = curve->Value(parameter);
+            if (hasPrevious && previous.SquareDistance(point) > 1.0e-18) {
+                segments.push_back({previous, point});
+            }
+            previous = point;
+            hasPrevious = true;
+        }
+    }
+    return segments;
 }
 
 bool point_inside_face_region(
@@ -202,6 +268,91 @@ bool point_inside_candidate_region(
     return false;
 }
 
+bool any_vertex_inside_candidate_region(
+    const std::vector<CandidateFaceRegion>& regions,
+    const StlTriangle& triangle,
+    double surfaceTolerance,
+    double boundaryTolerance) {
+    return
+        point_inside_candidate_region(regions, to_point(triangle.v0), surfaceTolerance, boundaryTolerance) ||
+        point_inside_candidate_region(regions, to_point(triangle.v1), surfaceTolerance, boundaryTolerance) ||
+        point_inside_candidate_region(regions, to_point(triangle.v2), surfaceTolerance, boundaryTolerance);
+}
+
+bool any_edge_midpoint_inside_candidate_region(
+    const std::vector<CandidateFaceRegion>& regions,
+    const StlTriangle& triangle,
+    double surfaceTolerance,
+    double boundaryTolerance) {
+    return
+        point_inside_candidate_region(regions, midpoint(triangle.v0, triangle.v1), surfaceTolerance, boundaryTolerance) ||
+        point_inside_candidate_region(regions, midpoint(triangle.v1, triangle.v2), surfaceTolerance, boundaryTolerance) ||
+        point_inside_candidate_region(regions, midpoint(triangle.v2, triangle.v0), surfaceTolerance, boundaryTolerance);
+}
+
+double squared_distance_point_segment(const gp_Pnt& point, const gp_Pnt& start, const gp_Pnt& end) {
+    const auto vx = end.X() - start.X();
+    const auto vy = end.Y() - start.Y();
+    const auto vz = end.Z() - start.Z();
+    const auto wx = point.X() - start.X();
+    const auto wy = point.Y() - start.Y();
+    const auto wz = point.Z() - start.Z();
+    const auto lengthSquared = vx * vx + vy * vy + vz * vz;
+    if (lengthSquared <= 1.0e-24) {
+        return point.SquareDistance(start);
+    }
+
+    const auto t = std::clamp((wx * vx + wy * vy + wz * vz) / lengthSquared, 0.0, 1.0);
+    const gp_Pnt projection(
+        start.X() + t * vx,
+        start.Y() + t * vy,
+        start.Z() + t * vz);
+    return point.SquareDistance(projection);
+}
+
+double squared_distance_to_boundary_segments(
+    const gp_Pnt& point,
+    const std::vector<BoundarySegment>& segments) {
+    auto best = std::numeric_limits<double>::infinity();
+    for (const auto& segment : segments) {
+        best = std::min(best, squared_distance_point_segment(point, segment.start, segment.end));
+    }
+    return best;
+}
+
+bool triangle_near_boundary_band(
+    const StlTriangle& triangle,
+    const std::vector<BoundarySegment>& segments,
+    double tolerance) {
+    if (segments.empty() || tolerance < 0.0) {
+        return false;
+    }
+
+    const auto toleranceSquared = tolerance * tolerance;
+    const auto nearPoint = [&](const gp_Pnt& point) {
+        return squared_distance_to_boundary_segments(point, segments) <= toleranceSquared;
+    };
+
+    return
+        nearPoint(to_point(triangle.v0)) ||
+        nearPoint(to_point(triangle.v1)) ||
+        nearPoint(to_point(triangle.v2)) ||
+        nearPoint(midpoint(triangle.v0, triangle.v1)) ||
+        nearPoint(midpoint(triangle.v1, triangle.v2)) ||
+        nearPoint(midpoint(triangle.v2, triangle.v0)) ||
+        nearPoint(triangle_centroid(triangle));
+}
+
+bool bbox_within(const StlBoundingBox& inner, const StlBoundingBox& outer, double tolerance) {
+    return inner.valid && outer.valid &&
+        inner.min.x >= outer.min.x - tolerance &&
+        inner.min.y >= outer.min.y - tolerance &&
+        inner.min.z >= outer.min.z - tolerance &&
+        inner.max.x <= outer.max.x + tolerance &&
+        inner.max.y <= outer.max.y + tolerance &&
+        inner.max.z <= outer.max.z + tolerance;
+}
+
 }
 
 StlRegionExtractResult StlRegionExtractor::extract(
@@ -218,6 +369,15 @@ StlRegionExtractResult StlRegionExtractor::extract(
     }
     if (options.minMargin < 0.0) {
         return fail(report, "minMargin must not be negative.");
+    }
+    if (options.boundaryBandTolerance < 0.0) {
+        return fail(report, "boundaryBandTolerance must not be negative.");
+    }
+    if (options.surfaceToleranceMultiplier <= 0.0) {
+        return fail(report, "surfaceToleranceMultiplier must be positive.");
+    }
+    if (options.maxConservativeLeakRatio < 1.0) {
+        return fail(report, "maxConservativeLeakRatio must be at least 1.0.");
     }
     if (!document.hasShape()) {
         return fail(report, "STL region extraction requires a loaded shape.");
@@ -254,15 +414,72 @@ StlRegionExtractResult StlRegionExtractor::extract(
     report.margin = std::max(bbox_diagonal(report.candidate_bbox) * options.bboxMarginRatio, options.minMargin);
     report.expanded_bbox = expand_bbox(report.candidate_bbox, report.margin);
 
-    const auto surfaceTolerance = std::max(report.margin, 1.0e-6);
+    const auto surfaceTolerance = std::max(report.margin * options.surfaceToleranceMultiplier, 1.0e-6);
     const auto boundaryTolerance = 1.0e-6;
+
+    const bool conservativeCrop = options.mode == StlCropMode::ConservativeBoundaryBand;
+    std::vector<BoundarySegment> boundaryBandSegments;
+    if (conservativeCrop && options.includeBoundaryBandTriangles) {
+        const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+        if (boundary.valid && !boundary.ordered_boundary_edges.empty()) {
+            boundaryBandSegments = boundary_segments(
+                document,
+                boundary,
+                std::max(options.boundaryBandTolerance * 0.5, 0.05));
+        } else {
+            report.warning_message = "Candidate boundary analysis failed; boundary-band triangle inclusion was skipped.";
+        }
+    }
 
     StlMesh localMesh;
     for (const auto& triangle : sourceMesh.triangles()) {
-        if (intersects(triangle_bbox(triangle), report.expanded_bbox) &&
-            point_inside_candidate_region(faceRegions, triangle_centroid(triangle), surfaceTolerance, boundaryTolerance)) {
-            localMesh.addTriangle(triangle);
+        if (!intersects(triangle_bbox(triangle), report.expanded_bbox)) {
+            ++report.rejected_outside_bbox_count;
+            continue;
         }
+
+        const auto centroidInside = point_inside_candidate_region(
+            faceRegions,
+            triangle_centroid(triangle),
+            surfaceTolerance,
+            boundaryTolerance);
+        if (centroidInside) {
+            ++report.centroid_keep_triangle_count;
+            localMesh.addTriangle(triangle);
+            continue;
+        }
+
+        const auto vertexInside = conservativeCrop &&
+            options.includeVertexInsideTriangles &&
+            any_vertex_inside_candidate_region(faceRegions, triangle, surfaceTolerance, boundaryTolerance);
+        if (vertexInside) {
+            ++report.vertex_keep_triangle_count;
+            ++report.conservative_keep_triangle_count;
+            localMesh.addTriangle(triangle);
+            continue;
+        }
+
+        const auto edgeMidpointInside = conservativeCrop &&
+            options.includeEdgeMidpointInsideTriangles &&
+            any_edge_midpoint_inside_candidate_region(faceRegions, triangle, surfaceTolerance, boundaryTolerance);
+        if (edgeMidpointInside) {
+            ++report.edge_midpoint_keep_triangle_count;
+            ++report.conservative_keep_triangle_count;
+            localMesh.addTriangle(triangle);
+            continue;
+        }
+
+        const auto nearBoundaryBand = conservativeCrop &&
+            options.includeBoundaryBandTriangles &&
+            triangle_near_boundary_band(triangle, boundaryBandSegments, options.boundaryBandTolerance);
+        if (nearBoundaryBand) {
+            ++report.boundary_band_keep_triangle_count;
+            ++report.conservative_keep_triangle_count;
+            localMesh.addTriangle(triangle);
+            continue;
+        }
+
+        ++report.rejected_outside_candidate_count;
     }
 
     report.output_triangle_count = static_cast<int>(localMesh.triangleCount());
@@ -273,6 +490,17 @@ StlRegionExtractResult StlRegionExtractor::extract(
     report.output_bbox = localMesh.boundingBox();
     if (!finite_bbox(report.output_bbox) || !intersects(report.output_bbox, report.expanded_bbox)) {
         return fail(report, "Output STL bbox is invalid.");
+    }
+    const auto leakTolerance = std::max(report.margin, options.boundaryBandTolerance);
+    if (!bbox_within(report.output_bbox, report.expanded_bbox, leakTolerance)) {
+        return fail(report, "Conservative STL crop exceeded expanded bbox leak guard.");
+    }
+    if (report.centroid_keep_triangle_count > 0) {
+        const auto ratio = static_cast<double>(report.output_triangle_count) /
+            static_cast<double>(report.centroid_keep_triangle_count);
+        if (ratio > options.maxConservativeLeakRatio) {
+            return fail(report, "Conservative STL crop exceeded triangle-count leak guard.");
+        }
     }
 
     report.success = true;

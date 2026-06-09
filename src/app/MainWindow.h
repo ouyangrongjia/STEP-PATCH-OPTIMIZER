@@ -92,11 +92,13 @@ private:
     void showPatchPreviewReport(
         const PatchPreviewReport& report,
         bool visualCutoutPreview = false,
-        const CropBoundaryDiagnosticsReport* diagnostics = nullptr);
+        const CropBoundaryDiagnosticsReport* diagnostics = nullptr,
+        const QString& cropMode = {});
     void refreshPatchApplyAction();
     void refreshProcessStatusPanel();
     void publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics);
     void setStlCropInProgress(bool inProgress);
+    StlRegionExtractorOptions currentStlCropOptions() const;
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -123,6 +125,7 @@ private:
     QAction* exportStepAction_ = nullptr;
     QAction* openSourceStlAction_ = nullptr;
     QAction* cropCurrentCandidateStlAction_ = nullptr;
+    QAction* useConservativeStlCropAction_ = nullptr;
     QAction* showSourceStlAction_ = nullptr;
     QAction* showCroppedStlAction_ = nullptr;
     QAction* showStlCropBoxAction_ = nullptr;
