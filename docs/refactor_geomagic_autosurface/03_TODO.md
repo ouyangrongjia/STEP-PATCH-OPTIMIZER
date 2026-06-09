@@ -2,7 +2,7 @@
 
 > 草案版本：v0.7-t6-multiface-replacement
 > 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；直接使用 AutoSurface multi-face patch outer boundary 替换原 CAD 区域会稳定产生 boundary mismatch / free edges。下一步主线改为 T6.7 Boundary-Constrained Surface Re-trim：从 Geomagic patch 借 surface / 曲面趋势，用原 STP candidate outer boundary wire 重新 trim / rebuild replacement，再进入 repair 与 StrictTopologyGate。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；直接使用 AutoSurface multi-face patch outer boundary 替换原 CAD 区域会稳定产生 boundary mismatch / free edges。T6.7 已落地 Boundary-Constrained Surface Re-trim 与 T6.7.4 strict multi-surface bounded shell 第一版：从 Geomagic patch 借 surface / 曲面趋势，用原 STP candidate outer boundary wire 重建 replacement，再进入 repair 与 StrictTopologyGate。
 
 ---
 
@@ -48,7 +48,7 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 不要绕过用户确认执行真实替换。
 不要绕过 StrictTopologyGate 提交模型。
 不要让 redo 重新运行 Geomagic。
-不要在生产逻辑中写死 `local_candidate_0179_mechanical.stp`、`local_candidate_0179` 或任何固定 candidate 文件名。
+不要在生产逻辑中写死任何固定 candidate 文件名、编号或真实样例路径。
 当前真实样例只能作为 optional integration test / manual verification fixture。
 ```
 
@@ -104,20 +104,20 @@ data/crop_stl/03_配件_Clay/candidate_0007.stl
 
 ### 0.4 Patch artifact 动态定位规则
 
-当前真实样例：
+动态定位示例：
 
 ```text
-data/crop_stl/local_candidate_0179.stl
-data/crop_stp/local_candidate_0179_mechanical.stp
-data/crop_stp/local_candidate_0179_mechanical_autosurface.igs
-data/crop_stp/local_candidate_0179_mechanical_fit_region.log
+data/crop_stl/<relative_dir>/<candidate_stem>.stl
+data/crop_stp/<relative_dir>/<candidate_stem>.stp
+data/crop_stp/<relative_dir>/<candidate_stem>_autosurface.igs
+data/crop_stp/<relative_dir>/<candidate_stem>_fit_region.log
 ```
 
 定位原则：
 
 ```text
-这些文件只能作为 optional integration test / manual GUI verification 的样例。
-生产流程不得写死 `local_candidate_0179`、`0179`、`mechanical` 或任何固定 patch 文件名。
+这些文件只能作为 optional integration test / manual GUI verification 的路径模板。
+生产流程不得写死候选编号、文件 stem、Geomagic 参数后缀或任何固定 patch 文件名。
 正式流程必须根据 local STL / GeomagicAutoSurfaceResult / selected candidate 动态定位对应 patch。
 ```
 
@@ -631,7 +631,7 @@ Geomagic 最小处理链：
 ```text
 ReadFile(.stl)
 → RepairMesh / RemoveNonManifoldVertices / FillSmallHoles
-→ optional Remesh / QuickSmooth / Relax
+→ Remesh（默认跳过，显式实验开启）/ optional QuickSmooth / Relax
 → AutoSurface(.igs)
 → ReadFile(.igs).cadModel
 → WriteFile(.stp, filterId=5)
@@ -1019,7 +1019,7 @@ CMakeLists.txt                            # 如新增测试则修改
 2. 通过环境变量读取参数。
 3. ReadFile 输入 local STL。
 4. 默认执行 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles。
-5. optional Remesh / QuickSmooth / Relax。
+5. 默认跳过 Remesh；Remesh / QuickSmooth / Relax 均为 optional。
 6. AutoSurface 输出临时 IGS。
 7. keepTemp 时保留 `<output>_autosurface.igs`。
 8. ReadFile(IGS).cadModel。
@@ -1140,7 +1140,7 @@ README 要求：
 4. 给出 crop 目录同步规则：data/crop_stl → data/crop_stp。
 5. 给出放宽 patch 数命令：FIT_REGION_STRICT_PATCH_TARGET=0。
 6. 给出实验性平滑命令。
-7. 说明小 patch 默认不建议 remesh / relax / quick smooth。
+7. 说明 Remesh / quick smooth / relax 均应作为实验性开关。
 8. 说明 STL 裁剪边界不是最终 CAD 边界。
 9. 说明 STP 原始 boundary wire 才是后续 trim/replacement 依据。
 10. 说明 AutoSurface 输出 STP/IGS 是拟合曲面来源，不是最终贴回结果。
@@ -1150,7 +1150,7 @@ README 要求：
 手动验证命令示例：
 
 ```bat
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\local_candidate_0179.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179.stp" && set "FIT_REGION_LOG_FILE=D:\pyProject\step-patch-optimizer\data\crop_stp\local_candidate_0179_fit_region.log" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_AUTO_MERGE=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=<local_stl_path>" && set "FIT_REGION_OUTPUT=<output_step_path>" && set "FIT_REGION_LOG_FILE=<fit_region_log_path>" && set "FIT_REGION_REPAIR_MESH=1" && set "FIT_REGION_AUTO_MERGE=1" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "<wrapCore_path>" --script "<autosurface_pipeline.py>"
 ```
 
 验收：
@@ -1209,13 +1209,13 @@ CMakeLists.txt
 3. 导入失败不影响主模型。
 ```
 
-当前真实样例验证：
+手动验证输出示例：
 
 ```text
-输入 STL：data/crop_stl/local_candidate_0179.stl
-输出 STEP：data/crop_stp/local_candidate_0179_mechanical.stp
-IGS sidecar：data/crop_stp/local_candidate_0179_mechanical_autosurface.igs
-fit_region log：data/crop_stp/local_candidate_0179_mechanical_fit_region.log
+输入 STL：data/crop_stl/<relative_dir>/<candidate_stem>.stl
+输出 STEP：data/crop_stp/<relative_dir>/<candidate_stem>.stp
+IGS sidecar：data/crop_stp/<relative_dir>/<candidate_stem>_autosurface.igs
+fit_region log：data/crop_stp/<relative_dir>/<candidate_stem>_fit_region.log
 
 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 后：
 boundaryCycles: 11 -> 1
@@ -1252,7 +1252,7 @@ patch bbox 与 candidate bbox 偏差过大时标记 HighRisk。
 已完成。
 已新增 PatchArtifactLocator，根据 local STL / GeomagicAutoSurfaceResult 动态定位 patch STEP/IGES sidecar/fit_region log。
 Windows 中文目录 / 中文 stem 查找已使用 native std::filesystem::path 拼接，避免把 UTF-8 narrow string 重新构造成文件名导致同名 patch 查找失败。
-生产逻辑不写死 local_candidate_0179 或任何固定 candidate 文件名；真实样例仅保留为 optional test fixture。
+生产逻辑不写死任何固定 candidate 文件名；真实样例仅保留为 optional test fixture。
 ```
 
 文件：
@@ -1268,7 +1268,7 @@ CMakeLists.txt
 
 ```text
 根据 local STL / GeomagicAutoSurfaceResult / selected candidate artifact 动态定位 Geomagic patch。
-生产逻辑不得写死当前真实样例 `local_candidate_0179_mechanical.stp` 或任何固定 candidate 文件名。
+生产逻辑不得写死当前真实样例路径或任何固定 candidate 文件名。
 当前真实样例只能作为 optional integration test / manual verification fixture。
 ```
 
@@ -1607,7 +1607,8 @@ T5.4.1 stale patch state cleanup（DONE）
 → T6.6.4 STL Region Extractor 保守裁剪修复（DONE，正式 crop 已支持 vertex / edge-midpoint / boundary-band 保守保留和 leak guard）
 → T6.6.4.1 STL Crop Mode Switch（DONE，默认 legacy centroid-only，GUI 可显式开启 conservative-boundary-band）
 → T6.6.5 Regenerate Geomagic Patch + Apply Verification（DONE，手动验证否定 direct AutoSurface outer-boundary replacement）
-→ T6.7 Boundary-Constrained Surface Re-trim（NEXT，用 Geomagic surface + 原 STP outer boundary 重建 replacement）
+→ T6.6.4.2 STL Boundary Loop Repair Connectivity Guard（DONE，boundary-loop 修补只允许加入与当前 crop mesh 连通的三角片，拒绝空中碎片）
+→ T6.7 Boundary-Constrained Surface Re-trim（DONE，single-surface re-trim 与 T6.7.4 strict multi-surface boundary shell 已接入）
 ```
 
 ## T6.0 PatchReplacement 输入结构与 MultiFacePatchAnalyzer
@@ -1896,7 +1897,7 @@ tests/test_validation.cpp
 
 ```text
 1. [x] 输入 PatchReplacementInput，并在 Command 构造时复制 candidate / boundary / importedPatch / artifactPaths / previewReport，避免持有 GUI 临时对象裸指针。
-2. [x] 不允许写死 data/crop_stp/local_candidate_0179_mechanical.stp 或任何固定 patch 路径。
+2. [x] 不允许写死任何固定 patch 路径。
 3. [x] execute 从 CommandContext 保存 beforeDocument。
 4. [ ] 删除 / 替换 candidate source faces 留给 T6.4；T6.3 仅构造 replacement fragment 并构造 gated afterDocument candidate。
 5. [x] 接入 BoundaryConstrainedPatchBuilder。
@@ -2831,6 +2832,29 @@ warning_message
 5. 该开关不修改 ShapeDocument，不调用 Geomagic 以外的新流程，不改变 Apply / StrictTopologyGate / redo 语义。
 ```
 
+## T6.6.4.2 STL Boundary Loop Repair Connectivity Guard / 边界修补连通性约束
+
+状态：DONE。
+
+实现：
+
+```text
+1. boundary-loop coverage repair 仍以原 STP candidate outer boundary loop 为检查对象。
+2. 修补三角片只有在与当前已保留 local STL mesh 顶点近似连通时才允许加入。
+3. 仅满足 boundary distance / bbox 的孤立候选三角片会被拒绝，不再生成漂浮碎片污染 AutoSurface 输入。
+4. StlCropReport 新增 boundary_loop_orphan_repair_candidate_count。
+5. GUI “STL 裁剪完成”报告显示 boundary-loop orphan repair candidates，用于区分“边界距离命中”与“可用连通修补”。
+```
+
+判断规则：
+
+```text
+1. boundary-loop missing after = 0 是必要条件，不是充分条件。
+2. 如果 missing after 依赖孤立三角片补齐，则该结果应视为无效修补。
+3. 如果拒绝孤立三角片后 missing after 仍大于 0，说明源 STL / 裁剪谓词没有提供可连通的边界覆盖，不应继续把碎片喂给 AutoSurface。
+4. STL 修补仍只改善 Geomagic 输入采样，不改变最终 CAD boundary；最终 boundary 仍来自原 STP wire。
+```
+
 Codex prompt：
 
 ```text
@@ -2939,7 +2963,7 @@ CMakeLists.txt 如需要
 
 ## T6.7 Boundary-Constrained Surface Re-trim / 原 STP 边界约束曲面重裁剪
 
-状态：NEXT。
+状态：DONE，第一版 single-surface re-trim 与 T6.7.4 strict multi-surface boundary-constrained shell 已接入 `BoundaryConstrainedPatchBuilder` 与 `PatchReplacementCommand`。
 
 路线判断：
 
@@ -2969,28 +2993,53 @@ Geomagic AutoSurface 结果仍有价值，但价值是提供 replacement surface
 建议实现分阶段：
 
 ```text
-T6.7.1 Surface Coverage Diagnostics
+T6.7.1 Surface Coverage Diagnostics（DONE，第一版）
 → 评估 imported patch faces / surfaces 是否覆盖原 STP candidate outer boundary sample。
 → 输出每个 patch face 到 original boundary sample 的 projection success / max distance / coverage ratio。
-→ 区分“单一 surface 可覆盖”和“需要 multi-surface 分段重建”。
+→ 同时输出 all-surface 最近投影 coverage：projected / failed samples、max / average distance、uncovered original boundary edge ids。
+→ 区分“单一 surface 可覆盖”“单面不覆盖但多 surface 合计覆盖”“所有 imported surfaces 仍不能覆盖”。
 
-T6.7.2 Main Surface Selection
+T6.7.2 Main Surface Selection（DONE，第一版）
 → 从 imported patch 中选主 surface 或主 face set。
 → 不使用 patch outer boundary 决定 CAD 边界。
 → 只把 surface 几何作为 replacement 候选。
 
-T6.7.3 Original Boundary Re-trim
+T6.7.3 Original Boundary Re-trim（DONE，第一版）
 → 将原 STP candidate outer boundary wire 投影 / 建立 pcurve 到选中 surface。
 → 用该 wire 构造 trimmed replacement face。
 → 若单一 surface 无法覆盖，明确失败并输出诊断，不强行 sewing。
 
-T6.7.4 Multi-surface Boundary-Constrained Shell
-→ 如果单面覆盖失败，按 patch surface domains 和原 boundary 分段构建 bounded multi-face shell。
-→ 外边界仍必须来自原 STP loop。
+T6.7.4 Multi-surface Boundary-Constrained Shell（DONE，第一版）
+→ 如果单面覆盖失败且 all-surface coverage 无 uncovered boundary sample，则按原 CAD boundary edge 整段分配到最佳 Geomagic surface。
+→ 使用原 STP edge 参数区间构造最终外边界段，保留 imported patch 内部 seam edges，尝试为每张 surface 连接闭合 wire 并构造 bounded replacement faces。
+→ 外边界仍必须来自原 STP loop；Geomagic patch outer boundary 不作为最终 CAD boundary。
+→ 若 surface coverage 不足、内部 seam 无法闭合 wire、face 构造失败，则返回 BuildFailed 并输出 multi-surface diagnostics，不回退 direct patch outer-boundary fragment。
 
-T6.7.5 Apply / Gate Integration
+T6.7.5 Apply / Gate Integration（DONE，第一版）
 → replacement 后仍走 PatchReplacementRepair。
 → StrictTopologyGate 必须看到 free edges 降为 0、BRepCheck 通过、solid/watertight 保持。
+```
+
+当前实现：
+
+```text
+1. 新增 BoundaryConstrainedSurfaceRetrim，负责从 imported Geomagic patch 中选择可用 surface，并用原 STP candidate outer boundary wire 构造 replacement face。
+2. 新增 BoundaryConstrainedMultiSurfaceShellBuilder，负责在单 surface 失败但 all-surface coverage 成立时构造 strict multi-surface replacement shell。
+3. BoundaryConstrainedPatchBuilder 默认优先走 original-boundary surface re-trim，失败后才尝试 T6.7.4 multi-surface boundary shell。
+4. Geomagic patch outer boundary 不再作为默认 replacement boundary；legacy direct patch fragment 只保留为显式测试/兼容路径。
+5. PatchReplacementReport / GUI Apply report 输出 re-trim 是否尝试、最佳单 surface 投影统计、all-surface coverage、T6.7.4 是否使用、multi-surface boundary sample / assigned segment / built face / open wire / failed edge diagnostics。
+6. 如果单一 Geomagic surface 无法覆盖原 STP boundary，builder 会在 all-surface coverage 成立时尝试 T6.7.4；T6.7.4 失败则 BuildFailed，后续不强行 sewing，不绕过 StrictTopologyGate。
+```
+
+Geomagic pipeline 同步修正：
+
+```text
+1. backend 与 autosurface_pipeline.py 在运行前删除 stale STEP / IGS 输出。
+2. IGES→STEP 转换每次 WriteFile 前删除旧 STP，避免旧文件被误判为新 AutoSurface 成果。
+3. Remesh 默认跳过：skipRemesh=true / FIT_REGION_SKIP_REMESH=1。
+4. GUI Patch 菜单可显式启用 Geomagic Remesh，用于 A/B 实验。
+5. Remesh 本身失败时记录 warning 并继续使用原 mesh；如果 Remesh 后 AutoSurface 全部失败，脚本会 retry pre-remesh mesh。
+6. backend 现在向脚本传递 log、mesh repair、remesh、smooth/relax 和 AutoSurface 参数环境变量。
 ```
 
 验收：
@@ -3001,6 +3050,7 @@ T6.7.5 Apply / Gate Integration
 3. replacement 后 gate after free edges 必须从 source boundary 数量级降到 0。
 4. after BRepCheck 必须为 true。
 5. STEP export / roundtrip 必须恢复成功。
+6. `.\scripts\build_debug.ps1` 与 `.\scripts\test.ps1` 通过。
 ```
 
 
@@ -3207,7 +3257,7 @@ src/gui/LogPanel.cpp
 10. 不把真实 Geomagic 调用加入自动单元测试。
 11. 不让 redo 重新运行 Geomagic。
 12. 不把 T6 设计成只支持 one-face patch；multi-face / complex patch 必须作为主路径。
-12. 不在生产逻辑中写死 `local_candidate_0179_mechanical.stp` 或任何当前样例路径。
+12. 不在生产逻辑中写死任何当前样例路径。
 13. 不要只根据 T6.6.1 的 stlCoverageMissingPointCount 很低就判定 STL crop 没问题；真实 Geomagic GUI 已见 local STL 缺面时，必须优先补做 boundary-band / triangle rejection 诊断。
 14. 不要在 local STL 缺面未修复前优先投入 patch boundary re-trim 或继续盲目调 sewing tolerance。
 ```

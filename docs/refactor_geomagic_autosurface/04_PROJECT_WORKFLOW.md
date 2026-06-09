@@ -26,7 +26,7 @@
     11. Viewer 叠加预览 patch，原 candidate 高亮保持。
     12. 输出 patch preview report。
     13. 用户检查 overlay 后点击 Apply。
-    14. 使用原 STP boundary wire 进行 boundary-constrained patch replacement。
+    14. 使用原 STP boundary wire 进行 boundary-constrained patch replacement：先尝试 single-surface re-trim，失败且 all-surface coverage 成立时尝试 strict multi-surface boundary shell。
     15. 执行 sewing / ShapeFix / SameParameter。
     16. StrictTopologyGate 验证。
     17. 合法则提交 Command；不合法则 rollback。
@@ -216,6 +216,7 @@ workspace/session_YYYYMMDD_HHMMSS/region_XXXX/crop_report.json
 local STL 的边界不是最终 CAD 边界。
 local STL 只用于拟合。
 最终 CAD 边界来自原 STP boundary wire。
+boundary-loop coverage repair 必须保持与当前 crop mesh 连通；孤立命中点或漂浮三角片不能作为有效修补。
 ```
 
 ---
@@ -251,6 +252,7 @@ wrapCore.exe --script autosurface_pipeline.py
   "fallback_num_patches": [2, 4, 8],
   "detail": 0.10,
   "geometry": "Mechanical",
+  "skip_remesh": true,
   "convert_iges_to_step": true,
   "timeout_seconds": 1800
 }
@@ -264,6 +266,14 @@ data/crop_stp/<relative>/<name>_autosurface.igs   # keepTemp 时保留
 autosurface_stdout.log
 autosurface_stderr.log
 fit_region.log
+```
+
+运行前处理：
+
+```text
+backend 和 autosurface_pipeline.py 会删除 stale STEP / IGS 输出。
+IGES→STEP 转换前也会删除旧 STP。
+因此 patch import 不应把上一次 AutoSurface 的旧文件误判为本次输出。
 ```
 
 失败处理：
@@ -282,6 +292,7 @@ candidate job status = Failed。
 RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 负责处理 STL 内孔和非流形顶点。
 Mechanical + autoMerge=true 是当前 crop STL 的默认最佳组合；Organic 会导致 STEP face 数量过高。
 numPatches=1 只是 Geomagic AutoSurface 的近似目标，不保证最终 STEP face count 等于 1。
+Remesh 默认跳过；如果显式启用 Remesh，脚本会在 Remesh 失败时记录 warning 并继续使用原 mesh，在 Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```
 
 ---
@@ -634,7 +645,9 @@ T6.6.3 STL Crop Boundary-Band Diagnostics 已完成：在 boundary point coverag
 T6.6.4 STL Region Extractor 保守裁剪修复已完成：crop 可在 conservative-boundary-band 模式下不只依赖 triangle centroid inside candidate region，新增 vertex-inside、edge-midpoint-inside 与 original CAD boundary-band inclusion，并用 output bbox / triangle-count leak guard 限制局部扩边。该扩边只改善 Geomagic 输入 STL 采样，不把 STL crop boundary 当作最终 CAD boundary。
 T6.6.4.1 STL Crop Mode Switch 已完成：由于手动验证显示 conservative-boundary-band 可能让 AutoSurface 生成过多 patch faces 并扩大 patch boundary mismatch，默认 crop mode 已回到 legacy centroid-only；GUI `STL -> 启用保守边界裁剪` 只用于显式 A/B 验证，单独裁剪和“生成并预览当前 Patch”共用同一开关。
 T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：legacy centroid-only crop 产生较简单 patch 但 patch outer boundary 仍局部 mismatch；conservative-boundary-band crop 补齐 STL 但会让 AutoSurface patch face count 暴涨并扩大全环 boundary mismatch。两者共同证明：directly using Geomagic patch outer boundary as replacement boundary is invalid for this class of feature-bounded regions。
-T6.7 Boundary-Constrained Surface Re-trim 成为下一条主线：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；replacement 应由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，再交给 repair 与 StrictTopologyGate。
+T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
+T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成第一版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段分配 surface、保留 imported patch 内部 seam、构造 multi-face bounded shell。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface assigned segments / built faces / open wires / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果仍交给 repair 与 StrictTopologyGate。
+Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```
 
 ```text
@@ -733,6 +746,13 @@ STL crop mode switch
 → crop reports and automatic Patch preview reports show crop mode
 → the toggle affects crop input only, not replacement, ShapeDocument, StrictTopologyGate, or redo
 
+T6.6.4.2 DONE:
+STL boundary-loop repair connectivity guard
+→ boundary-loop repair candidates must connect to the currently kept crop mesh
+→ orphan repair candidates are rejected and reported
+→ missing-after=0 is not sufficient if it depends on floating triangles
+→ crop repair still affects Geomagic input only, not final CAD boundary
+
 T6.6.5 DONE:
 manual patch regeneration and Apply verification
 → centroid-only crop keeps AutoSurface patch simple but does not make patch outer boundary CAD-compatible
@@ -740,13 +760,22 @@ manual patch regeneration and Apply verification
 → direct multi-face AutoSurface outer-boundary replacement remains blocked by free edges and BRepCheck
 → route decision: stop treating crop / sewing tolerance as the primary fix
 
-T6.7 NEXT:
-Boundary-Constrained Surface Re-trim
+T6.7 DONE:
+Boundary-Constrained Surface Re-trim + strict multi-surface boundary shell
 → select or fit surface geometry from the imported Geomagic patch
 → project / build original STP candidate outer boundary wire on that surface
-→ rebuild a trimmed replacement face, or fail with coverage diagnostics
-→ only if one surface cannot cover the loop, try bounded multi-surface shell construction
+→ rebuild a trimmed replacement face when one surface covers the boundary
+→ when one surface fails but all-surface coverage passes, assign original CAD boundary edges to Geomagic surfaces and build a bounded multi-face shell from original boundary segments plus internal patch seams
+→ report both selected single-surface coverage and all-surface nearest-projection coverage
+→ report multi-surface assigned segments / built faces / open wires / failed edge ids
+→ direct patch outer-boundary fragment is no longer the default replacement path
 → final result still must pass PatchReplacementRepair and StrictTopologyGate
+
+Geomagic pipeline hygiene DONE:
+→ stale STEP / IGS outputs are removed before a new AutoSurface run
+→ stale STP is removed before IGES→STEP WriteFile attempts
+→ Remesh is skipped by default, can be enabled explicitly, and AutoSurface failures after Remesh retry the pre-remesh mesh
+→ backend passes FIT_REGION_* repair / remesh / AutoSurface parameters to the script
 ```
 
 注意：
@@ -760,7 +789,10 @@ T6.6.1 overlay 只显示诊断几何，不参与 replacement，不改变 ShapeDo
 T6.6.3 overlay 只显示诊断几何，不参与 crop inclusion、不参与 replacement，不改变 ShapeDocument。
 T6.6.4 boundary-band inclusion 只影响 local STL crop 输入，不参与 replacement，不改变 ShapeDocument，不改变最终 CAD boundary。
 T6.6.4.1 crop mode 开关只决定 local STL 采样策略，不改变 patch replacement / Apply / StrictTopologyGate 规则。
+T6.6.4.2 boundary-loop repair connectivity guard 只拒绝不连通的 STL 修补候选，不用 STL 修补结果替代原 STP boundary。
 T6.6.5 结论已否定“Geomagic patch outer boundary 可直接作为最终 replacement boundary”的路线。
-T6.7 起，Patch Apply 的核心判断从“patch outer boundary 是否贴合”转为“Geomagic surface 是否覆盖原 STP candidate boundary，并能否用原 STP wire 重新 trim”。
+T6.7 起，Patch Apply 的核心判断从“patch outer boundary 是否贴合”转为“Geomagic surface 是否覆盖原 STP candidate boundary，并能否用原 STP wire 重新 trim 或构造 strict multi-surface bounded shell”。
+T6.7 的 all-surface coverage 是 T6.7.4 的进入条件之一，但仍不把 Geomagic patch outer boundary 或 STL crop boundary 变成最终 CAD boundary。
 如果 T6.6.1 / T6.6.3 证明 STL crop 或 patch outer boundary 有缺口，修复应优先发生在 crop / boundary sampling / patch generation 输入层，而不是继续放宽 Gate 或强行采用 sewing result。
+Geomagic stale output cleanup 是流程正确性要求，不代表 patch 可 Apply；Apply 仍必须通过 repair 与 StrictTopologyGate。
 ```
