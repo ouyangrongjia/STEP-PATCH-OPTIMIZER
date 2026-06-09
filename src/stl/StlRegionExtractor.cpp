@@ -153,6 +153,18 @@ struct BoundarySegment {
     gp_Pnt end;
 };
 
+struct BoundarySample {
+    gp_Pnt point;
+    EdgeId edgeId = -1;
+};
+
+struct TriangleDistanceData {
+    gp_Pnt p0;
+    gp_Pnt p1;
+    gp_Pnt p2;
+    StlBoundingBox bbox;
+};
+
 bool make_face_region(const TopoDS_Face& face, CandidateFaceRegion& region) {
     region.face = face;
     region.surface = BRep_Tool::Surface(face);
@@ -210,6 +222,35 @@ std::vector<BoundarySegment> boundary_segments(
         }
     }
     return segments;
+}
+
+std::vector<BoundarySample> boundary_samples(
+    const ShapeDocument& document,
+    const RegionBoundaryAnalysis& boundary,
+    int samplesPerEdge) {
+    std::vector<BoundarySample> samples;
+    const auto& topology = document.topology();
+    const auto count = std::clamp(samplesPerEdge, 2, 64);
+    for (const auto edgeId : boundary.ordered_boundary_edges) {
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            continue;
+        }
+        const auto& edge = topology.edge(edgeId);
+        double firstParameter = 0.0;
+        double lastParameter = 0.0;
+        const auto curve = BRep_Tool::Curve(edge, firstParameter, lastParameter);
+        if (curve.IsNull()) {
+            continue;
+        }
+        for (int index = 0; index < count; ++index) {
+            const double ratio = count == 1
+                ? 0.0
+                : static_cast<double>(index) / static_cast<double>(count - 1);
+            const auto parameter = firstParameter + (lastParameter - firstParameter) * ratio;
+            samples.push_back({curve->Value(parameter), edgeId});
+        }
+    }
+    return samples;
 }
 
 bool point_inside_face_region(
@@ -320,6 +361,242 @@ double squared_distance_to_boundary_segments(
     return best;
 }
 
+TriangleDistanceData make_triangle_distance_data(const StlTriangle& triangle) {
+    TriangleDistanceData data;
+    data.p0 = to_point(triangle.v0);
+    data.p1 = to_point(triangle.v1);
+    data.p2 = to_point(triangle.v2);
+    data.bbox = triangle_bbox(triangle);
+    return data;
+}
+
+double squared_distance_to_bbox(const gp_Pnt& point, const StlBoundingBox& bbox) {
+    const auto axisDistance = [](double value, double minValue, double maxValue) {
+        if (value < minValue) {
+            return minValue - value;
+        }
+        if (value > maxValue) {
+            return value - maxValue;
+        }
+        return 0.0;
+    };
+
+    const auto dx = axisDistance(point.X(), bbox.min.x, bbox.max.x);
+    const auto dy = axisDistance(point.Y(), bbox.min.y, bbox.max.y);
+    const auto dz = axisDistance(point.Z(), bbox.min.z, bbox.max.z);
+    return dx * dx + dy * dy + dz * dz;
+}
+
+double squared_distance_point_triangle(const gp_Pnt& point, const TriangleDistanceData& triangle) {
+    const auto ax = triangle.p0.X();
+    const auto ay = triangle.p0.Y();
+    const auto az = triangle.p0.Z();
+    const auto bx = triangle.p1.X();
+    const auto by = triangle.p1.Y();
+    const auto bz = triangle.p1.Z();
+    const auto cx = triangle.p2.X();
+    const auto cy = triangle.p2.Y();
+    const auto cz = triangle.p2.Z();
+
+    const auto abx = bx - ax;
+    const auto aby = by - ay;
+    const auto abz = bz - az;
+    const auto acx = cx - ax;
+    const auto acy = cy - ay;
+    const auto acz = cz - az;
+    const auto apx = point.X() - ax;
+    const auto apy = point.Y() - ay;
+    const auto apz = point.Z() - az;
+
+    const auto d1 = abx * apx + aby * apy + abz * apz;
+    const auto d2 = acx * apx + acy * apy + acz * apz;
+    if (d1 <= 0.0 && d2 <= 0.0) {
+        return point.SquareDistance(triangle.p0);
+    }
+
+    const auto bpx = point.X() - bx;
+    const auto bpy = point.Y() - by;
+    const auto bpz = point.Z() - bz;
+    const auto d3 = abx * bpx + aby * bpy + abz * bpz;
+    const auto d4 = acx * bpx + acy * bpy + acz * bpz;
+    if (d3 >= 0.0 && d4 <= d3) {
+        return point.SquareDistance(triangle.p1);
+    }
+
+    const auto vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+        const auto v = d1 / (d1 - d3);
+        const gp_Pnt projection(ax + v * abx, ay + v * aby, az + v * abz);
+        return point.SquareDistance(projection);
+    }
+
+    const auto cpx = point.X() - cx;
+    const auto cpy = point.Y() - cy;
+    const auto cpz = point.Z() - cz;
+    const auto d5 = abx * cpx + aby * cpy + abz * cpz;
+    const auto d6 = acx * cpx + acy * cpy + acz * cpz;
+    if (d6 >= 0.0 && d5 <= d6) {
+        return point.SquareDistance(triangle.p2);
+    }
+
+    const auto vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+        const auto w = d2 / (d2 - d6);
+        const gp_Pnt projection(ax + w * acx, ay + w * acy, az + w * acz);
+        return point.SquareDistance(projection);
+    }
+
+    const auto bcx = cx - bx;
+    const auto bcy = cy - by;
+    const auto bcz = cz - bz;
+    const auto va = d3 * d6 - d5 * d4;
+    if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+        const auto w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        const gp_Pnt projection(bx + w * bcx, by + w * bcy, bz + w * bcz);
+        return point.SquareDistance(projection);
+    }
+
+    const auto denom = 1.0 / (va + vb + vc);
+    const auto v = vb * denom;
+    const auto w = vc * denom;
+    const gp_Pnt projection(
+        ax + abx * v + acx * w,
+        ay + aby * v + acy * w,
+        az + abz * v + acz * w);
+    return point.SquareDistance(projection);
+}
+
+double distance_to_kept_triangles(
+    const gp_Pnt& point,
+    const std::vector<TriangleDistanceData>& triangles,
+    const std::vector<unsigned char>& kept) {
+    auto bestSquared = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < triangles.size(); ++index) {
+        if (kept[index] == 0) {
+            continue;
+        }
+        if (squared_distance_to_bbox(point, triangles[index].bbox) > bestSquared) {
+            continue;
+        }
+        bestSquared = std::min(bestSquared, squared_distance_point_triangle(point, triangles[index]));
+    }
+    return std::sqrt(bestSquared);
+}
+
+double squared_distance_vec3(const StlVec3& lhs, const StlVec3& rhs) {
+    const auto dx = lhs.x - rhs.x;
+    const auto dy = lhs.y - rhs.y;
+    const auto dz = lhs.z - rhs.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+bool triangles_share_vertex(
+    const StlTriangle& lhs,
+    const StlTriangle& rhs,
+    double tolerance) {
+    const auto toleranceSquared = tolerance * tolerance;
+    const StlVec3 lhsVertices[] = {lhs.v0, lhs.v1, lhs.v2};
+    const StlVec3 rhsVertices[] = {rhs.v0, rhs.v1, rhs.v2};
+    for (const auto& lhsVertex : lhsVertices) {
+        for (const auto& rhsVertex : rhsVertices) {
+            if (squared_distance_vec3(lhsVertex, rhsVertex) <= toleranceSquared) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool connected_to_kept_triangles(
+    std::size_t candidateIndex,
+    const std::vector<StlTriangle>& triangles,
+    const std::vector<unsigned char>& kept,
+    double tolerance) {
+    for (std::size_t index = 0; index < triangles.size(); ++index) {
+        if (kept[index] == 0) {
+            continue;
+        }
+        if (triangles_share_vertex(triangles[candidateIndex], triangles[index], tolerance)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+struct BoundaryCoverageSummary {
+    int sampleCount = 0;
+    int missingPointCount = 0;
+    double maxDistance = 0.0;
+    double averageDistance = 0.0;
+    std::vector<EdgeId> missingEdgeIds;
+};
+
+void append_unique_edge_id(std::vector<EdgeId>& edgeIds, EdgeId edgeId) {
+    if (edgeId < 0) {
+        return;
+    }
+    if (std::find(edgeIds.begin(), edgeIds.end(), edgeId) == edgeIds.end()) {
+        edgeIds.push_back(edgeId);
+    }
+}
+
+BoundaryCoverageSummary evaluate_boundary_loop_coverage(
+    const std::vector<BoundarySample>& samples,
+    const std::vector<TriangleDistanceData>& triangles,
+    const std::vector<unsigned char>& kept,
+    double tolerance) {
+    BoundaryCoverageSummary summary;
+    summary.sampleCount = static_cast<int>(samples.size());
+    if (samples.empty()) {
+        return summary;
+    }
+
+    double totalDistance = 0.0;
+    for (const auto& sample : samples) {
+        const auto distance = distance_to_kept_triangles(sample.point, triangles, kept);
+        summary.maxDistance = std::max(summary.maxDistance, distance);
+        totalDistance += distance;
+        if (distance > tolerance) {
+            ++summary.missingPointCount;
+            append_unique_edge_id(summary.missingEdgeIds, sample.edgeId);
+        }
+    }
+    summary.averageDistance = totalDistance / static_cast<double>(samples.size());
+    return summary;
+}
+
+std::size_t closest_repair_triangle(
+    const BoundarySample& sample,
+    const std::vector<StlTriangle>& sourceTriangles,
+    const std::vector<TriangleDistanceData>& triangles,
+    const std::vector<unsigned char>& kept,
+    const std::vector<unsigned char>& repairEligible,
+    const StlBoundingBox& expandedBbox,
+    double maxRepairDistance,
+    double connectivityTolerance,
+    int& orphanCandidateCount) {
+    auto bestIndex = triangles.size();
+    auto bestSquared = maxRepairDistance * maxRepairDistance;
+    for (std::size_t index = 0; index < triangles.size(); ++index) {
+        if (kept[index] != 0 || repairEligible[index] == 0 || !intersects(triangles[index].bbox, expandedBbox)) {
+            continue;
+        }
+        if (!connected_to_kept_triangles(index, sourceTriangles, kept, connectivityTolerance)) {
+            ++orphanCandidateCount;
+            continue;
+        }
+        if (squared_distance_to_bbox(sample.point, triangles[index].bbox) > bestSquared) {
+            continue;
+        }
+        const auto distanceSquared = squared_distance_point_triangle(sample.point, triangles[index]);
+        if (distanceSquared < bestSquared) {
+            bestSquared = distanceSquared;
+            bestIndex = index;
+        }
+    }
+    return bestIndex;
+}
+
 bool triangle_near_boundary_band(
     const StlTriangle& triangle,
     const std::vector<BoundarySegment>& segments,
@@ -379,6 +656,18 @@ StlRegionExtractResult StlRegionExtractor::extract(
     if (options.maxConservativeLeakRatio < 1.0) {
         return fail(report, "maxConservativeLeakRatio must be at least 1.0.");
     }
+    if (options.boundaryLoopSamplesPerEdge < 2) {
+        return fail(report, "boundaryLoopSamplesPerEdge must be at least 2.");
+    }
+    if (options.boundaryLoopCoverageTolerance < 0.0) {
+        return fail(report, "boundaryLoopCoverageTolerance must not be negative.");
+    }
+    if (options.boundaryLoopConnectivityTolerance < 0.0) {
+        return fail(report, "boundaryLoopConnectivityTolerance must not be negative.");
+    }
+    if (options.maxBoundaryLoopRepairTriangles < 0) {
+        return fail(report, "maxBoundaryLoopRepairTriangles must not be negative.");
+    }
     if (!document.hasShape()) {
         return fail(report, "STL region extraction requires a loaded shape.");
     }
@@ -419,8 +708,19 @@ StlRegionExtractResult StlRegionExtractor::extract(
 
     const bool conservativeCrop = options.mode == StlCropMode::ConservativeBoundaryBand;
     std::vector<BoundarySegment> boundaryBandSegments;
+    std::vector<BoundarySample> cadBoundarySamples;
+    const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+    if (options.repairBoundaryLoopCoverage) {
+        report.boundary_loop_coverage_evaluated = true;
+        report.boundary_loop_coverage_tolerance = options.boundaryLoopCoverageTolerance;
+        if (boundary.valid && !boundary.ordered_boundary_edges.empty()) {
+            cadBoundarySamples = boundary_samples(document, boundary, options.boundaryLoopSamplesPerEdge);
+            report.boundary_loop_sample_count = static_cast<int>(cadBoundarySamples.size());
+        } else {
+            report.warning_message = "Candidate boundary analysis failed; boundary-loop coverage repair was skipped.";
+        }
+    }
     if (conservativeCrop && options.includeBoundaryBandTriangles) {
-        const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
         if (boundary.valid && !boundary.ordered_boundary_edges.empty()) {
             boundaryBandSegments = boundary_segments(
                 document,
@@ -431,10 +731,29 @@ StlRegionExtractResult StlRegionExtractor::extract(
         }
     }
 
+    const auto& sourceTriangles = sourceMesh.triangles();
+    std::vector<unsigned char> kept(sourceTriangles.size(), 0);
+    std::vector<unsigned char> rejectedReason(sourceTriangles.size(), 0);
+    std::vector<unsigned char> boundaryRepairEligible(sourceTriangles.size(), 0);
+    std::vector<TriangleDistanceData> triangleDistanceData;
+    triangleDistanceData.reserve(sourceTriangles.size());
+    for (const auto& triangle : sourceTriangles) {
+        triangleDistanceData.push_back(make_triangle_distance_data(triangle));
+    }
+
+    const auto keepTriangle = [&](std::size_t index, StlMesh& localMesh) {
+        if (kept[index] == 0) {
+            kept[index] = 1;
+            localMesh.addTriangle(sourceTriangles[index]);
+        }
+    };
+
     StlMesh localMesh;
-    for (const auto& triangle : sourceMesh.triangles()) {
+    for (std::size_t triangleIndex = 0; triangleIndex < sourceTriangles.size(); ++triangleIndex) {
+        const auto& triangle = sourceTriangles[triangleIndex];
         if (!intersects(triangle_bbox(triangle), report.expanded_bbox)) {
             ++report.rejected_outside_bbox_count;
+            rejectedReason[triangleIndex] = 1;
             continue;
         }
 
@@ -445,27 +764,37 @@ StlRegionExtractResult StlRegionExtractor::extract(
             boundaryTolerance);
         if (centroidInside) {
             ++report.centroid_keep_triangle_count;
-            localMesh.addTriangle(triangle);
+            keepTriangle(triangleIndex, localMesh);
             continue;
         }
 
+        const auto anyVertexInside = any_vertex_inside_candidate_region(
+            faceRegions,
+            triangle,
+            surfaceTolerance,
+            boundaryTolerance);
         const auto vertexInside = conservativeCrop &&
             options.includeVertexInsideTriangles &&
-            any_vertex_inside_candidate_region(faceRegions, triangle, surfaceTolerance, boundaryTolerance);
+            anyVertexInside;
         if (vertexInside) {
             ++report.vertex_keep_triangle_count;
             ++report.conservative_keep_triangle_count;
-            localMesh.addTriangle(triangle);
+            keepTriangle(triangleIndex, localMesh);
             continue;
         }
 
+        const auto anyEdgeMidpointInside = any_edge_midpoint_inside_candidate_region(
+            faceRegions,
+            triangle,
+            surfaceTolerance,
+            boundaryTolerance);
         const auto edgeMidpointInside = conservativeCrop &&
             options.includeEdgeMidpointInsideTriangles &&
-            any_edge_midpoint_inside_candidate_region(faceRegions, triangle, surfaceTolerance, boundaryTolerance);
+            anyEdgeMidpointInside;
         if (edgeMidpointInside) {
             ++report.edge_midpoint_keep_triangle_count;
             ++report.conservative_keep_triangle_count;
-            localMesh.addTriangle(triangle);
+            keepTriangle(triangleIndex, localMesh);
             continue;
         }
 
@@ -475,11 +804,76 @@ StlRegionExtractResult StlRegionExtractor::extract(
         if (nearBoundaryBand) {
             ++report.boundary_band_keep_triangle_count;
             ++report.conservative_keep_triangle_count;
-            localMesh.addTriangle(triangle);
+            keepTriangle(triangleIndex, localMesh);
             continue;
         }
 
         ++report.rejected_outside_candidate_count;
+        rejectedReason[triangleIndex] = 2;
+        boundaryRepairEligible[triangleIndex] = (anyVertexInside || anyEdgeMidpointInside) ? 1 : 0;
+    }
+
+    if (options.repairBoundaryLoopCoverage && !cadBoundarySamples.empty()) {
+        const auto before = evaluate_boundary_loop_coverage(
+            cadBoundarySamples,
+            triangleDistanceData,
+            kept,
+            options.boundaryLoopCoverageTolerance);
+        report.boundary_loop_missing_point_count_before = before.missingPointCount;
+        report.boundary_loop_max_distance_before = before.maxDistance;
+        report.boundary_loop_average_distance_before = before.averageDistance;
+        report.boundary_loop_missing_edge_ids_before = before.missingEdgeIds;
+
+        const auto maxRepairDistance = std::max(
+            options.boundaryLoopCoverageTolerance * 3.0,
+            report.margin + options.boundaryLoopCoverageTolerance);
+        for (const auto& sample : cadBoundarySamples) {
+            if (report.boundary_loop_repair_triangle_count >= options.maxBoundaryLoopRepairTriangles) {
+                break;
+            }
+            const auto distance = distance_to_kept_triangles(sample.point, triangleDistanceData, kept);
+            if (distance <= options.boundaryLoopCoverageTolerance) {
+                continue;
+            }
+            const auto repairIndex = closest_repair_triangle(
+                sample,
+                sourceTriangles,
+                triangleDistanceData,
+                kept,
+                boundaryRepairEligible,
+                report.expanded_bbox,
+                maxRepairDistance,
+                options.boundaryLoopConnectivityTolerance,
+                report.boundary_loop_orphan_repair_candidate_count);
+            if (repairIndex >= sourceTriangles.size()) {
+                continue;
+            }
+            if (rejectedReason[repairIndex] == 1 && report.rejected_outside_bbox_count > 0) {
+                --report.rejected_outside_bbox_count;
+            } else if (rejectedReason[repairIndex] == 2 && report.rejected_outside_candidate_count > 0) {
+                --report.rejected_outside_candidate_count;
+            }
+            rejectedReason[repairIndex] = 0;
+            keepTriangle(repairIndex, localMesh);
+            ++report.boundary_loop_repair_triangle_count;
+            report.boundary_loop_coverage_repair_applied = true;
+        }
+
+        const auto after = evaluate_boundary_loop_coverage(
+            cadBoundarySamples,
+            triangleDistanceData,
+            kept,
+            options.boundaryLoopCoverageTolerance);
+        report.boundary_loop_missing_point_count_after = after.missingPointCount;
+        report.boundary_loop_max_distance_after = after.maxDistance;
+        report.boundary_loop_average_distance_after = after.averageDistance;
+        report.boundary_loop_missing_edge_ids_after = after.missingEdgeIds;
+        if (after.missingPointCount > 0) {
+            if (!report.warning_message.empty()) {
+                report.warning_message += " ";
+            }
+            report.warning_message += "Boundary-loop coverage repair could not cover all original CAD boundary samples.";
+        }
     }
 
     report.output_triangle_count = static_cast<int>(localMesh.triangleCount());

@@ -22,6 +22,11 @@ struct StlRegionExtractorOptions {
     double boundaryBandTolerance = 0.2;
     double surfaceToleranceMultiplier = 1.0;
     double maxConservativeLeakRatio = 3.0;
+    bool repairBoundaryLoopCoverage = true;
+    int boundaryLoopSamplesPerEdge = 5;
+    double boundaryLoopCoverageTolerance = 0.1;
+    double boundaryLoopConnectivityTolerance = 1.0e-5;
+    int maxBoundaryLoopRepairTriangles = 256;
 };
 
 struct StlRegionExtractResult {

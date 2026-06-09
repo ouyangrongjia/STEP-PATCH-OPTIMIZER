@@ -54,6 +54,11 @@ void test_geomagic_pipeline_script_mentions_required_contract() {
     assert_contains(script, "FIT_REGION_FILL_HOLE_MAX_EDGES");
     assert_contains(script, "FIT_REGION_FILL_HOLE_LENGTH_RATIO");
     assert_contains(script, "FIT_REGION_GEOMETRY_MODE");
+    assert_contains(script, "FIT_REGION_SKIP_REMESH              default: 1");
+    assert_contains(script, "Removed stale output");
+    assert_contains(script, "Warning: Remesh failed and original mesh will be used");
+    assert_contains(script, "try_run_autosurface_to_step");
+    assert_contains(script, "AutoSurface failed after Remesh; retrying with pre-remesh mesh");
     assert_contains(script, "Mechanical");
     assert_contains(script, "requested autoMerge={}");
     assert_contains(script, "run_autosurface_to_step");

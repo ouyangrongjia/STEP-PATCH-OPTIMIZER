@@ -33,6 +33,10 @@ std::string bytearray_to_string(const QByteArray& value) {
     return {value.constData(), static_cast<std::size_t>(value.size())};
 }
 
+QString bool_env(bool value) {
+    return value ? QStringLiteral("1") : QStringLiteral("0");
+}
+
 void append_message(std::string& target, const std::string& message) {
     if (message.empty()) {
         return;
@@ -110,6 +114,36 @@ bool create_runtime_directories(const GeomagicAutoSurfaceConfig& config, std::st
     return true;
 }
 
+bool remove_stale_output_file(const std::filesystem::path& path, std::string* message) {
+    if (path.empty()) {
+        return true;
+    }
+    std::error_code error;
+    if (!std::filesystem::exists(path, error)) {
+        return true;
+    }
+    if (error) {
+        if (message != nullptr) {
+            *message = "Could not inspect stale Geomagic output: " + error.message();
+        }
+        return false;
+    }
+    std::filesystem::remove(path, error);
+    if (error) {
+        if (message != nullptr) {
+            *message = "Could not remove stale Geomagic output: " + error.message();
+        }
+        return false;
+    }
+    return true;
+}
+
+bool remove_stale_output_artifacts(const GeomagicAutoSurfaceConfig& config, std::string* message) {
+    return remove_stale_output_file(config.outputStepPath, message) &&
+        remove_stale_output_file(config.outputIgesPath, message) &&
+        remove_stale_output_file(default_sidecar_path(config.outputStepPath, "_autosurface.igs"), message);
+}
+
 GeomagicAutoSurfaceConfig complete_config(
     const GeomagicAutoSurfaceConfig& config,
     std::string* errorMessage) {
@@ -162,9 +196,25 @@ QProcessEnvironment build_environment(const GeomagicAutoSurfaceConfig& config) {
     environment.remove(QStringLiteral("FIT_REGION_GEOMETRY_MODE"));
     environment.remove(QStringLiteral("FIT_REGION_AUTO_MERGE"));
     environment.remove(QStringLiteral("FIT_REGION_ADAPTIVE_FIT"));
+    environment.remove(QStringLiteral("FIT_REGION_FILL_HOLE_MAX_EDGES"));
+    environment.remove(QStringLiteral("FIT_REGION_FILL_HOLE_LENGTH_RATIO"));
 
     environment.insert(QStringLiteral("FIT_REGION_INPUT"), path_to_runtime_qstring(config.inputStlPath));
     environment.insert(QStringLiteral("FIT_REGION_OUTPUT"), path_to_runtime_qstring(config.outputStepPath));
+    environment.insert(QStringLiteral("FIT_REGION_LOG_FILE"), path_to_runtime_qstring(config.fitRegionLogPath));
+    environment.insert(QStringLiteral("FIT_REGION_REPAIR_MESH"), QStringLiteral("1"));
+    environment.insert(QStringLiteral("FIT_REGION_KEEP_TEMP"), bool_env(config.keepTemp));
+    environment.insert(QStringLiteral("FIT_REGION_SKIP_REMESH"), bool_env(config.skipRemesh));
+    environment.insert(QStringLiteral("FIT_REGION_QUICK_SMOOTH"), bool_env(config.quickSmooth));
+    environment.insert(QStringLiteral("FIT_REGION_RELAX"), bool_env(config.relax));
+    environment.insert(QStringLiteral("FIT_REGION_RELAX_ITERATION"), QString::number(config.relaxIterations));
+    environment.insert(QStringLiteral("FIT_REGION_RELAX_STRENGTH"), QString::number(config.relaxStrength, 'g', 12));
+    environment.insert(QStringLiteral("FIT_REGION_AUTOSURFACE_TARGET"), QString::number(config.numPatches));
+    environment.insert(QStringLiteral("FIT_REGION_AUTOSURFACE_TOLERANCE"), QString::number(config.tolerance, 'g', 12));
+    environment.insert(QStringLiteral("FIT_REGION_DETAIL_LEVEL"), QString::number(config.detail, 'g', 12));
+    environment.insert(QStringLiteral("FIT_REGION_GEOMETRY_MODE"), QString::fromStdString(config.geometry));
+    environment.insert(QStringLiteral("FIT_REGION_AUTO_MERGE"), bool_env(config.autoMerge));
+    environment.insert(QStringLiteral("FIT_REGION_ADAPTIVE_FIT"), bool_env(config.adaptiveFit));
     environment.insert(
         QStringLiteral("FIT_REGION_STRICT_PATCH_TARGET"),
         config.strictPatchTarget ? QStringLiteral("1") : QStringLiteral("0"));
@@ -272,6 +322,10 @@ GeomagicAutoSurfaceResult GeomagicAutoSurfaceBackend::run(const GeomagicAutoSurf
     std::string directoryError;
     if (!create_runtime_directories(effective, &directoryError)) {
         return failure_result(effective, directoryError, timer.elapsed());
+    }
+    std::string staleOutputError;
+    if (!remove_stale_output_artifacts(effective, &staleOutputError)) {
+        return failure_result(effective, staleOutputError, timer.elapsed());
     }
 
     QProcess process;

@@ -130,6 +130,7 @@ private:
     QAction* showCroppedStlAction_ = nullptr;
     QAction* showStlCropBoxAction_ = nullptr;
     QAction* generateAndPreviewCurrentPatchAction_ = nullptr;
+    QAction* useGeomagicRemeshAction_ = nullptr;
     QAction* importPatchForCurrentCandidateAction_ = nullptr;
     QAction* importPatchFromFileAction_ = nullptr;
     QAction* applyCurrentPatchAction_ = nullptr;

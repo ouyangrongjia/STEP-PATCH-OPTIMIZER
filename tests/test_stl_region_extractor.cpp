@@ -361,6 +361,7 @@ void test_centroid_only_mode_still_rejects_cross_boundary_triangle() {
     options.includeVertexInsideTriangles = false;
     options.includeEdgeMidpointInsideTriangles = false;
     options.includeBoundaryBandTriangles = false;
+    options.repairBoundaryLoopCoverage = false;
 
     const auto result = spo::StlRegionExtractor().extract(fixture.document, fixture.candidate, source, options);
 
@@ -369,23 +370,76 @@ void test_centroid_only_mode_still_rejects_cross_boundary_triangle() {
     assert(result.report.rejected_outside_candidate_count == 1);
 }
 
-void test_default_crop_mode_uses_centroid_only_behavior() {
+void test_default_crop_mode_repairs_boundary_loop_coverage_without_conservative_band() {
     const auto fixture = make_two_face_fixture();
+    const auto leftLower = make_triangle(
+        {0.0, 0.0, 1.0},
+        {0.0, 0.0, 0.0},
+        {1.9, 0.0, 0.0},
+        {0.0, 1.0, 0.0});
+    const auto leftUpper = make_triangle(
+        {0.0, 0.0, 1.0},
+        {1.9, 0.0, 0.0},
+        {1.9, 1.0, 0.0},
+        {0.0, 1.0, 0.0});
     const auto crossing = make_triangle(
         {0.0, 0.0, 1.0},
-        {1.95, 0.50, 0.0},
-        {2.40, 0.45, 0.0},
-        {2.40, 0.55, 0.0});
-    const auto source = make_mesh({crossing});
+        {1.9, 0.0, 0.0},
+        {2.40, 0.0, 0.0},
+        {1.9, 1.0, 0.0});
+    const auto crossingUpper = make_triangle(
+        {0.0, 0.0, 1.0},
+        {2.40, 0.0, 0.0},
+        {2.40, 1.0, 0.0},
+        {1.9, 1.0, 0.0});
+    const auto source = make_mesh({leftLower, leftUpper, crossing, crossingUpper});
     spo::StlRegionExtractorOptions options;
     options.bboxMarginRatio = 0.0;
     options.minMargin = 0.5;
+    options.boundaryLoopCoverageTolerance = 0.06;
 
     const auto result = spo::StlRegionExtractor().extract(fixture.document, fixture.candidate, source, options);
 
-    assert_failed_with_message(result);
-    assert(result.report.output_triangle_count == 0);
+    assert(result.success);
+    assert(result.report.output_triangle_count > result.report.centroid_keep_triangle_count);
     assert(result.report.conservative_keep_triangle_count == 0);
+    assert(result.report.boundary_loop_coverage_evaluated);
+    assert(result.report.boundary_loop_missing_point_count_before > 0);
+    assert(result.report.boundary_loop_missing_point_count_after == 0);
+    assert(result.report.boundary_loop_repair_triangle_count > 0);
+    assert(result.report.boundary_loop_orphan_repair_candidate_count == 0);
+}
+
+void test_default_boundary_loop_repair_rejects_disconnected_floating_triangle() {
+    const auto fixture = make_two_face_fixture();
+    const auto leftLower = make_triangle(
+        {0.0, 0.0, 1.0},
+        {0.0, 0.0, 0.0},
+        {1.85, 0.0, 0.0},
+        {0.0, 1.0, 0.0});
+    const auto leftUpper = make_triangle(
+        {0.0, 0.0, 1.0},
+        {1.85, 0.0, 0.0},
+        {1.85, 1.0, 0.0},
+        {0.0, 1.0, 0.0});
+    const auto floating = make_triangle(
+        {0.0, 0.0, 1.0},
+        {1.95, 0.0, 0.0},
+        {2.40, 0.0, 0.0},
+        {1.95, 1.0, 0.0});
+    const auto source = make_mesh({leftLower, leftUpper, floating});
+    spo::StlRegionExtractorOptions options;
+    options.bboxMarginRatio = 0.0;
+    options.minMargin = 0.5;
+    options.boundaryLoopCoverageTolerance = 0.06;
+
+    const auto result = spo::StlRegionExtractor().extract(fixture.document, fixture.candidate, source, options);
+
+    assert(result.success);
+    assert(result.report.boundary_loop_missing_point_count_before > 0);
+    assert(result.report.boundary_loop_repair_triangle_count == 0);
+    assert(result.report.boundary_loop_orphan_repair_candidate_count > 0);
+    assert(result.report.boundary_loop_missing_point_count_after > 0);
 }
 
 void test_empty_source_mesh_fails() {
@@ -504,6 +558,8 @@ void test_crop_report_fields_are_populated() {
     assert(result.report.edge_midpoint_keep_triangle_count == 0);
     assert(result.report.boundary_band_keep_triangle_count == 0);
     assert(result.report.conservative_keep_triangle_count == 0);
+    assert(result.report.boundary_loop_coverage_evaluated);
+    assert(result.report.boundary_loop_sample_count > 0);
 }
 
 void test_stl_region_extractor_real_clay_stp_stl_if_present() {
@@ -583,7 +639,8 @@ void run_stl_region_extractor_tests() {
     test_conservative_crop_keeps_triangle_when_centroid_outside_but_edge_midpoint_inside();
     test_conservative_crop_keeps_triangle_near_original_boundary_band();
     test_centroid_only_mode_still_rejects_cross_boundary_triangle();
-    test_default_crop_mode_uses_centroid_only_behavior();
+    test_default_crop_mode_repairs_boundary_loop_coverage_without_conservative_band();
+    test_default_boundary_loop_repair_rejects_disconnected_floating_triangle();
     test_empty_source_mesh_fails();
     test_empty_candidate_faces_fail();
     test_candidate_face_id_out_of_range_fails();

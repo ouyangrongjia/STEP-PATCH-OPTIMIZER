@@ -218,7 +218,7 @@ def parse_args():
     args.fill_hole_max_edges = args.fill_hole_max_edges if args.fill_hole_max_edges is not None else env_int("FIT_REGION_FILL_HOLE_MAX_EDGES", 80)
     args.fill_hole_length_ratio = args.fill_hole_length_ratio if args.fill_hole_length_ratio is not None else env_float("FIT_REGION_FILL_HOLE_LENGTH_RATIO", 1.0)
 
-    # Conservative defaults for tiny open STL patches.
+    # Remesh is experimental for small boundary crops; keep it opt-in.
     args.skip_remesh = args.skip_remesh or env_bool("FIT_REGION_SKIP_REMESH", True)
     args.quick_smooth = args.quick_smooth or env_bool("FIT_REGION_QUICK_SMOOTH", False)
     args.relax = args.relax or env_bool("FIT_REGION_RELAX", False)
@@ -561,17 +561,21 @@ def step_repair_mesh(mesh, args):
 
 
 def step_remesh(mesh, target_edge_length):
-    if target_edge_length <= 0.0:
-        calc = CalculateTargetEdgeLength()
-        calc.mesh = mesh
-        calc.run()
-        target_edge_length = calc.targetEdgeLength
-        print_flush("  Auto-calculated target edge length: {:.6f}".format(target_edge_length))
-    remesh = Remesh()
-    remesh.mesh = mesh
-    remesh.targetEdgeLength = target_edge_length
-    remesh.run()
-    return getattr(remesh, "mesh", mesh)
+    try:
+        if target_edge_length <= 0.0:
+            calc = CalculateTargetEdgeLength()
+            calc.mesh = mesh
+            calc.run()
+            target_edge_length = calc.targetEdgeLength
+            print_flush("  Auto-calculated target edge length: {:.6f}".format(target_edge_length))
+        remesh = Remesh()
+        remesh.mesh = mesh
+        remesh.targetEdgeLength = target_edge_length
+        remesh.run()
+        return getattr(remesh, "mesh", mesh)
+    except Exception as exc:
+        print_flush("  Warning: Remesh failed and original mesh will be used: {}".format(exc), stream=sys.stderr)
+        return mesh
 
 
 def step_quick_smooth(mesh):
@@ -627,6 +631,7 @@ def remove_if_exists(path):
     try:
         if os.path.isfile(path):
             os.remove(path)
+            print_flush("  Removed stale output: {}".format(path))
     except Exception:
         pass
 
@@ -742,7 +747,7 @@ def run_autosurface(mesh, igs_path, args):
     fatal("Error: all AutoSurface attempts failed: " + " | ".join(errors), 16)
 
 
-def run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
+def try_run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
     log_autosurface_attrs()
     errors = []
     saw_step_write_failure = False
@@ -758,7 +763,7 @@ def run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
         if success:
             if args.keep_temp:
                 preserve_igs(temp_igs_path, final_igs_path)
-            return bodies, loops
+            return True, bodies, loops, "", 0
 
         saw_step_write_failure = True
         print_flush(
@@ -768,7 +773,15 @@ def run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
         errors.append("{} => STEP write failed (openLoops={}): {}".format(label, loops, err))
 
     exit_code = 17 if saw_step_write_failure else 16
-    fatal("Error: all AutoSurface to STEP attempts failed: " + " | ".join(errors), exit_code)
+    return False, 0, 0, "Error: all AutoSurface to STEP attempts failed: " + " | ".join(errors), exit_code
+
+
+def run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
+    ok, bodies, loops, error, exit_code = try_run_autosurface_to_step(
+        mesh, temp_igs_path, final_igs_path, args)
+    if ok:
+        return bodies, loops
+    fatal(error, exit_code)
 
 
 def convert_igs_to_stp_plain(igs_path, stp_path):
@@ -776,6 +789,7 @@ def convert_igs_to_stp_plain(igs_path, stp_path):
     bodies = 0
     loops = 0
     try:
+        remove_if_exists(stp_path)
         reader = ReadFile()
         reader.filename = igs_path
         apply_mm_file_open_options(reader)
@@ -832,11 +846,14 @@ def run_pipeline(args, temp_igs_path, final_igs_path):
     else:
         print_flush("  RepairMesh disabled")
 
+    pre_remesh_mesh = mesh
+    remesh_attempted = False
     if args.skip_remesh:
         set_stage("Step 3/7: Skipping Remesh")
         print_flush("  Remesh skipped")
     else:
         set_stage("Step 3/7: Remeshing")
+        remesh_attempted = True
         mesh = step_remesh(mesh, args.target_edge_length)
         print_flush("  Remeshed: {} triangles".format(get_attr_safe(mesh, "numTriangles", 0)))
 
@@ -850,7 +867,24 @@ def run_pipeline(args, temp_igs_path, final_igs_path):
     else:
         print_flush("  Relax disabled")
 
-    bodies, loops = run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args)
+    ok, bodies, loops, error, exit_code = try_run_autosurface_to_step(
+        mesh, temp_igs_path, final_igs_path, args)
+    if not ok and remesh_attempted:
+        print_flush(
+            "  Warning: AutoSurface failed after Remesh; retrying with pre-remesh mesh.",
+            stream=sys.stderr,
+        )
+        fallback_ok, fallback_bodies, fallback_loops, fallback_error, fallback_exit_code = try_run_autosurface_to_step(
+            pre_remesh_mesh, temp_igs_path, final_igs_path, args)
+        if fallback_ok:
+            bodies, loops = fallback_bodies, fallback_loops
+            print_flush("  AutoSurface fallback with pre-remesh mesh succeeded.")
+        else:
+            fatal(error + " | pre-remesh fallback => " + fallback_error, fallback_exit_code or exit_code)
+    elif ok:
+        pass
+    else:
+        fatal(error, exit_code)
 
     set_stage("Step 7/7: Done")
     print_flush("  Saved STEP: {}".format(args.output))
@@ -864,6 +898,8 @@ def main():
     validate_args(args)
     temp_igs_path = safe_ascii_temp_igs(args.input)
     final_igs_path = desired_igs_path(args.output)
+    remove_if_exists(args.output)
+    remove_if_exists(final_igs_path)
     print_args(args, temp_igs_path, final_igs_path, log_file)
     try:
         run_pipeline(args, temp_igs_path, final_igs_path)

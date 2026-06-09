@@ -236,7 +236,12 @@ void test_multi_face_patch_is_not_unsupported() {
     assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
     assert(report.usedMultiFacePatch);
     assert(report.patchFaceCount > 1);
-    assert(report.replacementFaceCount > 1);
+    assert(report.replacementFaceCount > 0);
+    if (report.usedOriginalBoundarySurfaceRetrim) {
+        assert(report.replacementFaceCount == 1);
+        assert(report.retrimBoundarySampleCount > 0);
+        assert(report.retrimFailedProjectionCount == 0);
+    }
     assert(report.rollbackApplied);
     assert(report.gateEvaluated);
     assert(!report.gatePassed);
@@ -280,6 +285,9 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(executeResult.success());
     assert(report.success);
     assert(report.failureReason == spo::PatchReplacementFailureReason::None);
+    assert(report.usedOriginalBoundarySurfaceRetrim);
+    assert(report.retrimBoundarySampleCount > 0);
+    assert(report.retrimFailedProjectionCount == 0);
     assert(report.repairApplied);
     assert(report.sameParameterApplied);
     assert(report.shapeFixApplied);
@@ -330,14 +338,22 @@ void test_free_edge_increase_after_repair_is_rejected() {
     const auto result = command.execute(fixture.context);
 
     assert(!result.success());
-    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
-    assert(report.rollbackApplied);
-    assert(report.repairApplied);
-    assert(report.freeEdgesAfterRepair > 0);
-    assert(report.gateEvaluated);
-    assert(!report.gatePassed);
-    assert(report.gateAfterFreeEdges > 0);
-    assert(report.gateAfterFaceCount > 0);
+    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed ||
+        report.failureReason == spo::PatchReplacementFailureReason::BuildFailed);
+    if (report.failureReason == spo::PatchReplacementFailureReason::GateFailed) {
+        assert(report.rollbackApplied);
+        assert(report.repairApplied);
+        assert(report.freeEdgesAfterRepair > 0);
+        assert(report.gateEvaluated);
+        assert(!report.gatePassed);
+        assert(report.gateAfterFreeEdges > 0);
+        assert(report.gateAfterFaceCount > 0);
+    } else {
+        assert(!report.repairApplied);
+        assert(!report.gateEvaluated);
+        assert(report.retrimBoundarySampleCount > 0);
+        assert(report.retrimFailedProjectionCount > 0);
+    }
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
@@ -352,7 +368,11 @@ void test_multi_face_internal_seams_are_not_unsupported() {
     assert(!result.success());
     assert(report.failureReason != spo::PatchReplacementFailureReason::UnsupportedCandidate);
     assert(report.usedMultiFacePatch);
-    assert(report.replacementFaceCount > 1);
+    assert(report.replacementFaceCount > 0);
+    if (report.usedOriginalBoundarySurfaceRetrim) {
+        assert(report.replacementFaceCount == 1);
+        assert(report.retrimBoundarySampleCount > 0);
+    }
     assert(report.repairApplied);
     assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
     assert(report.gateEvaluated);

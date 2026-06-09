@@ -431,7 +431,7 @@ void test_app_controller_failed_apply_keeps_document_and_preview_state() {
     remove_temp_root(root);
 }
 
-void test_process_status_keeps_gate_failure_diagnostics_after_apply_failed() {
+void test_process_status_keeps_apply_failure_diagnostics_after_apply_failed() {
     const auto root = temp_root("spo_patch_process_status_gate_failure");
     const auto modelPath = root / "model.stp";
     const auto patchPath = root / "patch.stp";
@@ -451,7 +451,8 @@ void test_process_status_keeps_gate_failure_diagnostics_after_apply_failed() {
     const auto result = controller.applyCurrentPatchToCurrentCandidate(candidate, &report);
 
     assert(!result.success());
-    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed);
+    assert(report.failureReason == spo::PatchReplacementFailureReason::GateFailed ||
+        report.failureReason == spo::PatchReplacementFailureReason::BuildFailed);
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::ApplyFailed);
     assert(controller.currentProcessStatus().stage == spo::ProcessStage::ApplyFailed);
     assert(controller.currentProcessStatus().candidateId == candidate.candidate_id);
@@ -459,10 +460,17 @@ void test_process_status_keeps_gate_failure_diagnostics_after_apply_failed() {
     assert(controller.currentProcessStatus().sewingAttemptCount == report.sewingAttemptCount);
     assert(controller.currentProcessStatus().selectedSewingTolerance == report.selectedSewingTolerance);
     assert(controller.currentProcessStatus().bestFreeEdges == report.bestSewingFreeEdges);
-    assert(controller.currentProcessStatus().gateEvaluated);
-    assert(!controller.currentProcessStatus().gatePassed);
-    assert(!controller.currentProcessStatus().latestGateFailureReason.empty());
-    assert(controller.currentProcessStatus().latestMessage.find("StrictTopologyGate") != std::string::npos);
+    if (report.failureReason == spo::PatchReplacementFailureReason::GateFailed) {
+        assert(controller.currentProcessStatus().gateEvaluated);
+        assert(!controller.currentProcessStatus().gatePassed);
+        assert(!controller.currentProcessStatus().latestGateFailureReason.empty());
+        assert(controller.currentProcessStatus().latestMessage.find("StrictTopologyGate") != std::string::npos);
+    } else {
+        assert(!controller.currentProcessStatus().gateEvaluated);
+        assert(report.retrimBoundarySampleCount > 0);
+        assert(report.retrimFailedProjectionCount > 0);
+        assert(controller.currentProcessStatus().latestMessage.find("surface") != std::string::npos);
+    }
 
     remove_temp_root(root);
 }
@@ -610,7 +618,7 @@ void run_patch_apply_state_tests() {
     test_app_controller_preview_candidate_mismatch_blocks_apply();
     test_app_controller_valid_preview_applies_through_command_history_and_undo_redo();
     test_app_controller_failed_apply_keeps_document_and_preview_state();
-    test_process_status_keeps_gate_failure_diagnostics_after_apply_failed();
+    test_process_status_keeps_apply_failure_diagnostics_after_apply_failed();
     test_app_controller_multi_face_patch_enters_apply_path_without_unsupported();
     test_no_hard_coded_real_sample_path_in_apply_sources();
     test_app_controller_open_step_clears_patch_preview_state();

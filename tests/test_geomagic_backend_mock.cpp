@@ -90,6 +90,14 @@ std::string success_cmd_body(const std::filesystem::path& root) {
         "@echo off\n"
         "echo mock stdout\n"
         "echo FIT_REGION_STRICT_PATCH_TARGET=%FIT_REGION_STRICT_PATCH_TARGET%\n"
+        "echo FIT_REGION_SKIP_REMESH=%FIT_REGION_SKIP_REMESH%\n"
+        "echo FIT_REGION_AUTOSURFACE_TARGET=%FIT_REGION_AUTOSURFACE_TARGET%\n"
+        "echo FIT_REGION_AUTOSURFACE_TOLERANCE=%FIT_REGION_AUTOSURFACE_TOLERANCE%\n"
+        "echo FIT_REGION_DETAIL_LEVEL=%FIT_REGION_DETAIL_LEVEL%\n"
+        "echo FIT_REGION_GEOMETRY_MODE=%FIT_REGION_GEOMETRY_MODE%\n"
+        "echo FIT_REGION_AUTO_MERGE=%FIT_REGION_AUTO_MERGE%\n"
+        "echo FIT_REGION_ADAPTIVE_FIT=%FIT_REGION_ADAPTIVE_FIT%\n"
+        "echo FIT_REGION_LOG_FILE=%FIT_REGION_LOG_FILE%\n"
         "echo FIT_REGION_INPUT=%FIT_REGION_INPUT%\n"
         "echo FIT_REGION_OUTPUT=%FIT_REGION_OUTPUT%\n"
         "echo %2 > \"" + scriptArg + "\"\n"
@@ -97,20 +105,6 @@ std::string success_cmd_body(const std::filesystem::path& root) {
         "if defined FIT_REGION_RESULT_JSON type nul > \"" + legacyEnvMarker + "\"\n"
         "if defined FIT_REGION_OUTPUT_IGES type nul > \"" + legacyEnvMarker + "\"\n"
         "if defined FIT_REGION_WORK_DIR type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_LOG_FILE type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_REPAIR_MESH type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_KEEP_TEMP type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_SKIP_REMESH type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_QUICK_SMOOTH type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_RELAX type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_RELAX_ITERATION type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_RELAX_STRENGTH type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_AUTOSURFACE_TARGET type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_AUTOSURFACE_TOLERANCE type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_DETAIL_LEVEL type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_GEOMETRY_MODE type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_AUTO_MERGE type nul > \"" + legacyEnvMarker + "\"\n"
-        "if defined FIT_REGION_ADAPTIVE_FIT type nul > \"" + legacyEnvMarker + "\"\n"
         "type nul > \"%FIT_REGION_OUTPUT%\"\n"
         "exit /b 0\n";
 }
@@ -175,6 +169,9 @@ void test_mock_success() {
     assert(!std::filesystem::exists(root / "legacy_env_present.txt"));
     assert(std::filesystem::path(read_text_file(root / "script_arg.txt")).is_absolute());
     assert(result.message.find("mock stdout") != std::string::npos);
+    assert(result.message.find("FIT_REGION_SKIP_REMESH=1") != std::string::npos);
+    assert(result.message.find("FIT_REGION_AUTOSURFACE_TARGET=1") != std::string::npos);
+    assert(result.message.find("FIT_REGION_GEOMETRY_MODE=Mechanical") != std::string::npos);
 
     remove_temp_root(root);
 }
@@ -247,6 +244,21 @@ void test_missing_output_step_forces_failure() {
     const auto root = temp_root("spo_geomagic_backend_missing_output");
     const auto mock = write_mock_cmd(root, "mock_missing_output.cmd", missing_output_cmd_body());
     auto config = make_config(root, mock);
+
+    const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
+
+    assert(!result.success);
+    assert(!std::filesystem::exists(config.outputStepPath));
+    assert(!result.message.empty() || !result.errorMessage.empty());
+
+    remove_temp_root(root);
+}
+
+void test_stale_output_step_is_removed_before_process() {
+    const auto root = temp_root("spo_geomagic_backend_stale_output");
+    const auto mock = write_mock_cmd(root, "mock_missing_output.cmd", missing_output_cmd_body());
+    auto config = make_config(root, mock);
+    touch_file(config.outputStepPath);
 
     const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
 
@@ -361,17 +373,25 @@ void test_non_crop_input_without_explicit_outputs_fails_before_process() {
     remove_temp_root(root);
 }
 
-void test_config_fitting_flags_do_not_expand_backend_environment() {
+void test_config_fitting_flags_are_passed_to_backend_environment() {
     const auto root = temp_root("spo_geomagic_backend_adaptive_fit");
     const auto mock = write_mock_cmd(root, "mock_success.cmd", success_cmd_body(root));
     auto config = make_config(root, mock);
     config.autoMerge = true;
     config.adaptiveFit = true;
+    config.skipRemesh = true;
+    config.numPatches = 4;
+    config.tolerance = 0.08;
+    config.detail = 0.25;
 
     const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
 
     assert(result.success);
-    assert(result.message.find("FIT_REGION_ADAPTIVE_FIT") == std::string::npos);
+    assert(result.message.find("FIT_REGION_SKIP_REMESH=1") != std::string::npos);
+    assert(result.message.find("FIT_REGION_AUTOSURFACE_TARGET=4") != std::string::npos);
+    assert(result.message.find("FIT_REGION_AUTOSURFACE_TOLERANCE=0.08") != std::string::npos);
+    assert(result.message.find("FIT_REGION_DETAIL_LEVEL=0.25") != std::string::npos);
+    assert(result.message.find("FIT_REGION_ADAPTIVE_FIT=1") != std::string::npos);
     assert(!std::filesystem::exists(root / "legacy_env_present.txt"));
 
     remove_temp_root(root);
@@ -387,10 +407,11 @@ void run_geomagic_backend_mock_tests() {
     test_missing_input_stl_does_not_start_process();
     test_missing_script_does_not_start_process();
     test_missing_output_step_forces_failure();
+    test_stale_output_step_is_removed_before_process();
     test_output_step_without_result_json_is_success();
     test_auto_resolves_crop_paths_without_writing_sidecar_json();
     test_auto_resolves_chinese_crop_path();
     test_non_crop_input_without_explicit_outputs_fails_before_process();
-    test_config_fitting_flags_do_not_expand_backend_environment();
+    test_config_fitting_flags_are_passed_to_backend_environment();
 #endif
 }
