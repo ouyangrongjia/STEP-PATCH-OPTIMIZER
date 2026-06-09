@@ -135,7 +135,9 @@ ReplacementAssemblyResult assemble_replacement_shape(
         }
         const auto& sourceFace = topology.face(faceId);
         if (!replacedFirstFace) {
-            if (buildResult.sourceFaceIds.size() == 1 && buildResult.replacementFaces.size() == 1) {
+            if (!buildResult.usedOriginalBoundarySurfaceRetrim &&
+                buildResult.sourceFaceIds.size() == 1 &&
+                buildResult.replacementFaces.size() == 1) {
                 std::string trimMessage;
                 const auto trimmedFace = boundary_trimmed_patch_face(
                     beforeDocument,
@@ -335,6 +337,28 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.replacementShellCount = count_shapes(buildResult.replacementShape, TopAbs_SHELL);
     report_.replacementSolidCount = count_shapes(buildResult.replacementShape, TopAbs_SOLID);
     report_.usedMultiFacePatch = buildResult.usedMultiFaceFragment || analysis.isMultiFace;
+    report_.usedOriginalBoundarySurfaceRetrim = buildResult.usedOriginalBoundarySurfaceRetrim;
+    report_.usedMultiSurfaceBoundaryShell = buildResult.usedMultiSurfaceBoundaryShell;
+    report_.retrimSelectedPatchFaceIndex = buildResult.retrimSelectedPatchFaceIndex;
+    report_.retrimBoundarySampleCount = buildResult.retrimBoundarySampleCount;
+    report_.retrimProjectedSampleCount = buildResult.retrimProjectedSampleCount;
+    report_.retrimFailedProjectionCount = buildResult.retrimFailedProjectionCount;
+    report_.retrimMaxProjectionDistance = buildResult.retrimMaxProjectionDistance;
+    report_.retrimAverageProjectionDistance = buildResult.retrimAverageProjectionDistance;
+    report_.retrimSurfaceCoverageProjectedSampleCount = buildResult.retrimSurfaceCoverageProjectedSampleCount;
+    report_.retrimSurfaceCoverageFailedProjectionCount = buildResult.retrimSurfaceCoverageFailedProjectionCount;
+    report_.retrimSurfaceCoverageMaxProjectionDistance = buildResult.retrimSurfaceCoverageMaxProjectionDistance;
+    report_.retrimSurfaceCoverageAverageProjectionDistance = buildResult.retrimSurfaceCoverageAverageProjectionDistance;
+    report_.retrimSurfaceCoverageUncoveredEdgeIds = buildResult.retrimSurfaceCoverageUncoveredEdgeIds;
+    report_.multiSurfaceBoundarySampleCount = buildResult.multiSurfaceBoundarySampleCount;
+    report_.multiSurfaceProjectedSampleCount = buildResult.multiSurfaceProjectedSampleCount;
+    report_.multiSurfaceFailedProjectionCount = buildResult.multiSurfaceFailedProjectionCount;
+    report_.multiSurfaceMaxProjectionDistance = buildResult.multiSurfaceMaxProjectionDistance;
+    report_.multiSurfaceAverageProjectionDistance = buildResult.multiSurfaceAverageProjectionDistance;
+    report_.multiSurfaceAssignedBoundarySegmentCount = buildResult.multiSurfaceAssignedBoundarySegmentCount;
+    report_.multiSurfaceBuiltFaceCount = buildResult.multiSurfaceBuiltFaceCount;
+    report_.multiSurfaceOpenWireCount = buildResult.multiSurfaceOpenWireCount;
+    report_.multiSurfaceFailedEdgeIds = buildResult.multiSurfaceFailedEdgeIds;
     append_warning(report_, buildResult.warningMessage);
 
     if (!buildResult.success) {

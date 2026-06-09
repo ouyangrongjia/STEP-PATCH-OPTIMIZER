@@ -80,6 +80,8 @@ add_library(spo_core STATIC
     src/patch/PatchApplyState.cpp
     src/patch/MultiFacePatchAnalyzer.cpp
     src/patch/BoundaryConstrainedPatchBuilder.cpp
+    src/patch/BoundaryConstrainedMultiSurfaceShellBuilder.cpp
+    src/patch/BoundaryConstrainedSurfaceRetrim.cpp
     src/patch/CropBoundaryDiagnostics.cpp
     src/patch/PatchReplacementRepair.cpp
     src/validate/ErrorMetric.cpp

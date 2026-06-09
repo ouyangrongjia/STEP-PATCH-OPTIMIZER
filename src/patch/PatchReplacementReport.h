@@ -1,8 +1,10 @@
 #pragma once
 
+#include "common/GeometryTypes.h"
 #include "patch/PatchReplacementInput.h"
 
 #include <string>
+#include <vector>
 
 namespace spo {
 
@@ -90,6 +92,8 @@ struct PatchReplacementReport {
     bool rollbackApplied = false;
     bool usedMultiFacePatch = false;
     bool sourceFacesReplaced = false;
+    bool usedOriginalBoundarySurfaceRetrim = false;
+    bool usedMultiSurfaceBoundaryShell = false;
 
     bool repairApplied = false;
     bool sameParameterApplied = false;
@@ -116,6 +120,28 @@ struct PatchReplacementReport {
     int replacementEdgeCount = 0;
     int replacementShellCount = 0;
     int replacementSolidCount = 0;
+
+    int retrimSelectedPatchFaceIndex = -1;
+    int retrimBoundarySampleCount = 0;
+    int retrimProjectedSampleCount = 0;
+    int retrimFailedProjectionCount = 0;
+    double retrimMaxProjectionDistance = 0.0;
+    double retrimAverageProjectionDistance = 0.0;
+    int retrimSurfaceCoverageProjectedSampleCount = 0;
+    int retrimSurfaceCoverageFailedProjectionCount = 0;
+    double retrimSurfaceCoverageMaxProjectionDistance = 0.0;
+    double retrimSurfaceCoverageAverageProjectionDistance = 0.0;
+    std::vector<EdgeId> retrimSurfaceCoverageUncoveredEdgeIds;
+
+    int multiSurfaceBoundarySampleCount = 0;
+    int multiSurfaceProjectedSampleCount = 0;
+    int multiSurfaceFailedProjectionCount = 0;
+    double multiSurfaceMaxProjectionDistance = 0.0;
+    double multiSurfaceAverageProjectionDistance = 0.0;
+    int multiSurfaceAssignedBoundarySegmentCount = 0;
+    int multiSurfaceBuiltFaceCount = 0;
+    int multiSurfaceOpenWireCount = 0;
+    std::vector<EdgeId> multiSurfaceFailedEdgeIds;
 
     int faceCountBeforeRepair = 0;
     int edgeCountBeforeRepair = 0;

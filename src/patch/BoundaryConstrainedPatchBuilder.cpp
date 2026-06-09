@@ -3,6 +3,7 @@
 #include "brep/ShapeDocument.h"
 #include "merge/MergeCandidate.h"
 #include "merge/RegionBoundaryAnalyzer.h"
+#include "patch/BoundaryConstrainedMultiSurfaceShellBuilder.h"
 #include "patch/ImportedPatchInfo.h"
 #include "patch/PatchReplacementReport.h"
 
@@ -141,6 +142,36 @@ std::vector<TopoDS_Face> valid_faces(const MultiFacePatchAnalysis& analysis) {
     return faces;
 }
 
+void copy_retrim_report(
+    BoundaryConstrainedPatchBuildResult& result,
+    const BoundaryConstrainedSurfaceRetrimResult& retrim) {
+    result.retrimSelectedPatchFaceIndex = retrim.selectedPatchFaceIndex;
+    result.retrimBoundarySampleCount = retrim.boundarySampleCount;
+    result.retrimProjectedSampleCount = retrim.projectedSampleCount;
+    result.retrimFailedProjectionCount = retrim.failedProjectionCount;
+    result.retrimMaxProjectionDistance = retrim.maxProjectionDistance;
+    result.retrimAverageProjectionDistance = retrim.averageProjectionDistance;
+    result.retrimSurfaceCoverageProjectedSampleCount = retrim.surfaceCoverageProjectedSampleCount;
+    result.retrimSurfaceCoverageFailedProjectionCount = retrim.surfaceCoverageFailedProjectionCount;
+    result.retrimSurfaceCoverageMaxProjectionDistance = retrim.surfaceCoverageMaxProjectionDistance;
+    result.retrimSurfaceCoverageAverageProjectionDistance = retrim.surfaceCoverageAverageProjectionDistance;
+    result.retrimSurfaceCoverageUncoveredEdgeIds = retrim.surfaceCoverageUncoveredEdgeIds;
+}
+
+void copy_multi_surface_report(
+    BoundaryConstrainedPatchBuildResult& result,
+    const BoundaryConstrainedMultiSurfaceShellResult& shell) {
+    result.multiSurfaceBoundarySampleCount = shell.boundarySampleCount;
+    result.multiSurfaceProjectedSampleCount = shell.projectedSampleCount;
+    result.multiSurfaceFailedProjectionCount = shell.failedProjectionCount;
+    result.multiSurfaceMaxProjectionDistance = shell.maxProjectionDistance;
+    result.multiSurfaceAverageProjectionDistance = shell.averageProjectionDistance;
+    result.multiSurfaceAssignedBoundarySegmentCount = shell.assignedBoundarySegmentCount;
+    result.multiSurfaceBuiltFaceCount = shell.builtFaceCount;
+    result.multiSurfaceOpenWireCount = shell.openWireCount;
+    result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;
+}
+
 }
 
 const char* toString(BoundaryConstrainedBuildFailureReason reason) {
@@ -201,6 +232,78 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
     if (options.keepInternalPatchEdges) {
         result.internalPatchEdges = analysis.internalEdges;
         result.internalPatchEdgeCount = static_cast<int>(result.internalPatchEdges.size());
+    }
+
+    if (options.preferOriginalBoundarySurfaceRetrim) {
+        TopoDS_Face sourceOrientationFace;
+        if (!result.sourceFaceIds.empty()) {
+            const auto sourceFaceId = result.sourceFaceIds.front();
+            if (sourceFaceId >= 0 && static_cast<std::size_t>(sourceFaceId) < input.document->topology().faceCount()) {
+                sourceOrientationFace = input.document->topology().face(sourceFaceId);
+            }
+        }
+
+        const auto retrim = BoundaryConstrainedSurfaceRetrim().retrim(
+            *input.document,
+            *input.boundary,
+            faces,
+            sourceOrientationFace,
+            options.surfaceRetrimOptions);
+        copy_retrim_report(result, retrim);
+        if (retrim.success) {
+            result.replacementFaces = {retrim.replacementFace};
+            result.replacementFaceCount = 1;
+            result.replacementShape = retrim.replacementFace;
+            result.usedOriginalBoundarySurfaceRetrim = true;
+            result.success = true;
+            result.failureReason = BoundaryConstrainedBuildFailureReason::None;
+            result.message = retrim.message;
+            append_warning(result, retrim.warningMessage);
+            return result;
+        }
+
+        append_warning(result, retrim.warningMessage);
+        append_warning(result, retrim.message);
+        std::string replacementBuildFailureMessage = retrim.message.empty()
+            ? "Boundary-constrained surface re-trim failed."
+            : retrim.message;
+        if (options.enableMultiSurfaceBoundaryShell &&
+            retrim.surfaceCoverageFailedProjectionCount == 0 &&
+            faces.size() > 1) {
+            BoundaryConstrainedMultiSurfaceShellOptions shellOptions;
+            shellOptions.samplesPerEdge = options.surfaceRetrimOptions.samplesPerEdge;
+            shellOptions.projectionTolerance = options.surfaceRetrimOptions.projectionTolerance;
+            shellOptions.wireConnectTolerance = options.surfaceRetrimOptions.projectionTolerance;
+
+            const auto shell = BoundaryConstrainedMultiSurfaceShellBuilder().build(
+                *input.document,
+                *input.boundary,
+                analysis,
+                shellOptions);
+            copy_multi_surface_report(result, shell);
+            append_warning(result, shell.warningMessage);
+            if (shell.success) {
+                result.replacementShape = shell.replacementShape;
+                result.replacementFaces = shell.replacementFaces;
+                result.replacementFaceCount = static_cast<int>(result.replacementFaces.size());
+                result.usedMultiSurfaceBoundaryShell = true;
+                result.usedMultiFaceFragment = result.replacementFaceCount > 1;
+                result.success = true;
+                result.failureReason = BoundaryConstrainedBuildFailureReason::None;
+                result.message = shell.message;
+                return result;
+            }
+            append_warning(result, shell.message);
+            if (!shell.message.empty()) {
+                replacementBuildFailureMessage = shell.message;
+            }
+        }
+        if (!options.allowPatchOuterBoundaryFallback) {
+            return fail(
+                result,
+                BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed,
+                replacementBuildFailureMessage);
+        }
     }
 
     result.replacementFaces = faces;

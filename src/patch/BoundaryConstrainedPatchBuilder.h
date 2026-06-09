@@ -2,6 +2,7 @@
 
 #include "common/GeometryTypes.h"
 #include "patch/MultiFacePatchAnalyzer.h"
+#include "patch/BoundaryConstrainedSurfaceRetrim.h"
 #include "patch/PatchReplacementInput.h"
 
 #include <TopoDS_Edge.hxx>
@@ -29,7 +30,11 @@ struct BoundaryConstrainedPatchBuildOptions {
     bool allowMultiFaceFragment = true;
     bool allowOneFaceSpecialPath = true;
     bool keepInternalPatchEdges = true;
+    bool preferOriginalBoundarySurfaceRetrim = true;
+    bool enableMultiSurfaceBoundaryShell = true;
+    bool allowPatchOuterBoundaryFallback = false;
     double bboxToleranceRatio = 4.0;
+    BoundaryConstrainedSurfaceRetrimOptions surfaceRetrimOptions;
 };
 
 struct BoundaryConstrainedPatchBuildResult {
@@ -43,12 +48,36 @@ struct BoundaryConstrainedPatchBuildResult {
 
     bool usedMultiFaceFragment = false;
     bool usedOneFaceSpecialPath = false;
+    bool usedOriginalBoundarySurfaceRetrim = false;
+    bool usedMultiSurfaceBoundaryShell = false;
     bool boundaryMismatch = false;
 
     int sourceFaceCount = 0;
     int patchFaceCount = 0;
     int replacementFaceCount = 0;
     int internalPatchEdgeCount = 0;
+
+    int retrimSelectedPatchFaceIndex = -1;
+    int retrimBoundarySampleCount = 0;
+    int retrimProjectedSampleCount = 0;
+    int retrimFailedProjectionCount = 0;
+    double retrimMaxProjectionDistance = 0.0;
+    double retrimAverageProjectionDistance = 0.0;
+    int retrimSurfaceCoverageProjectedSampleCount = 0;
+    int retrimSurfaceCoverageFailedProjectionCount = 0;
+    double retrimSurfaceCoverageMaxProjectionDistance = 0.0;
+    double retrimSurfaceCoverageAverageProjectionDistance = 0.0;
+    std::vector<EdgeId> retrimSurfaceCoverageUncoveredEdgeIds;
+
+    int multiSurfaceBoundarySampleCount = 0;
+    int multiSurfaceProjectedSampleCount = 0;
+    int multiSurfaceFailedProjectionCount = 0;
+    double multiSurfaceMaxProjectionDistance = 0.0;
+    double multiSurfaceAverageProjectionDistance = 0.0;
+    int multiSurfaceAssignedBoundarySegmentCount = 0;
+    int multiSurfaceBuiltFaceCount = 0;
+    int multiSurfaceOpenWireCount = 0;
+    std::vector<EdgeId> multiSurfaceFailedEdgeIds;
 
     std::string message;
     std::string warningMessage;

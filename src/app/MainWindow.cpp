@@ -434,6 +434,9 @@ void MainWindow::createActions() {
     showStlCropBoxAction_->setChecked(false);
     showStlCropBoxAction_->setEnabled(false);
     generateAndPreviewCurrentPatchAction_ = new QAction("生成并预览当前 Patch", this);
+    useGeomagicRemeshAction_ = new QAction("启用 Geomagic Remesh", this);
+    useGeomagicRemeshAction_->setCheckable(true);
+    useGeomagicRemeshAction_->setChecked(false);
     importPatchForCurrentCandidateAction_ = new QAction("从 local STL 定位并导入 Patch", this);
     importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
     applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
@@ -538,6 +541,7 @@ void MainWindow::createMenus() {
 
     patchMenu_ = menuBar()->addMenu("Patch");
     patchMenu_->addAction(generateAndPreviewCurrentPatchAction_);
+    patchMenu_->addAction(useGeomagicRemeshAction_);
     patchMenu_->addSeparator();
     patchMenu_->addAction(importPatchForCurrentCandidateAction_);
     patchMenu_->addAction(importPatchFromFileAction_);
@@ -655,6 +659,7 @@ void MainWindow::createToolBars() {
 
     auto* patchToolMenu = new QMenu(this);
     patchToolMenu->addAction(generateAndPreviewCurrentPatchAction_);
+    patchToolMenu->addAction(useGeomagicRemeshAction_);
     patchToolMenu->addSeparator();
     patchToolMenu->addAction(importPatchForCurrentCandidateAction_);
     patchToolMenu->addAction(importPatchFromFileAction_);
@@ -1079,7 +1084,7 @@ void MainWindow::cropCurrentCandidateStl() {
         const auto cropWarning = report.warning_message.empty()
             ? QString("-")
             : QString::fromStdString(report.warning_message);
-        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\ncrop mode：%6\nsource triangle count：%7\noutput triangle count：%8\nviewer displayed cropped triangles：%9\ncentroid keep triangles：%10\nvertex conservative keep triangles：%11\nedge-midpoint conservative keep triangles：%12\nboundary-band conservative keep triangles：%13\nconservative keep total：%14\nrejected outside bbox：%15\nrejected outside candidate：%16\nmargin：%17\ncandidate bbox：%18\nexpanded bbox：%19\noutput bbox：%20\nwarning：%21\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
+        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\ncrop mode：%6\nsource triangle count：%7\noutput triangle count：%8\nviewer displayed cropped triangles：%9\ncentroid keep triangles：%10\nvertex conservative keep triangles：%11\nedge-midpoint conservative keep triangles：%12\nboundary-band conservative keep triangles：%13\nconservative keep total：%14\nrejected outside bbox：%15\nrejected outside candidate：%16\nboundary-loop coverage evaluated：%17\nboundary-loop samples：%18\nboundary-loop tolerance：%19\nboundary-loop missing before/after：%20 / %21\nboundary-loop max distance before/after：%22 / %23\nboundary-loop avg distance before/after：%24 / %25\nboundary-loop repair triangles：%26\nboundary-loop orphan repair candidates：%27\nboundary-loop missing edge ids before：%28\nboundary-loop missing edge ids after：%29\nmargin：%30\ncandidate bbox：%31\nexpanded bbox：%32\noutput bbox：%33\nwarning：%34\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
             .arg(pathToQString(sourceStlPath))
             .arg(filePath)
             .arg(candidateSnapshot.candidate_id)
@@ -1096,6 +1101,19 @@ void MainWindow::cropCurrentCandidateStl() {
             .arg(report.conservative_keep_triangle_count)
             .arg(report.rejected_outside_bbox_count)
             .arg(report.rejected_outside_candidate_count)
+            .arg(boolText(report.boundary_loop_coverage_evaluated))
+            .arg(report.boundary_loop_sample_count)
+            .arg(QString::number(report.boundary_loop_coverage_tolerance, 'g', 8))
+            .arg(report.boundary_loop_missing_point_count_before)
+            .arg(report.boundary_loop_missing_point_count_after)
+            .arg(QString::number(report.boundary_loop_max_distance_before, 'g', 8))
+            .arg(QString::number(report.boundary_loop_max_distance_after, 'g', 8))
+            .arg(QString::number(report.boundary_loop_average_distance_before, 'g', 8))
+            .arg(QString::number(report.boundary_loop_average_distance_after, 'g', 8))
+            .arg(report.boundary_loop_repair_triangle_count)
+            .arg(report.boundary_loop_orphan_repair_candidate_count)
+            .arg(gapEdgeIdsText(report.boundary_loop_missing_edge_ids_before))
+            .arg(gapEdgeIdsText(report.boundary_loop_missing_edge_ids_after))
             .arg(QString::number(report.margin, 'g', 8))
             .arg(stlBoundingBoxText(report.candidate_bbox))
             .arg(stlBoundingBoxText(report.expanded_bbox))
@@ -1163,10 +1181,14 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto cropMode = cropOptions.mode == StlCropMode::ConservativeBoundaryBand
         ? QString("conservative-boundary-band")
         : QString("centroid-only");
+    const bool useGeomagicRemesh = useGeomagicRemeshAction_ != nullptr && useGeomagicRemeshAction_->isChecked();
+    const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::RunningGeomagic,
-        QString("Patch preview pipeline started: crop local STL and run Geomagic. crop_mode=%1").arg(cropMode).toStdString());
+        QString("Patch preview pipeline started: crop local STL and run Geomagic. crop_mode=%1, geomagic_remesh=%2")
+            .arg(cropMode, geomagicRemeshMode)
+            .toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
     pipelineStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
@@ -1174,17 +1196,18 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     refreshProcessStatusPanel();
 
     setStlCropInProgress(true);
-    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\ncrop mode：%4\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
+    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\ncrop mode：%4\nGeomagic Remesh：%5\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
-        .arg(cropMode));
+        .arg(cropMode)
+        .arg(geomagicRemeshMode));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
 
     auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
-    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, cropMode]() {
+    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, cropMode, geomagicRemeshMode]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1206,10 +1229,11 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             controller_.updateProcessStatus(failedStatus);
             refreshProcessStatusPanel();
             const auto message = QString::fromStdString(result.message);
-            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\ncrop mode：%3\nlocal STL：%4\noutput STEP：%5\nfit_region log：%6\n消息：%7")
+            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\ncrop mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\n消息：%8")
                 .arg(pathToQString(sourceStlPath))
                 .arg(candidateSnapshot.candidate_id)
                 .arg(cropMode)
+                .arg(geomagicRemeshMode)
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
                 .arg(pathToQString(result.geomagic.fitRegionLogPath))
@@ -1275,9 +1299,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             .arg(pathToQString(result.geomagic.outputStepPath)));
         setStatus("Patch cutout overlay 已显示");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions]() {
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, useGeomagicRemesh]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
+        config.skipRemesh = !useGeomagicRemesh;
         return AppController::cropAndRunGeomagicForCandidateData(
             documentSnapshot,
             sourceMeshSnapshot,
@@ -1418,6 +1443,37 @@ void MainWindow::applyCurrentPatchPreview() {
         << QString("patch face count：%1").arg(report.patchFaceCount)
         << QString("replacement face count：%1").arg(report.replacementFaceCount)
         << QString("used multi-face patch：%1").arg(boolText(report.usedMultiFacePatch))
+        << QString("used original-boundary surface retrim：%1").arg(boolText(report.usedOriginalBoundarySurfaceRetrim))
+        << QString("used multi-surface boundary shell：%1").arg(boolText(report.usedMultiSurfaceBoundaryShell))
+        << QString("retrim selected patch face index：%1").arg(report.retrimSelectedPatchFaceIndex)
+        << QString("retrim boundary samples：%1").arg(report.retrimBoundarySampleCount)
+        << QString("retrim projected/failed samples：%1 / %2")
+            .arg(report.retrimProjectedSampleCount)
+            .arg(report.retrimFailedProjectionCount)
+        << QString("retrim max/avg projection distance：%1 / %2")
+            .arg(QString::number(report.retrimMaxProjectionDistance, 'g', 8))
+            .arg(QString::number(report.retrimAverageProjectionDistance, 'g', 8))
+        << QString("retrim all-surface projected/failed samples：%1 / %2")
+            .arg(report.retrimSurfaceCoverageProjectedSampleCount)
+            .arg(report.retrimSurfaceCoverageFailedProjectionCount)
+        << QString("retrim all-surface max/avg projection distance：%1 / %2")
+            .arg(QString::number(report.retrimSurfaceCoverageMaxProjectionDistance, 'g', 8))
+            .arg(QString::number(report.retrimSurfaceCoverageAverageProjectionDistance, 'g', 8))
+        << QString("retrim all-surface uncovered edge ids：%1")
+            .arg(gapEdgeIdsText(report.retrimSurfaceCoverageUncoveredEdgeIds))
+        << QString("multi-surface boundary samples：%1").arg(report.multiSurfaceBoundarySampleCount)
+        << QString("multi-surface projected/failed samples：%1 / %2")
+            .arg(report.multiSurfaceProjectedSampleCount)
+            .arg(report.multiSurfaceFailedProjectionCount)
+        << QString("multi-surface max/avg projection distance：%1 / %2")
+            .arg(QString::number(report.multiSurfaceMaxProjectionDistance, 'g', 8))
+            .arg(QString::number(report.multiSurfaceAverageProjectionDistance, 'g', 8))
+        << QString("multi-surface assigned boundary segments：%1").arg(report.multiSurfaceAssignedBoundarySegmentCount)
+        << QString("multi-surface built/open wires：%1 / %2")
+            .arg(report.multiSurfaceBuiltFaceCount)
+            .arg(report.multiSurfaceOpenWireCount)
+        << QString("multi-surface failed edge ids：%1")
+            .arg(gapEdgeIdsText(report.multiSurfaceFailedEdgeIds))
         << QString("source faces replaced：%1").arg(boolText(report.sourceFacesReplaced))
         << QString("repair applied：%1").arg(boolText(report.repairApplied))
         << QString("SameParameter applied：%1").arg(boolText(report.sameParameterApplied))
@@ -2853,6 +2909,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     cropCurrentCandidateStlAction_->setEnabled(!inProgress);
     useConservativeStlCropAction_->setEnabled(!inProgress);
     generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
+    useGeomagicRemeshAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
     importPatchFromFileAction_->setEnabled(!inProgress);
     if (inProgress) {
