@@ -179,7 +179,7 @@ private:
     int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;
     bool stlCropInProgress_ = false;
-    GeomagicFittingInputMode fittingInputMode_ = GeomagicFittingInputMode::LegacyStlCrop;
+    GeomagicFittingInputMode fittingInputMode_ = GeomagicFittingInputMode::StpSampledCandidateSurface;
 };
 
 }

@@ -168,46 +168,21 @@ QString gapEdgeIdsText(const std::vector<EdgeId>& edgeIds) {
 
 QString cropBoundaryDiagnosticsText(const CropBoundaryDiagnosticsReport& report) {
     QStringList lines;
-    lines
-        << "Crop Boundary diagnostics"
-        << QString("diagnostics success：%1").arg(boolText(report.success))
-        << QString("single closed outer loop：%1").arg(boolText(report.singleClosedOuterLoop))
-        << QString("original boundary sample count：%1").arg(report.originalBoundarySampleCount)
-        << QString("original boundary edge count：%1").arg(report.originalBoundaryEdges.size())
-        << QString("STL coverage evaluated：%1").arg(boolText(report.stlCoverageEvaluated))
-        << QString("STL coverage tolerance：%1").arg(QString::number(report.stlCoverageTolerance, 'g', 8))
-        << QString("STL coverage missing point count：%1").arg(report.stlCoverageMissingPointCount)
-        << QString("STL coverage min/max/avg distance：%1 / %2 / %3")
-            .arg(QString::number(report.stlCoverageMinDistance, 'g', 8))
-            .arg(QString::number(report.stlCoverageMaxDistance, 'g', 8))
-            .arg(QString::number(report.stlCoverageAverageDistance, 'g', 8))
-        << QString("boundary-band evaluated：%1").arg(boolText(report.boundaryBandEvaluated))
-        << QString("boundary-band offset：%1").arg(QString::number(report.boundaryBandOffset, 'g', 8))
-        << QString("boundary-band tolerance：%1").arg(QString::number(report.boundaryBandCoverageTolerance, 'g', 8))
-        << QString("boundary-band sample count：%1").arg(report.boundaryBandSampleCount)
-        << QString("boundary-band missing point count：%1").arg(report.boundaryBandMissingPointCount)
-        << QString("boundary-band min/max/avg distance：%1 / %2 / %3")
-            .arg(QString::number(report.boundaryBandMinDistance, 'g', 8))
-            .arg(QString::number(report.boundaryBandMaxDistance, 'g', 8))
-            .arg(QString::number(report.boundaryBandAverageDistance, 'g', 8))
-        << QString("source triangle audit evaluated：%1").arg(boolText(report.sourceTriangleAuditEvaluated))
-        << QString("source triangle audit count：%1").arg(report.sourceTriangleAuditCount)
-        << QString("rejected near-boundary triangle count：%1").arg(report.rejectedNearBoundaryTriangleCount)
-        << QString("conservative keep candidate count：%1").arg(report.conservativeKeepCandidateCount)
-        << QString("suspected crop hole edge ids：%1").arg(gapEdgeIdsText(report.suspectedCropHoleEdgeIds))
-        << QString("patch boundary evaluated：%1").arg(boolText(report.patchBoundaryEvaluated))
-        << QString("patch outer edge count：%1").arg(report.patchOuterEdgeCount)
-        << QString("patch boundary tolerance：%1").arg(QString::number(report.patchBoundaryTolerance, 'g', 8))
-        << QString("patch boundary missing point count：%1").arg(report.patchBoundaryMissingPointCount)
-        << QString("patch boundary min/max/avg distance：%1 / %2 / %3")
-            .arg(QString::number(report.patchBoundaryMinDistance, 'g', 8))
-            .arg(QString::number(report.patchBoundaryMaxDistance, 'g', 8))
-            .arg(QString::number(report.patchBoundaryAverageDistance, 'g', 8))
-        << QString("suspected gap count：%1").arg(report.suspectedGapCount)
-        << QString("suspected gap edge ids：%1").arg(gapEdgeIdsText(report.suspectedGapEdgeIds))
-        << QString("diagnostics message：%1").arg(QString::fromStdString(report.message))
-        << QString("diagnostics warning：%1").arg(QString::fromStdString(report.warningMessage))
-        << "overlay：yellow=original CAD boundary, cyan=imported patch outer boundary, red=local STL coverage issue, orange=boundary-band missing area, magenta=patch boundary mismatch, purple=near-boundary rejected triangles";
+    lines << "边界诊断";
+    if (report.suspectedGapCount > 0) {
+        lines << QString("疑似缺口：%1 段，边 %2")
+            .arg(report.suspectedGapCount)
+            .arg(gapEdgeIdsText(report.suspectedGapEdgeIds));
+    }
+    if (report.stlCoverageMissingPointCount > 0) {
+        lines << QString("STL 覆盖不足：%1 点缺失，最大偏差 %2")
+            .arg(report.stlCoverageMissingPointCount)
+            .arg(QString::number(report.stlCoverageMaxDistance, 'g', 4));
+    }
+    const auto msg = QString::fromStdString(report.message);
+    const auto warn = QString::fromStdString(report.warningMessage);
+    if (!msg.isEmpty()) lines << QString("信息：%1").arg(msg);
+    if (!warn.isEmpty()) lines << QString("警告：%1").arg(warn);
     return lines.join('\n');
 }
 
@@ -424,13 +399,13 @@ void MainWindow::createActions() {
 
     fittingModeLegacyStlCropAction_ = new QAction("Legacy STL Crop", this);
     fittingModeLegacyStlCropAction_->setCheckable(true);
-    fittingModeLegacyStlCropAction_->setChecked(true);
+    fittingModeLegacyStlCropAction_->setChecked(false);
     fittingModeConservativeBandAction_ = new QAction("Conservative Boundary Band STL Crop", this);
     fittingModeConservativeBandAction_->setCheckable(true);
     fittingModeConservativeBandAction_->setChecked(false);
     fittingModeStpSampledAction_ = new QAction("STP Sampled Candidate Surface", this);
     fittingModeStpSampledAction_->setCheckable(true);
-    fittingModeStpSampledAction_->setChecked(false);
+    fittingModeStpSampledAction_->setChecked(true);
 
     auto* fittingInputModeGroup = new QActionGroup(this);
     fittingInputModeGroup->setExclusive(true);
@@ -1104,48 +1079,18 @@ void MainWindow::cropCurrentCandidateStl() {
         refreshProcessStatusPanel();
 
         const auto cropWarning = report.warning_message.empty()
-            ? QString("-")
+            ? QString()
             : QString::fromStdString(report.warning_message);
-        inspectPanel_->showReport(QString("STL 裁剪完成\nsource STL：%1\noutput STL：%2\ncandidate id：%3\ncandidate type：%4\ncandidate status：%5\ncrop mode：%6\nsource triangle count：%7\noutput triangle count：%8\nviewer displayed cropped triangles：%9\ncentroid keep triangles：%10\nvertex conservative keep triangles：%11\nedge-midpoint conservative keep triangles：%12\nboundary-band conservative keep triangles：%13\nconservative keep total：%14\nrejected outside bbox：%15\nrejected outside candidate：%16\nboundary-loop coverage evaluated：%17\nboundary-loop samples：%18\nboundary-loop tolerance：%19\nboundary-loop missing before/after：%20 / %21\nboundary-loop max distance before/after：%22 / %23\nboundary-loop avg distance before/after：%24 / %25\nboundary-loop repair triangles：%26\nboundary-loop orphan repair candidates：%27\nboundary-loop missing edge ids before：%28\nboundary-loop missing edge ids after：%29\nmargin：%30\ncandidate bbox：%31\nexpanded bbox：%32\noutput bbox：%33\nwarning：%34\n说明：STL 裁剪只输出局部采样网格，不执行 Apply 或 STEP 替换。")
-            .arg(pathToQString(sourceStlPath))
-            .arg(filePath)
+        QString cropReport = QString("STL 裁剪完成  |  候选 %1  |  输出 %2 triangles（源 %3）|  模式 %4")
             .arg(candidateSnapshot.candidate_id)
-            .arg(candidateTypeText(candidateSnapshot.candidate_type))
-            .arg(candidateStatusText(candidateSnapshot.status))
-            .arg(cropMode)
-            .arg(report.source_triangle_count)
             .arg(report.output_triangle_count)
-            .arg(viewer_->croppedStlDisplayedTriangleCount())
-            .arg(report.centroid_keep_triangle_count)
-            .arg(report.vertex_keep_triangle_count)
-            .arg(report.edge_midpoint_keep_triangle_count)
-            .arg(report.boundary_band_keep_triangle_count)
-            .arg(report.conservative_keep_triangle_count)
-            .arg(report.rejected_outside_bbox_count)
-            .arg(report.rejected_outside_candidate_count)
-            .arg(boolText(report.boundary_loop_coverage_evaluated))
-            .arg(report.boundary_loop_sample_count)
-            .arg(QString::number(report.boundary_loop_coverage_tolerance, 'g', 8))
-            .arg(report.boundary_loop_missing_point_count_before)
-            .arg(report.boundary_loop_missing_point_count_after)
-            .arg(QString::number(report.boundary_loop_max_distance_before, 'g', 8))
-            .arg(QString::number(report.boundary_loop_max_distance_after, 'g', 8))
-            .arg(QString::number(report.boundary_loop_average_distance_before, 'g', 8))
-            .arg(QString::number(report.boundary_loop_average_distance_after, 'g', 8))
-            .arg(report.boundary_loop_repair_triangle_count)
-            .arg(report.boundary_loop_orphan_repair_candidate_count)
-            .arg(gapEdgeIdsText(report.boundary_loop_missing_edge_ids_before))
-            .arg(gapEdgeIdsText(report.boundary_loop_missing_edge_ids_after))
-            .arg(QString::number(report.margin, 'g', 8))
-            .arg(stlBoundingBoxText(report.candidate_bbox))
-            .arg(stlBoundingBoxText(report.expanded_bbox))
-            .arg(stlBoundingBoxText(report.output_bbox))
-            .arg(cropWarning));
+            .arg(report.source_triangle_count)
+            .arg(cropMode);
+        if (!cropWarning.isEmpty()) {
+            cropReport += QString("\n警告：%1").arg(cropWarning);
+        }
+        inspectPanel_->showReport(cropReport);
         bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
-        logPanel_->appendInfo(QString("STL 裁剪完成：候选 %1，输出 %2，triangle %3")
-            .arg(candidateSnapshot.candidate_id)
-            .arg(filePath)
-            .arg(report.output_triangle_count));
         setStatus("STL 裁剪完成");
     });
     watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, outputPath, cropOptions]() {
@@ -1315,10 +1260,6 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         publishCropBoundaryDiagnosticsStatus(diagnostics);
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
-        logPanel_->appendInfo(QString("Patch cutout overlay 已显示：候选 %1，local STL %2，output STEP %3")
-            .arg(candidateSnapshot.candidate_id)
-            .arg(pathToQString(result.crop.outputPath))
-            .arg(pathToQString(result.geomagic.outputStepPath)));
         setStatus("Patch cutout overlay 已显示");
     });
     watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh]() {
@@ -1453,138 +1394,38 @@ void MainWindow::applyCurrentPatchPreview() {
 
     PatchReplacementReport report;
     const auto result = controller_.applyCurrentPatchToCurrentCandidate(*candidate, &report);
-    const auto statusText = QString::fromUtf8(toString(controller_.currentPatchStatus()));
     const auto statusMessage = QString::fromStdString(controller_.currentPatchStatusMessage());
 
     QStringList reportLines;
-    reportLines
-        << "Patch Apply report"
-        << QString("patch status：%1").arg(statusText)
-        << QString("candidate id：%1").arg(report.candidateId)
-        << QString("source face count：%1").arg(report.sourceFaceCount)
-        << QString("source boundary edge count：%1").arg(report.sourceBoundaryEdgeCount)
-        << QString("patch face count：%1").arg(report.patchFaceCount)
-        << QString("replacement face count：%1").arg(report.replacementFaceCount)
-        << QString("used multi-face patch：%1").arg(boolText(report.usedMultiFacePatch))
-        << QString("used original-boundary surface retrim：%1").arg(boolText(report.usedOriginalBoundarySurfaceRetrim))
-        << QString("attempted multi-surface boundary shell：%1").arg(boolText(report.attemptedMultiSurfaceBoundaryShell))
-        << QString("used multi-surface boundary shell：%1").arg(boolText(report.usedMultiSurfaceBoundaryShell))
-        << QString("retrim selected patch face index：%1").arg(report.retrimSelectedPatchFaceIndex)
-        << QString("retrim boundary samples：%1").arg(report.retrimBoundarySampleCount)
-        << QString("retrim projected/failed samples：%1 / %2")
-            .arg(report.retrimProjectedSampleCount)
-            .arg(report.retrimFailedProjectionCount)
-        << QString("retrim max/avg projection distance：%1 / %2")
-            .arg(QString::number(report.retrimMaxProjectionDistance, 'g', 8))
-            .arg(QString::number(report.retrimAverageProjectionDistance, 'g', 8))
-        << QString("retrim all-surface projected/failed samples：%1 / %2")
-            .arg(report.retrimSurfaceCoverageProjectedSampleCount)
-            .arg(report.retrimSurfaceCoverageFailedProjectionCount)
-        << QString("retrim all-surface max/avg projection distance：%1 / %2")
-            .arg(QString::number(report.retrimSurfaceCoverageMaxProjectionDistance, 'g', 8))
-            .arg(QString::number(report.retrimSurfaceCoverageAverageProjectionDistance, 'g', 8))
-        << QString("retrim all-surface uncovered edge ids：%1")
-            .arg(gapEdgeIdsText(report.retrimSurfaceCoverageUncoveredEdgeIds))
-        << QString("multi-surface boundary samples：%1").arg(report.multiSurfaceBoundarySampleCount)
-        << QString("multi-surface projected/failed samples：%1 / %2")
-            .arg(report.multiSurfaceProjectedSampleCount)
-            .arg(report.multiSurfaceFailedProjectionCount)
-        << QString("multi-surface max/avg projection distance：%1 / %2")
-            .arg(QString::number(report.multiSurfaceMaxProjectionDistance, 'g', 8))
-            .arg(QString::number(report.multiSurfaceAverageProjectionDistance, 'g', 8))
-        << QString("multi-surface assigned boundary segments：%1").arg(report.multiSurfaceAssignedBoundarySegmentCount)
-        << QString("multi-surface split boundary edges：%1").arg(report.multiSurfaceSplitBoundaryEdgeCount)
-        << QString("multi-surface built faces：%1")
-            .arg(report.multiSurfaceBuiltFaceCount)
-        << QString("multi-surface closed/open wires：%1 / %2")
-            .arg(report.multiSurfaceClosedWireCount)
-            .arg(report.multiSurfaceOpenWireCount)
-        << QString("multi-surface multiple-closed-wire faces：%1")
-            .arg(report.multiSurfaceMultipleClosedWireFaceCount)
-        << QString("multi-surface failed patch face index：%1").arg(report.multiSurfaceFailedPatchFaceIndex)
-        << QString("multi-surface failed face edge count：%1").arg(report.multiSurfaceFailedFaceEdgeCount)
-        << QString("multi-surface failed edge ids：%1")
-            .arg(gapEdgeIdsText(report.multiSurfaceFailedEdgeIds))
-        << QString("source faces replaced：%1").arg(boolText(report.sourceFacesReplaced))
-        << QString("repair applied：%1").arg(boolText(report.repairApplied))
-        << QString("SameParameter applied：%1").arg(boolText(report.sameParameterApplied))
-        << QString("ShapeFix_Face applied：%1").arg(boolText(report.shapeFixFaceApplied))
-        << QString("ShapeFix_Wire applied：%1").arg(boolText(report.shapeFixWireApplied))
-        << QString("ShapeFix_Shape applied：%1").arg(boolText(report.shapeFixShapeApplied))
-        << QString("UnifySameDomain applied：%1").arg(boolText(report.unifySameDomainApplied))
-        << QString("Sewing applied：%1").arg(boolText(report.sewingApplied))
-        << QString("adaptive sewing applied：%1").arg(boolText(report.adaptiveSewingApplied))
-        << QString("shell-to-solid applied：%1").arg(boolText(report.shellToSolidApplied))
-        << QString("selected sewing tolerance：%1").arg(QString::number(report.selectedSewingTolerance, 'g', 8))
-        << QString("sewing attempt count：%1").arg(report.sewingAttemptCount)
-        << QString("best sewing face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.bestSewingFaceCount)
-            .arg(report.bestSewingEdgeCount)
-            .arg(report.bestSewingShellCount)
-            .arg(report.bestSewingSolidCount)
-        << QString("best sewing free/multiple edges：%1 / %2")
-            .arg(report.bestSewingFreeEdges)
-            .arg(report.bestSewingMultipleEdges)
-        << QString("best sewing BRepCheck：%1").arg(boolText(report.bestSewingBRepCheckValid))
-        << QString("best sewing collapsed：%1").arg(boolText(report.bestSewingCollapsed))
-        << QString("repair before face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.faceCountBeforeRepair)
-            .arg(report.edgeCountBeforeRepair)
-            .arg(report.shellCountBeforeRepair)
-            .arg(report.solidCountBeforeRepair)
-        << QString("repair after face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.faceCountAfterRepair)
-            .arg(report.edgeCountAfterRepair)
-            .arg(report.shellCountAfterRepair)
-            .arg(report.solidCountAfterRepair)
-        << QString("free edges before repair：%1").arg(report.freeEdgesBeforeRepair)
-        << QString("free edges after repair：%1").arg(report.freeEdgesAfterRepair)
-        << QString("multiple edges before repair：%1").arg(report.multipleEdgesBeforeRepair)
-        << QString("multiple edges after repair：%1").arg(report.multipleEdgesAfterRepair)
-        << QString("failure reason：%1").arg(QString::fromUtf8(toString(report.failureReason)))
-        << QString("rollback applied：%1").arg(boolText(report.rollbackApplied))
-        << QString("message：%1").arg(QString::fromStdString(report.message.empty() ? result.message() : report.message))
-        << QString("warning：%1").arg(QString::fromStdString(report.warningMessage))
-        << QString("repair warning：%1").arg(QString::fromStdString(report.repairWarningMessage))
-        << QString("StrictTopologyGate evaluated：%1").arg(boolText(report.gateEvaluated))
-        << QString("StrictTopologyGate passed：%1").arg(boolText(report.gatePassed))
-        << QString("StrictTopologyGate failure reason：%1").arg(QString::fromStdString(report.gateFailureReason))
-        << QString("StrictTopologyGate message：%1").arg(QString::fromStdString(report.gateMessage))
-        << QString("StrictTopologyGate warning：%1").arg(QString::fromStdString(report.gateWarningMessage))
-        << QString("gate before face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.gateBeforeFaceCount)
-            .arg(report.gateBeforeEdgeCount)
-            .arg(report.gateBeforeShellCount)
-            .arg(report.gateBeforeSolidCount)
-        << QString("gate after face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.gateAfterFaceCount)
-            .arg(report.gateAfterEdgeCount)
-            .arg(report.gateAfterShellCount)
-            .arg(report.gateAfterSolidCount)
-        << QString("gate roundtrip face/edge/shell/solid：%1 / %2 / %3 / %4")
-            .arg(report.gateRoundtripFaceCount)
-            .arg(report.gateRoundtripEdgeCount)
-            .arg(report.gateRoundtripShellCount)
-            .arg(report.gateRoundtripSolidCount)
-        << QString("gate before free/multiple edges：%1 / %2")
-            .arg(report.gateBeforeFreeEdges)
-            .arg(report.gateBeforeMultipleEdges)
-        << QString("gate after free/multiple edges：%1 / %2")
-            .arg(report.gateAfterFreeEdges)
-            .arg(report.gateAfterMultipleEdges)
-        << QString("gate roundtrip free/multiple edges：%1 / %2")
-            .arg(report.gateRoundtripFreeEdges)
-            .arg(report.gateRoundtripMultipleEdges)
-        << QString("gate before BRepCheck：%1").arg(boolText(report.gateBeforeBRepCheckValid))
-        << QString("gate after BRepCheck：%1").arg(boolText(report.gateAfterBRepCheckValid))
-        << QString("gate roundtrip BRepCheck：%1").arg(boolText(report.gateRoundtripBRepCheckValid))
-        << QString("STEP export ok：%1").arg(boolText(report.gateStepExportOk))
-        << QString("STEP roundtrip ok：%1").arg(boolText(report.gateStepRoundtripOk))
-        << QString("solid/watertight required：%1").arg(boolText(report.gateWatertightSolidRequired))
-        << QString("roundtrip watertight required：%1").arg(boolText(report.gateRoundtripWatertightRequired))
-        << QString("solid/watertight：%1").arg(report.success
-            ? QString("after and STEP roundtrip kept solid topology with zero free/multiple edges")
-            : statusMessage);
+    reportLines << "Patch Apply";
+    if (report.success) {
+        reportLines << QString("✅ 成功  |  候选 %1  |  替换 %2 面 → %3 面  |  BRepCheck 通过  |  STEP roundtrip 通过")
+            .arg(report.candidateId)
+            .arg(report.sourceFaceCount)
+            .arg(report.replacementFaceCount);
+        if (report.usedMultiSurfaceBoundaryShell) {
+            reportLines << "策略：multi-surface boundary shell";
+        } else if (report.usedOriginalBoundarySurfaceRetrim) {
+            reportLines << "策略：original boundary surface retrim";
+        }
+    } else {
+        reportLines << QString("❌ 失败  |  候选 %1  |  原因：%2")
+            .arg(report.candidateId)
+            .arg(QString::fromStdString(report.gateFailureReason.empty()
+                ? toString(report.failureReason) : report.gateFailureReason));
+    }
+    reportLines << QString("缝合容差 %1（%2 次尝试）| 最佳缝合 free edge %3  |  BRepCheck %4")
+        .arg(QString::number(report.selectedSewingTolerance, 'g', 4))
+        .arg(report.sewingAttemptCount)
+        .arg(report.bestSewingFreeEdges)
+        .arg(boolText(report.bestSewingBRepCheckValid));
+    reportLines << QString("free edge 修复前 %1 → 修复后 %2  |  Gate %3")
+        .arg(report.freeEdgesBeforeRepair)
+        .arg(report.freeEdgesAfterRepair)
+        .arg(report.gatePassed ? "通过" : QString("不通过：%1").arg(QString::fromStdString(report.gateFailureReason)));
+    const auto warn = QString::fromStdString(report.warningMessage);
+    if (!warn.isEmpty()) reportLines << QString("警告：%1").arg(warn);
+    reportLines << statusMessage;
     inspectPanel_->showReport(reportLines.join('\n'));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     refreshProcessStatusPanel();
@@ -1608,7 +1449,6 @@ void MainWindow::clearPatchOverlay() {
     viewer_->clearPatchOverlay();
     controller_.clearCurrentPatchOverlay();
     inspectPanel_->showReport("Patch overlay 已清除。\n主模型未修改。");
-    logPanel_->appendInfo("Patch overlay 已清除，主模型未修改。");
     setStatus("Patch overlay 已清除");
     refreshPatchApplyAction();
     refreshProcessStatusPanel();
@@ -1618,73 +1458,30 @@ void MainWindow::showPatchPreviewReport(
     const PatchPreviewReport& report,
     bool visualCutoutPreview,
     const CropBoundaryDiagnosticsReport* diagnostics,
-    const QString& cropMode) {
+    const QString& /*cropMode*/) {
     const auto warning = QString::fromStdString(report.warningMessage);
-    const auto recommendedAction = QString::fromStdString(report.recommendedAction);
     const auto message = QString::fromStdString(report.message);
-    const auto decision = controller_.currentPatchApplyDecision();
-    const auto decisionText = decision.canRequestApply
-        ? QString::fromStdString(decision.message)
-        : QString::fromStdString(decision.reason);
-    const auto patchStatus = QString::fromUtf8(toString(controller_.currentPatchStatus()));
-    const auto previewMode = visualCutoutPreview
-        ? QString("visual-only cutout preview：Viewer 临时隐藏当前 candidate source faces，并叠加 patch；主 ShapeDocument 未修改。")
-        : QString("patch overlay preview：Viewer 叠加 patch；主 ShapeDocument 未修改。");
 
-    QString reportText = QString("Patch preview report\nsuccess：%1\nHighRisk：%2\npatch status：%3\ncan request apply：%4\napply decision：%5\ncandidate id：%6\nsource face count：%7\nsource boundary edge count：%8\nlocal STL：%9\npatch STEP：%10\npatch IGS sidecar：%11\nfit_region log：%12\npatch face count：%13\npatch edge count：%14\npatch shell count：%15\npatch solid count：%16\npatch bbox：%17\ncandidate bbox：%18\nbbox center distance：%19\nbbox diagonal ratio：%20\nimport BRepCheck valid：%21\nwarning：%22\nrecommended action：%23\nmessage：%24\npreview mode：%25\n说明：Apply 将执行真实 replacement，并通过 StrictTopologyGate 验证后才提交。")
+    QString reportText = QString("Patch 预览\n状态：%1  |  候选 %2  |  源面 %3  |  patch 面 %4  |  BRepCheck %5")
         .arg(boolText(report.success))
-        .arg(boolText(report.highRisk))
-        .arg(patchStatus)
-        .arg(boolText(decision.canRequestApply))
-        .arg(decisionText)
         .arg(report.candidateId)
         .arg(report.sourceFaceCount)
-        .arg(report.sourceBoundaryEdgeCount)
-        .arg(pathToQString(report.localStlPath))
-        .arg(pathToQString(report.patchStepPath))
-        .arg(pathToQString(report.patchIgesSidecarPath))
-        .arg(pathToQString(report.fitRegionLogPath))
         .arg(report.patchFaceCount)
-        .arg(report.patchEdgeCount)
-        .arg(report.patchShellCount)
-        .arg(report.patchSolidCount)
-        .arg(bboxText(
-            report.patchBboxValid,
-            report.patchBBoxMinX,
-            report.patchBBoxMinY,
-            report.patchBBoxMinZ,
-            report.patchBBoxMaxX,
-            report.patchBBoxMaxY,
-            report.patchBBoxMaxZ))
-        .arg(bboxText(
-            report.candidateBboxValid,
-            report.candidateBBoxMinX,
-            report.candidateBBoxMinY,
-            report.candidateBBoxMinZ,
-            report.candidateBBoxMaxX,
-            report.candidateBBoxMaxY,
-            report.candidateBBoxMaxZ))
-        .arg(QString::number(report.bboxCenterDistance, 'g', 8))
-        .arg(QString::number(report.bboxDiagonalRatio, 'g', 8))
-        .arg(boolText(report.patchBRepCheckValid))
-        .arg(warning)
-        .arg(recommendedAction)
-        .arg(message)
-        .arg(previewMode);
-    if (!cropMode.isEmpty()) {
-        reportText += QString("\ncrop mode：%1").arg(cropMode);
+        .arg(boolText(report.patchBRepCheckValid));
+    if (!warning.isEmpty()) {
+        reportText += QString("\n警告：%1").arg(warning);
     }
-    if (diagnostics != nullptr) {
-        reportText += "\n\n" + cropBoundaryDiagnosticsText(*diagnostics);
+    if (report.highRisk) {
+        reportText += "\n⚠ 高风险，不建议 Apply";
     }
+    if (diagnostics != nullptr && diagnostics->suspectedGapCount > 0) {
+        reportText += QString("\n边界缺口：%1 段，边 %2")
+            .arg(diagnostics->suspectedGapCount)
+            .arg(gapEdgeIdsText(diagnostics->suspectedGapEdgeIds));
+    }
+
     inspectPanel_->showReport(reportText);
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
-
-    if (report.highRisk) {
-        logPanel_->appendWarning(QString("Patch preview HighRisk：%1").arg(warning.isEmpty() ? message : warning));
-    } else if (!warning.isEmpty()) {
-        logPanel_->appendWarning(QString("Patch preview warning：%1").arg(warning));
-    }
 }
 
 void MainWindow::detectFeatureEdges() {
@@ -1701,13 +1498,11 @@ void MainWindow::detectFeatureEdges() {
     viewer_->setFeatureLinesVisible(true);
     toggleFeaturesAction_->setChecked(true);
     refreshModelTree();
-    inspectPanel_->showReport(QString("特征边检测完成\n角度阈值：%1 度\n特征边总数：%2\nSharp edge：%3\nFree edge：%4\nMultiple edge：%5")
-        .arg(params.angular_threshold_degrees)
+    inspectPanel_->showReport(QString("特征边检测完成  |  %1 条边  |  Sharp %2  |  Free %3  |  Multiple %4")
         .arg(result.edges.size())
         .arg(result.sharp_edges)
         .arg(result.free_edges)
         .arg(result.multiple_edges));
-    logPanel_->appendInfo(QString("特征边检测完成：%1 条").arg(result.edges.size()));
     setStatus("特征边检测完成");
     refreshUndoRedoActions();
 }

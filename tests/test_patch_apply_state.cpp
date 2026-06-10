@@ -533,13 +533,13 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(allText.find(bannedLocalCandidate) == std::string::npos);
     assert(allText.find(bannedMechanical) == std::string::npos);
     assert(allText.find(bannedClay) == std::string::npos);
-    assert(mainWindowSource.find("repair before face/edge/shell/solid") != std::string::npos);
-    assert(mainWindowSource.find("selected sewing tolerance") != std::string::npos);
-    assert(mainWindowSource.find("sewing attempt count") != std::string::npos);
-    assert(mainWindowSource.find("best sewing face/edge/shell/solid") != std::string::npos);
-    assert(mainWindowSource.find("gate after face/edge/shell/solid") != std::string::npos);
-    assert(mainWindowSource.find("gate roundtrip face/edge/shell/solid") != std::string::npos);
-    assert(mainWindowSource.find("STEP roundtrip ok") != std::string::npos);
+    assert(mainWindowSource.find("Patch Apply") != std::string::npos);
+    assert(mainWindowSource.find("free edge 修复前") != std::string::npos);
+    assert(mainWindowSource.find("缝合容差") != std::string::npos);
+    assert(mainWindowSource.find("次尝试") != std::string::npos);
+    assert(mainWindowSource.find("最佳缝合 free edge") != std::string::npos);
+    assert(mainWindowSource.find("BRepCheck") != std::string::npos);
+    assert(mainWindowSource.find("Gate") != std::string::npos);
 #endif
 }
 

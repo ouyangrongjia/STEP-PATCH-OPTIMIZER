@@ -307,12 +307,9 @@ void test_no_hard_coded_real_sample_path_in_crop_boundary_diagnostics_sources() 
     assert(allText.find(bannedLocalCandidate) == std::string::npos);
     assert(allText.find(bannedMechanical) == std::string::npos);
     assert(allText.find(bannedClay) == std::string::npos);
-    assert(mainWindowSource.find("Crop Boundary diagnostics") != std::string::npos);
-    assert(mainWindowSource.find("original boundary sample count") != std::string::npos);
-    assert(mainWindowSource.find("STL coverage missing point count") != std::string::npos);
-    assert(mainWindowSource.find("patch boundary missing point count") != std::string::npos);
-    assert(mainWindowSource.find("boundary-band missing point count") != std::string::npos);
-    assert(mainWindowSource.find("rejected near-boundary triangle count") != std::string::npos);
+    assert(mainWindowSource.find("边界诊断") != std::string::npos);
+    assert(mainWindowSource.find("疑似缺口") != std::string::npos);
+    assert(mainWindowSource.find("STL 覆盖不足") != std::string::npos);
     assert(occHeader.find("showCropBoundaryDiagnosticsOverlay") != std::string::npos);
 #endif
 }
