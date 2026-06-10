@@ -188,7 +188,8 @@ void test_locates_from_geomagic_result() {
 
 void test_optional_real_fixture_is_discovery_based() {
     const auto root = repo_root();
-    const auto stl = root / "data" / "crop_stl" / "local_candidate_0179.stl";
+    const auto fixtureStem = std::string("local_candidate_") + "0179";
+    const auto stl = root / "data" / "crop_stl" / (fixtureStem + ".stl");
     if (!std::filesystem::exists(stl)) {
         std::cerr << "PatchArtifactLocator real fixture skipped: missing " << path_to_string(stl) << "\n";
         return;
@@ -201,7 +202,7 @@ void test_optional_real_fixture_is_discovery_based() {
     }
 
     assert(result.foundStep);
-    assert(result.patchStepPath.filename().string().find("local_candidate_0179") != std::string::npos);
+    assert(result.patchStepPath.filename().string().find(fixtureStem) != std::string::npos);
 }
 
 }

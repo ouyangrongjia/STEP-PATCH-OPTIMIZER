@@ -8,12 +8,20 @@
 #include "validate/StrictTopologyGate.h"
 
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRep_Builder.hxx>
+#include <BRepLib.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools_ReShape.hxx>
+#include <Precision.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Compound.hxx>
 
+#include <algorithm>
+#include <optional>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -76,6 +84,180 @@ struct ReplacementAssemblyResult {
     std::string warning;
 };
 
+std::vector<BoundaryConstrainedPatchSplitBoundarySegment> split_segments_for_edge(
+    const BoundaryConstrainedPatchBuildResult& buildResult,
+    EdgeId edgeId) {
+    std::vector<BoundaryConstrainedPatchSplitBoundarySegment> segments;
+    for (const auto& segment : buildResult.multiSurfaceSplitBoundarySegments) {
+        if (segment.edgeId == edgeId && !segment.edge.IsNull()) {
+            segments.push_back(segment);
+        }
+    }
+    std::sort(segments.begin(), segments.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.firstParameter < rhs.firstParameter;
+    });
+    return segments;
+}
+
+std::optional<EdgeId> matching_split_edge_id(
+    const ShapeDocument& document,
+    const BoundaryConstrainedPatchBuildResult& buildResult,
+    const TopoDS_Edge& edge) {
+    if (edge.IsNull()) {
+        return std::nullopt;
+    }
+    for (const auto& segment : buildResult.multiSurfaceSplitBoundarySegments) {
+        if (segment.edgeId < document.topology().edgeCount() &&
+            edge.IsSame(document.topology().edge(segment.edgeId))) {
+            return segment.edgeId;
+        }
+    }
+    return std::nullopt;
+}
+
+TopoDS_Edge oriented_segment_edge(
+    TopoDS_Edge edge,
+    TopAbs_Orientation orientation) {
+    edge.Orientation(orientation);
+    return edge;
+}
+
+TopoDS_Face rebuild_face_with_split_boundary_edges(
+    const ShapeDocument& document,
+    const BoundaryConstrainedPatchBuildResult& buildResult,
+    const TopoDS_Face& face) {
+    const auto surface = BRep_Tool::Surface(face);
+    if (surface.IsNull()) {
+        return {};
+    }
+
+    TopoDS_Wire rebuiltWire;
+    int wireCount = 0;
+    for (TopExp_Explorer wireExplorer(face, TopAbs_WIRE); wireExplorer.More(); wireExplorer.Next()) {
+        ++wireCount;
+        if (wireCount > 1) {
+            return {};
+        }
+
+        BRepBuilderAPI_MakeWire wireBuilder;
+        for (TopExp_Explorer edgeExplorer(wireExplorer.Current(), TopAbs_EDGE); edgeExplorer.More(); edgeExplorer.Next()) {
+            const auto originalEdge = TopoDS::Edge(edgeExplorer.Current());
+            const auto splitEdgeId = matching_split_edge_id(document, buildResult, originalEdge);
+            if (!splitEdgeId.has_value()) {
+                wireBuilder.Add(originalEdge);
+                continue;
+            }
+
+            auto segments = split_segments_for_edge(buildResult, *splitEdgeId);
+            if (segments.empty()) {
+                wireBuilder.Add(originalEdge);
+                continue;
+            }
+
+            if (originalEdge.Orientation() == TopAbs_REVERSED) {
+                for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
+                    wireBuilder.Add(oriented_segment_edge(it->edge, TopAbs_REVERSED));
+                }
+            } else {
+                for (const auto& segment : segments) {
+                    wireBuilder.Add(oriented_segment_edge(segment.edge, originalEdge.Orientation()));
+                }
+            }
+        }
+
+        if (!wireBuilder.IsDone()) {
+            return {};
+        }
+        rebuiltWire = wireBuilder.Wire();
+    }
+
+    if (wireCount != 1 || rebuiltWire.IsNull()) {
+        return {};
+    }
+
+    BRepBuilderAPI_MakeFace faceBuilder(surface, rebuiltWire, Standard_True);
+    if (!faceBuilder.IsDone()) {
+        return {};
+    }
+
+    auto rebuiltFace = faceBuilder.Face();
+    rebuiltFace.Orientation(face.Orientation());
+    BRepLib::BuildCurves3d(rebuiltFace);
+    BRepLib::SameParameter(rebuiltFace, Precision::Confusion(), Standard_True);
+    return rebuiltFace;
+}
+
+TopoDS_Face face_for_compound_assembly(
+    const ShapeDocument& document,
+    const BoundaryConstrainedPatchBuildResult& buildResult,
+    const TopoDS_Face& face) {
+    if (buildResult.multiSurfaceSplitBoundarySegments.empty()) {
+        return face;
+    }
+
+    bool usesSplitBoundaryEdge = false;
+    for (TopExp_Explorer edgeExplorer(face, TopAbs_EDGE); edgeExplorer.More(); edgeExplorer.Next()) {
+        if (matching_split_edge_id(
+                document,
+                buildResult,
+                TopoDS::Edge(edgeExplorer.Current())).has_value()) {
+            usesSplitBoundaryEdge = true;
+            break;
+        }
+    }
+    if (!usesSplitBoundaryEdge) {
+        return face;
+    }
+
+    const auto rebuilt = rebuild_face_with_split_boundary_edges(document, buildResult, face);
+    return rebuilt.IsNull() ? face : rebuilt;
+}
+
+ReplacementAssemblyResult assemble_face_compound_replacement(
+    const ShapeDocument& beforeDocument,
+    const BoundaryConstrainedPatchBuildResult& buildResult) {
+    ReplacementAssemblyResult result;
+    if (!beforeDocument.hasShape()) {
+        result.message = "Patch replacement face-compound assembly requires a before document.";
+        return result;
+    }
+    if (buildResult.replacementFaces.empty()) {
+        result.message = "Patch replacement face-compound assembly requires replacement faces.";
+        return result;
+    }
+
+    const std::set<FaceId> sourceFaceIds(
+        buildResult.sourceFaceIds.begin(),
+        buildResult.sourceFaceIds.end());
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    const auto& topology = beforeDocument.topology();
+    for (FaceId faceId = 0; faceId < topology.faceCount(); ++faceId) {
+        if (sourceFaceIds.find(faceId) != sourceFaceIds.end()) {
+            continue;
+        }
+        builder.Add(compound, face_for_compound_assembly(
+            beforeDocument,
+            buildResult,
+            topology.face(faceId)));
+    }
+    for (const auto& face : buildResult.replacementFaces) {
+        if (!face.IsNull()) {
+            builder.Add(compound, face);
+        }
+    }
+
+    result.shape = compound;
+    result.success = !result.shape.IsNull();
+    result.message = result.success
+        ? "Assembled replacement as a face compound before repair sewing."
+        : "Patch replacement face-compound assembly produced an empty shape.";
+    result.warning = "Multi-surface boundary shell used face-compound assembly before repair sewing.";
+    return result;
+}
+
 TopoDS_Shape boundary_trimmed_patch_face(
     const ShapeDocument& beforeDocument,
     const RegionBoundaryAnalysis& boundary,
@@ -111,6 +293,10 @@ ReplacementAssemblyResult assemble_replacement_shape(
     const RegionBoundaryAnalysis& boundary,
     const BoundaryConstrainedPatchBuildResult& buildResult) {
     ReplacementAssemblyResult result;
+    if (buildResult.usedMultiSurfaceBoundaryShell) {
+        return assemble_face_compound_replacement(beforeDocument, buildResult);
+    }
+
     if (!beforeDocument.hasShape()) {
         result.message = "Patch replacement assembly requires a before document.";
         return result;
@@ -359,7 +545,11 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.multiSurfaceAssignedBoundarySegmentCount = buildResult.multiSurfaceAssignedBoundarySegmentCount;
     report_.multiSurfaceSplitBoundaryEdgeCount = buildResult.multiSurfaceSplitBoundaryEdgeCount;
     report_.multiSurfaceBuiltFaceCount = buildResult.multiSurfaceBuiltFaceCount;
+    report_.multiSurfaceClosedWireCount = buildResult.multiSurfaceClosedWireCount;
     report_.multiSurfaceOpenWireCount = buildResult.multiSurfaceOpenWireCount;
+    report_.multiSurfaceMultipleClosedWireFaceCount = buildResult.multiSurfaceMultipleClosedWireFaceCount;
+    report_.multiSurfaceFailedPatchFaceIndex = buildResult.multiSurfaceFailedPatchFaceIndex;
+    report_.multiSurfaceFailedFaceEdgeCount = buildResult.multiSurfaceFailedFaceEdgeCount;
     report_.multiSurfaceFailedEdgeIds = buildResult.multiSurfaceFailedEdgeIds;
     append_warning(report_, buildResult.warningMessage);
 
@@ -382,7 +572,15 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.sourceFacesReplaced = true;
     append_warning(report_, assemblyResult.warning);
 
-    const auto repairResult = repairPatchReplacementShape(assemblyResult.shape, PatchReplacementRepairOptions {});
+    PatchReplacementRepairOptions repairOptions;
+    if (buildResult.usedMultiSurfaceBoundaryShell &&
+        buildResult.multiSurfaceMaxProjectionDistance > repairOptions.maxSewingTolerance) {
+        const auto measuredBoundaryTolerance = buildResult.multiSurfaceMaxProjectionDistance * 2.0;
+        repairOptions.maxSewingTolerance = std::min(0.25, measuredBoundaryTolerance);
+        repairOptions.preferredSewingTolerance = repairOptions.maxSewingTolerance;
+        append_warning(report_, "Multi-surface boundary shell raised repair sewing tolerance to cover measured original-boundary projection deviation.");
+    }
+    const auto repairResult = repairPatchReplacementShape(assemblyResult.shape, repairOptions);
     copy_repair_report(report_, repairResult.report);
     if (!repairResult.success) {
         report_.success = false;
