@@ -26,6 +26,13 @@ enum class BoundaryConstrainedBuildFailureReason {
 
 const char* toString(BoundaryConstrainedBuildFailureReason reason);
 
+struct BoundaryConstrainedPatchSplitBoundarySegment {
+    EdgeId edgeId = 0;
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    TopoDS_Edge edge;
+};
+
 struct BoundaryConstrainedPatchBuildOptions {
     bool allowMultiFaceFragment = true;
     bool allowOneFaceSpecialPath = true;
@@ -78,7 +85,12 @@ struct BoundaryConstrainedPatchBuildResult {
     int multiSurfaceAssignedBoundarySegmentCount = 0;
     int multiSurfaceSplitBoundaryEdgeCount = 0;
     int multiSurfaceBuiltFaceCount = 0;
+    int multiSurfaceClosedWireCount = 0;
     int multiSurfaceOpenWireCount = 0;
+    int multiSurfaceMultipleClosedWireFaceCount = 0;
+    int multiSurfaceFailedPatchFaceIndex = -1;
+    int multiSurfaceFailedFaceEdgeCount = 0;
+    std::vector<BoundaryConstrainedPatchSplitBoundarySegment> multiSurfaceSplitBoundarySegments;
     std::vector<EdgeId> multiSurfaceFailedEdgeIds;
 
     std::string message;

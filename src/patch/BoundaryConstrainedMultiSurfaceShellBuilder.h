@@ -6,6 +6,7 @@
 #include "patch/MultiFacePatchAnalyzer.h"
 
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Edge.hxx>
 #include <TopoDS_Shape.hxx>
 
 #include <string>
@@ -19,6 +20,13 @@ struct BoundaryConstrainedMultiSurfaceShellOptions {
     int samplesPerEdge = 5;
     double projectionTolerance = 0.2;
     double wireConnectTolerance = 0.2;
+};
+
+struct BoundaryConstrainedSplitBoundarySegment {
+    EdgeId edgeId = 0;
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    TopoDS_Edge edge;
 };
 
 struct BoundaryConstrainedMultiSurfaceShellResult {
@@ -36,7 +44,12 @@ struct BoundaryConstrainedMultiSurfaceShellResult {
     int assignedBoundarySegmentCount = 0;
     int splitBoundaryEdgeCount = 0;
     int builtFaceCount = 0;
+    int closedWireCount = 0;
     int openWireCount = 0;
+    int multipleClosedWireFaceCount = 0;
+    int failedPatchFaceIndex = -1;
+    int failedFaceEdgeCount = 0;
+    std::vector<BoundaryConstrainedSplitBoundarySegment> splitBoundarySegments;
     std::vector<EdgeId> failedEdgeIds;
 
     std::string message;

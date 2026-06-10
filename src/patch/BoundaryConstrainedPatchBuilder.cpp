@@ -170,7 +170,20 @@ void copy_multi_surface_report(
     result.multiSurfaceAssignedBoundarySegmentCount = shell.assignedBoundarySegmentCount;
     result.multiSurfaceSplitBoundaryEdgeCount = shell.splitBoundaryEdgeCount;
     result.multiSurfaceBuiltFaceCount = shell.builtFaceCount;
+    result.multiSurfaceClosedWireCount = shell.closedWireCount;
     result.multiSurfaceOpenWireCount = shell.openWireCount;
+    result.multiSurfaceMultipleClosedWireFaceCount = shell.multipleClosedWireFaceCount;
+    result.multiSurfaceFailedPatchFaceIndex = shell.failedPatchFaceIndex;
+    result.multiSurfaceFailedFaceEdgeCount = shell.failedFaceEdgeCount;
+    result.multiSurfaceSplitBoundarySegments.clear();
+    result.multiSurfaceSplitBoundarySegments.reserve(shell.splitBoundarySegments.size());
+    for (const auto& segment : shell.splitBoundarySegments) {
+        result.multiSurfaceSplitBoundarySegments.push_back({
+            segment.edgeId,
+            segment.firstParameter,
+            segment.lastParameter,
+            segment.edge});
+    }
     result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;
 }
 

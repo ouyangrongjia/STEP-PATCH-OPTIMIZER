@@ -453,7 +453,11 @@ void test_multi_surface_boundary_shell_builds_when_surface_set_covers_boundary()
     assert(result.multiSurfaceAssignedBoundarySegmentCount >= fixture.candidate.boundary_edge_count);
     assert(result.multiSurfaceSplitBoundaryEdgeCount == 0);
     assert(result.multiSurfaceBuiltFaceCount == 2);
+    assert(result.multiSurfaceClosedWireCount == 2);
     assert(result.multiSurfaceOpenWireCount == 0);
+    assert(result.multiSurfaceMultipleClosedWireFaceCount == 0);
+    assert(result.multiSurfaceFailedPatchFaceIndex == -1);
+    assert(result.multiSurfaceFailedFaceEdgeCount == 0);
     assert(result.multiSurfaceFailedEdgeIds.empty());
 }
 
@@ -476,6 +480,8 @@ void test_multi_surface_boundary_shell_fails_without_internal_seam_closure() {
     assert(result.multiSurfaceAssignedBoundarySegmentCount >= fixture.candidate.boundary_edge_count);
     assert(result.multiSurfaceBuiltFaceCount == 0);
     assert(result.multiSurfaceOpenWireCount > 0);
+    assert(result.multiSurfaceFailedPatchFaceIndex >= 0);
+    assert(result.multiSurfaceFailedFaceEdgeCount > 0);
     assert(!result.message.empty());
 }
 

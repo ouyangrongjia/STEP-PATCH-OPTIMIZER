@@ -142,7 +142,11 @@ struct PatchReplacementReport {
     int multiSurfaceAssignedBoundarySegmentCount = 0;
     int multiSurfaceSplitBoundaryEdgeCount = 0;
     int multiSurfaceBuiltFaceCount = 0;
+    int multiSurfaceClosedWireCount = 0;
     int multiSurfaceOpenWireCount = 0;
+    int multiSurfaceMultipleClosedWireFaceCount = 0;
+    int multiSurfaceFailedPatchFaceIndex = -1;
+    int multiSurfaceFailedFaceEdgeCount = 0;
     std::vector<EdgeId> multiSurfaceFailedEdgeIds;
 
     int faceCountBeforeRepair = 0;
