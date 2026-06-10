@@ -3013,11 +3013,13 @@ T6.7.4 Multi-surface Boundary-Constrained Shell（DONE，第一版）
 → 如果单面覆盖失败且 all-surface coverage 无 uncovered boundary sample，则按原 CAD boundary edge 整段优先分配到最佳 Geomagic surface。
 → 若某条原 CAD boundary edge 没有单一 surface 能覆盖整条 edge，但每个采样点均有 surface 覆盖，则只对该失败 edge 按 surface ownership 切分参数区间。
 → 使用原 STP edge 参数区间构造最终外边界段，保留 imported patch 内部 seam edges，尝试为每张 surface 连接闭合 wire 并构造 bounded replacement faces。
+→ 若单个 patch face 的候选边集合形成多个 closed wire，所有 closed wire 都构造成 replacement face，不再只选一个闭合环而丢弃其余环。
 → 外边界仍必须来自原 STP loop；Geomagic patch outer boundary 不作为最终 CAD boundary。
 → 若 surface coverage 不足、内部 seam 无法闭合 wire、face 构造失败，则返回 BuildFailed 并输出 multi-surface diagnostics，不回退 direct patch outer-boundary fragment。
 
 T6.7.5 Apply / Gate Integration（DONE，第一版）
-→ replacement 后仍走 PatchReplacementRepair。
+→ multi-surface shell 成功后使用 face-compound assembly：原模型非 source faces + replacement faces 组成临时 face 集合，再交给 PatchReplacementRepair sewing / ShapeFix。
+→ 对 measured original-boundary projection deviation 超过默认 repair sewing 上限的 multi-surface shell，repair 搜索上限按实测偏差受控提高，仍由 StrictTopologyGate 判定是否可提交。
 → StrictTopologyGate 必须看到 free edges 降为 0、BRepCheck 通过、solid/watertight 保持。
 ```
 
@@ -3028,8 +3030,10 @@ T6.7.5 Apply / Gate Integration（DONE，第一版）
 2. 新增 BoundaryConstrainedMultiSurfaceShellBuilder，负责在单 surface 失败但 all-surface coverage 成立时构造 strict multi-surface replacement shell。
 3. BoundaryConstrainedPatchBuilder 默认优先走 original-boundary surface re-trim，失败后才尝试 T6.7.4 multi-surface boundary shell。
 4. Geomagic patch outer boundary 不再作为默认 replacement boundary；legacy direct patch fragment 只保留为显式测试/兼容路径。
-5. PatchReplacementReport / GUI Apply report 输出 re-trim 是否尝试、最佳单 surface 投影统计、all-surface coverage、T6.7.4 是否 attempted / used、multi-surface boundary sample / assigned segment / split edge / built face / open wire / failed edge diagnostics。
+5. PatchReplacementReport / GUI Apply report 输出 re-trim 是否尝试、最佳单 surface 投影统计、all-surface coverage、T6.7.4 是否 attempted / used、multi-surface boundary sample / assigned segment / split edge / built face / closed wire / open wire / multiple-closed-wire face / failed patch face / failed edge diagnostics。
 6. 如果单一 Geomagic surface 无法覆盖原 STP boundary，builder 会在 all-surface coverage 成立时尝试 T6.7.4；T6.7.4 失败则 BuildFailed，后续不强行 sewing，不绕过 StrictTopologyGate。
+7. 新增 `patch_apply_probe` 命令行诊断工具，可按参数加载 source STEP、选择 candidate id、导入 patch STEP/IGES，并执行与 GUI Apply 对齐的 replacement / repair / StrictTopologyGate 路径；工具不运行 Geomagic、不裁剪 STL、不写死真实样例路径，并输出阶段进度用于定位真实大样例耗时。
+8. 当前真实手动样例结论：single-surface 失败、all-surface coverage 通过、multi-surface shell 已不再停在 coverage 阶段；后续主要问题转为 repair/Gate 后残留 free/multiple edge。该状态不是 Apply 成功，说明下一步需要处理 split boundary 与邻接旧拓扑/桥接闭合问题。命令行 probe 是辅助诊断工具，真实大样例仍以 GUI Apply report 为准。
 ```
 
 Geomagic pipeline 同步修正：
@@ -3048,9 +3052,9 @@ Geomagic pipeline 同步修正：
 ```text
 1. Patch preview diagnostics 不再以 patchBoundaryMissingPointCount 作为是否可 Apply 的核心依据。
 2. 新 diagnostics 能回答：Geomagic surface 是否覆盖原 STP boundary。
-3. replacement 后 gate after free edges 必须从 source boundary 数量级降到 0。
-4. after BRepCheck 必须为 true。
-5. STEP export / roundtrip 必须恢复成功。
+3. replacement 后 gate after free edges 必须从 source boundary 数量级降到 0；真实手动样例显示仍有残留 free/multiple edge，尚未达标。
+4. after BRepCheck 必须为 true；即使 BRepCheck 达标，free/multiple edge 未归零也不能提交。
+5. STEP export / roundtrip 必须恢复成功；free/multiple edge 未归零时仍由 Gate 阻断。
 6. `.\scripts\build_debug.ps1` 与 `.\scripts\test.ps1` 通过。
 ```
 
