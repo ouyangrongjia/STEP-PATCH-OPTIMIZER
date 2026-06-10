@@ -2,6 +2,7 @@
 
 #include "app/AppController.h"
 #include "merge/FaceInspectInfo.h"
+#include "stl/StlRegionExtractor.h"
 
 #include <QMainWindow>
 
@@ -99,6 +100,9 @@ private:
     void publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics);
     void setStlCropInProgress(bool inProgress);
     StlRegionExtractorOptions currentStlCropOptions() const;
+    void setGeomagicFittingInputMode(GeomagicFittingInputMode mode);
+    GeomagicFittingInputMode currentFittingInputMode() const;
+    void updateFittingInputModeActions();
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -131,6 +135,9 @@ private:
     QAction* showStlCropBoxAction_ = nullptr;
     QAction* generateAndPreviewCurrentPatchAction_ = nullptr;
     QAction* useGeomagicRemeshAction_ = nullptr;
+    QAction* fittingModeLegacyStlCropAction_ = nullptr;
+    QAction* fittingModeConservativeBandAction_ = nullptr;
+    QAction* fittingModeStpSampledAction_ = nullptr;
     QAction* importPatchForCurrentCandidateAction_ = nullptr;
     QAction* importPatchFromFileAction_ = nullptr;
     QAction* applyCurrentPatchAction_ = nullptr;
@@ -172,6 +179,7 @@ private:
     int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;
     bool stlCropInProgress_ = false;
+    GeomagicFittingInputMode fittingInputMode_ = GeomagicFittingInputMode::LegacyStlCrop;
 };
 
 }

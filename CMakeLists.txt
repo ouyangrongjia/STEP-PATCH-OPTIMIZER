@@ -72,6 +72,7 @@ add_library(spo_core STATIC
     src/stl/StlCropReport.cpp
     src/stl/StlMesh.cpp
     src/stl/StlRegionExtractor.cpp
+    src/stl/StpSampledFittingMeshBuilder.cpp
     src/merge/SurfaceRefitter.cpp
     src/merge/TorusRegionMerger.cpp
     src/patch/PatchImportService.cpp
@@ -178,6 +179,7 @@ if(SPO_BUILD_TESTS)
         tests/test_stl_io.cpp
         tests/test_stl_mesh.cpp
         tests/test_stl_region_extractor.cpp
+        tests/test_stp_sampled_fitting_mesh.cpp
         tests/test_geomagic_output_path_resolver.cpp
         tests/test_geomagic_autosurface_config.cpp
         tests/test_geomagic_backend_mock.cpp

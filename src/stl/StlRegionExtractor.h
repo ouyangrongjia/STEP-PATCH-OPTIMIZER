@@ -12,6 +12,14 @@ enum class StlCropMode {
     ConservativeBoundaryBand
 };
 
+enum class GeomagicFittingInputMode {
+    LegacyStlCrop,
+    ConservativeBoundaryBandStlCrop,
+    StpSampledCandidateSurface
+};
+
+const char* toString(GeomagicFittingInputMode mode);
+
 struct StlRegionExtractorOptions {
     StlCropMode mode = StlCropMode::CentroidOnly;
     double bboxMarginRatio = 0.01;

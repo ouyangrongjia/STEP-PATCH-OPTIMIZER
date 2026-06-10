@@ -421,6 +421,23 @@ void MainWindow::createActions() {
     useConservativeStlCropAction_ = new QAction("启用保守边界裁剪", this);
     useConservativeStlCropAction_->setCheckable(true);
     useConservativeStlCropAction_->setChecked(false);
+
+    fittingModeLegacyStlCropAction_ = new QAction("Legacy STL Crop", this);
+    fittingModeLegacyStlCropAction_->setCheckable(true);
+    fittingModeLegacyStlCropAction_->setChecked(true);
+    fittingModeConservativeBandAction_ = new QAction("Conservative Boundary Band STL Crop", this);
+    fittingModeConservativeBandAction_->setCheckable(true);
+    fittingModeConservativeBandAction_->setChecked(false);
+    fittingModeStpSampledAction_ = new QAction("STP Sampled Candidate Surface", this);
+    fittingModeStpSampledAction_->setCheckable(true);
+    fittingModeStpSampledAction_->setChecked(false);
+
+    auto* fittingInputModeGroup = new QActionGroup(this);
+    fittingInputModeGroup->setExclusive(true);
+    fittingInputModeGroup->addAction(fittingModeLegacyStlCropAction_);
+    fittingInputModeGroup->addAction(fittingModeConservativeBandAction_);
+    fittingInputModeGroup->addAction(fittingModeStpSampledAction_);
+
     showSourceStlAction_ = new QAction("显示源 STL", this);
     showSourceStlAction_->setCheckable(true);
     showSourceStlAction_->setChecked(true);
@@ -540,6 +557,11 @@ void MainWindow::createMenus() {
     stlMenu_->addAction(showStlCropBoxAction_);
 
     patchMenu_ = menuBar()->addMenu("Patch");
+    auto* fittingInputModeMenu = patchMenu_->addMenu("Geomagic Fitting Input Mode");
+    fittingInputModeMenu->addAction(fittingModeLegacyStlCropAction_);
+    fittingInputModeMenu->addAction(fittingModeConservativeBandAction_);
+    fittingInputModeMenu->addAction(fittingModeStpSampledAction_);
+    patchMenu_->addSeparator();
     patchMenu_->addAction(generateAndPreviewCurrentPatchAction_);
     patchMenu_->addAction(useGeomagicRemeshAction_);
     patchMenu_->addSeparator();
@@ -1165,7 +1187,9 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         return;
     }
 
-    if (!controller_.hasSourceStl()) {
+    const auto fittingInputMode = currentFittingInputMode();
+    const auto needsSourceStl = fittingInputMode != GeomagicFittingInputMode::StpSampledCandidateSurface;
+    if (needsSourceStl && !controller_.hasSourceStl()) {
         inspectPanel_->showReport("请先通过 STL -> 打开原始 STL 加载源 STL。");
         logPanel_->appendWarning("生成 Patch 前未加载源 STL。");
         setStatus("未加载源 STL");
@@ -1178,16 +1202,14 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto sourceMeshSnapshot = controller_.sourceStlMesh();
     const auto workspaceRoot = std::filesystem::current_path();
     const auto cropOptions = currentStlCropOptions();
-    const auto cropMode = cropOptions.mode == StlCropMode::ConservativeBoundaryBand
-        ? QString("conservative-boundary-band")
-        : QString("centroid-only");
+    const auto fittingModeStr = QString::fromStdString(toString(fittingInputMode));
     const bool useGeomagicRemesh = useGeomagicRemeshAction_ != nullptr && useGeomagicRemeshAction_->isChecked();
     const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::RunningGeomagic,
-        QString("Patch preview pipeline started: crop local STL and run Geomagic. crop_mode=%1, geomagic_remesh=%2")
-            .arg(cropMode, geomagicRemeshMode)
+        QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2")
+            .arg(fittingModeStr, geomagicRemeshMode)
             .toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
@@ -1196,18 +1218,18 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     refreshProcessStatusPanel();
 
     setStlCropInProgress(true);
-    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\ncrop mode：%4\nGeomagic Remesh：%5\n说明：将自动裁剪 local STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
+    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\n说明：将自动生成 fitting STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
-        .arg(cropMode)
+        .arg(fittingModeStr)
         .arg(geomagicRemeshMode));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
 
     auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
-    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, cropMode, geomagicRemeshMode]() {
+    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, fittingModeStr, geomagicRemeshMode]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1229,10 +1251,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             controller_.updateProcessStatus(failedStatus);
             refreshProcessStatusPanel();
             const auto message = QString::fromStdString(result.message);
-            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\ncrop mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\n消息：%8")
+            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nfitting input mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\n消息：%8")
                 .arg(pathToQString(sourceStlPath))
                 .arg(candidateSnapshot.candidate_id)
-                .arg(cropMode)
+                .arg(fittingModeStr)
                 .arg(geomagicRemeshMode)
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
@@ -1289,7 +1311,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             candidateSnapshot,
             &result.crop.extract.localMesh);
         viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
-        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics, cropMode);
+        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics, fittingModeStr);
         publishCropBoundaryDiagnosticsStatus(diagnostics);
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
@@ -1299,16 +1321,17 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             .arg(pathToQString(result.geomagic.outputStepPath)));
         setStatus("Patch cutout overlay 已显示");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, useGeomagicRemesh]() {
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
         config.skipRemesh = !useGeomagicRemesh;
-        return AppController::cropAndRunGeomagicForCandidateData(
+        return AppController::generateFittingStlAndRunGeomagicForCandidateData(
             documentSnapshot,
             sourceMeshSnapshot,
             candidateSnapshot,
             workspaceRoot,
             config,
+            fittingInputMode,
             cropOptions);
     }));
 }
@@ -2935,6 +2958,30 @@ StlRegionExtractorOptions MainWindow::currentStlCropOptions() const {
         options.mode = StlCropMode::ConservativeBoundaryBand;
     }
     return options;
+}
+
+void MainWindow::setGeomagicFittingInputMode(GeomagicFittingInputMode mode) {
+    fittingInputMode_ = mode;
+    updateFittingInputModeActions();
+}
+
+GeomagicFittingInputMode MainWindow::currentFittingInputMode() const {
+    if (fittingModeStpSampledAction_ != nullptr && fittingModeStpSampledAction_->isChecked()) {
+        return GeomagicFittingInputMode::StpSampledCandidateSurface;
+    }
+    if (fittingModeConservativeBandAction_ != nullptr && fittingModeConservativeBandAction_->isChecked()) {
+        return GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop;
+    }
+    return GeomagicFittingInputMode::LegacyStlCrop;
+}
+
+void MainWindow::updateFittingInputModeActions() {
+    fittingModeLegacyStlCropAction_->setChecked(
+        fittingInputMode_ == GeomagicFittingInputMode::LegacyStlCrop);
+    fittingModeConservativeBandAction_->setChecked(
+        fittingInputMode_ == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop);
+    fittingModeStpSampledAction_->setChecked(
+        fittingInputMode_ == GeomagicFittingInputMode::StpSampledCandidateSurface);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

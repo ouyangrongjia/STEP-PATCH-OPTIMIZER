@@ -22,6 +22,7 @@
 #include "patch/PatchPreviewReport.h"
 #include "patch/PatchReplacementReport.h"
 #include "stl/StlRegionExtractor.h"
+#include "stl/StpSampledFittingMeshBuilder.h"
 #include "validate/ShapeValidator.h"
 
 #include <filesystem>
@@ -42,6 +43,8 @@ struct PatchPreviewPipelineResult {
     bool success = false;
     StlCandidateCropResult crop;
     GeomagicAutoSurfaceResult geomagic;
+    GeomagicFittingInputMode fittingInputMode = GeomagicFittingInputMode::LegacyStlCrop;
+    StpSampledFittingReport stpSampledReport;
     std::string message;
 };
 
@@ -79,6 +82,15 @@ public:
         const std::filesystem::path& workspaceRoot,
         GeomagicAutoSurfaceConfig config = {},
         const StlRegionExtractorOptions& options = {});
+    static PatchPreviewPipelineResult generateFittingStlAndRunGeomagicForCandidateData(
+        const ShapeDocument& document,
+        const StlMesh& sourceMesh,
+        const MergeCandidate& candidate,
+        const std::filesystem::path& workspaceRoot,
+        GeomagicAutoSurfaceConfig config = {},
+        GeomagicFittingInputMode fittingMode = GeomagicFittingInputMode::LegacyStlCrop,
+        const StlRegionExtractorOptions& cropOptions = {},
+        const StpSampledFittingOptions& samplingOptions = {});
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
     MergePlannerResult previewMergeCandidates(
         double angularThresholdDegrees,

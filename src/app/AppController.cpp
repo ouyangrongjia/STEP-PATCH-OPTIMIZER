@@ -338,6 +338,126 @@ PatchPreviewPipelineResult AppController::cropAndRunGeomagicForCandidateData(
     return result;
 }
 
+PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCandidateData(
+    const ShapeDocument& document,
+    const StlMesh& sourceMesh,
+    const MergeCandidate& candidate,
+    const std::filesystem::path& workspaceRoot,
+    GeomagicAutoSurfaceConfig config,
+    GeomagicFittingInputMode fittingMode,
+    const StlRegionExtractorOptions& cropOptions,
+    const StpSampledFittingOptions& samplingOptions) {
+    const auto localStlPath = default_pipeline_local_stl_path(document, candidate, workspaceRoot);
+
+    std::string directoryMessage;
+    if (!ensure_parent_directory(localStlPath, directoryMessage)) {
+        return pipeline_error({}, {}, directoryMessage);
+    }
+
+    const auto root = workspaceRoot.empty()
+        ? std::filesystem::absolute(std::filesystem::current_path()).lexically_normal()
+        : std::filesystem::absolute(workspaceRoot).lexically_normal();
+    const auto outputPaths = resolveGeomagicOutputPathsFromCropStl(
+        localStlPath,
+        root / "data" / "crop_stl",
+        root / "data" / "crop_stp",
+        root / "data" / "crop_igs");
+    if (!outputPaths.success) {
+        return pipeline_error({}, {}, outputPaths.message);
+    }
+
+    StlCandidateCropResult crop;
+    StpSampledFittingReport sampledReport;
+
+    if (fittingMode == GeomagicFittingInputMode::StpSampledCandidateSurface) {
+        // Generate synthetic STL from STP candidate faces
+        StlMesh syntheticMesh;
+        StpSampledFittingMeshBuilder builder;
+        sampledReport = builder.build(document, candidate, samplingOptions, syntheticMesh);
+        if (!sampledReport.success) {
+            PatchPreviewPipelineResult result;
+            result.success = false;
+            result.fittingInputMode = fittingMode;
+            result.stpSampledReport = std::move(sampledReport);
+            result.message = sampledReport.message;
+            return result;
+        }
+
+        sampledReport.outputPath = localStlPath;
+        StlWriter writer;
+        const auto writeResult = writer.write(syntheticMesh, localStlPath);
+        if (!writeResult.success) {
+            sampledReport.success = false;
+            sampledReport.message = writeResult.message;
+            PatchPreviewPipelineResult result;
+            result.success = false;
+            result.fittingInputMode = fittingMode;
+            result.stpSampledReport = std::move(sampledReport);
+            result.message = writeResult.message;
+            return result;
+        }
+
+        crop.success = true;
+        crop.outputPath = localStlPath;
+        crop.extract.localMesh = std::move(syntheticMesh);
+        crop.extract.report.output_triangle_count = sampledReport.outputTriangleCount;
+        crop.extract.report.output_bbox = sampledReport.output_bbox;
+        crop.extract.report.success = true;
+        crop.extract.report.candidate_id = candidate.candidate_id;
+        crop.message = "STP-sampled fitting STL written.";
+    } else {
+        // Legacy STL crop path
+        StlRegionExtractorOptions effectiveCropOptions = cropOptions;
+        if (fittingMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop) {
+            effectiveCropOptions.mode = StlCropMode::ConservativeBoundaryBand;
+        } else {
+            effectiveCropOptions.mode = StlCropMode::CentroidOnly;
+        }
+
+        crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, effectiveCropOptions);
+        if (!crop.success) {
+            PatchPreviewPipelineResult result;
+            result.success = false;
+            result.crop = std::move(crop);
+            result.fittingInputMode = fittingMode;
+            result.message = crop.message;
+            return result;
+        }
+    }
+
+    config.inputStlPath = localStlPath;
+    config.outputStepPath = outputPaths.outputStepPath;
+    config.outputIgesPath = outputPaths.outputIgesPath;
+    config.workDir = root;
+    config.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
+    config.geometry = "Mechanical";
+    config.autoMerge = true;
+    config.adaptiveFit = false;
+    config.strictPatchTarget = false;
+
+    auto geomagic = GeomagicAutoSurfaceBackend().run(config);
+    if (!geomagic.success) {
+        const auto message = geomagic.errorMessage.empty() ? geomagic.message : geomagic.errorMessage;
+        PatchPreviewPipelineResult result;
+        result.success = false;
+        result.crop = std::move(crop);
+        result.geomagic = std::move(geomagic);
+        result.fittingInputMode = fittingMode;
+        result.stpSampledReport = std::move(sampledReport);
+        result.message = message.empty() ? "Geomagic AutoSurface failed." : message;
+        return result;
+    }
+
+    PatchPreviewPipelineResult result;
+    result.success = true;
+    result.crop = std::move(crop);
+    result.geomagic = std::move(geomagic);
+    result.fittingInputMode = fittingMode;
+    result.stpSampledReport = std::move(sampledReport);
+    result.message = "Patch preview pipeline completed.";
+    return result;
+}
+
 FeatureEdgeDetectionResult AppController::detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength) {
     const auto result = execute(std::make_unique<DetectFeatureCommand>(angularThresholdDegrees, minEdgeLength));
     if (!result.success()) {

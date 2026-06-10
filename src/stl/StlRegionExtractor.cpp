@@ -25,6 +25,15 @@
 
 namespace spo {
 
+const char* toString(GeomagicFittingInputMode mode) {
+    switch (mode) {
+        case GeomagicFittingInputMode::LegacyStlCrop: return "legacy-stl-crop";
+        case GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop: return "conservative-boundary-band-stl-crop";
+        case GeomagicFittingInputMode::StpSampledCandidateSurface: return "stp-sampled-candidate-surface";
+    }
+    return "unknown";
+}
+
 namespace {
 
 void include_vertex(StlBoundingBox& bbox, const StlVec3& vertex) {

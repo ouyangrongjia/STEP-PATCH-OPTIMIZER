@@ -33,6 +33,7 @@ void run_boundary_constrained_patch_builder_tests();
 void run_crop_boundary_diagnostics_tests();
 void run_patch_replacement_repair_tests();
 void run_patch_replacement_command_tests();
+void run_stp_sampled_fitting_mesh_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -115,6 +116,7 @@ int main() {
     run_crop_boundary_diagnostics_tests();
     run_patch_replacement_repair_tests();
     run_patch_replacement_command_tests();
+    run_stp_sampled_fitting_mesh_tests();
     run_validation_tests();
     return 0;
 }
