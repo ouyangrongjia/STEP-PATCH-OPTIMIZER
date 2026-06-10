@@ -338,6 +338,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.replacementSolidCount = count_shapes(buildResult.replacementShape, TopAbs_SOLID);
     report_.usedMultiFacePatch = buildResult.usedMultiFaceFragment || analysis.isMultiFace;
     report_.usedOriginalBoundarySurfaceRetrim = buildResult.usedOriginalBoundarySurfaceRetrim;
+    report_.attemptedMultiSurfaceBoundaryShell = buildResult.attemptedMultiSurfaceBoundaryShell;
     report_.usedMultiSurfaceBoundaryShell = buildResult.usedMultiSurfaceBoundaryShell;
     report_.retrimSelectedPatchFaceIndex = buildResult.retrimSelectedPatchFaceIndex;
     report_.retrimBoundarySampleCount = buildResult.retrimBoundarySampleCount;
@@ -356,6 +357,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.multiSurfaceMaxProjectionDistance = buildResult.multiSurfaceMaxProjectionDistance;
     report_.multiSurfaceAverageProjectionDistance = buildResult.multiSurfaceAverageProjectionDistance;
     report_.multiSurfaceAssignedBoundarySegmentCount = buildResult.multiSurfaceAssignedBoundarySegmentCount;
+    report_.multiSurfaceSplitBoundaryEdgeCount = buildResult.multiSurfaceSplitBoundaryEdgeCount;
     report_.multiSurfaceBuiltFaceCount = buildResult.multiSurfaceBuiltFaceCount;
     report_.multiSurfaceOpenWireCount = buildResult.multiSurfaceOpenWireCount;
     report_.multiSurfaceFailedEdgeIds = buildResult.multiSurfaceFailedEdgeIds;

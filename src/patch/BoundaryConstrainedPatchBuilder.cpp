@@ -161,12 +161,14 @@ void copy_retrim_report(
 void copy_multi_surface_report(
     BoundaryConstrainedPatchBuildResult& result,
     const BoundaryConstrainedMultiSurfaceShellResult& shell) {
+    result.attemptedMultiSurfaceBoundaryShell = shell.attempted;
     result.multiSurfaceBoundarySampleCount = shell.boundarySampleCount;
     result.multiSurfaceProjectedSampleCount = shell.projectedSampleCount;
     result.multiSurfaceFailedProjectionCount = shell.failedProjectionCount;
     result.multiSurfaceMaxProjectionDistance = shell.maxProjectionDistance;
     result.multiSurfaceAverageProjectionDistance = shell.averageProjectionDistance;
     result.multiSurfaceAssignedBoundarySegmentCount = shell.assignedBoundarySegmentCount;
+    result.multiSurfaceSplitBoundaryEdgeCount = shell.splitBoundaryEdgeCount;
     result.multiSurfaceBuiltFaceCount = shell.builtFaceCount;
     result.multiSurfaceOpenWireCount = shell.openWireCount;
     result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;

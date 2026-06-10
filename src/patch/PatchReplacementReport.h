@@ -93,6 +93,7 @@ struct PatchReplacementReport {
     bool usedMultiFacePatch = false;
     bool sourceFacesReplaced = false;
     bool usedOriginalBoundarySurfaceRetrim = false;
+    bool attemptedMultiSurfaceBoundaryShell = false;
     bool usedMultiSurfaceBoundaryShell = false;
 
     bool repairApplied = false;
@@ -139,6 +140,7 @@ struct PatchReplacementReport {
     double multiSurfaceMaxProjectionDistance = 0.0;
     double multiSurfaceAverageProjectionDistance = 0.0;
     int multiSurfaceAssignedBoundarySegmentCount = 0;
+    int multiSurfaceSplitBoundaryEdgeCount = 0;
     int multiSurfaceBuiltFaceCount = 0;
     int multiSurfaceOpenWireCount = 0;
     std::vector<EdgeId> multiSurfaceFailedEdgeIds;

@@ -23,6 +23,7 @@ struct BoundaryConstrainedMultiSurfaceShellOptions {
 
 struct BoundaryConstrainedMultiSurfaceShellResult {
     bool success = false;
+    bool attempted = false;
     TopoDS_Shape replacementShape;
     std::vector<TopoDS_Face> replacementFaces;
 
@@ -33,6 +34,7 @@ struct BoundaryConstrainedMultiSurfaceShellResult {
     double averageProjectionDistance = 0.0;
 
     int assignedBoundarySegmentCount = 0;
+    int splitBoundaryEdgeCount = 0;
     int builtFaceCount = 0;
     int openWireCount = 0;
     std::vector<EdgeId> failedEdgeIds;

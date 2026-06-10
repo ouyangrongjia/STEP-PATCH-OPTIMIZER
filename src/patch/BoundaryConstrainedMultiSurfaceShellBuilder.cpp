@@ -36,6 +36,11 @@ struct OwnedBoundarySegment {
     double lastParameter = 0.0;
 };
 
+struct SurfaceOwner {
+    int faceIndex = -1;
+    double distance = std::numeric_limits<double>::infinity();
+};
+
 BoundaryConstrainedMultiSurfaceShellResult fail(std::string message) {
     BoundaryConstrainedMultiSurfaceShellResult result;
     result.message = std::move(message);
@@ -68,6 +73,24 @@ std::vector<BoundarySurfaceSample> samples_for_edge(
         }
     }
     return edgeSamples;
+}
+
+SurfaceOwner nearest_owner(
+    const std::vector<TopoDS_Face>& faces,
+    const BoundarySurfaceSample& sample) {
+    SurfaceOwner owner;
+    for (std::size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
+        const auto surface = BRep_Tool::Surface(faces[faceIndex]);
+        if (surface.IsNull()) {
+            continue;
+        }
+        const auto distance = projectionDistanceToSurface(sample.point, surface);
+        if (distance < owner.distance) {
+            owner.faceIndex = static_cast<int>(faceIndex);
+            owner.distance = distance;
+        }
+    }
+    return owner;
 }
 
 TopoDS_Edge make_boundary_segment_edge(
@@ -153,7 +176,35 @@ std::vector<OwnedBoundarySegment> assign_boundary_segments(
         }
 
         if (selectedFace < 0 || selectedFailedCount > 0) {
-            append_unique_edge(result.failedEdgeIds, edgeId);
+            std::vector<SurfaceOwner> owners;
+            owners.reserve(edgeSamples.size());
+            bool splitSupported = true;
+            for (const auto& sample : edgeSamples) {
+                const auto owner = nearest_owner(faces, sample);
+                if (owner.faceIndex < 0 || owner.distance > projectionTolerance) {
+                    splitSupported = false;
+                }
+                owners.push_back(owner);
+            }
+
+            if (!splitSupported) {
+                append_unique_edge(result.failedEdgeIds, edgeId);
+                continue;
+            }
+
+            ++result.splitBoundaryEdgeCount;
+            auto currentFace = owners.front().faceIndex;
+            auto segmentStart = edgeSamples.front().parameter;
+            for (std::size_t sampleIndex = 1; sampleIndex < edgeSamples.size(); ++sampleIndex) {
+                if (owners[sampleIndex].faceIndex == currentFace) {
+                    continue;
+                }
+                const auto splitParameter = (edgeSamples[sampleIndex - 1].parameter + edgeSamples[sampleIndex].parameter) * 0.5;
+                segments.push_back({currentFace, edgeId, segmentStart, splitParameter});
+                segmentStart = splitParameter;
+                currentFace = owners[sampleIndex].faceIndex;
+            }
+            segments.push_back({currentFace, edgeId, segmentStart, edgeSamples.back().parameter});
             continue;
         }
 
@@ -298,6 +349,7 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
     }
 
     BoundaryConstrainedMultiSurfaceShellResult result;
+    result.attempted = true;
     const auto samples = sampleBoundaryForSurfaceProjection(document, boundary, options.samplesPerEdge);
     if (samples.empty()) {
         return fail("Multi-surface boundary shell could not sample the original CAD boundary.");

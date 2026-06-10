@@ -443,6 +443,7 @@ void test_multi_surface_boundary_shell_builds_when_surface_set_covers_boundary()
     const auto result = spo::BoundaryConstrainedPatchBuilder().build(fixture.input(), analysis, options);
 
     assert(result.success);
+    assert(result.attemptedMultiSurfaceBoundaryShell);
     assert(result.usedMultiSurfaceBoundaryShell);
     assert(!result.usedOriginalBoundarySurfaceRetrim);
     assert(result.replacementFaceCount == 2);
@@ -450,6 +451,7 @@ void test_multi_surface_boundary_shell_builds_when_surface_set_covers_boundary()
     assert(result.multiSurfaceProjectedSampleCount == result.multiSurfaceBoundarySampleCount);
     assert(result.multiSurfaceFailedProjectionCount == 0);
     assert(result.multiSurfaceAssignedBoundarySegmentCount >= fixture.candidate.boundary_edge_count);
+    assert(result.multiSurfaceSplitBoundaryEdgeCount == 0);
     assert(result.multiSurfaceBuiltFaceCount == 2);
     assert(result.multiSurfaceOpenWireCount == 0);
     assert(result.multiSurfaceFailedEdgeIds.empty());
@@ -467,6 +469,7 @@ void test_multi_surface_boundary_shell_fails_without_internal_seam_closure() {
 
     assert(!result.success);
     assert(result.failureReason == spo::BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed);
+    assert(result.attemptedMultiSurfaceBoundaryShell);
     assert(!result.usedMultiSurfaceBoundaryShell);
     assert(result.multiSurfaceBoundarySampleCount > 0);
     assert(result.multiSurfaceFailedProjectionCount == 0);

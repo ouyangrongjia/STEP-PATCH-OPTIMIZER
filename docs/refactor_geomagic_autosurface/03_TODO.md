@@ -3010,7 +3010,8 @@ T6.7.3 Original Boundary Re-trim（DONE，第一版）
 → 若单一 surface 无法覆盖，明确失败并输出诊断，不强行 sewing。
 
 T6.7.4 Multi-surface Boundary-Constrained Shell（DONE，第一版）
-→ 如果单面覆盖失败且 all-surface coverage 无 uncovered boundary sample，则按原 CAD boundary edge 整段分配到最佳 Geomagic surface。
+→ 如果单面覆盖失败且 all-surface coverage 无 uncovered boundary sample，则按原 CAD boundary edge 整段优先分配到最佳 Geomagic surface。
+→ 若某条原 CAD boundary edge 没有单一 surface 能覆盖整条 edge，但每个采样点均有 surface 覆盖，则只对该失败 edge 按 surface ownership 切分参数区间。
 → 使用原 STP edge 参数区间构造最终外边界段，保留 imported patch 内部 seam edges，尝试为每张 surface 连接闭合 wire 并构造 bounded replacement faces。
 → 外边界仍必须来自原 STP loop；Geomagic patch outer boundary 不作为最终 CAD boundary。
 → 若 surface coverage 不足、内部 seam 无法闭合 wire、face 构造失败，则返回 BuildFailed 并输出 multi-surface diagnostics，不回退 direct patch outer-boundary fragment。
@@ -3027,7 +3028,7 @@ T6.7.5 Apply / Gate Integration（DONE，第一版）
 2. 新增 BoundaryConstrainedMultiSurfaceShellBuilder，负责在单 surface 失败但 all-surface coverage 成立时构造 strict multi-surface replacement shell。
 3. BoundaryConstrainedPatchBuilder 默认优先走 original-boundary surface re-trim，失败后才尝试 T6.7.4 multi-surface boundary shell。
 4. Geomagic patch outer boundary 不再作为默认 replacement boundary；legacy direct patch fragment 只保留为显式测试/兼容路径。
-5. PatchReplacementReport / GUI Apply report 输出 re-trim 是否尝试、最佳单 surface 投影统计、all-surface coverage、T6.7.4 是否使用、multi-surface boundary sample / assigned segment / built face / open wire / failed edge diagnostics。
+5. PatchReplacementReport / GUI Apply report 输出 re-trim 是否尝试、最佳单 surface 投影统计、all-surface coverage、T6.7.4 是否 attempted / used、multi-surface boundary sample / assigned segment / split edge / built face / open wire / failed edge diagnostics。
 6. 如果单一 Geomagic surface 无法覆盖原 STP boundary，builder 会在 all-surface coverage 成立时尝试 T6.7.4；T6.7.4 失败则 BuildFailed，后续不强行 sewing，不绕过 StrictTopologyGate。
 ```
 

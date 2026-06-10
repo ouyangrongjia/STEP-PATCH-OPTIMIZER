@@ -646,7 +646,7 @@ T6.6.4 STL Region Extractor 保守裁剪修复已完成：crop 可在 conservati
 T6.6.4.1 STL Crop Mode Switch 已完成：由于手动验证显示 conservative-boundary-band 可能让 AutoSurface 生成过多 patch faces 并扩大 patch boundary mismatch，默认 crop mode 已回到 legacy centroid-only；GUI `STL -> 启用保守边界裁剪` 只用于显式 A/B 验证，单独裁剪和“生成并预览当前 Patch”共用同一开关。
 T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：legacy centroid-only crop 产生较简单 patch 但 patch outer boundary 仍局部 mismatch；conservative-boundary-band crop 补齐 STL 但会让 AutoSurface patch face count 暴涨并扩大全环 boundary mismatch。两者共同证明：directly using Geomagic patch outer boundary as replacement boundary is invalid for this class of feature-bounded regions。
 T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
-T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成第一版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段分配 surface、保留 imported patch 内部 seam、构造 multi-face bounded shell。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface assigned segments / built faces / open wires / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果仍交给 repair 与 StrictTopologyGate。
+T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成第一版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段优先分配 surface；若整条 edge 无单一 surface 覆盖但采样点均被 surface 集合覆盖，则只对该失败 edge 分段。T6.7.4 保留 imported patch 内部 seam、构造 multi-face bounded shell。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface attempted / used / assigned segments / split edges / built faces / open wires / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果仍交给 repair 与 StrictTopologyGate。
 Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```
 
@@ -765,9 +765,9 @@ Boundary-Constrained Surface Re-trim + strict multi-surface boundary shell
 → select or fit surface geometry from the imported Geomagic patch
 → project / build original STP candidate outer boundary wire on that surface
 → rebuild a trimmed replacement face when one surface covers the boundary
-→ when one surface fails but all-surface coverage passes, assign original CAD boundary edges to Geomagic surfaces and build a bounded multi-face shell from original boundary segments plus internal patch seams
+→ when one surface fails but all-surface coverage passes, assign original CAD boundary edges to Geomagic surfaces, split only the edges that cannot be owned by one surface, and build a bounded multi-face shell from original boundary segments plus internal patch seams
 → report both selected single-surface coverage and all-surface nearest-projection coverage
-→ report multi-surface assigned segments / built faces / open wires / failed edge ids
+→ report multi-surface attempted / used / assigned segments / split edges / built faces / open wires / failed edge ids
 → direct patch outer-boundary fragment is no longer the default replacement path
 → final result still must pass PatchReplacementRepair and StrictTopologyGate
 
