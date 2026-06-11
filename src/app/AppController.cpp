@@ -21,6 +21,12 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/CropBoundaryDiagnostics.h"
 #include "patch/PatchImportService.h"
+#include "brep/BoundaryWireBuilder.h"
+#include "stl/StlCutChainCutter.h"
+
+#include <BRep_Tool.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 
 #include <algorithm>
 #include <cctype>
@@ -263,6 +269,89 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
         return crop_error(outputPath, {}, "Candidate boundary is not a valid single closed loop: " + boundary.message);
     }
 
+    // ---- GlobalCutChain mode ----
+    if (options.mode == StlCropMode::GlobalCutChain) {
+        // Build ordered boundary wire
+        auto wireResult = BoundaryWireBuilder().buildOuterWire(document, boundary);
+        if (!wireResult.success || wireResult.wire.IsNull()) {
+            StlRegionExtractResult emptyExtract;
+            return crop_error(outputPath, std::move(emptyExtract),
+                "Failed to build boundary wire for global cut chain: " + wireResult.message);
+        }
+
+        // Sample boundary loop points from the wire
+        std::vector<gp_Pnt> boundaryPoints;
+        const auto& topology = document.topology();
+        for (const auto edgeId : boundary.ordered_boundary_edges) {
+            if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) continue;
+            const auto& edge = topology.edge(edgeId);
+            double first = 0.0, last = 0.0;
+            auto curve = BRep_Tool::Curve(edge, first, last);
+            if (curve.IsNull()) continue;
+            const int nPts = 30;
+            for (int k = 0; k < nPts; ++k) {
+                double t = first + (last - first) * static_cast<double>(k) / static_cast<double>(nPts);
+                boundaryPoints.push_back(curve->Value(t));
+            }
+        }
+
+        if (boundaryPoints.size() < 3) {
+            StlRegionExtractResult emptyExtract;
+            return crop_error(outputPath, std::move(emptyExtract),
+                "Boundary loop has too few sample points for global cut chain.");
+        }
+
+        // Compute seed points from candidate face centers
+        std::vector<gp_Pnt> seedPoints;
+        for (const auto faceId : candidate.faces) {
+            if (faceId >= topology.faceCount()) continue;
+            const auto& face = topology.face(faceId);
+            try {
+                GProp_GProps props;
+                BRepGProp::SurfaceProperties(face, props);
+                seedPoints.push_back(props.CentreOfMass());
+            } catch (...) {}
+        }
+
+        // Run global cut chain cutter
+        StlCutChainOptions cutOpts;
+        cutOpts.samplesPerEdge = 30;
+        cutOpts.minComponentFaceCount = 1;
+
+        StlCutChainCutter cutter;
+        auto cutResult = cutter.cut(
+            sourceMesh, boundaryPoints,
+            seedPoints.empty() ? std::optional<std::vector<gp_Pnt>>{} : seedPoints,
+            cutOpts);
+
+        if (!cutResult.success || cutResult.patchMesh.empty()) {
+            StlRegionExtractResult emptyExtract;
+            return crop_error(outputPath, std::move(emptyExtract),
+                "Global cut chain failed: " + cutResult.message);
+        }
+
+        // Write the patch STL
+        const auto write = StlWriter().write(cutResult.patchMesh, outputPath);
+        if (!write.success) {
+            return crop_error(outputPath, {}, write.message);
+        }
+
+        StlCandidateCropResult result;
+        result.success = true;
+        result.extract.localMesh = std::move(cutResult.patchMesh);
+        result.extract.report.success = true;
+        result.extract.report.candidate_id = candidate.candidate_id;
+        result.extract.report.source_triangle_count = static_cast<int>(sourceMesh.triangleCount());
+        result.extract.report.output_triangle_count = cutResult.patchFaceCount;
+        result.extract.report.output_bbox = result.extract.localMesh.boundingBox();
+        result.extract.report.message = cutResult.message;
+        result.extract.success = true;
+        result.outputPath = outputPath;
+        result.message = "Global cut chain patch extracted (" + std::to_string(cutResult.patchFaceCount) + " triangles).";
+        return result;
+    }
+
+    // ---- Default / ConservativeBoundaryBand modes ----
     auto extract = StlRegionExtractor().extract(document, candidate, sourceMesh, options);
     if (!extract.success) {
         const auto message = extract.report.message.empty()

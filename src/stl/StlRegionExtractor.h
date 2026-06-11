@@ -9,7 +9,8 @@ namespace spo {
 
 enum class StlCropMode {
     CentroidOnly,
-    ConservativeBoundaryBand
+    ConservativeBoundaryBand,
+    GlobalCutChain
 };
 
 enum class GeomagicFittingInputMode {

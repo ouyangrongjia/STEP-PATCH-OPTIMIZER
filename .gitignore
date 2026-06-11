@@ -16,3 +16,4 @@ scripts/geomagic_wrap/fit_region_temp/
 *.lib
 *.exp
 scripts/industrial_sew.py
+scripts/cutter_global_chain_mode.py

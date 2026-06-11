@@ -130,6 +130,7 @@ private:
     QAction* openSourceStlAction_ = nullptr;
     QAction* cropCurrentCandidateStlAction_ = nullptr;
     QAction* useConservativeStlCropAction_ = nullptr;
+    QAction* useGlobalCutChainCropAction_ = nullptr;
     QAction* showSourceStlAction_ = nullptr;
     QAction* showCroppedStlAction_ = nullptr;
     QAction* showStlCropBoxAction_ = nullptr;

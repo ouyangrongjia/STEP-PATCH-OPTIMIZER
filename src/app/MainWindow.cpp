@@ -397,6 +397,15 @@ void MainWindow::createActions() {
     useConservativeStlCropAction_->setCheckable(true);
     useConservativeStlCropAction_->setChecked(false);
 
+    useGlobalCutChainCropAction_ = new QAction("启用全局切链裁剪 (Global Cut Chain)", this);
+    useGlobalCutChainCropAction_->setCheckable(true);
+    useGlobalCutChainCropAction_->setChecked(false);
+
+    auto* stlCropModeGroup = new QActionGroup(this);
+    stlCropModeGroup->setExclusive(true);
+    stlCropModeGroup->addAction(useConservativeStlCropAction_);
+    stlCropModeGroup->addAction(useGlobalCutChainCropAction_);
+
     fittingModeLegacyStlCropAction_ = new QAction("Legacy STL Crop", this);
     fittingModeLegacyStlCropAction_->setCheckable(true);
     fittingModeLegacyStlCropAction_->setChecked(false);
@@ -526,6 +535,7 @@ void MainWindow::createMenus() {
     stlMenu_->addAction(openSourceStlAction_);
     stlMenu_->addAction(cropCurrentCandidateStlAction_);
     stlMenu_->addAction(useConservativeStlCropAction_);
+    stlMenu_->addAction(useGlobalCutChainCropAction_);
     stlMenu_->addSeparator();
     stlMenu_->addAction(showSourceStlAction_);
     stlMenu_->addAction(showCroppedStlAction_);
@@ -2734,6 +2744,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     openSourceStlAction_->setEnabled(!inProgress);
     cropCurrentCandidateStlAction_->setEnabled(!inProgress);
     useConservativeStlCropAction_->setEnabled(!inProgress);
+    useGlobalCutChainCropAction_->setEnabled(!inProgress);
     generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
     useGeomagicRemeshAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
@@ -2749,7 +2760,9 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
 
 StlRegionExtractorOptions MainWindow::currentStlCropOptions() const {
     StlRegionExtractorOptions options;
-    if (useConservativeStlCropAction_ != nullptr && useConservativeStlCropAction_->isChecked()) {
+    if (useGlobalCutChainCropAction_ != nullptr && useGlobalCutChainCropAction_->isChecked()) {
+        options.mode = StlCropMode::GlobalCutChain;
+    } else if (useConservativeStlCropAction_ != nullptr && useConservativeStlCropAction_->isChecked()) {
         options.mode = StlCropMode::ConservativeBoundaryBand;
     }
     return options;
