@@ -1202,12 +1202,120 @@ StlMesh StlCutChainCutter::floodFillPatch(
 
 StlMesh StlCutChainCutter::snapBoundary(
     const StlMesh& patch,
-    const std::vector<Vec3>& /*green*/,
-    const std::vector<Vec3>& /*red*/,
-    double /*maxDist*/) {
-    // Boundary snap is a post-process that aligns the patch outer boundary
-    // back to the original STEP free edge. Currently a no-op.
-    return patch;
+    const std::vector<Vec3>& green,
+    const std::vector<Vec3>& red,
+    double maxDist) {
+    if (patch.empty() || green.empty() || red.empty() || green.size() != red.size()) {
+        return patch;
+    }
+
+    // 1. Collect all patch vertices as Vec3
+    const auto& tris = patch.triangles();
+    std::vector<Vec3> verts;
+    verts.reserve(tris.size() * 3);
+    for (const auto& t : tris) {
+        verts.push_back(vec3_from_stl(t.v0));
+        verts.push_back(vec3_from_stl(t.v1));
+        verts.push_back(vec3_from_stl(t.v2));
+    }
+
+    // 2. Find boundary edges: edges appearing exactly once
+    //    Use spatial keys to identify shared edges
+    std::map<std::pair<
+        std::tuple<std::int64_t,std::int64_t,std::int64_t>,
+        std::tuple<std::int64_t,std::int64_t,std::int64_t>>, int> edgeCount;
+    for (const auto& t : tris) {
+        Vec3 v0 = vec3_from_stl(t.v0);
+        Vec3 v1 = vec3_from_stl(t.v1);
+        Vec3 v2 = vec3_from_stl(t.v2);
+        auto k0 = make_spatial_key(v0, 1e-10);
+        auto k1 = make_spatial_key(v1, 1e-10);
+        auto k2 = make_spatial_key(v2, 1e-10);
+        auto addE = [&](const auto& ka, const auto& kb) {
+            if (ka < kb) edgeCount[{ka, kb}]++;
+            else         edgeCount[{kb, ka}]++;
+        };
+        addE(k0, k1); addE(k1, k2); addE(k2, k0);
+    }
+
+    std::set<std::tuple<std::int64_t,std::int64_t,std::int64_t>> boundaryVertKeys;
+    for (const auto& [ekey, count] : edgeCount) {
+        if (count == 1) {
+            boundaryVertKeys.insert(ekey.first);
+            boundaryVertKeys.insert(ekey.second);
+        }
+    }
+
+    if (boundaryVertKeys.empty()) return patch;
+
+    // 3. For each boundary vertex, find closest point on green polyline,
+    //    then map to corresponding red point via parameter t
+    std::vector<Vec3> snappedVerts = verts;
+    std::size_t nMoved = 0;
+
+    for (const auto& bkey : boundaryVertKeys) {
+        // Find the vertex position from its spatial key
+        // (We stored per-triangle vertices, so find one matching the key)
+        Vec3 q3 = {0,0,0};
+        bool found = false;
+        for (const auto& v : verts) {
+            if (make_spatial_key(v, 1e-10) == bkey) { q3 = v; found = true; break; }
+        }
+        if (!found) continue;
+
+        // Find closest green segment
+        const std::size_t gn = green.size();
+        double bestD = kDoubleMax;
+        double bestT = 0.0;
+        std::size_t bestI = 0;
+
+        for (std::size_t i = 0; i < gn; ++i) {
+            std::size_t j = (i + 1) % gn;
+            Vec3 g0 = green[i];
+            Vec3 g1 = green[j];
+            Vec3 seg = vec3_sub(g1, g0);
+            double den = vec3_norm2(seg);
+            double t = (den < 1e-30) ? 0.0
+                : std::clamp(vec3_dot(vec3_sub(q3, g0), seg) / den, 0.0, 1.0);
+            Vec3 cg = vec3_lerp(g0, g1, t);
+            double d = vec3_norm(vec3_sub(q3, cg));
+            if (d < bestD) { bestD = d; bestT = t; bestI = i; }
+        }
+
+        // Map to red point using the same segment and parameter t
+        std::size_t rj = (bestI + 1) % gn;
+        Vec3 targetRed = vec3_lerp(red[bestI], red[rj], bestT);
+
+        if (bestD <= maxDist) {
+            // Snap this vertex's occurrences in the output
+            for (std::size_t vi = 0; vi < verts.size(); ++vi) {
+                if (make_spatial_key(verts[vi], 1e-10) == bkey) {
+                    snappedVerts[vi] = targetRed;
+                }
+            }
+            ++nMoved;
+        }
+    }
+
+    // 4. Reconstruct mesh with snapped vertices
+    StlMesh result;
+    std::size_t vi = 0;
+    for (const auto& t : tris) {
+        (void)t; // suppress unused warning
+        if (vi + 2 >= snappedVerts.size()) break;
+        StlTriangle nt;
+        nt.v0 = stl_from_vec3(snappedVerts[vi]);
+        nt.v1 = stl_from_vec3(snappedVerts[vi+1]);
+        nt.v2 = stl_from_vec3(snappedVerts[vi+2]);
+        nt.normal = {0,0,1};
+        // Skip degenerate triangles after snap
+        if (triangleArea(snappedVerts[vi], snappedVerts[vi+1], snappedVerts[vi+2]) > 1e-14) {
+            result.addTriangle(nt);
+        }
+        vi += 3;
+    }
+
+    return result.empty() ? patch : result;
 }
 
 // ============================================================================
