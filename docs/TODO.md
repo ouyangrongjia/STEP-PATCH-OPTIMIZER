@@ -1,14 +1,42 @@
-# STEP-PATCH-OPTIMIZER 当前 TODO：Geomagic AutoSurface → T6 replacement 路线
+# STEP-PATCH-OPTIMIZER 当前 TODO：Geomagic AutoSurface → T6 replacement / fitting input 路线
 
 > 文档定位：这是当前执行 TODO 文档，用于随开发进度持续更新、替换和勾选。  
 > 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
-> 当前阶段：Geomagic AutoSurface T6 前置准备；T5.4 / T5.4.1 已完成，下一步进入 T6.0 patch replacement 输入结构与 multi-face patch 分析。
-> 更新时间：2026-06-05
-> 当前判断：旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支；当前主线转向 `docs/refactor_geomagic_autosurface/03_TODO.md` 中的 Geomagic patch preview → T6 replacement 路线。
+> 当前阶段：T6.7.4 strict multi-surface boundary shell 之后，重点转向 Geomagic fitting input mode 与真实 Apply 收口。
+> 更新时间：2026-06-11
+> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。
 
 ---
 
-## 0. 当前核心判断
+## 当前执行判断（2026-06-11）
+
+```text
+1. 默认 Geomagic fitting input mode：
+   stp-sampled-candidate-surface
+   → 从当前 STP candidate faces / boundary 采样生成 fitting STL
+   → 不要求先打开原始 STL
+   → 当前推荐作为默认模式
+
+2. 备用 / 诊断路线：
+   legacy-stl-crop
+   conservative-boundary-band-stl-crop
+   Global Cut Chain STL crop（独立 STL 裁剪路线，当前不是 automatic fitting input mode）
+   → 需要原始 STL
+   → 用于 A/B 验证、缺面诊断或必须使用源 STL 几何采样的场景
+
+3. Apply 边界：
+   最终 CAD boundary 仍只能来自原 STP candidate outer boundary wire。
+   STP sampled fitting STL、裁剪 STL、Global Cut Chain 输出和 Geomagic patch outer boundary 都不能作为最终 CAD boundary。
+
+4. 当前真实收口问题：
+   T6.7.4 后不是继续调 STL crop tolerance，
+   而是处理 split boundary、邻接旧拓扑 / bridge closure，
+   让 repair 后 free edge / multiple edge 归零并通过 BRepCheck、solid/watertight 和 STEP roundtrip。
+```
+
+---
+
+## 0. 历史核心判断：Stage 3A-Approx / A6
 
 当前 Geomagic Wrap 输出的 STP 中，视觉上看似平面的区域，底层通常不是 OCCT 原生 `GeomAbs_Plane`，而是：
 
@@ -155,7 +183,7 @@ T5A / T5B 暂停；
 
 ---
 
-## 4. 当前主线：Stage 3A-Approx
+## 4. 历史路线：Stage 3A-Approx
 
 ### 4.1 阶段目标
 
@@ -719,21 +747,25 @@ commit 8:
 
 ## 12. 下一步 Codex 任务
 
-当前下一步不是 T5，而是：
+当前下一步不是 A6.3，也不是继续扩大 STL crop tolerance，而是：
 
 ```text
-A6.3：基于 diagnostic_report 评估 SameParameter / BuildCurves3d / ShapeFix_Wire / ShapeFix_Face 的最小修复路径。
+T6.7.4 后续 Apply 收口：
+1. 继续以 STP Sampled Candidate Surface 作为默认 Geomagic fitting input mode。
+2. 用真实样例对比 STP sampled 与 Global Cut Chain STL crop 的耗时、patch face count 和 Apply report；Global Cut Chain 若用于 Geomagic，当前需要手动 / 脚本喂入输出 STL。
+3. 重点处理 split boundary / 邻接旧拓扑桥接闭合，使 PatchReplacementRepair 后 free edge / multiple edge 归零。
+4. 仍由 StrictTopologyGate 决定是否提交，不绕过 BRepCheck、solid/watertight 和 STEP roundtrip。
 ```
 
 极简 Codex 任务边界：
 
 ```text
-只做诊断和安全判定；
-不放宽 T1/T4 安全门；
-不大改 GUI；
-只做受控 ShapeFix 评估，不默认写入 document；
-不做 projected boundary / pcurve rebuild；
-失败不污染 document。
+只做 T6.7.4 后的输入路线对齐、诊断和 Apply 收口；
+不把 STP sampled fitting STL / STL crop / Global Cut Chain 边界当最终 CAD boundary；
+不回退到 Geomagic patch outer-boundary replacement；
+不放宽 StrictTopologyGate；
+不让 redo 重新运行 Geomagic / fitting STL generation / crop / import / repair；
+不写死真实样例路径或 candidate id。
 ```
 
 ---
@@ -741,24 +773,16 @@ A6.3：基于 diagnostic_report 评估 SameParameter / BuildCurves3d / ShapeFix_
 ## 13. 当前周报表述
 
 ```text
-本周完成了 PlaneRegionMerge 的安全底座：
-T1 建立 BRepCheck + STEP roundtrip gate；
-T2 建立 strict native Plane 输入冻结；
-T3 完善失败原因报告；
-T4 增加 RegionBoundaryAnalyzer 做边界安全分析。
+T6.7.4 已把 Apply 路线从直接信任 Geomagic patch outer boundary，
+收敛为用原 STP candidate outer boundary wire 做 boundary-constrained replacement。
 
-进一步测试发现，Geomagic Wrap 输出的 STP 中大多数视觉平面并不是 OCCT 原生 Plane，
-而是 B-spline backed planar-like surface。
-因此 strict native Plane 模式虽然安全，但当前样例没有可真实合并的原生 Plane 候选。
+T6.7.4 之后新增两条 fitting input 路线：
+1. STP Sampled Candidate Surface：当前默认，直接从 STP candidate faces / boundary 生成 fitting STL，不要求源 STL，速度更快，效果与 STL crop 接近。
+2. Global Cut Chain STL crop：可选源 STL 全局切链裁剪器，用于真实 STL 几何采样和诊断，当前不是 automatic fitting input mode，也不是默认模式。
 
-下一步路线调整为 Stage 3A-Approx：
-在保留 T1-T4 安全门的前提下，新增实验性 B-spline 近似平面重构路径，
-允许低 deviation 的 B-spline PlaneLike candidate 被重建为 planar trimmed face，
-并继续通过 BRepCheck、STEP roundtrip 和外部 CAD 验证保证 B-Rep 合法性。
-
-当前 A6 已开始收口 approximate planar rebuild 的 boundary 风险：
-在进入 MakeFace 前先检查 boundary 3D curve 是否落在拟合平面内。
-不满足条件的候选会提前失败并 rollback，避免生成 BRepCheck 失败的坏结果。
+当前下一步不是继续扩大 STL crop 或 sewing tolerance，
+而是让 replacement shell / repair / StrictTopologyGate 在真实样例上稳定闭合：
+free edge / multiple edge 归零、BRepCheck 通过、solid/watertight 保持、STEP roundtrip 通过。
 ```
 
 ---
@@ -766,7 +790,8 @@ T4 增加 RegionBoundaryAnalyzer 做边界安全分析。
 ## 14. 关键结论
 
 ```text
-T1-T4 是安全底座。
-T5 原生 Plane 专用修复暂时暂停。
-Stage 3A-Approx 才是适配 Geomagic Wrap STP 的当前主线。
+旧 A6 近似平面路线保留为历史诊断分支。
+当前主线是 Geomagic patch preview / Apply：
+STP sampled fitting input 默认，Global Cut Chain STL crop 作为独立备用裁剪路线，
+最终 CAD boundary 只能来自原 STP candidate outer boundary wire。
 ```

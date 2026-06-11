@@ -343,15 +343,20 @@ tools         批处理和 STEP 统计工具
 
 ## 当前开发阶段
 
-当前项目已经完成 MVP 基础闭环，下一阶段重点是：
+当前项目已经完成 MVP 基础闭环和候选区域基础框架，当前重点已经转向 Geomagic AutoSurface patch preview / Apply 主线：
 
 ```text
-1. MergeCandidate 数据结构。
-2. MergePlanner 最小候选生成。
-3. MergeRegionGrower 基础区域生长。
-4. 合并候选 GUI 预览。
-5. ProjectSerializer 项目保存与恢复。
-6. ErrorMetric / ReportGenerator 实验指标和报告。
+1. 默认 Geomagic fitting input mode：STP Sampled Candidate Surface。
+   - 直接从当前 STP candidate faces / boundary 采样生成 fitting STL。
+   - 不要求先加载原始 STL。
+   - 当前推荐作为默认模式，速度更快，实际 AutoSurface 效果与 STL 裁剪路线接近。
+2. 备用 / 诊断路线：原始 STL crop。
+   - Legacy centroid-only crop 保留为基线。
+   - Conservative boundary-band crop 保留为 A/B 验证。
+   - Global Cut Chain crop 已接入 GUI 作为可选的独立 STL 全局切链裁剪器。
+3. Apply 仍以原 STP candidate outer boundary wire 作为最终 CAD boundary。
+   - STP 采样 STL、裁剪 STL、Geomagic patch outer boundary 都只是拟合输入或诊断证据。
+   - 最终提交仍必须通过 PatchReplacementRepair 和 StrictTopologyGate。
 ```
 
 后续开发时，Codex 或人工修改应优先遵循：

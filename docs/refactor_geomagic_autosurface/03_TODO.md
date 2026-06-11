@@ -1,8 +1,8 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.7-t6-multiface-replacement
-> 当前主线：**候选区域预览 → STL 局部裁剪 → Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 真实贴回与边界缝合 → StrictTopologyGate 验证**。  
-> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T5.4 已完成 Apply 占位状态机；T5.4.1 已完成 stale patch preview state 安全清理；T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；直接使用 AutoSurface multi-face patch outer boundary 替换原 CAD 区域会稳定产生 boundary mismatch / free edges。T6.7 已落地 Boundary-Constrained Surface Re-trim 与 T6.7.4 strict multi-surface bounded shell 第一版：从 Geomagic patch 借 surface / 曲面趋势，用原 STP candidate outer boundary wire 重建 replacement，再进入 repair 与 StrictTopologyGate。
+> 草案版本：v0.8-t6-input-modes
+> 当前主线：**候选区域预览 → 生成 fitting STL（默认 STP sampled；自动 Patch 预览中可选 legacy / conservative STL crop；Global Cut Chain 当前是独立 STL 裁剪路线）→ Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 原 STP boundary constrained replacement → repair → StrictTopologyGate 验证**。
+> 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；T6.7 已落地 Boundary-Constrained Surface Re-trim 与 T6.7.4 strict multi-surface bounded shell 第一版。T6.7.4 之后，当前默认输入路线已切到 `STP Sampled Candidate Surface`，速度更快且效果接近 STL crop；`Global Cut Chain` 作为可选 STL 全局切链裁剪器保留，不是默认模式。
 
 ---
 
@@ -11,14 +11,17 @@
 ### 0.1 总体目标
 
 ```text
-输入：当前 STP + 原始 STL
+输入：当前 STP；原始 STL 仅在选择 legacy / conservative / global cut-chain STL crop 路线时需要
 
 1. 在 STP 上生成 FeatureBoundedRegion candidates。
 2. 用户在 GUI 中预览候选区域。
 3. 用户接受 / 选择一个 candidate。
 4. 对 candidate 提取并验证原 STP closed boundary wire。
-5. 从原始 STL 中裁剪对应 local STL，允许 margin。
-6. 将 local STL 写入 data/crop_stl。
+5. 生成 fitting STL：
+   - 默认：从 STP candidate faces / boundary 采样生成 STP-sampled fitting STL。
+   - 自动 Patch 预览可选：从原始 STL 走 legacy / conservative boundary-band crop。
+   - 独立 STL 裁剪可选：Global Cut Chain crop，当前未作为 `GeomagicFittingInputMode` 暴露。
+6. 将 fitting STL 写入 data/crop_stl。
 7. 调用 wrapCore.exe + AutoSurface，生成同步目录下的 local IGS / local STP patch。
 8. OCCT 导入 Geomagic 输出 patch。
 9. 在 Viewer 中把 patch 与原 candidate 区域叠加预览。
@@ -33,7 +36,7 @@
 
 ```text
 STP 提供拓扑边界。
-STL 提供几何采样。
+STP sampled fitting STL 或源 STL crop 提供 Geomagic 几何采样。
 Geomagic 提供曲面拟合。
 OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 用户确认是 patch preview 和真实替换之间的硬分界线。
@@ -43,6 +46,7 @@ OCCT 负责 patch 导入、叠加预览、真实替换、缝合与验证。
 
 ```text
 不要把 STL 裁剪边界作为最终 CAD 边界。
+不要把 STP-sampled fitting STL 的三角边界作为最终 CAD 边界。
 不要直接信任 Geomagic patch 的外边界。
 不要在 patch 生成后自动贴回主模型。
 不要绕过用户确认执行真实替换。
@@ -3058,6 +3062,51 @@ Geomagic pipeline 同步修正：
 6. `.\scripts\build_debug.ps1` 与 `.\scripts\test.ps1` 通过。
 ```
 
+## T6.7.6 Fitting STL Input Modes / STP sampled default + STL global cut-chain fallback
+
+状态：DONE，T6.7.4 之后的 automatic fitting input mode 已从“只围绕源 STL crop”扩展为三类明确模式，其中 STP sampled 已在 GUI 中作为当前默认模式。
+
+当前模式：
+
+```text
+1. stp-sampled-candidate-surface
+   - 默认模式。
+   - 使用当前 STP candidate faces / boundary 采样生成 synthetic fitting STL。
+   - 不要求先打开原始 STL。
+   - 当前实测判断：速度更快，AutoSurface 效果与 STL crop 路线接近，推荐作为当前默认生产路径。
+
+2. legacy-stl-crop
+   - 从原始 STL 做 centroid-only crop。
+   - 作为历史基线和对照路线保留。
+
+3. conservative-boundary-band-stl-crop
+   - 从原始 STL 做 boundary-band 保守裁剪。
+   - 只用于 A/B 验证和缺面诊断，不作为默认路线。
+```
+
+STL Global Cut Chain：
+
+```text
+StlCropMode::GlobalCutChain 已接入 GUI 的 STL crop 开关。
+它从原 STP candidate ordered boundary 采样 red loop，在源 STL 上投影为 green loop，
+沿 STL face adjacency 构造全局 cut chain，再按 seed / connected component 选择 patch mesh。
+
+snapBoundaryToRed 默认开启，用于把切链 patch outer boundary 回贴到原 STP red loop 附近。
+这只影响 fitting STL 输入质量，不改变 final CAD boundary。
+当前代码中 Global Cut Chain 是 `StlCropMode` 的单独裁剪路线，不是 `GeomagicFittingInputMode`；
+若要进入一键 Patch preview，需要后续显式把它接入 fitting input mode，或手动 / 脚本把输出 STL 交给 Geomagic。
+```
+
+关键边界：
+
+```text
+1. STP sampled 是当前默认 Geomagic fitting input mode。
+2. Global Cut Chain 是可选 STL 裁剪器，不是当前 automatic fitting input mode。
+3. STP sampled fitting STL / STL crop / Global Cut Chain 输出都不能作为最终 CAD boundary。
+4. Apply 仍只信任原 STP candidate outer boundary wire，最终提交仍由 PatchReplacementRepair + StrictTopologyGate 控制。
+5. redo 仍不得重新运行 Geomagic / fitting STL generation / STL crop / import / repair。
+```
+
 
 # P1：workspace 与日志规范
 
@@ -3265,4 +3314,6 @@ src/gui/LogPanel.cpp
 12. 不在生产逻辑中写死任何当前样例路径。
 13. 不要只根据 T6.6.1 的 stlCoverageMissingPointCount 很低就判定 STL crop 没问题；真实 Geomagic GUI 已见 local STL 缺面时，必须优先补做 boundary-band / triangle rejection 诊断。
 14. 不要在 local STL 缺面未修复前优先投入 patch boundary re-trim 或继续盲目调 sewing tolerance。
+15. 不要把 STP-sampled fitting STL 的三角边界当作最终 CAD boundary；它只是 Geomagic 输入。
+16. 不要在没有更多真实样例证据前把 Global Cut Chain 提升为默认模式；当前默认仍是 STP Sampled Candidate Surface。
 ```
