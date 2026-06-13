@@ -4,7 +4,7 @@
 > 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
 > 当前阶段：T6.7.4 strict multi-surface boundary shell 之后，重点转向 Geomagic fitting input mode 与真实 Apply 收口。
 > 更新时间：2026-06-11
-> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。
+> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 已接入一键 Patch preview 作为可选 STL 全局切链 fitting input mode，但不是默认模式。当前 Global Cut Chain 生产路径调用 `scripts/global_chain_cut_cli.py`，执行参考脚本 `scripts/cutter_global_chain_mode.py` 的无 GUI 算法片段；旧 C++ `StlCutChainCutter` 不再作为该路线的默认生产后端。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。
 
 ---
 
@@ -20,8 +20,9 @@
 2. 备用 / 诊断路线：
    legacy-stl-crop
    conservative-boundary-band-stl-crop
-   Global Cut Chain STL crop（独立 STL 裁剪路线，当前不是 automatic fitting input mode）
+   Global Cut Chain STL crop（已接入 automatic fitting input mode，同时保留独立 STL 裁剪路线）
    → 需要原始 STL
+   → 需要 `spo-global-chain` Python 环境；可用 `.\scripts\setup_global_chain_python.ps1` 创建 / 校验
    → 用于 A/B 验证、缺面诊断或必须使用源 STL 几何采样的场景
 
 3. Apply 边界：
@@ -752,7 +753,7 @@ commit 8:
 ```text
 T6.7.4 后续 Apply 收口：
 1. 继续以 STP Sampled Candidate Surface 作为默认 Geomagic fitting input mode。
-2. 用真实样例对比 STP sampled 与 Global Cut Chain STL crop 的耗时、patch face count 和 Apply report；Global Cut Chain 若用于 Geomagic，当前需要手动 / 脚本喂入输出 STL。
+2. 用真实样例对比 STP sampled 与 Global Cut Chain STL crop 的耗时、patch face count 和 Apply report。
 3. 重点处理 split boundary / 邻接旧拓扑桥接闭合，使 PatchReplacementRepair 后 free edge / multiple edge 归零。
 4. 仍由 StrictTopologyGate 决定是否提交，不绕过 BRepCheck、solid/watertight 和 STEP roundtrip。
 ```
@@ -778,7 +779,7 @@ T6.7.4 已把 Apply 路线从直接信任 Geomagic patch outer boundary，
 
 T6.7.4 之后新增两条 fitting input 路线：
 1. STP Sampled Candidate Surface：当前默认，直接从 STP candidate faces / boundary 生成 fitting STL，不要求源 STL，速度更快，效果与 STL crop 接近。
-2. Global Cut Chain STL crop：可选源 STL 全局切链裁剪器，用于真实 STL 几何采样和诊断，当前不是 automatic fitting input mode，也不是默认模式。
+2. Global Cut Chain STL crop：可选源 STL 全局切链 fitting input mode，用于真实 STL 几何采样和诊断，不是默认模式。
 
 当前下一步不是继续扩大 STL crop 或 sewing tolerance，
 而是让 replacement shell / repair / StrictTopologyGate 在真实样例上稳定闭合：

@@ -29,9 +29,28 @@ const char* toString(GeomagicFittingInputMode mode) {
     switch (mode) {
         case GeomagicFittingInputMode::LegacyStlCrop: return "legacy-stl-crop";
         case GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop: return "conservative-boundary-band-stl-crop";
+        case GeomagicFittingInputMode::GlobalCutChainStlCrop: return "global-cut-chain-stl-crop";
         case GeomagicFittingInputMode::StpSampledCandidateSurface: return "stp-sampled-candidate-surface";
     }
     return "unknown";
+}
+
+bool requiresSourceStlForFittingInputMode(GeomagicFittingInputMode mode) {
+    return stlCropModeForFittingInputMode(mode).has_value();
+}
+
+std::optional<StlCropMode> stlCropModeForFittingInputMode(GeomagicFittingInputMode mode) {
+    switch (mode) {
+        case GeomagicFittingInputMode::LegacyStlCrop:
+            return StlCropMode::CentroidOnly;
+        case GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop:
+            return StlCropMode::ConservativeBoundaryBand;
+        case GeomagicFittingInputMode::GlobalCutChainStlCrop:
+            return StlCropMode::GlobalCutChain;
+        case GeomagicFittingInputMode::StpSampledCandidateSurface:
+            return std::nullopt;
+    }
+    return std::nullopt;
 }
 
 namespace {

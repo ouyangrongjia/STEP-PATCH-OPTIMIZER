@@ -475,6 +475,76 @@ void test_process_status_keeps_apply_failure_diagnostics_after_apply_failed() {
     remove_temp_root(root);
 }
 
+void test_patch_preview_pipeline_reports_progress_before_source_stl_failure() {
+    const auto root = temp_root("spo_patch_preview_pipeline_progress_missing_stl");
+    const spo::ShapeDocument document(make_test_box(), {});
+    const auto candidate = make_feature_candidate(document, {0});
+    std::vector<spo::ProcessStatusSnapshot> updates;
+
+    const auto result = spo::AppController::generateFittingStlAndRunGeomagicForCandidateData(
+        document,
+        spo::StlMesh{},
+        candidate,
+        root,
+        spo::GeomagicAutoSurfaceConfig{},
+        spo::GeomagicFittingInputMode::GlobalCutChainStlCrop,
+        spo::StlRegionExtractorOptions{},
+        spo::StpSampledFittingOptions{},
+        [&](spo::ProcessStatusSnapshot status) {
+            updates.push_back(std::move(status));
+        });
+
+    assert(!result.success);
+    assert(result.message.find("source STL") != std::string::npos);
+    assert(!updates.empty());
+    const auto cropProgress = std::find_if(updates.begin(), updates.end(), [&](const auto& status) {
+        return status.stage == spo::ProcessStage::CroppingStl &&
+            status.candidateId == candidate.candidate_id &&
+            status.sourceFaceCount == candidate.face_count &&
+            status.boundaryEdgeCount == candidate.boundary_edge_count &&
+            status.localStlPath.filename().string().find("_candidate_") != std::string::npos &&
+            status.latestMessage.find("global-cut-chain-stl-crop") != std::string::npos;
+    });
+    assert(cropProgress != updates.end());
+    const auto failureProgress = std::find_if(updates.begin(), updates.end(), [&](const auto& status) {
+        return status.stage == spo::ProcessStage::CroppingStl &&
+            status.latestWarning.find("source STL") != std::string::npos;
+    });
+    assert(failureProgress != updates.end());
+
+    remove_temp_root(root);
+}
+
+void test_global_cut_chain_crop_requires_source_stl_path() {
+    const auto root = temp_root("spo_global_cut_chain_requires_source_path");
+    const spo::ShapeDocument document(make_test_box(), {});
+    const auto candidate = make_feature_candidate(document, {0});
+
+    spo::StlMesh sourceMesh;
+    spo::StlTriangle triangle;
+    triangle.normal = {0.0, 0.0, 1.0};
+    triangle.v0 = {0.0, 0.0, 0.0};
+    triangle.v1 = {1.0, 0.0, 0.0};
+    triangle.v2 = {0.0, 1.0, 0.0};
+    sourceMesh.addTriangle(triangle);
+
+    spo::StlRegionExtractorOptions options;
+    options.mode = spo::StlCropMode::GlobalCutChain;
+
+    const auto result = spo::AppController::cropStlForCandidateData(
+        document,
+        sourceMesh,
+        candidate,
+        root / "candidate.stl",
+        options);
+
+    assert(!result.success);
+    assert(result.message.find("source STL path") != std::string::npos);
+    assert(!std::filesystem::exists(root / "candidate.stl"));
+
+    remove_temp_root(root);
+}
+
 void test_app_controller_multi_face_patch_enters_apply_path_without_unsupported() {
     const auto root = temp_root("spo_patch_apply_controller_multiface");
     const auto modelPath = root / "model.stp";
@@ -619,6 +689,8 @@ void run_patch_apply_state_tests() {
     test_app_controller_valid_preview_applies_through_command_history_and_undo_redo();
     test_app_controller_failed_apply_keeps_document_and_preview_state();
     test_process_status_keeps_apply_failure_diagnostics_after_apply_failed();
+    test_patch_preview_pipeline_reports_progress_before_source_stl_failure();
+    test_global_cut_chain_crop_requires_source_stl_path();
     test_app_controller_multi_face_patch_enters_apply_path_without_unsupported();
     test_no_hard_coded_real_sample_path_in_apply_sources();
     test_app_controller_open_step_clears_patch_preview_state();

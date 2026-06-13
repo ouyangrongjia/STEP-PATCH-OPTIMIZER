@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 namespace {
 
@@ -167,6 +168,40 @@ void test_boundary_wire_builder_uses_analyzer_ordered_edges_only() {
     assert(!result.wire.IsNull());
 }
 
+void test_boundary_wire_builder_samples_reversed_wire_edges_continuously() {
+    const gp_Pnt p00(0.0, 0.0, 0.0);
+    const gp_Pnt p10(1.0, 0.0, 0.0);
+    const gp_Pnt p11(1.0, 1.0, 0.0);
+    const gp_Pnt p01(0.0, 1.0, 0.0);
+
+    const auto bottom = BRepBuilderAPI_MakeEdge(p00, p10).Edge();
+    const auto rightNaturalDown = BRepBuilderAPI_MakeEdge(p11, p10).Edge();
+    const auto topNaturalRight = BRepBuilderAPI_MakeEdge(p01, p11).Edge();
+    const auto leftNaturalUp = BRepBuilderAPI_MakeEdge(p00, p01).Edge();
+
+    BRepBuilderAPI_MakeWire wireBuilder;
+    wireBuilder.Add(bottom);
+    wireBuilder.Add(TopoDS::Edge(rightNaturalDown.Reversed()));
+    wireBuilder.Add(TopoDS::Edge(topNaturalRight.Reversed()));
+    wireBuilder.Add(TopoDS::Edge(leftNaturalUp.Reversed()));
+    assert(wireBuilder.IsDone());
+
+    const auto points = spo::BoundaryWireBuilder::sampleWireLoop(wireBuilder.Wire(), 5);
+
+    assert(points.size() == 20);
+    double maxStep = 0.0;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const auto& a = points[i];
+        const auto& b = points[(i + 1) % points.size()];
+        const auto dx = a.X() - b.X();
+        const auto dy = a.Y() - b.Y();
+        const auto dz = a.Z() - b.Z();
+        maxStep = std::max(maxStep, std::sqrt(dx * dx + dy * dy + dz * dz));
+    }
+
+    assert(maxStep < 0.31);
+}
+
 }
 
 void run_boundary_wire_builder_tests() {
@@ -178,4 +213,5 @@ void run_boundary_wire_builder_tests() {
     test_boundary_wire_builder_rejects_empty_ordered_edges();
     test_boundary_wire_builder_rejects_out_of_range_edge_id();
     test_boundary_wire_builder_uses_analyzer_ordered_edges_only();
+    test_boundary_wire_builder_samples_reversed_wire_edges_continuously();
 }

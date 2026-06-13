@@ -3,6 +3,7 @@
 #include "validate/ShapeValidator.h"
 
 #include <BRepBndLib.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeSolid.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepLib.hxx>
@@ -17,6 +18,7 @@
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shell.hxx>
 #include <TopoDS_Solid.hxx>
@@ -296,6 +298,38 @@ TopoDS_Shape run_shape_fix_solid(const TopoDS_Shape& shape, bool& applied) {
     return fixedShape.IsNull() ? shape : fixedShape;
 }
 
+TopoDS_Shape keep_solids_only(const TopoDS_Shape& shape, bool& applied) {
+    if (shape.IsNull() || count_shapes(shape, TopAbs_SOLID) == 0) {
+        return shape;
+    }
+    if (shape.ShapeType() == TopAbs_SOLID) {
+        return shape;
+    }
+
+    std::vector<TopoDS_Solid> solids;
+    for (TopExp_Explorer explorer(shape, TopAbs_SOLID); explorer.More(); explorer.Next()) {
+        const auto solid = TopoDS::Solid(explorer.Current());
+        if (!solid.IsNull()) {
+            solids.push_back(solid);
+        }
+    }
+    if (solids.empty()) {
+        return shape;
+    }
+    applied = true;
+    if (solids.size() == 1) {
+        return solids.front();
+    }
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    for (const auto& solid : solids) {
+        builder.Add(compound, solid);
+    }
+    return compound;
+}
+
 SewingAttempt run_sewing_attempt(
     const TopoDS_Shape& shape,
     double tolerance,
@@ -325,6 +359,9 @@ SewingAttempt run_sewing_attempt(
 
     bool unifyApplied = false;
     sewedShape = run_unify_same_domain(sewedShape, unifyApplied);
+
+    bool solidOnlyApplied = false;
+    sewedShape = keep_solids_only(sewedShape, solidOnlyApplied);
 
     attempt.shape = sewedShape;
     attempt.stats = capture_stats(sewedShape);
@@ -492,6 +529,13 @@ PatchReplacementRepairResult repairPatchReplacementShape(
             bool finalUnifyApplied = false;
             result.shape = run_unify_same_domain(result.shape, finalUnifyApplied);
             result.report.unifySameDomainApplied = result.report.unifySameDomainApplied || finalUnifyApplied;
+        }
+        bool solidOnlyApplied = false;
+        result.shape = keep_solids_only(result.shape, solidOnlyApplied);
+        if (solidOnlyApplied) {
+            append_repair_warning(
+                result.report,
+                "Discarded non-solid repair leftovers after a watertight solid was available.");
         }
 
         copy_after_stats(result.report, capture_stats(result.shape));

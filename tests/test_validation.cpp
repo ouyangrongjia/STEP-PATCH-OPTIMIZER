@@ -39,6 +39,8 @@ void run_stl_cut_chain_cutter_tests();
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
 
+#include <BRepPrimAPI_MakeSphere.hxx>
+
 #include <cassert>
 #include <cstdlib>
 
@@ -77,6 +79,13 @@ void run_validation_tests() {
     assert(report.free_edges == 0);
     assert(report.multiple_edges == 0);
     assert(!report.brep_check_valid);
+
+    const spo::ShapeDocument sphere(BRepPrimAPI_MakeSphere(10.0).Shape(), {});
+    const auto sphereReport = validator.validate(sphere);
+    assert(sphereReport.has_shape);
+    assert(sphereReport.brep_check_valid);
+    assert(sphereReport.free_edges == 0);
+    assert(sphereReport.multiple_edges == 0);
 }
 
 int main() {

@@ -24,14 +24,20 @@
 #include "brep/BoundaryWireBuilder.h"
 #include "stl/StlCutChainCutter.h"
 
-#include <BRep_Tool.hxx>
+#include <QByteArray>
+#include <QProcess>
+#include <QString>
+
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -117,6 +123,287 @@ PatchPreviewPipelineResult pipeline_error(
     result.geomagic = std::move(geomagic);
     result.message = std::move(message);
     return result;
+}
+
+QString path_to_qstring(const std::filesystem::path& path) {
+    const auto utf8Path = path.generic_u8string();
+    return QString::fromUtf8(
+        reinterpret_cast<const char*>(utf8Path.c_str()),
+        static_cast<qsizetype>(utf8Path.size()));
+}
+
+QString program_to_qstring(const std::filesystem::path& program) {
+    if (program.has_parent_path() || program.is_absolute()) {
+        return path_to_qstring(program);
+    }
+    return QString::fromStdString(program.string());
+}
+
+std::string byte_array_to_string(const QByteArray& bytes) {
+    return QString::fromUtf8(bytes).toStdString();
+}
+
+std::string tail_text(const std::string& text, std::size_t maxChars = 4000) {
+    if (text.size() <= maxChars) {
+        return text;
+    }
+    return text.substr(text.size() - maxChars);
+}
+
+std::optional<std::filesystem::path> env_path(const char* name) {
+    const auto* value = std::getenv(name);
+    if (value == nullptr || *value == '\0') {
+        return std::nullopt;
+    }
+    return std::filesystem::path(value);
+}
+
+std::filesystem::path repo_root_from_source_file() {
+    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+}
+
+std::filesystem::path resolve_global_chain_script_path() {
+    if (const auto configured = env_path("SPO_GLOBAL_CHAIN_SCRIPT")) {
+        return *configured;
+    }
+
+    const auto cwdScript = std::filesystem::current_path() / "scripts" / "global_chain_cut_cli.py";
+    std::error_code error;
+    if (std::filesystem::exists(cwdScript, error) && !error) {
+        return cwdScript;
+    }
+
+    return repo_root_from_source_file() / "scripts" / "global_chain_cut_cli.py";
+}
+
+std::filesystem::path resolve_global_chain_python_program() {
+    if (const auto configured = env_path("SPO_GLOBAL_CHAIN_PYTHON")) {
+        return *configured;
+    }
+
+    std::vector<std::filesystem::path> candidates;
+    candidates.emplace_back("D:/miniconda/envs/spo-global-chain/python.exe");
+    candidates.emplace_back("D:/miniconda/python.exe");
+
+    if (const auto userProfile = env_path("USERPROFILE")) {
+        candidates.push_back(*userProfile / "miniconda3" / "envs" / "spo-global-chain" / "python.exe");
+        candidates.push_back(*userProfile / "anaconda3" / "envs" / "spo-global-chain" / "python.exe");
+    }
+    if (const auto condaPrefix = env_path("CONDA_PREFIX")) {
+        candidates.push_back(*condaPrefix / "envs" / "spo-global-chain" / "python.exe");
+        candidates.push_back(*condaPrefix / "python.exe");
+    }
+
+    std::error_code error;
+    for (const auto& candidate : candidates) {
+        if (std::filesystem::exists(candidate, error) && !error) {
+            return candidate;
+        }
+        error.clear();
+    }
+
+    return std::filesystem::path("python");
+}
+
+bool write_points_json(
+    const std::filesystem::path& path,
+    const std::vector<gp_Pnt>& points,
+    std::string& message) {
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+        message = "Could not create Global Cut Chain JSON directory: " + error.message();
+        return false;
+    }
+
+    std::ofstream stream(path, std::ios::binary);
+    if (!stream) {
+        message = "Could not write Global Cut Chain JSON file: " + path.string();
+        return false;
+    }
+
+    stream << std::setprecision(17);
+    stream << "[\n";
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const auto& p = points[i];
+        stream << "  [" << p.X() << ", " << p.Y() << ", " << p.Z() << "]";
+        if (i + 1 < points.size()) {
+            stream << ",";
+        }
+        stream << "\n";
+    }
+    stream << "]\n";
+    return true;
+}
+
+std::string process_failure_message(
+    const std::string& prefix,
+    const std::string& stdoutText,
+    const std::string& stderrText) {
+    std::ostringstream stream;
+    stream << prefix;
+    if (!stdoutText.empty()) {
+        stream << "\nstdout tail:\n" << tail_text(stdoutText);
+    }
+    if (!stderrText.empty()) {
+        stream << "\nstderr tail:\n" << tail_text(stderrText);
+    }
+    return stream.str();
+}
+
+StlCandidateCropResult run_global_chain_python_crop(
+    const StlMesh& sourceMesh,
+    const MergeCandidate& candidate,
+    const std::filesystem::path& sourceStlPath,
+    const std::filesystem::path& outputPath,
+    const std::vector<gp_Pnt>& boundaryPoints,
+    const std::vector<gp_Pnt>& seedPoints) {
+    if (sourceStlPath.empty()) {
+        return crop_error(outputPath, {}, "Global Cut Chain Python backend requires the original source STL path.");
+    }
+
+    std::error_code error;
+    if (!std::filesystem::exists(sourceStlPath, error) || error) {
+        return crop_error(outputPath, {}, "Global Cut Chain source STL path does not exist: " + sourceStlPath.string());
+    }
+
+    const auto scriptPath = resolve_global_chain_script_path();
+    if (!std::filesystem::exists(scriptPath, error) || error) {
+        return crop_error(outputPath, {}, "Global Cut Chain CLI script does not exist: " + scriptPath.string());
+    }
+
+    const auto runDir = outputPath.parent_path() / (outputPath.stem().string() + "_global_chain_py");
+    const auto boundaryJson = runDir / "boundary_points.json";
+    const auto seedsJson = runDir / "seed_points.json";
+    const auto summaryJson = runDir / "summary.json";
+    const auto debugDir = runDir / "debug";
+
+    std::string jsonMessage;
+    if (!write_points_json(boundaryJson, boundaryPoints, jsonMessage)) {
+        return crop_error(outputPath, {}, jsonMessage);
+    }
+    if (!write_points_json(seedsJson, seedPoints, jsonMessage)) {
+        return crop_error(outputPath, {}, jsonMessage);
+    }
+
+    std::filesystem::remove(outputPath, error);
+    error.clear();
+
+    const auto pythonProgram = resolve_global_chain_python_program();
+    QProcess process;
+    process.setProgram(program_to_qstring(pythonProgram));
+    process.setArguments({
+        path_to_qstring(scriptPath),
+        QStringLiteral("--stl"), path_to_qstring(sourceStlPath),
+        QStringLiteral("--boundary-json"), path_to_qstring(boundaryJson),
+        QStringLiteral("--seeds-json"), path_to_qstring(seedsJson),
+        QStringLiteral("--output"), path_to_qstring(outputPath),
+        QStringLiteral("--summary-json"), path_to_qstring(summaryJson),
+        QStringLiteral("--debug-dir"), path_to_qstring(debugDir),
+    });
+    process.setWorkingDirectory(path_to_qstring(repo_root_from_source_file()));
+    process.start();
+
+    if (!process.waitForStarted()) {
+        return crop_error(
+            outputPath,
+            {},
+            "Could not start Global Cut Chain Python backend: " + byte_array_to_string(process.errorString().toUtf8()) +
+                " program=" + pythonProgram.string());
+    }
+
+    constexpr int kTimeoutMs = 45 * 60 * 1000;
+    bool timedOut = false;
+    if (!process.waitForFinished(kTimeoutMs)) {
+        timedOut = true;
+        process.kill();
+        process.waitForFinished(5000);
+    }
+
+    const auto stdoutText = byte_array_to_string(process.readAllStandardOutput());
+    const auto stderrText = byte_array_to_string(process.readAllStandardError());
+    if (timedOut) {
+        return crop_error(
+            outputPath,
+            {},
+            process_failure_message("Global Cut Chain Python backend timed out.", stdoutText, stderrText));
+    }
+
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        std::ostringstream prefix;
+        prefix << "Global Cut Chain Python backend failed with exit code " << process.exitCode()
+               << ". program=" << pythonProgram.string();
+        return crop_error(outputPath, {}, process_failure_message(prefix.str(), stdoutText, stderrText));
+    }
+
+    if (!std::filesystem::exists(outputPath, error) || error) {
+        return crop_error(
+            outputPath,
+            {},
+            process_failure_message("Global Cut Chain Python backend did not produce the output STL.", stdoutText, stderrText));
+    }
+
+    auto read = StlReader().read(outputPath);
+    if (!read.success) {
+        return crop_error(outputPath, {}, "Global Cut Chain Python backend output STL is unreadable: " + read.message);
+    }
+
+    constexpr std::size_t kMinPatchTriangleCount = 10;
+    if (read.mesh.triangleCount() < kMinPatchTriangleCount) {
+        std::ostringstream message;
+        message << "Global Cut Chain Python backend produced only " << read.mesh.triangleCount()
+                << " triangles; refusing to send a degenerate STL to Geomagic.";
+        return crop_error(outputPath, {}, message.str());
+    }
+
+    StlCandidateCropResult result;
+    result.success = true;
+    result.outputPath = outputPath;
+    result.extract.localMesh = std::move(read.mesh);
+    result.extract.success = true;
+    result.extract.report.success = true;
+    result.extract.report.candidate_id = candidate.candidate_id;
+    result.extract.report.source_triangle_count = static_cast<int>(sourceMesh.triangleCount());
+    result.extract.report.output_triangle_count = static_cast<int>(result.extract.localMesh.triangleCount());
+    result.extract.report.output_bbox = result.extract.localMesh.boundingBox();
+    result.extract.report.message = "Global Cut Chain Python backend completed.";
+    result.message = "Global Cut Chain Python patch extracted (" +
+        std::to_string(result.extract.localMesh.triangleCount()) + " triangles).";
+    return result;
+}
+
+struct PatchPreviewProgressPaths {
+    std::filesystem::path localStlPath;
+    std::filesystem::path patchStepPath;
+    std::filesystem::path patchIgesPath;
+    std::filesystem::path fitRegionLogPath;
+};
+
+void publish_patch_preview_progress(
+    const PatchPreviewProgressCallback& progress,
+    ProcessStage stage,
+    const MergeCandidate& candidate,
+    std::string message,
+    const PatchPreviewProgressPaths& paths = {},
+    std::string warning = {}) {
+    if (!progress) {
+        return;
+    }
+
+    auto status = makeProcessStatus(stage, std::move(message));
+    status.candidateId = candidate.candidate_id;
+    status.sourceFaceCount = candidate.face_count > 0
+        ? candidate.face_count
+        : static_cast<int>(candidate.faces.size());
+    status.boundaryEdgeCount = candidate.boundary_edge_count > 0
+        ? candidate.boundary_edge_count
+        : static_cast<int>(candidate.boundary_edges.size());
+    status.localStlPath = paths.localStlPath;
+    status.patchStepPath = paths.patchStepPath;
+    status.patchIgesPath = paths.patchIgesPath;
+    status.fitRegionLogPath = paths.fitRegionLogPath;
+    status.latestWarning = std::move(warning);
+    progress(std::move(status));
 }
 
 void publish_apply_failure(
@@ -239,7 +526,7 @@ StlCandidateCropResult AppController::cropStlForCandidate(
     const MergeCandidate& candidate,
     const std::filesystem::path& outputPath,
     const StlRegionExtractorOptions& options) const {
-    return cropStlForCandidateData(context_.document, sourceStlMesh_, candidate, outputPath, options);
+    return cropStlForCandidateData(context_.document, sourceStlMesh_, candidate, outputPath, options, sourceStlPath_);
 }
 
 StlCandidateCropResult AppController::cropStlForCandidateData(
@@ -247,7 +534,8 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
     const StlMesh& sourceMesh,
     const MergeCandidate& candidate,
     const std::filesystem::path& outputPath,
-    const StlRegionExtractorOptions& options) {
+    const StlRegionExtractorOptions& options,
+    const std::filesystem::path& sourceStlPath) {
     if (!document.hasShape()) {
         return crop_error(outputPath, {}, "Open a STEP/STP document before cropping STL.");
     }
@@ -279,21 +567,7 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
                 "Failed to build boundary wire for global cut chain: " + wireResult.message);
         }
 
-        // Sample boundary loop points from the wire
-        std::vector<gp_Pnt> boundaryPoints;
-        const auto& topology = document.topology();
-        for (const auto edgeId : boundary.ordered_boundary_edges) {
-            if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) continue;
-            const auto& edge = topology.edge(edgeId);
-            double first = 0.0, last = 0.0;
-            auto curve = BRep_Tool::Curve(edge, first, last);
-            if (curve.IsNull()) continue;
-            const int nPts = 30;
-            for (int k = 0; k < nPts; ++k) {
-                double t = first + (last - first) * static_cast<double>(k) / static_cast<double>(nPts);
-                boundaryPoints.push_back(curve->Value(t));
-            }
-        }
+        const auto boundaryPoints = BoundaryWireBuilder::sampleWireLoop(wireResult.wire, 120);
 
         if (boundaryPoints.size() < 3) {
             StlRegionExtractResult emptyExtract;
@@ -302,6 +576,7 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
         }
 
         // Compute seed points from candidate face centers
+        const auto& topology = document.topology();
         std::vector<gp_Pnt> seedPoints;
         for (const auto faceId : candidate.faces) {
             if (faceId >= topology.faceCount()) continue;
@@ -313,42 +588,7 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
             } catch (...) {}
         }
 
-        // Run global cut chain cutter
-        StlCutChainOptions cutOpts;
-        cutOpts.samplesPerEdge = 30;
-        cutOpts.minComponentFaceCount = 1;
-
-        StlCutChainCutter cutter;
-        auto cutResult = cutter.cut(
-            sourceMesh, boundaryPoints,
-            seedPoints.empty() ? std::optional<std::vector<gp_Pnt>>{} : seedPoints,
-            cutOpts);
-
-        if (!cutResult.success || cutResult.patchMesh.empty()) {
-            StlRegionExtractResult emptyExtract;
-            return crop_error(outputPath, std::move(emptyExtract),
-                "Global cut chain failed: " + cutResult.message);
-        }
-
-        // Write the patch STL
-        const auto write = StlWriter().write(cutResult.patchMesh, outputPath);
-        if (!write.success) {
-            return crop_error(outputPath, {}, write.message);
-        }
-
-        StlCandidateCropResult result;
-        result.success = true;
-        result.extract.localMesh = std::move(cutResult.patchMesh);
-        result.extract.report.success = true;
-        result.extract.report.candidate_id = candidate.candidate_id;
-        result.extract.report.source_triangle_count = static_cast<int>(sourceMesh.triangleCount());
-        result.extract.report.output_triangle_count = cutResult.patchFaceCount;
-        result.extract.report.output_bbox = result.extract.localMesh.boundingBox();
-        result.extract.report.message = cutResult.message;
-        result.extract.success = true;
-        result.outputPath = outputPath;
-        result.message = "Global cut chain patch extracted (" + std::to_string(cutResult.patchFaceCount) + " triangles).";
-        return result;
+        return run_global_chain_python_crop(sourceMesh, candidate, sourceStlPath, outputPath, boundaryPoints, seedPoints);
     }
 
     // ---- Default / ConservativeBoundaryBand modes ----
@@ -388,7 +628,8 @@ PatchPreviewPipelineResult AppController::cropAndRunGeomagicForCandidateData(
 
     auto crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, options);
     if (!crop.success) {
-        return pipeline_error(std::move(crop), {}, crop.message);
+        const auto message = crop.message;
+        return pipeline_error(std::move(crop), {}, message);
     }
 
     const auto root = workspaceRoot.empty()
@@ -435,11 +676,29 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
     GeomagicAutoSurfaceConfig config,
     GeomagicFittingInputMode fittingMode,
     const StlRegionExtractorOptions& cropOptions,
-    const StpSampledFittingOptions& samplingOptions) {
+    const StpSampledFittingOptions& samplingOptions,
+    PatchPreviewProgressCallback progress,
+    const std::filesystem::path& sourceStlPath) {
     const auto localStlPath = default_pipeline_local_stl_path(document, candidate, workspaceRoot);
+    PatchPreviewProgressPaths progressPaths;
+    progressPaths.localStlPath = localStlPath;
+
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::AnalyzingBoundary,
+        candidate,
+        "Patch preview pipeline preparing outputs: fitting_mode=" + std::string(toString(fittingMode)),
+        progressPaths);
 
     std::string directoryMessage;
     if (!ensure_parent_directory(localStlPath, directoryMessage)) {
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            directoryMessage,
+            progressPaths,
+            directoryMessage);
         return pipeline_error({}, {}, directoryMessage);
     }
 
@@ -452,18 +711,40 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         root / "data" / "crop_stp",
         root / "data" / "crop_igs");
     if (!outputPaths.success) {
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            outputPaths.message,
+            progressPaths,
+            outputPaths.message);
         return pipeline_error({}, {}, outputPaths.message);
     }
+    progressPaths.patchStepPath = outputPaths.outputStepPath;
+    progressPaths.patchIgesPath = outputPaths.outputIgesPath;
+    progressPaths.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
 
     StlCandidateCropResult crop;
     StpSampledFittingReport sampledReport;
 
     if (fittingMode == GeomagicFittingInputMode::StpSampledCandidateSurface) {
-        // Generate synthetic STL from STP candidate faces
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Generating fitting STL from STP sampled candidate surface: fitting_mode=" + std::string(toString(fittingMode)),
+            progressPaths);
         StlMesh syntheticMesh;
         StpSampledFittingMeshBuilder builder;
         sampledReport = builder.build(document, candidate, samplingOptions, syntheticMesh);
         if (!sampledReport.success) {
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                sampledReport.message,
+                progressPaths,
+                sampledReport.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
@@ -478,6 +759,13 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         if (!writeResult.success) {
             sampledReport.success = false;
             sampledReport.message = writeResult.message;
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                writeResult.message,
+                progressPaths,
+                writeResult.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
@@ -494,39 +782,93 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         crop.extract.report.success = true;
         crop.extract.report.candidate_id = candidate.candidate_id;
         crop.message = "STP-sampled fitting STL written.";
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
+                ", triangles=" + std::to_string(sampledReport.outputTriangleCount),
+            progressPaths);
     } else {
-        // Legacy STL crop path
         StlRegionExtractorOptions effectiveCropOptions = cropOptions;
-        if (fittingMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop) {
-            effectiveCropOptions.mode = StlCropMode::ConservativeBoundaryBand;
-        } else {
-            effectiveCropOptions.mode = StlCropMode::CentroidOnly;
+        const auto cropMode = stlCropModeForFittingInputMode(fittingMode);
+        if (!cropMode.has_value()) {
+            const std::string message = "Unsupported Geomagic fitting input mode.";
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                message,
+                progressPaths,
+                message);
+            PatchPreviewPipelineResult result;
+            result.success = false;
+            result.fittingInputMode = fittingMode;
+            result.message = message;
+            return result;
         }
+        effectiveCropOptions.mode = *cropMode;
 
-        crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, effectiveCropOptions);
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Generating fitting STL from source STL: fitting_mode=" + std::string(toString(fittingMode)),
+            progressPaths);
+        crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, effectiveCropOptions, sourceStlPath);
         if (!crop.success) {
+            const auto message = crop.message;
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                message,
+                progressPaths,
+                message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.crop = std::move(crop);
             result.fittingInputMode = fittingMode;
-            result.message = crop.message;
+            result.message = message;
             return result;
         }
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
+                ", triangles=" + std::to_string(crop.extract.localMesh.triangleCount()),
+            progressPaths);
     }
 
     config.inputStlPath = localStlPath;
     config.outputStepPath = outputPaths.outputStepPath;
     config.outputIgesPath = outputPaths.outputIgesPath;
     config.workDir = root;
-    config.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
+    config.fitRegionLogPath = progressPaths.fitRegionLogPath;
     config.geometry = "Mechanical";
     config.autoMerge = true;
     config.adaptiveFit = false;
     config.strictPatchTarget = false;
 
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::RunningGeomagic,
+        candidate,
+        "Geomagic AutoSurface started: fitting_mode=" + std::string(toString(fittingMode)) +
+            ", skip_remesh=" + std::string(config.skipRemesh ? "true" : "false"),
+        progressPaths);
     auto geomagic = GeomagicAutoSurfaceBackend().run(config);
     if (!geomagic.success) {
         const auto message = geomagic.errorMessage.empty() ? geomagic.message : geomagic.errorMessage;
+        const auto warning = message.empty() ? std::string("Geomagic AutoSurface failed.") : message;
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::RunningGeomagic,
+            candidate,
+            warning,
+            progressPaths,
+            warning);
         PatchPreviewPipelineResult result;
         result.success = false;
         result.crop = std::move(crop);
@@ -536,6 +878,12 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         result.message = message.empty() ? "Geomagic AutoSurface failed." : message;
         return result;
     }
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::RunningGeomagic,
+        candidate,
+        "Geomagic AutoSurface finished.",
+        progressPaths);
 
     PatchPreviewPipelineResult result;
     result.success = true;

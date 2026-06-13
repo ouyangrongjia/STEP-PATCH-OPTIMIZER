@@ -6,6 +6,7 @@
 #include <deque>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <queue>
 #include <set>
 #include <sstream>
@@ -66,6 +67,245 @@ std::tuple<std::int64_t, std::int64_t, std::int64_t> make_spatial_key(
         static_cast<std::int64_t>(std::llround(p[2] / tol))
     };
 }
+
+struct ClosestPointResult {
+    Vec3 point = {0, 0, 0};
+    double distance2 = kDoubleMax;
+};
+
+ClosestPointResult closest_point_on_triangle(const Vec3& p, const Vec3& a, const Vec3& b, const Vec3& c) {
+    const Vec3 ab = vec3_sub(b, a);
+    const Vec3 ac = vec3_sub(c, a);
+    const Vec3 ap = vec3_sub(p, a);
+    const double d1 = vec3_dot(ab, ap);
+    const double d2 = vec3_dot(ac, ap);
+    if (d1 <= 0.0 && d2 <= 0.0) {
+        return {a, vec3_norm2(vec3_sub(p, a))};
+    }
+
+    const Vec3 bp = vec3_sub(p, b);
+    const double d3 = vec3_dot(ab, bp);
+    const double d4 = vec3_dot(ac, bp);
+    if (d3 >= 0.0 && d4 <= d3) {
+        return {b, vec3_norm2(vec3_sub(p, b))};
+    }
+
+    const double vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+        const double v = d1 / (d1 - d3);
+        const Vec3 point = vec3_add(a, vec3_mul(ab, v));
+        return {point, vec3_norm2(vec3_sub(p, point))};
+    }
+
+    const Vec3 cp = vec3_sub(p, c);
+    const double d5 = vec3_dot(ab, cp);
+    const double d6 = vec3_dot(ac, cp);
+    if (d6 >= 0.0 && d5 <= d6) {
+        return {c, vec3_norm2(vec3_sub(p, c))};
+    }
+
+    const double vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+        const double w = d2 / (d2 - d6);
+        const Vec3 point = vec3_add(a, vec3_mul(ac, w));
+        return {point, vec3_norm2(vec3_sub(p, point))};
+    }
+
+    const double va = d3 * d6 - d5 * d4;
+    if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+        const double w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        const Vec3 point = vec3_add(b, vec3_mul(vec3_sub(c, b), w));
+        return {point, vec3_norm2(vec3_sub(p, point))};
+    }
+
+    const double denom = 1.0 / (va + vb + vc);
+    const double v = vb * denom;
+    const double w = vc * denom;
+    const Vec3 point = vec3_add(a, vec3_add(vec3_mul(ab, v), vec3_mul(ac, w)));
+    return {point, vec3_norm2(vec3_sub(p, point))};
+}
+
+struct Bounds3 {
+    Vec3 min = {0, 0, 0};
+    Vec3 max = {0, 0, 0};
+    bool valid = false;
+};
+
+void include_point(Bounds3& bounds, const Vec3& point) {
+    if (!bounds.valid) {
+        bounds.min = point;
+        bounds.max = point;
+        bounds.valid = true;
+        return;
+    }
+    for (int axis = 0; axis < 3; ++axis) {
+        bounds.min[axis] = std::min(bounds.min[axis], point[axis]);
+        bounds.max[axis] = std::max(bounds.max[axis], point[axis]);
+    }
+}
+
+void include_bounds(Bounds3& bounds, const Bounds3& other) {
+    if (!other.valid) {
+        return;
+    }
+    include_point(bounds, other.min);
+    include_point(bounds, other.max);
+}
+
+double bounds_distance2(const Bounds3& bounds, const Vec3& point) {
+    if (!bounds.valid) {
+        return kDoubleMax;
+    }
+    double distance2 = 0.0;
+    for (int axis = 0; axis < 3; ++axis) {
+        if (point[axis] < bounds.min[axis]) {
+            const double d = bounds.min[axis] - point[axis];
+            distance2 += d * d;
+        } else if (point[axis] > bounds.max[axis]) {
+            const double d = point[axis] - bounds.max[axis];
+            distance2 += d * d;
+        }
+    }
+    return distance2;
+}
+
+class ProjectionBvh {
+public:
+    explicit ProjectionBvh(const StlCutChainCutter::MeshTopology& topo)
+        : topo_(topo) {
+        const auto faceCount = topo_.faces.size();
+        triangleBounds_.resize(faceCount);
+        triangleCenters_.resize(faceCount);
+        indices_.resize(faceCount);
+        std::iota(indices_.begin(), indices_.end(), 0);
+
+        for (std::size_t i = 0; i < faceCount; ++i) {
+            const auto& face = topo_.faces[i];
+            const Vec3& a = topo_.vertices[static_cast<std::size_t>(face[0])];
+            const Vec3& b = topo_.vertices[static_cast<std::size_t>(face[1])];
+            const Vec3& c = topo_.vertices[static_cast<std::size_t>(face[2])];
+            include_point(triangleBounds_[i], a);
+            include_point(triangleBounds_[i], b);
+            include_point(triangleBounds_[i], c);
+            triangleCenters_[i] = vec3_mul(vec3_add(vec3_add(a, b), c), 1.0 / 3.0);
+        }
+
+        if (!indices_.empty()) {
+            root_ = build(0, indices_.size());
+        }
+    }
+
+    ClosestPointResult closestPoint(const Vec3& point, std::int64_t* faceId) const {
+        ClosestPointResult result;
+        std::int64_t bestFace = -1;
+        if (root_ >= 0) {
+            query(root_, point, result, bestFace);
+        }
+        if (faceId != nullptr) {
+            *faceId = bestFace;
+        }
+        return result;
+    }
+
+private:
+    struct Node {
+        Bounds3 bounds;
+        std::size_t begin = 0;
+        std::size_t end = 0;
+        int left = -1;
+        int right = -1;
+    };
+
+    int build(std::size_t begin, std::size_t end) {
+        Node node;
+        node.begin = begin;
+        node.end = end;
+        Bounds3 centroidBounds;
+        for (std::size_t i = begin; i < end; ++i) {
+            const auto faceId = static_cast<std::size_t>(indices_[i]);
+            include_bounds(node.bounds, triangleBounds_[faceId]);
+            include_point(centroidBounds, triangleCenters_[faceId]);
+        }
+
+        const auto nodeIndex = static_cast<int>(nodes_.size());
+        nodes_.push_back(node);
+        constexpr std::size_t maxLeafSize = 12;
+        if (end - begin <= maxLeafSize) {
+            return nodeIndex;
+        }
+
+        int splitAxis = 0;
+        double bestExtent = centroidBounds.max[0] - centroidBounds.min[0];
+        for (int axis = 1; axis < 3; ++axis) {
+            const double extent = centroidBounds.max[axis] - centroidBounds.min[axis];
+            if (extent > bestExtent) {
+                bestExtent = extent;
+                splitAxis = axis;
+            }
+        }
+
+        if (bestExtent <= 1e-20) {
+            return nodeIndex;
+        }
+
+        const auto mid = begin + (end - begin) / 2;
+        std::nth_element(indices_.begin() + static_cast<std::ptrdiff_t>(begin),
+            indices_.begin() + static_cast<std::ptrdiff_t>(mid),
+            indices_.begin() + static_cast<std::ptrdiff_t>(end),
+            [&](std::int64_t lhs, std::int64_t rhs) {
+                return triangleCenters_[static_cast<std::size_t>(lhs)][splitAxis] <
+                    triangleCenters_[static_cast<std::size_t>(rhs)][splitAxis];
+            });
+
+        nodes_[nodeIndex].left = build(begin, mid);
+        nodes_[nodeIndex].right = build(mid, end);
+        return nodeIndex;
+    }
+
+    void query(int nodeIndex, const Vec3& point, ClosestPointResult& best, std::int64_t& bestFace) const {
+        const auto& node = nodes_[static_cast<std::size_t>(nodeIndex)];
+        if (bounds_distance2(node.bounds, point) > best.distance2) {
+            return;
+        }
+
+        if (node.left < 0 && node.right < 0) {
+            for (std::size_t i = node.begin; i < node.end; ++i) {
+                const auto faceId = indices_[i];
+                const auto& face = topo_.faces[static_cast<std::size_t>(faceId)];
+                const Vec3& a = topo_.vertices[static_cast<std::size_t>(face[0])];
+                const Vec3& b = topo_.vertices[static_cast<std::size_t>(face[1])];
+                const Vec3& c = topo_.vertices[static_cast<std::size_t>(face[2])];
+                auto candidate = closest_point_on_triangle(point, a, b, c);
+                if (candidate.distance2 < best.distance2) {
+                    best = candidate;
+                    bestFace = faceId;
+                }
+            }
+            return;
+        }
+
+        const double leftDistance = node.left >= 0
+            ? bounds_distance2(nodes_[static_cast<std::size_t>(node.left)].bounds, point)
+            : kDoubleMax;
+        const double rightDistance = node.right >= 0
+            ? bounds_distance2(nodes_[static_cast<std::size_t>(node.right)].bounds, point)
+            : kDoubleMax;
+        if (leftDistance <= rightDistance) {
+            if (node.left >= 0) query(node.left, point, best, bestFace);
+            if (node.right >= 0) query(node.right, point, best, bestFace);
+        } else {
+            if (node.right >= 0) query(node.right, point, best, bestFace);
+            if (node.left >= 0) query(node.left, point, best, bestFace);
+        }
+    }
+
+    const StlCutChainCutter::MeshTopology& topo_;
+    std::vector<Bounds3> triangleBounds_;
+    std::vector<Vec3> triangleCenters_;
+    std::vector<std::int64_t> indices_;
+    std::vector<Node> nodes_;
+    int root_ = -1;
+};
 
 // ---- edge helpers ----
 
@@ -458,6 +698,14 @@ std::vector<Vec3> StlCutChainCutter::resamplePolyline(
 std::vector<Vec3> StlCutChainCutter::sampleBoundaryLoop(
     const std::vector<gp_Pnt>& loop, int samplesPerEdge) {
     std::vector<Vec3> out;
+    if (samplesPerEdge <= 1) {
+        out.reserve(loop.size());
+        for (const auto& point : loop) {
+            out.push_back(gppnt_to_vec3(point));
+        }
+        return out;
+    }
+
     int n = std::max(2, samplesPerEdge);
     for (std::size_t i = 0; i < loop.size(); ++i) {
         std::size_t j = (i + 1) % loop.size();
@@ -484,81 +732,12 @@ void StlCutChainCutter::projectToStl(
     triIds.reserve(redPoints.size());
     distances.reserve(redPoints.size());
 
+    const ProjectionBvh bvh(topo);
     for (const auto& rp : redPoints) {
-        double bestDist2 = kDoubleMax;
-        Vec3 bestProj = rp;
         std::int64_t bestTri = -1;
-
-        for (std::int64_t fi = 0; fi < static_cast<std::int64_t>(topo.faces.size()); ++fi) {
-            const auto& f = topo.faces[static_cast<std::size_t>(fi)];
-            const Vec3& a = topo.vertices[static_cast<std::size_t>(f[0])];
-            const Vec3& b = topo.vertices[static_cast<std::size_t>(f[1])];
-            const Vec3& c = topo.vertices[static_cast<std::size_t>(f[2])];
-
-            // Barycentric projection to triangle plane
-            Vec3 ab = vec3_sub(b, a);
-            Vec3 ac = vec3_sub(c, a);
-            Vec3 n = vec3_cross(ab, ac);
-            double area2 = vec3_norm2(n);
-            if (area2 < 1e-20) continue;
-            n = vec3_mul(n, 1.0 / std::sqrt(area2));
-
-            // Project point to plane
-            Vec3 ap = vec3_sub(rp, a);
-            double t = vec3_dot(ap, n);
-            Vec3 proj = vec3_sub(rp, vec3_mul(n, t));
-
-            // Check if projection is inside triangle (barycentric)
-            Vec3 bp = vec3_sub(proj, b);
-            Vec3 cp = vec3_sub(proj, c);
-            Vec3 cb = vec3_sub(b, c);
-            Vec3 ca = vec3_sub(c, a);
-            Vec3 ba = vec3_sub(a, b);
-
-            double sn = vec3_dot(n, vec3_cross(ab, vec3_sub(proj, a)));
-            double sbn = vec3_dot(n, vec3_cross(cb, bp));
-            double scn = vec3_dot(n, vec3_cross(ca, cp));
-            double san = vec3_dot(n, vec3_cross(ba, vec3_sub(proj, b)));
-
-            double sum = sn + sbn + scn + san;
-            if (std::abs(sum) < 1e-20) continue;
-            double u = sn / sum;
-            double v = sbn / sum;
-            double w = scn / sum;
-            // The 4th is for the split at vertex a — simplify to 3 components
-            // Using standard barycentric: u+v+w=1, u,v,w >= 0 for inside
-            // Recompute with cleaner method
-            double d00 = vec3_dot(ab, ab);
-            double d01 = vec3_dot(ab, ac);
-            double d11 = vec3_dot(ac, ac);
-            double d20 = vec3_dot(ap, ab);
-            double d21 = vec3_dot(ap, ac);
-            double denom = d00 * d11 - d01 * d01;
-            if (std::abs(denom) < 1e-20) continue;
-            v = (d11 * d20 - d01 * d21) / denom;
-            w = (d00 * d21 - d01 * d20) / denom;
-            u = 1.0 - v - w;
-
-            bool inside = (u >= -1e-6) && (v >= -1e-6) && (w >= -1e-6);
-            double d2 = vec3_norm2(vec3_sub(proj, rp));
-            if (!inside) {
-                // Point projects outside triangle — find closest point on edges
-                double ed = std::min({
-                    pointSegmentDistance(rp, a, b),
-                    pointSegmentDistance(rp, b, c),
-                    pointSegmentDistance(rp, c, a)});
-                d2 = ed * ed;
-            }
-
-            if (d2 < bestDist2) {
-                bestDist2 = d2;
-                bestTri = fi;
-                if (inside)
-                    bestProj = vec3_add(a, vec3_add(vec3_mul(ab, v), vec3_mul(ac, w)));
-            }
-        }
-
-        greenPoints.push_back(bestProj != rp ? bestProj : rp);
+        const auto closest = bvh.closestPoint(rp, &bestTri);
+        const auto bestDist2 = closest.distance2;
+        greenPoints.push_back(bestTri >= 0 ? closest.point : rp);
         triIds.push_back(bestTri >= 0 ? bestTri : 0);
         distances.push_back(std::sqrt(bestDist2));
     }

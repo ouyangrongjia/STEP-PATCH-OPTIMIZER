@@ -5,6 +5,8 @@
 #include "stl/StlCropReport.h"
 #include "stl/StlMesh.h"
 
+#include <optional>
+
 namespace spo {
 
 enum class StlCropMode {
@@ -16,10 +18,13 @@ enum class StlCropMode {
 enum class GeomagicFittingInputMode {
     LegacyStlCrop,
     ConservativeBoundaryBandStlCrop,
+    GlobalCutChainStlCrop,
     StpSampledCandidateSurface
 };
 
 const char* toString(GeomagicFittingInputMode mode);
+bool requiresSourceStlForFittingInputMode(GeomagicFittingInputMode mode);
+std::optional<StlCropMode> stlCropModeForFittingInputMode(GeomagicFittingInputMode mode);
 
 struct StlRegionExtractorOptions {
     StlCropMode mode = StlCropMode::CentroidOnly;

@@ -3,7 +3,11 @@
 #include "brep/ShapeDocument.h"
 #include "brep/TopologyGraph.h"
 
+#include <BRep_Tool.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepTools_WireExplorer.hxx>
+#include <TopAbs_Orientation.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 
 #include <utility>
@@ -68,6 +72,40 @@ BoundaryWireBuildResult BoundaryWireBuilder::buildOuterWire(
     result.wire = wire;
     result.message = "Boundary wire built from one closed outer loop.";
     return result;
+}
+
+std::vector<gp_Pnt> BoundaryWireBuilder::sampleWireLoop(
+    const TopoDS_Wire& wire,
+    int samplesPerEdge) {
+    std::vector<gp_Pnt> points;
+    if (wire.IsNull() || samplesPerEdge <= 0) {
+        return points;
+    }
+
+    for (BRepTools_WireExplorer explorer(wire); explorer.More(); explorer.Next()) {
+        const auto edge = TopoDS::Edge(explorer.Current());
+        if (edge.IsNull()) {
+            continue;
+        }
+
+        double first = 0.0;
+        double last = 0.0;
+        auto curve = BRep_Tool::Curve(edge, first, last);
+        if (curve.IsNull()) {
+            continue;
+        }
+
+        const bool reversed = edge.Orientation() == TopAbs_REVERSED;
+        for (int k = 0; k < samplesPerEdge; ++k) {
+            const double u = static_cast<double>(k) / static_cast<double>(samplesPerEdge);
+            const double parameter = reversed
+                ? last - (last - first) * u
+                : first + (last - first) * u;
+            points.push_back(curve->Value(parameter));
+        }
+    }
+
+    return points;
 }
 
 }

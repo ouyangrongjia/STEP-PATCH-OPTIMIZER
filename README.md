@@ -353,10 +353,14 @@ tools         批处理和 STEP 统计工具
 2. 备用 / 诊断路线：原始 STL crop。
    - Legacy centroid-only crop 保留为基线。
    - Conservative boundary-band crop 保留为 A/B 验证。
-   - Global Cut Chain crop 已接入 GUI 作为可选的独立 STL 全局切链裁剪器。
+   - Global Cut Chain crop 已接入 GUI，既可作为独立 STL 全局切链裁剪器，也可作为一键 Patch preview 的可选 fitting input mode；当前生产调用走 `scripts/global_chain_cut_cli.py`，执行 `scripts/cutter_global_chain_mode.py` 的无 GUI 参考算法片段。
+   - 首次使用 Global Cut Chain 前运行 `.\scripts\setup_global_chain_python.ps1`，准备 `spo-global-chain` conda 环境。
 3. Apply 仍以原 STP candidate outer boundary wire 作为最终 CAD boundary。
    - STP 采样 STL、裁剪 STL、Geomagic patch outer boundary 都只是拟合输入或诊断证据。
    - 最终提交仍必须通过 PatchReplacementRepair 和 StrictTopologyGate。
+4. 一键 Patch preview 的报告区会实时显示进度。
+   - fitting STL 生成、STL crop / Global Cut Chain crop、Geomagic start/finish/failure、import 和 PreviewReady/失败会追加阶段事件。
+   - 长阶段每 2 秒刷新心跳行，显示 elapsed、last stage 和最近 message / warning。
 ```
 
 后续开发时，Codex 或人工修改应优先遵循：

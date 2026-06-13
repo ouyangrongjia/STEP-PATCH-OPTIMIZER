@@ -120,6 +120,11 @@ void print_report(const spo::PatchReplacementReport& report) {
               << report.multiSurfaceFailedPatchFaceIndex << "\n";
     std::cout << "multi-surface failed face edge count: "
               << report.multiSurfaceFailedFaceEdgeCount << "\n";
+    std::cout << "multi-surface failed edge ids:";
+    for (const auto edgeId : report.multiSurfaceFailedEdgeIds) {
+        std::cout << " " << edgeId;
+    }
+    std::cout << "\n";
     std::cout << "source faces replaced: " << report.sourceFacesReplaced << "\n";
     std::cout << "repair applied: " << report.repairApplied << "\n";
     std::cout << "repair before face/edge/shell/solid: "

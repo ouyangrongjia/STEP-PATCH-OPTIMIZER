@@ -1,7 +1,7 @@
 # STEP-PATCH-OPTIMIZER 项目流程文档
 
 > 草案版本：v0.3-stp-sampled-default
-> 用途：定义从 STP 输入（默认 STP sampled fitting STL；自动 Patch 预览可选 legacy / conservative STL crop；Global Cut Chain 为独立 STL 裁剪路线），到候选预览、Geomagic patch 生成、patch 叠加预览、用户 Apply、真实贴回和验证的完整流程。
+> 用途：定义从 STP 输入（默认 STP sampled fitting STL；自动 Patch 预览可选 legacy / conservative / Global Cut Chain STL crop），到候选预览、Geomagic patch 生成、patch 叠加预览、用户 Apply、真实贴回和验证的完整流程。
 
 ---
 
@@ -10,7 +10,7 @@
 ```text
 输入：
     当前 STP
-    原始 STL（legacy / conservative STL crop 和独立 Global Cut Chain crop 路线需要）
+    原始 STL（legacy / conservative / Global Cut Chain STL crop 路线需要）
 
 流程：
     1. 读取 STP，构建 ShapeDocument / FaceIndex / EdgeIndex / TopologyGraph。
@@ -20,7 +20,7 @@
     5. 用户预览、接受、拒绝或隐藏候选区域。
     6. 对 accepted candidate 做 RegionBoundaryAnalyzer。
     7. 仅允许 closed single outer boundary candidate 进入 patch generation。
-    8. 生成 fitting STL：默认从 STP candidate faces / boundary 采样；自动 Patch 预览可选从原始 STL 做 legacy / conservative crop；Global Cut Chain 当前作为独立 STL 裁剪路线。
+    8. 生成 fitting STL：默认从 STP candidate faces / boundary 采样；自动 Patch 预览可选从原始 STL 做 legacy / conservative / Global Cut Chain crop。
     9. 调用 wrapCore.exe + AutoSurface，生成 local IGS / STEP patch。
     10. OCCT 导入 local patch。
     11. Viewer 叠加预览 patch，原 candidate 高亮保持。
@@ -53,14 +53,14 @@ OCCT 负责导入、预览、替换与验证。
 
 ```text
 File → Open STEP/STP
-File → Open Original STL（仅 legacy / conservative STL crop 或独立 Global Cut Chain 裁剪路线需要）
+File → Open Original STL（仅 legacy / conservative / Global Cut Chain STL crop 路线需要）
 ```
 
 要求：
 
 ```text
 1. STP sampled 默认路线只要求打开 STEP/STP。
-2. 使用 legacy / conservative STL crop 或独立 Global Cut Chain crop 时，STP 和 STL 必须位于同一坐标系。
+2. 使用 legacy / conservative / Global Cut Chain STL crop 时，STP 和 STL 必须位于同一坐标系。
 3. 第一版不自动对齐、不自动缩放。
 4. bbox 差异过大时提示用户坐标不一致。
 ```
@@ -221,14 +221,16 @@ conservative-boundary-band-stl-crop
 → 只用于 A/B 验证和缺面诊断，不作为默认生产路径
 
 global-cut-chain STL crop
-→ StlCutChainCutter
+→ scripts/global_chain_cut_cli.py
+→ 执行 scripts/cutter_global_chain_mode.py 的无 GUI 参考算法片段
 → 从原 STP ordered boundary 采样 red loop
 → 投影到源 STL 得到 green loop
 → 沿 STL face graph 构造 global cut chain
 → constrained retriangulation + component flood fill
 → snapBoundaryToRed 可将 patch outer boundary 回贴到原 STP red loop 附近
-→ 当前是独立 STL 裁剪路线，不是 GeomagicFittingInputMode
-→ 如需进入一键 Patch preview，需要后续显式接入 fitting input mode，或手动 / 脚本运行 Geomagic
+→ 当前已接入 GeomagicFittingInputMode::GlobalCutChainStlCrop
+→ 一键 Patch preview 可直接运行 Global Cut Chain 后调用 Geomagic
+→ 需要 spo-global-chain Python 环境；用 scripts/setup_global_chain_python.ps1 创建 / 校验
 ```
 
 重点：
@@ -661,14 +663,14 @@ T6.5 已完成 AppController / GUI 真实 Apply 接入：GUI 按钮调用 AppCon
 T6.5.1 Apply/Gate 失败诊断增强已完成：PatchReplacementReport 记录 repair 前后 stats、Gate before/after stats、STEP roundtrip stats、BRepCheck/free/multiple edge 和 watertight 选项，GUI Patch Apply report 会直接展示这些字段；可选 rejected after debug artifact 路径尚未实现。
 T6.6 Industrial Adaptive Sewing 已完成最小 C++ 集成：PatchReplacementRepair 执行 ShapeFix_Shape、ShapeUpgrade_UnifySameDomain、多 tolerance Sewing loop、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid、collapsed guard 和 best-result selection，并把 selected tolerance、attempt count、best stats 写入 report / GUI。该路线只增强 repair 和诊断，不放宽 StrictTopologyGate，不绕过 rollback，不信任 STL crop boundary 或 Geomagic patch outer boundary。
 T6.6.1 Crop Boundary Diagnostics 已完成：用原 STP candidate outer boundary loop 采样点验证 local STL crop 和 imported patch outer boundary 是否存在缺口或覆盖不足，并在 GUI overlay / patch preview report 中显示 suspected gap。
-T6.6.2 Process Status Panel 已完成第一版：GUI 底部“进程”页显示 crop、Geomagic、import、replacement、repair、adaptive sewing、StrictTopologyGate 的当前阶段、candidate、路径、sewing best stats、Gate reason 和最近 message / warning；undo/redo 显示 cached undo / cached redo，不伪装成重新运行 Geomagic、crop、import 或 repair。
+T6.6.2 Process Status Panel 已完成第一版：GUI 底部“进程”页显示 crop、Geomagic、import、replacement、repair、adaptive sewing、StrictTopologyGate 的当前阶段、candidate、路径、sewing best stats、Gate reason 和最近 message / warning；undo/redo 显示 cached undo / cached redo，不伪装成重新运行 Geomagic、crop、import 或 repair。一键 Patch preview 现在通过 pipeline progress callback 在报告区实时显示 output path 准备、fitting STL 生成、STL crop / Global Cut Chain crop、Geomagic start/finish/failure、import 和 PreviewReady/失败；阶段事件立即追加，长阶段每 2 秒刷新心跳行。adaptive sewing 的每个 tolerance attempt 仍未做实时逐步刷新。
 T6.6.3 STL Crop Boundary-Band Diagnostics 已完成：在 boundary point coverage 外增加 candidate 内侧 boundary-band coverage，并对 source STL triangles 复现当前 centroid-only crop predicate，统计 rejected near-boundary triangles 与 conservative keep candidate；GUI overlay 新增橙色 boundary-band missing area 和紫色 near-boundary rejected triangles，crop bbox 线框保留手动开关但默认隐藏，避免干扰观察 STL、原 STP loop 和诊断 segment。
 T6.6.4 STL Region Extractor 保守裁剪修复已完成：crop 可在 conservative-boundary-band 模式下不只依赖 triangle centroid inside candidate region，新增 vertex-inside、edge-midpoint-inside 与 original CAD boundary-band inclusion，并用 output bbox / triangle-count leak guard 限制局部扩边。该扩边只改善 Geomagic 输入 STL 采样，不把 STL crop boundary 当作最终 CAD boundary。
 T6.6.4.1 STL Crop Mode Switch 已完成：由于手动验证显示 conservative-boundary-band 可能让 AutoSurface 生成过多 patch faces 并扩大 patch boundary mismatch，默认 crop mode 已回到 legacy centroid-only；GUI `STL -> 启用保守边界裁剪` 只用于显式 A/B 验证，单独裁剪和“生成并预览当前 Patch”共用同一开关。
 T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：legacy centroid-only crop 产生较简单 patch 但 patch outer boundary 仍局部 mismatch；conservative-boundary-band crop 补齐 STL 但会让 AutoSurface patch face count 暴涨并扩大全环 boundary mismatch。两者共同证明：directly using Geomagic patch outer boundary as replacement boundary is invalid for this class of feature-bounded regions。
 T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
 T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成增强版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段优先分配 surface；若整条 edge 无单一 surface 覆盖但采样点均被 surface 集合覆盖，则只对该失败 edge 分段。T6.7.4 保留 imported patch 内部 seam、构造 multi-face bounded shell；同一 patch face 形成多个 closed wire 时，所有 closed wire 都构造成 replacement face。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface attempted / used / assigned segments / split edges / built faces / closed wires / open wires / failed face / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果进入 face-compound assembly、PatchReplacementRepair 与 StrictTopologyGate。
-Post-T6.7.4 fitting input modes 已完成：`GeomagicFittingInputMode::StpSampledCandidateSurface` 已作为 GUI 默认模式，直接从 STP candidate faces / boundary 生成 synthetic fitting STL，不要求源 STL；legacy STL crop 与 conservative boundary-band STL crop 保留为自动 Patch preview 的对照路线。`StlCropMode::GlobalCutChain` 已接入 GUI 的 STL crop 开关，作为独立 STL 全局切链裁剪器，支持 boundary snap 回贴原 STP red loop；当前它不是 `GeomagicFittingInputMode`，仍只影响手动 / 脚本可使用的 fitting STL 输入，不改变最终 CAD boundary。
+Post-T6.7.4 fitting input modes 已完成：`GeomagicFittingInputMode::StpSampledCandidateSurface` 已作为 GUI 默认模式，直接从 STP candidate faces / boundary 生成 synthetic fitting STL，不要求源 STL；legacy STL crop、conservative boundary-band STL crop 和 Global Cut Chain STL crop 保留为自动 Patch preview 的对照路线。`StlCropMode::GlobalCutChain` 也保留在 GUI 的 STL crop 开关中，支持单独裁剪当前候选 STL；无论走独立裁剪还是一键 Patch preview，boundary snap 只改善 fitting STL 输入，不改变最终 CAD boundary。
 Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```
 
@@ -705,8 +707,7 @@ Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行�
 ```text
 可选诊断：STP + 原始 STL
 → Legacy STL crop / Conservative Boundary Band crop / Global Cut Chain crop
-→ Legacy / Conservative 可走一键 Patch preview
-→ Global Cut Chain 当前输出 local STL，需手动 / 脚本运行 Geomagic 后再进入 patch import / preview / Apply 路径
+→ 都可走一键 Patch preview
 ```
 
 ### 13.1 T6.5 后续工业级 sewing 路线
@@ -807,10 +808,10 @@ Post-T6.7.4 input modes DONE:
 → STP Sampled Candidate Surface is the current default fitting input mode
 → it generates synthetic fitting STL directly from STP candidate faces / boundary
 → it does not require loading source STL before Patch preview
-→ legacy STL crop and conservative boundary-band STL crop remain available for A/B verification
-→ Global Cut Chain crop is available as an explicit STL crop mode for source-STL-based extraction
-→ Global Cut Chain is not currently a GeomagicFittingInputMode in the one-click Patch preview path
-→ Global Cut Chain boundary snap only improves manually/script-fed fitting STL input, not final CAD boundary
+→ legacy STL crop, conservative boundary-band STL crop, and Global Cut Chain STL crop remain available for A/B verification
+→ Global Cut Chain crop is available both as a fitting input mode and as an explicit STL crop mode for source-STL-based extraction
+→ Global Cut Chain production path calls scripts/global_chain_cut_cli.py and requires the spo-global-chain Python environment
+→ Global Cut Chain boundary snap only improves fitting STL input, not final CAD boundary
 
 Geomagic pipeline hygiene DONE:
 → stale STEP / IGS outputs are removed before a new AutoSurface run
@@ -836,7 +837,8 @@ T6.7 起，Patch Apply 的核心判断从“patch outer boundary 是否贴合”
 T6.7 的 all-surface coverage 是 T6.7.4 的进入条件之一，但仍不把 Geomagic patch outer boundary 或 STL crop boundary 变成最终 CAD boundary。
 T6.7.4 multi-surface shell 成功不等于 Apply 成功；repair 后仍必须 free edges=0、multiple edges=0、BRepCheck=true、solid/watertight 和 STEP roundtrip 均通过。
 STP sampled fitting STL 是当前默认 Geomagic 输入模式；它不要求源 STL，但它的三角边界仍不是最终 CAD boundary。
-Global Cut Chain 是可选 STL 裁剪器；它可以改善源 STL 局部提取，但当前不是一键 Patch preview 的 `GeomagicFittingInputMode`，也不应在没有更多真实样例证据前替代 STP sampled 默认模式。
+Global Cut Chain 是可选 STL 裁剪器和一键 Patch preview fitting input mode；它可以改善源 STL 局部提取，但不应在没有更多真实样例证据前替代 STP sampled 默认模式。
+Global Cut Chain 当前生产路径依赖 scripts/global_chain_cut_cli.py 和 spo-global-chain Python 环境，旧 C++ StlCutChainCutter 不再作为默认后端。
 如果 T6.6.1 / T6.6.3 证明 STL crop 或 patch outer boundary 有缺口，修复应优先发生在 crop / boundary sampling / patch generation 输入层，而不是继续放宽 Gate 或强行采用 sewing result。
 Geomagic stale output cleanup 是流程正确性要求，不代表 patch 可 Apply；Apply 仍必须通过 repair 与 StrictTopologyGate。
 ```

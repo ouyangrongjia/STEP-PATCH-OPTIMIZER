@@ -4,6 +4,7 @@
 
 #include <BRepGProp.hxx>
 #include <BRepLProp_SLProps.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <GProp_GProps.hxx>
@@ -53,6 +54,15 @@ bool normalAtFaceCenter(const TopoDS_Face& face, gp_Dir& normal) {
     return true;
 }
 
+bool isClosedSeamOnSingleFace(const TopologyGraph& topology, EdgeId edgeId, const EdgeAdjacency& adjacency) {
+    return adjacency.faces.size() == 1 &&
+        BRep_Tool::IsClosed(topology.edge(edgeId), topology.face(adjacency.faces.front()));
+}
+
+bool isDegeneratedEdge(const TopologyGraph& topology, EdgeId edgeId) {
+    return BRep_Tool::Degenerated(topology.edge(edgeId));
+}
+
 }
 
 FeatureEdgeDetectionResult FeatureEdgeDetector::detect(
@@ -74,10 +84,12 @@ FeatureEdgeDetectionResult FeatureEdgeDetector::detect(
         FeatureEdge edge;
         edge.edge = id;
 
-        if (adjacency->faces.size() == 1) {
+        if (adjacency->use_count == 1 &&
+            !isClosedSeamOnSingleFace(topology, id, *adjacency) &&
+            !isDegeneratedEdge(topology, id)) {
             edge.kind = FeatureEdgeKind::Free;
             ++result.free_edges;
-        } else if (adjacency->faces.size() > 2) {
+        } else if (adjacency->use_count > 2) {
             edge.kind = FeatureEdgeKind::Multiple;
             ++result.multiple_edges;
         } else if (adjacency->faces.size() == 2) {

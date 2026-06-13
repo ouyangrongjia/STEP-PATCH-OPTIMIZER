@@ -1,11 +1,17 @@
 #include "patch/PatchReplacementRepair.h"
 #include "patch/PatchReplacementReport.h"
 
+#include <BRep_Builder.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Pnt.hxx>
 
 #include <cassert>
 #include <cmath>
@@ -23,6 +29,24 @@ TopoDS_Shape make_box_shell() {
         return TopoDS::Shell(explorer.Current());
     }
     return {};
+}
+
+TopoDS_Shape make_loose_face() {
+    BRepBuilderAPI_MakeWire wire;
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(50.0, 0.0, 0.0), gp_Pnt(51.0, 0.0, 0.0)).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(51.0, 0.0, 0.0), gp_Pnt(51.0, 1.0, 0.0)).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(51.0, 1.0, 0.0), gp_Pnt(50.0, 1.0, 0.0)).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(50.0, 1.0, 0.0), gp_Pnt(50.0, 0.0, 0.0)).Edge());
+    return BRepBuilderAPI_MakeFace(wire.Wire()).Face();
+}
+
+TopoDS_Shape make_box_with_loose_face() {
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+    builder.Add(compound, make_box());
+    builder.Add(compound, make_loose_face());
+    return compound;
 }
 
 void test_adaptive_sewing_records_attempts_and_prefers_preferred_tolerance() {
@@ -72,10 +96,23 @@ void test_collapsed_sewing_result_is_reported_as_diagnostic_only() {
     assert(result.report.warningMessage.find("collapsed") != std::string::npos);
 }
 
+void test_repair_discards_non_solid_leftovers_when_solid_available() {
+    spo::PatchReplacementRepairOptions options;
+    options.runSewing = false;
+    options.runAdaptiveSewing = false;
+
+    const auto result = spo::repairPatchReplacementShape(make_box_with_loose_face(), options);
+
+    assert(result.success);
+    assert(result.report.solidCountAfterRepair > 0);
+    assert(result.report.freeEdgesAfterRepair == 0);
+}
+
 }
 
 void run_patch_replacement_repair_tests() {
     test_adaptive_sewing_records_attempts_and_prefers_preferred_tolerance();
     test_shell_to_solid_path_generates_solid_for_closed_shell();
     test_collapsed_sewing_result_is_reported_as_diagnostic_only();
+    test_repair_discards_non_solid_leftovers_when_solid_available();
 }

@@ -40,6 +40,21 @@ void test_geomagic_pipeline_files_exist() {
     assert(std::filesystem::exists(root / "scripts" / "geomagic_wrap" / "README.md"));
 }
 
+void test_global_chain_headless_cli_contract() {
+    const auto scriptPath = repo_root() / "scripts" / "global_chain_cut_cli.py";
+    assert(std::filesystem::exists(scriptPath));
+
+    const auto script = read_text_file(scriptPath);
+    assert_contains(script, "cutter_global_chain_mode.py");
+    assert_contains(script, "exec_reference_slice");
+    assert_contains(script, "--boundary-json");
+    assert_contains(script, "--seeds-json");
+    assert_contains(script, "--summary-json");
+    assert_contains(script, "cut_one_loop_global_chain");
+    assert_not_contains(script, "from PyQt5");
+    assert_not_contains(script, "from OCC");
+}
+
 void test_geomagic_pipeline_script_mentions_required_contract() {
     const auto script = read_text_file(repo_root() / "scripts" / "geomagic_wrap" / "autosurface_pipeline.py");
 
@@ -122,6 +137,7 @@ void test_geomagic_pipeline_example_config_is_valid_json() {
 
 void run_geomagic_pipeline_script_tests() {
     test_geomagic_pipeline_files_exist();
+    test_global_chain_headless_cli_contract();
     test_geomagic_pipeline_script_mentions_required_contract();
     test_geomagic_pipeline_readme_mentions_manual_contract();
     test_geomagic_pipeline_example_config_is_valid_json();

@@ -3,8 +3,10 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 
 #include <TopoDS_Wire.hxx>
+#include <gp_Pnt.hxx>
 
 #include <string>
+#include <vector>
 
 namespace spo {
 
@@ -21,6 +23,10 @@ public:
     BoundaryWireBuildResult buildOuterWire(
         const ShapeDocument& document,
         const RegionBoundaryAnalysis& analysis) const;
+
+    static std::vector<gp_Pnt> sampleWireLoop(
+        const TopoDS_Wire& wire,
+        int samplesPerEdge);
 };
 
 }

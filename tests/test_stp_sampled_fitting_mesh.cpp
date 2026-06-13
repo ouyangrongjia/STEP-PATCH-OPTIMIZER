@@ -303,9 +303,33 @@ void test_GeomagicFittingInputMode_toString() {
     assert(std::string(spo::toString(spo::GeomagicFittingInputMode::LegacyStlCrop)) == "legacy-stl-crop");
     assert(std::string(spo::toString(spo::GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop)) == "conservative-boundary-band-stl-crop");
     assert(std::string(spo::toString(spo::GeomagicFittingInputMode::StpSampledCandidateSurface)) == "stp-sampled-candidate-surface");
+    assert(std::string(spo::toString(spo::GeomagicFittingInputMode::GlobalCutChainStlCrop)) == "global-cut-chain-stl-crop");
     // All modes produce distinct strings
     assert(std::string(spo::toString(spo::GeomagicFittingInputMode::LegacyStlCrop)) !=
            std::string(spo::toString(spo::GeomagicFittingInputMode::StpSampledCandidateSurface)));
+    assert(std::string(spo::toString(spo::GeomagicFittingInputMode::GlobalCutChainStlCrop)) !=
+           std::string(spo::toString(spo::GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop)));
+}
+
+void test_GeomagicFittingInputMode_crop_mapping() {
+    assert(!spo::requiresSourceStlForFittingInputMode(spo::GeomagicFittingInputMode::StpSampledCandidateSurface));
+    assert(spo::requiresSourceStlForFittingInputMode(spo::GeomagicFittingInputMode::LegacyStlCrop));
+    assert(spo::requiresSourceStlForFittingInputMode(spo::GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop));
+    assert(spo::requiresSourceStlForFittingInputMode(spo::GeomagicFittingInputMode::GlobalCutChainStlCrop));
+
+    const auto legacyCrop = spo::stlCropModeForFittingInputMode(spo::GeomagicFittingInputMode::LegacyStlCrop);
+    assert(legacyCrop.has_value());
+    assert(*legacyCrop == spo::StlCropMode::CentroidOnly);
+
+    const auto conservativeCrop = spo::stlCropModeForFittingInputMode(spo::GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop);
+    assert(conservativeCrop.has_value());
+    assert(*conservativeCrop == spo::StlCropMode::ConservativeBoundaryBand);
+
+    const auto globalCutCrop = spo::stlCropModeForFittingInputMode(spo::GeomagicFittingInputMode::GlobalCutChainStlCrop);
+    assert(globalCutCrop.has_value());
+    assert(*globalCutCrop == spo::StlCropMode::GlobalCutChain);
+
+    assert(!spo::stlCropModeForFittingInputMode(spo::GeomagicFittingInputMode::StpSampledCandidateSurface).has_value());
 }
 
 void test_bbox_includes_boundary() {
@@ -360,6 +384,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_boundary_band_disabled();
     test_report_fields_present();
     test_GeomagicFittingInputMode_toString();
+    test_GeomagicFittingInputMode_crop_mapping();
     test_bbox_includes_boundary();
     test_no_degenerate_triangles();
     test_multiple_face_candidate();

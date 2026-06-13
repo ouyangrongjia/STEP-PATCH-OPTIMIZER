@@ -55,7 +55,9 @@ struct WireBuildResult {
     int inputEdgeCount = 0;
     int closedWireCount = 0;
     int openWireCount = 0;
+    int ignoredOpenWireCount = 0;
     bool multipleClosedWires = false;
+    std::vector<EdgeId> openOriginalBoundaryEdgeIds;
     std::string message;
 };
 
@@ -69,6 +71,20 @@ void append_unique_edge(std::vector<EdgeId>& edgeIds, EdgeId edgeId) {
     if (std::find(edgeIds.begin(), edgeIds.end(), edgeId) == edgeIds.end()) {
         edgeIds.push_back(edgeId);
     }
+}
+
+void append_warning(std::string& warning, const std::string& message) {
+    if (message.empty()) {
+        return;
+    }
+    if (!warning.empty()) {
+        warning += " ";
+    }
+    warning += message;
+}
+
+bool edge_id_in_list(const std::vector<EdgeId>& edgeIds, EdgeId edgeId) {
+    return std::find(edgeIds.begin(), edgeIds.end(), edgeId) != edgeIds.end();
 }
 
 std::vector<TopoDS_Face> valid_faces(const MultiFacePatchAnalysis& analysis) {
@@ -145,7 +161,8 @@ std::vector<OwnedBoundarySegment> assign_boundary_segments(
     const std::vector<TopoDS_Face>& faces,
     const std::vector<BoundarySurfaceSample>& samples,
     double projectionTolerance,
-    BoundaryConstrainedMultiSurfaceShellResult& result) {
+    BoundaryConstrainedMultiSurfaceShellResult& result,
+    const std::vector<EdgeId>& forceWholeEdgeIds = {}) {
     std::vector<OwnedBoundarySegment> segments;
 
     for (const auto edgeId : boundary.ordered_boundary_edges) {
@@ -207,6 +224,11 @@ std::vector<OwnedBoundarySegment> assign_boundary_segments(
 
             if (!splitSupported) {
                 append_unique_edge(result.failedEdgeIds, edgeId);
+                continue;
+            }
+
+            if (selectedFace >= 0 && edge_id_in_list(forceWholeEdgeIds, edgeId)) {
+                segments.push_back({selectedFace, edgeId, edgeSamples.front().parameter, edgeSamples.back().parameter, false});
                 continue;
             }
 
@@ -297,6 +319,35 @@ bool wire_contains_original_boundary_segment(
     return false;
 }
 
+bool wires_contain_original_boundary_segment(
+    const Handle(TopTools_HSequenceOfShape)& wires,
+    const std::vector<FaceEdgeCandidate>& candidates) {
+    for (int index = 1; index <= wires->Length(); ++index) {
+        if (wire_contains_original_boundary_segment(TopoDS::Wire(wires->Value(index)), candidates)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<EdgeId> original_boundary_edge_ids_in_wires(
+    const Handle(TopTools_HSequenceOfShape)& wires,
+    const std::vector<FaceEdgeCandidate>& candidates) {
+    std::vector<EdgeId> edgeIds;
+    for (int index = 1; index <= wires->Length(); ++index) {
+        const auto wire = TopoDS::Wire(wires->Value(index));
+        for (const auto& candidate : candidates) {
+            if (!candidate.originalBoundarySegment) {
+                continue;
+            }
+            if (wire_contains_edge(wire, candidate.edge)) {
+                append_unique_edge(edgeIds, candidate.sourceEdgeId);
+            }
+        }
+    }
+    return edgeIds;
+}
+
 std::vector<TopoDS_Wire> collect_closed_wires(
     const Handle(TopTools_HSequenceOfShape)& closedWires,
     const std::vector<FaceEdgeCandidate>& candidates) {
@@ -373,16 +424,23 @@ WireBuildResult connect_one_closed_wire(
 
     result.closedWireCount = closedWires->Length();
     result.openWireCount = openWires->Length();
-    if (openWires->Length() != 0) {
+    result.openOriginalBoundaryEdgeIds = original_boundary_edge_ids_in_wires(openWires, candidates);
+    const bool openWireHasOriginalBoundary = !result.openOriginalBoundaryEdgeIds.empty();
+    if (openWires->Length() != 0 && openWireHasOriginalBoundary) {
         result.message = "Multi-surface replacement face edges produced open wires.";
         return result;
     }
     if (closedWires->Length() < 1) {
+        if (openWires->Length() != 0 && !openWireHasOriginalBoundary) {
+            result.ignoredOpenWireCount = openWires->Length();
+            return result;
+        }
         result.message = "Multi-surface replacement face edges did not form a closed wire.";
         return result;
     }
 
     result.wires = collect_closed_wires(closedWires, candidates);
+    result.ignoredOpenWireCount = openWires->Length();
     result.multipleClosedWires = closedWires->Length() > 1;
     if (result.wires.empty()) {
         result.message = "Multi-surface replacement wire is not closed.";
@@ -471,13 +529,34 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
         return result;
     }
 
+    std::vector<EdgeId> forceWholeEdgeIds;
+    bool retriedWholeEdgeAssignment = false;
+    std::string retryWarning;
+
+retry_boundary_assignment:
+    result.assignedBoundarySegmentCount = 0;
+    result.splitBoundaryEdgeCount = 0;
+    result.builtFaceCount = 0;
+    result.closedWireCount = 0;
+    result.openWireCount = 0;
+    result.multipleClosedWireFaceCount = 0;
+    result.failedPatchFaceIndex = -1;
+    result.failedFaceEdgeCount = 0;
+    result.replacementFaces.clear();
+    result.replacementShape.Nullify();
+    result.splitBoundarySegments.clear();
+    result.failedEdgeIds = coverage.uncoveredEdgeIds;
+    result.message.clear();
+    result.warningMessage = retryWarning;
+
     const auto segments = assign_boundary_segments(
         document,
         boundary,
         faces,
         samples,
         options.projectionTolerance,
-        result);
+        result,
+        forceWholeEdgeIds);
     result.assignedBoundarySegmentCount = static_cast<int>(segments.size());
     if (!result.failedEdgeIds.empty()) {
         result.message = "Multi-surface boundary shell could not assign all original CAD boundary edges to imported surfaces.";
@@ -532,9 +611,28 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
         if (wireResult.multipleClosedWires) {
             ++result.multipleClosedWireFaceCount;
         }
+        if (wireResult.ignoredOpenWireCount > 0) {
+            append_warning(
+                result.warningMessage,
+                "Ignored open imported-patch internal seam wires that do not contain original CAD boundary segments.");
+        }
         if (wireResult.wires.empty()) {
+            if (wireResult.ignoredOpenWireCount > 0 && wireResult.openWireCount == wireResult.ignoredOpenWireCount) {
+                continue;
+            }
+            if (!retriedWholeEdgeAssignment &&
+                result.builtFaceCount > 0 &&
+                !wireResult.openOriginalBoundaryEdgeIds.empty()) {
+                forceWholeEdgeIds = wireResult.openOriginalBoundaryEdgeIds;
+                retriedWholeEdgeAssignment = true;
+                retryWarning = "Split boundary edge assignment produced open original-boundary wires; retried failed edge(s) as whole-edge surface assignments.";
+                goto retry_boundary_assignment;
+            }
             result.failedPatchFaceIndex = static_cast<int>(faceIndex);
             result.failedFaceEdgeCount = wireResult.inputEdgeCount;
+            for (const auto edgeId : wireResult.openOriginalBoundaryEdgeIds) {
+                append_unique_edge(result.failedEdgeIds, edgeId);
+            }
             result.message = wireResult.message.empty()
                 ? "Multi-surface boundary shell failed to connect replacement face wire."
                 : wireResult.message;
@@ -577,7 +675,9 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
     result.success = true;
     result.message = "Built strict multi-surface boundary-constrained replacement shell from Geomagic surfaces and the original CAD boundary.";
     if (result.multipleClosedWireFaceCount > 0) {
-        result.warningMessage = "Some multi-surface face edge sets produced multiple closed wires; each closed wire was built as a replacement face.";
+        append_warning(
+            result.warningMessage,
+            "Some multi-surface face edge sets produced multiple closed wires; each closed wire was built as a replacement face.");
     }
     return result;
 }

@@ -5,6 +5,7 @@
 #include "patch/BoundaryConstrainedPatchBuilder.h"
 #include "patch/MultiFacePatchAnalyzer.h"
 #include "patch/PatchReplacementRepair.h"
+#include "io/StepWriter.h"
 #include "validate/StrictTopologyGate.h"
 
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -20,6 +21,8 @@
 #include <TopoDS_Compound.hxx>
 
 #include <algorithm>
+#include <cstdlib>
+#include <filesystem>
 #include <optional>
 #include <set>
 #include <string>
@@ -597,6 +600,10 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
         report_.message = "Patch replacement command did not construct an after document after repair.";
         publishReport();
         return Result::error(report_.message);
+    }
+    if (const auto* debugAfterStepPath = std::getenv("SPO_DEBUG_PATCH_AFTER_STEP");
+        debugAfterStepPath != nullptr && *debugAfterStepPath != '\0') {
+        (void)StepWriter().write(afterDocument_, std::filesystem::path(debugAfterStepPath));
     }
 
     StrictTopologyGateInput gateInput;

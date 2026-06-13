@@ -47,6 +47,7 @@ void TopologyGraph::build(const TopoDS_Shape& shape) {
         for (TopTools_ListIteratorOfListOfShape it(edgeFaceMap.FindFromIndex(index)); it.More(); it.Next()) {
             const auto faceId = faceMap.FindIndex(it.Value());
             if (faceId > 0) {
+                ++adjacency.use_count;
                 adjacency.faces.push_back(static_cast<FaceId>(faceId - 1));
             }
         }

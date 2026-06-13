@@ -13,6 +13,7 @@ namespace spo {
 
 struct EdgeAdjacency {
     EdgeId edge = 0;
+    int use_count = 0;
     std::vector<FaceId> faces;
 };
 
