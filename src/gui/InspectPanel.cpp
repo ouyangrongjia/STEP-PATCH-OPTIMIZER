@@ -1,6 +1,7 @@
 #include "gui/InspectPanel.h"
 
 #include <QHeaderView>
+#include <QFontDatabase>
 #include <QPlainTextEdit>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -9,21 +10,30 @@ namespace spo {
 
 InspectPanel::InspectPanel(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(6, 6, 6, 6);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setSpacing(8);
 
     properties_ = new QTableWidget(0, 2, this);
+    properties_->setObjectName("propertyTable");
     properties_->setHorizontalHeaderLabels({"属性", "值"});
     properties_->horizontalHeader()->setStretchLastSection(true);
     properties_->verticalHeader()->setVisible(false);
     properties_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    properties_->setAlternatingRowColors(true);
+    properties_->setShowGrid(false);
+    properties_->verticalHeader()->setDefaultSectionSize(26);
     layout->addWidget(properties_);
 
     validation_ = new QPlainTextEdit(this);
+    validation_->setObjectName("validationText");
     validation_->setReadOnly(true);
+    validation_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     validation_->setPlainText("尚未运行合法性检查。");
 
     report_ = new QPlainTextEdit(this);
+    report_->setObjectName("reportText");
     report_->setReadOnly(true);
+    report_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     report_->setPlainText("尚无报告。");
 
     showProperties("选择", {{"当前对象", "无"}});

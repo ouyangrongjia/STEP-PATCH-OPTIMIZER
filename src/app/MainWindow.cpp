@@ -31,6 +31,8 @@
 #include <QStringList>
 #include <QTabWidget>
 #include <QTimer>
+#include <QList>
+#include <QSize>
 #include <QToolBar>
 #include <QToolButton>
 #include <QtConcurrent/QtConcurrentRun>
@@ -415,6 +417,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("STEP 曲面片优化器");
     menuBar()->setNativeMenuBar(false);
     resize(1380, 860);
+    setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks);
+    setCorner(Qt::BottomLeftCorner, Qt::LeftDockWidgetArea);
 
     createActions();
     createMenus();
@@ -620,7 +624,6 @@ void MainWindow::createMenus() {
     viewMenu_ = menuBar()->addMenu("视图");
     viewMenu_->addAction(selectFaceAction_);
     viewMenu_->addAction(selectEdgeAction_);
-    viewMenu_->addAction(selectCandidateAction_);
     viewMenu_->addSeparator();
     viewMenu_->addAction(toggleFeaturesAction_);
     viewMenu_->addAction(resetViewAction_);
@@ -629,7 +632,44 @@ void MainWindow::createMenus() {
     auto* detectMenu = menuBar()->addMenu("检测");
     detectMenu->addAction(detectAction_);
 
-    stlMenu_ = menuBar()->addMenu("STL");
+    auto* validateMenu = menuBar()->addMenu("验证");
+    validateMenu->addAction(validateAction_);
+
+    auto* exportMenu = menuBar()->addMenu("导出");
+    exportMenu->addAction(exportStepAction_);
+
+    auto* advancedMenu = menuBar()->addMenu("高级");
+
+    auto* candidateMenu = advancedMenu->addMenu("候选区域");
+    candidateMenu->addAction(selectCandidateAction_);
+    candidateMenu->addSeparator();
+    candidateMenu->addAction(previewMergeAction_);
+    candidateMenu->addAction(showAllMergeCandidatesAction_);
+    auto* showStrictPlaneCandidatesAction = candidateMenu->addAction("显示可平面合并候选");
+    connect(showStrictPlaneCandidatesAction, &QAction::triggered, this, [this]() {
+        showStrictPlaneMergeCandidates();
+    });
+    auto* showPlaneCandidatesAction = candidateMenu->addAction("显示 PlaneLike 候选");
+    connect(showPlaneCandidatesAction, &QAction::triggered, this, [this]() {
+        showMergeCandidatesByType(MergeCandidateType::PlaneLike);
+    });
+    auto* showSphereCandidatesAction = candidateMenu->addAction("显示 SphereLike 候选");
+    connect(showSphereCandidatesAction, &QAction::triggered, this, [this]() {
+        showMergeCandidatesByType(MergeCandidateType::SphereLike);
+    });
+    candidateMenu->addAction(highlightMergeCandidateByIdAction_);
+    candidateMenu->addAction(clearMergeCandidatesAction_);
+    candidateMenu->addSeparator();
+    candidateMenu->addAction(acceptMergeCandidateAction_);
+    candidateMenu->addAction(rejectMergeCandidateAction_);
+    candidateMenu->addAction(hideMergeCandidateAction_);
+    candidateMenu->addAction(restoreMergeCandidateAction_);
+    candidateMenu->addSeparator();
+    candidateMenu->addAction(showAcceptedMergeCandidatesAction_);
+    candidateMenu->addAction(showPendingMergeCandidatesAction_);
+    candidateMenu->addAction(showCandidatesByTypeAction_);
+
+    stlMenu_ = advancedMenu->addMenu("STL 裁剪");
     stlMenu_->addAction(openSourceStlAction_);
     stlMenu_->addAction(cropCurrentCandidateStlAction_);
     stlMenu_->addAction(useConservativeStlCropAction_);
@@ -639,7 +679,7 @@ void MainWindow::createMenus() {
     stlMenu_->addAction(showCroppedStlAction_);
     stlMenu_->addAction(showStlCropBoxAction_);
 
-    patchMenu_ = menuBar()->addMenu("Patch");
+    patchMenu_ = advancedMenu->addMenu("Patch / Geomagic");
     auto* fittingInputModeMenu = patchMenu_->addMenu("Geomagic Fitting Input Mode");
     fittingInputModeMenu->addAction(fittingModeLegacyStlCropAction_);
     fittingInputModeMenu->addAction(fittingModeConservativeBandAction_);
@@ -655,21 +695,7 @@ void MainWindow::createMenus() {
     patchMenu_->addSeparator();
     patchMenu_->addAction(clearPatchOverlayAction_);
 
-    auto* mergeMenu = menuBar()->addMenu("合并");
-    mergeMenu->addAction(previewMergeAction_);
-    mergeMenu->addAction(showAllMergeCandidatesAction_);
-    mergeMenu->addAction(highlightMergeCandidateByIdAction_);
-    mergeMenu->addAction(clearMergeCandidatesAction_);
-    mergeMenu->addSeparator();
-    mergeMenu->addAction(acceptMergeCandidateAction_);
-    mergeMenu->addAction(rejectMergeCandidateAction_);
-    mergeMenu->addAction(hideMergeCandidateAction_);
-    mergeMenu->addAction(restoreMergeCandidateAction_);
-    mergeMenu->addSeparator();
-    mergeMenu->addAction(showAcceptedMergeCandidatesAction_);
-    mergeMenu->addAction(showPendingMergeCandidatesAction_);
-    mergeMenu->addAction(showCandidatesByTypeAction_);
-    mergeMenu->addSeparator();
+    auto* mergeMenu = advancedMenu->addMenu("合并实验");
     planeMergeMenu_ = mergeMenu->addMenu("平面候选合并");
     planeMergeMenu_->addAction(mergePlaneCandidateAction_);
     planeMergeMenu_->addAction(mergeAcceptedPlaneCandidatesAction_);
@@ -687,12 +713,6 @@ void MainWindow::createMenus() {
     mergeMenu->addAction(undoAction_);
     mergeMenu->addAction(redoAction_);
 
-    auto* validateMenu = menuBar()->addMenu("验证");
-    validateMenu->addAction(validateAction_);
-
-    auto* exportMenu = menuBar()->addMenu("导出");
-    exportMenu->addAction(exportStepAction_);
-
     auto* helpMenu = menuBar()->addMenu("帮助");
     helpMenu->addAction("关于", this, [this]() {
         QMessageBox::about(this, "关于", "STEP 曲面片优化器\n特征感知的 STEP 曲面片合并与边界优化系统");
@@ -702,74 +722,42 @@ void MainWindow::createMenus() {
 void MainWindow::createToolBars() {
     auto* toolBar = addToolBar("主工具栏");
     toolBar->setMovable(false);
+    toolBar->setObjectName("primaryToolBar");
+    toolBar->setIconSize(QSize(18, 18));
+    toolBar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    toolBar->setAllowedAreas(Qt::TopToolBarArea);
 
     auto* selectionMenu = new QMenu(this);
     selectionMenu->addAction(selectFaceAction_);
     selectionMenu->addAction(selectEdgeAction_);
     selectionMenu->addAction(selectCandidateAction_);
 
-    auto* candidateViewMenu = new QMenu(this);
-    candidateViewMenu->addAction(previewMergeAction_);
-    candidateViewMenu->addSeparator();
-    candidateViewMenu->addAction(showAllMergeCandidatesAction_);
-    auto* showStrictPlaneCandidatesAction = candidateViewMenu->addAction("显示可平面合并候选");
-    connect(showStrictPlaneCandidatesAction, &QAction::triggered, this, [this]() {
-        showStrictPlaneMergeCandidates();
-    });
-    auto* showPlaneCandidatesAction = candidateViewMenu->addAction("显示 PlaneLike 候选");
-    connect(showPlaneCandidatesAction, &QAction::triggered, this, [this]() {
-        showMergeCandidatesByType(MergeCandidateType::PlaneLike);
-    });
-    auto* showSphereCandidatesAction = candidateViewMenu->addAction("显示 SphereLike 候选");
-    connect(showSphereCandidatesAction, &QAction::triggered, this, [this]() {
-        showMergeCandidatesByType(MergeCandidateType::SphereLike);
-    });
-    candidateViewMenu->addAction(showCandidatesByTypeAction_);
-    candidateViewMenu->addSeparator();
-    candidateViewMenu->addAction(clearMergeCandidatesAction_);
-
-    auto* candidateStateMenu = new QMenu(this);
-    candidateStateMenu->addAction(acceptMergeCandidateAction_);
-    candidateStateMenu->addAction(rejectMergeCandidateAction_);
-    candidateStateMenu->addAction(hideMergeCandidateAction_);
-    candidateStateMenu->addAction(restoreMergeCandidateAction_);
-    candidateStateMenu->addSeparator();
-    candidateStateMenu->addAction(showAcceptedMergeCandidatesAction_);
-    candidateStateMenu->addAction(showPendingMergeCandidatesAction_);
-    candidateStateMenu->addAction(highlightMergeCandidateByIdAction_);
-
-    auto* mergeToolMenu = new QMenu(this);
-    auto* planeToolMenu = mergeToolMenu->addMenu("平面合并");
-    planeToolMenu->addAction(mergePlaneCandidateAction_);
-    planeToolMenu->addAction(mergeAcceptedPlaneCandidatesAction_);
-    planeToolMenu->addAction(mergeAllPlaneCandidatesAction_);
-    planeToolMenu->addSeparator();
-    planeToolMenu->addAction(mergeApproximatePlaneCandidateAction_);
-    planeToolMenu->addAction(mergeAllApproximatePlaneCandidatesAction_);
-    auto* sphereToolMenu = mergeToolMenu->addMenu("球面合并");
-    sphereToolMenu->addAction(mergeSphereCandidateAction_);
-    sphereToolMenu->addAction(mergeAcceptedSphereCandidatesAction_);
-    sphereToolMenu->addAction(mergeAllSphereCandidatesAction_);
-    mergeToolMenu->addSeparator();
-    mergeToolMenu->addAction(applyMergeAction_);
-
-    auto* stlToolMenu = new QMenu(this);
-    stlToolMenu->addAction(openSourceStlAction_);
-    stlToolMenu->addAction(cropCurrentCandidateStlAction_);
-    stlToolMenu->addAction(useConservativeStlCropAction_);
-    stlToolMenu->addSeparator();
-    stlToolMenu->addAction(showSourceStlAction_);
-    stlToolMenu->addAction(showCroppedStlAction_);
-    stlToolMenu->addAction(showStlCropBoxAction_);
+    auto* candidateToolMenu = new QMenu(this);
+    candidateToolMenu->addAction(selectCandidateAction_);
+    candidateToolMenu->addSeparator();
+    candidateToolMenu->addAction(previewMergeAction_);
+    candidateToolMenu->addAction(showAllMergeCandidatesAction_);
+    candidateToolMenu->addAction(showAcceptedMergeCandidatesAction_);
+    candidateToolMenu->addAction(showPendingMergeCandidatesAction_);
+    candidateToolMenu->addAction(highlightMergeCandidateByIdAction_);
+    candidateToolMenu->addSeparator();
+    candidateToolMenu->addAction(acceptMergeCandidateAction_);
+    candidateToolMenu->addAction(rejectMergeCandidateAction_);
+    candidateToolMenu->addAction(hideMergeCandidateAction_);
+    candidateToolMenu->addAction(restoreMergeCandidateAction_);
 
     auto* patchToolMenu = new QMenu(this);
     patchToolMenu->addAction(generateAndPreviewCurrentPatchAction_);
-    patchToolMenu->addAction(useGeomagicRemeshAction_);
+    patchToolMenu->addAction(applyCurrentPatchAction_);
     patchToolMenu->addSeparator();
     patchToolMenu->addAction(importPatchForCurrentCandidateAction_);
     patchToolMenu->addAction(importPatchFromFileAction_);
     patchToolMenu->addSeparator();
-    patchToolMenu->addAction(applyCurrentPatchAction_);
+    auto* fittingInputModeToolMenu = patchToolMenu->addMenu("Geomagic Fitting Input Mode");
+    fittingInputModeToolMenu->addAction(fittingModeLegacyStlCropAction_);
+    fittingInputModeToolMenu->addAction(fittingModeConservativeBandAction_);
+    fittingInputModeToolMenu->addAction(fittingModeStpSampledAction_);
+    patchToolMenu->addAction(useGeomagicRemeshAction_);
     patchToolMenu->addSeparator();
     patchToolMenu->addAction(clearPatchOverlayAction_);
 
@@ -781,6 +769,8 @@ void MainWindow::createToolBars() {
         auto* button = new QToolButton(this);
         button->setText(text);
         button->setPopupMode(QToolButton::InstantPopup);
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        button->setMinimumHeight(30);
         button->setMenu(menu);
         toolBar->addWidget(button);
     };
@@ -790,11 +780,9 @@ void MainWindow::createToolBars() {
     toolBar->addSeparator();
     addMenuButton("选择", selectionMenu);
     toolBar->addAction(detectAction_);
-    addMenuButton("候选显示", candidateViewMenu);
-    addMenuButton("候选状态", candidateStateMenu);
-    addMenuButton("STL", stlToolMenu);
+    addMenuButton("候选区域", candidateToolMenu);
     addMenuButton("Patch", patchToolMenu);
-    addMenuButton("合并", mergeToolMenu);
+    toolBar->addAction(toggleFeaturesAction_);
     addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
     toolBar->addAction(undoAction_);
@@ -803,18 +791,24 @@ void MainWindow::createToolBars() {
 
 void MainWindow::createDocks() {
     viewer_ = new OccViewWidget(this);
+    viewer_->setObjectName("occViewport");
     setCentralWidget(viewer_);
 
     modelTree_ = new ModelTreePanel(this);
-    modelDock_ = new QDockWidget("模型树", this);
+    modelDock_ = new QDockWidget("模型结构", this);
     modelDock_->setObjectName("modelTreeDock");
     modelDock_->setWidget(modelTree_);
+    modelDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    modelDock_->setMinimumWidth(220);
     addDockWidget(Qt::LeftDockWidgetArea, modelDock_);
 
     parameterPanel_ = new ParameterPanel(this);
-    parameterDock_ = new QDockWidget("参数", this);
+    parameterDock_ = new QDockWidget("检测参数", this);
     parameterDock_->setObjectName("parameterDock");
     parameterDock_->setWidget(parameterPanel_);
+    parameterDock_->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    parameterDock_->setMinimumWidth(240);
+    parameterDock_->setMaximumWidth(360);
     addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
 
     inspectPanel_ = new InspectPanel(this);
@@ -822,16 +816,27 @@ void MainWindow::createDocks() {
     processStatusPanel_ = new ProcessStatusPanel(this);
 
     bottomTabs_ = new QTabWidget(this);
+    bottomTabs_->setObjectName("outputTabs");
     bottomTabs_->addTab(logPanel_, "日志");
     bottomTabs_->addTab(processStatusPanel_, "进程");
     bottomTabs_->addTab(inspectPanel_, "检查");
     bottomTabs_->addTab(inspectPanel_->validationWidget(), "验证");
     bottomTabs_->addTab(inspectPanel_->reportWidget(), "报告");
 
-    bottomDock_ = new QDockWidget("输出", this);
+    bottomDock_ = new QDockWidget("输出与检查", this);
     bottomDock_->setObjectName("outputDock");
     bottomDock_->setWidget(bottomTabs_);
+    bottomDock_->setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
+    bottomDock_->setMinimumHeight(150);
     addDockWidget(Qt::BottomDockWidgetArea, bottomDock_);
+
+    const QList<QDockWidget*> horizontalDocks{modelDock_, parameterDock_};
+    const QList<int> horizontalSizes{260, 280};
+    resizeDocks(horizontalDocks, horizontalSizes, Qt::Horizontal);
+
+    const QList<QDockWidget*> verticalDocks{bottomDock_};
+    const QList<int> verticalSizes{210};
+    resizeDocks(verticalDocks, verticalSizes, Qt::Vertical);
 
     if (viewMenu_ != nullptr) {
         viewMenu_->addSeparator();
@@ -2726,7 +2731,11 @@ void MainWindow::startPatchPreviewProgressReport(const ProcessStatusSnapshot& in
     patchPreviewProgressTimer_->start();
 
     appendPatchPreviewProgress(initialStatus);
-    if (bottomTabs_ != nullptr && inspectPanel_ != nullptr) {
+    if (bottomTabs_ != nullptr &&
+        processStatusPanel_ != nullptr &&
+        patchPreviewProgressHeader_.startsWith("Patch Apply")) {
+        bottomTabs_->setCurrentWidget(processStatusPanel_);
+    } else if (bottomTabs_ != nullptr && inspectPanel_ != nullptr) {
         bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     }
 }
@@ -2751,15 +2760,7 @@ void MainWindow::appendPatchPreviewProgress(ProcessStatusSnapshot status, bool s
     }
 
     refreshPatchPreviewProgressReport();
-    QString statusPrefix = "Patch 预览";
-    if (patchPreviewProgressHeader_.startsWith("Patch Apply")) {
-        statusPrefix = "Patch Apply";
-    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP")) {
-        statusPrefix = "STEP/STP";
-    } else if (patchPreviewProgressHeader_.startsWith("合并候选")) {
-        statusPrefix = "合并候选";
-    }
-    setStatus(QString("%1：%2").arg(statusPrefix, QString::fromLatin1(toString(patchPreviewLastProgress_.stage))));
+    setStatus(patchProgressStatusText());
 }
 
 void MainWindow::refreshPatchPreviewProgressReport() {
@@ -2829,6 +2830,30 @@ QString MainWindow::patchPreviewProgressLine(const ProcessStatusSnapshot& status
         fields << QString("warning=%1").arg(QString::fromStdString(status.latestWarning));
     }
     return fields.join("  |  ");
+}
+
+QString MainWindow::patchProgressStatusText() const {
+    QString statusPrefix = "Patch 预览";
+    if (patchPreviewProgressHeader_.startsWith("Patch Apply")) {
+        statusPrefix = "Patch Apply";
+    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP")) {
+        statusPrefix = "STEP/STP";
+    } else if (patchPreviewProgressHeader_.startsWith("合并候选")) {
+        statusPrefix = "合并候选";
+    }
+
+    QStringList fields;
+    fields << statusPrefix;
+    fields << QString::fromLatin1(toString(patchPreviewLastProgress_.stage));
+    if (patchPreviewLastProgress_.candidateId >= 0) {
+        fields << QString("candidate %1").arg(patchPreviewLastProgress_.candidateId);
+    }
+    if (!patchPreviewLastProgress_.latestMessage.empty()) {
+        fields << QString::fromStdString(patchPreviewLastProgress_.latestMessage);
+    } else if (!patchPreviewLastProgress_.latestWarning.empty()) {
+        fields << QString("warning: %1").arg(QString::fromStdString(patchPreviewLastProgress_.latestWarning));
+    }
+    return fields.join(" | ");
 }
 
 void MainWindow::publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics) {

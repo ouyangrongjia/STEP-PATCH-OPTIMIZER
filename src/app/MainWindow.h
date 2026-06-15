@@ -107,6 +107,7 @@ private:
     void stopPatchPreviewProgressReport();
     QString patchPreviewProgressReportText() const;
     QString patchPreviewProgressLine(const ProcessStatusSnapshot& status) const;
+    QString patchProgressStatusText() const;
     void setStlCropInProgress(bool inProgress);
     StlRegionExtractorOptions currentStlCropOptions() const;
     void setGeomagicFittingInputMode(GeomagicFittingInputMode mode);
