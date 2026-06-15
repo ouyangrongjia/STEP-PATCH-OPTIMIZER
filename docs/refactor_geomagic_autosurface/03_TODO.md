@@ -1,8 +1,32 @@
 # STEP-PATCH-OPTIMIZER 当前阶段 TODO
 
-> 草案版本：v0.8-t6-input-modes
+> 草案版本：v0.9-a57695d-baseline
 > 当前主线：**候选区域预览 → 生成 fitting STL（默认 STP sampled；自动 Patch 预览中可选 legacy / conservative STL crop；Global Cut Chain 当前是独立 STL 裁剪路线）→ Geomagic AutoSurface 生成 IGS/STP patch → patch 叠加预览 → 用户点击 Apply → 原 STP boundary constrained replacement → repair → StrictTopologyGate 验证**。
 > 核心调整：Geomagic 后端采用 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量传参；当前真实脚本只要求 input/output/log，`config.json` / `result.json` 只作为 C++ 后端兼容和 mock 测试结构，不作为真实 wrapCore 调用的必需输入输出。新增 `PatchArtifactLocator` 作为 T5 入口，生产逻辑必须根据 local STL / GeomagicAutoSurfaceResult / candidate artifact 动态定位 patch，禁止写死当前真实样例文件名。T6 必须以 multi-face / complex patch replacement fragment 为主路径，不能假设 Geomagic 输出 1 个 B-rep face。当前路线修正：T6.6.x 已证明 STL crop 只负责给 Geomagic 提供采样，不能让 Geomagic patch outer boundary 成为最终 CAD boundary；T6.7 已落地 Boundary-Constrained Surface Re-trim 与 T6.7.4 strict multi-surface bounded shell 第一版。T6.7.4 之后，当前默认输入路线已切到 `STP Sampled Candidate Surface`，速度更快且效果接近 STL crop；`Global Cut Chain` 作为可选 STL 全局切链裁剪器保留，不是默认模式。
+> 当前提交路径：`feature-bounded-refit` / `origin/feature-bounded-refit` 指向 `a57695d`，该提交只是在 `1f0c3d7` 可缝合几何基准上合入 GUI 后台任务和状态显示优化。`d1c00e4 Improve boundary constrained Geomagic patch flow` 因真实样例缝合回归保留在备份/实验分支，不进入当前主线；Sharp Contours 实验已废弃。
+
+## 0.0 当前阶段修正（2026-06-15）
+
+```text
+当前不要继续沿 Sharp Contours 或 d1c00e4 推进。
+
+下一阶段问题不是裁剪缺面，也不是单纯 repair / sewing tolerance：
+Geomagic AutoSurface 导出的 patch 在 sharp corner / feature junction 附近会圆角化，
+导致原 CAD 棱角变成圆边。
+
+该问题的危险点是：
+1. OCCT BRepCheck 可能为 true。
+2. free edge / multiple edge 可能没有暴露问题。
+3. GUI 中视觉上可能看不到缝隙。
+4. Creo 等商业 CAD 重新解析后仍可能出现可见缝隙。
+
+下一轮应先做方案和 A/B 实验：
+1. corner-aware / curvature-aware sampling。
+2. STP sampled fitting STL 在原 boundary 外增加 guard-band 采样点。
+3. feature edge / corner anchor 约束。
+4. Geomagic 拟合后仍用原 STP boundary 重裁剪，不信任 patch outer boundary。
+5. 建立比 OCCT 门控更接近商业 CAD 的高密度偏差 / corner preservation gate。
+```
 
 ---
 

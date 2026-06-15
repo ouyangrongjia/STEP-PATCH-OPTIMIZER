@@ -1,7 +1,30 @@
 # STEP-PATCH-OPTIMIZER 项目流程文档
 
-> 草案版本：v0.3-stp-sampled-default
+> 草案版本：v0.4-a57695d-baseline
 > 用途：定义从 STP 输入（默认 STP sampled fitting STL；自动 Patch 预览可选 legacy / conservative STL crop；Global Cut Chain 为独立 STL 裁剪路线），到候选预览、Geomagic patch 生成、patch 叠加预览、用户 Apply、真实贴回和验证的完整流程。
+> 当前基准：`feature-bounded-refit` / `origin/feature-bounded-refit` 指向 `a57695d`，即 `1f0c3d7` 可缝合几何基准 + GUI 后台任务、状态显示和 Gate 诊断优化。`d1c00e4` 与 Sharp Contours 不属于当前主线。
+
+---
+
+## 0. 当前推进重点（2026-06-15）
+
+```text
+已确认：
+1. 裁剪问题不是当前最大瓶颈。
+2. Sharp Contours 实验无明显价值，已废弃。
+3. d1c00e4 的 boundary constrained flow 改动会让真实样例缝合回归，不进入当前主线。
+4. 当前可继续推进的稳定基准是 a57695d。
+
+下一阶段关注：
+Geomagic 输出 patch 在拐角 / 特征交汇处圆角化，导致商业 CAD 中出现缝隙。
+GUI 视觉连续和 OCCT BRepCheck 通过不足以证明 Creo 类软件打开后无缝。
+
+流程层面的约束：
+1. fitting STL 可以在原 STP boundary 内外增加采样，但最终 CAD boundary 仍只来自原 STP wire。
+2. 如果做 boundary 外 guard-band 采样，拟合后必须用原 STP boundary 裁剪多余部分。
+3. corner / feature anchors 只能约束 Geomagic 输入或后处理评估，不能替代 StrictTopologyGate。
+4. 新增质量门控必须能暴露 corner rounding / edge drift / boundary deviation，而不是只重复 BRepCheck。
+```
 
 ---
 

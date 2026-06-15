@@ -36,6 +36,8 @@ STEP 读取
    - Global Cut Chain crop 已接入 GUI，作为 STL 全局切链裁剪器。
 4. Stage 3A-Fix / A6 保留为旧 OCCT 近似平面路线的诊断与研究分支。
 5. 暂停扩展球面/圆柱/圆锥/自由曲面真实合并。
+6. 当前主线提交为 `a57695d`：以 `1f0c3d7` 已手动验证可缝合的几何处理为基准，只额外合入 GUI 后台任务、状态显示和 Gate 诊断优化。
+7. 下一阶段重点转为 Geomagic 输出在 sharp corner / feature junction 附近圆角化所造成的商业 CAD 缝隙问题；该问题不能只靠 OCCT BRepCheck / free edge / multiple edge 判断。
 ```
 
 ### 1.1 当前关键诊断（2026-05-27）
@@ -163,6 +165,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 66. STL Global Cut Chain crop 已完成第一版并接入 GUI：新增 `StlCropMode::GlobalCutChain` 与 `StlCutChainCutter`，从原 STP candidate ordered boundary edges 采样 boundary loop，在源 STL 上投影、跟踪 cut chain、按约束重三角化并 flood-fill 选出 patch mesh；GUI `STL -> 启用全局切链裁剪 (Global Cut Chain)` 可显式开启，单独裁剪当前候选 STL 时会走该路线。它是 STL 全局切链裁剪器，不是当前默认 Geomagic fitting input mode。
 67. Global Cut Chain boundary snap 已接入：`StlCutChainOptions` 默认 `snapBoundaryToRed=true`、`snapMaxDist=0.2`，切链后的 patch outer boundary 可向原 STP red boundary loop 回贴，降低投影到 STL 后的 green boundary 漂移。该 snap 只改善 local STL / fitting STL 输入质量，不改变最终 CAD boundary；Apply 仍必须使用原 STP candidate outer boundary wire，并通过 PatchReplacementRepair 与 StrictTopologyGate。
 68. GUI 后台任务与状态显示优化已按 `1f0c3d7` 可缝合基准完成移植：`openStepFile()`、`previewMergeCandidates()` 和 Patch Apply 的计算 / 读取进入 worker，viewer / model tree / report / Process Status 更新回 GUI 线程；长任务期间禁用会修改 document / controller 的入口；Process Status 与 Patch Apply report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和 face / edge / shell / solid 计数。`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
+69. 文档入口与下一阶段方向已同步到 `a57695d` 主线：仓库根目录恢复 `AGENTS.md`，保证新对话会先读全局 Workspace、项目记忆和仓库文档；当前后续研究问题明确为 Geomagic 在拐角 / 特征交汇处圆角化导致商业 CAD 出现缝隙。下一轮应优先评估 corner-aware / curvature-aware 采样、STP boundary guard-band 外扩采样、feature/corner anchors、原 STP boundary 重裁剪和 Creo-like 高密度偏差门控，而不是继续 Sharp Contours 或重新合入 `d1c00e4`。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -663,6 +666,7 @@ STL Global Cut Chain crop：已完成第一版并作为可选裁剪器接入 GUI
 GUI 后台任务 / 状态显示优化：已合入 1f0c3d7 基准
 d1c00e4 Improve boundary constrained Geomagic patch flow：因真实样例缝合回归，暂不进入当前主线
 Sharp Contours 实验：无收益，暂不进入当前主线
+下一阶段硬问题：Geomagic 圆角化 sharp corner 后，OCCT 门控可能通过但商业 CAD 仍出现缝隙；需要新增 corner-aware fitting input 与商业 CAD 近似门控实验
 ```
 
 **旧 OCCT 近似平面路线定位：**

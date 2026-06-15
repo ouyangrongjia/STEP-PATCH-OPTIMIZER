@@ -4,11 +4,11 @@
 > 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
 > 当前阶段：以 `1f0c3d7`（文档同步）为已手动验证可缝合的几何基准；`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
 > 更新时间：2026-06-15
-> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。本轮只在 `1f0c3d7` 基准上合入 GUI 后台任务、状态显示和门控优化。
+> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。当前主线提交为 `a57695d`，即 `1f0c3d7` 可缝合几何基准 + GUI 后台任务、状态显示和门控诊断优化。
 
 ---
 
-## 当前执行判断（2026-06-11）
+## 当前执行判断（2026-06-15）
 
 ```text
 1. 默认 Geomagic fitting input mode：
@@ -38,6 +38,13 @@
    viewer / model tree / report / Process Status 更新必须回 GUI 线程执行。
    长任务期间禁用会修改 document / controller 的入口。
    Process Status / report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和拓扑计数。
+
+6. 下一阶段硬问题：
+   Geomagic 导出的 patch 会在 sharp corner / feature junction 附近圆角化，
+   原 STP 的棱角可能变成圆边；OCCT BRepCheck、free edge、multiple edge 甚至 STEP roundtrip 通过，
+   仍可能在 Creo 等商业 CAD 中出现可见缝隙。
+   下一步不应继续 Sharp Contours 实验，也不应重新合入 d1c00e4。
+   应在 a57695d 基准上设计 corner-aware / curvature-aware fitting input 与商业 CAD 近似门控实验。
 ```
 
 ---
