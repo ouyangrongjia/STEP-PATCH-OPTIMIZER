@@ -26,6 +26,82 @@ GUI 视觉连续和 OCCT BRepCheck 通过不足以证明 Creo 类软件打开后
 4. 新增质量门控必须能暴露 corner rounding / edge drift / boundary deviation，而不是只重复 BRepCheck。
 ```
 
+### 0.1 最终流程增量
+
+下一轮流程新增两个明确阶段：
+
+```text
+Fitting input enhancement:
+  STP candidate faces / boundary
+  → detect sharp edges / corner vertices / feature junctions
+  → generate corner-aware dense samples
+  → generate inner boundary band + outer STP guard-band samples
+  → preserve feature / corner anchor set in report
+  → write enhanced fitting STL
+  → run Geomagic AutoSurface
+
+Commercial-CAD-like quality gate:
+  after PatchReplacementRepair + StrictTopologyGate
+  → dense boundary deviation
+  → corner anchor drift
+  → feature edge drift
+  → sharpness preservation
+  → surface COPS-like deviation
+  → STEP roundtrip geometry drift
+  → Creo / commercial CAD A/B confirmation
+```
+
+流程边界：
+
+```text
+1. Enhanced fitting STL 只改变 Geomagic 输入，不改变 final CAD boundary。
+2. guard-band 采样只能来自 STP 邻接 face，不信任 patch outer boundary。
+3. Apply 仍通过 original STP boundary re-trim / multi-surface shell。
+4. Commercial-CAD-like gate 不替代 StrictTopologyGate；它在拓扑 gate 之外判断几何质量。
+5. A/B 实验分支为 experiment/corner-preservation-ab。
+```
+
+最小实验矩阵：
+
+| 组 | 输入策略 | 必须比较的指标 |
+|---|---|---|
+| A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
+| B1 | corner / feature edge 加密采样 | sharp edge drift 是否下降 |
+| B2 | outer guard-band sampling | corner rounding 是否下降 |
+| B3 | corner anchors + guard-band | 是否同时降低 drift 且不恶化 repair / gate |
+
+当前 A0 自动化入口：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7
+```
+
+无 Geomagic 或复用已有 patch：
+
+```powershell
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7 `
+  --patch "D:\path\to\patch.stp"
+```
+
+默认输出报告：
+
+```text
+data/baseline_runs/baseline_report.json
+```
+
+Geomagic staging 与 GUI 相同：
+
+```text
+data/crop_stl/<model>/<model>_candidate_<id>.stl
+data/crop_stp/<model>/<model>_candidate_<id>.stp
+data/crop_stp/<model>/<model>_candidate_<id>_fit_region.log
+```
+
 ---
 
 ## 1. 总体流程

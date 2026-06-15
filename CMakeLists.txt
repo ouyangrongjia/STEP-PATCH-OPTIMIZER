@@ -90,6 +90,7 @@ add_library(spo_core STATIC
     src/validate/ReportGenerator.cpp
     src/validate/SewingChecker.cpp
     src/validate/ShapeValidator.cpp
+    src/validate/CommercialCadQualityGate.cpp
     src/validate/StrictTopologyGate.cpp
 )
 
@@ -155,6 +156,10 @@ if(SPO_BUILD_TOOLS)
 
     add_executable(patch_apply_probe tools/patch_apply_probe.cpp)
     target_link_libraries(patch_apply_probe PRIVATE spo_core)
+
+    add_executable(corner_baseline_probe tools/corner_baseline_probe.cpp)
+    target_link_libraries(corner_baseline_probe PRIVATE spo_core)
+    target_compile_definitions(corner_baseline_probe PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 if(SPO_BUILD_TESTS)
@@ -193,6 +198,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_apply_state.cpp
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
+        tests/test_commercial_cad_quality_gate.cpp
         tests/test_boundary_constrained_patch_builder.cpp
         tests/test_crop_boundary_diagnostics.cpp
         tests/test_patch_replacement_repair.cpp

@@ -30,6 +30,169 @@ Geomagic AutoSurface 导出的 patch 在 sharp corner / feature junction 附近�
 
 ---
 
+## 0.1 最终方案：双层闭环
+
+当前最终方案不是继续调裁剪、sewing tolerance、Sharp Contours 或 `d1c00e4`，而是建立两层闭环：
+
+```text
+输入层：
+  改善 Geomagic fitting STL，让 AutoSurface 在 sharp corner / feature junction 附近看到更完整的几何上下文。
+
+验证层：
+  在 StrictTopologyGate 之外增加 commercial-CAD-like 高密度几何质量门控。
+```
+
+### 0.1.1 输入层
+
+```text
+1. corner-aware / curvature-aware sampling
+   - 识别 sharp edge、corner vertex、feature junction。
+   - 沿 sharp edge 两侧和 corner fan 加密 STP sampled points。
+   - 曲率突变或二面角突变附近使用更小 spacing。
+
+2. STP boundary 外 guard-band 采样
+   - 从原 STP candidate boundary 跨到邻接 STP faces 采样 1-3 圈外侧窄带。
+   - guard-band 只作为 Geomagic fitting input。
+   - 不能把 guard-band 三角边界当最终 CAD boundary。
+
+3. feature / corner anchors
+   - 将 sharp edge polyline、corner vertices、feature junction 邻域点作为 anchor set。
+   - 如果 Geomagic 不能接收硬约束，anchor set 至少必须进入输入加密和输出漂移评估。
+```
+
+注意：`StpSampledFittingOptions` 已有 `preserveCornerPoints` / `includeBoundaryBand` 字段，但当前实现仍没有真正生成 boundary band / bridge triangles；第一轮实验应优先补齐这个差距。
+
+### 0.1.2 Replacement 层
+
+```text
+1. Geomagic patch 只提供 surface trend。
+2. replacement / Apply 仍必须使用原 STP candidate outer boundary wire。
+3. 拟合外扩得到的 guard-band 在 Apply 时必须被原 STP boundary 裁掉。
+4. `allowPatchOuterBoundaryFallback=false` 不得放开。
+5. StrictTopologyGate 继续负责 BRepCheck、free edge、multiple edge、solid/watertight 和 STEP roundtrip。
+```
+
+### 0.1.3 新增 commercial-CAD-like 几何质量门控
+
+建议新增独立 gate，不把它混入现有 `StrictTopologyGate`：
+
+```text
+CommercialCadLikeQualityGate
+```
+
+第一版指标：
+
+```text
+boundary_deviation:
+  原 STP boundary dense samples 到 replacement surface / shell 的 max / p95 / RMS。
+
+corner_anchor_drift:
+  原 corner vertices / junction anchors 到 replacement 的 max / p95。
+
+feature_edge_drift:
+  原 sharp edge dense samples 到 replacement feature / seam / surface 的 max / p95。
+
+sharpness_preservation:
+  原 sharp edge 两侧法向 / 二面角突变不能被 replacement 变成近似 G1 圆滑过渡。
+
+surface_cops_like_deviation:
+  原 candidate dense samples 到 after shape 的 max / p95 / RMS。
+
+roundtrip_geometry_drift:
+  STEP roundtrip 后重复计算上述指标。
+```
+
+阈值策略：
+
+```text
+第一版以 0.01 mm 作为 warning / report 参考线。
+真实 fail 阈值必须通过 Creo 或等价商业 CAD A/B 实验标定。
+不要把 OCCT BRepCheck 通过当成商业 CAD 无缝。
+```
+
+### 0.1.4 最小 A/B 实验矩阵
+
+实验分支：
+
+```text
+experiment/corner-preservation-ab
+```
+
+| 组 | 策略 | 目的 |
+|---|---|---|
+| A0 | 当前 STP sampled baseline | 建立 corner rounding / commercial CAD gap 数值基线 |
+| B1 | corner / feature edge 加密采样 | 验证点集增强是否降低 feature edge drift |
+| B2 | 原 STP boundary 外 guard-band 采样 | 验证外侧上下文是否抑制圆角化 |
+| B3 | corner anchors + guard-band | 验证组合是否明显优于单独策略 |
+
+每组必须输出：
+
+```text
+1. Geomagic patch face / edge / shell / solid / BRepCheck。
+2. Apply / repair / StrictTopologyGate before-after-roundtrip stats。
+3. boundary max / p95 / RMS deviation。
+4. corner anchor drift。
+5. feature edge drift。
+6. sharpness preservation score。
+7. STEP roundtrip 后重复测量。
+8. Creo 或商业 CAD 打开结果。
+```
+
+成功判定：
+
+```text
+B 组必须同时降低 corner anchor drift、feature edge drift p95/max、boundary projection p95/max，
+并且不能让 patch face count、repair failure、StrictTopologyGate 结果明显恶化。
+
+GUI 看起来连续不是成功证据。
+OCCT BRepCheck 通过也不是商业 CAD 无缝证据。
+```
+
+### 0.1.5 A0 baseline 脚本化状态
+
+已新增：
+
+```text
+tools/corner_baseline_probe.cpp
+src/validate/CommercialCadQualityGate.h/.cpp
+tests/test_commercial_cad_quality_gate.cpp
+```
+
+当前 CLI 流程：
+
+```text
+source STEP + candidate id
+→ STP-sampled fitting STL
+→ Geomagic AutoSurface，或 --patch 复用已有 patch
+→ Patch preview/import
+→ Patch Apply + StrictTopologyGate
+→ CommercialCadLikeQualityGate
+→ baseline_report.json
+```
+
+实现约束：
+
+```text
+Geomagic staging 必须对齐 GUI：
+  data/crop_stl/<model>/<model>_candidate_<id>.stl
+  data/crop_stp/<model>/<model>_candidate_<id>.stp
+  data/crop_stp/<model>/<model>_candidate_<id>_fit_region.log
+
+baseline_runs 只保存实验报告，不作为默认 Geomagic 输出目录。
+```
+
+第一版 gate 只做自动化几何风险近似：
+
+```text
+boundary dense samples → imported patch
+corner anchors → imported patch
+feature boundary samples → imported patch
+```
+
+它不能替代 Creo / commercial CAD 最终确认，也不能替代 `StrictTopologyGate`。
+
+---
+
 ## 0. 当前路线定义
 
 ### 0.1 总体目标

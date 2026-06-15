@@ -149,6 +149,62 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ---
 
+## 4.1 命令行 baseline / A0 自动验证
+
+不需要打开 GUI 的 A0 baseline 入口：
+
+```powershell
+cd D:\pyProject\step-patch-optimizer
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7
+```
+
+默认流程：
+
+```text
+read STEP
+→ detect feature edges
+→ plan feature-bounded candidates
+→ analyze original STP boundary
+→ generate STP-sampled fitting STL
+→ run Geomagic AutoSurface
+→ import generated patch
+→ Patch Apply with StrictTopologyGate
+→ CommercialCadLikeQualityGate
+→ write JSON report
+```
+
+无 Geomagic 或复用已有 patch 时：
+
+```powershell
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7 `
+  --patch "D:\path\to\patch.stp"
+```
+
+默认输出：
+
+```text
+D:\pyProject\step-patch-optimizer\data\baseline_runs\baseline_report.json
+```
+
+Geomagic staging 使用与 GUI 一致的路径和文件名：
+
+```text
+data\crop_stl\<model>\<model>_candidate_<id>.stl
+data\crop_stp\<model>\<model>_candidate_<id>.stp
+data\crop_stp\<model>\<model>_candidate_<id>_fit_region.log
+```
+
+报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary / corner anchor / feature edge drift。
+
+该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程变成可重复的 baseline 数据生成器。
+
+---
+
 ## 5. 当前 GUI 主流程
 
 当前 GUI 已支持以下主流程：
