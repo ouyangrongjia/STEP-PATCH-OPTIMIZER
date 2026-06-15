@@ -2,6 +2,7 @@
 
 #include <QHeaderView>
 #include <QTreeWidget>
+#include <QAbstractItemView>
 #include <QVBoxLayout>
 
 namespace spo {
@@ -24,11 +25,19 @@ QString riskLevelText(MergeRiskLevel risk) {
 
 ModelTreePanel::ModelTreePanel(QWidget* parent) : QWidget(parent) {
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(6, 6, 6, 6);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setSpacing(0);
 
     tree_ = new QTreeWidget(this);
+    tree_->setObjectName("modelTree");
     tree_->setHeaderLabel("模型");
     tree_->header()->setStretchLastSection(true);
+    tree_->setAlternatingRowColors(true);
+    tree_->setAnimated(true);
+    tree_->setIndentation(18);
+    tree_->setUniformRowHeights(true);
+    tree_->setSelectionMode(QAbstractItemView::SingleSelection);
+    tree_->setFocusPolicy(Qt::StrongFocus);
     layout->addWidget(tree_);
 
     showEmpty();
@@ -36,8 +45,8 @@ ModelTreePanel::ModelTreePanel(QWidget* parent) : QWidget(parent) {
 
 void ModelTreePanel::showEmpty() {
     tree_->clear();
-    auto* root = new QTreeWidgetItem(tree_, QStringList() << "未加载 STEP/STP");
-    new QTreeWidgetItem(root, QStringList() << "请通过 文件 > 打开 STEP/STP 导入模型");
+    auto* root = new QTreeWidgetItem(tree_, QStringList() << "未加载模型");
+    new QTreeWidgetItem(root, QStringList() << "请通过 文件 > 打开 STEP/STP 导入");
     tree_->expandAll();
 }
 

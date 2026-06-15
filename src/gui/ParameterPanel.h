@@ -4,8 +4,6 @@
 
 #include <QWidget>
 
-class QCheckBox;
-class QComboBox;
 class QDoubleSpinBox;
 class QSpinBox;
 
@@ -21,11 +19,6 @@ private:
     QDoubleSpinBox* linearTolerance_ = nullptr;
     QDoubleSpinBox* curvatureThreshold_ = nullptr;
     QDoubleSpinBox* minEdgeLength_ = nullptr;
-    QComboBox* mergeMode_ = nullptr;
-    QCheckBox* preserveFeatureEdges_ = nullptr;
-    QCheckBox* preserveUserLockedEdges_ = nullptr;
-    QCheckBox* concatBsplines_ = nullptr;
-    QCheckBox* enableRefit_ = nullptr;
 };
 
 }
