@@ -2,9 +2,9 @@
 
 > 文档定位：这是当前执行 TODO 文档，用于随开发进度持续更新、替换和勾选。  
 > 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
-> 当前阶段：T6.7.4 strict multi-surface boundary shell 之后，重点转向 Geomagic fitting input mode 与真实 Apply 收口。
-> 更新时间：2026-06-11
-> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。
+> 当前阶段：以 `1f0c3d7`（文档同步）为已手动验证可缝合的几何基准；`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
+> 更新时间：2026-06-15
+> 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。本轮只在 `1f0c3d7` 基准上合入 GUI 后台任务、状态显示和门控优化。
 
 ---
 
@@ -29,9 +29,15 @@
    STP sampled fitting STL、裁剪 STL、Global Cut Chain 输出和 Geomagic patch outer boundary 都不能作为最终 CAD boundary。
 
 4. 当前真实收口问题：
-   T6.7.4 后不是继续调 STL crop tolerance，
-   而是处理 split boundary、邻接旧拓扑 / bridge closure，
-   让 repair 后 free edge / multiple edge 归零并通过 BRepCheck、solid/watertight 和 STEP roundtrip。
+   以 1f0c3d7 的可缝合结果为准。
+   d1c00e4 的 boundary constrained flow 改动已导致真实样例缝合回归，
+   因此不作为当前主线基准。
+
+5. 本轮 GUI 优化边界：
+   openStepFile、previewMergeCandidates 和 Patch Apply 长任务转入后台线程。
+   viewer / model tree / report / Process Status 更新必须回 GUI 线程执行。
+   长任务期间禁用会修改 document / controller 的入口。
+   Process Status / report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和拓扑计数。
 ```
 
 ---

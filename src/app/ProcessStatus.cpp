@@ -8,6 +8,10 @@ const char* toString(ProcessStage stage) {
     switch (stage) {
     case ProcessStage::Idle:
         return "Idle";
+    case ProcessStage::LoadingStep:
+        return "LoadingStep";
+    case ProcessStage::PreviewingMergeCandidates:
+        return "PreviewingMergeCandidates";
     case ProcessStage::AnalyzingBoundary:
         return "AnalyzingBoundary";
     case ProcessStage::CroppingStl:

@@ -60,6 +60,30 @@ void ProcessStatusPanel::showStatus(const ProcessStatusSnapshot& snapshot) {
         {"StrictTopologyGate evaluated", boolText(snapshot.gateEvaluated)},
         {"StrictTopologyGate passed", boolText(snapshot.gatePassed)},
         {"StrictTopologyGate failure", QString::fromStdString(snapshot.latestGateFailureReason)},
+        {"Gate before BRepCheck", boolText(snapshot.gateBeforeBRepCheckValid)},
+        {"Gate after BRepCheck", boolText(snapshot.gateAfterBRepCheckValid)},
+        {"Gate roundtrip BRepCheck", boolText(snapshot.gateRoundtripBRepCheckValid)},
+        {"Gate before free edges", QString::number(snapshot.gateBeforeFreeEdges)},
+        {"Gate after free edges", QString::number(snapshot.gateAfterFreeEdges)},
+        {"Gate roundtrip free edges", QString::number(snapshot.gateRoundtripFreeEdges)},
+        {"Gate before multiple edges", QString::number(snapshot.gateBeforeMultipleEdges)},
+        {"Gate after multiple edges", QString::number(snapshot.gateAfterMultipleEdges)},
+        {"Gate roundtrip multiple edges", QString::number(snapshot.gateRoundtripMultipleEdges)},
+        {"Gate before faces/edges/shells/solids", QString("%1/%2/%3/%4")
+            .arg(snapshot.gateBeforeFaceCount)
+            .arg(snapshot.gateBeforeEdgeCount)
+            .arg(snapshot.gateBeforeShellCount)
+            .arg(snapshot.gateBeforeSolidCount)},
+        {"Gate after faces/edges/shells/solids", QString("%1/%2/%3/%4")
+            .arg(snapshot.gateAfterFaceCount)
+            .arg(snapshot.gateAfterEdgeCount)
+            .arg(snapshot.gateAfterShellCount)
+            .arg(snapshot.gateAfterSolidCount)},
+        {"Gate roundtrip faces/edges/shells/solids", QString("%1/%2/%3/%4")
+            .arg(snapshot.gateRoundtripFaceCount)
+            .arg(snapshot.gateRoundtripEdgeCount)
+            .arg(snapshot.gateRoundtripShellCount)
+            .arg(snapshot.gateRoundtripSolidCount)},
         {"crop band evaluated", boolText(snapshot.cropBoundaryBandEvaluated)},
         {"crop band sample count", QString::number(snapshot.cropBoundaryBandSampleCount)},
         {"crop band missing points", QString::number(snapshot.cropBoundaryBandMissingPointCount)},

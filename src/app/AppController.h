@@ -26,6 +26,7 @@
 #include "validate/ShapeValidator.h"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <set>
 #include <vector>
@@ -47,6 +48,8 @@ struct PatchPreviewPipelineResult {
     StpSampledFittingReport stpSampledReport;
     std::string message;
 };
+
+using PatchPreviewProgressCallback = std::function<void(ProcessStatusSnapshot)>;
 
 class AppController {
 public:
@@ -90,7 +93,8 @@ public:
         GeomagicAutoSurfaceConfig config = {},
         GeomagicFittingInputMode fittingMode = GeomagicFittingInputMode::LegacyStlCrop,
         const StlRegionExtractorOptions& cropOptions = {},
-        const StpSampledFittingOptions& samplingOptions = {});
+        const StpSampledFittingOptions& samplingOptions = {},
+        PatchPreviewProgressCallback progress = {});
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
     MergePlannerResult previewMergeCandidates(
         double angularThresholdDegrees,
@@ -135,7 +139,8 @@ public:
     Result requestApplyCurrentPatchPreview();
     Result applyCurrentPatchToCurrentCandidate(
         const MergeCandidate& candidate,
-        PatchReplacementReport* outReport = nullptr);
+        PatchReplacementReport* outReport = nullptr,
+        PatchPreviewProgressCallback progress = {});
     CropBoundaryDiagnosticsReport diagnoseCropBoundaryForCurrentPatch(
         const MergeCandidate& candidate,
         const StlMesh* localStlMesh = nullptr,

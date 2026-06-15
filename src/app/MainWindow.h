@@ -5,6 +5,8 @@
 #include "stl/StlRegionExtractor.h"
 
 #include <QMainWindow>
+#include <QElapsedTimer>
+#include <QStringList>
 
 #include <set>
 #include <vector>
@@ -13,6 +15,7 @@ class QAction;
 class QDockWidget;
 class QMenu;
 class QTabWidget;
+class QTimer;
 
 namespace spo {
 
@@ -98,6 +101,12 @@ private:
     void refreshPatchApplyAction();
     void refreshProcessStatusPanel();
     void publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics);
+    void startPatchPreviewProgressReport(const ProcessStatusSnapshot& initialStatus, const QString& header);
+    void appendPatchPreviewProgress(ProcessStatusSnapshot status, bool syncController = true);
+    void refreshPatchPreviewProgressReport();
+    void stopPatchPreviewProgressReport();
+    QString patchPreviewProgressReportText() const;
+    QString patchPreviewProgressLine(const ProcessStatusSnapshot& status) const;
     void setStlCropInProgress(bool inProgress);
     StlRegionExtractorOptions currentStlCropOptions() const;
     void setGeomagicFittingInputMode(GeomagicFittingInputMode mode);
@@ -180,6 +189,13 @@ private:
     int currentMergeCandidateId_ = -1;
     bool hasFeatureEdgeResult_ = false;
     bool stlCropInProgress_ = false;
+    bool patchApplyInProgress_ = false;
+    QTimer* patchPreviewProgressTimer_ = nullptr;
+    QString patchPreviewProgressHeader_;
+    QStringList patchPreviewProgressLines_;
+    ProcessStatusSnapshot patchPreviewLastProgress_;
+    QElapsedTimer patchPreviewProgressClock_;
+    bool patchPreviewProgressActive_ = false;
     GeomagicFittingInputMode fittingInputMode_ = GeomagicFittingInputMode::StpSampledCandidateSurface;
 };
 

@@ -235,6 +235,8 @@ void test_status_to_string() {
     assert(std::string(spo::toString(spo::RegionPatchStatus::NotGenerated)) == "NotGenerated");
     assert(std::string(spo::toString(spo::RegionPatchStatus::ApplyPending)) == "ApplyPending");
     assert(std::string(spo::toString(spo::ProcessStage::Idle)) == "Idle");
+    assert(std::string(spo::toString(spo::ProcessStage::LoadingStep)) == "LoadingStep");
+    assert(std::string(spo::toString(spo::ProcessStage::PreviewingMergeCandidates)) == "PreviewingMergeCandidates");
     assert(std::string(spo::toString(spo::ProcessStage::PreviewReady)) == "PreviewReady");
     assert(std::string(spo::toString(spo::ProcessStage::CachedRedo)) == "CachedRedo");
 }
@@ -335,9 +337,18 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     const auto beforeStats = controller.document().stats();
     const auto commandCountBefore = controller.history().executedCommands().size();
     spo::PatchReplacementReport report;
-    const auto apply = controller.applyCurrentPatchToCurrentCandidate(candidate, &report);
+    std::vector<spo::ProcessStatusSnapshot> progressUpdates;
+    const auto apply = controller.applyCurrentPatchToCurrentCandidate(
+        candidate,
+        &report,
+        [&](spo::ProcessStatusSnapshot status) {
+            progressUpdates.push_back(std::move(status));
+        });
 
     assert(apply.success());
+    assert(!progressUpdates.empty());
+    assert(progressUpdates.front().stage == spo::ProcessStage::ApplyingPatch);
+    assert(progressUpdates.back().stage == spo::ProcessStage::Applied);
     assert(report.success);
     assert(report.sourceFacesReplaced);
     assert(report.repairApplied);
@@ -375,6 +386,14 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(controller.currentProcessStatus().bestFreeEdges == report.bestSewingFreeEdges);
     assert(controller.currentProcessStatus().gateEvaluated);
     assert(controller.currentProcessStatus().gatePassed);
+    assert(controller.currentProcessStatus().gateAfterFreeEdges == report.gateAfterFreeEdges);
+    assert(controller.currentProcessStatus().gateAfterMultipleEdges == report.gateAfterMultipleEdges);
+    assert(controller.currentProcessStatus().gateRoundtripFreeEdges == report.gateRoundtripFreeEdges);
+    assert(controller.currentProcessStatus().gateRoundtripMultipleEdges == report.gateRoundtripMultipleEdges);
+    assert(controller.currentProcessStatus().gateAfterBRepCheckValid == report.gateAfterBRepCheckValid);
+    assert(controller.currentProcessStatus().gateRoundtripBRepCheckValid == report.gateRoundtripBRepCheckValid);
+    assert(controller.currentProcessStatus().gateAfterSolidCount == report.gateAfterSolidCount);
+    assert(controller.currentProcessStatus().gateRoundtripSolidCount == report.gateRoundtripSolidCount);
 
     const auto afterStats = controller.document().stats();
     const auto validation = spo::ShapeValidator().validate(controller.document());
@@ -465,6 +484,12 @@ void test_process_status_keeps_apply_failure_diagnostics_after_apply_failed() {
         assert(!controller.currentProcessStatus().gatePassed);
         assert(!controller.currentProcessStatus().latestGateFailureReason.empty());
         assert(controller.currentProcessStatus().latestMessage.find("StrictTopologyGate") != std::string::npos);
+        assert(controller.currentProcessStatus().gateAfterFreeEdges == report.gateAfterFreeEdges);
+        assert(controller.currentProcessStatus().gateAfterMultipleEdges == report.gateAfterMultipleEdges);
+        assert(controller.currentProcessStatus().gateRoundtripFreeEdges == report.gateRoundtripFreeEdges);
+        assert(controller.currentProcessStatus().gateRoundtripMultipleEdges == report.gateRoundtripMultipleEdges);
+        assert(controller.currentProcessStatus().gateAfterBRepCheckValid == report.gateAfterBRepCheckValid);
+        assert(controller.currentProcessStatus().gateRoundtripBRepCheckValid == report.gateRoundtripBRepCheckValid);
     } else {
         assert(!controller.currentProcessStatus().gateEvaluated);
         assert(report.retrimBoundarySampleCount > 0);
@@ -523,9 +548,13 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     const auto appControllerSource = read_text_file(sourceRoot / "src" / "app" / "AppController.cpp");
     const auto mainWindowHeader = read_text_file(sourceRoot / "src" / "app" / "MainWindow.h");
     const auto mainWindowSource = read_text_file(sourceRoot / "src" / "app" / "MainWindow.cpp");
+    const auto processStatusHeader = read_text_file(sourceRoot / "src" / "app" / "ProcessStatus.h");
+    const auto processStatusPanelSource = read_text_file(sourceRoot / "src" / "gui" / "ProcessStatusPanel.cpp");
     const auto commandHeader = read_text_file(sourceRoot / "src" / "command" / "PatchReplacementCommand.h");
     const auto commandSource = read_text_file(sourceRoot / "src" / "command" / "PatchReplacementCommand.cpp");
-    const auto allText = appControllerHeader + appControllerSource + mainWindowHeader + mainWindowSource + commandHeader + commandSource;
+    const auto allText =
+        appControllerHeader + appControllerSource + mainWindowHeader + mainWindowSource +
+        processStatusHeader + processStatusPanelSource + commandHeader + commandSource;
     const auto bannedLocalCandidate = std::string("local_candidate_") + "0179";
     const auto bannedMechanical = std::string("local_candidate_") + "0179_" + "mechanical.stp";
     const auto bannedClay = std::string("03_") + "\xE9\x85\x8D\xE4\xBB\xB6" + "_Clay_candidate_" + "0179";
@@ -540,6 +569,25 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(mainWindowSource.find("最佳缝合 free edge") != std::string::npos);
     assert(mainWindowSource.find("BRepCheck") != std::string::npos);
     assert(mainWindowSource.find("Gate") != std::string::npos);
+    assert(mainWindowSource.find("multiple edge 修复前") != std::string::npos);
+    assert(mainWindowSource.find("Gate free edge") != std::string::npos);
+    assert(mainWindowSource.find("Gate multiple edge") != std::string::npos);
+    assert(mainWindowSource.find("STEP roundtrip") != std::string::npos);
+    assert(mainWindowSource.find("QFutureWatcher<PatchApplyUiResult>") != std::string::npos);
+    assert(mainWindowSource.find("Patch Apply 正在后台运行") != std::string::npos);
+    assert(mainWindowSource.find("QFutureWatcher<OpenStepUiResult>") != std::string::npos);
+    assert(mainWindowSource.find("STEP/STP 正在后台打开") != std::string::npos);
+    assert(mainWindowSource.find("QFutureWatcher<MergePreviewUiResult>") != std::string::npos);
+    assert(mainWindowSource.find("合并候选区域预览正在后台运行") != std::string::npos);
+    assert(mainWindowHeader.find("patchApplyInProgress_") != std::string::npos);
+    assert(appControllerHeader.find("PatchPreviewProgressCallback progress") != std::string::npos);
+    assert(processStatusHeader.find("gateAfterMultipleEdges") != std::string::npos);
+    assert(processStatusHeader.find("gateRoundtripMultipleEdges") != std::string::npos);
+    assert(processStatusPanelSource.find("Gate after multiple edges") != std::string::npos);
+    assert(processStatusPanelSource.find("Gate roundtrip multiple edges") != std::string::npos);
+    assert(mainWindowSource.find("Geomagic Sharp Contours") == std::string::npos);
+    assert(mainWindowSource.find("useGeomagicSharpContoursAction_") == std::string::npos);
+    assert(appControllerSource.find("sharpenConstrainedContours") == std::string::npos);
 #endif
 }
 

@@ -25,6 +25,8 @@
 #include <QKeySequence>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QPointer>
 #include <QStatusBar>
 #include <QStringList>
 #include <QTabWidget>
@@ -47,6 +49,13 @@ std::filesystem::path pathFromQString(const QString& path) {
 
 QString pathToQString(const std::filesystem::path& path) {
     return QString::fromStdWString(path.wstring());
+}
+
+QString elapsedText(qint64 milliseconds) {
+    const auto seconds = milliseconds / 1000;
+    return QString("%1:%2")
+        .arg(seconds / 60)
+        .arg(seconds % 60, 2, 10, QLatin1Char('0'));
 }
 
 QString candidateTypeText(MergeCandidateType type) {
@@ -153,6 +162,90 @@ QString bboxText(
 QString boolText(bool value) {
     return value ? "true" : "false";
 }
+
+struct PatchApplyUiResult {
+    bool success = false;
+    std::string resultMessage;
+    std::string statusMessage;
+    PatchReplacementReport report;
+};
+
+QString patchApplyReportText(const PatchReplacementReport& report, const QString& statusMessage) {
+    QStringList reportLines;
+    reportLines << "Patch Apply";
+    if (report.success) {
+        reportLines << QString("✅ 成功  |  候选 %1  |  替换 %2 面 → %3 面  |  BRepCheck 通过  |  STEP roundtrip 通过")
+            .arg(report.candidateId)
+            .arg(report.sourceFaceCount)
+            .arg(report.replacementFaceCount);
+        if (report.usedMultiSurfaceBoundaryShell) {
+            reportLines << "策略：multi-surface boundary shell";
+        } else if (report.usedOriginalBoundarySurfaceRetrim) {
+            reportLines << "策略：original boundary surface retrim";
+        }
+    } else {
+        reportLines << QString("❌ 失败  |  候选 %1  |  原因：%2")
+            .arg(report.candidateId)
+            .arg(QString::fromStdString(report.gateFailureReason.empty()
+                ? toString(report.failureReason) : report.gateFailureReason));
+    }
+    reportLines << QString("缝合容差 %1（%2 次尝试）| 最佳缝合 free edge %3  |  multiple edge %4  |  BRepCheck %5")
+        .arg(QString::number(report.selectedSewingTolerance, 'g', 4))
+        .arg(report.sewingAttemptCount)
+        .arg(report.bestSewingFreeEdges)
+        .arg(report.bestSewingMultipleEdges)
+        .arg(boolText(report.bestSewingBRepCheckValid));
+    reportLines << QString("修复拓扑：free edge 修复前 %1 → 修复后 %2  |  multiple edge 修复前 %3 → 修复后 %4")
+        .arg(report.freeEdgesBeforeRepair)
+        .arg(report.freeEdgesAfterRepair)
+        .arg(report.multipleEdgesBeforeRepair)
+        .arg(report.multipleEdgesAfterRepair);
+    reportLines << QString("Gate free edge：before %1  |  after %2  |  STEP roundtrip %3")
+        .arg(report.gateBeforeFreeEdges)
+        .arg(report.gateAfterFreeEdges)
+        .arg(report.gateRoundtripFreeEdges);
+    reportLines << QString("Gate multiple edge：before %1  |  after %2  |  STEP roundtrip %3")
+        .arg(report.gateBeforeMultipleEdges)
+        .arg(report.gateAfterMultipleEdges)
+        .arg(report.gateRoundtripMultipleEdges);
+    reportLines << QString("Gate BRepCheck：before %1  |  after %2  |  STEP roundtrip %3")
+        .arg(boolText(report.gateBeforeBRepCheckValid))
+        .arg(boolText(report.gateAfterBRepCheckValid))
+        .arg(boolText(report.gateRoundtripBRepCheckValid));
+    reportLines << QString("Gate faces/edges/shells/solids：before %1/%2/%3/%4  |  after %5/%6/%7/%8  |  STEP roundtrip %9/%10/%11/%12")
+        .arg(report.gateBeforeFaceCount)
+        .arg(report.gateBeforeEdgeCount)
+        .arg(report.gateBeforeShellCount)
+        .arg(report.gateBeforeSolidCount)
+        .arg(report.gateAfterFaceCount)
+        .arg(report.gateAfterEdgeCount)
+        .arg(report.gateAfterShellCount)
+        .arg(report.gateAfterSolidCount)
+        .arg(report.gateRoundtripFaceCount)
+        .arg(report.gateRoundtripEdgeCount)
+        .arg(report.gateRoundtripShellCount)
+        .arg(report.gateRoundtripSolidCount);
+    reportLines << QString("Gate %1")
+        .arg(report.gatePassed ? "通过" : QString("不通过：%1").arg(QString::fromStdString(report.gateFailureReason)));
+    const auto warn = QString::fromStdString(report.warningMessage);
+    if (!warn.isEmpty()) {
+        reportLines << QString("警告：%1").arg(warn);
+    }
+    reportLines << statusMessage;
+    return reportLines.join('\n');
+}
+
+struct OpenStepUiResult {
+    bool success = false;
+    std::string message;
+    std::filesystem::path path;
+};
+
+struct MergePreviewUiResult {
+    MergePlannerResult result;
+    ShapeStats beforeStats;
+    ShapeStats afterStats;
+};
 
 QString gapEdgeIdsText(const std::vector<EdgeId>& edgeIds) {
     if (edgeIds.empty()) {
@@ -336,6 +429,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 }
 
 bool MainWindow::event(QEvent* event) {
+    if (event->type() == QEvent::Close && (patchApplyInProgress_ || stlCropInProgress_)) {
+        event->ignore();
+        QMessageBox::information(this, "后台任务", "当前后台任务正在运行，请等待任务结束。");
+        return true;
+    }
     if (event->type() == QEvent::KeyPress ||
         event->type() == QEvent::KeyRelease ||
         event->type() == QEvent::ShortcutOverride) {
@@ -819,60 +917,106 @@ void MainWindow::connectActions() {
 }
 
 void MainWindow::openStepFile() {
+    if (stlCropInProgress_ || patchApplyInProgress_) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
+
     const auto filePath = QFileDialog::getOpenFileName(
         this, "打开 STEP/STP", QString(), "STEP 文件 (*.step *.stp *.STEP *.STP);;所有文件 (*.*)");
     if (filePath.isEmpty()) {
         return;
     }
 
-    const auto result = controller_.openStepFile(pathFromQString(filePath));
-    if (!result.success()) {
-        QMessageBox::critical(this, "打开 STEP/STP 失败", QString::fromStdString(result.message()));
-        logPanel_->appendError(QString("打开失败：%1").arg(QString::fromStdString(result.message())));
-        return;
-    }
+    const auto path = pathFromQString(filePath);
+    ProcessStatusSnapshot loadingStatus = makeProcessStatus(ProcessStage::LoadingStep, "STEP/STP loading started.");
+    loadingStatus.latestMessage = "Loading STEP/STP in background.";
+    controller_.updateProcessStatus(loadingStatus);
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        loadingStatus,
+        QString("STEP/STP 正在后台打开\n文件：%1\n刷新策略：读取完成后回到 GUI 线程刷新 viewer / model tree / report。")
+            .arg(filePath));
+    logPanel_->appendInfo(QString("开始后台打开 STEP/STP：%1").arg(filePath));
+    setStatus("STEP/STP 正在后台打开");
 
-    const auto& document = controller_.document();
-    const auto& stats = document.stats();
-    clearMergeCandidateState();
-    hasFeatureEdgeResult_ = false;
-    refreshModelTree();
-    const auto displayStatus = viewer_->displayDocument(document);
-    if (!displayStatus.success()) {
-        QMessageBox::critical(this, "显示模型失败", QString::fromStdString(displayStatus.message()));
-        logPanel_->appendError(QString("显示模型失败：%1").arg(QString::fromStdString(displayStatus.message())));
-        setStatus("模型已读取，但显示失败");
+    auto* watcher = new QFutureWatcher<OpenStepUiResult>(this);
+    connect(watcher, &QFutureWatcher<OpenStepUiResult>::finished, this, [this, watcher, filePath]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+
+        if (!result.success) {
+            auto failedStatus = makeProcessStatus(ProcessStage::LoadingStep, result.message);
+            failedStatus.latestWarning = result.message;
+            appendPatchPreviewProgress(std::move(failedStatus));
+            stopPatchPreviewProgressReport();
+            QMessageBox::critical(this, "打开 STEP/STP 失败", QString::fromStdString(result.message));
+            logPanel_->appendError(QString("打开失败：%1").arg(QString::fromStdString(result.message)));
+            setStatus("STEP/STP 打开失败");
+            refreshUndoRedoActions();
+            refreshPatchApplyAction();
+            refreshProcessStatusPanel();
+            return;
+        }
+
+        auto loadedStatus = makeProcessStatus(ProcessStage::Idle, "STEP/STP loaded.");
+        appendPatchPreviewProgress(loadedStatus, false);
+        stopPatchPreviewProgressReport();
+
+        const auto& document = controller_.document();
+        const auto& stats = document.stats();
+        clearMergeCandidateState();
+        hasFeatureEdgeResult_ = false;
+        refreshModelTree();
+        const auto displayStatus = viewer_->displayDocument(document);
+        if (!displayStatus.success()) {
+            QMessageBox::critical(this, "显示模型失败", QString::fromStdString(displayStatus.message()));
+            logPanel_->appendError(QString("显示模型失败：%1").arg(QString::fromStdString(displayStatus.message())));
+            setStatus("模型已读取，但显示失败");
+            refreshUndoRedoActions();
+            refreshPatchApplyAction();
+            refreshProcessStatusPanel();
+            return;
+        }
+        showSourceStlAction_->setChecked(true);
+        showSourceStlAction_->setEnabled(false);
+        showCroppedStlAction_->setChecked(true);
+        showCroppedStlAction_->setEnabled(false);
+        showStlCropBoxAction_->setChecked(false);
+        showStlCropBoxAction_->setEnabled(false);
+        syncLockedEdges();
+        QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
+        QTimer::singleShot(100, viewer_, &OccViewWidget::fitAll);
+        inspectPanel_->showProperties("模型摘要", {
+            {"文件", pathToQString(document.sourcePath())},
+            {"实体数", QString::number(stats.solids)},
+            {"壳数", QString::number(stats.shells)},
+            {"面数", QString::number(stats.faces)},
+            {"边数", QString::number(stats.edges)},
+            {"顶点数", QString::number(stats.vertices)}
+        });
+        inspectPanel_->showReport(QString("输入文件：%1\n实体数：%2\n壳数：%3\n面数：%4\n边数：%5")
+            .arg(pathToQString(document.sourcePath()))
+            .arg(stats.solids)
+            .arg(stats.shells)
+            .arg(stats.faces)
+            .arg(stats.edges));
+        logPanel_->appendInfo(QString("已打开 STEP/STP：%1").arg(filePath));
+        setStatus("STEP/STP 已加载");
         refreshUndoRedoActions();
-        return;
-    }
-    showSourceStlAction_->setChecked(true);
-    showSourceStlAction_->setEnabled(false);
-    showCroppedStlAction_->setChecked(true);
-    showCroppedStlAction_->setEnabled(false);
-    showStlCropBoxAction_->setChecked(false);
-    showStlCropBoxAction_->setEnabled(false);
-    syncLockedEdges();
-    QTimer::singleShot(0, viewer_, &OccViewWidget::fitAll);
-    QTimer::singleShot(100, viewer_, &OccViewWidget::fitAll);
-    inspectPanel_->showProperties("模型摘要", {
-        {"文件", pathToQString(document.sourcePath())},
-        {"实体数", QString::number(stats.solids)},
-        {"壳数", QString::number(stats.shells)},
-        {"面数", QString::number(stats.faces)},
-        {"边数", QString::number(stats.edges)},
-        {"顶点数", QString::number(stats.vertices)}
+        refreshPatchApplyAction();
+        refreshProcessStatusPanel();
     });
-    inspectPanel_->showReport(QString("输入文件：%1\n实体数：%2\n壳数：%3\n面数：%4\n边数：%5")
-        .arg(pathToQString(document.sourcePath()))
-        .arg(stats.solids)
-        .arg(stats.shells)
-        .arg(stats.faces)
-        .arg(stats.edges));
-    logPanel_->appendInfo(QString("已打开 STEP/STP：%1").arg(filePath));
-    setStatus("STEP/STP 已加载");
-    refreshUndoRedoActions();
-    refreshPatchApplyAction();
-    refreshProcessStatusPanel();
+    watcher->setFuture(QtConcurrent::run([this, path]() {
+        const auto result = controller_.openStepFile(path);
+        OpenStepUiResult output;
+        output.success = result.success();
+        output.message = result.message();
+        output.path = path;
+        return output;
+    }));
 }
 
 void MainWindow::saveProject() {
@@ -1162,26 +1306,38 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
-        ProcessStage::RunningGeomagic,
+        ProcessStage::AnalyzingBoundary,
         QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2")
             .arg(fittingModeStr, geomagicRemeshMode)
             .toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
     pipelineStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
-    controller_.updateProcessStatus(pipelineStatus);
-    refreshProcessStatusPanel();
 
     setStlCropInProgress(true);
-    inspectPanel_->showReport(QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\n说明：将自动生成 fitting STL、调用 Geomagic 后端、导入 patch，并在 Viewer 中显示 visual-only cutout overlay。")
+    startPatchPreviewProgressReport(
+        pipelineStatus,
+        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
         .arg(fittingModeStr)
         .arg(geomagicRemeshMode));
-    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
+
+    QPointer<MainWindow> window(this);
+    auto progressCallback = [window](ProcessStatusSnapshot status) mutable {
+        if (window.isNull()) {
+            return;
+        }
+        QMetaObject::invokeMethod(window.data(), [window, status = std::move(status)]() mutable {
+            if (window.isNull()) {
+                return;
+            }
+            window->appendPatchPreviewProgress(std::move(status));
+        }, Qt::QueuedConnection);
+    };
 
     auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
     connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, fittingModeStr, geomagicRemeshMode]() {
@@ -1203,8 +1359,8 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             failedStatus.patchIgesPath = result.geomagic.outputIgesPath;
             failedStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
             failedStatus.latestWarning = result.message;
-            controller_.updateProcessStatus(failedStatus);
-            refreshProcessStatusPanel();
+            appendPatchPreviewProgress(std::move(failedStatus));
+            stopPatchPreviewProgressReport();
             const auto message = QString::fromStdString(result.message);
             inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nfitting input mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\n消息：%8")
                 .arg(pathToQString(sourceStlPath))
@@ -1239,14 +1395,17 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         importingStatus.patchStepPath = result.geomagic.outputStepPath;
         importingStatus.patchIgesPath = result.geomagic.outputIgesPath;
         importingStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
-        controller_.updateProcessStatus(importingStatus);
-        refreshProcessStatusPanel();
+        appendPatchPreviewProgress(importingStatus);
 
         const auto import = controller_.importPatchResultForCurrentCandidate(result.geomagic, &candidateSnapshot);
         if (!import.success()) {
             viewer_->clearPatchOverlay();
-            refreshProcessStatusPanel();
             const auto message = QString::fromStdString(import.message());
+            auto importFailed = importingStatus;
+            importFailed.latestMessage = import.message();
+            importFailed.latestWarning = import.message();
+            appendPatchPreviewProgress(std::move(importFailed));
+            stopPatchPreviewProgressReport();
             inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\noutput STEP：%2\n错误：%3")
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
@@ -1266,13 +1425,15 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             candidateSnapshot,
             &result.crop.extract.localMesh);
         viewer_->showCropBoundaryDiagnosticsOverlay(diagnostics);
-        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics, fittingModeStr);
         publishCropBoundaryDiagnosticsStatus(diagnostics);
+        appendPatchPreviewProgress(controller_.currentProcessStatus());
+        stopPatchPreviewProgressReport();
+        showPatchPreviewReport(controller_.currentPatchPreviewReport(), true, &diagnostics, fittingModeStr);
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
         setStatus("Patch cutout overlay 已显示");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh]() {
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, progressCallback]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
         config.skipRemesh = !useGeomagicRemesh;
@@ -1283,7 +1444,9 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             workspaceRoot,
             config,
             fittingInputMode,
-            cropOptions);
+            cropOptions,
+            {},
+            progressCallback);
     }));
 }
 
@@ -1380,6 +1543,13 @@ void MainWindow::importPatchFromFile() {
 }
 
 void MainWindow::applyCurrentPatchPreview() {
+    if (patchApplyInProgress_) {
+        inspectPanel_->showReport("Patch Apply 正在后台运行，请等待当前任务结束。");
+        bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+        setStatus("Patch Apply 正在运行");
+        return;
+    }
+
     auto* candidate = currentMergeCandidate();
     if (candidate == nullptr) {
         controller_.updateProcessStatus(makeProcessStatus(ProcessStage::ApplyFailed, "Patch Apply requires a selected candidate."));
@@ -1391,10 +1561,11 @@ void MainWindow::applyCurrentPatchPreview() {
         return;
     }
 
+    const auto candidateSnapshot = *candidate;
     ProcessStatusSnapshot applyingStatus = makeProcessStatus(ProcessStage::ApplyingPatch, "Patch Apply started.");
-    applyingStatus.candidateId = candidate->candidate_id;
-    applyingStatus.sourceFaceCount = candidate->face_count;
-    applyingStatus.boundaryEdgeCount = candidate->boundary_edge_count;
+    applyingStatus.candidateId = candidateSnapshot.candidate_id;
+    applyingStatus.sourceFaceCount = candidateSnapshot.face_count;
+    applyingStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
     applyingStatus.localStlPath = controller_.currentPatchArtifactPaths().localStlPath;
     applyingStatus.patchStepPath = controller_.currentPatchArtifactPaths().patchStepPath;
     applyingStatus.patchIgesPath = controller_.currentPatchArtifactPaths().patchIgesSidecarPath;
@@ -1402,57 +1573,73 @@ void MainWindow::applyCurrentPatchPreview() {
     controller_.updateProcessStatus(applyingStatus);
     refreshProcessStatusPanel();
 
-    PatchReplacementReport report;
-    const auto result = controller_.applyCurrentPatchToCurrentCandidate(*candidate, &report);
-    const auto statusMessage = QString::fromStdString(controller_.currentPatchStatusMessage());
+    patchApplyInProgress_ = true;
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        applyingStatus,
+        QString("Patch Apply 正在后台运行\ncandidate id：%1\ncandidate type：%2\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
+            .arg(candidateSnapshot.candidate_id)
+            .arg(candidateTypeText(candidateSnapshot.candidate_type)));
+    logPanel_->appendInfo(QString("开始 Patch Apply：候选 %1").arg(candidateSnapshot.candidate_id));
+    setStatus("Patch Apply 运行中");
 
-    QStringList reportLines;
-    reportLines << "Patch Apply";
-    if (report.success) {
-        reportLines << QString("✅ 成功  |  候选 %1  |  替换 %2 面 → %3 面  |  BRepCheck 通过  |  STEP roundtrip 通过")
-            .arg(report.candidateId)
-            .arg(report.sourceFaceCount)
-            .arg(report.replacementFaceCount);
-        if (report.usedMultiSurfaceBoundaryShell) {
-            reportLines << "策略：multi-surface boundary shell";
-        } else if (report.usedOriginalBoundarySurfaceRetrim) {
-            reportLines << "策略：original boundary surface retrim";
+    QPointer<MainWindow> window(this);
+    auto progressCallback = [window](ProcessStatusSnapshot status) mutable {
+        if (window.isNull()) {
+            return;
         }
-    } else {
-        reportLines << QString("❌ 失败  |  候选 %1  |  原因：%2")
-            .arg(report.candidateId)
-            .arg(QString::fromStdString(report.gateFailureReason.empty()
-                ? toString(report.failureReason) : report.gateFailureReason));
-    }
-    reportLines << QString("缝合容差 %1（%2 次尝试）| 最佳缝合 free edge %3  |  BRepCheck %4")
-        .arg(QString::number(report.selectedSewingTolerance, 'g', 4))
-        .arg(report.sewingAttemptCount)
-        .arg(report.bestSewingFreeEdges)
-        .arg(boolText(report.bestSewingBRepCheckValid));
-    reportLines << QString("free edge 修复前 %1 → 修复后 %2  |  Gate %3")
-        .arg(report.freeEdgesBeforeRepair)
-        .arg(report.freeEdgesAfterRepair)
-        .arg(report.gatePassed ? "通过" : QString("不通过：%1").arg(QString::fromStdString(report.gateFailureReason)));
-    const auto warn = QString::fromStdString(report.warningMessage);
-    if (!warn.isEmpty()) reportLines << QString("警告：%1").arg(warn);
-    reportLines << statusMessage;
-    inspectPanel_->showReport(reportLines.join('\n'));
-    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
-    refreshProcessStatusPanel();
+        QMetaObject::invokeMethod(window.data(), [window, status = std::move(status)]() mutable {
+            if (window.isNull()) {
+                return;
+            }
+            window->appendPatchPreviewProgress(std::move(status), false);
+        }, Qt::QueuedConnection);
+    };
 
-    if (result.success()) {
-        viewer_->clearPatchOverlay();
-        refreshDocumentViews(false);
-        refreshUndoRedoActions();
-        refreshPatchApplyAction();
-        logPanel_->appendInfo(QString("Patch Apply 完成：候选 %1 已通过 StrictTopologyGate 并提交。").arg(report.candidateId));
-        setStatus("Patch Apply 完成");
-    } else {
-        refreshUndoRedoActions();
-        refreshPatchApplyAction();
-        logPanel_->appendWarning(QString("Patch Apply 失败：%1").arg(statusMessage));
-        setStatus("Patch Apply 失败");
-    }
+    auto* watcher = new QFutureWatcher<PatchApplyUiResult>(this);
+    connect(watcher, &QFutureWatcher<PatchApplyUiResult>::finished, this, [this, watcher, candidateSnapshot]() {
+        const auto output = watcher->result();
+        watcher->deleteLater();
+
+        patchApplyInProgress_ = false;
+        setStlCropInProgress(false);
+        appendPatchPreviewProgress(controller_.currentProcessStatus());
+        stopPatchPreviewProgressReport();
+
+        const auto statusMessage = output.statusMessage.empty()
+            ? QString::fromStdString(output.resultMessage)
+            : QString::fromStdString(output.statusMessage);
+        inspectPanel_->showReport(patchApplyReportText(output.report, statusMessage));
+        bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+        refreshProcessStatusPanel();
+
+        if (output.success) {
+            viewer_->clearPatchOverlay();
+            refreshDocumentViews(false);
+            refreshUndoRedoActions();
+            refreshPatchApplyAction();
+            logPanel_->appendInfo(QString("Patch Apply 完成：候选 %1 已通过 StrictTopologyGate 并提交。").arg(output.report.candidateId));
+            setStatus("Patch Apply 完成");
+        } else {
+            refreshUndoRedoActions();
+            refreshPatchApplyAction();
+            logPanel_->appendWarning(QString("Patch Apply 失败：候选 %1，%2")
+                .arg(candidateSnapshot.candidate_id)
+                .arg(statusMessage));
+            setStatus("Patch Apply 失败");
+        }
+    });
+    watcher->setFuture(QtConcurrent::run([this, candidateSnapshot, progressCallback]() {
+        PatchApplyUiResult output;
+        const auto result = controller_.applyCurrentPatchToCurrentCandidate(
+            candidateSnapshot,
+            &output.report,
+            progressCallback);
+        output.success = result.success();
+        output.resultMessage = result.message();
+        output.statusMessage = controller_.currentPatchStatusMessage();
+        return output;
+    }));
 }
 
 void MainWindow::clearPatchOverlay() {
@@ -1518,6 +1705,12 @@ void MainWindow::detectFeatureEdges() {
 }
 
 void MainWindow::previewMergeCandidates() {
+    if (stlCropInProgress_ || patchApplyInProgress_) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
+
     if (!controller_.hasDocument()) {
         inspectPanel_->showReport("请先打开 STEP/STP 文件。");
         setStatus("未加载模型");
@@ -1538,91 +1731,120 @@ void MainWindow::previewMergeCandidates() {
     options.max_sphere_center_delta = 0.50;
     options.max_sphere_radius_delta = 0.25;
 
-    const auto result = controller_.previewMergeCandidates(
-        params.angular_threshold_degrees,
-        params.min_edge_length,
-        options);
-    const auto afterStats = controller_.document().stats();
-    clearMergeCandidateState();
-    lastMergeCandidates_ = result.candidates;
-    hasFeatureEdgeResult_ = true;
+    auto progress = makeProcessStatus(
+        ProcessStage::PreviewingMergeCandidates,
+        "Merge candidate preview started.");
+    controller_.updateProcessStatus(progress);
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        progress,
+        "合并候选区域预览正在后台运行\n刷新策略：候选计算在 worker，viewer / model tree / report 更新回 GUI 线程。");
+    logPanel_->appendInfo("开始后台预览合并候选区域。");
+    setStatus("合并候选区域预览中");
 
-    int maxFaceCount = 0;
-    int totalCandidateFaces = 0;
-    for (const auto& candidate : result.candidates) {
-        maxFaceCount = std::max(maxFaceCount, candidate.face_count);
-        totalCandidateFaces += candidate.face_count;
-    }
-    const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
-    const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
+    auto* watcher = new QFutureWatcher<MergePreviewUiResult>(this);
+    connect(watcher, &QFutureWatcher<MergePreviewUiResult>::finished, this, [this, watcher]() {
+        auto output = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
 
-    QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFeatureBoundedRefit：%7\nFreeformG1：%8\nFreeformG2：%9\nUnknown：%10\nPending：%11\nAccepted：%12\nRejected：%13\nHidden：%14\n保护边数量：%15\n访问 face 数量：%16\n拒绝区域数量：%17\n最大候选区域 face 数：%18\n总候选 face 数：%19\n预览前 face/edge：%20/%21\n预览后 face/edge：%22/%23")
-        .arg(result.candidates.size())
-        .arg(typeCounts.plane_like)
-        .arg(typeCounts.cylinder_like)
-        .arg(typeCounts.sphere_like)
-        .arg(typeCounts.cone_like)
-        .arg(typeCounts.torus_like)
-        .arg(typeCounts.feature_bounded_refit)
-        .arg(typeCounts.freeform_g1)
-        .arg(typeCounts.freeform_g2)
-        .arg(typeCounts.unknown)
-        .arg(statusCounts.pending)
-        .arg(statusCounts.accepted)
-        .arg(statusCounts.rejected)
-        .arg(statusCounts.hidden)
-        .arg(result.protected_edge_count)
-        .arg(result.visited_faces)
-        .arg(result.rejected_regions)
-        .arg(maxFaceCount)
-        .arg(totalCandidateFaces)
-        .arg(beforeStats.faces)
-        .arg(beforeStats.edges)
-        .arg(afterStats.faces)
-        .arg(afterStats.edges);
+        auto completed = makeProcessStatus(ProcessStage::PreviewingMergeCandidates, "Merge candidate preview completed.");
+        completed.latestMessage = "Merge candidate preview completed.";
+        appendPatchPreviewProgress(completed);
+        stopPatchPreviewProgressReport();
 
-    const auto previewCount = std::min<std::size_t>(10, result.candidates.size());
-    for (std::size_t index = 0; index < previewCount; ++index) {
-        const auto& candidate = result.candidates[index];
-        report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\nfit_error：%10\n风险：%11")
-            .arg(candidate.candidate_id)
-            .arg(candidateStatusText(candidate.status))
-            .arg(candidateTypeText(candidate.candidate_type))
-            .arg(candidate.face_count)
-            .arg(QString::number(candidate.total_area, 'f', 4))
-            .arg(QString::number(candidate.max_normal_angle_deg, 'f', 3))
-            .arg(QString::number(candidate.max_distance, 'g', 6))
-            .arg(candidate.boundary_edge_count)
-            .arg(candidate.internal_edge_count)
-            .arg(QString::number(candidate.fit_error, 'g', 6))
-            .arg(riskLevelText(candidate.risk_level));
-    }
+        clearMergeCandidateState();
+        lastMergeCandidates_ = std::move(output.result.candidates);
+        hasFeatureEdgeResult_ = true;
 
-    if (result.candidates.empty()) {
-        viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
-        report += "\n\n没有可预览候选区域。";
-    } else {
-        viewer_->showMergeCandidates(result.candidates, 10, false);
-        visibleMergeCandidateCount_ = static_cast<int>(std::min<std::size_t>(10, result.candidates.size()));
-        visibleMergeCandidateIds_.clear();
-        for (std::size_t index = 0; index < static_cast<std::size_t>(visibleMergeCandidateCount_); ++index) {
-            addVisibleCandidateId(visibleMergeCandidateIds_, result.candidates[index]);
+        int maxFaceCount = 0;
+        int totalCandidateFaces = 0;
+        for (const auto& candidate : lastMergeCandidates_) {
+            maxFaceCount = std::max(maxFaceCount, candidate.face_count);
+            totalCandidateFaces += candidate.face_count;
         }
-    }
-    viewer_->showFeatureEdges(controller_.featureEdges());
-    viewer_->setFeatureLinesVisible(true);
-    toggleFeaturesAction_->setChecked(true);
-    refreshModelTree();
-    inspectPanel_->showReport(report);
-    logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，FeatureBoundedRefit %2 个，保护边 %3，访问 face %4，拒绝 %5")
-        .arg(result.candidates.size())
-        .arg(typeCounts.feature_bounded_refit)
-        .arg(result.protected_edge_count)
-        .arg(result.visited_faces)
-        .arg(result.rejected_regions));
-    setStatus("合并候选区域预览完成");
+        const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
+        const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
+
+        QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFeatureBoundedRefit：%7\nFreeformG1：%8\nFreeformG2：%9\nUnknown：%10\nPending：%11\nAccepted：%12\nRejected：%13\nHidden：%14\n保护边数量：%15\n访问 face 数量：%16\n拒绝区域数量：%17\n最大候选区域 face 数：%18\n总候选 face 数：%19\n预览前 face/edge：%20/%21\n预览后 face/edge：%22/%23")
+            .arg(lastMergeCandidates_.size())
+            .arg(typeCounts.plane_like)
+            .arg(typeCounts.cylinder_like)
+            .arg(typeCounts.sphere_like)
+            .arg(typeCounts.cone_like)
+            .arg(typeCounts.torus_like)
+            .arg(typeCounts.feature_bounded_refit)
+            .arg(typeCounts.freeform_g1)
+            .arg(typeCounts.freeform_g2)
+            .arg(typeCounts.unknown)
+            .arg(statusCounts.pending)
+            .arg(statusCounts.accepted)
+            .arg(statusCounts.rejected)
+            .arg(statusCounts.hidden)
+            .arg(output.result.protected_edge_count)
+            .arg(output.result.visited_faces)
+            .arg(output.result.rejected_regions)
+            .arg(maxFaceCount)
+            .arg(totalCandidateFaces)
+            .arg(output.beforeStats.faces)
+            .arg(output.beforeStats.edges)
+            .arg(output.afterStats.faces)
+            .arg(output.afterStats.edges);
+
+        const auto previewCount = std::min<std::size_t>(10, lastMergeCandidates_.size());
+        for (std::size_t index = 0; index < previewCount; ++index) {
+            const auto& candidate = lastMergeCandidates_[index];
+            report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\nfit_error：%10\n风险：%11")
+                .arg(candidate.candidate_id)
+                .arg(candidateStatusText(candidate.status))
+                .arg(candidateTypeText(candidate.candidate_type))
+                .arg(candidate.face_count)
+                .arg(QString::number(candidate.total_area, 'f', 4))
+                .arg(QString::number(candidate.max_normal_angle_deg, 'f', 3))
+                .arg(QString::number(candidate.max_distance, 'g', 6))
+                .arg(candidate.boundary_edge_count)
+                .arg(candidate.internal_edge_count)
+                .arg(QString::number(candidate.fit_error, 'g', 6))
+                .arg(riskLevelText(candidate.risk_level));
+        }
+
+        if (lastMergeCandidates_.empty()) {
+            viewer_->clearMergeCandidates();
+            visibleMergeCandidateCount_ = 0;
+            visibleMergeCandidateIds_.clear();
+            report += "\n\n没有可预览候选区域。";
+        } else {
+            viewer_->showMergeCandidates(lastMergeCandidates_, 10, false);
+            visibleMergeCandidateCount_ = static_cast<int>(std::min<std::size_t>(10, lastMergeCandidates_.size()));
+            visibleMergeCandidateIds_.clear();
+            for (std::size_t index = 0; index < static_cast<std::size_t>(visibleMergeCandidateCount_); ++index) {
+                addVisibleCandidateId(visibleMergeCandidateIds_, lastMergeCandidates_[index]);
+            }
+        }
+        viewer_->showFeatureEdges(controller_.featureEdges());
+        viewer_->setFeatureLinesVisible(true);
+        toggleFeaturesAction_->setChecked(true);
+        refreshModelTree();
+        inspectPanel_->showReport(report);
+        logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，FeatureBoundedRefit %2 个，保护边 %3，访问 face %4，拒绝 %5")
+            .arg(lastMergeCandidates_.size())
+            .arg(typeCounts.feature_bounded_refit)
+            .arg(output.result.protected_edge_count)
+            .arg(output.result.visited_faces)
+            .arg(output.result.rejected_regions));
+        setStatus("合并候选区域预览完成");
+        refreshProcessStatusPanel();
+    });
+    watcher->setFuture(QtConcurrent::run([this, beforeStats, params, options]() {
+        MergePreviewUiResult output;
+        output.beforeStats = beforeStats;
+        output.result = controller_.previewMergeCandidates(
+            params.angular_threshold_degrees,
+            params.min_edge_length,
+            options);
+        output.afterStats = controller_.document().stats();
+        return output;
+    }));
 }
 
 void MainWindow::showAllMergeCandidates() {
@@ -2463,8 +2685,9 @@ void MainWindow::redo() {
 }
 
 void MainWindow::refreshUndoRedoActions() {
-    undoAction_->setEnabled(controller_.canUndo());
-    redoAction_->setEnabled(controller_.canRedo());
+    const bool idle = !stlCropInProgress_ && !patchApplyInProgress_;
+    undoAction_->setEnabled(idle && controller_.canUndo());
+    redoAction_->setEnabled(idle && controller_.canRedo());
 }
 
 void MainWindow::refreshPatchApplyAction() {
@@ -2478,7 +2701,7 @@ void MainWindow::refreshPatchApplyAction() {
         ? QString::fromStdString(decision.message)
         : QString::fromStdString(decision.reason);
 
-    applyCurrentPatchAction_->setEnabled(decision.canRequestApply && !stlCropInProgress_);
+    applyCurrentPatchAction_->setEnabled(decision.canRequestApply && !stlCropInProgress_ && !patchApplyInProgress_);
     applyCurrentPatchAction_->setToolTip(QString("Patch status：%1\n%2").arg(statusText, detail));
 }
 
@@ -2486,6 +2709,126 @@ void MainWindow::refreshProcessStatusPanel() {
     if (processStatusPanel_ != nullptr) {
         processStatusPanel_->showStatus(controller_.currentProcessStatus());
     }
+}
+
+void MainWindow::startPatchPreviewProgressReport(const ProcessStatusSnapshot& initialStatus, const QString& header) {
+    patchPreviewProgressActive_ = true;
+    patchPreviewProgressHeader_ = header;
+    patchPreviewProgressLines_.clear();
+    patchPreviewLastProgress_ = initialStatus;
+    patchPreviewProgressClock_.restart();
+
+    if (patchPreviewProgressTimer_ == nullptr) {
+        patchPreviewProgressTimer_ = new QTimer(this);
+        patchPreviewProgressTimer_->setInterval(2000);
+        connect(patchPreviewProgressTimer_, &QTimer::timeout, this, &MainWindow::refreshPatchPreviewProgressReport);
+    }
+    patchPreviewProgressTimer_->start();
+
+    appendPatchPreviewProgress(initialStatus);
+    if (bottomTabs_ != nullptr && inspectPanel_ != nullptr) {
+        bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    }
+}
+
+void MainWindow::appendPatchPreviewProgress(ProcessStatusSnapshot status, bool syncController) {
+    if (!patchPreviewProgressActive_) {
+        return;
+    }
+
+    patchPreviewLastProgress_ = std::move(status);
+    if (syncController) {
+        controller_.updateProcessStatus(patchPreviewLastProgress_);
+        refreshProcessStatusPanel();
+    } else if (processStatusPanel_ != nullptr) {
+        processStatusPanel_->showStatus(patchPreviewLastProgress_);
+    }
+
+    patchPreviewProgressLines_ << patchPreviewProgressLine(patchPreviewLastProgress_);
+    constexpr int maxProgressLineCount = 80;
+    while (patchPreviewProgressLines_.size() > maxProgressLineCount) {
+        patchPreviewProgressLines_.removeFirst();
+    }
+
+    refreshPatchPreviewProgressReport();
+    QString statusPrefix = "Patch 预览";
+    if (patchPreviewProgressHeader_.startsWith("Patch Apply")) {
+        statusPrefix = "Patch Apply";
+    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP")) {
+        statusPrefix = "STEP/STP";
+    } else if (patchPreviewProgressHeader_.startsWith("合并候选")) {
+        statusPrefix = "合并候选";
+    }
+    setStatus(QString("%1：%2").arg(statusPrefix, QString::fromLatin1(toString(patchPreviewLastProgress_.stage))));
+}
+
+void MainWindow::refreshPatchPreviewProgressReport() {
+    if (!patchPreviewProgressActive_ || inspectPanel_ == nullptr) {
+        return;
+    }
+    inspectPanel_->showReport(patchPreviewProgressReportText());
+}
+
+void MainWindow::stopPatchPreviewProgressReport() {
+    patchPreviewProgressActive_ = false;
+    if (patchPreviewProgressTimer_ != nullptr) {
+        patchPreviewProgressTimer_->stop();
+    }
+}
+
+QString MainWindow::patchPreviewProgressReportText() const {
+    QStringList lines;
+    if (!patchPreviewProgressHeader_.isEmpty()) {
+        lines << patchPreviewProgressHeader_;
+    }
+
+    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
+    lines << QString("心跳：running  |  elapsed %1  |  last stage %2")
+        .arg(elapsedText(elapsed))
+        .arg(QString::fromLatin1(toString(patchPreviewLastProgress_.stage)));
+    if (!patchPreviewLastProgress_.latestMessage.empty()) {
+        lines << QString("最近消息：%1").arg(QString::fromStdString(patchPreviewLastProgress_.latestMessage));
+    }
+    if (!patchPreviewLastProgress_.latestWarning.empty()) {
+        lines << QString("最近警告：%1").arg(QString::fromStdString(patchPreviewLastProgress_.latestWarning));
+    }
+
+    lines << "";
+    lines << "阶段事件";
+    lines << patchPreviewProgressLines_;
+    return lines.join('\n');
+}
+
+QString MainWindow::patchPreviewProgressLine(const ProcessStatusSnapshot& status) const {
+    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
+    QStringList fields;
+    fields << QString("[%1]").arg(elapsedText(elapsed));
+    fields << QString::fromLatin1(toString(status.stage));
+    if (status.candidateId >= 0) {
+        fields << QString("candidate=%1").arg(status.candidateId);
+    }
+    if (status.sourceFaceCount > 0) {
+        fields << QString("faces=%1").arg(status.sourceFaceCount);
+    }
+    if (status.boundaryEdgeCount > 0) {
+        fields << QString("boundary_edges=%1").arg(status.boundaryEdgeCount);
+    }
+    if (!status.localStlPath.empty()) {
+        fields << QString("local STL=%1").arg(pathToQString(status.localStlPath));
+    }
+    if (!status.patchStepPath.empty()) {
+        fields << QString("patch STEP=%1").arg(pathToQString(status.patchStepPath));
+    }
+    if (!status.fitRegionLogPath.empty()) {
+        fields << QString("fit_region log=%1").arg(pathToQString(status.fitRegionLogPath));
+    }
+    if (!status.latestMessage.empty()) {
+        fields << QString("message=%1").arg(QString::fromStdString(status.latestMessage));
+    }
+    if (!status.latestWarning.empty()) {
+        fields << QString("warning=%1").arg(QString::fromStdString(status.latestWarning));
+    }
+    return fields.join("  |  ");
 }
 
 void MainWindow::publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics) {
@@ -2741,6 +3084,7 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
 void MainWindow::setStlCropInProgress(bool inProgress) {
     stlCropInProgress_ = inProgress;
     openStepAction_->setEnabled(!inProgress);
+    exportStepAction_->setEnabled(!inProgress);
     openSourceStlAction_->setEnabled(!inProgress);
     cropCurrentCandidateStlAction_->setEnabled(!inProgress);
     useConservativeStlCropAction_->setEnabled(!inProgress);
@@ -2749,6 +3093,21 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     useGeomagicRemeshAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
     importPatchFromFileAction_->setEnabled(!inProgress);
+    detectAction_->setEnabled(!inProgress);
+    applyMergeAction_->setEnabled(!inProgress);
+    validateAction_->setEnabled(!inProgress);
+    acceptMergeCandidateAction_->setEnabled(!inProgress);
+    rejectMergeCandidateAction_->setEnabled(!inProgress);
+    hideMergeCandidateAction_->setEnabled(!inProgress);
+    restoreMergeCandidateAction_->setEnabled(!inProgress);
+    mergePlaneCandidateAction_->setEnabled(!inProgress);
+    mergeAcceptedPlaneCandidatesAction_->setEnabled(!inProgress);
+    mergeAllPlaneCandidatesAction_->setEnabled(!inProgress);
+    mergeApproximatePlaneCandidateAction_->setEnabled(!inProgress);
+    mergeAllApproximatePlaneCandidatesAction_->setEnabled(!inProgress);
+    mergeSphereCandidateAction_->setEnabled(!inProgress);
+    mergeAcceptedSphereCandidatesAction_->setEnabled(!inProgress);
+    mergeAllSphereCandidatesAction_->setEnabled(!inProgress);
     if (inProgress) {
         applyCurrentPatchAction_->setEnabled(false);
     } else {
@@ -2756,6 +3115,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     }
     previewMergeAction_->setEnabled(!inProgress);
     highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
+    refreshUndoRedoActions();
 }
 
 StlRegionExtractorOptions MainWindow::currentStlCropOptions() const {

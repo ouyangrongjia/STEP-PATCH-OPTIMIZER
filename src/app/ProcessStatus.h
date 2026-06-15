@@ -7,6 +7,8 @@ namespace spo {
 
 enum class ProcessStage {
     Idle,
+    LoadingStep,
+    PreviewingMergeCandidates,
     AnalyzingBoundary,
     CroppingStl,
     RunningGeomagic,
@@ -52,6 +54,27 @@ struct ProcessStatusSnapshot {
     bool repairApplied = false;
     bool gateEvaluated = false;
     bool gatePassed = false;
+    bool gateBeforeBRepCheckValid = false;
+    bool gateAfterBRepCheckValid = false;
+    bool gateRoundtripBRepCheckValid = false;
+    int gateBeforeFaceCount = 0;
+    int gateBeforeEdgeCount = 0;
+    int gateBeforeShellCount = 0;
+    int gateBeforeSolidCount = 0;
+    int gateAfterFaceCount = 0;
+    int gateAfterEdgeCount = 0;
+    int gateAfterShellCount = 0;
+    int gateAfterSolidCount = 0;
+    int gateRoundtripFaceCount = 0;
+    int gateRoundtripEdgeCount = 0;
+    int gateRoundtripShellCount = 0;
+    int gateRoundtripSolidCount = 0;
+    int gateBeforeFreeEdges = 0;
+    int gateAfterFreeEdges = 0;
+    int gateRoundtripFreeEdges = 0;
+    int gateBeforeMultipleEdges = 0;
+    int gateAfterMultipleEdges = 0;
+    int gateRoundtripMultipleEdges = 0;
 
     bool cropBoundaryBandEvaluated = false;
     bool cropSourceTriangleAuditEvaluated = false;

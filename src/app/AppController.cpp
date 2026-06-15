@@ -372,6 +372,40 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
     return result;
 }
 
+struct PatchPreviewProgressPaths {
+    std::filesystem::path localStlPath;
+    std::filesystem::path patchStepPath;
+    std::filesystem::path patchIgesPath;
+    std::filesystem::path fitRegionLogPath;
+};
+
+void publish_patch_preview_progress(
+    const PatchPreviewProgressCallback& progress,
+    ProcessStage stage,
+    const MergeCandidate& candidate,
+    std::string message,
+    const PatchPreviewProgressPaths& paths = {},
+    std::string warning = {}) {
+    if (!progress) {
+        return;
+    }
+
+    auto status = makeProcessStatus(stage, std::move(message));
+    status.candidateId = candidate.candidate_id;
+    status.sourceFaceCount = candidate.face_count > 0
+        ? candidate.face_count
+        : static_cast<int>(candidate.faces.size());
+    status.boundaryEdgeCount = candidate.boundary_edge_count > 0
+        ? candidate.boundary_edge_count
+        : static_cast<int>(candidate.boundary_edges.size());
+    status.localStlPath = paths.localStlPath;
+    status.patchStepPath = paths.patchStepPath;
+    status.patchIgesPath = paths.patchIgesPath;
+    status.fitRegionLogPath = paths.fitRegionLogPath;
+    status.latestWarning = std::move(warning);
+    progress(std::move(status));
+}
+
 PatchPreviewPipelineResult AppController::cropAndRunGeomagicForCandidateData(
     const ShapeDocument& document,
     const StlMesh& sourceMesh,
@@ -435,11 +469,28 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
     GeomagicAutoSurfaceConfig config,
     GeomagicFittingInputMode fittingMode,
     const StlRegionExtractorOptions& cropOptions,
-    const StpSampledFittingOptions& samplingOptions) {
+    const StpSampledFittingOptions& samplingOptions,
+    PatchPreviewProgressCallback progress) {
     const auto localStlPath = default_pipeline_local_stl_path(document, candidate, workspaceRoot);
+    PatchPreviewProgressPaths progressPaths;
+    progressPaths.localStlPath = localStlPath;
+
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::AnalyzingBoundary,
+        candidate,
+        "Patch preview pipeline preparing outputs: fitting_mode=" + std::string(toString(fittingMode)),
+        progressPaths);
 
     std::string directoryMessage;
     if (!ensure_parent_directory(localStlPath, directoryMessage)) {
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            directoryMessage,
+            progressPaths,
+            directoryMessage);
         return pipeline_error({}, {}, directoryMessage);
     }
 
@@ -452,18 +503,41 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         root / "data" / "crop_stp",
         root / "data" / "crop_igs");
     if (!outputPaths.success) {
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            outputPaths.message,
+            progressPaths,
+            outputPaths.message);
         return pipeline_error({}, {}, outputPaths.message);
     }
+    progressPaths.patchStepPath = outputPaths.outputStepPath;
+    progressPaths.patchIgesPath = outputPaths.outputIgesPath;
+    progressPaths.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
 
     StlCandidateCropResult crop;
     StpSampledFittingReport sampledReport;
 
     if (fittingMode == GeomagicFittingInputMode::StpSampledCandidateSurface) {
-        // Generate synthetic STL from STP candidate faces
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Generating fitting STL from STP sampled candidate surface: fitting_mode=" +
+                std::string(toString(fittingMode)),
+            progressPaths);
         StlMesh syntheticMesh;
         StpSampledFittingMeshBuilder builder;
         sampledReport = builder.build(document, candidate, samplingOptions, syntheticMesh);
         if (!sampledReport.success) {
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                sampledReport.message,
+                progressPaths,
+                sampledReport.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
@@ -478,6 +552,13 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         if (!writeResult.success) {
             sampledReport.success = false;
             sampledReport.message = writeResult.message;
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                writeResult.message,
+                progressPaths,
+                writeResult.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
@@ -494,8 +575,14 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         crop.extract.report.success = true;
         crop.extract.report.candidate_id = candidate.candidate_id;
         crop.message = "STP-sampled fitting STL written.";
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
+                ", triangles=" + std::to_string(sampledReport.outputTriangleCount),
+            progressPaths);
     } else {
-        // Legacy STL crop path
         StlRegionExtractorOptions effectiveCropOptions = cropOptions;
         if (fittingMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop) {
             effectiveCropOptions.mode = StlCropMode::ConservativeBoundaryBand;
@@ -503,8 +590,21 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
             effectiveCropOptions.mode = StlCropMode::CentroidOnly;
         }
 
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Generating fitting STL from source STL: fitting_mode=" + std::string(toString(fittingMode)),
+            progressPaths);
         crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, effectiveCropOptions);
         if (!crop.success) {
+            publish_patch_preview_progress(
+                progress,
+                ProcessStage::CroppingStl,
+                candidate,
+                crop.message,
+                progressPaths,
+                crop.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.crop = std::move(crop);
@@ -512,21 +612,43 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
             result.message = crop.message;
             return result;
         }
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::CroppingStl,
+            candidate,
+            "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
+                ", triangles=" + std::to_string(crop.extract.localMesh.triangleCount()),
+            progressPaths);
     }
 
     config.inputStlPath = localStlPath;
     config.outputStepPath = outputPaths.outputStepPath;
     config.outputIgesPath = outputPaths.outputIgesPath;
     config.workDir = root;
-    config.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
+    config.fitRegionLogPath = progressPaths.fitRegionLogPath;
     config.geometry = "Mechanical";
     config.autoMerge = true;
     config.adaptiveFit = false;
     config.strictPatchTarget = false;
 
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::RunningGeomagic,
+        candidate,
+        "Geomagic AutoSurface started: fitting_mode=" + std::string(toString(fittingMode)) +
+            ", skip_remesh=" + std::string(config.skipRemesh ? "true" : "false"),
+        progressPaths);
     auto geomagic = GeomagicAutoSurfaceBackend().run(config);
     if (!geomagic.success) {
         const auto message = geomagic.errorMessage.empty() ? geomagic.message : geomagic.errorMessage;
+        const auto warning = message.empty() ? std::string("Geomagic AutoSurface failed.") : message;
+        publish_patch_preview_progress(
+            progress,
+            ProcessStage::RunningGeomagic,
+            candidate,
+            warning,
+            progressPaths,
+            warning);
         PatchPreviewPipelineResult result;
         result.success = false;
         result.crop = std::move(crop);
@@ -536,6 +658,12 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         result.message = message.empty() ? "Geomagic AutoSurface failed." : message;
         return result;
     }
+    publish_patch_preview_progress(
+        progress,
+        ProcessStage::RunningGeomagic,
+        candidate,
+        "Geomagic AutoSurface finished.",
+        progressPaths);
 
     PatchPreviewPipelineResult result;
     result.success = true;
@@ -873,11 +1001,19 @@ Result AppController::requestApplyCurrentPatchPreview() {
 
 Result AppController::applyCurrentPatchToCurrentCandidate(
     const MergeCandidate& candidate,
-    PatchReplacementReport* outReport) {
+    PatchReplacementReport* outReport,
+    PatchPreviewProgressCallback progress) {
+    auto emitProgress = [&]() {
+        if (progress) {
+            progress(processStatus_);
+        }
+    };
+
     publishProcessStatusForCandidate(
         ProcessStage::ApplyingPatch,
         &candidate,
         "Patch Apply started.");
+    emitProgress();
 
     if (!hasDocument()) {
         const std::string message = "Open a STEP/STP document before applying a patch.";
@@ -885,6 +1021,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingDocument, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
 
@@ -894,6 +1031,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = decision.reason;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingPreviewReport, &candidate, decision.reason);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, decision.reason);
+        emitProgress();
         return Result::error(decision.reason);
     }
     if (candidate.faces.empty()) {
@@ -902,6 +1040,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::MissingCandidate, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
     if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
@@ -910,6 +1049,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
     if (candidate.status == MergeCandidateStatus::Rejected || candidate.status == MergeCandidateStatus::Hidden) {
@@ -918,6 +1058,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
 
@@ -931,6 +1072,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::UnsupportedCandidate, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
 
@@ -938,6 +1080,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         ProcessStage::AnalyzingBoundary,
         &candidate,
         "Analyzing original CAD boundary before Patch Apply.");
+    emitProgress();
     const auto boundary = RegionBoundaryAnalyzer().analyze(context_.document, candidate);
     if (!boundary.valid ||
         boundary.connected_component_count != 1 ||
@@ -955,6 +1098,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         currentPatchStatusMessage_ = message;
         publish_apply_failure(outReport, PatchReplacementFailureReason::InvalidBoundary, &candidate, message);
         publishProcessStatusForCandidate(ProcessStage::ApplyFailed, &candidate, message);
+        emitProgress();
         return Result::error(message);
     }
 
@@ -979,6 +1123,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         ProcessStage::BuildingReplacement,
         &candidate,
         "Building replacement and running repair before StrictTopologyGate.");
+    emitProgress();
     const auto result = execute(std::move(command));
     const auto& finalReport = *reportTarget;
     if (!result.success()) {
@@ -987,6 +1132,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
             ? finalReport.message
             : result.message();
         publishProcessStatusFromReplacementReport(ProcessStage::ApplyFailed, finalReport, currentPatchStatusMessage_);
+        emitProgress();
         return result;
     }
 
@@ -994,6 +1140,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
         ProcessStage::Applied,
         finalReport,
         "Patch Apply completed and committed after StrictTopologyGate passed.");
+    emitProgress();
     currentPatchArtifactPaths_ = {};
     currentImportedPatchInfo_ = {};
     currentPatchPreviewReport_ = {};
@@ -1135,6 +1282,27 @@ void AppController::publishProcessStatusFromReplacementReport(
     snapshot.repairApplied = report.repairApplied;
     snapshot.gateEvaluated = report.gateEvaluated;
     snapshot.gatePassed = report.gatePassed;
+    snapshot.gateBeforeBRepCheckValid = report.gateBeforeBRepCheckValid;
+    snapshot.gateAfterBRepCheckValid = report.gateAfterBRepCheckValid;
+    snapshot.gateRoundtripBRepCheckValid = report.gateRoundtripBRepCheckValid;
+    snapshot.gateBeforeFaceCount = report.gateBeforeFaceCount;
+    snapshot.gateBeforeEdgeCount = report.gateBeforeEdgeCount;
+    snapshot.gateBeforeShellCount = report.gateBeforeShellCount;
+    snapshot.gateBeforeSolidCount = report.gateBeforeSolidCount;
+    snapshot.gateAfterFaceCount = report.gateAfterFaceCount;
+    snapshot.gateAfterEdgeCount = report.gateAfterEdgeCount;
+    snapshot.gateAfterShellCount = report.gateAfterShellCount;
+    snapshot.gateAfterSolidCount = report.gateAfterSolidCount;
+    snapshot.gateRoundtripFaceCount = report.gateRoundtripFaceCount;
+    snapshot.gateRoundtripEdgeCount = report.gateRoundtripEdgeCount;
+    snapshot.gateRoundtripShellCount = report.gateRoundtripShellCount;
+    snapshot.gateRoundtripSolidCount = report.gateRoundtripSolidCount;
+    snapshot.gateBeforeFreeEdges = report.gateBeforeFreeEdges;
+    snapshot.gateAfterFreeEdges = report.gateAfterFreeEdges;
+    snapshot.gateRoundtripFreeEdges = report.gateRoundtripFreeEdges;
+    snapshot.gateBeforeMultipleEdges = report.gateBeforeMultipleEdges;
+    snapshot.gateAfterMultipleEdges = report.gateAfterMultipleEdges;
+    snapshot.gateRoundtripMultipleEdges = report.gateRoundtripMultipleEdges;
     snapshot.latestGateFailureReason = report.gateFailureReason;
     if (snapshot.latestGateFailureReason.empty() &&
         report.failureReason == PatchReplacementFailureReason::GateFailed) {

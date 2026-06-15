@@ -162,6 +162,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 65. GUI 默认 fitting input mode 已切到 STP sampled：`MainWindow::fittingInputMode_` 默认值和对应 QAction 都是 `StpSampledCandidateSurface`；“生成并预览当前 Patch”在该模式下不会要求先打开原始 STL。Legacy STL crop 与 Conservative Boundary Band STL crop 仍保留在 Patch 菜单用于对照验证，报告会输出 `fitting input mode` 字符串，避免把不同输入路线混在一起。
 66. STL Global Cut Chain crop 已完成第一版并接入 GUI：新增 `StlCropMode::GlobalCutChain` 与 `StlCutChainCutter`，从原 STP candidate ordered boundary edges 采样 boundary loop，在源 STL 上投影、跟踪 cut chain、按约束重三角化并 flood-fill 选出 patch mesh；GUI `STL -> 启用全局切链裁剪 (Global Cut Chain)` 可显式开启，单独裁剪当前候选 STL 时会走该路线。它是 STL 全局切链裁剪器，不是当前默认 Geomagic fitting input mode。
 67. Global Cut Chain boundary snap 已接入：`StlCutChainOptions` 默认 `snapBoundaryToRed=true`、`snapMaxDist=0.2`，切链后的 patch outer boundary 可向原 STP red boundary loop 回贴，降低投影到 STL 后的 green boundary 漂移。该 snap 只改善 local STL / fitting STL 输入质量，不改变最终 CAD boundary；Apply 仍必须使用原 STP candidate outer boundary wire，并通过 PatchReplacementRepair 与 StrictTopologyGate。
+68. GUI 后台任务与状态显示优化已按 `1f0c3d7` 可缝合基准完成移植：`openStepFile()`、`previewMergeCandidates()` 和 Patch Apply 的计算 / 读取进入 worker，viewer / model tree / report / Process Status 更新回 GUI 线程；长任务期间禁用会修改 document / controller 的入口；Process Status 与 Patch Apply report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和 face / edge / shell / solid 计数。`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -656,10 +657,12 @@ PlaneRegionMerge：已完成基础可用版（导出稳定性未验证）
 平面合并边界简化：已完成基础版
 Stage 3-S Shared Primitive Fields：已完成
 SphereRegionMerge：已完成稳定版调整（标记为实验性）
-Geomagic patch preview / Apply 主线：已完成 T6.7.4 基线
+Geomagic patch preview / Apply 主线：以 1f0c3d7 文档同步提交为当前可缝合基准
 STP Sampled Candidate Surface：已完成并作为当前默认 fitting input mode
 STL Global Cut Chain crop：已完成第一版并作为可选裁剪器接入 GUI
-T6.7.4 后续 Apply 收口：进行中，核心问题是 split boundary / 邻接拓扑桥接后 repair + gate 仍未稳定通过
+GUI 后台任务 / 状态显示优化：已合入 1f0c3d7 基准
+d1c00e4 Improve boundary constrained Geomagic patch flow：因真实样例缝合回归，暂不进入当前主线
+Sharp Contours 实验：无收益，暂不进入当前主线
 ```
 
 **旧 OCCT 近似平面路线定位：**
