@@ -49,6 +49,176 @@
 
 ---
 
+## 0. 当前最终方案：corner preservation / commercial-CAD-like gate
+
+当前结论不是继续扩大裁剪范围、继续调 sewing tolerance，或重新尝试 Sharp Contours。
+
+必须建立“双层闭环”：
+
+```text
+1. 前端输入约束：
+   让 Geomagic AutoSurface 在拟合时看到 sharp corner / feature junction 的真实上下文。
+
+2. 后端商业 CAD 近似门控：
+   即使 OCCT BRepCheck / free edge / multiple edge / STEP roundtrip 通过，也必须用高密度几何偏差、
+   corner drift、edge drift 和 sharpness preservation 判断是否可交付。
+```
+
+### 0.1 为什么 OCCT gate 不够
+
+```text
+OCCT gate 证明的是 OCCT 自己认为 B-rep 拓扑合法。
+它不能证明：
+1. Geomagic 拟合曲面在 sharp corner 附近仍贴合原 CAD 几何。
+2. 原 sharp edge 没有被拟合成隐性圆角或 G1 平滑过渡。
+3. 原 STP boundary wire 附着到 replacement surface 后，商业 CAD 仍会按相同容差闭合。
+4. GUI tessellation 中视觉连续的区域，在 Creo / SolidWorks / CATIA 类软件中也无缝。
+```
+
+因此，`StrictTopologyGate` 继续负责拓扑水密；新增质量门控负责商业 CAD 近似几何质量。
+
+### 0.2 必须实现的策略组合
+
+```text
+1. corner-aware / curvature-aware sampling：
+   - 沿 sharp edge、corner vertex、feature junction 增加高密度采样。
+   - 曲率突变和二面角突变附近使用更小 sampling spacing。
+
+2. STP boundary guard-band 外扩采样：
+   - 在原 STP candidate boundary 外侧沿邻接 STP faces 采样 1-3 圈窄带。
+   - guard-band 只用于 Geomagic fitting input。
+   - 拟合后必须继续使用原 STP boundary wire 重裁剪。
+
+3. feature edge / corner anchor 约束：
+   - 将 sharp edge polyline、corner vertices、junction 邻域点作为 anchor set。
+   - 如果 Geomagic 不能接受硬约束，则至少作为输入加密点和输出漂移指标。
+
+4. 原 STP boundary re-trim：
+   - Geomagic patch outer boundary 仍不能作为最终 CAD boundary。
+   - `allowPatchOuterBoundaryFallback=false` 不得放开。
+
+5. CommercialCadLikeQualityGate：
+   - 不替代 `StrictTopologyGate`。
+   - 在拓扑 gate 之外新增高密度几何门控。
+```
+
+### 0.3 新增质量指标
+
+```text
+boundary_deviation:
+  原 STP boundary dense samples 到 replacement surface / shell 的 max / p95 / RMS。
+
+corner_anchor_drift:
+  原 corner vertices / feature junction anchors 到 replacement 的 max / p95。
+
+feature_edge_drift:
+  原 sharp edge dense samples 到 replacement feature / seam / surface 的 max / p95。
+
+sharpness_preservation:
+  原 sharp edge 两侧二面角或法向突变不能被 replacement 变成近似 G1 圆滑过渡。
+
+surface_cops_like_deviation:
+  原 candidate dense samples 到 after shape 的 max / p95 / RMS。
+
+roundtrip_geometry_drift:
+  STEP roundtrip 后重复计算上述指标，避免只验证写出前的 OCCT 内存形体。
+```
+
+阈值第一版不要写死成“最终工业标准”。先以 `0.01 mm` 作为 warning / report 参考线，真实 fail 阈值通过 Creo A/B 实验标定。
+
+### 0.4 最小 A/B 实验
+
+实验分支：
+
+```text
+experiment/corner-preservation-ab
+```
+
+实验矩阵：
+
+| 组 | 策略 | 目的 |
+|---|---|---|
+| A0 | 当前 STP sampled baseline | 建立 corner rounding / commercial CAD gap 数值基线 |
+| B1 | corner / feature edge 加密采样 | 验证点集增强是否降低 sharp edge drift |
+| B2 | 原 STP boundary 外 guard-band 采样 | 验证外侧上下文是否抑制圆角化 |
+| B3 | corner anchors + guard-band | 验证组合是否明显优于单独策略 |
+
+每组必须输出同一份实验报告：
+
+```text
+1. Geomagic patch face / edge / shell / solid / BRepCheck。
+2. Apply / repair / StrictTopologyGate before-after-roundtrip stats。
+3. boundary max / p95 / RMS deviation。
+4. corner anchor drift。
+5. feature edge drift。
+6. sharpness preservation score。
+7. STEP roundtrip 后重复测量。
+8. Creo 或商业 CAD 打开结果作为最终外部确认。
+```
+
+判定标准：
+
+```text
+B 组必须同时降低 corner anchor drift、feature edge drift p95/max、boundary projection p95/max，
+并且不能让 patch face count、repair failure、StrictTopologyGate 结果明显恶化。
+
+GUI 看起来连续不是成功证据。
+OCCT BRepCheck 通过也不是商业 CAD 无缝证据。
+```
+
+### 0.5 已落地的 A0 自动化入口
+
+当前实验分支已新增命令行入口：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7
+```
+
+也可跳过 Geomagic，复用已有 patch：
+
+```powershell
+.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
+  --source-step "D:\path\to\model.stp" `
+  --candidate-id 7 `
+  --patch "D:\path\to\patch.stp"
+```
+
+第一版 `CommercialCadLikeQualityGate` 已实现为独立代码模块：
+
+```text
+输入：
+  原 STEP document / candidate / original boundary / imported patch。
+
+当前测量：
+  1. 原 STP boundary dense samples 到 imported patch 的 max / mean / RMS / p95。
+  2. 原 boundary endpoints 去重后作为 corner anchors 到 imported patch 的 drift。
+  3. 候选 boundary 上 sharp/free/multiple feature edges 的 drift。
+
+输出：
+  baseline_report.json 中的 commercial_cad_like_quality_gate 节。
+```
+
+Geomagic staging 必须保持 GUI 兼容：
+
+```text
+脚本报告可以写入 data/baseline_runs，
+但 Geomagic 输入 STL、输出 STP 和 fit_region.log 必须写入 data/crop_stl / data/crop_stp / data/crop_igs。
+否则 Geomagic WriteFile 可能受工作目录 / 路径长度 / 路径形态影响，导致 CLI 与 GUI 结论不一致。
+```
+
+明确限制：
+
+```text
+1. 这不是 Creo 内核替代品，只是比 OCCT BRepCheck 更接近商业 CAD 风险的自动化近似门控。
+2. 它当前测的是 imported patch 几何相对原 CAD boundary 的漂移，后续还要补 STEP roundtrip 后 geometry drift。
+3. B1/B2/B3 的 corner-aware sampling、guard-band 和 anchor fitting input 尚未实现。
+```
+
+---
+
 ## 0. 历史核心判断：Stage 3A-Approx / A6
 
 当前 Geomagic Wrap 输出的 STP 中，视觉上看似平面的区域，底层通常不是 OCCT 原生 `GeomAbs_Plane`，而是：
@@ -760,14 +930,16 @@ commit 8:
 
 ## 12. 下一步 Codex 任务
 
-当前下一步不是 A6.3，也不是继续扩大 STL crop tolerance，而是：
+当前下一步不是 A6.3，也不是继续扩大 STL crop tolerance，而是用脚本先跑 A0 baseline，再实现 B1/B2/B3：
 
 ```text
-T6.7.4 后续 Apply 收口：
-1. 继续以 STP Sampled Candidate Surface 作为默认 Geomagic fitting input mode。
-2. 用真实样例对比 STP sampled 与 Global Cut Chain STL crop 的耗时、patch face count 和 Apply report；Global Cut Chain 若用于 Geomagic，当前需要手动 / 脚本喂入输出 STL。
-3. 重点处理 split boundary / 邻接旧拓扑桥接闭合，使 PatchReplacementRepair 后 free edge / multiple edge 归零。
-4. 仍由 StrictTopologyGate 决定是否提交，不绕过 BRepCheck、solid/watertight 和 STEP roundtrip。
+corner preservation A/B 后续：
+1. 对真实样例运行 A0：corner_baseline_probe + 当前 STP sampled fitting input。
+2. 保存 baseline_report.json，并记录 patch face count、StrictTopologyGate、CommercialCadLikeQualityGate。
+3. 实现 B1：corner / feature edge 加密采样。
+4. 实现 B2：原 STP boundary 外 guard-band 采样。
+5. 实现 B3：corner anchors + guard-band。
+6. 用同一脚本和同一真实样例对比 drift / gate / Creo 或商业 CAD 结果。
 ```
 
 极简 Codex 任务边界：

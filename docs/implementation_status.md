@@ -166,6 +166,9 @@ Organic detail/tolerance 调参：face count 仍≈273
 67. Global Cut Chain boundary snap 已接入：`StlCutChainOptions` 默认 `snapBoundaryToRed=true`、`snapMaxDist=0.2`，切链后的 patch outer boundary 可向原 STP red boundary loop 回贴，降低投影到 STL 后的 green boundary 漂移。该 snap 只改善 local STL / fitting STL 输入质量，不改变最终 CAD boundary；Apply 仍必须使用原 STP candidate outer boundary wire，并通过 PatchReplacementRepair 与 StrictTopologyGate。
 68. GUI 后台任务与状态显示优化已按 `1f0c3d7` 可缝合基准完成移植：`openStepFile()`、`previewMergeCandidates()` 和 Patch Apply 的计算 / 读取进入 worker，viewer / model tree / report / Process Status 更新回 GUI 线程；长任务期间禁用会修改 document / controller 的入口；Process Status 与 Patch Apply report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和 face / edge / shell / solid 计数。`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
 69. 文档入口与下一阶段方向已同步到 `a57695d` 主线：仓库根目录恢复 `AGENTS.md`，保证新对话会先读全局 Workspace、项目记忆和仓库文档；当前后续研究问题明确为 Geomagic 在拐角 / 特征交汇处圆角化导致商业 CAD 出现缝隙。下一轮应优先评估 corner-aware / curvature-aware 采样、STP boundary guard-band 外扩采样、feature/corner anchors、原 STP boundary 重裁剪和 Creo-like 高密度偏差门控，而不是继续 Sharp Contours 或重新合入 `d1c00e4`。
+70. corner preservation 最终方案已确定为“双层闭环”：前端通过 corner-aware / curvature-aware sampling、feature/corner anchors 和 STP boundary 外 guard-band 采样改善 Geomagic fitting input；后端在 `StrictTopologyGate` 之外新增 commercial-CAD-like 高密度几何门控，测量 boundary deviation、corner anchor drift、feature edge drift、sharpness preservation、surface COPS-like deviation 和 STEP roundtrip 后 geometry drift。第一轮实验分支为 `experiment/corner-preservation-ab`，A/B 矩阵为 baseline、corner 加密、guard-band、corner+guard-band；成功不能只看 GUI 或 OCCT BRepCheck。
+71. A0 baseline 自动化入口已落地：新增 `corner_baseline_probe` CLI，流程为 source STEP + candidate id → STP-sampled fitting STL → Geomagic AutoSurface 或 `--patch` 复用已有 patch → Patch Apply + `StrictTopologyGate` → `CommercialCadLikeQualityGate` → JSON 报告。新增 `CommercialCadQualityGate` 独立模块，第一版测量原 STP boundary、corner anchor 和 feature boundary samples 到 imported patch 的 max/mean/RMS/p95 drift；它不替代 `StrictTopologyGate`，只补足 OCCT 拓扑 gate 看不到的 commercial-CAD-like 几何偏差。
+72. `corner_baseline_probe` 的 Geomagic staging 已对齐 GUI 路径：输入 STL / 输出 STP / fit log 写入仓库 `data\crop_stl`、`data\crop_stp`、`data\crop_igs`，报告写入 `data\baseline_runs`。真实样例 `03_配件_Clay.stp` candidate 179 的 A0 脚本已复现 GUI 后端：Geomagic STP 生成成功，Patch Apply 与 `StrictTopologyGate` 通过，但 `CommercialCadLikeQualityGate` 失败，boundary/feature max drift 0.123574、p95 0.044766，corner p95 0.086309。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -621,6 +624,17 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
    - fitting input mode：STP sampled / legacy STL crop / conservative STL crop。
    - STL crop mode：centroid-only / conservative boundary-band / global cut chain。
    - final CAD boundary：只能来自原 STP candidate outer boundary wire。
+
+5. 当前下一步执行 corner preservation A/B 实验：
+   - A0：用 `corner_baseline_probe` 跑当前 STP sampled baseline，并保存 JSON 报告。
+   - B1：corner / feature edge 加密采样。
+   - B2：原 STP boundary 外 guard-band 采样。
+   - B3：corner anchors + guard-band。
+
+6. `CommercialCadLikeQualityGate` 第一版已新增：
+   - 不替代 StrictTopologyGate。
+   - 当前输出 boundary max/p95/RMS deviation、corner anchor drift、feature edge drift 和 sharp-corner-preservation pass/fail。
+   - 后续仍需补 STEP roundtrip 后几何重复测量、surface COPS-like deviation 和 Creo / commercial CAD 阈值标定。
 ```
 
 **冻结范围：**
