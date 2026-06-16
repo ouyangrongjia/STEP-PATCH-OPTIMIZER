@@ -21,6 +21,8 @@ struct StpSampledFittingOptions {
     double bandRingSpacing = 0.3;
     bool preserveCornerPoints = true;
     bool includeBoundaryBand = true;
+    bool enableCornerFeatureDenseSampling = false;
+    int cornerFeatureSamplesPerEdge = 64;
 };
 
 struct StpSampledFittingReport {
@@ -33,6 +35,10 @@ struct StpSampledFittingReport {
     int boundaryEdgeCount = 0;
     int boundarySampleCount = 0;
     int boundaryBandSampleCount = 0;
+    bool cornerFeatureDenseSamplingEnabled = false;
+    int featureEdgeDenseSampleCount = 0;
+    int cornerAnchorSampleCount = 0;
+    int cornerFeatureSurfaceDivisionCount = 0;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

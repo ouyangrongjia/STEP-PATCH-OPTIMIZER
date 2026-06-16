@@ -1,5 +1,7 @@
 param(
     [string]$Preset = "windows-msvc-debug",
+    [ValidateSet("A0", "B1")]
+    [string]$Experiment = "A0",
     [string]$SourceStep = "",
     [string]$CandidateId = "auto",
     [string]$Patch = "",
@@ -7,6 +9,7 @@ param(
     [string]$Report = "",
     [string]$WrapCore = "E:\Geomagic Wrap\wrapCore.exe",
     [int]$TimeoutSeconds = 1800,
+    [int]$CornerFeatureSamples = 64,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
 )
@@ -156,7 +159,8 @@ if (-not (Test-Path $SourceStep)) {
 }
 
 if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot "data\baseline_runs\scripted_a0_gate"
+    $experimentSlug = $Experiment.ToLowerInvariant()
+    $OutputDir = Join-Path $repoRoot "data\baseline_runs\scripted_${experimentSlug}_gate"
 } else {
     $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
 }
@@ -198,6 +202,13 @@ $probeArgs = @(
     "--output-dir", $OutputDir,
     "--report", $Report
 )
+
+if ($Experiment -eq "B1") {
+    $probeArgs += @(
+        "--b1-corner-feature-sampling",
+        "--corner-feature-samples", "$CornerFeatureSamples"
+    )
+}
 
 if ($Patch) {
     $probeArgs += @("--patch", $Patch)

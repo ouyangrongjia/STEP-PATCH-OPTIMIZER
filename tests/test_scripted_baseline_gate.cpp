@@ -38,9 +38,11 @@ void test_scripted_baseline_gate_is_not_hardcoded_to_one_sample() {
 
     assert(script.find("param(") != std::string::npos);
     assert(script.find("CandidateId = \"auto\"") != std::string::npos);
+    assert(script.find("Experiment = \"A0\"") != std::string::npos);
     assert(script.find("Find-DefaultSourceStep") != std::string::npos);
     assert(script.find("Find-ExistingPatchForCandidate") != std::string::npos);
     assert(script.find("corner_baseline_probe") != std::string::npos);
+    assert(script.find("--b1-corner-feature-sampling") != std::string::npos);
     assert(script.find("-RealGeomagic") != std::string::npos);
     assert(script.find("--candidate-id") != std::string::npos);
     assert(script.find("candidate_0179") == std::string::npos);

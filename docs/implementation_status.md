@@ -180,6 +180,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 81. Commercial-CAD-like A0 sampling report 已补齐：`CommercialCadQualityGateReport` 现在输出 `sampling_report`，记录 boundary / feature-edge samples per edge、corner anchor source、boundary sample count、corner anchor count、feature boundary edge count、feature edge sample count，以及 FeatureEdgeDetectionResult 是否参与评估；`corner_baseline_probe` 的 baseline JSON 同步输出该字段。此项只增强 A0 报告可重复性，不改变 gate 阈值、不改变 pass/fail 语义、不实现 B1/B2/B3 fitting input 增强。
 82. 自动 baseline / probe 工具构建覆盖已补齐：Cleanup-6 删除旧 analytic `MergePlannerOptions` 字段后，`corner_baseline_probe` 和 `patch_apply_probe` 仍保留旧字段赋值，导致这两个工具单独构建失败；现已改为只设置当前 `FeatureBoundedRefit` 相关选项，并把两个工具纳入 `scripts/verify_spo.ps1` 默认构建。注意这仍是 CLI 自动 baseline/probe，不是窗口点击级 GUI 自动化。
 83. 脚本化 A0 baseline gate 已补齐：新增 `scripts/run_corner_baseline_gate.ps1`，用于构建并运行 `corner_baseline_probe`，支持 `-CandidateId auto`、显式 `-Patch` 复用已有 patch、`-RealGeomagic` 触发真实 Geomagic、`-AllowQualityGateFailure` 保留已知 A0 质量门失败报告；`corner_baseline_probe` 现在会输出 `candidate_selection_mode` 和 `generated_candidate_count`。`verify_spo.ps1 -RealGeomagic` 会调用该 gate，但普通 `verify_spo.ps1` 不依赖真实 Geomagic。
+84. B1 corner / feature edge 加密采样已完成第一版：`StpSampledFittingMeshBuilder` 新增显式 `enableCornerFeatureDenseSampling` 路径，默认 A0 不变；B1 会沿原 STP candidate outer boundary / feature-boundary edges 生成 dense samples 作为报告采样集，同时提高 STP-sampled fitting STL 的连接 surface grid 密度。真实 Geomagic 覆盖测试证明孤立 anchor micro facets 会让输入 STL 变成大量离散组件并导致 AutoSurface initialization failure，因此 B1 不再生成孤立锚点三角片。`corner_baseline_probe` / `run_corner_baseline_gate.ps1 -Experiment B1` 会输出 `corner_feature_dense_sampling_enabled`、`feature_edge_dense_sample_count`、`corner_anchor_sample_count` 和 `corner_feature_surface_division_count`。该项只改变 Geomagic fitting input，不改变 Apply、original STP boundary re-trim、redo 或 `StrictTopologyGate` 语义。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -384,6 +385,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | PatchArtifactLocator 中文路径测试 | 已完成 | 覆盖中文 relative dir / 中文 stem 下 local STL 到同名 STEP、autosurface IGS sidecar 和 fit_region log 的定位 |
 | A0 baseline / Apply probe 工具构建 | 已完成 | `verify_spo.ps1` 默认构建 `corner_baseline_probe` 和 `patch_apply_probe`，避免 CLI baseline / probe 因接口漂移失效 |
 | A0 baseline 脚本 gate | 已完成 | `run_corner_baseline_gate.ps1` 可复用已有 patch 或在 `-RealGeomagic` 下运行真实 Geomagic；candidate 可用 `auto` 发现式选择，报告写出 candidate selection 字段 |
+| B1 corner / feature edge 加密采样测试 | 已完成基础版 | 覆盖默认 A0 不生成 B1 加密、显式 B1 增加 dense edge samples / corner anchors / connected surface divisions，并防止回退到孤立 micro-facet 组件；脚本源码级覆盖 `-Experiment B1` 与 `--b1-corner-feature-sampling` 转发 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 部分完成 | GUI 同源核心 pipeline 已有脚本 gate；窗口点击级 Qt/系统事件自动化仍未完成 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -640,9 +642,9 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 5. 当前下一步执行 corner preservation A/B 实验：
    - A0：用 `corner_baseline_probe` 跑当前 STP sampled baseline，并保存 JSON 报告。
-   - B1：corner / feature edge 加密采样。
-   - B2：原 STP boundary 外 guard-band 采样。
-   - B3：corner anchors + guard-band。
+   - B1：corner / feature edge 加密采样已完成第一版；真实质量改善必须用重新跑 Geomagic 后的 B1 patch 判断，不能用复用 A0 patch 的报告替代。
+   - B2：下一步实现原 STP boundary 外 guard-band 采样。
+   - B3：再实现 corner anchors + guard-band。
 
 6. `CommercialCadLikeQualityGate` 第一版已新增：
    - 不替代 StrictTopologyGate。

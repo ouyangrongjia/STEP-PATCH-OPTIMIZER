@@ -52,6 +52,9 @@ struct Options {
     double geomagicTolerance = 0.03;
     double geomagicDetail = 0.10;
     int timeoutSeconds = 1800;
+
+    bool enableB1CornerFeatureSampling = false;
+    int cornerFeatureSamplesPerEdge = 64;
 };
 
 std::filesystem::path repo_root() {
@@ -99,7 +102,9 @@ void print_usage() {
         << "  --max-feature-edge-distance <value>      Default 0.03.\n"
         << "  --geomagic-tolerance <value>             Default 0.03.\n"
         << "  --geomagic-detail <0..1>                 Default 0.10.\n"
-        << "  --timeout-seconds <n>                    Default 1800.\n";
+        << "  --timeout-seconds <n>                    Default 1800.\n"
+        << "  --b1-corner-feature-sampling            Enable B1 corner / feature edge dense anchors.\n"
+        << "  --corner-feature-samples <n>             B1 dense samples per feature edge, default 64.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -230,6 +235,14 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.timeoutSeconds = std::stoi(value);
+        } else if (arg == "--b1-corner-feature-sampling") {
+            options.enableB1CornerFeatureSampling = true;
+        } else if (arg == "--corner-feature-samples") {
+            const auto* value = requireValue("--corner-feature-samples");
+            if (value == nullptr) {
+                return false;
+            }
+            options.cornerFeatureSamplesPerEdge = std::stoi(value);
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -466,6 +479,10 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("boundary_edge_count", report.boundaryEdgeCount);
     object.insert("boundary_sample_count", report.boundarySampleCount);
     object.insert("boundary_band_sample_count", report.boundaryBandSampleCount);
+    object.insert("corner_feature_dense_sampling_enabled", report.cornerFeatureDenseSamplingEnabled);
+    object.insert("feature_edge_dense_sample_count", report.featureEdgeDenseSampleCount);
+    object.insert("corner_anchor_sample_count", report.cornerAnchorSampleCount);
+    object.insert("corner_feature_surface_division_count", report.cornerFeatureSurfaceDivisionCount);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -685,6 +702,8 @@ int main(int argc, char* argv[]) {
     print_stage("building STP-sampled fitting STL");
     spo::StlMesh fittingMesh;
     spo::StpSampledFittingOptions samplingOptions;
+    samplingOptions.enableCornerFeatureDenseSampling = options.enableB1CornerFeatureSampling;
+    samplingOptions.cornerFeatureSamplesPerEdge = options.cornerFeatureSamplesPerEdge;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

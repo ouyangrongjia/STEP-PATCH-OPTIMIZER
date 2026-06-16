@@ -149,7 +149,7 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ---
 
-## 4.1 命令行 baseline / A0 自动验证
+## 4.1 命令行 baseline / A0-B1 自动验证
 
 不需要人工打开 GUI 的 A0 baseline 脚本入口：
 
@@ -171,7 +171,28 @@ cd D:\pyProject\step-patch-optimizer
   -AllowQualityGateFailure
 ```
 
-脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+B1 corner / feature edge 加密采样：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B1 复用已有 patch 时：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId 7 `
+  -Patch "D:\path\to\patch.stp" `
+  -AllowQualityGateFailure
+```
+
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
 

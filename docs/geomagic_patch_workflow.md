@@ -66,7 +66,7 @@ Commercial-CAD-like quality gate:
 | 组 | 输入策略 | 必须比较的指标 |
 |---|---|---|
 | A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
-| B1 | corner / feature edge 加密采样 | sharp edge drift 是否下降 |
+| B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
 | B2 | outer guard-band sampling | corner rounding 是否下降 |
 | B3 | corner anchors + guard-band | 是否同时降低 drift 且不恶化 repair / gate |
 
@@ -88,6 +88,29 @@ Commercial-CAD-like quality gate:
   -Patch "D:\path\to\patch.stp" `
   -AllowQualityGateFailure
 ```
+
+B1 加密采样入口：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B1 也可复用已有 patch 来验证 fitting STL / report 链路：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId 7 `
+  -Patch "D:\path\to\patch.stp" `
+  -AllowQualityGateFailure
+```
+
+注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1 drift 改善证据。它只能证明 B1 输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
 
 底层 probe 入口：
 

@@ -185,7 +185,7 @@ experiment/corner-preservation-ab
 | 组 | 策略 | 目的 |
 |---|---|---|
 | A0 | 当前 STP sampled baseline | 建立 corner rounding / commercial CAD gap 数值基线 |
-| B1 | corner / feature edge 加密采样 | 验证点集增强是否降低 sharp edge drift |
+| B1 | corner / feature edge 加密采样 | 已接入脚本开关；验证点集增强是否降低 sharp edge drift |
 | B2 | 原 STP boundary 外 guard-band 采样 | 验证外侧上下文是否抑制圆角化 |
 | B3 | corner anchors + guard-band | 验证组合是否明显优于单独策略 |
 
@@ -212,7 +212,7 @@ GUI 看起来连续不是成功证据。
 OCCT BRepCheck 通过也不是商业 CAD 无缝证据。
 ```
 
-### 0.5 已落地的 A0 自动化入口
+### 0.5 已落地的 A0 / B1 自动化入口
 
 当前已新增脚本化 A0 baseline gate：
 
@@ -233,7 +233,28 @@ OCCT BRepCheck 通过也不是商业 CAD 无缝证据。
   -AllowQualityGateFailure
 ```
 
-该脚本会构建并调用 `corner_baseline_probe`，默认 candidate id 可用 `auto`，选择最大且 boundary analysis 有效的 `FeatureBoundedRefit` candidate。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通测试依赖真实 Geomagic。
+B1 corner / feature edge 加密采样入口：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+复用已有 patch 只验证 B1 fitting input / report 链路，不证明 Geomagic 重新拟合后的 drift 改善：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId 7 `
+  -Patch "D:\path\to\patch.stp" `
+  -AllowQualityGateFailure
+```
+
+该脚本会构建并调用 `corner_baseline_probe`，默认 candidate id 可用 `auto`，选择最大且 boundary analysis 有效的 `FeatureBoundedRefit` candidate。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通测试依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的 surface grid 密度，并报告原 STP candidate boundary / feature-boundary edge dense samples 与 corner endpoints；默认 `A0` 路径保持不变。B1 不生成孤立 anchor micro facets，避免 Geomagic AutoSurface 把输入识别为大量离散组件。
 
 底层命令行入口：
 
@@ -286,8 +307,8 @@ Geomagic staging 必须保持 GUI 兼容：
 ```text
 1. 这不是 Creo 内核替代品，只是比 OCCT BRepCheck 更接近商业 CAD 风险的自动化近似门控。
 2. 它当前测的是 imported patch 几何相对原 CAD boundary 的漂移，后续还要补 STEP roundtrip 后 geometry drift。
-3. B1/B2/B3 的 corner-aware sampling、guard-band 和 anchor fitting input 尚未实现。
-4. sampling_report 只说明当前 A0 点集来源与采样规模，不代表 Geomagic 已获得硬约束 anchor。
+3. B1 corner / feature edge 加密采样已完成第一版；B2 guard-band 和 B3 组合策略尚未实现。
+4. sampling_report 说明 quality gate 测量点集来源与采样规模；B1 的 fitting STL 增强字段写在 `stp_sampled_fitting` 节，不代表 Geomagic 已获得硬约束 anchor。
 5. `run_corner_baseline_gate.ps1` 是 GUI 同源 pipeline 的脚本化 gate，不是窗口点击级自动化；窗口事件自动化仍未完成。
 ```
 
@@ -1010,9 +1031,9 @@ commit 8:
 corner preservation A/B 后续：
 1. 对真实样例运行 A0：run_corner_baseline_gate.ps1 / corner_baseline_probe + 当前 STP sampled fitting input。
 2. 保存 baseline_report.json，并记录 patch face count、StrictTopologyGate、CommercialCadLikeQualityGate 及 sampling_report。
-3. 实现 B1：corner / feature edge 加密采样。
-4. 实现 B2：原 STP boundary 外 guard-band 采样。
-5. 实现 B3：corner anchors + guard-band。
+3. B1 已完成第一版：STP-sampled fitting STL 可通过 `-Experiment B1` 提高连接 surface grid 密度，并在 JSON 中输出 dense sample / corner anchor / surface division 统计。
+4. 下一步实现 B2：原 STP boundary 外 guard-band 采样。
+5. 再实现 B3：corner anchors + guard-band。
 6. 用同一脚本和同一真实样例对比 drift / gate / Creo 或商业 CAD 结果。
 ```
 

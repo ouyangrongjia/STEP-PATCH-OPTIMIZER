@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <unordered_set>
 
 namespace spo {
@@ -167,6 +168,10 @@ struct BoundarySample {
     int faceIndex = -1;
 };
 
+double squared_distance(const gp_Pnt& lhs, const gp_Pnt& rhs) {
+    return lhs.SquareDistance(rhs);
+}
+
 std::vector<BoundarySample> sample_boundary_edges(
     const ShapeDocument& document,
     const std::vector<EdgeId>& orderedEdges,
@@ -222,6 +227,51 @@ std::vector<BoundarySample> sample_boundary_edges(
         }
     }
     return samples;
+}
+
+std::vector<gp_Pnt> collect_unique_edge_endpoints(
+    const ShapeDocument& document,
+    const std::vector<EdgeId>& orderedEdges,
+    double tolerance) {
+    std::vector<gp_Pnt> points;
+    const auto toleranceSquared = tolerance * tolerance;
+    const auto& topology = document.topology();
+
+    auto add_unique = [&](const gp_Pnt& point) {
+        for (const auto& existing : points) {
+            if (squared_distance(existing, point) <= toleranceSquared) {
+                return;
+            }
+        }
+        points.push_back(point);
+    };
+
+    for (const auto edgeId : orderedEdges) {
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            continue;
+        }
+        const auto& edge = topology.edge(edgeId);
+        double firstParam = 0.0, lastParam = 0.0;
+        const auto curve = BRep_Tool::Curve(edge, firstParam, lastParam);
+        if (curve.IsNull()) {
+            continue;
+        }
+        add_unique(curve->Value(firstParam));
+        add_unique(curve->Value(lastParam));
+    }
+
+    return points;
+}
+
+std::string append_warning(std::string warning, const std::string& addition) {
+    if (addition.empty()) {
+        return warning;
+    }
+    if (!warning.empty()) {
+        warning += " ";
+    }
+    warning += addition;
+    return warning;
 }
 
 StlTriangle make_stl_triangle(
@@ -317,6 +367,7 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     StpSampledFittingReport report;
     report.candidateId = candidate.candidate_id;
     report.sourceFaceCount = static_cast<int>(candidate.faces.size());
+    report.cornerFeatureDenseSamplingEnabled = options.enableCornerFeatureDenseSampling;
 
     // Validate inputs
     if (!document.hasShape()) {
@@ -368,6 +419,17 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     const auto targetDivs = std::max(8, static_cast<int>(std::sqrt(static_cast<double>(maxSamplesPerFace))));
     auto divisionsPerFace = std::min(targetDivs, options.maxInteriorDivisions);
     divisionsPerFace = std::clamp(divisionsPerFace, 8, options.maxInteriorDivisions);
+    if (options.enableCornerFeatureDenseSampling) {
+        const auto requestedFeatureDivisions = std::max(
+            divisionsPerFace + 4,
+            std::max(8, options.cornerFeatureSamplesPerEdge / 2));
+        const auto featureDivisionCap = std::max(options.maxInteriorDivisions, 28);
+        divisionsPerFace = std::clamp(
+            requestedFeatureDivisions,
+            divisionsPerFace,
+            featureDivisionCap);
+        report.cornerFeatureSurfaceDivisionCount = divisionsPerFace;
+    }
     report.samplingSpacing = diagonal / static_cast<double>(divisionsPerFace);
     report.boundarySpacing = report.samplingSpacing * 0.5;
 
@@ -404,6 +466,39 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             divisionsPerFace,
             allTriangles,
             faceTriCount);
+    }
+
+    if (options.enableCornerFeatureDenseSampling) {
+        std::vector<int> denseEdgeSampleCounts;
+        const auto denseSamplesPerEdge = std::max(
+            options.cornerFeatureSamplesPerEdge,
+            options.minBoundarySamplesPerEdge);
+        const auto denseSamples = sample_boundary_edges(
+            document,
+            boundary.ordered_boundary_edges,
+            denseSamplesPerEdge,
+            denseSamplesPerEdge,
+            options.chordError,
+            denseEdgeSampleCounts);
+        std::vector<gp_Pnt> densePoints;
+        densePoints.reserve(denseSamples.size());
+        for (const auto& sample : denseSamples) {
+            densePoints.push_back(sample.point);
+        }
+
+        const auto cornerAnchors = collect_unique_edge_endpoints(
+            document,
+            boundary.ordered_boundary_edges,
+            1.0e-7);
+
+        report.featureEdgeDenseSampleCount = static_cast<int>(densePoints.size());
+        report.cornerAnchorSampleCount = static_cast<int>(cornerAnchors.size());
+
+        if (densePoints.empty() && cornerAnchors.empty()) {
+            report.warningMessage = append_warning(
+                report.warningMessage,
+                "B1 corner/feature dense sampling was enabled but no anchors were generated.");
+        }
     }
 
     // Build output mesh

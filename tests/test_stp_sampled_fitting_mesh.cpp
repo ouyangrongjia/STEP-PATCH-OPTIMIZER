@@ -25,13 +25,99 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
+#include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace {
 
 constexpr double kTolerance = 1.0e-9;
+
+struct QuantizedVertex {
+    std::int64_t x = 0;
+    std::int64_t y = 0;
+    std::int64_t z = 0;
+
+    bool operator==(const QuantizedVertex& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+};
+
+struct QuantizedVertexHash {
+    std::size_t operator()(const QuantizedVertex& vertex) const {
+        const auto hx = std::hash<std::int64_t>{}(vertex.x);
+        const auto hy = std::hash<std::int64_t>{}(vertex.y);
+        const auto hz = std::hash<std::int64_t>{}(vertex.z);
+        return hx ^ (hy << 1) ^ (hz << 2);
+    }
+};
+
+QuantizedVertex quantize_vertex(const spo::StlVec3& vertex) {
+    constexpr double scale = 1.0e8;
+    return {
+        static_cast<std::int64_t>(std::llround(vertex.x * scale)),
+        static_cast<std::int64_t>(std::llround(vertex.y * scale)),
+        static_cast<std::int64_t>(std::llround(vertex.z * scale))
+    };
+}
+
+int connected_component_count(const spo::StlMesh& mesh) {
+    const auto triangleCount = mesh.triangleCount();
+    if (triangleCount == 0) {
+        return 0;
+    }
+
+    std::vector<std::vector<std::size_t>> adjacency(triangleCount);
+    std::unordered_map<QuantizedVertex, std::vector<std::size_t>, QuantizedVertexHash> trianglesByVertex;
+
+    auto add_vertex = [&](const spo::StlVec3& vertex, std::size_t triangleIndex) {
+        trianglesByVertex[quantize_vertex(vertex)].push_back(triangleIndex);
+    };
+
+    const auto& triangles = mesh.triangles();
+    for (std::size_t i = 0; i < triangles.size(); ++i) {
+        add_vertex(triangles[i].v0, i);
+        add_vertex(triangles[i].v1, i);
+        add_vertex(triangles[i].v2, i);
+    }
+
+    for (const auto& [_, owners] : trianglesByVertex) {
+        if (owners.size() < 2) {
+            continue;
+        }
+        const auto first = owners.front();
+        for (std::size_t i = 1; i < owners.size(); ++i) {
+            adjacency[first].push_back(owners[i]);
+            adjacency[owners[i]].push_back(first);
+        }
+    }
+
+    int components = 0;
+    std::vector<bool> visited(triangleCount, false);
+    for (std::size_t i = 0; i < triangleCount; ++i) {
+        if (visited[i]) {
+            continue;
+        }
+        ++components;
+        std::queue<std::size_t> queue;
+        queue.push(i);
+        visited[i] = true;
+        while (!queue.empty()) {
+            const auto current = queue.front();
+            queue.pop();
+            for (const auto next : adjacency[current]) {
+                if (!visited[next]) {
+                    visited[next] = true;
+                    queue.push(next);
+                }
+            }
+        }
+    }
+    return components;
+}
 
 struct PlanarFixture {
     spo::ShapeDocument document;
@@ -110,6 +196,36 @@ void test_boundary_sample_count_per_edge() {
     // 4 edges, each should have at least 8 samples
     assert(report.boundarySampleCount >= 4 * 8);
     assert(report.boundaryEdgeCount == 4);
+}
+
+void test_b1_corner_feature_dense_sampling_adds_anchor_facets() {
+    auto fixture = make_planar_square_fixture(10.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+    assert(!baselineReport.cornerFeatureDenseSamplingEnabled);
+    assert(baselineReport.featureEdgeDenseSampleCount == 0);
+    assert(baselineReport.cornerAnchorSampleCount == 0);
+    assert(baselineReport.cornerFeatureSurfaceDivisionCount == 0);
+
+    spo::StpSampledFittingOptions b1Options;
+    b1Options.enableCornerFeatureDenseSampling = true;
+    b1Options.cornerFeatureSamplesPerEdge = 32;
+    spo::StlMesh b1Mesh;
+    const auto b1Report = builder.build(fixture.document, fixture.candidate, b1Options, b1Mesh);
+
+    assert(b1Report.success);
+    assert(b1Report.cornerFeatureDenseSamplingEnabled);
+    assert(b1Report.featureEdgeDenseSampleCount >= 4 * 8);
+    assert(b1Report.cornerAnchorSampleCount == 4);
+    assert(b1Report.cornerFeatureSurfaceDivisionCount > baselineOptions.maxInteriorDivisions);
+    assert(b1Report.outputTriangleCount > baselineReport.outputTriangleCount);
+    assert(b1Mesh.triangleCount() > baselineMesh.triangleCount());
+    assert(connected_component_count(baselineMesh) == 1);
+    assert(connected_component_count(b1Mesh) == 1);
 }
 
 void test_increased_div_increases_triangle_count() {
@@ -292,6 +408,10 @@ void test_report_fields_present() {
     assert(report.sourceFaceCount == 1);
     assert(report.boundaryEdgeCount > 0);
     assert(report.boundarySampleCount > 0);
+    assert(!report.cornerFeatureDenseSamplingEnabled);
+    assert(report.featureEdgeDenseSampleCount == 0);
+    assert(report.cornerAnchorSampleCount == 0);
+    assert(report.cornerFeatureSurfaceDivisionCount == 0);
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);
@@ -353,6 +473,7 @@ void test_no_degenerate_triangles() {
 void run_stp_sampled_fitting_mesh_tests() {
     test_planar_face_sampling_produces_triangles();
     test_boundary_sample_count_per_edge();
+    test_b1_corner_feature_dense_sampling_adds_anchor_facets();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();
