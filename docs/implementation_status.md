@@ -181,6 +181,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 82. 自动 baseline / probe 工具构建覆盖已补齐：Cleanup-6 删除旧 analytic `MergePlannerOptions` 字段后，`corner_baseline_probe` 和 `patch_apply_probe` 仍保留旧字段赋值，导致这两个工具单独构建失败；现已改为只设置当前 `FeatureBoundedRefit` 相关选项，并把两个工具纳入 `scripts/verify_spo.ps1` 默认构建。注意这仍是 CLI 自动 baseline/probe，不是窗口点击级 GUI 自动化。
 83. 脚本化 A0 baseline gate 已补齐：新增 `scripts/run_corner_baseline_gate.ps1`，用于构建并运行 `corner_baseline_probe`，支持 `-CandidateId auto`、显式 `-Patch` 复用已有 patch、`-RealGeomagic` 触发真实 Geomagic、`-AllowQualityGateFailure` 保留已知 A0 质量门失败报告；`corner_baseline_probe` 现在会输出 `candidate_selection_mode` 和 `generated_candidate_count`。`verify_spo.ps1 -RealGeomagic` 会调用该 gate，但普通 `verify_spo.ps1` 不依赖真实 Geomagic。
 84. B1 corner / feature edge 加密采样已完成第一版：`StpSampledFittingMeshBuilder` 新增显式 `enableCornerFeatureDenseSampling` 路径，默认 A0 不变；B1 会沿原 STP candidate outer boundary / feature-boundary edges 生成 dense samples 作为报告采样集，同时提高 STP-sampled fitting STL 的连接 surface grid 密度。真实 Geomagic 覆盖测试证明孤立 anchor micro facets 会让输入 STL 变成大量离散组件并导致 AutoSurface initialization failure，因此 B1 不再生成孤立锚点三角片。`corner_baseline_probe` / `run_corner_baseline_gate.ps1 -Experiment B1` 会输出 `corner_feature_dense_sampling_enabled`、`feature_edge_dense_sample_count`、`corner_anchor_sample_count` 和 `corner_feature_surface_division_count`。该项只改变 Geomagic fitting input，不改变 Apply、original STP boundary re-trim、redo 或 `StrictTopologyGate` 语义。
+85. B2 原 STP boundary guard-band 外扩采样已完成第一版：`StpSampledFittingMeshBuilder` 新增显式 `enableBoundaryGuardBandSampling` 路径，默认 A0/B1 不变；B2 会在 B1 连接 surface grid 基础上沿原 STP candidate outer boundary 采样一圈外扩带，优先将 guard samples 投到相邻非候选 STP face，并用桥接三角形接回现有采样面，避免恢复 B1 早期孤立 micro-facet 问题。`corner_baseline_probe` / `run_corner_baseline_gate.ps1 -Experiment B2` 会输出 `boundary_guard_band_*` 统计字段；脚本默认使用保守参数 `GuardBandSamples=16`、`GuardBandRings=1`、`GuardBandSpacing=0.10`。真实样例 `03_配件_Clay.stp` candidate 179 的 B2 重新生成验证显示 fitting STL 仍为 `components=1`，Patch preview 可进入 apply 路径，boundary/feature max drift 从 B1 的约 `0.123518` 降到 `0.057990`，corner max drift 从约 `0.123518` 降到 `0.043502`；但 `StrictTopologyGate` 仍因 after BRepCheck/free edges 失败，`CommercialCadLikeQualityGate` 仍未通过。本阶段只证明 B2 外扩采样和报告链路落地，不宣称商业 CAD 门控已通过。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -386,6 +387,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | A0 baseline / Apply probe 工具构建 | 已完成 | `verify_spo.ps1` 默认构建 `corner_baseline_probe` 和 `patch_apply_probe`，避免 CLI baseline / probe 因接口漂移失效 |
 | A0 baseline 脚本 gate | 已完成 | `run_corner_baseline_gate.ps1` 可复用已有 patch 或在 `-RealGeomagic` 下运行真实 Geomagic；candidate 可用 `auto` 发现式选择，报告写出 candidate selection 字段 |
 | B1 corner / feature edge 加密采样测试 | 已完成基础版 | 覆盖默认 A0 不生成 B1 加密、显式 B1 增加 dense edge samples / corner anchors / connected surface divisions，并防止回退到孤立 micro-facet 组件；脚本源码级覆盖 `-Experiment B1` 与 `--b1-corner-feature-sampling` 转发 |
+| B2 boundary guard-band 外扩采样测试 | 已完成基础版 | 覆盖默认 A0 不生成 B2 guard-band、显式 B2 增加 guard-band 样本/三角形、扩展 fitting STL bbox 且保持单连通组件；脚本源码级覆盖 `-Experiment B2` 与 `--b2-boundary-guard-band` 转发 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 部分完成 | GUI 同源核心 pipeline 已有脚本 gate；窗口点击级 Qt/系统事件自动化仍未完成 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -643,8 +645,8 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 5. 当前下一步执行 corner preservation A/B 实验：
    - A0：用 `corner_baseline_probe` 跑当前 STP sampled baseline，并保存 JSON 报告。
    - B1：corner / feature edge 加密采样已完成第一版；真实质量改善必须用重新跑 Geomagic 后的 B1 patch 判断，不能用复用 A0 patch 的报告替代。
-   - B2：下一步实现原 STP boundary 外 guard-band 采样。
-   - B3：再实现 corner anchors + guard-band。
+   - B2：原 STP boundary 外 guard-band 采样已完成第一版；真实样例显示 max drift 明显下降，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍未通过。
+   - B3：下一步实现 corner anchors + guard-band，并重点减少 B2 暴露的多面 replacement / free edge 风险。
 
 6. `CommercialCadLikeQualityGate` 第一版已新增：
    - 不替代 StrictTopologyGate。

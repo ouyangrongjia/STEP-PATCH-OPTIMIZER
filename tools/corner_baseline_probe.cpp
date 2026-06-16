@@ -55,6 +55,10 @@ struct Options {
 
     bool enableB1CornerFeatureSampling = false;
     int cornerFeatureSamplesPerEdge = 64;
+    bool enableB2BoundaryGuardBand = false;
+    int boundaryGuardBandSamplesPerEdge = 16;
+    int boundaryGuardBandRingCount = 1;
+    double boundaryGuardBandSpacing = 0.10;
 };
 
 std::filesystem::path repo_root() {
@@ -104,7 +108,11 @@ void print_usage() {
         << "  --geomagic-detail <0..1>                 Default 0.10.\n"
         << "  --timeout-seconds <n>                    Default 1800.\n"
         << "  --b1-corner-feature-sampling            Enable B1 corner / feature edge dense anchors.\n"
-        << "  --corner-feature-samples <n>             B1 dense samples per feature edge, default 64.\n";
+        << "  --corner-feature-samples <n>             B1 dense samples per feature edge, default 64.\n"
+        << "  --b2-boundary-guard-band                Enable B2 STP boundary guard-band sampling.\n"
+        << "  --guard-band-samples <n>                 B2 samples per boundary edge, default 16.\n"
+        << "  --guard-band-rings <n>                   B2 guard-band ring count, default 1.\n"
+        << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -243,6 +251,26 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.cornerFeatureSamplesPerEdge = std::stoi(value);
+        } else if (arg == "--b2-boundary-guard-band") {
+            options.enableB2BoundaryGuardBand = true;
+        } else if (arg == "--guard-band-samples") {
+            const auto* value = requireValue("--guard-band-samples");
+            if (value == nullptr) {
+                return false;
+            }
+            options.boundaryGuardBandSamplesPerEdge = std::stoi(value);
+        } else if (arg == "--guard-band-rings") {
+            const auto* value = requireValue("--guard-band-rings");
+            if (value == nullptr) {
+                return false;
+            }
+            options.boundaryGuardBandRingCount = std::stoi(value);
+        } else if (arg == "--guard-band-spacing") {
+            const auto* value = requireValue("--guard-band-spacing");
+            if (value == nullptr) {
+                return false;
+            }
+            options.boundaryGuardBandSpacing = std::stod(value);
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -483,6 +511,14 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("feature_edge_dense_sample_count", report.featureEdgeDenseSampleCount);
     object.insert("corner_anchor_sample_count", report.cornerAnchorSampleCount);
     object.insert("corner_feature_surface_division_count", report.cornerFeatureSurfaceDivisionCount);
+    object.insert("boundary_guard_band_sampling_enabled", report.boundaryGuardBandSamplingEnabled);
+    object.insert("boundary_guard_band_edge_count", report.boundaryGuardBandEdgeCount);
+    object.insert("boundary_guard_band_sample_count", report.boundaryGuardBandSampleCount);
+    object.insert("boundary_guard_band_triangle_count", report.boundaryGuardBandTriangleCount);
+    object.insert("boundary_guard_band_ring_count", report.boundaryGuardBandRingCount);
+    object.insert("boundary_guard_band_spacing", report.boundaryGuardBandSpacing);
+    object.insert("boundary_guard_band_adjacent_face_sample_count", report.boundaryGuardBandAdjacentFaceSampleCount);
+    object.insert("boundary_guard_band_fallback_sample_count", report.boundaryGuardBandFallbackSampleCount);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -704,6 +740,10 @@ int main(int argc, char* argv[]) {
     spo::StpSampledFittingOptions samplingOptions;
     samplingOptions.enableCornerFeatureDenseSampling = options.enableB1CornerFeatureSampling;
     samplingOptions.cornerFeatureSamplesPerEdge = options.cornerFeatureSamplesPerEdge;
+    samplingOptions.enableBoundaryGuardBandSampling = options.enableB2BoundaryGuardBand;
+    samplingOptions.boundaryGuardBandSamplesPerEdge = options.boundaryGuardBandSamplesPerEdge;
+    samplingOptions.boundaryGuardBandRingCount = options.boundaryGuardBandRingCount;
+    samplingOptions.boundaryGuardBandSpacing = options.boundaryGuardBandSpacing;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

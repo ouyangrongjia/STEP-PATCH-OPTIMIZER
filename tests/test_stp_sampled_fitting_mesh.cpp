@@ -228,6 +228,41 @@ void test_b1_corner_feature_dense_sampling_adds_anchor_facets() {
     assert(connected_component_count(b1Mesh) == 1);
 }
 
+void test_b2_boundary_guard_band_expands_connected_mesh() {
+    auto fixture = make_planar_square_fixture(10.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+    assert(!baselineReport.boundaryGuardBandSamplingEnabled);
+    assert(baselineReport.boundaryGuardBandSampleCount == 0);
+    assert(baselineReport.boundaryGuardBandTriangleCount == 0);
+
+    spo::StpSampledFittingOptions b2Options;
+    b2Options.enableBoundaryGuardBandSampling = true;
+    b2Options.boundaryGuardBandSamplesPerEdge = 16;
+    b2Options.boundaryGuardBandRingCount = 2;
+    b2Options.boundaryGuardBandSpacing = 0.5;
+    spo::StlMesh b2Mesh;
+    const auto b2Report = builder.build(fixture.document, fixture.candidate, b2Options, b2Mesh);
+
+    assert(b2Report.success);
+    assert(b2Report.boundaryGuardBandSamplingEnabled);
+    assert(b2Report.boundaryGuardBandRingCount == 2);
+    assert(b2Report.boundaryGuardBandSpacing == 0.5);
+    assert(b2Report.boundaryGuardBandEdgeCount == 4);
+    assert(b2Report.boundaryGuardBandSampleCount >= 4 * 16 * 2);
+    assert(b2Report.boundaryGuardBandTriangleCount > 0);
+    assert(b2Report.outputTriangleCount > baselineReport.outputTriangleCount);
+    assert(b2Report.output_bbox.min.x < baselineReport.output_bbox.min.x);
+    assert(b2Report.output_bbox.min.y < baselineReport.output_bbox.min.y);
+    assert(b2Report.output_bbox.max.x > baselineReport.output_bbox.max.x);
+    assert(b2Report.output_bbox.max.y > baselineReport.output_bbox.max.y);
+    assert(connected_component_count(b2Mesh) == 1);
+}
+
 void test_increased_div_increases_triangle_count() {
     auto fixture = make_planar_square_fixture(10.0);
 
@@ -412,6 +447,10 @@ void test_report_fields_present() {
     assert(report.featureEdgeDenseSampleCount == 0);
     assert(report.cornerAnchorSampleCount == 0);
     assert(report.cornerFeatureSurfaceDivisionCount == 0);
+    assert(!report.boundaryGuardBandSamplingEnabled);
+    assert(report.boundaryGuardBandEdgeCount == 0);
+    assert(report.boundaryGuardBandSampleCount == 0);
+    assert(report.boundaryGuardBandTriangleCount == 0);
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);
@@ -474,6 +513,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_planar_face_sampling_produces_triangles();
     test_boundary_sample_count_per_edge();
     test_b1_corner_feature_dense_sampling_adds_anchor_facets();
+    test_b2_boundary_guard_band_expands_connected_mesh();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();

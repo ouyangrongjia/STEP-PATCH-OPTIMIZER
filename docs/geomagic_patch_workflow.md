@@ -67,7 +67,7 @@ Commercial-CAD-like quality gate:
 |---|---|---|
 | A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
 | B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
-| B2 | outer guard-band sampling | corner rounding 是否下降 |
+| B2 | outer guard-band sampling | 已接入 `-Experiment B2`；corner rounding 是否下降 |
 | B3 | corner anchors + guard-band | 是否同时降低 drift 且不恶化 repair / gate |
 
 当前 A0 自动化入口：
@@ -110,7 +110,19 @@ B1 也可复用已有 patch 来验证 fitting STL / report 链路：
   -AllowQualityGateFailure
 ```
 
-注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1 drift 改善证据。它只能证明 B1 输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
+B2 外扩采样入口：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B2 默认参数为 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`。实现上 guard-band 只写入 Geomagic fitting STL，优先沿相邻非候选 STP face 采样，并通过桥接三角形接回现有采样面；最终 CAD replacement 仍必须使用 original STP boundary re-trim / multi-surface shell。
+
+注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1/B2 drift 改善证据。它只能证明增强输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
 
 底层 probe 入口：
 

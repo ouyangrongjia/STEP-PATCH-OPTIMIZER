@@ -186,7 +186,7 @@ experiment/corner-preservation-ab
 |---|---|---|
 | A0 | 当前 STP sampled baseline | 建立 corner rounding / commercial CAD gap 数值基线 |
 | B1 | corner / feature edge 加密采样 | 已接入脚本开关；验证点集增强是否降低 sharp edge drift |
-| B2 | 原 STP boundary 外 guard-band 采样 | 验证外侧上下文是否抑制圆角化 |
+| B2 | 原 STP boundary 外 guard-band 采样 | 已接入脚本开关；验证外侧上下文是否抑制圆角化 |
 | B3 | corner anchors + guard-band | 验证组合是否明显优于单独策略 |
 
 每组必须输出同一份实验报告：
@@ -212,7 +212,7 @@ GUI 看起来连续不是成功证据。
 OCCT BRepCheck 通过也不是商业 CAD 无缝证据。
 ```
 
-### 0.5 已落地的 A0 / B1 自动化入口
+### 0.5 已落地的 A0 / B1 / B2 自动化入口
 
 当前已新增脚本化 A0 baseline gate：
 
@@ -243,7 +243,30 @@ B1 corner / feature edge 加密采样入口：
   -RealGeomagic
 ```
 
-复用已有 patch 只验证 B1 fitting input / report 链路，不证明 Geomagic 重新拟合后的 drift 改善：
+B2 原 STP boundary 外 guard-band 采样入口：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B2 默认同时启用 B1 corner / feature edge 加密，并在原 STP candidate outer boundary 外侧沿相邻 STP faces 采样保守窄带。默认 guard-band 参数为 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`，用于避免 Geomagic AutoSurface 因过密外扩带输出高碎片 patch。JSON 的 `stp_sampled_fitting` 节会输出：
+
+```text
+boundary_guard_band_sampling_enabled
+boundary_guard_band_edge_count
+boundary_guard_band_sample_count
+boundary_guard_band_triangle_count
+boundary_guard_band_ring_count
+boundary_guard_band_spacing
+boundary_guard_band_adjacent_face_sample_count
+boundary_guard_band_fallback_sample_count
+```
+
+复用已有 patch 只验证 B1/B2 fitting input / report 链路，不证明 Geomagic 重新拟合后的 drift 改善：
 
 ```powershell
 .\scripts\run_corner_baseline_gate.ps1 `
@@ -254,7 +277,7 @@ B1 corner / feature edge 加密采样入口：
   -AllowQualityGateFailure
 ```
 
-该脚本会构建并调用 `corner_baseline_probe`，默认 candidate id 可用 `auto`，选择最大且 boundary analysis 有效的 `FeatureBoundedRefit` candidate。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通测试依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的 surface grid 密度，并报告原 STP candidate boundary / feature-boundary edge dense samples 与 corner endpoints；默认 `A0` 路径保持不变。B1 不生成孤立 anchor micro facets，避免 Geomagic AutoSurface 把输入识别为大量离散组件。
+该脚本会构建并调用 `corner_baseline_probe`，默认 candidate id 可用 `auto`，选择最大且 boundary analysis 有效的 `FeatureBoundedRefit` candidate。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通测试依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的 surface grid 密度，并报告原 STP candidate boundary / feature-boundary edge dense samples 与 corner endpoints；`-Experiment B2` 会在 B1 基础上生成连接到采样面的 STP boundary guard-band 三角带，并优先投到相邻非候选 STP face。默认 `A0` 路径保持不变。B1 不生成孤立 anchor micro facets；B2 不把 guard-band 或 Geomagic patch outer boundary 当最终 CAD boundary，Apply 仍必须使用原 STP boundary wire re-trim / multi-surface shell。
 
 底层命令行入口：
 
@@ -307,8 +330,9 @@ Geomagic staging 必须保持 GUI 兼容：
 ```text
 1. 这不是 Creo 内核替代品，只是比 OCCT BRepCheck 更接近商业 CAD 风险的自动化近似门控。
 2. 它当前测的是 imported patch 几何相对原 CAD boundary 的漂移，后续还要补 STEP roundtrip 后 geometry drift。
-3. B1 corner / feature edge 加密采样已完成第一版；B2 guard-band 和 B3 组合策略尚未实现。
-4. sampling_report 说明 quality gate 测量点集来源与采样规模；B1 的 fitting STL 增强字段写在 `stp_sampled_fitting` 节，不代表 Geomagic 已获得硬约束 anchor。
+3. B1 corner / feature edge 加密采样已完成第一版；B2 guard-band 已完成第一版；B3 组合策略尚未实现。
+4. sampling_report 说明 quality gate 测量点集来源与采样规模；B1/B2 的 fitting STL 增强字段写在 `stp_sampled_fitting` 节，不代表 Geomagic 已获得硬约束 anchor。
+5. 真实样例 `03_配件_Clay.stp` candidate 179 的 B2 保守参数验证显示：输入 STL 仍为单连通 Geomagic mesh，Patch preview 可通过 high-risk gate，但 Apply 后 `StrictTopologyGate` 因 after BRepCheck/free edges 失败，`CommercialCadLikeQualityGate` 仍未通过。B2 已降低 max drift，但不是可交付成功状态。
 5. `run_corner_baseline_gate.ps1` 是 GUI 同源 pipeline 的脚本化 gate，不是窗口点击级自动化；窗口事件自动化仍未完成。
 ```
 
@@ -1032,8 +1056,8 @@ corner preservation A/B 后续：
 1. 对真实样例运行 A0：run_corner_baseline_gate.ps1 / corner_baseline_probe + 当前 STP sampled fitting input。
 2. 保存 baseline_report.json，并记录 patch face count、StrictTopologyGate、CommercialCadLikeQualityGate 及 sampling_report。
 3. B1 已完成第一版：STP-sampled fitting STL 可通过 `-Experiment B1` 提高连接 surface grid 密度，并在 JSON 中输出 dense sample / corner anchor / surface division 统计。
-4. 下一步实现 B2：原 STP boundary 外 guard-band 采样。
-5. 再实现 B3：corner anchors + guard-band。
+4. B2 已完成第一版：`-Experiment B2` 在 B1 基础上增加原 STP boundary 外 guard-band 采样，并在 JSON 报告中输出 guard-band 样本/三角形统计。
+5. 下一步实现 B3：corner anchors + guard-band，并重点处理 B2 当前暴露的 multi-surface replacement / StrictTopologyGate 失败。
 6. 用同一脚本和同一真实样例对比 drift / gate / Creo 或商业 CAD 结果。
 ```
 

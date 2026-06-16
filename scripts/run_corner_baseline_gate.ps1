@@ -1,6 +1,6 @@
 param(
     [string]$Preset = "windows-msvc-debug",
-    [ValidateSet("A0", "B1")]
+    [ValidateSet("A0", "B1", "B2")]
     [string]$Experiment = "A0",
     [string]$SourceStep = "",
     [string]$CandidateId = "auto",
@@ -10,6 +10,9 @@ param(
     [string]$WrapCore = "E:\Geomagic Wrap\wrapCore.exe",
     [int]$TimeoutSeconds = 1800,
     [int]$CornerFeatureSamples = 64,
+    [int]$GuardBandSamples = 16,
+    [int]$GuardBandRings = 1,
+    [double]$GuardBandSpacing = 0.10,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
 )
@@ -203,10 +206,19 @@ $probeArgs = @(
     "--report", $Report
 )
 
-if ($Experiment -eq "B1") {
+if ($Experiment -eq "B1" -or $Experiment -eq "B2") {
     $probeArgs += @(
         "--b1-corner-feature-sampling",
         "--corner-feature-samples", "$CornerFeatureSamples"
+    )
+}
+
+if ($Experiment -eq "B2") {
+    $probeArgs += @(
+        "--b2-boundary-guard-band",
+        "--guard-band-samples", "$GuardBandSamples",
+        "--guard-band-rings", "$GuardBandRings",
+        "--guard-band-spacing", "$GuardBandSpacing"
     )
 }
 
