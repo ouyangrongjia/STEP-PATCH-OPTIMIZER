@@ -202,9 +202,21 @@ B2 原 STP boundary 外 guard-band 采样：
   -RealGeomagic
 ```
 
-B2 默认在 B1 加密采样基础上启用 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`，并在 `stp_sampled_fitting` 节输出 `boundary_guard_band_*` 统计。guard-band 只改变 Geomagic fitting STL 输入，最终 Apply 仍使用原 STP candidate boundary wire。
+B2.0 默认在 B1 加密采样基础上启用 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`，并在 `stp_sampled_fitting` 节输出 `boundary_guard_band_*` 统计。guard-band 只改变 Geomagic fitting STL 输入，最终 Apply 仍使用原 STP candidate boundary wire。
 
-脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 STP boundary guard-band 样本和三角形统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+注意：当前 `-Experiment B2` 对应 B2.0 邻接 STP face guard-band，不是 B2.1。B2.1 入口已单独接入：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2.1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B2.1 会在当前 fitting STL patch 外围生成连续、小幅 over-cover strip，再通过原 STP candidate boundary re-trim 裁回；JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 统计。该入口仍不是 GUI 窗口点击自动化，真实质量结论必须看重新跑 Geomagic 后的 Patch Apply / Gate 报告。
+
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
 

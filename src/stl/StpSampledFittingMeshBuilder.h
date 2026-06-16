@@ -27,6 +27,9 @@ struct StpSampledFittingOptions {
     int boundaryGuardBandSamplesPerEdge = 16;
     int boundaryGuardBandRingCount = 1;
     double boundaryGuardBandSpacing = 0.10;
+    bool enableBoundaryOverCoverStrip = false;
+    double boundaryOverCoverWidth = 0.10;
+    int boundaryOverCoverRingCount = 1;
 };
 
 struct StpSampledFittingReport {
@@ -51,6 +54,14 @@ struct StpSampledFittingReport {
     double boundaryGuardBandSpacing = 0.0;
     int boundaryGuardBandAdjacentFaceSampleCount = 0;
     int boundaryGuardBandFallbackSampleCount = 0;
+    bool boundaryOverCoverStripEnabled = false;
+    double boundaryOverCoverWidth = 0.0;
+    int boundaryOverCoverRingCount = 0;
+    int boundaryOverCoverSampleCount = 0;
+    int boundaryOverCoverTriangleCount = 0;
+    int boundaryOverCoverFallbackCount = 0;
+    int boundaryOverCoverRejectedCount = 0;
+    double boundaryOverCoverBoundaryCoverage = 0.0;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

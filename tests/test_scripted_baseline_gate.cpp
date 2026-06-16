@@ -44,6 +44,9 @@ void test_scripted_baseline_gate_is_not_hardcoded_to_one_sample() {
     assert(script.find("corner_baseline_probe") != std::string::npos);
     assert(script.find("--b1-corner-feature-sampling") != std::string::npos);
     assert(script.find("--b2-boundary-guard-band") != std::string::npos);
+    assert(script.find("B2.1") != std::string::npos);
+    assert(script.find("--b2-over-cover-strip") != std::string::npos);
+    assert(script.find("--over-cover-width") != std::string::npos);
     assert(script.find("-RealGeomagic") != std::string::npos);
     assert(script.find("--candidate-id") != std::string::npos);
     assert(script.find("candidate_0179") == std::string::npos);
@@ -58,10 +61,22 @@ void test_verify_real_geomagic_runs_scripted_baseline_gate() {
     assert(script.find("-RealGeomagic") != std::string::npos);
 }
 
+void test_corner_baseline_probe_reports_b2_1_over_cover_fields() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+
+    assert(source.find("--b2-over-cover-strip") != std::string::npos);
+    assert(source.find("--over-cover-width") != std::string::npos);
+    assert(source.find("boundary_over_cover_strip_enabled") != std::string::npos);
+    assert(source.find("boundary_over_cover_triangle_count") != std::string::npos);
+    assert(source.find("boundary_over_cover_boundary_coverage") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_supports_auto_candidate_selection();
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
+    test_corner_baseline_probe_reports_b2_1_over_cover_fields();
 }

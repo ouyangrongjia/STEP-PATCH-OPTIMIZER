@@ -26,9 +26,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace spo {
@@ -180,6 +182,71 @@ struct GuardBandBuildResult {
     int adjacentFaceSampleCount = 0;
     int fallbackSampleCount = 0;
 };
+
+struct OverCoverBuildResult {
+    int boundaryEdgeCount = 0;
+    int coveredBoundaryEdgeCount = 0;
+    int sampleCount = 0;
+    int triangleCount = 0;
+    int fallbackCount = 0;
+    int rejectedCount = 0;
+    double boundaryCoverage = 0.0;
+};
+
+struct QuantizedPoint {
+    std::int64_t x = 0;
+    std::int64_t y = 0;
+    std::int64_t z = 0;
+
+    bool operator==(const QuantizedPoint& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+};
+
+struct QuantizedPointHash {
+    std::size_t operator()(const QuantizedPoint& point) const {
+        const auto hx = std::hash<std::int64_t>{}(point.x);
+        const auto hy = std::hash<std::int64_t>{}(point.y);
+        const auto hz = std::hash<std::int64_t>{}(point.z);
+        return hx ^ (hy << 1) ^ (hz << 2);
+    }
+};
+
+struct BoundaryEdgeKey {
+    int first = -1;
+    int second = -1;
+
+    bool operator==(const BoundaryEdgeKey& other) const {
+        return first == other.first && second == other.second;
+    }
+};
+
+struct BoundaryEdgeKeyHash {
+    std::size_t operator()(const BoundaryEdgeKey& edge) const {
+        const auto h0 = std::hash<int>{}(edge.first);
+        const auto h1 = std::hash<int>{}(edge.second);
+        return h0 ^ (h1 << 1);
+    }
+};
+
+struct BoundaryEdgeAccum {
+    int first = -1;
+    int second = -1;
+    int count = 0;
+};
+
+QuantizedPoint quantize_point(const StlVec3& point) {
+    constexpr double scale = 1.0e8;
+    return {
+        static_cast<std::int64_t>(std::llround(point.x * scale)),
+        static_cast<std::int64_t>(std::llround(point.y * scale)),
+        static_cast<std::int64_t>(std::llround(point.z * scale))
+    };
+}
+
+bool finite_vec(const StlVec3& point) {
+    return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
+}
 
 struct SurfaceParamScale {
     double u = 1.0;
@@ -482,6 +549,148 @@ int append_quad_strip(
     return added;
 }
 
+OverCoverBuildResult append_boundary_over_cover_strip(
+    const StpSampledFittingOptions& options,
+    const StlBoundingBox& candidateBBox,
+    const std::vector<StlTriangle>& baseTriangles,
+    std::vector<StlTriangle>& outTriangles) {
+    OverCoverBuildResult result;
+    if (!options.enableBoundaryOverCoverStrip ||
+        options.boundaryOverCoverWidth <= 0.0 ||
+        options.boundaryOverCoverRingCount <= 0 ||
+        baseTriangles.empty()) {
+        return result;
+    }
+
+    std::vector<StlVec3> vertices;
+    std::unordered_map<QuantizedPoint, int, QuantizedPointHash> vertexIds;
+    std::unordered_map<BoundaryEdgeKey, BoundaryEdgeAccum, BoundaryEdgeKeyHash> edges;
+
+    auto vertex_id = [&](const StlVec3& vertex) -> int {
+        const auto key = quantize_point(vertex);
+        const auto found = vertexIds.find(key);
+        if (found != vertexIds.end()) {
+            return found->second;
+        }
+
+        const auto id = static_cast<int>(vertices.size());
+        vertexIds.emplace(key, id);
+        vertices.push_back(vertex);
+        return id;
+    };
+
+    auto add_edge = [&](int first, int second) {
+        if (first == second) {
+            ++result.rejectedCount;
+            return;
+        }
+        const BoundaryEdgeKey key {std::min(first, second), std::max(first, second)};
+        auto& edge = edges[key];
+        edge.first = key.first;
+        edge.second = key.second;
+        ++edge.count;
+    };
+
+    for (const auto& triangle : baseTriangles) {
+        if (!finite_vec(triangle.v0) || !finite_vec(triangle.v1) || !finite_vec(triangle.v2)) {
+            result.rejectedCount += 3;
+            continue;
+        }
+        const auto v0 = vertex_id(triangle.v0);
+        const auto v1 = vertex_id(triangle.v1);
+        const auto v2 = vertex_id(triangle.v2);
+        add_edge(v0, v1);
+        add_edge(v1, v2);
+        add_edge(v2, v0);
+    }
+
+    std::vector<BoundaryEdgeAccum> boundaryEdges;
+    boundaryEdges.reserve(edges.size());
+    std::vector<bool> boundaryVertex(vertices.size(), false);
+    for (const auto& [_, edge] : edges) {
+        if (edge.count == 1) {
+            boundaryEdges.push_back(edge);
+            boundaryVertex[static_cast<std::size_t>(edge.first)] = true;
+            boundaryVertex[static_cast<std::size_t>(edge.second)] = true;
+        }
+    }
+
+    result.boundaryEdgeCount = static_cast<int>(boundaryEdges.size());
+    if (boundaryEdges.empty()) {
+        return result;
+    }
+
+    const auto center = bbox_center(candidateBBox);
+    const auto ringCount = std::max(options.boundaryOverCoverRingCount, 1);
+    const auto width = options.boundaryOverCoverWidth;
+    std::vector<std::vector<gp_Pnt>> overCoverRings(
+        static_cast<std::size_t>(ringCount),
+        std::vector<gp_Pnt>(vertices.size()));
+
+    for (std::size_t vertexIndex = 0; vertexIndex < vertices.size(); ++vertexIndex) {
+        if (!boundaryVertex[vertexIndex]) {
+            continue;
+        }
+
+        const auto basePoint = vec3_to_point(vertices[vertexIndex]);
+        gp_Vec direction(center, basePoint);
+        if (direction.Magnitude() <= 1.0e-12) {
+            direction = gp_Vec(1.0, 0.0, 0.0);
+            ++result.fallbackCount;
+        } else {
+            direction.Normalize();
+        }
+
+        for (int ring = 1; ring <= ringCount; ++ring) {
+            const auto distance = width * static_cast<double>(ring) / static_cast<double>(ringCount);
+            overCoverRings[static_cast<std::size_t>(ring - 1)][vertexIndex] =
+                basePoint.Translated(direction.Multiplied(distance));
+            ++result.sampleCount;
+        }
+    }
+
+    for (const auto& edge : boundaryEdges) {
+        bool edgeCovered = false;
+        for (int ring = 0; ring < ringCount; ++ring) {
+            const auto inner0 = ring == 0
+                ? vec3_to_point(vertices[static_cast<std::size_t>(edge.first)])
+                : overCoverRings[static_cast<std::size_t>(ring - 1)][static_cast<std::size_t>(edge.first)];
+            const auto inner1 = ring == 0
+                ? vec3_to_point(vertices[static_cast<std::size_t>(edge.second)])
+                : overCoverRings[static_cast<std::size_t>(ring - 1)][static_cast<std::size_t>(edge.second)];
+            const auto outer0 = overCoverRings[static_cast<std::size_t>(ring)][static_cast<std::size_t>(edge.first)];
+            const auto outer1 = overCoverRings[static_cast<std::size_t>(ring)][static_cast<std::size_t>(edge.second)];
+
+            auto first = make_stl_triangle(inner0, inner1, outer0);
+            if (!is_degenerate(first, 1.0e-15)) {
+                outTriangles.push_back(first);
+                ++result.triangleCount;
+                edgeCovered = true;
+            } else {
+                ++result.rejectedCount;
+            }
+
+            auto second = make_stl_triangle(inner1, outer1, outer0);
+            if (!is_degenerate(second, 1.0e-15)) {
+                outTriangles.push_back(second);
+                ++result.triangleCount;
+                edgeCovered = true;
+            } else {
+                ++result.rejectedCount;
+            }
+        }
+
+        if (edgeCovered) {
+            ++result.coveredBoundaryEdgeCount;
+        }
+    }
+
+    result.boundaryCoverage = result.boundaryEdgeCount > 0
+        ? static_cast<double>(result.coveredBoundaryEdgeCount) / static_cast<double>(result.boundaryEdgeCount)
+        : 0.0;
+    return result;
+}
+
 std::optional<FaceId> guard_face_for_edge(
     const TopologyGraph& topology,
     EdgeId edgeId,
@@ -680,9 +889,14 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     report.sourceFaceCount = static_cast<int>(candidate.faces.size());
     report.cornerFeatureDenseSamplingEnabled = options.enableCornerFeatureDenseSampling;
     report.boundaryGuardBandSamplingEnabled = options.enableBoundaryGuardBandSampling;
+    report.boundaryOverCoverStripEnabled = options.enableBoundaryOverCoverStrip;
     if (options.enableBoundaryGuardBandSampling) {
         report.boundaryGuardBandRingCount = std::max(options.boundaryGuardBandRingCount, 0);
         report.boundaryGuardBandSpacing = options.boundaryGuardBandSpacing;
+    }
+    if (options.enableBoundaryOverCoverStrip) {
+        report.boundaryOverCoverWidth = options.boundaryOverCoverWidth;
+        report.boundaryOverCoverRingCount = std::max(options.boundaryOverCoverRingCount, 0);
     }
 
     // Validate inputs
@@ -788,6 +1002,24 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             divisionsPerFace,
             allTriangles,
             faceTriCount);
+    }
+
+    if (options.enableBoundaryOverCoverStrip) {
+        const auto overCover = append_boundary_over_cover_strip(
+            options,
+            candidateBBox,
+            allTriangles,
+            allTriangles);
+        report.boundaryOverCoverSampleCount = overCover.sampleCount;
+        report.boundaryOverCoverTriangleCount = overCover.triangleCount;
+        report.boundaryOverCoverFallbackCount = overCover.fallbackCount;
+        report.boundaryOverCoverRejectedCount = overCover.rejectedCount;
+        report.boundaryOverCoverBoundaryCoverage = overCover.boundaryCoverage;
+        if (overCover.triangleCount == 0) {
+            report.warningMessage = append_warning(
+                report.warningMessage,
+                "B2.1 boundary over-cover strip was enabled but no strip triangles were generated.");
+        }
     }
 
     if (options.enableBoundaryGuardBandSampling) {

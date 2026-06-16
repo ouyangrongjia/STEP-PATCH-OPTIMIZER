@@ -59,6 +59,9 @@ struct Options {
     int boundaryGuardBandSamplesPerEdge = 16;
     int boundaryGuardBandRingCount = 1;
     double boundaryGuardBandSpacing = 0.10;
+    bool enableB2OverCoverStrip = false;
+    double boundaryOverCoverWidth = 0.10;
+    int boundaryOverCoverRingCount = 1;
 };
 
 std::filesystem::path repo_root() {
@@ -112,7 +115,10 @@ void print_usage() {
         << "  --b2-boundary-guard-band                Enable B2 STP boundary guard-band sampling.\n"
         << "  --guard-band-samples <n>                 B2 samples per boundary edge, default 16.\n"
         << "  --guard-band-rings <n>                   B2 guard-band ring count, default 1.\n"
-        << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n";
+        << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n"
+        << "  --b2-over-cover-strip                   Enable B2.1 fitting STL boundary over-cover strip.\n"
+        << "  --over-cover-width <value>               B2.1 over-cover strip total width, default 0.10.\n"
+        << "  --over-cover-rings <n>                   B2.1 over-cover ring count, default 1.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -271,6 +277,20 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.boundaryGuardBandSpacing = std::stod(value);
+        } else if (arg == "--b2-over-cover-strip") {
+            options.enableB2OverCoverStrip = true;
+        } else if (arg == "--over-cover-width") {
+            const auto* value = requireValue("--over-cover-width");
+            if (value == nullptr) {
+                return false;
+            }
+            options.boundaryOverCoverWidth = std::stod(value);
+        } else if (arg == "--over-cover-rings") {
+            const auto* value = requireValue("--over-cover-rings");
+            if (value == nullptr) {
+                return false;
+            }
+            options.boundaryOverCoverRingCount = std::stoi(value);
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -519,6 +539,14 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("boundary_guard_band_spacing", report.boundaryGuardBandSpacing);
     object.insert("boundary_guard_band_adjacent_face_sample_count", report.boundaryGuardBandAdjacentFaceSampleCount);
     object.insert("boundary_guard_band_fallback_sample_count", report.boundaryGuardBandFallbackSampleCount);
+    object.insert("boundary_over_cover_strip_enabled", report.boundaryOverCoverStripEnabled);
+    object.insert("boundary_over_cover_width", report.boundaryOverCoverWidth);
+    object.insert("boundary_over_cover_ring_count", report.boundaryOverCoverRingCount);
+    object.insert("boundary_over_cover_sample_count", report.boundaryOverCoverSampleCount);
+    object.insert("boundary_over_cover_triangle_count", report.boundaryOverCoverTriangleCount);
+    object.insert("boundary_over_cover_fallback_count", report.boundaryOverCoverFallbackCount);
+    object.insert("boundary_over_cover_rejected_count", report.boundaryOverCoverRejectedCount);
+    object.insert("boundary_over_cover_boundary_coverage", report.boundaryOverCoverBoundaryCoverage);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -744,6 +772,9 @@ int main(int argc, char* argv[]) {
     samplingOptions.boundaryGuardBandSamplesPerEdge = options.boundaryGuardBandSamplesPerEdge;
     samplingOptions.boundaryGuardBandRingCount = options.boundaryGuardBandRingCount;
     samplingOptions.boundaryGuardBandSpacing = options.boundaryGuardBandSpacing;
+    samplingOptions.enableBoundaryOverCoverStrip = options.enableB2OverCoverStrip;
+    samplingOptions.boundaryOverCoverWidth = options.boundaryOverCoverWidth;
+    samplingOptions.boundaryOverCoverRingCount = options.boundaryOverCoverRingCount;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

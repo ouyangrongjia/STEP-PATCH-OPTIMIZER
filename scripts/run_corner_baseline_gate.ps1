@@ -1,6 +1,6 @@
 param(
     [string]$Preset = "windows-msvc-debug",
-    [ValidateSet("A0", "B1", "B2")]
+    [ValidateSet("A0", "B1", "B2", "B2.0", "B2.1")]
     [string]$Experiment = "A0",
     [string]$SourceStep = "",
     [string]$CandidateId = "auto",
@@ -13,6 +13,8 @@ param(
     [int]$GuardBandSamples = 16,
     [int]$GuardBandRings = 1,
     [double]$GuardBandSpacing = 0.10,
+    [double]$OverCoverWidth = 0.10,
+    [int]$OverCoverRings = 1,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
 )
@@ -206,19 +208,27 @@ $probeArgs = @(
     "--report", $Report
 )
 
-if ($Experiment -eq "B1" -or $Experiment -eq "B2") {
+if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.0" -or $Experiment -eq "B2.1") {
     $probeArgs += @(
         "--b1-corner-feature-sampling",
         "--corner-feature-samples", "$CornerFeatureSamples"
     )
 }
 
-if ($Experiment -eq "B2") {
+if ($Experiment -eq "B2" -or $Experiment -eq "B2.0") {
     $probeArgs += @(
         "--b2-boundary-guard-band",
         "--guard-band-samples", "$GuardBandSamples",
         "--guard-band-rings", "$GuardBandRings",
         "--guard-band-spacing", "$GuardBandSpacing"
+    )
+}
+
+if ($Experiment -eq "B2.1") {
+    $probeArgs += @(
+        "--b2-over-cover-strip",
+        "--over-cover-width", "$OverCoverWidth",
+        "--over-cover-rings", "$OverCoverRings"
     )
 }
 

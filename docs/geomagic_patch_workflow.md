@@ -21,7 +21,7 @@ GUI 视觉连续和 OCCT BRepCheck 通过不足以证明 Creo 类软件打开后
 
 流程层面的约束：
 1. fitting STL 可以在原 STP boundary 内外增加采样，但最终 CAD boundary 仍只来自原 STP wire。
-2. 如果做 boundary 外 guard-band 采样，拟合后必须用原 STP boundary 裁剪多余部分。
+2. B2.0 邻接 STP face guard-band 和 B2.1 fitting STL over-cover 都只能扩展 Geomagic 输入；拟合后必须用原 STP boundary 裁剪多余部分。
 3. corner / feature anchors 只能约束 Geomagic 输入或后处理评估，不能替代 StrictTopologyGate。
 4. 新增质量门控必须能暴露 corner rounding / edge drift / boundary deviation，而不是只重复 BRepCheck。
 ```
@@ -35,7 +35,7 @@ Fitting input enhancement:
   STP candidate faces / boundary
   → detect sharp edges / corner vertices / feature junctions
   → generate corner-aware dense samples
-  → generate inner boundary band + outer STP guard-band samples
+  → generate inner boundary band + B2.0 outer STP guard-band samples or B2.1 fitting STL over-cover strip
   → preserve feature / corner anchor set in report
   → write enhanced fitting STL
   → run Geomagic AutoSurface
@@ -55,7 +55,7 @@ Commercial-CAD-like quality gate:
 
 ```text
 1. Enhanced fitting STL 只改变 Geomagic 输入，不改变 final CAD boundary。
-2. guard-band 采样只能来自 STP 邻接 face，不信任 patch outer boundary。
+2. B2.0 guard-band 采样来自 STP 邻接 face；B2.1 over-cover strip 必须围绕当前 fitting STL patch boundary 连续生成。两者都不信任 patch outer boundary。
 3. Apply 仍通过 original STP boundary re-trim / multi-surface shell。
 4. Commercial-CAD-like gate 不替代 StrictTopologyGate；它在拓扑 gate 之外判断几何质量。
 5. A/B 实验分支为 experiment/corner-preservation-ab。
@@ -67,8 +67,9 @@ Commercial-CAD-like quality gate:
 |---|---|---|
 | A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
 | B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
-| B2 | outer guard-band sampling | 已接入 `-Experiment B2`；corner rounding 是否下降 |
-| B3 | corner anchors + guard-band | 是否同时降低 drift 且不恶化 repair / gate |
+| B2.0 | adjacent-STP-face outer guard-band sampling | 已接入 `-Experiment B2`；真实样例 drift 下降但 Gate 未通过 |
+| B2.1 | fitting STL over-cover strip + original-boundary re-trim | 基础版已接入 `-Experiment B2.1`；真实 Geomagic / Gate 改善待验证 |
+| B3 | corner anchors + B2.1 over-cover | 是否同时降低 drift 且不恶化 repair / gate |
 
 当前 A0 自动化入口：
 
@@ -120,7 +121,19 @@ B2 外扩采样入口：
   -RealGeomagic
 ```
 
-B2 默认参数为 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`。实现上 guard-band 只写入 Geomagic fitting STL，优先沿相邻非候选 STP face 采样，并通过桥接三角形接回现有采样面；最终 CAD replacement 仍必须使用 original STP boundary re-trim / multi-surface shell。
+B2.0 默认参数为 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`。实现上 guard-band 只写入 Geomagic fitting STL，优先沿相邻非候选 STP face 采样，并通过桥接三角形接回现有采样面；最终 CAD replacement 仍必须使用 original STP boundary re-trim / multi-surface shell。
+
+B2.1 不是当前 `-Experiment B2` 的行为。B2.1 的基础版入口是：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2.1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B2.1 在当前 STP-sampled fitting STL patch boundary 外围生成一圈连续、小幅、连通的 over-cover strip，让 Geomagic 拟合出的 surface 覆盖原 STP candidate boundary 外侧；Apply 阶段仍丢弃 Geomagic patch outer boundary，并使用 original STP boundary wire / pcurve 在 fitted surface 上 re-trim。这里所谓“相交裁剪”应优先落到 original-boundary re-trim / pcurve rebuild 上；直接用 patch outer boundary 或 STL boundary 做最终 CAD boundary 仍然禁止。JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 字段；真实样例质量改善尚未验证。
 
 注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1/B2 drift 改善证据。它只能证明增强输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
 

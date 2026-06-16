@@ -263,6 +263,42 @@ void test_b2_boundary_guard_band_expands_connected_mesh() {
     assert(connected_component_count(b2Mesh) == 1);
 }
 
+void test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band() {
+    auto fixture = make_planar_square_fixture(10.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+    assert(!baselineReport.boundaryOverCoverStripEnabled);
+    assert(baselineReport.boundaryOverCoverTriangleCount == 0);
+
+    spo::StpSampledFittingOptions b21Options;
+    b21Options.enableBoundaryOverCoverStrip = true;
+    b21Options.boundaryOverCoverWidth = 0.4;
+    b21Options.boundaryOverCoverRingCount = 1;
+    spo::StlMesh b21Mesh;
+    const auto b21Report = builder.build(fixture.document, fixture.candidate, b21Options, b21Mesh);
+
+    assert(b21Report.success);
+    assert(b21Report.boundaryOverCoverStripEnabled);
+    assert(b21Report.boundaryOverCoverWidth == 0.4);
+    assert(b21Report.boundaryOverCoverRingCount == 1);
+    assert(b21Report.boundaryOverCoverSampleCount > 0);
+    assert(b21Report.boundaryOverCoverTriangleCount > 0);
+    assert(b21Report.boundaryOverCoverRejectedCount == 0);
+    assert(b21Report.boundaryOverCoverBoundaryCoverage >= 0.99);
+    assert(!b21Report.boundaryGuardBandSamplingEnabled);
+    assert(b21Report.boundaryGuardBandTriangleCount == 0);
+    assert(b21Report.outputTriangleCount > baselineReport.outputTriangleCount);
+    assert(b21Report.output_bbox.min.x < baselineReport.output_bbox.min.x);
+    assert(b21Report.output_bbox.min.y < baselineReport.output_bbox.min.y);
+    assert(b21Report.output_bbox.max.x > baselineReport.output_bbox.max.x);
+    assert(b21Report.output_bbox.max.y > baselineReport.output_bbox.max.y);
+    assert(connected_component_count(b21Mesh) == 1);
+}
+
 void test_increased_div_increases_triangle_count() {
     auto fixture = make_planar_square_fixture(10.0);
 
@@ -451,6 +487,12 @@ void test_report_fields_present() {
     assert(report.boundaryGuardBandEdgeCount == 0);
     assert(report.boundaryGuardBandSampleCount == 0);
     assert(report.boundaryGuardBandTriangleCount == 0);
+    assert(!report.boundaryOverCoverStripEnabled);
+    assert(report.boundaryOverCoverSampleCount == 0);
+    assert(report.boundaryOverCoverTriangleCount == 0);
+    assert(report.boundaryOverCoverFallbackCount == 0);
+    assert(report.boundaryOverCoverRejectedCount == 0);
+    assert(report.boundaryOverCoverBoundaryCoverage == 0.0);
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);
@@ -514,6 +556,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_boundary_sample_count_per_edge();
     test_b1_corner_feature_dense_sampling_adds_anchor_facets();
     test_b2_boundary_guard_band_expands_connected_mesh();
+    test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();
