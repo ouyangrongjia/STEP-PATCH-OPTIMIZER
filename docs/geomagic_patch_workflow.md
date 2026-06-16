@@ -68,7 +68,7 @@ Commercial-CAD-like quality gate:
 | A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
 | B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
 | B2.0 | adjacent-STP-face outer guard-band sampling | 已接入 `-Experiment B2`；真实样例 drift 下降但 Gate 未通过 |
-| B2.1 | fitting STL over-cover strip + original-boundary re-trim | 基础版已接入 `-Experiment B2.1`；真实 Geomagic / Gate 改善待验证 |
+| B2.1 | fitting STL over-cover strip + original-boundary re-trim | 已接入 `-Experiment B2.1`；默认 `OverCoverWidth=0.05` 真实样例可进入 Apply / StrictTopologyGate / applied STEP export，但 CommercialCadLikeQualityGate 仍未通过 |
 | B3 | corner anchors + B2.1 over-cover | 是否同时降低 drift 且不恶化 repair / gate |
 
 当前 A0 自动化入口：
@@ -133,7 +133,43 @@ B2.1 不是当前 `-Experiment B2` 的行为。B2.1 的基础版入口是：
   -RealGeomagic
 ```
 
-B2.1 在当前 STP-sampled fitting STL patch boundary 外围生成一圈连续、小幅、连通的 over-cover strip，让 Geomagic 拟合出的 surface 覆盖原 STP candidate boundary 外侧；Apply 阶段仍丢弃 Geomagic patch outer boundary，并使用 original STP boundary wire / pcurve 在 fitted surface 上 re-trim。这里所谓“相交裁剪”应优先落到 original-boundary re-trim / pcurve rebuild 上；直接用 patch outer boundary 或 STL boundary 做最终 CAD boundary 仍然禁止。JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 字段；真实样例质量改善尚未验证。
+B2.1 在当前 STP-sampled fitting STL patch boundary 外围生成一圈连续、小幅、连通的 over-cover strip，让 Geomagic 拟合出的 surface 覆盖原 STP candidate boundary 外侧；Apply 阶段仍丢弃 Geomagic patch outer boundary，并使用 original STP boundary wire / pcurve 在 fitted surface 上 re-trim。这里所谓“相交裁剪”应优先落到 original-boundary re-trim / pcurve rebuild 上；直接用 patch outer boundary 或 STL boundary 做最终 CAD boundary 仍然禁止。JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 字段。
+
+2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
+
+```text
+fitting STL:
+  output_triangle_count=78288
+  boundary_over_cover_sample_count=728
+  boundary_over_cover_triangle_count=1456
+  boundary_over_cover_boundary_coverage=1
+  boundary_over_cover_fallback_count=0
+  boundary_over_cover_rejected_count=0
+  boundary_over_cover_width=0.05
+  Geomagic log before repair: components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0
+
+patch preview:
+  Geomagic AutoSurface success=true
+  imported patch BRepCheck valid=true
+  patch_face_count=5
+  patch_edge_count=20
+  high_risk=false
+
+apply / export:
+  Patch Apply success=true
+  StrictTopologyGate gate_passed=true
+  applied_step_export.success=true
+  applied_step_export.readback_success=true
+
+commercial-CAD-like quality:
+  passed=false
+  boundary / feature / corner max drift=0.088487
+
+conclusion:
+  B2.1 默认参数已能走完 GUI 同源 Apply + StrictTopologyGate + applied STEP 导出验收链路。
+  但 CommercialCadLikeQualityGate 仍未通过，不能标记为几何质量收口。
+  下一步应在不恶化 patch face count / StrictTopologyGate 的前提下降低 boundary / feature / corner drift。
+```
 
 注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1/B2 drift 改善证据。它只能证明增强输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
 

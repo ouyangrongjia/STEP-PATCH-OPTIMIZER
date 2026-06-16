@@ -5,6 +5,7 @@
 #include "external/geomagic/GeomagicOutputPathResolver.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
+#include "io/StepWriter.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
@@ -60,8 +61,17 @@ struct Options {
     int boundaryGuardBandRingCount = 1;
     double boundaryGuardBandSpacing = 0.10;
     bool enableB2OverCoverStrip = false;
-    double boundaryOverCoverWidth = 0.10;
+    double boundaryOverCoverWidth = 0.05;
     int boundaryOverCoverRingCount = 1;
+};
+
+struct AppliedStepExportReport {
+    bool attempted = false;
+    bool success = false;
+    bool writeSuccess = false;
+    bool readbackSuccess = false;
+    std::filesystem::path path;
+    std::string message;
 };
 
 std::filesystem::path repo_root() {
@@ -117,7 +127,7 @@ void print_usage() {
         << "  --guard-band-rings <n>                   B2 guard-band ring count, default 1.\n"
         << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n"
         << "  --b2-over-cover-strip                   Enable B2.1 fitting STL boundary over-cover strip.\n"
-        << "  --over-cover-width <value>               B2.1 over-cover strip total width, default 0.10.\n"
+        << "  --over-cover-width <value>               B2.1 over-cover strip total width, default 0.05.\n"
         << "  --over-cover-rings <n>                   B2.1 over-cover ring count, default 1.\n";
 }
 
@@ -463,6 +473,13 @@ std::filesystem::path fitting_stl_path(
         candidate_patch_filename(document, candidate, ".stl");
 }
 
+std::filesystem::path applied_step_path(
+    const Options& options,
+    const spo::ShapeDocument& document,
+    const spo::MergeCandidate& candidate) {
+    return options.outputDir / candidate_patch_filename(document, candidate, "_applied.stp");
+}
+
 std::filesystem::path sidecar_path(const std::filesystem::path& outputStepPath, const char* suffix) {
     auto filename = outputStepPath.stem();
     filename += suffix;
@@ -621,6 +638,52 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     return object;
 }
 
+QJsonObject applied_step_export_to_json(const AppliedStepExportReport& report) {
+    QJsonObject object;
+    object.insert("attempted", report.attempted);
+    object.insert("success", report.success);
+    object.insert("write_success", report.writeSuccess);
+    object.insert("readback_success", report.readbackSuccess);
+    object.insert("path", path_to_qstring(report.path));
+    object.insert("exists", !report.path.empty() && std::filesystem::exists(report.path));
+    object.insert("message", QString::fromStdString(report.message));
+    return object;
+}
+
+AppliedStepExportReport export_applied_step(
+    const Options& options,
+    const spo::ShapeDocument& document,
+    const spo::MergeCandidate& candidate) {
+    AppliedStepExportReport report;
+    report.attempted = true;
+    report.path = applied_step_path(options, document, candidate);
+
+    std::error_code dirError;
+    std::filesystem::create_directories(report.path.parent_path(), dirError);
+    if (dirError) {
+        report.message = "Could not create applied STEP export directory: " + dirError.message();
+        return report;
+    }
+
+    const auto write = spo::StepWriter().write(document, report.path);
+    report.writeSuccess = write.success();
+    if (!write.success()) {
+        report.message = "Applied STEP export failed: " + write.message();
+        return report;
+    }
+
+    const auto readback = spo::StepReader().read(report.path);
+    report.readbackSuccess = readback.status.success() && readback.document.hasShape();
+    if (!report.readbackSuccess) {
+        report.message = "Applied STEP readback failed: " + readback.status.message();
+        return report;
+    }
+
+    report.success = true;
+    report.message = "Applied STEP exported and read back successfully.";
+    return report;
+}
+
 bool write_report(
     const Options& options,
     bool overallSuccess,
@@ -629,6 +692,7 @@ bool write_report(
     const spo::GeomagicAutoSurfaceResult& geomagic,
     const spo::PatchPreviewReport& preview,
     const spo::PatchReplacementReport& apply,
+    const AppliedStepExportReport& appliedStepExport,
     const spo::CommercialCadQualityGateReport& quality,
     const spo::PatchArtifactPaths& artifacts,
     std::string* errorMessage = nullptr) {
@@ -650,6 +714,7 @@ bool write_report(
     root.insert("geomagic", geomagic_to_json(geomagic));
     root.insert("patch_preview", preview_to_json(preview));
     root.insert("patch_apply", apply_to_json(apply));
+    root.insert("applied_step_export", applied_step_export_to_json(appliedStepExport));
     root.insert("commercial_cad_like_quality_gate", quality_to_json(quality));
 
     std::error_code error;
@@ -710,6 +775,7 @@ int main(int argc, char* argv[]) {
     spo::GeomagicAutoSurfaceResult geomagicResult;
     spo::PatchPreviewReport previewReport;
     spo::PatchReplacementReport applyReport;
+    AppliedStepExportReport appliedStepExportReport;
     spo::CommercialCadQualityGateReport qualityReport;
     spo::PatchArtifactPaths artifacts;
 
@@ -724,6 +790,7 @@ int main(int argc, char* argv[]) {
             geomagicResult,
             previewReport,
             applyReport,
+            appliedStepExportReport,
             qualityReport,
             artifacts,
             &reportError);
@@ -911,22 +978,36 @@ int main(int argc, char* argv[]) {
     spo::PatchReplacementCommand command(input, &applyReport, commandOptions);
     const auto result = command.execute(context);
 
-    const auto overallSuccess =
+    const auto strictApplySuccess =
         result.success() &&
         applyReport.gateEvaluated &&
-        applyReport.gatePassed &&
+        applyReport.gatePassed;
+
+    if (strictApplySuccess) {
+        print_stage("exporting applied STEP");
+        appliedStepExportReport = export_applied_step(options, context.document, *candidate);
+    }
+
+    const auto exportOk = !appliedStepExportReport.attempted || appliedStepExportReport.success;
+    const auto overallSuccess =
+        strictApplySuccess &&
+        exportOk &&
         qualityReport.evaluated &&
         qualityReport.passed;
+    const auto finalStage = overallSuccess
+        ? "completed"
+        : (strictApplySuccess && !exportOk ? "export_applied_step" : "failed_gate");
 
     std::string reportError;
     if (!write_report(
             options,
             overallSuccess,
-            overallSuccess ? "completed" : "failed_gate",
+            finalStage,
             fittingReport,
             geomagicResult,
             previewReport,
             applyReport,
+            appliedStepExportReport,
             qualityReport,
             artifacts,
             &reportError)) {
@@ -936,6 +1017,10 @@ int main(int argc, char* argv[]) {
 
     std::cout << "corner baseline report: " << path_to_string(options.reportPath) << "\n";
     std::cout << "StrictTopologyGate passed: " << applyReport.gatePassed << "\n";
+    if (appliedStepExportReport.attempted) {
+        std::cout << "applied STEP export: " << path_to_string(appliedStepExportReport.path)
+                  << " readback=" << appliedStepExportReport.readbackSuccess << "\n";
+    }
     std::cout << "CommercialCadLikeQualityGate passed: " << qualityReport.passed << "\n";
     std::cout << "boundary max distance: " << qualityReport.boundary.maxDistance << "\n";
     std::cout << "corner max distance: " << qualityReport.cornerAnchors.maxDistance << "\n";

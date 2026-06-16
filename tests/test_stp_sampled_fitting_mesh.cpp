@@ -55,6 +55,23 @@ struct QuantizedVertexHash {
     }
 };
 
+struct QuantizedEdge {
+    int first = -1;
+    int second = -1;
+
+    bool operator==(const QuantizedEdge& other) const {
+        return first == other.first && second == other.second;
+    }
+};
+
+struct QuantizedEdgeHash {
+    std::size_t operator()(const QuantizedEdge& edge) const {
+        const auto h0 = std::hash<int>{}(edge.first);
+        const auto h1 = std::hash<int>{}(edge.second);
+        return h0 ^ (h1 << 1);
+    }
+};
+
 QuantizedVertex quantize_vertex(const spo::StlVec3& vertex) {
     constexpr double scale = 1.0e8;
     return {
@@ -62,6 +79,73 @@ QuantizedVertex quantize_vertex(const spo::StlVec3& vertex) {
         static_cast<std::int64_t>(std::llround(vertex.y * scale)),
         static_cast<std::int64_t>(std::llround(vertex.z * scale))
     };
+}
+
+int boundary_cycle_count(const spo::StlMesh& mesh) {
+    std::vector<QuantizedVertex> vertices;
+    std::unordered_map<QuantizedVertex, int, QuantizedVertexHash> vertexIds;
+    std::unordered_map<QuantizedEdge, int, QuantizedEdgeHash> edgeCounts;
+
+    auto vertex_id = [&](const spo::StlVec3& vertex) {
+        const auto key = quantize_vertex(vertex);
+        const auto found = vertexIds.find(key);
+        if (found != vertexIds.end()) {
+            return found->second;
+        }
+        const auto id = static_cast<int>(vertices.size());
+        vertexIds.emplace(key, id);
+        vertices.push_back(key);
+        return id;
+    };
+
+    auto add_edge = [&](int lhs, int rhs) {
+        if (lhs == rhs) {
+            return;
+        }
+        const QuantizedEdge edge {std::min(lhs, rhs), std::max(lhs, rhs)};
+        ++edgeCounts[edge];
+    };
+
+    for (const auto& triangle : mesh.triangles()) {
+        const auto v0 = vertex_id(triangle.v0);
+        const auto v1 = vertex_id(triangle.v1);
+        const auto v2 = vertex_id(triangle.v2);
+        add_edge(v0, v1);
+        add_edge(v1, v2);
+        add_edge(v2, v0);
+    }
+
+    std::vector<std::vector<int>> adjacency(vertices.size());
+    for (const auto& [edge, count] : edgeCounts) {
+        if (count != 1) {
+            continue;
+        }
+        adjacency[static_cast<std::size_t>(edge.first)].push_back(edge.second);
+        adjacency[static_cast<std::size_t>(edge.second)].push_back(edge.first);
+    }
+
+    int cycles = 0;
+    std::vector<bool> visited(vertices.size(), false);
+    for (std::size_t index = 0; index < vertices.size(); ++index) {
+        if (visited[index] || adjacency[index].empty()) {
+            continue;
+        }
+        ++cycles;
+        std::queue<int> queue;
+        queue.push(static_cast<int>(index));
+        visited[index] = true;
+        while (!queue.empty()) {
+            const auto current = queue.front();
+            queue.pop();
+            for (const auto next : adjacency[static_cast<std::size_t>(current)]) {
+                if (!visited[static_cast<std::size_t>(next)]) {
+                    visited[static_cast<std::size_t>(next)] = true;
+                    queue.push(next);
+                }
+            }
+        }
+    }
+    return cycles;
 }
 
 int connected_component_count(const spo::StlMesh& mesh) {
@@ -117,6 +201,39 @@ int connected_component_count(const spo::StlMesh& mesh) {
         }
     }
     return components;
+}
+
+spo::StlVec3 geometric_normal(const spo::StlTriangle& triangle) {
+    const auto ax = triangle.v1.x - triangle.v0.x;
+    const auto ay = triangle.v1.y - triangle.v0.y;
+    const auto az = triangle.v1.z - triangle.v0.z;
+    const auto bx = triangle.v2.x - triangle.v0.x;
+    const auto by = triangle.v2.y - triangle.v0.y;
+    const auto bz = triangle.v2.z - triangle.v0.z;
+    return {
+        ay * bz - az * by,
+        az * bx - ax * bz,
+        ax * by - ay * bx
+    };
+}
+
+double vector_magnitude(const spo::StlVec3& vector) {
+    return std::sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
+}
+
+double dot(const spo::StlVec3& lhs, const spo::StlVec3& rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+
+void assert_triangle_normals_match_geometry(const spo::StlMesh& mesh) {
+    for (const auto& triangle : mesh.triangles()) {
+        const auto normal = geometric_normal(triangle);
+        const auto geometricMagnitude = vector_magnitude(normal);
+        const auto storedMagnitude = vector_magnitude(triangle.normal);
+        assert(geometricMagnitude > 1.0e-12);
+        assert(storedMagnitude > 1.0e-12);
+        assert(dot(normal, triangle.normal) > 0.0);
+    }
 }
 
 struct PlanarFixture {
@@ -297,6 +414,36 @@ void test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band() {
     assert(b21Report.output_bbox.max.x > baselineReport.output_bbox.max.x);
     assert(b21Report.output_bbox.max.y > baselineReport.output_bbox.max.y);
     assert(connected_component_count(b21Mesh) == 1);
+    assert(boundary_cycle_count(b21Mesh) == 1);
+}
+
+void test_b2_1_over_cover_strip_preserves_planar_winding_and_normals() {
+    auto fixture = make_planar_square_fixture(10.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+
+    spo::StpSampledFittingOptions b21Options;
+    b21Options.enableBoundaryOverCoverStrip = true;
+    b21Options.boundaryOverCoverWidth = 0.4;
+    b21Options.boundaryOverCoverRingCount = 1;
+    spo::StlMesh b21Mesh;
+    const auto b21Report = builder.build(fixture.document, fixture.candidate, b21Options, b21Mesh);
+
+    assert(b21Report.success);
+    assert(b21Report.boundaryOverCoverTriangleCount > 0);
+    assert(b21Mesh.triangleCount() > baselineMesh.triangleCount());
+    assert_triangle_normals_match_geometry(b21Mesh);
+
+    const auto& triangles = b21Mesh.triangles();
+    for (std::size_t index = baselineMesh.triangleCount(); index < triangles.size(); ++index) {
+        const auto normal = geometric_normal(triangles[index]);
+        assert(normal.z > 0.0);
+        assert(triangles[index].normal.z > 0.0);
+    }
 }
 
 void test_increased_div_increases_triangle_count() {
@@ -557,6 +704,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_b1_corner_feature_dense_sampling_adds_anchor_facets();
     test_b2_boundary_guard_band_expands_connected_mesh();
     test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band();
+    test_b2_1_over_cover_strip_preserves_planar_winding_and_normals();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();

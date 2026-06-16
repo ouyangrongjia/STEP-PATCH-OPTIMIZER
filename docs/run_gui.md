@@ -214,7 +214,7 @@ B2.0 默认在 B1 加密采样基础上启用 `-GuardBandSamples 16 -GuardBandRi
   -RealGeomagic
 ```
 
-B2.1 会在当前 fitting STL patch 外围生成连续、小幅 over-cover strip，再通过原 STP candidate boundary re-trim 裁回；JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 统计。该入口仍不是 GUI 窗口点击自动化，真实质量结论必须看重新跑 Geomagic 后的 Patch Apply / Gate 报告。
+B2.1 会在当前 fitting STL patch 外围生成连续、小幅 over-cover strip，再通过原 STP candidate boundary re-trim 裁回；默认 `-OverCoverWidth 0.05 -OverCoverRings 1`，JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 统计。该入口仍不是 GUI 窗口点击自动化，真实质量结论必须看重新跑 Geomagic 后的 Patch preview / Apply / Gate 报告。2026-06-16 的 `03_配件_Clay.stp` candidate 179 默认 B2.1 真实运行中，fitting STL 导入 Geomagic 时为 `components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0`，Patch preview 为 5 faces / 20 edges 且非 high-risk，脚本继续执行 Apply、StrictTopologyGate、applied STEP export 和 readback；StrictTopologyGate 通过，但 CommercialCadLikeQualityGate 仍因 max drift 0.088487 失败。
 
 脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 

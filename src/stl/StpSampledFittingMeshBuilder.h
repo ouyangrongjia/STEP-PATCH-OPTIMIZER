@@ -28,7 +28,7 @@ struct StpSampledFittingOptions {
     int boundaryGuardBandRingCount = 1;
     double boundaryGuardBandSpacing = 0.10;
     bool enableBoundaryOverCoverStrip = false;
-    double boundaryOverCoverWidth = 0.10;
+    double boundaryOverCoverWidth = 0.05;
     int boundaryOverCoverRingCount = 1;
 };
 

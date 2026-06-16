@@ -72,6 +72,20 @@ void test_corner_baseline_probe_reports_b2_1_over_cover_fields() {
     assert(source.find("boundary_over_cover_boundary_coverage") != std::string::npos);
 }
 
+void test_corner_baseline_probe_exports_applied_step_for_acceptance() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+    const auto script = read_text_file(root / "scripts" / "run_corner_baseline_gate.ps1");
+
+    assert(source.find("#include \"io/StepWriter.h\"") != std::string::npos);
+    assert(source.find("applied_step_export") != std::string::npos);
+    assert(source.find("readback_success") != std::string::npos);
+    assert(source.find("StepWriter().write") != std::string::npos);
+    assert(source.find("StepReader().read") != std::string::npos);
+    assert(script.find("applied_step_export") != std::string::npos);
+    assert(script.find("readback_success") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
@@ -79,4 +93,5 @@ void run_scripted_baseline_gate_tests() {
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
     test_corner_baseline_probe_reports_b2_1_over_cover_fields();
+    test_corner_baseline_probe_exports_applied_step_for_acceptance();
 }

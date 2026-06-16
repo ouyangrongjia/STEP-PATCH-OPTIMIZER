@@ -13,7 +13,7 @@ param(
     [int]$GuardBandSamples = 16,
     [int]$GuardBandRings = 1,
     [double]$GuardBandSpacing = 0.10,
-    [double]$OverCoverWidth = 0.10,
+    [double]$OverCoverWidth = 0.05,
     [int]$OverCoverRings = 1,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
@@ -133,6 +133,12 @@ function Test-AllowableBaselineFailure {
         return $false
     }
     if (-not $json.patch_apply.gate_passed) {
+        return $false
+    }
+    if (-not $json.applied_step_export.success) {
+        return $false
+    }
+    if (-not $json.applied_step_export.readback_success) {
         return $false
     }
     if (-not $json.commercial_cad_like_quality_gate.evaluated) {
