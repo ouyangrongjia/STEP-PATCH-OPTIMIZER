@@ -107,6 +107,11 @@ void test_report_json_contains_machine_readable_metrics() {
     const auto json = spo::toJson(report);
 
     assert(json.find("\"commercial_cad_like_quality_gate\"") != std::string::npos);
+    assert(json.find("\"sampling_report\"") != std::string::npos);
+    assert(json.find("\"corner_anchor_source\"") != std::string::npos);
+    assert(json.find("\"original_boundary_edge_endpoints\"") != std::string::npos);
+    assert(json.find("\"boundary_samples_per_edge\"") != std::string::npos);
+    assert(json.find("\"feature_edge_samples_per_edge\"") != std::string::npos);
     assert(json.find("\"boundary\"") != std::string::npos);
     assert(json.find("\"corner_anchors\"") != std::string::npos);
     assert(json.find("\"sharp_corner_preservation_passed\"") != std::string::npos);

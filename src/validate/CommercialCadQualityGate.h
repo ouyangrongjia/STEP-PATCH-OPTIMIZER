@@ -24,6 +24,20 @@ struct CommercialCadDistanceStats {
     double p95Distance = 0.0;
 };
 
+struct CommercialCadSamplingReport {
+    int boundarySamplesPerEdge = 0;
+    int featureEdgeSamplesPerEdge = 0;
+    double anchorDedupTolerance = 0.0;
+    std::string cornerAnchorSource;
+
+    int boundaryEdgesSampled = 0;
+    int boundarySampleCount = 0;
+    int cornerAnchorCount = 0;
+    bool featureEdgeResultAvailable = false;
+    int featureBoundaryEdgesSampled = 0;
+    int featureEdgeSampleCount = 0;
+};
+
 struct CommercialCadQualityGateOptions {
     int boundarySamplesPerEdge = 64;
     int featureEdgeSamplesPerEdge = 64;
@@ -51,6 +65,7 @@ struct CommercialCadQualityGateReport {
     int boundaryEdgeCount = 0;
     int featureBoundaryEdgeCount = 0;
 
+    CommercialCadSamplingReport sampling;
     CommercialCadDistanceStats boundary;
     CommercialCadDistanceStats cornerAnchors;
     CommercialCadDistanceStats featureEdges;

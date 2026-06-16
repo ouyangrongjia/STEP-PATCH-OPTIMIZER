@@ -209,6 +209,21 @@ QJsonObject stats_to_json(const CommercialCadDistanceStats& stats) {
     return object;
 }
 
+QJsonObject sampling_to_json(const CommercialCadSamplingReport& sampling) {
+    QJsonObject object;
+    object.insert("boundary_samples_per_edge", sampling.boundarySamplesPerEdge);
+    object.insert("feature_edge_samples_per_edge", sampling.featureEdgeSamplesPerEdge);
+    object.insert("anchor_dedup_tolerance", sampling.anchorDedupTolerance);
+    object.insert("corner_anchor_source", QString::fromStdString(sampling.cornerAnchorSource));
+    object.insert("boundary_edges_sampled", sampling.boundaryEdgesSampled);
+    object.insert("boundary_sample_count", sampling.boundarySampleCount);
+    object.insert("corner_anchor_count", sampling.cornerAnchorCount);
+    object.insert("feature_edge_result_available", sampling.featureEdgeResultAvailable);
+    object.insert("feature_boundary_edges_sampled", sampling.featureBoundaryEdgesSampled);
+    object.insert("feature_edge_sample_count", sampling.featureEdgeSampleCount);
+    return object;
+}
+
 }
 
 CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
@@ -229,9 +244,15 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
     CommercialCadQualityGateReport report;
     report.evaluated = true;
     report.candidateId = input.candidate->candidate_id;
+    report.sampling.boundarySamplesPerEdge = input.options.boundarySamplesPerEdge;
+    report.sampling.featureEdgeSamplesPerEdge = input.options.featureEdgeSamplesPerEdge;
+    report.sampling.anchorDedupTolerance = input.options.anchorDedupTolerance;
+    report.sampling.cornerAnchorSource = "original_boundary_edge_endpoints";
+    report.sampling.featureEdgeResultAvailable = input.featureEdges != nullptr;
 
     const auto boundaryEdges = boundary_edges_for(*input.boundary, *input.candidate);
     report.boundaryEdgeCount = static_cast<int>(boundaryEdges.size());
+    report.sampling.boundaryEdgesSampled = report.boundaryEdgeCount;
     if (boundaryEdges.empty()) {
         report.message = "CommercialCadLikeQualityGate failed: no original boundary edges were available.";
         return report;
@@ -246,6 +267,7 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
             true);
         boundarySamples.insert(boundarySamples.end(), points.begin(), points.end());
     }
+    report.sampling.boundarySampleCount = static_cast<int>(boundarySamples.size());
     report.boundary = summarize_distances(
         boundarySamples,
         *input.patchShape,
@@ -255,6 +277,7 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
         input.document->topology(),
         boundaryEdges,
         input.options.anchorDedupTolerance);
+    report.sampling.cornerAnchorCount = static_cast<int>(anchors.size());
     report.cornerAnchors = summarize_distances(
         anchors,
         *input.patchShape,
@@ -276,6 +299,8 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
             featureSamples.insert(featureSamples.end(), points.begin(), points.end());
         }
     }
+    report.sampling.featureBoundaryEdgesSampled = report.featureBoundaryEdgeCount;
+    report.sampling.featureEdgeSampleCount = static_cast<int>(featureSamples.size());
     report.featureEdges = summarize_distances(
         featureSamples,
         *input.patchShape,
@@ -308,6 +333,7 @@ std::string toJson(const CommercialCadQualityGateReport& report) {
     gate.insert("candidate_id", report.candidateId);
     gate.insert("boundary_edge_count", report.boundaryEdgeCount);
     gate.insert("feature_boundary_edge_count", report.featureBoundaryEdgeCount);
+    gate.insert("sampling_report", sampling_to_json(report.sampling));
     gate.insert("boundary", stats_to_json(report.boundary));
     gate.insert("corner_anchors", stats_to_json(report.cornerAnchors));
     gate.insert("feature_edges", stats_to_json(report.featureEdges));
