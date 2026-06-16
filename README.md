@@ -115,6 +115,7 @@ scripts\configure.ps1          执行 cmake --preset windows-msvc-debug
 scripts\build_debug.ps1        配置并构建 GUI 和测试
 scripts\run_gui.ps1            启动 GUI，如果 exe 不存在会先构建
 scripts\test.ps1               构建测试并运行 ctest
+scripts\run_corner_baseline_gate.ps1 运行脚本化 A0 baseline / commercial-CAD-like gate
 ```
 
 默认路径：

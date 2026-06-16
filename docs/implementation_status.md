@@ -177,6 +177,9 @@ Organic detail/tolerance 调参：face count 仍≈273
 78. 旧无用代码 Cleanup-6 已完成：删除旧 analytic candidate enum 值、`MergeRegionGrower` 和 `tests/test_analytic_candidate_detection.cpp`；`MergePlanner` 只通过 `FeatureBoundedRegionBuilder` 生成 `FeatureBoundedRefit` 候选；CandidateFilters、MainWindow、Viewer、ModelTree、Face Inspect 和候选统计测试已同步到 FeatureBoundedRefit / Unknown 当前主线。
 79. Patch preview run log 已完成第一版：GUI 每次一键 Patch preview 都会在仓库根目录 `log/` 下创建 `patch_preview_<timestamp>_candidate_<id>.log`。该日志记录 output path 解析、STP sampled / source STL fitting mesh 生成、STL 写出、`RunningGeomagic` 调用、patch import、viewer overlay 和 crop boundary diagnostics 的 elapsed / duration；Process Status、阶段事件、失败报告和状态栏同步显示 root run log 或 elapsed。`fit_region.log` 仍只代表 Geomagic Wrap 脚本内部步骤；root run log 用于判断 GUI 卡在 Geomagic backend 等待、import，还是后处理。
 80. STEP export background flow 已完成：`MainWindow::exportStepFile()` 使用 `QFutureWatcher<ExportStepUiResult>`，文件选择仍在 GUI 线程，`AppController::exportStepFile()` 与 `verifyStepFileReadable()` 在 worker 执行；完成后回 GUI 线程更新 report / log / status。`ProcessStage::ExportingStep` 用于区分 STEP/STP 导出后台状态，避免导出和二次读取校验期间主窗口未响应。
+81. Commercial-CAD-like A0 sampling report 已补齐：`CommercialCadQualityGateReport` 现在输出 `sampling_report`，记录 boundary / feature-edge samples per edge、corner anchor source、boundary sample count、corner anchor count、feature boundary edge count、feature edge sample count，以及 FeatureEdgeDetectionResult 是否参与评估；`corner_baseline_probe` 的 baseline JSON 同步输出该字段。此项只增强 A0 报告可重复性，不改变 gate 阈值、不改变 pass/fail 语义、不实现 B1/B2/B3 fitting input 增强。
+82. 自动 baseline / probe 工具构建覆盖已补齐：Cleanup-6 删除旧 analytic `MergePlannerOptions` 字段后，`corner_baseline_probe` 和 `patch_apply_probe` 仍保留旧字段赋值，导致这两个工具单独构建失败；现已改为只设置当前 `FeatureBoundedRefit` 相关选项，并把两个工具纳入 `scripts/verify_spo.ps1` 默认构建。注意这仍是 CLI 自动 baseline/probe，不是窗口点击级 GUI 自动化。
+83. 脚本化 A0 baseline gate 已补齐：新增 `scripts/run_corner_baseline_gate.ps1`，用于构建并运行 `corner_baseline_probe`，支持 `-CandidateId auto`、显式 `-Patch` 复用已有 patch、`-RealGeomagic` 触发真实 Geomagic、`-AllowQualityGateFailure` 保留已知 A0 质量门失败报告；`corner_baseline_probe` 现在会输出 `candidate_selection_mode` 和 `generated_candidate_count`。`verify_spo.ps1 -RealGeomagic` 会调用该 gate，但普通 `verify_spo.ps1` 不依赖真实 Geomagic。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -379,8 +382,10 @@ Organic detail/tolerance 调参：face count 仍≈273
 | STP-sampled fitting mesh 测试 | 已完成 | 覆盖 planar face / multi-face candidate 采样、boundary samples、boundary band 开关、STL roundtrip、bbox、非退化三角片、report 字段和 `GeomagicFittingInputMode` 字符串 |
 | STL Global Cut Chain cutter 测试 | 已完成基础版 | 覆盖空 mesh / 短 loop 失败、拓扑构建、三角形面积、polyline 长度和点到线段距离；真实复杂 STL 切链仍以 GUI 手动验证为主 |
 | PatchArtifactLocator 中文路径测试 | 已完成 | 覆盖中文 relative dir / 中文 stem 下 local STL 到同名 STEP、autosurface IGS sidecar 和 fit_region log 的定位 |
+| A0 baseline / Apply probe 工具构建 | 已完成 | `verify_spo.ps1` 默认构建 `corner_baseline_probe` 和 `patch_apply_probe`，避免 CLI baseline / probe 因接口漂移失效 |
+| A0 baseline 脚本 gate | 已完成 | `run_corner_baseline_gate.ps1` 可复用已有 patch 或在 `-RealGeomagic` 下运行真实 Geomagic；candidate 可用 `auto` 发现式选择，报告写出 candidate selection 字段 |
 | AppController 打开新文档清历史测试 | 已完成 |
-| GUI 自动化测试 | 未完成 | 当前主要依赖手动验证 |
+| GUI 自动化测试 | 部分完成 | GUI 同源核心 pipeline 已有脚本 gate；窗口点击级 Qt/系统事件自动化仍未完成 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
 
 ---
@@ -641,7 +646,7 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 6. `CommercialCadLikeQualityGate` 第一版已新增：
    - 不替代 StrictTopologyGate。
-   - 当前输出 boundary max/p95/RMS deviation、corner anchor drift、feature edge drift 和 sharp-corner-preservation pass/fail。
+   - 当前输出 boundary max/p95/RMS deviation、corner anchor drift、feature edge drift、sharp-corner-preservation pass/fail 和 sampling_report。
    - 后续仍需补 STEP roundtrip 后几何重复测量、surface COPS-like deviation 和 Creo / commercial CAD 阈值标定。
 ```
 

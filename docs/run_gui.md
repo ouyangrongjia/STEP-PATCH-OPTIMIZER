@@ -151,14 +151,36 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ## 4.1 命令行 baseline / A0 自动验证
 
-不需要打开 GUI 的 A0 baseline 入口：
+不需要人工打开 GUI 的 A0 baseline 脚本入口：
+
+```powershell
+cd D:\pyProject\step-patch-optimizer
+.\scripts\run_corner_baseline_gate.ps1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+复用已有 patch、跳过 Geomagic 时：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId 7 `
+  -Patch "D:\path\to\patch.stp" `
+  -AllowQualityGateFailure
+```
+
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+
+底层 probe 也可直接运行：
 
 ```powershell
 cd D:\pyProject\step-patch-optimizer
 cmake --build --preset windows-msvc-debug --target corner_baseline_probe
 .\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
   --source-step "D:\path\to\model.stp" `
-  --candidate-id 7
+  --candidate-id auto
 ```
 
 默认流程：
@@ -209,7 +231,7 @@ log\patch_preview_<timestamp>_candidate_<id>.log
 
 报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary / corner anchor / feature edge drift。
 
-该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程变成可重复的 baseline 数据生成器。
+该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程中的核心后端路径变成可重复的 baseline 数据生成器。
 
 ---
 

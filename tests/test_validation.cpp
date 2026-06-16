@@ -25,6 +25,7 @@ void run_patch_apply_state_tests();
 void run_multiface_patch_analyzer_tests();
 void run_strict_topology_gate_tests();
 void run_commercial_cad_quality_gate_tests();
+void run_scripted_baseline_gate_tests();
 void run_boundary_constrained_patch_builder_tests();
 void run_crop_boundary_diagnostics_tests();
 void run_patch_replacement_repair_tests();
@@ -105,6 +106,7 @@ int main() {
     run_multiface_patch_analyzer_tests();
     run_strict_topology_gate_tests();
     run_commercial_cad_quality_gate_tests();
+    run_scripted_baseline_gate_tests();
     run_boundary_constrained_patch_builder_tests();
     run_crop_boundary_diagnostics_tests();
     run_patch_replacement_repair_tests();

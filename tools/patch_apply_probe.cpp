@@ -187,17 +187,8 @@ int main(int argc, char* argv[]) {
         options.minEdgeLength);
 
     spo::MergePlannerOptions plannerOptions;
-    plannerOptions.enable_plane_candidates = false;
-    plannerOptions.enable_cylinder_candidates = true;
-    plannerOptions.enable_sphere_candidates = false;
-    plannerOptions.enable_cone_candidates = true;
-    plannerOptions.enable_torus_candidates = true;
     plannerOptions.enable_feature_bounded_refit_candidates = true;
     plannerOptions.min_feature_bounded_region_faces = 2;
-    plannerOptions.min_analytic_region_faces = 2;
-    plannerOptions.min_region_faces = 2;
-    plannerOptions.max_sphere_center_delta = 0.50;
-    plannerOptions.max_sphere_radius_delta = 0.25;
 
     print_stage("planning merge candidates");
     const auto planner = spo::MergePlanner().plan(document, featureEdges, {}, plannerOptions);

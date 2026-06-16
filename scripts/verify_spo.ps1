@@ -135,6 +135,8 @@ $env:Path = "C:\Program Files\CMake\bin;$vcpkgRoot;" + $env:Path
 
 Invoke-Native -FilePath "cmake" -Arguments @("--preset", $Preset)
 Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "spo_tests")
+Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "patch_apply_probe")
+Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "corner_baseline_probe")
 
 $oldRealGeomagic = $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS
 try {
@@ -151,6 +153,16 @@ try {
     } else {
         $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS = $oldRealGeomagic
     }
+}
+
+if ($RealGeomagic) {
+    Invoke-Native -FilePath "powershell" -Arguments @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", (Join-Path $repoRoot "scripts\run_corner_baseline_gate.ps1"),
+        "-Preset", $Preset,
+        "-RealGeomagic",
+        "-AllowQualityGateFailure"
+    )
 }
 
 if ($Gui) {

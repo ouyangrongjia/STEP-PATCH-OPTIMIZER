@@ -184,6 +184,7 @@ if(SPO_BUILD_TESTS)
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
         tests/test_commercial_cad_quality_gate.cpp
+        tests/test_scripted_baseline_gate.cpp
         tests/test_boundary_constrained_patch_builder.cpp
         tests/test_crop_boundary_diagnostics.cpp
         tests/test_patch_replacement_repair.cpp

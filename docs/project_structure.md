@@ -111,6 +111,7 @@ step-patch-optimizer/
 │   ├── configure.ps1
 │   ├── build_debug.ps1
 │   ├── run_gui.ps1
+│   ├── run_corner_baseline_gate.ps1
 │   └── test.ps1
 │
 ├── log/                         # 运行时 Patch preview root run log，git ignore

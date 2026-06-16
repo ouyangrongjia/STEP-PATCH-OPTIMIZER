@@ -25,6 +25,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -37,6 +38,8 @@ struct Options {
     std::filesystem::path scriptPath;
 
     int candidateId = -1;
+    bool autoCandidateId = true;
+    int generatedCandidateCount = 0;
     double angularThresholdDegrees = 25.0;
     double minEdgeLength = 0.0;
 
@@ -78,9 +81,10 @@ QJsonObject path_object(const std::filesystem::path& path) {
 
 void print_usage() {
     std::cerr
-        << "Usage: corner_baseline_probe --source-step <model.stp> --candidate-id <id> [options]\n"
+        << "Usage: corner_baseline_probe --source-step <model.stp> --candidate-id <id|auto> [options]\n"
         << "\n"
         << "Options:\n"
+        << "  --candidate-id <id|auto>                 Default: auto.\n"
         << "  --patch <patch.stp|patch.igs>             Reuse an existing patch and skip Geomagic.\n"
         << "  --output-dir <dir>                       Default: <repo>/data/baseline_runs.\n"
         << "  --report <path>                          Default: <output-dir>/baseline_report.json.\n"
@@ -154,7 +158,18 @@ bool parse_options(int argc, char* argv[], Options& options) {
             if (value == nullptr) {
                 return false;
             }
-            options.candidateId = std::stoi(value);
+            const std::string candidateValue(value);
+            if (candidateValue == "auto") {
+                options.autoCandidateId = true;
+                options.candidateId = -1;
+            } else {
+                options.autoCandidateId = false;
+                options.candidateId = std::stoi(value);
+                if (options.candidateId < 0) {
+                    std::cerr << "--candidate-id must be a non-negative integer or auto.\n";
+                    return false;
+                }
+            }
         } else if (arg == "--angle") {
             const auto* value = requireValue("--angle");
             if (value == nullptr) {
@@ -228,10 +243,16 @@ bool parse_options(int argc, char* argv[], Options& options) {
         options.reportPath = std::filesystem::absolute(options.reportPath).lexically_normal();
     }
 
-    return !options.sourceStep.empty() && options.candidateId >= 0;
+    return !options.sourceStep.empty();
 }
 
-const spo::MergeCandidate* find_candidate(
+struct CandidateSelection {
+    const spo::MergeCandidate* candidate = nullptr;
+    spo::RegionBoundaryAnalysis boundary;
+    std::string message;
+};
+
+const spo::MergeCandidate* find_candidate_by_id(
     const std::vector<spo::MergeCandidate>& candidates,
     int candidateId) {
     for (const auto& candidate : candidates) {
@@ -240,6 +261,95 @@ const spo::MergeCandidate* find_candidate(
         }
     }
     return nullptr;
+}
+
+int candidate_face_count(const spo::MergeCandidate& candidate) {
+    if (candidate.face_count > 0) {
+        return candidate.face_count;
+    }
+    return static_cast<int>(candidate.faces.size());
+}
+
+int candidate_boundary_edge_count(const spo::MergeCandidate& candidate) {
+    if (candidate.boundary_edge_count > 0) {
+        return candidate.boundary_edge_count;
+    }
+    return static_cast<int>(candidate.boundary_edges.size());
+}
+
+CandidateSelection select_candidate_for_baseline(
+    const spo::ShapeDocument& document,
+    const std::vector<spo::MergeCandidate>& candidates,
+    const Options& options) {
+    CandidateSelection selection;
+    if (candidates.empty()) {
+        selection.message = "No generated candidates.";
+        return selection;
+    }
+
+    if (!options.autoCandidateId) {
+        const auto* candidate = find_candidate_by_id(candidates, options.candidateId);
+        if (candidate == nullptr) {
+            selection.message =
+                "Candidate id not found. generated candidates: " + std::to_string(candidates.size());
+            return selection;
+        }
+
+        selection.boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
+        if (!selection.boundary.valid) {
+            selection.message = "Boundary analysis failed: " + selection.boundary.message;
+            return selection;
+        }
+
+        selection.candidate = candidate;
+        selection.message = "Selected requested candidate id.";
+        return selection;
+    }
+
+    std::vector<const spo::MergeCandidate*> ranked;
+    ranked.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        if (candidate.valid &&
+            candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit &&
+            candidate.status != spo::MergeCandidateStatus::Rejected &&
+            candidate.status != spo::MergeCandidateStatus::Hidden) {
+            ranked.push_back(&candidate);
+        }
+    }
+
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto* lhs, const auto* rhs) {
+        const auto lhsFaces = candidate_face_count(*lhs);
+        const auto rhsFaces = candidate_face_count(*rhs);
+        if (lhsFaces != rhsFaces) {
+            return lhsFaces > rhsFaces;
+        }
+        const auto lhsBoundary = candidate_boundary_edge_count(*lhs);
+        const auto rhsBoundary = candidate_boundary_edge_count(*rhs);
+        if (lhsBoundary != rhsBoundary) {
+            return lhsBoundary > rhsBoundary;
+        }
+        return lhs->candidate_id < rhs->candidate_id;
+    });
+
+    std::string firstFailure;
+    for (const auto* candidate : ranked) {
+        auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
+        if (boundary.valid) {
+            selection.candidate = candidate;
+            selection.boundary = std::move(boundary);
+            selection.message = "Auto-selected largest valid FeatureBoundedRefit candidate.";
+            return selection;
+        }
+        if (firstFailure.empty()) {
+            firstFailure = boundary.message;
+        }
+    }
+
+    selection.message = "Auto candidate selection found no valid boundary candidate.";
+    if (!firstFailure.empty()) {
+        selection.message += " First boundary failure: " + firstFailure;
+    }
+    return selection;
 }
 
 std::string lower_extension(const std::filesystem::path& path) {
@@ -316,6 +426,21 @@ QJsonObject stats_to_json(const spo::CommercialCadDistanceStats& stats) {
     return object;
 }
 
+QJsonObject sampling_to_json(const spo::CommercialCadSamplingReport& sampling) {
+    QJsonObject object;
+    object.insert("boundary_samples_per_edge", sampling.boundarySamplesPerEdge);
+    object.insert("feature_edge_samples_per_edge", sampling.featureEdgeSamplesPerEdge);
+    object.insert("anchor_dedup_tolerance", sampling.anchorDedupTolerance);
+    object.insert("corner_anchor_source", QString::fromStdString(sampling.cornerAnchorSource));
+    object.insert("boundary_edges_sampled", sampling.boundaryEdgesSampled);
+    object.insert("boundary_sample_count", sampling.boundarySampleCount);
+    object.insert("corner_anchor_count", sampling.cornerAnchorCount);
+    object.insert("feature_edge_result_available", sampling.featureEdgeResultAvailable);
+    object.insert("feature_boundary_edges_sampled", sampling.featureBoundaryEdgesSampled);
+    object.insert("feature_edge_sample_count", sampling.featureEdgeSampleCount);
+    return object;
+}
+
 QJsonObject quality_to_json(const spo::CommercialCadQualityGateReport& report) {
     QJsonObject object;
     object.insert("evaluated", report.evaluated);
@@ -324,6 +449,7 @@ QJsonObject quality_to_json(const spo::CommercialCadQualityGateReport& report) {
     object.insert("candidate_id", report.candidateId);
     object.insert("boundary_edge_count", report.boundaryEdgeCount);
     object.insert("feature_boundary_edge_count", report.featureBoundaryEdgeCount);
+    object.insert("sampling_report", sampling_to_json(report.sampling));
     object.insert("boundary", stats_to_json(report.boundary));
     object.insert("corner_anchors", stats_to_json(report.cornerAnchors));
     object.insert("feature_edges", stats_to_json(report.featureEdges));
@@ -430,6 +556,8 @@ bool write_report(
     root.insert("stage", QString::fromStdString(stage));
     root.insert("source_step", path_to_qstring(options.sourceStep));
     root.insert("candidate_id", options.candidateId);
+    root.insert("candidate_selection_mode", options.autoCandidateId ? "auto" : "explicit");
+    root.insert("generated_candidate_count", options.generatedCandidateCount);
     root.insert("output_dir", path_to_qstring(options.outputDir));
     root.insert("report_path", path_to_qstring(options.reportPath));
     root.insert("user_patch_path", path_to_qstring(options.patchPath));
@@ -476,17 +604,8 @@ bool write_report(
 
 spo::MergePlannerOptions baseline_planner_options() {
     spo::MergePlannerOptions options;
-    options.enable_plane_candidates = false;
-    options.enable_cylinder_candidates = true;
-    options.enable_sphere_candidates = false;
-    options.enable_cone_candidates = true;
-    options.enable_torus_candidates = true;
     options.enable_feature_bounded_refit_candidates = true;
     options.min_feature_bounded_region_faces = 2;
-    options.min_analytic_region_faces = 2;
-    options.min_region_faces = 2;
-    options.max_sphere_center_delta = 0.50;
-    options.max_sphere_radius_delta = 0.25;
     return options;
 }
 
@@ -552,18 +671,16 @@ int main(int argc, char* argv[]) {
         featureEdges,
         {},
         baseline_planner_options());
-    const auto* candidate = find_candidate(planner.candidates, options.candidateId);
-    if (candidate == nullptr) {
-        return fail(
-            "plan_candidates",
-            "Candidate id not found. generated candidates: " + std::to_string(planner.candidates.size()));
-    }
+    options.generatedCandidateCount = static_cast<int>(planner.candidates.size());
 
-    print_stage("analyzing original boundary");
-    const auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
-    if (!boundary.valid) {
-        return fail("analyze_boundary", "Boundary analysis failed: " + boundary.message);
+    print_stage("selecting and analyzing original boundary");
+    const auto selection = select_candidate_for_baseline(document, planner.candidates, options);
+    if (selection.candidate == nullptr) {
+        return fail("plan_candidates", selection.message);
     }
+    const auto* candidate = selection.candidate;
+    options.candidateId = candidate->candidate_id;
+    const auto boundary = selection.boundary;
 
     print_stage("building STP-sampled fitting STL");
     spo::StlMesh fittingMesh;

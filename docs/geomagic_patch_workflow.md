@@ -73,10 +73,29 @@ Commercial-CAD-like quality gate:
 当前 A0 自动化入口：
 
 ```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+复用已有 patch、跳过 Geomagic 时：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId 7 `
+  -Patch "D:\path\to\patch.stp" `
+  -AllowQualityGateFailure
+```
+
+底层 probe 入口：
+
+```powershell
 cmake --build --preset windows-msvc-debug --target corner_baseline_probe
 .\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
   --source-step "D:\path\to\model.stp" `
-  --candidate-id 7
+  --candidate-id auto
 ```
 
 无 Geomagic 或复用已有 patch：
