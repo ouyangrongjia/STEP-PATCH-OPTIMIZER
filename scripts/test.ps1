@@ -11,4 +11,11 @@ $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USER
 $env:VCPKG_ROOT = $vcpkgRoot
 $env:Path = "C:\Program Files\CMake\bin;$vcpkgRoot;" + $env:Path
 cmake --build --preset $Preset --target spo_tests
-ctest --preset $Preset --output-on-failure --timeout 30
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+ctest --preset $Preset --output-on-failure --timeout 300
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}

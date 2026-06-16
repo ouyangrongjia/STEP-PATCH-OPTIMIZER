@@ -462,7 +462,7 @@ class UserConstraintSet;
 
 ```cpp
 class MergeCandidate;
-class MergeRegionGrower;
+class FeatureBoundedRegionBuilder;
 class MergePlanner;
 class SameDomainUnifier;
 class SurfaceRefitter;
@@ -472,13 +472,11 @@ class SurfaceRefitter;
 
 | 类型 | 说明 | 阶段定位 |
 |---|---|---|
-| 共面 face 合并 | 多个相邻平面碎片合为大平面 | 第一阶段 |
-| 同圆柱面合并 | 圆柱面被切成多个条带 | 第一阶段 |
-| 同球面合并 | 球面碎片合并 | 第一阶段 |
-| 同圆锥面合并 | 圆锥面碎片合并 | 可选 |
-| 同 B-spline 几何域合并 | 同一 B-spline surface 上的 trimmed faces 合并 | 第一阶段 |
-| 近似 G1 连续区域重拟合 | 重新拟合新 B-spline surface | 后续增强 |
+| FeatureBoundedRefit | 被特征边 / 锁边围定的候选区域，用于 Geomagic patch preview / Apply 主线 | 当前主线 |
+| SameDomain | 同一底层几何域上的 trimmed faces 合并 | 保留能力 |
+| Unknown | 兼容和统计兜底，不作为主动生成的主候选类型 | 兜底 |
 | 局部 patch layout 重构 | 重构局部曲面片布局 | 研究增强 |
+| 近似 G1 连续区域重拟合 | 重新拟合新 B-spline surface | 后续增强 |
 
 ### 9.4 MergePlanner 职责
 
@@ -492,7 +490,7 @@ class SurfaceRefitter;
 7. 根据用户确认生成 MergePlan。
 ```
 
-### 9.5 MergeRegionGrower 职责
+### 9.5 FeatureBoundedRegionBuilder 职责
 
 ```text
 for each unvisited face:
@@ -520,6 +518,8 @@ for each unvisited face:
             add neighbor to region
             push neighbor
 ```
+
+历史 `MergeRegionGrower` / PlaneLike / SphereLike / CylinderLike / ConeLike / TorusLike 候选检测已在 Cleanup-6 删除；不要按旧 analytic candidate 路线扩展新功能。
 
 ### 9.6 SameDomainUnifier 职责
 
@@ -742,7 +742,7 @@ OCCT
 
 ```text
 1. MergePlanner 候选区域生成。
-2. MergeRegionGrower 区域生长。
+2. FeatureBoundedRegionBuilder 区域构建。
 3. 合并候选 GUI 预览。
 4. 手动合并组编辑。
 5. ProjectSerializer 保存项目。

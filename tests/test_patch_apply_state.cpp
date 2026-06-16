@@ -577,6 +577,11 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(mainWindowSource.find("Patch Apply 正在后台运行") != std::string::npos);
     assert(mainWindowSource.find("QFutureWatcher<OpenStepUiResult>") != std::string::npos);
     assert(mainWindowSource.find("STEP/STP 正在后台打开") != std::string::npos);
+    assert(mainWindowSource.find("QFutureWatcher<ExportStepUiResult>") != std::string::npos);
+    assert(mainWindowSource.find("STEP 正在后台导出") != std::string::npos);
+    assert(mainWindowSource.find("Exporting STEP in background.") != std::string::npos);
+    assert(processStatusHeader.find("ExportingStep") != std::string::npos);
+    assert(mainWindowSource.find("ProcessStage::ExportingStep") != std::string::npos);
     assert(mainWindowSource.find("QFutureWatcher<MergePreviewUiResult>") != std::string::npos);
     assert(mainWindowSource.find("合并候选区域预览正在后台运行") != std::string::npos);
     assert(mainWindowHeader.find("patchApplyInProgress_") != std::string::npos);

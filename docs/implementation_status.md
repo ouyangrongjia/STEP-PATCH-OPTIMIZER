@@ -101,28 +101,28 @@ Organic detail/tolerance 调参：face count 仍≈273
 2. 用户锁边进入 protectedEdges 的测试已补充。
 3. GUI 手动流程验证已通过。
 4. MergePatchCommand undo 时清空锁边状态是当前确认的正确语义。
-5. Stage 2 Generic Merge Candidate Framework 已完成：MergeCandidate / MergePlanner / MergeRegionGrower 可生成 PlaneLike 候选区域。
+5. Stage 2 Generic Merge Candidate Framework 已完成并在 Cleanup-6 收口：`MergeCandidate` / `MergePlanner` 当前只生成 `FeatureBoundedRefit` 候选；旧 `MergeRegionGrower` 和 PlaneLike 等 analytic candidate 检测已删除。
 6. Stage 2.5 Candidate GUI Preview 已完成：支持 Top N、显示全部非隐藏候选、按 ID 高亮和清除候选高亮。
 7. Stage 2.6 Candidate Selection / Rejection 已完成：支持候选区域点击选择、接受、拒绝、隐藏、恢复和状态统计。
-8. Stage 3-0 Analytic RegionMerger Framework Preparation 已完成：已预留统一结果、选项、失败原因和解析图元 merger stub。
-9. Stage 3A PlaneRegionMerge 已完成基础可用版：支持 PlaneLike candidate 的真实 planar trimmed face 替换、Command 层执行、undo/redo、批量平面候选合并和 BRepCheck 报告。
-10. PlaneRegionMerge 已修复合并后实体数丢失问题：当前通过原 shape 上的 face 级 reshape 保留 solid/shell 容器，并对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段。
+8. Stage 3-0 Analytic RegionMerger Framework 是历史阶段：旧 stub merger、RegionMerge result/options 和 analytic candidate type 已在 Cleanup-1 / Cleanup-5 / Cleanup-6 删除。
+9. Stage 3A PlaneRegionMerge 是历史阶段：旧 Plane 真实合并入口、Command、AppController API、后端和测试已在 Cleanup-2 / Cleanup-3 / Cleanup-4 删除。
+10. PlaneRegionMerge 的历史修复记录只作为背景保留；当前仓库不再提供旧 PlaneRegionMerger 执行路径。
 11. Stage 2.7 Face / Candidate Inspect 已完成：点击 face 可查看 surface type、候选归属、candidate type/status/risk/metrics，并支持未命中原因提示。
-12. Stage 2.8 Analytic Primitive Candidate Detection 已完成基础版：PlaneLike 保持原行为，CylinderLike/SphereLike/ConeLike 支持基础检测，TorusLike/Freeform 类型保留通道。
-13. Stage 2.9 Multi-type Candidate Preview 已完成：报告、模型树、按类型筛选、Viewer 多类型配色和 Face Inspect 已支持 PlaneLike / CylinderLike / SphereLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 / Unknown 的显示通道。
-14. Stage 2.8 Enhancement A 已完成：CylinderLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆柱 face 做保守采样拟合检测；CylinderLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 CylinderRegionMerge。
-15. Stage 2.8 Enhancement B 已完成：ConeLike 支持对 B-spline / Bezier / SurfaceOfRevolution 近似圆锥/圆台 face 做保守采样拟合检测；ConeLike 仍要求至少 2 个 face 形成可合并候选；本阶段只生成候选，不执行 ConeRegionMerge。
-16. Stage 3-S Shared Primitive Result Fields 已完成：RegionMergeResult 已新增通用 primitive 参数字段（primitive_center_x/y/z、primitive_axis_x/y/z、primitive_radius、primitive_secondary_radius、primitive_angle_degrees、primitive_fit_error）；Stage 3A PlaneRegionMerge 仍保持原有行为，成功时填充 primitive_axis_* 和 primitive_fit_error；Cylinder / Sphere / Cone / Torus 真实合并仍未实现；后续 Stage 3D / Stage 3B 将复用这些字段。
-17. Stage 3D SphereRegionMerge 已完成稳定版调整：SphereLike candidate 合并不再手工构造 spherical trimmed face，也不再使用 ReShape 删除 face；当前改为只放开候选内部边并保护其他所有边，然后调用 OCCT `ShapeUpgrade_UnifySameDomain` 合并同域球面片，避免手工球面边界导致缺面和飞线；支持所有已接受 SphereLike candidates 的批量合并；支持全部可合并 SphereLike candidates 的实验性批量合并；支持 Command 层执行和 undo/redo；支持 AppController 和 GUI 三个入口；写入 RegionMergeResult primitive_center / primitive_radius / primitive_fit_error；Cylinder / Cone / Torus 真实合并仍未实现。
-18. SphereRegionMerge 一键批量合并已增加防护：一键全部可合并球面候选会跳过 High risk 和单 face 候选；批量合并保护候选外部边和其他所有边，只允许候选内部边被同域合并消除；若结果丢失拓扑、solid 数变化或 face 数未下降则失败回滚。
-19. GUI 主工具栏已按功能收敛为下拉入口：选择、候选显示、候选状态、合并、检查/导出；候选显示下拉中补充了直接显示 PlaneLike / SphereLike 候选的入口，避免工具栏横向溢出。
-20. GUI 平面候选入口已区分“PlaneLike 预览候选”和“可真实平面合并候选”：严格合并入口只显示原生 `GeomAbs_Plane`、边界有效、非隐藏/非拒绝的候选；B-spline backed planar-like 候选会明确报告为预览专用，不再显示 Unknown 失败原因。
-21. Stage 3A-Fix T3 Unsafe Candidate Rejection Report 已完成：`RegionMergeFailureReason` 已有稳定字符串转换；平面/球面候选合并报告会输出 candidate、failure reason、message、统计、BRepCheck 和失败时 `document was not modified / rollback applied`。
-22. Stage 3A-Fix T4 RegionBoundaryAnalyzer 已完成：新增独立边界分析器，在 PlaneRegionMerger 真实重建前检查单连通区域、单一闭合外环、无内环/洞、无 non-manifold 边；复杂 boundary 先明确拒绝，不执行修复。
-23. Stage 3A-Approx A1 已完成：PlaneRegionMergeOptions 新增 `allow_approximate_planar_surfaces=false` 和 `approximate_plane_max_deviation=0.01`；默认继续保持 T2 strict mode，显式开启后 B-spline backed PlaneLike 可越过 strict native Plane 检查进入后续拟合/偏差检查，但本阶段未实现真实 B-spline 平面重建。
+12. Stage 2.8 Analytic Primitive Candidate Detection 是历史阶段：PlaneLike / SphereLike / CylinderLike / ConeLike / TorusLike / Freeform 类型和检测实现已在 Cleanup-6 删除。
+13. Stage 2.9 Multi-type Candidate Preview 已收口：报告、模型树、按类型筛选、Viewer 配色和 Face Inspect 当前只面向 `FeatureBoundedRefit` / `Unknown`。
+14. Stage 2.8 Enhancement A 的 CylinderLike 近似检测已删除；当前不再生成 CylinderLike 候选。
+15. Stage 2.8 Enhancement B 的 ConeLike 近似检测已删除；当前不再生成 ConeLike 候选。
+16. Stage 3-S Shared Primitive Result Fields 曾完成：RegionMergeResult 当时新增通用 primitive 参数字段。Cleanup-5 后旧 `RegionMergeResult` / `RegionMergeOptions` 已删除；该阶段只保留为历史记录。
+17. Stage 3D SphereRegionMerge 是历史阶段：旧 Sphere 真实合并入口、Command、AppController API、后端、测试以及 SphereLike 候选类型 / 检测 / 过滤 / 显示已全部删除。
+18. SphereRegionMerge 一键批量合并防护只作为历史记录；当前仓库不再提供旧 Sphere 合并路径。
+19. GUI 主工具栏已按功能收敛为下拉入口：选择、候选显示、候选状态、合并、检查/导出；旧 PlaneLike / SphereLike 专用候选显示入口已在 Cleanup-6 删除。
+20. GUI 旧严格平面候选显示入口已删除；当前候选显示主线是 FeatureBoundedRefit preview 和状态筛选。
+21. Stage 3A-Fix T3 Unsafe Candidate Rejection Report 是历史阶段：当时 `RegionMergeFailureReason` 提供稳定字符串转换；Cleanup-5 后该枚举已随旧 RegionMerge result 类型删除。
+22. Stage 3A-Fix T4 RegionBoundaryAnalyzer 已完成：新增独立边界分析器，检查单连通区域、单一闭合外环、无内环/洞、无 non-manifold 边；复杂 boundary 先明确拒绝，不执行修复。Cleanup-5 后它使用独立 `BoundaryAnalysisFailureReason`，不再依赖旧 RegionMerge result 类型。
+23. Stage 3A-Approx A1 是历史阶段：当时 PlaneRegionMergeOptions 新增 `allow_approximate_planar_surfaces=false` 和 `approximate_plane_max_deviation=0.01`；Cleanup-5 后相关 options 类型已删除。
 24. Stage 3A-Approx A2 已完成：`allow_approximate_planar_surfaces=true` 时低误差 B-spline backed PlaneLike 可复用拟合平面、T4 边界分析、planar trimmed face 构造、ShapeValidator/BRepCheck 和 STEP roundtrip gate 完成近似平面重建；高偏差候选返回 `DeviationTooLarge`，失败时 document/stats 保持不变；GUI 实验入口仍留给 A4。
 25. Stage 3A-Approx A3 已完成：strict native Plane 与 approximate B-spline planar rebuild 统一使用 `RegionBoundaryAnalyzer`；构造 boundary wire 时只使用 `analysis.ordered_boundary_edges`，不依赖原始 `candidate.boundary_edges` 顺序；open/disconnected/multiple-loop/hole/non-manifold/branching boundary 仍按 strict 策略拒绝，不做 ShapeFix 或 pcurve 深度修复。
-26. Stage 3A-Approx A4 已完成：GUI 新增“实验性合并当前近似平面候选”和“实验性合并全部近似平面候选”入口；原 strict 平面合并入口保持 `allow_approximate_planar_surfaces=false`，实验入口显式开启 `allow_approximate_planar_surfaces=true` 并在报告中输出 mode、approximate_plane_max_deviation、失败原因、文档回滚状态、统计和 BRepCheck。
+26. Stage 3A-Approx A4 历史阶段已完成：当时 GUI 新增“实验性合并当前近似平面候选”和“实验性合并全部近似平面候选”入口；Cleanup-2 后这些旧 Plane GUI 真实合并入口已下线，Cleanup-3 后对应 AppController API / Command / command 测试已删除，Cleanup-4 后 `PlaneRegionMerger` 后端和后端测试也已删除。
 27. Stage 3A-Approx A5 已完成：补齐 strict/approx 自动测试和阶段收口验证；覆盖 B-spline backed PlaneLike strict 拒绝、approx 低误差成功、高误差失败、RegionBoundaryAnalyzer invalid boundary failure、batch approx mixed valid/invalid 跳过语义、全部 invalid failure、STEP roundtrip failure、失败 rollback 和 command undo/redo 既有路径。
 28. Geomagic AutoSurface T4 路径已改为真实 `wrapCore.exe --script` + `FIT_REGION_*` 环境变量；真实脚本不再要求 `config.json` 作为调用输入。
 29. Geomagic Python 脚本已对齐标准 `fit_region.py` 风格：只输出一个 fit_region log，不再写大量 result JSON；中间 IGES keepTemp 时作为 `<output>_autosurface.igs` sidecar 保留。
@@ -164,11 +164,19 @@ Organic detail/tolerance 调参：face count 仍≈273
 65. GUI 默认 fitting input mode 已切到 STP sampled：`MainWindow::fittingInputMode_` 默认值和对应 QAction 都是 `StpSampledCandidateSurface`；“生成并预览当前 Patch”在该模式下不会要求先打开原始 STL。Legacy STL crop 与 Conservative Boundary Band STL crop 仍保留在 Patch 菜单用于对照验证，报告会输出 `fitting input mode` 字符串，避免把不同输入路线混在一起。
 66. STL Global Cut Chain crop 已完成第一版并接入 GUI：新增 `StlCropMode::GlobalCutChain` 与 `StlCutChainCutter`，从原 STP candidate ordered boundary edges 采样 boundary loop，在源 STL 上投影、跟踪 cut chain、按约束重三角化并 flood-fill 选出 patch mesh；GUI `STL -> 启用全局切链裁剪 (Global Cut Chain)` 可显式开启，单独裁剪当前候选 STL 时会走该路线。它是 STL 全局切链裁剪器，不是当前默认 Geomagic fitting input mode。
 67. Global Cut Chain boundary snap 已接入：`StlCutChainOptions` 默认 `snapBoundaryToRed=true`、`snapMaxDist=0.2`，切链后的 patch outer boundary 可向原 STP red boundary loop 回贴，降低投影到 STL 后的 green boundary 漂移。该 snap 只改善 local STL / fitting STL 输入质量，不改变最终 CAD boundary；Apply 仍必须使用原 STP candidate outer boundary wire，并通过 PatchReplacementRepair 与 StrictTopologyGate。
-68. GUI 后台任务与状态显示优化已按 `1f0c3d7` 可缝合基准完成移植：`openStepFile()`、`previewMergeCandidates()` 和 Patch Apply 的计算 / 读取进入 worker，viewer / model tree / report / Process Status 更新回 GUI 线程；长任务期间禁用会修改 document / controller 的入口；Process Status 与 Patch Apply report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和 face / edge / shell / solid 计数。`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
+68. GUI 后台任务与状态显示优化已按 `1f0c3d7` 可缝合基准完成移植：`openStepFile()`、`exportStepFile()`、`previewMergeCandidates()` 和 Patch Apply 的计算 / 读取 / 导出进入 worker，viewer / model tree / report / Process Status 更新回 GUI 线程；长任务期间禁用会修改 document / controller 的入口；Process Status 与 Patch Apply report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和 face / edge / shell / solid 计数。`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
 69. 文档入口与下一阶段方向已同步到 `a57695d` 主线：仓库根目录恢复 `AGENTS.md`，保证新对话会先读全局 Workspace、项目记忆和仓库文档；当前后续研究问题明确为 Geomagic 在拐角 / 特征交汇处圆角化导致商业 CAD 出现缝隙。下一轮应优先评估 corner-aware / curvature-aware 采样、STP boundary guard-band 外扩采样、feature/corner anchors、原 STP boundary 重裁剪和 Creo-like 高密度偏差门控，而不是继续 Sharp Contours 或重新合入 `d1c00e4`。
 70. corner preservation 最终方案已确定为“双层闭环”：前端通过 corner-aware / curvature-aware sampling、feature/corner anchors 和 STP boundary 外 guard-band 采样改善 Geomagic fitting input；后端在 `StrictTopologyGate` 之外新增 commercial-CAD-like 高密度几何门控，测量 boundary deviation、corner anchor drift、feature edge drift、sharpness preservation、surface COPS-like deviation 和 STEP roundtrip 后 geometry drift。第一轮实验分支为 `experiment/corner-preservation-ab`，A/B 矩阵为 baseline、corner 加密、guard-band、corner+guard-band；成功不能只看 GUI 或 OCCT BRepCheck。
 71. A0 baseline 自动化入口已落地：新增 `corner_baseline_probe` CLI，流程为 source STEP + candidate id → STP-sampled fitting STL → Geomagic AutoSurface 或 `--patch` 复用已有 patch → Patch Apply + `StrictTopologyGate` → `CommercialCadLikeQualityGate` → JSON 报告。新增 `CommercialCadQualityGate` 独立模块，第一版测量原 STP boundary、corner anchor 和 feature boundary samples 到 imported patch 的 max/mean/RMS/p95 drift；它不替代 `StrictTopologyGate`，只补足 OCCT 拓扑 gate 看不到的 commercial-CAD-like 几何偏差。
 72. `corner_baseline_probe` 的 Geomagic staging 已对齐 GUI 路径：输入 STL / 输出 STP / fit log 写入仓库 `data\crop_stl`、`data\crop_stp`、`data\crop_igs`，报告写入 `data\baseline_runs`。真实样例 `03_配件_Clay.stp` candidate 179 的 A0 脚本已复现 GUI 后端：Geomagic STP 生成成功，Patch Apply 与 `StrictTopologyGate` 通过，但 `CommercialCadLikeQualityGate` 失败，boundary/feature max drift 0.123574、p95 0.044766，corner p95 0.086309。
+73. 旧无用代码 Cleanup-1 已完成第一批无损瘦身：删除未接入 GUI / AppController 的 `CylinderRegionMerger`、`ConeRegionMerger`、`TorusRegionMerger`、`RegionMergeStub` 和 `tests/test_region_merge_stubs.cpp`，并从 CMake 移除对应源文件 / 测试。Cleanup-1 当时保留的旧候选类型和检测通道已在 Cleanup-6 删除。同步修正 CTest 超时为 300 秒，并让 `scripts/test.ps1` 传播 native command 失败码。
+74. 旧无用代码 Cleanup-2 已完成：`MainWindow` 旧 Plane / Sphere 真实合并菜单、action、connect 和 handler 已下线；候选按类型显示、严格平面候选显示、same-domain `applyMerge()`、Geomagic Patch preview / Apply、undo/redo 保留。Cleanup-2 阶段 Plane / Sphere 的 AppController API、Command、后端 merger 和测试暂时保留，作为后续删除对象。
+75. 旧无用代码 Cleanup-3 已完成代码侧清理：删除 Plane / Sphere 的 AppController merge API、`PlaneRegionMergeCommand` / `PlaneRegionBatchMergeCommand` / `SphereRegionMergeCommand` / `SphereRegionBatchMergeCommand` 及对应 command 测试，并从 CMake 与 `tests/test_validation.cpp` 解绑。`PlaneRegionMerger` / `SphereRegionMerger` 后端和后端测试暂保留，作为 Cleanup-4 单独处理对象。
+76. 旧无用代码 Cleanup-4 已完成：删除 `PlaneRegionMerger` / `SphereRegionMerger` 后端和 `tests/test_plane_region_merger.cpp` / `tests/test_sphere_region_merger.cpp`，并从 CMake 与 `tests/test_validation.cpp` 解绑。`tests/test_analytic_candidate_detection.cpp`、`tests/test_candidate_type_statistics.cpp`、`tests/test_region_boundary_analyzer.cpp` 已改为测试候选检测、候选过滤和 boundary analyzer 本身，不再实例化 PlaneRegionMerger。
+77. 旧无用代码 Cleanup-5 已完成：新增 `BoundaryAnalysisFailureReason`，`RegionBoundaryAnalyzer` 和对应测试不再依赖旧 `RegionMergeFailureReason`；删除 `src/merge/RegionMergeResult.h` 与 `src/merge/RegionMergeOptions.h`。
+78. 旧无用代码 Cleanup-6 已完成：删除旧 analytic candidate enum 值、`MergeRegionGrower` 和 `tests/test_analytic_candidate_detection.cpp`；`MergePlanner` 只通过 `FeatureBoundedRegionBuilder` 生成 `FeatureBoundedRefit` 候选；CandidateFilters、MainWindow、Viewer、ModelTree、Face Inspect 和候选统计测试已同步到 FeatureBoundedRefit / Unknown 当前主线。
+79. Patch preview run log 已完成第一版：GUI 每次一键 Patch preview 都会在仓库根目录 `log/` 下创建 `patch_preview_<timestamp>_candidate_<id>.log`。该日志记录 output path 解析、STP sampled / source STL fitting mesh 生成、STL 写出、`RunningGeomagic` 调用、patch import、viewer overlay 和 crop boundary diagnostics 的 elapsed / duration；Process Status、阶段事件、失败报告和状态栏同步显示 root run log 或 elapsed。`fit_region.log` 仍只代表 Geomagic Wrap 脚本内部步骤；root run log 用于判断 GUI 卡在 Geomagic backend 等待、import，还是后处理。
+80. STEP export background flow 已完成：`MainWindow::exportStepFile()` 使用 `QFutureWatcher<ExportStepUiResult>`，文件选择仍在 GUI 线程，`AppController::exportStepFile()` 与 `verifyStepFileReadable()` 在 worker 执行；完成后回 GUI 线程更新 report / log / status。`ProcessStage::ExportingStep` 用于区分 STEP/STP 导出后台状态，避免导出和二次读取校验期间主窗口未响应。
 ```
 
 其中，`MergePatchCommand` 的撤销语义当前定义为：
@@ -241,8 +249,8 @@ Organic detail/tolerance 调参：face count 仍≈273
 | 功能 | 状态 | 说明 |
 |---|---:|---|
 | STEP 读取 | 已完成 | 支持读取 `.step` / `.stp` |
-| STEP 写出 | 已完成 | 支持导出 STEP |
-| STEP 二次读取验证 | 已完成 | 导出后可重新读取验证 |
+| STEP 写出 | 已完成 | 支持导出 STEP；GUI 导出路径在后台执行 |
+| STEP 二次读取验证 | 已完成 | 导出后可重新读取验证；GUI 导出后的二次读取校验在同一后台任务执行 |
 | 项目文件保存 | 未完成 | `ProjectSerializer` 仍待实现 |
 | 项目文件恢复 | 未完成 | 需要保存锁边、参数、操作日志等 |
 
@@ -285,27 +293,27 @@ Organic detail/tolerance 调参：face count 仍≈273
 | 合并撤销时清空锁边 | 已确认 | 当前定义为正确交互语义 |
 | 锁边重映射 | 已完成基础版 | 通过 `LockedEdgeRef` 几何签名尝试映射 |
 | `MergeCandidate` | 已完成基础版 | 支持候选类型、风险、face/edge 集合、统计指标和运行时状态 |
-| `MergePlanner` | 已完成基础版 | 基于特征边和锁边生成 PlaneLike 候选区域 |
-| `MergeRegionGrower` | 已完成基础版 | 支持平面近似区域生长，protectedEdges 可阻断扩张 |
+| `MergePlanner` | 已完成基础版 | 基于特征边和锁边生成 FeatureBoundedRefit 候选区域 |
+| `MergeRegionGrower` | 已删除 | Cleanup-6 删除旧 analytic candidate grower；当前由 `FeatureBoundedRegionBuilder` 承担候选区域构建 |
 | `MergeCandidate` 预览 | 已完成基础版 | GUI 可预览 Top N、全部非隐藏候选和指定候选 |
 | 候选状态管理 | 已完成基础版 | Pending / Accepted / Rejected / Hidden，仅运行时保存 |
 | Face / Candidate Inspect | 已完成基础版 | 点击 face 可查看 surface type、候选归属、candidate type/status/risk/fit_error 等信息 |
-| Analytic primitive candidate detection | 已完成增强 B | 支持 PlaneLike、CylinderLike 原生与 B-spline/Bezier/SurfaceOfRevolution 近似检测、SphereLike、ConeLike 原生与 B-spline/Bezier/SurfaceOfRevolution 近似检测；TorusLike/Freeform 类型预留 |
-| Multi-type Candidate Preview | 已完成基础版 | 支持多类型统计、按类型筛选、Viewer 类型配色、模型树同步和点击查看 |
-| RegionMergeResult / RegionMergeOptions | 已完成基础版 | 统一解析图元区域合并返回值、失败原因和基础选项 |
-| Plane/Cylinder/Cone/Sphere/Torus RegionMerger stub | 已完成基础版 | 仅返回 NotImplemented / UnsupportedCandidateType，不修改 B-rep |
-| `PlaneRegionMerger` | 已完成基础可用版 | 支持 PlaneLike 候选区域真实替换为 planar trimmed face，保留 solid/shell 容器 |
-| 平面候选批量合并 | 已完成基础版 | 支持合并当前候选、合并所有已接受平面候选、一键合并全部可合并平面候选 |
-| 平面合并边界简化 | 已完成基础版 | 对候选外边界执行受限 edge-only same-domain 简化，减少共线边界分段 |
-| `PlaneRegionMergeCommand` | 已完成基础版 | 平面候选合并通过 Command 层执行，支持 undo/redo |
-| `PlaneRegionBatchMergeCommand` | 已完成基础版 | 批量平面候选合并通过 Command 层执行，支持 undo/redo |
-| Stage 3-S Shared Primitive Fields | 已完成 | RegionMergeResult 已新增 9 个通用 primitive 参数字段，供后续 Sphere / Cylinder / Cone / Torus 复用 |
-| `SphereRegionMerger` | 已完成稳定版调整 | 支持 SphereLike 候选区域通过 OCCT same-domain unifier 消除内部边，不再手工构造 spherical trimmed face；批量路径保护候选外边界和其他所有边，避免缺面和飞线 |
-| `SphereRegionMergeCommand` | 已完成基础版 | 球面候选合并通过 Command 层执行，支持 undo/redo |
-| `SphereRegionBatchMergeCommand` | 已完成基础版 | 批量球面候选合并通过 Command 层执行，支持 undo/redo |
-| `CylinderRegionMerger` | 未完成 | 当前仍为 stub |
-| `ConeRegionMerger` | 未完成 | 当前仍为 stub，后置 |
-| `TorusRegionMerger` | 未完成 | 当前仍为 stub，可选 |
+| Analytic primitive candidate detection | 已删除 | Cleanup-6 删除旧 PlaneLike / SphereLike / CylinderLike / ConeLike / TorusLike / Freeform 候选检测 |
+| Candidate Type Preview | 已完成基础版 | 当前只支持 FeatureBoundedRefit / Unknown 统计、按类型筛选、Viewer 配色、模型树同步和点击查看 |
+| RegionMergeResult / RegionMergeOptions | 已删除 | Cleanup-5 删除；`RegionBoundaryAnalyzer` 已切换到 `BoundaryAnalysisFailureReason` |
+| Plane/Sphere RegionMerger | 已删除 | Cleanup-4 删除 Plane / Sphere 后端和后端测试；旧候选类型、检测、过滤和显示通道已在 Cleanup-6 删除 |
+| `PlaneRegionMerger` | 已删除 | Cleanup-4 删除旧 Plane 后端 |
+| 平面候选批量合并 | 已删除 | 旧 Plane 真实合并入口 / Command / 后端均已删除 |
+| 平面合并边界简化 | 已删除 | 随 `PlaneRegionMerger` 后端在 Cleanup-4 删除 |
+| `PlaneRegionMergeCommand` | 已删除 | Cleanup-3 删除旧 Plane command 入口 |
+| `PlaneRegionBatchMergeCommand` | 已删除 | Cleanup-3 删除旧 Plane batch command 入口 |
+| Stage 3-S Shared Primitive Fields | 已删除历史实现 | Cleanup-5 删除旧 result/options 类型；只保留历史记录 |
+| `SphereRegionMerger` | 已删除 | Cleanup-4 删除旧 Sphere 后端；SphereLike 候选过滤 / 统计已在 Cleanup-6 删除 |
+| `SphereRegionMergeCommand` | 已删除 | Cleanup-3 删除旧 Sphere command 入口 |
+| `SphereRegionBatchMergeCommand` | 已删除 | Cleanup-3 删除旧 Sphere batch command 入口 |
+| `CylinderRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；CylinderLike 候选检测 / 显示通道已在 Cleanup-6 删除 |
+| `ConeRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；ConeLike 候选检测 / 显示通道已在 Cleanup-6 删除 |
+| `TorusRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；TorusLike 候选显示通道已在 Cleanup-6 删除 |
 | `SurfaceRefitter` | 未完成 | 当前为后续研究增强方向 |
 
 ### 3.8 验证模块
@@ -339,16 +347,16 @@ Organic detail/tolerance 调参：face count 仍≈273
 | UnlockEdgeCommand 无文档校验测试 | 已完成 |
 | MergePatchCommand undo/redo 测试 | 已完成 |
 | 用户锁边进入 protectedEdges 测试 | 已完成 |
-| MergePlanner / MergeRegionGrower 测试 | 已完成基础版 | 覆盖候选生成、protectedEdges 阻断、min_region_faces 和预览不改模型 |
+| MergePlanner / FeatureBoundedRegionBuilder 测试 | 已完成基础版 | 覆盖 FeatureBoundedRefit 候选生成、protectedEdges / locked edge 阻断、最小区域 face 数和预览不改模型 |
 | MergeCandidate 状态测试 | 已完成基础版 | 覆盖 Pending 默认状态、状态切换、Hidden 过滤和 stats 不变 |
-| RegionMerger stub 测试 | 已完成基础版 | 覆盖 NotImplemented、UnsupportedCandidateType、Rejected/Hidden 和 stats 不变 |
-| PlaneRegionMerger 测试 | 已完成基础版 | 覆盖非法候选、边界无效、NURBS-backed 平面区域、solid 容器保留和边界分段简化 |
-| PlaneRegionMergeCommand 测试 | 已完成基础版 | 覆盖失败不污染文档、成功后 undo/redo |
-| PlaneRegionBatchMergeCommand 测试 | 已完成基础版 | 覆盖批量平面合并成功后的 undo/redo |
+| RegionMerger stub 测试 | 已删除 | Cleanup-1 随 stub-only Cylinder/Cone/Torus 后端删除；不再编译 `tests/test_region_merge_stubs.cpp` |
+| PlaneRegionMerger 测试 | 已删除 | Cleanup-4 随旧 Plane 后端删除 |
+| PlaneRegionMergeCommand 测试 | 已删除 | Cleanup-3 随旧 Plane command 入口删除 |
+| PlaneRegionBatchMergeCommand 测试 | 已删除 | Cleanup-3 随旧 Plane batch command 入口删除 |
 | Face / Candidate Inspect 测试 | 已完成基础版 | 覆盖 surface type、候选归属、NotInCandidate 和 stats 不变 |
-| Analytic Candidate Detection 测试 | 已完成增强 B | 覆盖 CylinderLike 原生与 NURBS-backed 近似检测、SphereLike/ConeLike 基础检测、NURBS-backed ConeLike 近似检测、近似圆柱不误判为 ConeLike、protected edge 阻断和 ID 唯一 |
-| Candidate Type Statistics 测试 | 已完成基础版 | 覆盖多类型统计、Hidden 过滤、按类型筛选和 PlaneLike 合并过滤 |
-| SphereLike 一键合并过滤测试 | 已完成基础版 | 覆盖一键球面候选过滤会跳过 High risk 和单 face 候选；球面合并不再依赖 boundary wire 闭合，而是基于候选内部边做同域合并 |
+| Analytic Candidate Detection 测试 | 已删除 | Cleanup-6 删除旧 analytic candidate detection 测试，不再编译 `tests/test_analytic_candidate_detection.cpp` |
+| Candidate Type Statistics 测试 | 已完成基础版 | 覆盖 FeatureBoundedRefit / Unknown 统计、Hidden 过滤和按类型筛选 |
+| SphereLike 一键合并过滤测试 | 已删除 | SphereLike 类型和过滤路径已在 Cleanup-6 删除 |
 | Geomagic backend mock 测试 | 已完成 | 覆盖 mock success/failure/timeout、缺输入、缺脚本、缺输出、result JSON 缺失但 STEP 存在的真实脚本兜底 |
 | Geomagic pipeline script 静态契约测试 | 已完成 | 覆盖 FIT_REGION 输入输出、RepairMesh、RemoveNonManifoldVertices、FillSmallHoles、Mechanical 默认、无 result JSON 输出契约 |
 | PatchImportService 测试 | 已完成 | 覆盖 STEP/STP/IGS/IGES 导入、bbox/face/edge/BRepCheck 统计、从 Geomagic result 导入、失败不修改 ShapeDocument |
@@ -360,6 +368,8 @@ Organic detail/tolerance 调参：face count 仍≈273
 | PatchReplacementRepair / T6.6 测试 | 已完成 | 覆盖 adaptive sewing 多 tolerance 尝试、preferred tolerance 优先、collapsed result 只作为诊断、closed shell 的 shell-to-solid path、Command report 字段、multi-face 不 unsupported、GateFailed rollback、redo 不重跑 repair；T6.5.1 的 rejected after debug artifact 仍未实现，若后续需要可补为可选诊断 artifact |
 | T6.6.1 Crop Boundary Diagnostics 测试 | 已完成 | 覆盖原 STP boundary loop 采样、STL crop 最近距离覆盖检查、imported patch outer boundary 覆盖检查、suspected gap segment 报告、无 local STL 的 patch-only 诊断、GUI overlay 标签和禁止真实样例路径硬编码 |
 | T6.6.2 Process Status Panel 测试 | 已完成 | 覆盖状态阶段字符串、PreviewReady、Apply success/failure 后参数保留、GateFailed 后 repair/Gate 诊断保留、undo/redo 显示 CachedUndo / CachedRedo 且不显示 Geomagic / crop / import / repair 重跑 |
+| Patch preview run log 测试 | 已完成 | 覆盖 root `log/` 自动创建、时间戳 + candidate 文件名、elapsed_ms / duration_ms 和阶段消息写入 |
+| STEP export background 测试 | 已完成 | 源码级回归覆盖 `ExportingStep`、`QFutureWatcher<ExportStepUiResult>`、后台导出文案和导出完成回 GUI 线程更新路径 |
 | T6.6.3 STL Crop Boundary-Band Diagnostics 测试 | 已完成 | 覆盖 boundary point coverage 正常但 boundary-band coverage 报警、centroid-only 拒绝近边界三角片但 conservative criteria 命中、report/GUI 字段存在性和禁止真实样例路径硬编码 |
 | T6.6.4 STL Region Extractor conservative crop / mode switch 测试 | 已完成 | 覆盖默认 centroid-only、显式 ConservativeBoundaryBand 下 centroid outside but vertex inside、edge midpoint inside、boundary-band inclusion、crop report keep/reject 字段和正式测试不调用 Geomagic |
 | T6.6.5 GUI A/B 验证 | 已完成 | 验证 centroid-only 与 conservative-boundary-band 两条 crop mode 都不能让 Geomagic patch outer boundary 成为可靠 CAD replacement boundary，后续转向 T6.7 surface re-trim |
@@ -405,8 +415,6 @@ Organic detail/tolerance 调参：face count 仍≈273
 1. MergePatchCommand
 2. LockEdgeCommand
 3. UnlockEdgeCommand
-4. PlaneRegionMergeCommand
-5. PlaneRegionBatchMergeCommand
 ```
 
 当前不可撤销命令：
@@ -536,8 +544,8 @@ protectedEdges = 自动检测特征边 + 用户锁定边
 | 任务 | 状态 | 验收方式 |
 |---|---:|---|
 | 实现 MergeCandidate 数据结构 | 已完成基础版 | 能表达候选区域 face 集合、边界、风险说明和运行时状态 |
-| 实现 MergePlanner 基础候选生成 | 已完成基础版 | 能从 TopologyGraph 生成 PlaneLike 候选区域 |
-| 实现 MergeRegionGrower 基础区域生长 | 已完成基础版 | 能根据特征边/锁边阻断区域扩张 |
+| 实现 MergePlanner 基础候选生成 | 已完成基础版 | 能从 TopologyGraph 生成 FeatureBoundedRefit 候选区域 |
+| 实现 FeatureBoundedRegionBuilder 基础区域构建 | 已完成基础版 | 能根据特征边/锁边阻断区域扩张 |
 | GUI 显示候选区域 | 已完成基础版 | 可高亮 Top N、全部非隐藏候选和指定候选 |
 | 用户接受/拒绝候选区域 | 已完成基础版 | 支持选择、接受、拒绝、隐藏、恢复候选；本阶段不应用到 B-rep |
 
@@ -590,12 +598,12 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 8. 执行 same-domain 合并。
 9. Ctrl+Z，确认模型回退并清空合并相关锁边状态。
 10. Ctrl+Y，确认模型恢复。
-11. 点击“预览合并”，选择或接受 PlaneLike 候选区域。
-12. 通过“平面合并”下拉菜单执行当前候选、全部已接受候选或全部可合并候选。
-13. 确认平面合并后 face/edge 数下降，solid 数不丢失，候选外边界共线分段尽量被简化。
+11. 点击“预览合并”，选择或接受 FeatureBoundedRefit 候选区域。
+12. 生成 Geomagic Patch preview，确认默认走 STP Sampled Candidate Surface fitting input。
+13. 执行 Patch Apply，确认仍经过 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip gate。
 14. 执行合法性检查。
-15. 导出 STEP。
-16. 确认导出后二次读取校验通过。
+15. 导出 STEP，并确认导出期间 GUI 不进入未响应状态。
+16. 确认导出完成后报告面板显示二次读取校验通过。
 ```
 
 ---
@@ -664,20 +672,20 @@ P0 稳定性收口：基本完成
 候选区域 GUI 预览：已完成基础版
 候选区域选择/接受/拒绝/隐藏：已完成基础版
 Face / Candidate Inspect：已完成基础版
-Analytic primitive candidate detection：已完成增强 B
-Stage 2.8 Enhancement A B-spline CylinderLike approximate detection：已完成
-Stage 2.8 Enhancement B B-spline ConeLike / FrustumLike approximate detection：已完成
-Multi-type candidate preview：已完成基础版
-RegionMerger 框架准备：已完成基础版
-PlaneRegionMerge：已完成基础可用版（导出稳定性未验证）
-平面候选批量合并：已完成基础版
-平面合并边界简化：已完成基础版
-Stage 3-S Shared Primitive Fields：已完成
-SphereRegionMerge：已完成稳定版调整（标记为实验性）
+Analytic primitive candidate detection：已删除（Cleanup-6）
+Stage 2.8 Enhancement A B-spline CylinderLike approximate detection：已删除（Cleanup-6）
+Stage 2.8 Enhancement B B-spline ConeLike / FrustumLike approximate detection：已删除（Cleanup-6）
+Candidate type preview：已收口为 FeatureBoundedRefit / Unknown
+RegionMerger 框架准备：历史实现已删除（Cleanup-1 / Cleanup-5）
+PlaneRegionMerge：已删除旧后端（Cleanup-4）
+平面候选批量合并：已删除旧入口 / Command / 后端
+平面合并边界简化：随旧 PlaneRegionMerger 删除
+Stage 3-S Shared Primitive Fields：历史实现已删除（Cleanup-5）
+SphereRegionMerge：已删除旧后端（Cleanup-4）
 Geomagic patch preview / Apply 主线：以 1f0c3d7 文档同步提交为当前可缝合基准
 STP Sampled Candidate Surface：已完成并作为当前默认 fitting input mode
 STL Global Cut Chain crop：已完成第一版并作为可选裁剪器接入 GUI
-GUI 后台任务 / 状态显示优化：已合入 1f0c3d7 基准
+GUI 后台任务 / 状态显示优化：已合入 1f0c3d7 基准；打开 STEP、导出 STEP、Patch preview 和 Patch Apply 均已后台化
 d1c00e4 Improve boundary constrained Geomagic patch flow：因真实样例缝合回归，暂不进入当前主线
 Sharp Contours 实验：无收益，暂不进入当前主线
 下一阶段硬问题：Geomagic 圆角化 sharp corner 后，OCCT 门控可能通过但商业 CAD 仍出现缝隙；需要新增 corner-aware fitting input 与商业 CAD 近似门控实验
@@ -697,7 +705,7 @@ Stage 3A-Fix / A6 只保留为历史诊断与研究分支。
 CylinderRegionMerge：冻结
 ConeRegionMerge：冻结
 TorusRegionMerge：冻结
-SphereRegionMerge 进一步扩展：冻结
+SphereRegionMerge：已下线并删除旧后端
 Freeform Candidate Detection：冻结
 Freeform B-spline / Plate Refit：冻结
 项目保存恢复：冻结
@@ -727,12 +735,14 @@ T6.7.4 已经把 replacement boundary 从 Geomagic patch outer boundary 收回�
 ```text
 Stage 3A-Approx / A6：历史诊断分支，非当前默认推进路线
 
+Cleanup-5 后，`PlaneRegionMerger`、旧 RegionMerge result/options 类型和相关自动测试均已删除；以下条目只作为历史诊断记录，不代表当前仓库仍有可调用实现。
+
 已完成：
 - A6.1：PlaneRegionMerger 在 approximate planar rebuild 进入 MakeFace 前检查 ordered boundary edges。
 - A6.1：boundary 3D curve 采样点若明显偏离拟合平面，提前返回 DeviationTooLarge。
 - A6.1：失败时 result.document 保持原 document，Command 层仍不会污染当前模型。
 - A6.1：新增测试覆盖“face 采样误差低，但 boundary 曲线偏离拟合平面”的失败路径。
-- A6.2：RegionMergeResult 新增 diagnostic_report，用于承载近似平面重建失败诊断。
+- A6.2：RegionMergeResult 曾新增 diagnostic_report，用于承载近似平面重建失败诊断；该 result 类型已在 Cleanup-5 删除。
 - A6.2：PlaneRegionMerger approximate mode 失败路径会输出 candidate id/type/status、face ids、boundary/internal/ordered edge ids、拟合平面、face/boundary deviation、RegionBoundaryAnalyzer 结果、每条 boundary edge 的 3D curve type、start/mid/end 距离和 pcurve 信息。
 - A6.2：data/samples/3#_底部.stp 已纳入自动测试；样例存在时会读取真实 STP、生成候选并验证失败诊断报告，同时确认 document/stats 不被污染。
 

@@ -9,10 +9,6 @@
 #include "io/StlReader.h"
 #include "merge/CandidateFilters.h"
 #include "merge/FaceInspector.h"
-#include "merge/SphereRegionMerger.h"
-
-#include <BRepAdaptor_Surface.hxx>
-#include <GeomAbs_SurfaceType.hxx>
 
 #include <QAction>
 #include <QActionGroup>
@@ -38,6 +34,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <utility>
 
@@ -64,22 +61,8 @@ QString candidateTypeText(MergeCandidateType type) {
     switch (type) {
     case MergeCandidateType::SameDomain:
         return "SameDomain";
-    case MergeCandidateType::PlaneLike:
-        return "PlaneLike";
-    case MergeCandidateType::CylinderLike:
-        return "CylinderLike";
-    case MergeCandidateType::ConeLike:
-        return "ConeLike";
-    case MergeCandidateType::SphereLike:
-        return "SphereLike";
-    case MergeCandidateType::TorusLike:
-        return "TorusLike";
     case MergeCandidateType::FeatureBoundedRefit:
         return "FeatureBoundedRefit";
-    case MergeCandidateType::FreeformG1:
-        return "FreeformG1";
-    case MergeCandidateType::FreeformG2:
-        return "FreeformG2";
     case MergeCandidateType::Unknown:
         return "Unknown";
     }
@@ -88,14 +71,7 @@ QString candidateTypeText(MergeCandidateType type) {
 
 std::vector<MergeCandidateType> displayCandidateTypes() {
     return {
-        MergeCandidateType::PlaneLike,
-        MergeCandidateType::CylinderLike,
-        MergeCandidateType::SphereLike,
-        MergeCandidateType::ConeLike,
-        MergeCandidateType::TorusLike,
         MergeCandidateType::FeatureBoundedRefit,
-        MergeCandidateType::FreeformG1,
-        MergeCandidateType::FreeformG2,
         MergeCandidateType::Unknown
     };
 }
@@ -118,14 +94,6 @@ QString candidateStatusText(MergeCandidateStatus status) {
 
 QString faceInspectCandidateStateText(FaceInspectCandidateState state) {
     return QString::fromLatin1(toString(state));
-}
-
-QString regionMergeFailureText(RegionMergeFailureReason reason) {
-    return QString::fromLatin1(regionMergeFailureReasonToString(reason));
-}
-
-QString regionMergeDocumentStateText(const RegionMergeResult& result) {
-    return result.success ? "document updated" : "document was not modified / rollback applied";
 }
 
 QString stlBoundingBoxText(const StlBoundingBox& bbox) {
@@ -243,6 +211,14 @@ struct OpenStepUiResult {
     std::filesystem::path path;
 };
 
+struct ExportStepUiResult {
+    bool exportSuccess = false;
+    std::string exportMessage;
+    bool verifySuccess = false;
+    std::string verifyMessage;
+    std::filesystem::path path;
+};
+
 struct MergePreviewUiResult {
     MergePlannerResult result;
     ShapeStats beforeStats;
@@ -281,95 +257,6 @@ QString cropBoundaryDiagnosticsText(const CropBoundaryDiagnosticsReport& report)
     return lines.join('\n');
 }
 
-bool isStrictPlaneMergeCandidate(const ShapeDocument& document, const MergeCandidate& candidate) {
-    if (!document.hasShape() || !candidate.valid ||
-        candidate.candidate_type != MergeCandidateType::PlaneLike ||
-        candidate.status == MergeCandidateStatus::Rejected ||
-        candidate.status == MergeCandidateStatus::Hidden ||
-        candidate.face_count < 2 ||
-        candidate.boundary_edges.empty()) {
-        return false;
-    }
-
-    const auto& topology = document.topology();
-    for (const auto faceId : candidate.faces) {
-        if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
-            return false;
-        }
-        BRepAdaptor_Surface surface(topology.face(faceId));
-        if (surface.GetType() != GeomAbs_Plane) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::vector<MergeCandidate> filterStrictPlaneMergeCandidates(
-    const ShapeDocument& document,
-    const std::vector<MergeCandidate>& candidates) {
-    std::vector<MergeCandidate> result;
-    for (const auto& candidate : candidates) {
-        if (isStrictPlaneMergeCandidate(document, candidate)) {
-            result.push_back(candidate);
-        }
-    }
-    return result;
-}
-
-bool isApproximatePlaneMergeCandidate(const MergeCandidate& candidate) {
-    return candidate.valid &&
-        candidate.candidate_type == MergeCandidateType::PlaneLike &&
-        candidate.status != MergeCandidateStatus::Rejected &&
-        candidate.status != MergeCandidateStatus::Hidden &&
-        candidate.face_count >= 2 &&
-        !candidate.boundary_edges.empty();
-}
-
-std::vector<MergeCandidate> filterApproximatePlaneMergeCandidates(
-    const std::vector<MergeCandidate>& candidates) {
-    std::vector<MergeCandidate> result;
-    for (const auto& candidate : candidates) {
-        if (isApproximatePlaneMergeCandidate(candidate)) {
-            result.push_back(candidate);
-        }
-    }
-    return result;
-}
-
-PlaneRegionMergeOptions makePlaneMergeOptions(const AlgorithmParameters& params, bool approximateMode) {
-    PlaneRegionMergeOptions options;
-    options.plane_distance_tolerance = std::max(options.plane_distance_tolerance, params.linear_tolerance);
-    options.allow_pending_candidate = true;
-    options.require_accepted_candidate = false;
-    options.min_region_faces = 2;
-    if (approximateMode) {
-        options.allow_approximate_planar_surfaces = true;
-        options.approximate_plane_max_deviation =
-            std::max(options.approximate_plane_max_deviation, params.linear_tolerance);
-    }
-    return options;
-}
-
-QString planeMergeModeText(bool approximateMode) {
-    return approximateMode ? "approximate planar experimental" : "strict native plane";
-}
-
-QString candidateIdSummary(const std::vector<MergeCandidate>& candidates) {
-    QString summary;
-    constexpr std::size_t maxShown = 20;
-    const auto shown = std::min(maxShown, candidates.size());
-    for (std::size_t i = 0; i < shown; ++i) {
-        if (!summary.isEmpty()) {
-            summary += ", ";
-        }
-        summary += QString::number(candidates[i].candidate_id);
-    }
-    if (candidates.size() > maxShown) {
-        summary += QString(", ... +%1").arg(candidates.size() - maxShown);
-    }
-    return summary;
-}
-
 struct CandidateStatusCounts {
     int pending = 0;
     int accepted = 0;
@@ -396,15 +283,6 @@ CandidateStatusCounts countCandidateStatuses(const std::vector<MergeCandidate>& 
         }
     }
     return counts;
-}
-
-QString candidateStatusSummary(const std::vector<MergeCandidate>& candidates) {
-    auto counts = countCandidateStatuses(candidates);
-    return QString("Pending %1，Accepted %2，Rejected %3，Hidden %4")
-        .arg(counts.pending)
-        .arg(counts.accepted)
-        .arg(counts.rejected)
-        .arg(counts.hidden);
 }
 
 void addVisibleCandidateId(std::set<int>& visibleIds, const MergeCandidate& candidate) {
@@ -580,14 +458,6 @@ void MainWindow::createActions() {
     showAcceptedMergeCandidatesAction_ = new QAction("显示已接受候选", this);
     showPendingMergeCandidatesAction_ = new QAction("显示待处理候选", this);
     showCandidatesByTypeAction_ = new QAction("按类型显示候选", this);
-    mergePlaneCandidateAction_ = new QAction("合并当前平面候选", this);
-    mergeAcceptedPlaneCandidatesAction_ = new QAction("合并所有已接受平面候选", this);
-    mergeAllPlaneCandidatesAction_ = new QAction("一键合并全部可合并平面候选", this);
-    mergeApproximatePlaneCandidateAction_ = new QAction("实验性合并当前近似平面候选", this);
-    mergeAllApproximatePlaneCandidatesAction_ = new QAction("实验性合并全部近似平面候选", this);
-    mergeSphereCandidateAction_ = new QAction("合并当前球面候选", this);
-    mergeAcceptedSphereCandidatesAction_ = new QAction("合并所有已接受球面候选", this);
-    mergeAllSphereCandidatesAction_ = new QAction("一键合并全部可合并球面候选", this);
     applyMergeAction_ = new QAction("执行合并", this);
 
     validateAction_ = new QAction("合法性检查", this);
@@ -645,18 +515,6 @@ void MainWindow::createMenus() {
     candidateMenu->addSeparator();
     candidateMenu->addAction(previewMergeAction_);
     candidateMenu->addAction(showAllMergeCandidatesAction_);
-    auto* showStrictPlaneCandidatesAction = candidateMenu->addAction("显示可平面合并候选");
-    connect(showStrictPlaneCandidatesAction, &QAction::triggered, this, [this]() {
-        showStrictPlaneMergeCandidates();
-    });
-    auto* showPlaneCandidatesAction = candidateMenu->addAction("显示 PlaneLike 候选");
-    connect(showPlaneCandidatesAction, &QAction::triggered, this, [this]() {
-        showMergeCandidatesByType(MergeCandidateType::PlaneLike);
-    });
-    auto* showSphereCandidatesAction = candidateMenu->addAction("显示 SphereLike 候选");
-    connect(showSphereCandidatesAction, &QAction::triggered, this, [this]() {
-        showMergeCandidatesByType(MergeCandidateType::SphereLike);
-    });
     candidateMenu->addAction(highlightMergeCandidateByIdAction_);
     candidateMenu->addAction(clearMergeCandidatesAction_);
     candidateMenu->addSeparator();
@@ -696,18 +554,6 @@ void MainWindow::createMenus() {
     patchMenu_->addAction(clearPatchOverlayAction_);
 
     auto* mergeMenu = advancedMenu->addMenu("合并实验");
-    planeMergeMenu_ = mergeMenu->addMenu("平面候选合并");
-    planeMergeMenu_->addAction(mergePlaneCandidateAction_);
-    planeMergeMenu_->addAction(mergeAcceptedPlaneCandidatesAction_);
-    planeMergeMenu_->addAction(mergeAllPlaneCandidatesAction_);
-    planeMergeMenu_->addSeparator();
-    planeMergeMenu_->addAction(mergeApproximatePlaneCandidateAction_);
-    planeMergeMenu_->addAction(mergeAllApproximatePlaneCandidatesAction_);
-    sphereMergeMenu_ = mergeMenu->addMenu("球面候选合并");
-    sphereMergeMenu_->addAction(mergeSphereCandidateAction_);
-    sphereMergeMenu_->addAction(mergeAcceptedSphereCandidatesAction_);
-    sphereMergeMenu_->addAction(mergeAllSphereCandidatesAction_);
-    mergeMenu->addSeparator();
     mergeMenu->addAction(applyMergeAction_);
     mergeMenu->addSeparator();
     mergeMenu->addAction(undoAction_);
@@ -904,14 +750,6 @@ void MainWindow::connectActions() {
     connect(showAcceptedMergeCandidatesAction_, &QAction::triggered, this, [this]() { showAcceptedMergeCandidates(); });
     connect(showPendingMergeCandidatesAction_, &QAction::triggered, this, [this]() { showPendingMergeCandidates(); });
     connect(showCandidatesByTypeAction_, &QAction::triggered, this, [this]() { showMergeCandidatesByTypeDialog(); });
-    connect(mergePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentPlaneCandidate(); });
-    connect(mergeAcceptedPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedPlaneCandidates(); });
-    connect(mergeAllPlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeablePlaneCandidates(); });
-    connect(mergeApproximatePlaneCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentApproximatePlaneCandidate(); });
-    connect(mergeAllApproximatePlaneCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllApproximatePlaneCandidates(); });
-    connect(mergeSphereCandidateAction_, &QAction::triggered, this, [this]() { mergeCurrentSphereCandidate(); });
-    connect(mergeAcceptedSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAcceptedSphereCandidates(); });
-    connect(mergeAllSphereCandidatesAction_, &QAction::triggered, this, [this]() { mergeAllMergeableSphereCandidates(); });
     connect(applyMergeAction_, &QAction::triggered, this, [this]() { applyMerge(); });
     connect(validateAction_, &QAction::triggered, this, [this]() { validateShape(); });
     connect(resetViewAction_, &QAction::triggered, this, [this]() { resetView(); });
@@ -1030,6 +868,12 @@ void MainWindow::saveProject() {
 }
 
 void MainWindow::exportStepFile() {
+    if (stlCropInProgress_ || patchApplyInProgress_) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
+
     if (!controller_.hasDocument()) {
         QMessageBox::information(this, "导出 STEP", "请先打开 STEP/STP 文件再导出。");
         return;
@@ -1041,28 +885,80 @@ void MainWindow::exportStepFile() {
         return;
     }
 
-    const auto result = controller_.exportStepFile(pathFromQString(filePath));
-    if (!result.success()) {
-        QMessageBox::critical(this, "导出 STEP 失败", QString::fromStdString(result.message()));
-        logPanel_->appendError(QString("导出失败：%1").arg(QString::fromStdString(result.message())));
-        return;
-    }
+    const auto path = pathFromQString(filePath);
+    ProcessStatusSnapshot exportStatus = makeProcessStatus(ProcessStage::ExportingStep, "Exporting STEP in background.");
+    exportStatus.patchStepPath = path;
+    controller_.updateProcessStatus(exportStatus);
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        exportStatus,
+        QString("STEP 正在后台导出\n文件：%1\n刷新策略：导出和二次读取校验在后台运行，完成后回到 GUI 线程更新 report / status。")
+            .arg(filePath));
+    logPanel_->appendInfo(QString("开始后台导出 STEP：%1").arg(filePath));
+    setStatus("STEP 正在后台导出");
 
-    const auto verifyResult = controller_.verifyStepFileReadable(pathFromQString(filePath));
-    if (!verifyResult.success()) {
-        logPanel_->appendError(QString("STEP 已导出，但重新读取校验失败：%1").arg(QString::fromStdString(verifyResult.message())));
-        inspectPanel_->showValidation(QString("导出后二次读取校验失败\n文件：%1\n错误：%2")
-            .arg(filePath)
-            .arg(QString::fromStdString(verifyResult.message())));
-        setStatus("STEP 已导出，二次读取失败");
+    auto* watcher = new QFutureWatcher<ExportStepUiResult>(this);
+    connect(watcher, &QFutureWatcher<ExportStepUiResult>::finished, this, [this, watcher, filePath]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+
+        if (!result.exportSuccess) {
+            auto failedStatus = makeProcessStatus(ProcessStage::ExportingStep, result.exportMessage);
+            failedStatus.patchStepPath = result.path;
+            failedStatus.latestWarning = result.exportMessage;
+            appendPatchPreviewProgress(std::move(failedStatus));
+            stopPatchPreviewProgressReport();
+            QMessageBox::critical(this, "导出 STEP 失败", QString::fromStdString(result.exportMessage));
+            logPanel_->appendError(QString("导出失败：%1").arg(QString::fromStdString(result.exportMessage)));
+            setStatus("STEP 导出失败");
+            refreshUndoRedoActions();
+            refreshProcessStatusPanel();
+            return;
+        }
+
+        if (!result.verifySuccess) {
+            auto verifyFailedStatus = makeProcessStatus(ProcessStage::ExportingStep, result.verifyMessage);
+            verifyFailedStatus.patchStepPath = result.path;
+            verifyFailedStatus.latestWarning = result.verifyMessage;
+            appendPatchPreviewProgress(std::move(verifyFailedStatus));
+            stopPatchPreviewProgressReport();
+            logPanel_->appendError(QString("STEP 已导出，但重新读取校验失败：%1").arg(QString::fromStdString(result.verifyMessage)));
+            inspectPanel_->showValidation(QString("导出后二次读取校验失败\n文件：%1\n错误：%2")
+                .arg(filePath)
+                .arg(QString::fromStdString(result.verifyMessage)));
+            setStatus("STEP 已导出，二次读取失败");
+            refreshUndoRedoActions();
+            refreshProcessStatusPanel();
+            return;
+        }
+
+        auto completedStatus = makeProcessStatus(ProcessStage::Idle, "STEP export completed and readback validation passed.");
+        completedStatus.patchStepPath = result.path;
+        appendPatchPreviewProgress(std::move(completedStatus));
+        stopPatchPreviewProgressReport();
+        logPanel_->appendInfo(QString("已导出 STEP 并通过二次读取校验：%1").arg(filePath));
+        inspectPanel_->showValidation(QString("导出后二次读取校验通过\n文件：%1").arg(filePath));
+        setStatus("STEP 已导出并通过校验");
         refreshUndoRedoActions();
-        return;
-    }
+        refreshProcessStatusPanel();
+    });
+    watcher->setFuture(QtConcurrent::run([this, path]() {
+        ExportStepUiResult output;
+        output.path = path;
 
-    logPanel_->appendInfo(QString("已导出 STEP 并通过二次读取校验：%1").arg(filePath));
-    inspectPanel_->showValidation(QString("导出后二次读取校验通过\n文件：%1").arg(filePath));
-    setStatus("STEP 已导出并通过校验");
-    refreshUndoRedoActions();
+        const auto exportResult = controller_.exportStepFile(path);
+        output.exportSuccess = exportResult.success();
+        output.exportMessage = exportResult.message();
+        if (!output.exportSuccess) {
+            return output;
+        }
+
+        const auto verifyResult = controller_.verifyStepFileReadable(path);
+        output.verifySuccess = verifyResult.success();
+        output.verifyMessage = verifyResult.message();
+        return output;
+    }));
 }
 
 void MainWindow::openSourceStlFile() {
@@ -1309,6 +1205,17 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto fittingModeStr = QString::fromStdString(toString(fittingInputMode));
     const bool useGeomagicRemesh = useGeomagicRemeshAction_ != nullptr && useGeomagicRemeshAction_->isChecked();
     const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
+    const auto runLogger = PatchPreviewRunLogger::create(workspaceRoot, candidateSnapshot.candidate_id);
+    runLogger.log(
+        "Start",
+        "Patch preview requested: fitting_mode=" + fittingModeStr.toStdString() +
+            ", geomagic_remesh=" + geomagicRemeshMode.toStdString());
+    if (runLogger.ready()) {
+        logPanel_->appendInfo(QString("Patch preview run log：%1").arg(pathToQString(runLogger.path())));
+    } else {
+        logPanel_->appendWarning(QString("Patch preview run log 创建失败：%1")
+            .arg(QString::fromStdString(runLogger.errorMessage())));
+    }
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::AnalyzingBoundary,
@@ -1318,16 +1225,18 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
     pipelineStatus.boundaryEdgeCount = candidateSnapshot.boundary_edge_count;
+    pipelineStatus.patchPreviewRunLogPath = runLogger.path();
 
     setStlCropInProgress(true);
     startPatchPreviewProgressReport(
         pipelineStatus,
-        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
+        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\nrun log：%6\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
         .arg(fittingModeStr)
-        .arg(geomagicRemeshMode));
+        .arg(geomagicRemeshMode)
+        .arg(pathToQString(runLogger.path())));
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
 
@@ -1345,10 +1254,15 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     };
 
     auto* watcher = new QFutureWatcher<PatchPreviewPipelineResult>(this);
-    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, fittingModeStr, geomagicRemeshMode]() {
+    connect(watcher, &QFutureWatcher<PatchPreviewPipelineResult>::finished, this, [this, watcher, candidateSnapshot, sourceStlPath, fittingModeStr, geomagicRemeshMode, runLogger]() {
         const auto result = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
+        runLogger.log(
+            "WorkerFinished",
+            result.success
+                ? "Patch preview worker completed successfully."
+                : "Patch preview worker failed: " + result.message);
 
         if (!result.success) {
             viewer_->clearPatchOverlay();
@@ -1363,11 +1277,14 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             failedStatus.patchStepPath = result.geomagic.outputStepPath;
             failedStatus.patchIgesPath = result.geomagic.outputIgesPath;
             failedStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
+            failedStatus.patchPreviewRunLogPath = result.patchPreviewRunLogPath.empty()
+                ? runLogger.path()
+                : result.patchPreviewRunLogPath;
             failedStatus.latestWarning = result.message;
             appendPatchPreviewProgress(std::move(failedStatus));
             stopPatchPreviewProgressReport();
             const auto message = QString::fromStdString(result.message);
-            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nfitting input mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\n消息：%8")
+            inspectPanel_->showReport(QString("Patch 预览链路失败\nsource STL：%1\ncandidate id：%2\nfitting input mode：%3\nGeomagic Remesh：%4\nlocal STL：%5\noutput STEP：%6\nfit_region log：%7\nrun log：%8\n消息：%9")
                 .arg(pathToQString(sourceStlPath))
                 .arg(candidateSnapshot.candidate_id)
                 .arg(fittingModeStr)
@@ -1375,6 +1292,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
                 .arg(pathToQString(result.geomagic.fitRegionLogPath))
+                .arg(pathToQString(failedStatus.patchPreviewRunLogPath))
                 .arg(message));
             bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
             logPanel_->appendWarning(QString("Patch 预览链路失败：候选 %1，%2")
@@ -1400,10 +1318,19 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         importingStatus.patchStepPath = result.geomagic.outputStepPath;
         importingStatus.patchIgesPath = result.geomagic.outputIgesPath;
         importingStatus.fitRegionLogPath = result.geomagic.fitRegionLogPath;
+        importingStatus.patchPreviewRunLogPath = result.patchPreviewRunLogPath.empty()
+            ? runLogger.path()
+            : result.patchPreviewRunLogPath;
         appendPatchPreviewProgress(importingStatus);
 
+        runLogger.log("ImportingPatch", "Importing Geomagic patch result started.");
+        const auto importStart = std::chrono::steady_clock::now();
         const auto import = controller_.importPatchResultForCurrentCandidate(result.geomagic, &candidateSnapshot);
         if (!import.success()) {
+            runLogger.logDuration(
+                "ImportingPatch",
+                "Patch import failed: " + import.message(),
+                importStart);
             viewer_->clearPatchOverlay();
             const auto message = QString::fromStdString(import.message());
             auto importFailed = importingStatus;
@@ -1411,9 +1338,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             importFailed.latestWarning = import.message();
             appendPatchPreviewProgress(std::move(importFailed));
             stopPatchPreviewProgressReport();
-            inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\noutput STEP：%2\n错误：%3")
+            inspectPanel_->showReport(QString("Patch 导入失败\nlocal STL：%1\noutput STEP：%2\nrun log：%3\n错误：%4")
                 .arg(pathToQString(result.crop.outputPath))
                 .arg(pathToQString(result.geomagic.outputStepPath))
+                .arg(pathToQString(importingStatus.patchPreviewRunLogPath))
                 .arg(message));
             bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
             logPanel_->appendWarning(QString("Patch 导入失败：候选 %1，%2")
@@ -1423,7 +1351,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             refreshPatchApplyAction();
             return;
         }
+        runLogger.logDuration("ImportingPatch", "Patch import finished.", importStart);
 
+        const auto previewStart = std::chrono::steady_clock::now();
+        runLogger.log("PreviewReady", "Viewer overlay and crop boundary diagnostics started.");
         viewer_->showPatchCutoutPreview(candidateSnapshot.faces);
         viewer_->showPatchOverlay(controller_.currentImportedPatchInfo().shape);
         const auto diagnostics = controller_.diagnoseCropBoundaryForCurrentPatch(
@@ -1437,8 +1368,10 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         refreshPatchApplyAction();
         refreshProcessStatusPanel();
         setStatus("Patch cutout overlay 已显示");
+        runLogger.logDuration("PreviewReady", "Viewer overlay and crop boundary diagnostics finished.", previewStart);
+        runLogger.log("Finished", "Patch preview ready.");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, progressCallback]() {
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, progressCallback, runLogger]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
         config.skipRemesh = !useGeomagicRemesh;
@@ -1451,7 +1384,8 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             fittingInputMode,
             cropOptions,
             {},
-            progressCallback);
+            progressCallback,
+            runLogger);
     }));
 }
 
@@ -1725,16 +1659,8 @@ void MainWindow::previewMergeCandidates() {
     const auto beforeStats = controller_.document().stats();
     const auto params = parameterPanel_->parameters();
     MergePlannerOptions options;
-    options.enable_plane_candidates = false;
-    options.max_plane_distance = params.linear_tolerance;
-    options.min_region_faces = 2;
-    options.enable_cylinder_candidates = true;
-    options.enable_sphere_candidates = false;
-    options.enable_cone_candidates = true;
-    options.enable_torus_candidates = true;
-    options.min_analytic_region_faces = 2;
-    options.max_sphere_center_delta = 0.50;
-    options.max_sphere_radius_delta = 0.25;
+    options.enable_feature_bounded_refit_candidates = true;
+    options.min_feature_bounded_region_faces = 2;
 
     auto progress = makeProcessStatus(
         ProcessStage::PreviewingMergeCandidates,
@@ -1771,16 +1697,9 @@ void MainWindow::previewMergeCandidates() {
         const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
         const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
 
-        QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nPlaneLike：%2\nCylinderLike：%3\nSphereLike：%4\nConeLike：%5\nTorusLike：%6\nFeatureBoundedRefit：%7\nFreeformG1：%8\nFreeformG2：%9\nUnknown：%10\nPending：%11\nAccepted：%12\nRejected：%13\nHidden：%14\n保护边数量：%15\n访问 face 数量：%16\n拒绝区域数量：%17\n最大候选区域 face 数：%18\n总候选 face 数：%19\n预览前 face/edge：%20/%21\n预览后 face/edge：%22/%23")
+        QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nFeatureBoundedRefit：%2\nUnknown：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n保护边数量：%8\n访问 face 数量：%9\n拒绝区域数量：%10\n最大候选区域 face 数：%11\n总候选 face 数：%12\n预览前 face/edge：%13/%14\n预览后 face/edge：%15/%16")
             .arg(lastMergeCandidates_.size())
-            .arg(typeCounts.plane_like)
-            .arg(typeCounts.cylinder_like)
-            .arg(typeCounts.sphere_like)
-            .arg(typeCounts.cone_like)
-            .arg(typeCounts.torus_like)
             .arg(typeCounts.feature_bounded_refit)
-            .arg(typeCounts.freeform_g1)
-            .arg(typeCounts.freeform_g2)
             .arg(typeCounts.unknown)
             .arg(statusCounts.pending)
             .arg(statusCounts.accepted)
@@ -1883,46 +1802,6 @@ void MainWindow::showNonHiddenMergeCandidates() {
     refreshModelTree();
     showCandidateStatusReport("已显示全部非隐藏候选区域");
     setStatus("已显示全部非隐藏候选区域");
-}
-
-void MainWindow::showStrictPlaneMergeCandidates() {
-    if (lastMergeCandidates_.empty()) {
-        logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
-        setStatus("没有候选区域");
-        return;
-    }
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-
-    const auto strictCandidates = filterStrictPlaneMergeCandidates(controller_.document(), lastMergeCandidates_);
-    if (strictCandidates.empty()) {
-        viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
-        refreshModelTree();
-        const auto message = QString("当前没有可真实平面合并的原生 Plane 候选。\n"
-                                     "当前 PlaneLike 可能是 B-spline backed planar-like 候选，只能用于预览，严格 PlaneRegionMerge 会拒绝。");
-        inspectPanel_->showReport(message);
-        logPanel_->appendWarning(message);
-        setStatus("没有可平面合并候选");
-        return;
-    }
-
-    viewer_->showMergeCandidates(strictCandidates, 10, true);
-    if (hasFeatureEdgeResult_) {
-        viewer_->showFeatureEdges(controller_.featureEdges());
-    }
-    visibleMergeCandidateCount_ = static_cast<int>(strictCandidates.size());
-    visibleMergeCandidateIds_.clear();
-    for (const auto& candidate : strictCandidates) {
-        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
-    }
-    refreshModelTree();
-    showCandidateStatusReport("已显示可真实平面合并候选");
-    setStatus("已显示可平面合并候选");
 }
 
 void MainWindow::showMergeCandidatesByTypeDialog() {
@@ -2162,423 +2041,6 @@ void MainWindow::showPendingMergeCandidates() {
     showFilteredMergeCandidates(MergeCandidateStatus::Pending);
 }
 
-void MainWindow::mergeCurrentPlaneCandidate() {
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-
-    auto* candidate = currentMergeCandidate();
-    if (candidate == nullptr) {
-        inspectPanel_->showReport("请先在候选选择模式下点击一个候选区域，或按 ID 高亮一个候选区域。");
-        logPanel_->appendWarning("执行平面候选合并前未选择候选区域。");
-        setStatus("未选择候选区域");
-        return;
-    }
-
-    if (candidate->candidate_type != MergeCandidateType::PlaneLike) {
-        inspectPanel_->showReport(QString("当前候选不是 PlaneLike，不能执行平面区域合并。\n候选 ID：%1\n候选类型：%2")
-            .arg(candidate->candidate_id)
-            .arg(candidateTypeText(candidate->candidate_type)));
-        setStatus("当前候选不是平面候选");
-        return;
-    }
-
-    const auto params = parameterPanel_->parameters();
-    const auto options = makePlaneMergeOptions(params, false);
-
-    const auto result = controller_.mergePlaneCandidate(*candidate, options);
-    const auto report = QString("平面候选合并%1\nmode：%2\nallow_approximate_planar_surfaces：%3\napproximate_plane_max_deviation：%4\n候选 ID：%5\n候选类型：%6\n候选状态：%7\n失败原因：%8\n消息：%9\n文档状态：%10\n平面法向：(%11, %12, %13)\n合并前 face：%14\n合并后 face：%15\nface reduction ratio：%16%\n合并前 edge：%17\n合并后 edge：%18\nedge reduction ratio：%19%\nmax deviation：%20\nmean deviation：%21\nrms deviation：%22\nBRepCheck：%23\nSTEP roundtrip gate：后端强制执行")
-        .arg(result.success ? "完成" : "失败")
-        .arg(planeMergeModeText(false))
-        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
-        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
-        .arg(candidate->candidate_id)
-        .arg(candidateTypeText(candidate->candidate_type))
-        .arg(candidateStatusText(candidate->status))
-        .arg(regionMergeFailureText(result.failure_reason))
-        .arg(QString::fromStdString(result.message))
-        .arg(regionMergeDocumentStateText(result))
-        .arg(QString::number(result.plane_normal_x, 'f', 6))
-        .arg(QString::number(result.plane_normal_y, 'f', 6))
-        .arg(QString::number(result.plane_normal_z, 'f', 6))
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after)
-        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
-        .arg(QString::number(result.max_deviation, 'g', 6))
-        .arg(QString::number(result.mean_deviation, 'g', 6))
-        .arg(QString::number(result.rms_deviation, 'g', 6))
-        .arg(result.brep_check_valid ? "通过" : "失败");
-
-    inspectPanel_->showReport(report);
-    if (!result.success) {
-        logPanel_->appendWarning(QString("平面候选合并失败：候选 %1，原因 %2，%3")
-            .arg(candidate->candidate_id)
-            .arg(regionMergeFailureText(result.failure_reason))
-            .arg(QString::fromStdString(result.message)));
-        setStatus("平面候选合并失败");
-        refreshUndoRedoActions();
-        return;
-    }
-
-    refreshDocumentViews();
-    logPanel_->appendInfo(QString("平面候选合并完成：候选 %1，face %2 -> %3，edge %4 -> %5")
-        .arg(result.candidate_id)
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after));
-    setStatus("平面候选合并完成");
-    refreshUndoRedoActions();
-}
-
-void MainWindow::mergeAcceptedPlaneCandidates() {
-    std::vector<MergeCandidate> candidates;
-    for (const auto& candidate : lastMergeCandidates_) {
-        if (candidate.candidate_type == MergeCandidateType::PlaneLike &&
-            candidate.status == MergeCandidateStatus::Accepted &&
-            controller_.hasDocument() &&
-            isStrictPlaneMergeCandidate(controller_.document(), candidate)) {
-            candidates.push_back(candidate);
-        }
-    }
-    mergePlaneCandidateBatch(candidates, "合并所有已接受平面候选", false);
-}
-
-void MainWindow::mergeAllMergeablePlaneCandidates() {
-    const auto candidates = controller_.hasDocument()
-        ? filterStrictPlaneMergeCandidates(controller_.document(), lastMergeCandidates_)
-        : std::vector<MergeCandidate>{};
-    mergePlaneCandidateBatch(candidates, "一键合并全部可合并平面候选", false);
-}
-
-void MainWindow::mergeCurrentApproximatePlaneCandidate() {
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-
-    auto* candidate = currentMergeCandidate();
-    if (candidate == nullptr) {
-        inspectPanel_->showReport("请先在候选选择模式下点击一个候选区域，或按 ID 高亮一个候选区域。");
-        logPanel_->appendWarning("实验性近似平面合并前未选择候选区域。");
-        setStatus("未选择候选区域");
-        return;
-    }
-
-    if (!isApproximatePlaneMergeCandidate(*candidate)) {
-        inspectPanel_->showReport(QString("当前候选不满足实验性近似平面合并入口条件。\n候选 ID：%1\n候选类型：%2\n候选状态：%3\nface 数：%4\nboundary edge 数：%5")
-            .arg(candidate->candidate_id)
-            .arg(candidateTypeText(candidate->candidate_type))
-            .arg(candidateStatusText(candidate->status))
-            .arg(candidate->face_count)
-            .arg(candidate->boundary_edges.size()));
-        setStatus("当前候选不能进入实验性近似平面合并");
-        return;
-    }
-
-    const auto params = parameterPanel_->parameters();
-    const auto options = makePlaneMergeOptions(params, true);
-    const auto result = controller_.mergePlaneCandidate(*candidate, options);
-    const auto report = QString("实验性近似平面候选合并%1\nmode：%2\nallow_approximate_planar_surfaces：%3\napproximate_plane_max_deviation：%4\n候选 ID：%5\n候选类型：%6\n候选状态：%7\n失败原因：%8\n消息：%9\n文档状态：%10\n平面法向：(%11, %12, %13)\n合并前 face：%14\n合并后 face：%15\nface reduction ratio：%16%\n合并前 edge：%17\n合并后 edge：%18\nedge reduction ratio：%19%\nmax deviation：%20\nmean deviation：%21\nrms deviation：%22\nBRepCheck：%23\nSTEP roundtrip gate：后端强制执行")
-        .arg(result.success ? "完成" : "失败")
-        .arg(planeMergeModeText(true))
-        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
-        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
-        .arg(candidate->candidate_id)
-        .arg(candidateTypeText(candidate->candidate_type))
-        .arg(candidateStatusText(candidate->status))
-        .arg(regionMergeFailureText(result.failure_reason))
-        .arg(QString::fromStdString(result.message))
-        .arg(regionMergeDocumentStateText(result))
-        .arg(QString::number(result.plane_normal_x, 'f', 6))
-        .arg(QString::number(result.plane_normal_y, 'f', 6))
-        .arg(QString::number(result.plane_normal_z, 'f', 6))
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after)
-        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
-        .arg(QString::number(result.max_deviation, 'g', 6))
-        .arg(QString::number(result.mean_deviation, 'g', 6))
-        .arg(QString::number(result.rms_deviation, 'g', 6))
-        .arg(result.brep_check_valid ? "通过" : "失败");
-
-    inspectPanel_->showReport(report);
-    if (!result.success) {
-        logPanel_->appendWarning(QString("实验性近似平面候选合并失败：候选 %1，原因 %2，%3")
-            .arg(candidate->candidate_id)
-            .arg(regionMergeFailureText(result.failure_reason))
-            .arg(QString::fromStdString(result.message)));
-        setStatus("实验性近似平面候选合并失败");
-        refreshUndoRedoActions();
-        return;
-    }
-
-    refreshDocumentViews();
-    logPanel_->appendInfo(QString("实验性近似平面候选合并完成：候选 %1，face %2 -> %3，edge %4 -> %5")
-        .arg(result.candidate_id)
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after));
-    setStatus("实验性近似平面候选合并完成");
-    refreshUndoRedoActions();
-}
-
-void MainWindow::mergeAllApproximatePlaneCandidates() {
-    const auto candidates = filterApproximatePlaneMergeCandidates(lastMergeCandidates_);
-    mergeApproximatePlaneCandidateBatch(candidates, "实验性合并全部近似平面候选");
-}
-
-void MainWindow::mergeApproximatePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title) {
-    mergePlaneCandidateBatch(candidates, title, true);
-}
-
-void MainWindow::mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title, bool approximateMode) {
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-    if (lastMergeCandidates_.empty()) {
-        inspectPanel_->showReport("请先点击“预览合并”生成候选区域。");
-        logPanel_->appendWarning("批量平面合并前尚未生成候选区域。");
-        setStatus("没有候选区域");
-        return;
-    }
-    if (candidates.empty()) {
-        const auto reason = approximateMode
-            ? "没有符合实验性近似平面合并入口条件的 PlaneLike 候选区域。"
-            : "没有符合严格平面合并条件的原生 PlaneLike 候选区域。\nB-spline backed planar-like candidate 请使用实验性近似平面入口。";
-        inspectPanel_->showReport(QString("%1\nmode：%2\n%3")
-            .arg(title)
-            .arg(planeMergeModeText(approximateMode))
-            .arg(reason));
-        logPanel_->appendWarning(QString("%1：%2").arg(title, reason));
-        setStatus("没有可批量合并的平面候选");
-        return;
-    }
-
-    const auto params = parameterPanel_->parameters();
-    const auto options = makePlaneMergeOptions(params, approximateMode);
-
-    const auto result = controller_.mergePlaneCandidates(candidates, options);
-    const auto report = QString("%1%2\nmode：%3\nallow_approximate_planar_surfaces：%4\napproximate_plane_max_deviation：%5\n输入候选数量：%6\n候选 ID：%7\n候选类型：PlaneLike\n候选状态：%8\n失败原因：%9\n消息：%10\n文档状态：%11\n合并前 face：%12\n合并后 face：%13\nface reduction ratio：%14%\n合并前 edge：%15\n合并后 edge：%16\nedge reduction ratio：%17%\nmax deviation：%18\nmean deviation：%19\nrms deviation：%20\nBRepCheck：%21\nSTEP roundtrip gate：后端强制执行")
-        .arg(title)
-        .arg(result.success ? "完成" : "失败")
-        .arg(planeMergeModeText(approximateMode))
-        .arg(options.allow_approximate_planar_surfaces ? "true" : "false")
-        .arg(QString::number(options.approximate_plane_max_deviation, 'g', 6))
-        .arg(candidates.size())
-        .arg(candidateIdSummary(candidates))
-        .arg(candidateStatusSummary(candidates))
-        .arg(regionMergeFailureText(result.failure_reason))
-        .arg(QString::fromStdString(result.message))
-        .arg(regionMergeDocumentStateText(result))
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after)
-        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
-        .arg(QString::number(result.max_deviation, 'g', 6))
-        .arg(QString::number(result.mean_deviation, 'g', 6))
-        .arg(QString::number(result.rms_deviation, 'g', 6))
-        .arg(result.brep_check_valid ? "通过" : "失败");
-
-    inspectPanel_->showReport(report);
-    if (!result.success) {
-        logPanel_->appendWarning(QString("%1失败：原因 %2，%3")
-            .arg(title)
-            .arg(regionMergeFailureText(result.failure_reason))
-            .arg(QString::fromStdString(result.message)));
-        setStatus(QString("%1失败").arg(title));
-        refreshUndoRedoActions();
-        return;
-    }
-
-    refreshDocumentViews();
-    logPanel_->appendInfo(QString("%1完成：输入候选 %2，face %3 -> %4，edge %5 -> %6")
-        .arg(title)
-        .arg(candidates.size())
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after));
-    setStatus(QString("%1完成").arg(title));
-    refreshUndoRedoActions();
-}
-
-void MainWindow::mergeCurrentSphereCandidate() {
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-    if (lastMergeCandidates_.empty() || currentMergeCandidateId_ < 0) {
-        inspectPanel_->showReport("请先选择一个候选区域。");
-        setStatus("没有选中候选");
-        return;
-    }
-    const auto* candidate = currentMergeCandidate();
-    if (candidate == nullptr) {
-        inspectPanel_->showReport("请先选择一个候选区域。");
-        setStatus("没有选中候选");
-        return;
-    }
-    if (candidate->candidate_type != MergeCandidateType::SphereLike) {
-        inspectPanel_->showReport(QString("当前候选不是 SphereLike，不能执行球面区域合并。\n候选 ID：%1\n候选类型：%2")
-            .arg(candidate->candidate_id)
-            .arg(candidateTypeText(candidate->candidate_type)));
-        setStatus("当前候选不是球面候选");
-        return;
-    }
-
-    const auto params = parameterPanel_->parameters();
-    SphereRegionMergeOptions options;
-    options.sphere_radius_tolerance = std::max(options.sphere_radius_tolerance, params.linear_tolerance);
-    options.allow_pending_candidate = true;
-    options.require_accepted_candidate = false;
-    options.min_region_faces = 2;
-
-    const auto result = controller_.mergeSphereCandidate(*candidate, options);
-    const auto report = QString("球面候选合并%1\n候选 ID：%2\n候选类型：%3\n候选状态：%4\n失败原因：%5\n消息：%6\n文档状态：%7\n球心：(%8, %9, %10)\n球半径：%11\n拟合误差：%12\n合并前 face：%13\n合并后 face：%14\nface reduction ratio：%15%\n合并前 edge：%16\n合并后 edge：%17\nedge reduction ratio：%18%\nmax deviation：%19\nmean deviation：%20\nrms deviation：%21\nBRepCheck：%22")
-        .arg(result.success ? "完成" : "失败")
-        .arg(candidate->candidate_id)
-        .arg(candidateTypeText(candidate->candidate_type))
-        .arg(candidateStatusText(candidate->status))
-        .arg(regionMergeFailureText(result.failure_reason))
-        .arg(QString::fromStdString(result.message))
-        .arg(regionMergeDocumentStateText(result))
-        .arg(QString::number(result.primitive_center_x, 'f', 6))
-        .arg(QString::number(result.primitive_center_y, 'f', 6))
-        .arg(QString::number(result.primitive_center_z, 'f', 6))
-        .arg(QString::number(result.primitive_radius, 'f', 6))
-        .arg(QString::number(result.primitive_fit_error, 'g', 6))
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after)
-        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
-        .arg(QString::number(result.max_deviation, 'g', 6))
-        .arg(QString::number(result.mean_deviation, 'g', 6))
-        .arg(QString::number(result.rms_deviation, 'g', 6))
-        .arg(result.brep_check_valid ? "通过" : "失败");
-
-    inspectPanel_->showReport(report);
-    if (!result.success) {
-        logPanel_->appendWarning(QString("球面候选合并失败：候选 %1，原因 %2，%3")
-            .arg(candidate->candidate_id)
-            .arg(regionMergeFailureText(result.failure_reason))
-            .arg(QString::fromStdString(result.message)));
-        setStatus("球面候选合并失败");
-        refreshUndoRedoActions();
-        return;
-    }
-
-    refreshDocumentViews();
-    logPanel_->appendInfo(QString("球面候选合并完成：候选 %1，face %2 -> %3，edge %4 -> %5")
-        .arg(result.candidate_id)
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after));
-    setStatus("球面候选合并完成");
-    refreshUndoRedoActions();
-}
-
-void MainWindow::mergeAcceptedSphereCandidates() {
-    std::vector<MergeCandidate> candidates;
-    for (const auto& candidate : lastMergeCandidates_) {
-        if (candidate.candidate_type == MergeCandidateType::SphereLike &&
-            candidate.status == MergeCandidateStatus::Accepted) {
-            candidates.push_back(candidate);
-        }
-    }
-    mergeSphereCandidateBatch(candidates, "合并所有已接受球面候选");
-}
-
-void MainWindow::mergeAllMergeableSphereCandidates() {
-    const auto candidates = filterMergeableSphereCandidates(lastMergeCandidates_);
-    mergeSphereCandidateBatch(candidates, "一键合并全部可合并球面候选");
-}
-
-void MainWindow::mergeSphereCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title) {
-    if (!controller_.hasDocument()) {
-        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
-        setStatus("未加载模型");
-        return;
-    }
-    if (lastMergeCandidates_.empty()) {
-        inspectPanel_->showReport(QString::fromUtf8("请先点击“预览合并”生成候选区域。"));
-        logPanel_->appendWarning("批量球面合并前尚未生成候选区域。");
-        setStatus("没有候选区域");
-        return;
-    }
-    if (candidates.empty()) {
-        inspectPanel_->showReport(QString("%1\n没有符合条件的 SphereLike 候选区域。").arg(title));
-        logPanel_->appendWarning(QString("%1：没有符合条件的 SphereLike 候选区域。").arg(title));
-        setStatus("没有可批量合并的球面候选");
-        return;
-    }
-
-    SphereRegionMergeOptions options;
-    const auto params = parameterPanel_->parameters();
-    options.sphere_radius_tolerance = std::max(options.sphere_radius_tolerance, params.linear_tolerance);
-    options.allow_pending_candidate = true;
-    options.require_accepted_candidate = false;
-    options.min_region_faces = 2;
-
-    const auto result = controller_.mergeSphereCandidates(candidates, options);
-    const auto report = QString("%1%2\n输入候选数量：%3\n失败原因：%4\n消息：%5\n文档状态：%6\n合并前 face：%7\n合并后 face：%8\nface reduction ratio：%9%\n合并前 edge：%10\n合并后 edge：%11\nedge reduction ratio：%12%\nmax deviation：%13\nmean deviation：%14\nrms deviation：%15\nBRepCheck：%16")
-        .arg(title)
-        .arg(result.success ? "完成" : "失败")
-        .arg(candidates.size())
-        .arg(regionMergeFailureText(result.failure_reason))
-        .arg(QString::fromStdString(result.message))
-        .arg(regionMergeDocumentStateText(result))
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(QString::number(result.face_reduction_ratio * 100.0, 'f', 2))
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after)
-        .arg(QString::number(result.edge_reduction_ratio * 100.0, 'f', 2))
-        .arg(QString::number(result.max_deviation, 'g', 6))
-        .arg(QString::number(result.mean_deviation, 'g', 6))
-        .arg(QString::number(result.rms_deviation, 'g', 6))
-        .arg(result.brep_check_valid ? "通过" : "失败");
-
-    inspectPanel_->showReport(report);
-    if (!result.success) {
-        logPanel_->appendWarning(QString("%1失败：原因 %2，%3")
-            .arg(title)
-            .arg(regionMergeFailureText(result.failure_reason))
-            .arg(QString::fromStdString(result.message)));
-        setStatus(QString("%1失败").arg(title));
-        refreshUndoRedoActions();
-        return;
-    }
-
-    refreshDocumentViews();
-    logPanel_->appendInfo(QString("%1完成：输入候选 %2，face %3 -> %4，edge %5 -> %6")
-        .arg(title)
-        .arg(candidates.size())
-        .arg(result.face_count_before)
-        .arg(result.face_count_after)
-        .arg(result.edge_count_before)
-        .arg(result.edge_count_after));
-    setStatus(QString("%1完成").arg(title));
-    refreshUndoRedoActions();
-}
-
 void MainWindow::applyMerge() {
     if (!controller_.hasDocument()) {
         inspectPanel_->showReport("请先打开 STEP/STP 文件。");
@@ -2768,6 +2230,7 @@ void MainWindow::refreshPatchPreviewProgressReport() {
         return;
     }
     inspectPanel_->showReport(patchPreviewProgressReportText());
+    setStatus(patchProgressStatusText());
 }
 
 void MainWindow::stopPatchPreviewProgressReport() {
@@ -2823,6 +2286,9 @@ QString MainWindow::patchPreviewProgressLine(const ProcessStatusSnapshot& status
     if (!status.fitRegionLogPath.empty()) {
         fields << QString("fit_region log=%1").arg(pathToQString(status.fitRegionLogPath));
     }
+    if (!status.patchPreviewRunLogPath.empty()) {
+        fields << QString("run log=%1").arg(pathToQString(status.patchPreviewRunLogPath));
+    }
     if (!status.latestMessage.empty()) {
         fields << QString("message=%1").arg(QString::fromStdString(status.latestMessage));
     }
@@ -2836,7 +2302,8 @@ QString MainWindow::patchProgressStatusText() const {
     QString statusPrefix = "Patch 预览";
     if (patchPreviewProgressHeader_.startsWith("Patch Apply")) {
         statusPrefix = "Patch Apply";
-    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP")) {
+    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP") ||
+               patchPreviewProgressHeader_.startsWith("STEP ")) {
         statusPrefix = "STEP/STP";
     } else if (patchPreviewProgressHeader_.startsWith("合并候选")) {
         statusPrefix = "合并候选";
@@ -2845,6 +2312,8 @@ QString MainWindow::patchProgressStatusText() const {
     QStringList fields;
     fields << statusPrefix;
     fields << QString::fromLatin1(toString(patchPreviewLastProgress_.stage));
+    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
+    fields << QString("elapsed %1").arg(elapsedText(elapsed));
     if (patchPreviewLastProgress_.candidateId >= 0) {
         fields << QString("candidate %1").arg(patchPreviewLastProgress_.candidateId);
     }
@@ -2975,13 +2444,10 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
         report += QString("\nAdjacent Protected Edges：%1\nAdjacent Locked Edges：%2")
             .arg(info.adjacent_protected_edge_count)
             .arg(info.adjacent_locked_edge_count);
-        if (info.sphere_like_single_patch) {
-            report += "\nNote：该 face 可识别为 SphereLike 单面 patch，但单面区域没有可消除的内部边，因此不会作为合并候选显示。";
-        }
         if (!hasCandidatePreview) {
             report += "\nNote：当前尚未生成合并候选，请先点击“预览合并”。";
         } else {
-            report += "\nNote：当前候选检测已启用 FeatureBoundedRefit / CylinderLike / ConeLike / TorusLike。若该面仍未进入候选，通常是因为区域面数不足，或邻接 protected/locked edge 阻断。";
+            report += "\nNote：当前候选检测只生成 FeatureBoundedRefit。若该面仍未进入候选，通常是因为区域面数不足，或邻接 protected/locked edge 阻断。";
         }
     }
 
@@ -3125,14 +2591,6 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     rejectMergeCandidateAction_->setEnabled(!inProgress);
     hideMergeCandidateAction_->setEnabled(!inProgress);
     restoreMergeCandidateAction_->setEnabled(!inProgress);
-    mergePlaneCandidateAction_->setEnabled(!inProgress);
-    mergeAcceptedPlaneCandidatesAction_->setEnabled(!inProgress);
-    mergeAllPlaneCandidatesAction_->setEnabled(!inProgress);
-    mergeApproximatePlaneCandidateAction_->setEnabled(!inProgress);
-    mergeAllApproximatePlaneCandidatesAction_->setEnabled(!inProgress);
-    mergeSphereCandidateAction_->setEnabled(!inProgress);
-    mergeAcceptedSphereCandidatesAction_->setEnabled(!inProgress);
-    mergeAllSphereCandidatesAction_->setEnabled(!inProgress);
     if (inProgress) {
         applyCurrentPatchAction_->setEnabled(false);
     } else {

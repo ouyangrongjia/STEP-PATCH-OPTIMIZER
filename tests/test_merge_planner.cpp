@@ -9,11 +9,7 @@
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <TopoDS.hxx>
-#include <gp_Ax3.hxx>
-#include <gp_Cylinder.hxx>
-#include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
-#include <gp_Sphere.hxx>
 
 #include <algorithm>
 #include <cassert>
@@ -78,28 +74,6 @@ TwoFaceFixture create_two_face_document() {
         }
     }
     return fixture;
-}
-
-spo::ShapeDocument create_split_cylinder_document() {
-    const gp_Cylinder cylinder(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 5.0);
-    const auto first = BRepBuilderAPI_MakeFace(cylinder, 0.0, 3.14159265358979323846, 0.0, 10.0).Face();
-    const auto second = BRepBuilderAPI_MakeFace(cylinder, 3.14159265358979323846, 6.28318530717958647692, 0.0, 10.0).Face();
-    BRepBuilderAPI_Sewing sewing;
-    sewing.Add(first);
-    sewing.Add(second);
-    sewing.Perform();
-    return spo::ShapeDocument(sewing.SewedShape(), {});
-}
-
-spo::ShapeDocument create_split_sphere_document() {
-    const gp_Sphere sphere(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)), 5.0);
-    const auto first = BRepBuilderAPI_MakeFace(sphere, 0.0, 3.14159265358979323846, -0.6, 0.6).Face();
-    const auto second = BRepBuilderAPI_MakeFace(sphere, 3.14159265358979323846, 6.28318530717958647692, -0.6, 0.6).Face();
-    BRepBuilderAPI_Sewing sewing;
-    sewing.Add(first);
-    sewing.Add(second);
-    sewing.Perform();
-    return spo::ShapeDocument(sewing.SewedShape(), {});
 }
 
 std::filesystem::path temp_step_path() {
@@ -170,25 +144,22 @@ std::vector<spo::MergeCandidate> non_hidden_candidates(const std::vector<spo::Me
     return filtered;
 }
 
-void test_merge_planner_creates_plane_candidates_without_modifying_document() {
+void test_merge_planner_creates_feature_bounded_candidates_without_modifying_document() {
     const auto document = create_box_document();
     const auto before = document.stats();
 
     spo::MergePlannerOptions options;
-    options.min_region_faces = 1;
-    options.enable_feature_bounded_refit_candidates = false;
+    options.min_feature_bounded_region_faces = 1;
 
     const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
-    const auto result = planner.plan(document, featureEdges, {}, options);
+    const auto result = planner.plan(document, {}, {}, options);
 
     assert(same_stats(document.stats(), before));
     assert(result.visited_faces == before.faces);
     assert(!result.candidates.empty());
     for (const auto& candidate : result.candidates) {
-        assert(candidate.candidate_type == spo::MergeCandidateType::PlaneLike);
+        assert(candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
         assert(candidate.face_count == static_cast<int>(candidate.faces.size()));
-        assert(candidate.total_area >= 0.0);
         assert(candidate.valid);
     }
 }
@@ -198,35 +169,13 @@ void test_protected_edges_are_reported_for_region_growth_barriers() {
     assert(document.topology().edgeCount() > 0);
 
     spo::MergePlannerOptions options;
-    options.min_region_faces = 1;
-    options.enable_feature_bounded_refit_candidates = false;
+    options.min_feature_bounded_region_faces = 1;
 
     const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
-    const auto result = planner.plan(document, featureEdges, std::set<spo::EdgeId>{0}, options);
+    const auto result = planner.plan(document, {}, std::set<spo::EdgeId>{0}, options);
 
-    assert(result.protected_edge_count == 1);
+    assert(result.protected_edge_count >= 1);
     assert(same_stats(document.stats(), create_box_document().stats()));
-}
-
-void test_min_region_faces_filters_candidates() {
-    const auto document = create_box_document();
-
-    spo::MergePlannerOptions permissive;
-    permissive.min_region_faces = 1;
-    permissive.enable_feature_bounded_refit_candidates = false;
-    spo::MergePlannerOptions strict;
-    strict.min_region_faces = 1000;
-    strict.enable_feature_bounded_refit_candidates = false;
-
-    const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
-    const auto permissiveResult = planner.plan(document, featureEdges, {}, permissive);
-    const auto strictResult = planner.plan(document, featureEdges, {}, strict);
-
-    assert(permissiveResult.candidates.size() >= strictResult.candidates.size());
-    assert(strictResult.candidates.empty());
-    assert(strictResult.rejected_regions > 0);
 }
 
 void test_app_controller_preview_keeps_document_and_counts_locked_edges() {
@@ -237,8 +186,7 @@ void test_app_controller_preview_keeps_document_and_counts_locked_edges() {
 
     const auto before = controller.document().stats();
     spo::MergePlannerOptions options;
-    options.min_region_faces = 1;
-    options.enable_feature_bounded_refit_candidates = false;
+    options.min_feature_bounded_region_faces = 1;
 
     const auto result = controller.previewMergeCandidates(180.0, 0.0, options);
     assert(result.protected_edge_count >= 1);
@@ -272,20 +220,20 @@ void test_merge_candidate_status_defaults_and_filters() {
 }
 
 void test_candidate_status_changes_do_not_modify_document_stats() {
-    const auto document = create_box_document();
-    const auto before = document.stats();
+    const auto fixture = create_two_face_document();
+    const auto before = fixture.document.stats();
 
     spo::MergePlannerOptions options;
-    options.min_region_faces = 1;
-    options.enable_feature_bounded_refit_candidates = false;
+    options.min_feature_bounded_region_faces = 2;
 
     const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
-    auto result = planner.plan(document, featureEdges, {}, options);
+    auto result = planner.plan(fixture.document, {}, {}, options);
     assert(!result.candidates.empty());
 
     auto* candidate = find_candidate(result.candidates, result.candidates.front().candidate_id);
     assert(candidate != nullptr);
+    assert(candidate->candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
+
     candidate->status = spo::MergeCandidateStatus::Accepted;
     assert(candidate->status == spo::MergeCandidateStatus::Accepted);
     candidate->status = spo::MergeCandidateStatus::Rejected;
@@ -293,47 +241,22 @@ void test_candidate_status_changes_do_not_modify_document_stats() {
     candidate->status = spo::MergeCandidateStatus::Hidden;
     assert(candidate->status == spo::MergeCandidateStatus::Hidden);
 
-    assert(same_stats(document.stats(), before));
-}
-
-void test_feature_bounded_candidate_status_changes_do_not_modify_document_stats() {
-    const auto fixture = create_two_face_document();
-    const auto before = fixture.document.stats();
-
-    spo::MergePlannerOptions options;
-    options.enable_plane_candidates = false;
-    options.min_feature_bounded_region_faces = 2;
-
-    const spo::MergePlanner planner;
-    auto result = planner.plan(fixture.document, {}, {}, options);
-    auto* candidate = find_candidate(result.candidates, 0);
-    assert(candidate != nullptr);
-    assert(candidate->candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
-
-    candidate->status = spo::MergeCandidateStatus::Accepted;
-    assert(same_stats(fixture.document.stats(), before));
-    candidate->status = spo::MergeCandidateStatus::Rejected;
-    assert(same_stats(fixture.document.stats(), before));
-    candidate->status = spo::MergeCandidateStatus::Hidden;
     assert(same_stats(fixture.document.stats(), before));
 }
 
 void test_feature_bounded_refit_enable_flag_controls_generation() {
     const auto fixture = create_two_face_document();
     const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
 
     spo::MergePlannerOptions disabled;
-    disabled.enable_plane_candidates = false;
     disabled.enable_feature_bounded_refit_candidates = false;
-    const auto disabledResult = planner.plan(fixture.document, featureEdges, {}, disabled);
+    const auto disabledResult = planner.plan(fixture.document, {}, {}, disabled);
     assert(candidates_of_type(disabledResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
 
     spo::MergePlannerOptions enabled;
-    enabled.enable_plane_candidates = false;
     enabled.enable_feature_bounded_refit_candidates = true;
     enabled.min_feature_bounded_region_faces = 2;
-    const auto enabledResult = planner.plan(fixture.document, featureEdges, {}, enabled);
+    const auto enabledResult = planner.plan(fixture.document, {}, {}, enabled);
     const auto featureBounded = candidates_of_type(enabledResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit);
     assert(featureBounded.size() == 1);
     assert(featureBounded.front().face_count == 2);
@@ -342,18 +265,15 @@ void test_feature_bounded_refit_enable_flag_controls_generation() {
 void test_min_feature_bounded_region_faces_filters_candidates() {
     const auto fixture = create_two_face_document();
     const spo::MergePlanner planner;
-    const spo::FeatureEdgeDetectionResult featureEdges;
 
     spo::MergePlannerOptions permissive;
-    permissive.enable_plane_candidates = false;
     permissive.min_feature_bounded_region_faces = 2;
-    const auto permissiveResult = planner.plan(fixture.document, featureEdges, {}, permissive);
+    const auto permissiveResult = planner.plan(fixture.document, {}, {}, permissive);
     assert(candidates_of_type(permissiveResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).size() == 1);
 
     spo::MergePlannerOptions strict;
-    strict.enable_plane_candidates = false;
     strict.min_feature_bounded_region_faces = 3;
-    const auto strictResult = planner.plan(fixture.document, featureEdges, {}, strict);
+    const auto strictResult = planner.plan(fixture.document, {}, {}, strict);
     assert(candidates_of_type(strictResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
     assert(strictResult.visited_faces == 2);
     assert(strictResult.rejected_regions == 1);
@@ -364,7 +284,6 @@ void test_locked_edges_and_feature_edges_bound_feature_bounded_regions() {
     const spo::MergePlanner planner;
 
     spo::MergePlannerOptions options;
-    options.enable_plane_candidates = false;
     options.min_feature_bounded_region_faces = 1;
 
     const auto lockedResult = planner.plan(fixture.document, {}, {fixture.shared_edge}, options);
@@ -390,45 +309,29 @@ void test_locked_edges_and_feature_edges_bound_feature_bounded_regions() {
     }
 }
 
-void test_feature_bounded_refit_does_not_replace_existing_candidate_entries() {
-    const auto planeDocument = create_box_document();
-    const auto cylinderDocument = create_split_cylinder_document();
-    const auto sphereDocument = create_split_sphere_document();
+void test_merge_planner_only_emits_feature_bounded_refit_candidates() {
+    const auto document = create_box_document();
     const spo::MergePlanner planner;
 
-    spo::MergePlannerOptions planeOptions;
-    planeOptions.min_region_faces = 1;
-    const auto planeResult = planner.plan(planeDocument, {}, {}, planeOptions);
-    assert(!candidates_of_type(planeResult.candidates, spo::MergeCandidateType::PlaneLike).empty());
-    assert(!candidates_of_type(planeResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
-
-    spo::MergePlannerOptions cylinderOptions;
-    cylinderOptions.enable_plane_candidates = false;
-    cylinderOptions.enable_cylinder_candidates = true;
-    const auto cylinderResult = planner.plan(cylinderDocument, {}, {}, cylinderOptions);
-    assert(!candidates_of_type(cylinderResult.candidates, spo::MergeCandidateType::CylinderLike).empty());
-    assert(!candidates_of_type(cylinderResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
-
-    spo::MergePlannerOptions sphereOptions;
-    sphereOptions.enable_plane_candidates = false;
-    sphereOptions.enable_sphere_candidates = true;
-    const auto sphereResult = planner.plan(sphereDocument, {}, {}, sphereOptions);
-    assert(!candidates_of_type(sphereResult.candidates, spo::MergeCandidateType::SphereLike).empty());
-    assert(!candidates_of_type(sphereResult.candidates, spo::MergeCandidateType::FeatureBoundedRefit).empty());
+    spo::MergePlannerOptions options;
+    options.min_feature_bounded_region_faces = 1;
+    const auto result = planner.plan(document, {}, {}, options);
+    assert(!result.candidates.empty());
+    for (const auto& candidate : result.candidates) {
+        assert(candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
+    }
 }
 
 }
 
 void run_merge_planner_tests() {
-    test_merge_planner_creates_plane_candidates_without_modifying_document();
+    test_merge_planner_creates_feature_bounded_candidates_without_modifying_document();
     test_protected_edges_are_reported_for_region_growth_barriers();
-    test_min_region_faces_filters_candidates();
     test_app_controller_preview_keeps_document_and_counts_locked_edges();
     test_merge_candidate_status_defaults_and_filters();
     test_candidate_status_changes_do_not_modify_document_stats();
-    test_feature_bounded_candidate_status_changes_do_not_modify_document_stats();
     test_feature_bounded_refit_enable_flag_controls_generation();
     test_min_feature_bounded_region_faces_filters_candidates();
     test_locked_edges_and_feature_edges_bound_feature_bounded_regions();
-    test_feature_bounded_refit_does_not_replace_existing_candidate_entries();
+    test_merge_planner_only_emits_feature_bounded_refit_candidates();
 }

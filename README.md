@@ -31,6 +31,12 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 
 4. docs/project_structure.md
    当前目录结构、文件职责、开发边界和后续增强边界。
+
+5. docs/TODO.md
+   当前执行 TODO、阶段边界和验收要求。
+
+6. docs/geomagic_patch_workflow.md
+   Geomagic patch preview / Apply 主线流程。
 ```
 
 如果文档之间出现冲突，按以下规则处理：
@@ -40,6 +46,7 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 当前任务优先级和验收标准以 docs/implementation_status.md 为准。
 构建、运行、测试命令以 README.md 和 docs/run_gui.md 为准。
 目录结构以真实仓库和 CMakeLists.txt 为准，再同步更新 docs/project_structure.md。
+Geomagic patch preview / Apply 主线以 docs/TODO.md 和 docs/geomagic_patch_workflow.md 为准。
 ```
 
 ## 从 0 开始一键配置
@@ -363,5 +370,6 @@ tools         批处理和 STEP 统计工具
 
 ```text
 架构边界：docs/module_design.md
-任务顺序与验收：docs/implementation_status.md
+任务顺序与验收：docs/implementation_status.md / docs/TODO.md
+Geomagic patch 主线流程：docs/geomagic_patch_workflow.md
 ```

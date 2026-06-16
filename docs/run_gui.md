@@ -199,6 +199,14 @@ data\crop_stp\<model>\<model>_candidate_<id>.stp
 data\crop_stp\<model>\<model>_candidate_<id>_fit_region.log
 ```
 
+GUI 一键 Patch preview 还会为每次点击生成独立 root run log：
+
+```text
+log\patch_preview_<timestamp>_candidate_<id>.log
+```
+
+状态栏会显示当前阶段和总 elapsed。若 `fit_region.log` 显示 Geomagic Wrap 内部很快结束，但 GUI 仍在运行，优先查看 root run log 中 `RunningGeomagic`、`ImportingPatch`、`PreviewReady` 的 `duration_ms`。
+
 报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary / corner anchor / feature edge drift。
 
 该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程变成可重复的 baseline 数据生成器。
@@ -292,7 +300,7 @@ protectedEdges 传入 SameDomainUnifier
 OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 ```
 
-注意：当前合并算法偏保守，只会合并同一底层几何域上的碎片面。对于视觉上接近连续但底层不是同一 surface 的碎片面，需要后续 MergePlanner / MergeRegionGrower / SurfaceRefitter 等增强模块。
+注意：当前合并算法偏保守。same-domain 合并只处理同一底层几何域上的碎片面；Geomagic patch 主线通过 MergePlanner / FeatureBoundedRegionBuilder 生成 FeatureBoundedRefit 候选，再进入 patch preview / Apply。旧 MergeRegionGrower / analytic candidate 路线已删除。
 
 ### 5.5 合法性检查
 
@@ -320,7 +328,7 @@ OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 文件 → 导出 STEP
 ```
 
-导出后会自动执行二次读取校验。如果二次读取失败，报告面板会显示错误信息。
+导出与二次读取校验会在后台执行，期间 GUI 不应卡死或进入未响应状态。状态栏 / 报告面板会显示 STEP 正在后台导出；完成后报告面板会显示二次读取校验结果。如果二次读取失败，主模型仍保持当前内存状态，报告面板会显示错误信息。
 
 ---
 
@@ -368,8 +376,8 @@ OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 14. Ctrl + Z，确认模型回退。
 15. Ctrl + Y，确认模型恢复合并后状态。
 16. 执行“合法性检查”，确认报告面板输出 BRepCheck、free edge、multiple edge 等信息。
-17. 导出 STEP/STP。
-18. 确认导出后二次读取校验通过。
+17. 导出 STEP/STP，并确认导出期间 GUI 仍可响应窗口刷新。
+18. 确认导出完成后报告面板显示二次读取校验通过。
 19. 关闭并重新打开导出的 STEP/STP，确认可正常显示。
 ```
 

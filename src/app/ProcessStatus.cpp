@@ -10,6 +10,8 @@ const char* toString(ProcessStage stage) {
         return "Idle";
     case ProcessStage::LoadingStep:
         return "LoadingStep";
+    case ProcessStage::ExportingStep:
+        return "ExportingStep";
     case ProcessStage::PreviewingMergeCandidates:
         return "PreviewingMergeCandidates";
     case ProcessStage::AnalyzingBoundary:

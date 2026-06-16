@@ -98,14 +98,7 @@ void ModelTreePanel::showDocument(
     if (mergeCandidateCount > 0) {
         new QTreeWidgetItem(candidates, QStringList() << QString("候选总数：%1").arg(mergeCandidateCount));
         if (candidateTypeCounts != nullptr) {
-            new QTreeWidgetItem(candidates, QStringList() << QString("PlaneLike：%1").arg(candidateTypeCounts->plane_like));
-            new QTreeWidgetItem(candidates, QStringList() << QString("CylinderLike：%1").arg(candidateTypeCounts->cylinder_like));
-            new QTreeWidgetItem(candidates, QStringList() << QString("SphereLike：%1").arg(candidateTypeCounts->sphere_like));
-            new QTreeWidgetItem(candidates, QStringList() << QString("ConeLike：%1").arg(candidateTypeCounts->cone_like));
-            new QTreeWidgetItem(candidates, QStringList() << QString("TorusLike：%1").arg(candidateTypeCounts->torus_like));
             new QTreeWidgetItem(candidates, QStringList() << QString("FeatureBoundedRefit：%1").arg(candidateTypeCounts->feature_bounded_refit));
-            new QTreeWidgetItem(candidates, QStringList() << QString("FreeformG1：%1").arg(candidateTypeCounts->freeform_g1));
-            new QTreeWidgetItem(candidates, QStringList() << QString("FreeformG2：%1").arg(candidateTypeCounts->freeform_g2));
             new QTreeWidgetItem(candidates, QStringList() << QString("Unknown：%1").arg(candidateTypeCounts->unknown));
         }
         new QTreeWidgetItem(candidates, QStringList() << QString("待处理：%1").arg(pendingCandidateCount));

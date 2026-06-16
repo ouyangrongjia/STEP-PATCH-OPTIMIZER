@@ -388,6 +388,14 @@ autosurface_stderr.log
 fit_region.log
 ```
 
+GUI 一键 Patch preview 每次运行还会额外创建 root run log：
+
+```text
+log/patch_preview_<yyyyMMdd_HHmmss_mmm>_candidate_<id>.log
+```
+
+`fit_region.log` 只覆盖 Geomagic Wrap 脚本内部步骤。root run log 覆盖 GUI 点击后到完成的整体链路，包括 output path 解析、STP sampled / source STL fitting mesh 生成、STL 写出、`RunningGeomagic` 调用耗时、patch import、viewer overlay 和 crop boundary diagnostics。状态栏会显示总 elapsed，Process Status 和报告会显示 root run log 路径。
+
 运行前处理：
 
 ```text
@@ -657,6 +665,14 @@ ApplyFailed
 
 ```text
 maxConcurrentGeomagicJobs = 1
+```
+
+观测约定：
+
+```text
+RunningGeomagic 表示 C++ backend 正在等待 Geomagic AutoSurface 调用返回。
+如果 Geomagic 的 fit_region.log 显示 Wrap 内部很快完成，但 GUI 仍未结束，应先查看 root log 中 RunningGeomagic、ImportingPatch、PreviewReady 的 duration_ms。
+root log 是运行诊断产物，写入仓库根目录 log/，不纳入 git。
 ```
 
 原因：

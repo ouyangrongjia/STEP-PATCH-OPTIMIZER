@@ -4,6 +4,7 @@ vcpkg_installed/
 .vscode/.cmake/
 out/
 data/
+log/
 scripts/geomagic_wrap/fit_region_bootstrap.log
 scripts/geomagic_wrap/fit_region_temp/
 *.user

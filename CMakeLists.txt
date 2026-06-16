@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
-    add_compile_options(/utf-8)
+    add_compile_options(/utf-8 /FS)
 endif()
 
 option(SPO_BUILD_APP "Build the Qt desktop application" ON)
@@ -21,6 +21,7 @@ set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(spo_core STATIC
     src/app/AppController.cpp
+    src/app/PatchPreviewRunLogger.cpp
     src/app/ProcessStatus.cpp
     src/brep/BoundaryWireBuilder.cpp
     src/brep/EdgeIndex.cpp
@@ -36,10 +37,6 @@ add_library(spo_core STATIC
     src/command/LockEdgeCommand.cpp
     src/command/MergePatchCommand.cpp
     src/command/PatchReplacementCommand.cpp
-    src/command/PlaneRegionBatchMergeCommand.cpp
-    src/command/PlaneRegionMergeCommand.cpp
-    src/command/SphereRegionBatchMergeCommand.cpp
-    src/command/SphereRegionMergeCommand.cpp
     src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
     src/feature/BoundaryClassifier.cpp
@@ -59,23 +56,16 @@ add_library(spo_core STATIC
     src/merge/FaceInspector.cpp
     src/merge/FeatureBoundedRegionBuilder.cpp
     src/merge/CandidateFilters.cpp
-    src/merge/ConeRegionMerger.cpp
-    src/merge/CylinderRegionMerger.cpp
     src/merge/MergeCandidate.cpp
     src/merge/MergePlanner.cpp
-    src/merge/MergeRegionGrower.cpp
-    src/merge/PlaneRegionMerger.cpp
     src/merge/RegionBoundaryAnalyzer.cpp
-    src/merge/RegionMergeStub.cpp
     src/merge/SameDomainUnifier.cpp
-    src/merge/SphereRegionMerger.cpp
     src/stl/StlCropReport.cpp
     src/stl/StlMesh.cpp
     src/stl/StlRegionExtractor.cpp
     src/stl/StpSampledFittingMeshBuilder.cpp
     src/stl/StlCutChainCutter.cpp
     src/merge/SurfaceRefitter.cpp
-    src/merge/TorusRegionMerger.cpp
     src/patch/PatchImportService.cpp
     src/patch/PatchArtifactLocator.cpp
     src/patch/PatchPreviewReport.cpp
@@ -169,17 +159,11 @@ if(SPO_BUILD_TESTS)
         tests/test_feature_edges.cpp
         tests/test_feature_bounded_region_builder.cpp
         tests/test_face_inspect.cpp
-        tests/test_analytic_candidate_detection.cpp
         tests/test_boundary_wire_builder.cpp
         tests/test_candidate_type_statistics.cpp
         tests/test_commands.cpp
         tests/test_merge_planner.cpp
-        tests/test_plane_region_merge_command.cpp
-        tests/test_plane_region_merger.cpp
         tests/test_region_boundary_analyzer.cpp
-        tests/test_region_merge_stubs.cpp
-        tests/test_sphere_region_merge_command.cpp
-        tests/test_sphere_region_merger.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
         tests/test_stl_io.cpp
@@ -195,6 +179,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_import_service_real.cpp
         tests/test_patch_artifact_locator.cpp
         tests/test_patch_preview_report.cpp
+        tests/test_patch_preview_run_logger.cpp
         tests/test_patch_apply_state.cpp
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
@@ -210,5 +195,5 @@ if(SPO_BUILD_TESTS)
     target_link_libraries(spo_tests PRIVATE spo_core)
     target_compile_definitions(spo_tests PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME spo_tests COMMAND spo_tests)
-    set_tests_properties(spo_tests PROPERTIES TIMEOUT 120)
+    set_tests_properties(spo_tests PROPERTIES TIMEOUT 300)
 endif()

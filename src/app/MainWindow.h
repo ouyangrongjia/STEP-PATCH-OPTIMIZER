@@ -64,20 +64,8 @@ private:
     void showAcceptedMergeCandidates();
     void showPendingMergeCandidates();
     void showNonHiddenMergeCandidates();
-    void showStrictPlaneMergeCandidates();
     void showMergeCandidatesByTypeDialog();
     void showMergeCandidatesByType(MergeCandidateType type);
-    void mergeCurrentPlaneCandidate();
-    void mergeAcceptedPlaneCandidates();
-    void mergeAllMergeablePlaneCandidates();
-    void mergeCurrentApproximatePlaneCandidate();
-    void mergeAllApproximatePlaneCandidates();
-    void mergeApproximatePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
-    void mergePlaneCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title, bool approximateMode);
-    void mergeCurrentSphereCandidate();
-    void mergeAcceptedSphereCandidates();
-    void mergeAllMergeableSphereCandidates();
-    void mergeSphereCandidateBatch(const std::vector<MergeCandidate>& candidates, const QString& title);
     void applyMerge();
     void validateShape();
     void resetView();
@@ -131,8 +119,6 @@ private:
     QMenu* viewMenu_ = nullptr;
     QMenu* stlMenu_ = nullptr;
     QMenu* patchMenu_ = nullptr;
-    QMenu* planeMergeMenu_ = nullptr;
-    QMenu* sphereMergeMenu_ = nullptr;
 
     QAction* openStepAction_ = nullptr;
     QAction* saveProjectAction_ = nullptr;
@@ -169,14 +155,6 @@ private:
     QAction* showAcceptedMergeCandidatesAction_ = nullptr;
     QAction* showPendingMergeCandidatesAction_ = nullptr;
     QAction* showCandidatesByTypeAction_ = nullptr;
-    QAction* mergePlaneCandidateAction_ = nullptr;
-    QAction* mergeAcceptedPlaneCandidatesAction_ = nullptr;
-    QAction* mergeAllPlaneCandidatesAction_ = nullptr;
-    QAction* mergeApproximatePlaneCandidateAction_ = nullptr;
-    QAction* mergeAllApproximatePlaneCandidatesAction_ = nullptr;
-    QAction* mergeSphereCandidateAction_ = nullptr;
-    QAction* mergeAcceptedSphereCandidatesAction_ = nullptr;
-    QAction* mergeAllSphereCandidatesAction_ = nullptr;
     QAction* applyMergeAction_ = nullptr;
     QAction* validateAction_ = nullptr;
     QAction* resetViewAction_ = nullptr;

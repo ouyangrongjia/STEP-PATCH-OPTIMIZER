@@ -53,7 +53,8 @@ function Test-DocsSync {
 
     $requiredDocs = @(
         "docs/implementation_status.md",
-        "docs/refactor_geomagic_autosurface/03_TODO.md"
+        "docs/TODO.md",
+        "docs/geomagic_patch_workflow.md"
     )
 
     $docChanged = $false
@@ -106,7 +107,7 @@ function Test-DocsSync {
     }
 
     if ($needsDocs -and -not $docChanged) {
-        throw "Docs sync check failed: Geomagic/Patch code or repo scripts changed, but docs/implementation_status.md or docs/refactor_geomagic_autosurface/03_TODO.md was not updated. Update docs or rerun with -SkipDocsSyncCheck."
+        throw "Docs sync check failed: Geomagic/Patch code or repo scripts changed, but docs/implementation_status.md, docs/TODO.md, or docs/geomagic_patch_workflow.md was not updated. Update docs or rerun with -SkipDocsSyncCheck."
     }
 }
 

@@ -40,7 +40,7 @@ STEP/STP 读取
 当前阶段已经从“搭建项目结构与 MVP 主链路”转入“工程增强阶段”。后续重点是：
 
 ```text
-1. MergeCandidate / MergePlanner / MergeRegionGrower 合并候选规划。
+1. MergeCandidate / MergePlanner / FeatureBoundedRegionBuilder 合并候选规划。
 2. 合并候选区域 GUI 预览与人工确认。
 3. ProjectSerializer 项目状态保存与恢复。
 4. ErrorMetric / ReportGenerator 实验指标和报告输出。
@@ -99,6 +99,9 @@ step-patch-optimizer/
 ├── docs/
 │   ├── module_design.md
 │   ├── implementation_status.md
+│   ├── TODO.md
+│   ├── geomagic_patch_workflow.md
+│   ├── geomagic_patch_cleanup_plan.md
 │   ├── project_structure.md
 │   └── run_gui.md
 │
@@ -110,13 +113,19 @@ step-patch-optimizer/
 │   ├── run_gui.ps1
 │   └── test.ps1
 │
+├── log/                         # 运行时 Patch preview root run log，git ignore
+│
 ├── src/
 │   ├── app/
 │   │   ├── main.cpp
 │   │   ├── MainWindow.h
 │   │   ├── MainWindow.cpp
 │   │   ├── AppController.h
-│   │   └── AppController.cpp
+│   │   ├── AppController.cpp
+│   │   ├── PatchPreviewRunLogger.h
+│   │   ├── PatchPreviewRunLogger.cpp
+│   │   ├── ProcessStatus.h
+│   │   └── ProcessStatus.cpp
 │   │
 │   ├── gui/
 │   │   ├── GuiTypes.h
@@ -186,8 +195,8 @@ step-patch-optimizer/
 │   │   ├── MergeCandidate.cpp
 │   │   ├── MergePlanner.h
 │   │   ├── MergePlanner.cpp
-│   │   ├── MergeRegionGrower.h
-│   │   ├── MergeRegionGrower.cpp
+│   │   ├── FeatureBoundedRegionBuilder.h
+│   │   ├── FeatureBoundedRegionBuilder.cpp
 │   │   ├── SameDomainUnifier.h
 │   │   ├── SameDomainUnifier.cpp
 │   │   ├── SurfaceRefitter.h
@@ -231,6 +240,9 @@ step-patch-optimizer/
 | `README.md` | 面向新用户：项目简介、环境配置、构建、运行、测试、常见问题 |
 | `docs/module_design.md` | 长期架构文档：模块边界、依赖关系、阶段规划 |
 | `docs/implementation_status.md` | 当前实现进度：已完成、待办、验收方式、近期开发顺序 |
+| `docs/TODO.md` | 当前执行 TODO：阶段任务、冻结范围、验收要求 |
+| `docs/geomagic_patch_workflow.md` | Geomagic patch preview / Apply 主线流程 |
+| `docs/geomagic_patch_cleanup_plan.md` | 旧 analytic region merge 路线清理计划和删除检查表 |
 | `docs/run_gui.md` | GUI 使用文档：启动方式、操作方式、快捷键、手动验证流程 |
 | `docs/project_structure.md` | 目录结构文档：当前文件树、目录职责、开发边界 |
 
@@ -238,9 +250,11 @@ step-patch-optimizer/
 
 ```text
 架构边界：module_design.md
-当前任务：implementation_status.md
+当前任务：implementation_status.md / TODO.md
 构建运行：README.md / run_gui.md
 目录职责：project_structure.md
+Geomagic patch 主线：geomagic_patch_workflow.md
+旧代码清理：geomagic_patch_cleanup_plan.md
 ```
 
 ---
@@ -341,8 +355,8 @@ ExportStepCommand
 ```text
 1. 完善 MergeCandidate 数据结构。
 2. 实现 MergePlanner 基础候选生成。
-3. 实现 MergeRegionGrower 基础区域生长。
-4. 生成近似共面候选区域。
+3. 实现 FeatureBoundedRegionBuilder 基础区域构建。
+4. 生成 FeatureBoundedRefit 候选区域。
 5. GUI 中显示候选区域统计。
 6. 后续再做候选区域 3D 高亮。
 ```

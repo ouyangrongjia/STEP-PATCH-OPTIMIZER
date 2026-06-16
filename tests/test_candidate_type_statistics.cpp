@@ -1,6 +1,4 @@
-#include "brep/ShapeDocument.h"
 #include "merge/CandidateFilters.h"
-#include "merge/PlaneRegionMerger.h"
 
 #include <cassert>
 #include <set>
@@ -24,32 +22,22 @@ spo::MergeCandidate make_candidate(
 
 void test_candidate_type_counts_include_zero_types() {
     const std::vector<spo::MergeCandidate> candidates {
-        make_candidate(0, spo::MergeCandidateType::PlaneLike),
-        make_candidate(1, spo::MergeCandidateType::SphereLike),
-        make_candidate(2, spo::MergeCandidateType::CylinderLike),
-        make_candidate(3, spo::MergeCandidateType::FreeformG1),
-        make_candidate(4, spo::MergeCandidateType::FeatureBoundedRefit),
-        make_candidate(5, spo::MergeCandidateType::Unknown),
+        make_candidate(0, spo::MergeCandidateType::FeatureBoundedRefit),
+        make_candidate(1, spo::MergeCandidateType::Unknown),
+        make_candidate(2, spo::MergeCandidateType::SameDomain),
     };
 
     const auto counts = spo::countCandidateTypes(candidates);
-    assert(counts.plane_like == 1);
-    assert(counts.cylinder_like == 1);
-    assert(counts.sphere_like == 1);
-    assert(counts.cone_like == 0);
-    assert(counts.torus_like == 0);
     assert(counts.feature_bounded_refit == 1);
-    assert(counts.freeform_g1 == 1);
-    assert(counts.freeform_g2 == 0);
-    assert(counts.unknown == 1);
+    assert(counts.unknown == 2);
 }
 
 void test_candidate_filters_by_visibility_and_type() {
     const std::vector<spo::MergeCandidate> candidates {
-        make_candidate(0, spo::MergeCandidateType::PlaneLike),
-        make_candidate(1, spo::MergeCandidateType::PlaneLike, spo::MergeCandidateStatus::Hidden),
-        make_candidate(2, spo::MergeCandidateType::SphereLike),
-        make_candidate(3, spo::MergeCandidateType::FeatureBoundedRefit),
+        make_candidate(0, spo::MergeCandidateType::FeatureBoundedRefit),
+        make_candidate(1, spo::MergeCandidateType::FeatureBoundedRefit, spo::MergeCandidateStatus::Hidden),
+        make_candidate(2, spo::MergeCandidateType::Unknown),
+        make_candidate(3, spo::MergeCandidateType::SameDomain),
     };
 
     const auto nonHidden = spo::filterNonHiddenCandidates(candidates);
@@ -58,71 +46,23 @@ void test_candidate_filters_by_visibility_and_type() {
         assert(candidate.status != spo::MergeCandidateStatus::Hidden);
     }
 
-    const auto planeOnly = spo::filterCandidatesByType(candidates, spo::MergeCandidateType::PlaneLike);
-    assert(planeOnly.size() == 1);
-    assert(planeOnly.front().candidate_type == spo::MergeCandidateType::PlaneLike);
-
-    const auto sphereOnly = spo::filterCandidatesByType(candidates, spo::MergeCandidateType::SphereLike);
-    assert(sphereOnly.size() == 1);
-    assert(sphereOnly.front().candidate_type == spo::MergeCandidateType::SphereLike);
-
     const auto featureBoundedOnly = spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FeatureBoundedRefit);
     assert(featureBoundedOnly.size() == 1);
     assert(featureBoundedOnly.front().candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
 
-    assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::ConeLike).empty());
-    assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FreeformG1).empty());
-    assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::FreeformG2).empty());
-    assert(spo::filterCandidatesByType(candidates, spo::MergeCandidateType::Unknown).empty());
+    const auto unknownOnly = spo::filterCandidatesByType(candidates, spo::MergeCandidateType::Unknown);
+    assert(unknownOnly.size() == 1);
+    assert(unknownOnly.front().candidate_type == spo::MergeCandidateType::Unknown);
+
+    const auto hiddenFeatureBounded = spo::filterCandidatesByType(
+        candidates,
+        spo::MergeCandidateType::FeatureBoundedRefit,
+        true);
+    assert(hiddenFeatureBounded.size() == 2);
 }
 
 void test_candidate_type_string_includes_feature_bounded_refit() {
     assert(std::string(spo::toString(spo::MergeCandidateType::FeatureBoundedRefit)) == "FeatureBoundedRefit");
-}
-
-void test_mergeable_plane_filter_only_returns_plane_candidates() {
-    std::vector<spo::MergeCandidate> candidates {
-        make_candidate(0, spo::MergeCandidateType::PlaneLike),
-        make_candidate(1, spo::MergeCandidateType::PlaneLike, spo::MergeCandidateStatus::Rejected),
-        make_candidate(2, spo::MergeCandidateType::PlaneLike, spo::MergeCandidateStatus::Hidden),
-        make_candidate(3, spo::MergeCandidateType::SphereLike),
-    };
-    candidates.front().face_count = 2;
-    candidates.front().faces = {0, 1};
-
-    const auto planes = spo::filterMergeablePlaneCandidates(candidates);
-    assert(planes.size() == 1);
-    assert(planes.front().candidate_id == 0);
-    assert(planes.front().candidate_type == spo::MergeCandidateType::PlaneLike);
-}
-
-void test_mergeable_sphere_filter_skips_high_risk_and_single_face_candidates() {
-    std::vector<spo::MergeCandidate> candidates {
-        make_candidate(0, spo::MergeCandidateType::SphereLike),
-        make_candidate(1, spo::MergeCandidateType::SphereLike),
-        make_candidate(2, spo::MergeCandidateType::SphereLike),
-        make_candidate(3, spo::MergeCandidateType::PlaneLike),
-    };
-    candidates[0].face_count = 2;
-    candidates[0].faces = {0, 1};
-    candidates[1].face_count = 2;
-    candidates[1].faces = {2, 3};
-    candidates[1].risk_level = spo::MergeRiskLevel::High;
-    candidates[2].face_count = 1;
-    candidates[2].faces = {4};
-
-    const auto spheres = spo::filterMergeableSphereCandidates(candidates);
-    assert(spheres.size() == 1);
-    assert(spheres.front().candidate_id == 0);
-    assert(spheres.front().candidate_type == spo::MergeCandidateType::SphereLike);
-}
-
-void test_plane_region_merger_rejects_non_plane_candidate() {
-    const spo::ShapeDocument document;
-    const spo::PlaneRegionMerger merger;
-    const spo::PlaneRegionMergeOptions options;
-    const auto result = merger.merge(document, make_candidate(7, spo::MergeCandidateType::SphereLike), options);
-    assert(!result.success);
 }
 
 }
@@ -131,7 +71,4 @@ void run_candidate_type_statistics_tests() {
     test_candidate_type_counts_include_zero_types();
     test_candidate_filters_by_visibility_and_type();
     test_candidate_type_string_includes_feature_bounded_refit();
-    test_mergeable_plane_filter_only_returns_plane_candidates();
-    test_mergeable_sphere_filter_skips_high_risk_and_single_face_candidates();
-    test_plane_region_merger_rejects_non_plane_candidate();
 }

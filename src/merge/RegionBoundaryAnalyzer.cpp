@@ -13,7 +13,7 @@ namespace spo {
 
 namespace {
 
-void fail(RegionBoundaryAnalysis& analysis, RegionMergeFailureReason reason, std::string message) {
+void fail(RegionBoundaryAnalysis& analysis, BoundaryAnalysisFailureReason reason, std::string message) {
     analysis.valid = false;
     analysis.failure_reason = reason;
     analysis.message = std::move(message);
@@ -150,22 +150,22 @@ bool orderBoundaryLoops(
 RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& document, const MergeCandidate& candidate) const {
     RegionBoundaryAnalysis analysis;
     if (!document.hasShape()) {
-        fail(analysis, RegionMergeFailureReason::NotSupported, "Region boundary analysis requires a loaded shape.");
+        fail(analysis, BoundaryAnalysisFailureReason::NotSupported, "Region boundary analysis requires a loaded shape.");
         return analysis;
     }
     if (candidate.faces.empty()) {
-        fail(analysis, RegionMergeFailureReason::InvalidCandidate, "Candidate has no faces.");
+        fail(analysis, BoundaryAnalysisFailureReason::InvalidCandidate, "Candidate has no faces.");
         return analysis;
     }
     if (candidate.boundary_edges.empty()) {
-        fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate has no boundary edges.");
+        fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate has no boundary edges.");
         return analysis;
     }
 
     const auto& topology = document.topology();
     for (const auto faceId : candidate.faces) {
         if (faceId < 0 || static_cast<std::size_t>(faceId) >= topology.faceCount()) {
-            fail(analysis, RegionMergeFailureReason::InvalidCandidate, "Candidate references a missing face.");
+            fail(analysis, BoundaryAnalysisFailureReason::InvalidCandidate, "Candidate references a missing face.");
             return analysis;
         }
     }
@@ -175,18 +175,18 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
     std::set<EdgeId> seenBoundaryEdges;
     for (const auto edgeId : candidate.boundary_edges) {
         if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
-            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate references a missing boundary edge.");
+            fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate references a missing boundary edge.");
             return analysis;
         }
         if (!seenBoundaryEdges.insert(edgeId).second) {
             analysis.has_non_manifold_edges = true;
-            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary references an edge more than once.");
+            fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary references an edge more than once.");
             return analysis;
         }
         const auto* adjacency = topology.adjacencyForEdge(edgeId);
         if (adjacency == nullptr || adjacency->faces.size() > 2) {
             analysis.has_non_manifold_edges = true;
-            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary contains a non-manifold edge.");
+            fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary contains a non-manifold edge.");
             return analysis;
         }
 
@@ -194,12 +194,12 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
         TopoDS_Vertex second;
         TopExp::Vertices(topology.edge(edgeId), first, second);
         if (first.IsNull() || second.IsNull()) {
-            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary contains an edge without two vertices.");
+            fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary contains an edge without two vertices.");
             return analysis;
         }
         if (first.IsSame(second)) {
             analysis.has_non_manifold_edges = true;
-            fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary contains a degenerate edge.");
+            fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary contains a degenerate edge.");
             return analysis;
         }
         boundaryEdges.push_back(BoundaryEdgeInfo {edgeId, first, second});
@@ -208,7 +208,7 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
     analysis.connected_component_count = countConnectedFaceComponents(document, candidate);
     if (analysis.connected_component_count != 1) {
         analysis.outer_wire_count = analysis.connected_component_count;
-        fail(analysis, RegionMergeFailureReason::MultipleOuterLoopsNotSupported, "Candidate region has multiple disconnected boundary components.");
+        fail(analysis, BoundaryAnalysisFailureReason::MultipleOuterLoopsNotSupported, "Candidate region has multiple disconnected boundary components.");
         return analysis;
     }
 
@@ -235,17 +235,17 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
         }
     }
     if (analysis.has_branching_boundary) {
-        fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary has a branching vertex.");
+        fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary has a branching vertex.");
         return analysis;
     }
     if (!analysis.boundary_closed) {
-        fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary edges do not form closed loops.");
+        fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary edges do not form closed loops.");
         return analysis;
     }
 
     if (!orderBoundaryLoops(boundaryEdges, analysis.boundary_loops, analysis.ordered_boundary_edges)) {
         analysis.boundary_closed = false;
-        fail(analysis, RegionMergeFailureReason::BoundaryLoopInvalid, "Candidate boundary edges do not form closed loops.");
+        fail(analysis, BoundaryAnalysisFailureReason::BoundaryLoopInvalid, "Candidate boundary edges do not form closed loops.");
         return analysis;
     }
 
@@ -253,12 +253,12 @@ RegionBoundaryAnalysis RegionBoundaryAnalyzer::analyze(const ShapeDocument& docu
     analysis.inner_wire_count = analysis.boundary_loops.size() > 1 ? static_cast<int>(analysis.boundary_loops.size() - 1) : 0;
     analysis.has_holes = analysis.inner_wire_count > 0;
     if (analysis.has_holes) {
-        fail(analysis, RegionMergeFailureReason::InnerLoopsNotSupported, "Candidate boundary contains inner loops, holes, or multiple closed boundary loops.");
+        fail(analysis, BoundaryAnalysisFailureReason::InnerLoopsNotSupported, "Candidate boundary contains inner loops, holes, or multiple closed boundary loops.");
         return analysis;
     }
 
     analysis.valid = true;
-    analysis.failure_reason = RegionMergeFailureReason::None;
+    analysis.failure_reason = BoundaryAnalysisFailureReason::None;
     analysis.message = "Candidate boundary contains one closed outer loop.";
     return analysis;
 }

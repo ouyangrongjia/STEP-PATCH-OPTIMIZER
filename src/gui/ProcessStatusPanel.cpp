@@ -44,6 +44,7 @@ void ProcessStatusPanel::showStatus(const ProcessStatusSnapshot& snapshot) {
         {"patch STEP", pathText(snapshot.patchStepPath)},
         {"patch IGS", pathText(snapshot.patchIgesPath)},
         {"fit_region log", pathText(snapshot.fitRegionLogPath)},
+        {"patch preview run log", pathText(snapshot.patchPreviewRunLogPath)},
         {"selected sewing tolerance", QString::number(snapshot.selectedSewingTolerance, 'g', 8)},
         {"sewing attempt index", QString::number(snapshot.sewingAttemptIndex)},
         {"sewing attempt count", QString::number(snapshot.sewingAttemptCount)},

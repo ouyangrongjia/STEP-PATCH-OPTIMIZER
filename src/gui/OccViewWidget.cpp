@@ -56,22 +56,8 @@ TopoDS_Shape shapeFromOwner(const Handle(SelectMgr_EntityOwner)& owner) {
 Quantity_Color candidateColor(MergeCandidateType type, std::size_t index) {
     const auto shade = static_cast<double>(index % 3) * 0.08;
     switch (type) {
-    case MergeCandidateType::PlaneLike:
-        return Quantity_Color(1.00, 0.62 + shade, 0.05, Quantity_TOC_RGB);
-    case MergeCandidateType::CylinderLike:
-        return Quantity_Color(0.05, 0.38 + shade, 1.00, Quantity_TOC_RGB);
-    case MergeCandidateType::SphereLike:
-        return Quantity_Color(0.00, 0.72 + shade, 0.28, Quantity_TOC_RGB);
-    case MergeCandidateType::ConeLike:
-        return Quantity_Color(0.72 + shade, 0.12, 0.95, Quantity_TOC_RGB);
-    case MergeCandidateType::TorusLike:
-        return Quantity_Color(0.00, 0.78 + shade, 0.85, Quantity_TOC_RGB);
     case MergeCandidateType::FeatureBoundedRefit:
         return Quantity_Color(0.95, 0.95, 0.10 + shade, Quantity_TOC_RGB);
-    case MergeCandidateType::FreeformG1:
-        return Quantity_Color(0.36, 0.52 + shade, 0.68, Quantity_TOC_RGB);
-    case MergeCandidateType::FreeformG2:
-        return Quantity_Color(0.42, 0.66 + shade, 0.48, Quantity_TOC_RGB);
     case MergeCandidateType::SameDomain:
     case MergeCandidateType::Unknown:
         return Quantity_Color(0.55 + shade, 0.55 + shade, 0.55 + shade, Quantity_TOC_RGB);

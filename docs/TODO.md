@@ -1,9 +1,9 @@
 # STEP-PATCH-OPTIMIZER 当前 TODO：Geomagic AutoSurface → T6 replacement / fitting input 路线
 
 > 文档定位：这是当前执行 TODO 文档，用于随开发进度持续更新、替换和勾选。  
-> 长期算法路线、阶段边界、历史决策和完整设计依据请维护在 `docs/merge_algorithm_roadmap.md`。  
+> 长期模块边界维护在 `docs/module_design.md`；Geomagic patch preview / Apply 流程维护在 `docs/geomagic_patch_workflow.md`。
 > 当前阶段：以 `1f0c3d7`（文档同步）为已手动验证可缝合的几何基准；`d1c00e4` Improve boundary constrained Geomagic patch flow 与 Sharp Contours 实验不进入本轮主线。
-> 更新时间：2026-06-15
+> 更新时间：2026-06-16
 > 当前判断：默认路线是 `STP Sampled Candidate Surface`，速度更快且效果与 STL crop 接近；`Global Cut Chain` 是可选 STL 全局切链裁剪器，不是默认模式。旧 Stage 3A-Approx / A6 保留为 OCCT 近似平面诊断分支，不再抢占当前主线。当前主线提交为 `a57695d`，即 `1f0c3d7` 可缝合几何基准 + GUI 后台任务、状态显示和门控诊断优化。
 
 ---
@@ -34,17 +34,61 @@
    因此不作为当前主线基准。
 
 5. 本轮 GUI 优化边界：
-   openStepFile、previewMergeCandidates 和 Patch Apply 长任务转入后台线程。
+   openStepFile、exportStepFile、previewMergeCandidates 和 Patch Apply 长任务转入后台线程。
    viewer / model tree / report / Process Status 更新必须回 GUI 线程执行。
    长任务期间禁用会修改 document / controller 的入口。
+   STEP 导出与二次读取校验使用 ExportingStep 状态在后台执行。
    Process Status / report 展示 Gate before / after / STEP roundtrip 的 BRepCheck、free edge、multiple edge 和拓扑计数。
 
-6. 下一阶段硬问题：
+6. Patch preview 运行观测：
+   每次 GUI 一键 Patch preview 都会在仓库根目录 log/ 下生成
+   patch_preview_<timestamp>_candidate_<id>.log。
+   状态栏显示总 elapsed；root run log 记录 output path 解析、fitting STL 生成、RunningGeomagic、ImportingPatch、
+   viewer overlay 和 crop diagnostics 的 elapsed_ms / duration_ms。
+   fit_region.log 只代表 Geomagic Wrap 脚本内部耗时，不能单独解释 GUI 是否卡住。
+
+7. 下一阶段硬问题：
    Geomagic 导出的 patch 会在 sharp corner / feature junction 附近圆角化，
    原 STP 的棱角可能变成圆边；OCCT BRepCheck、free edge、multiple edge 甚至 STEP roundtrip 通过，
    仍可能在 Creo 等商业 CAD 中出现可见缝隙。
    下一步不应继续 Sharp Contours 实验，也不应重新合入 d1c00e4。
    应在 a57695d 基准上设计 corner-aware / curvature-aware fitting input 与商业 CAD 近似门控实验。
+```
+
+---
+
+## 0.6 旧无用代码清理执行记录（2026-06-16）
+
+```text
+已执行 Cleanup-0 / Cleanup-1 / Cleanup-2 / Cleanup-3 / Cleanup-4 / Cleanup-5 / Cleanup-6：
+1. 删除未接入 GUI / AppController 的 CylinderRegionMerger / ConeRegionMerger / TorusRegionMerger stub 后端。
+2. 删除 RegionMergeStub 和 tests/test_region_merge_stubs.cpp。
+3. 从 CMake 移除对应源文件和 stub 测试。
+4. Cleanup-6 已删除 PlaneLike / SphereLike / CylinderLike / ConeLike / TorusLike / FreeformG1 / FreeformG2 旧候选类型及相关检测。
+5. Cleanup-2 已下线 MainWindow 旧 Plane / Sphere 真实合并菜单、action 和 handler。
+6. Cleanup-3 已删除 Plane / Sphere 的 AppController API、Command 类和对应 command 测试。
+7. Cleanup-4 已删除 PlaneRegionMerger / SphereRegionMerger 后端和对应后端测试。
+8. 依赖 PlaneRegionMerger 的候选检测、候选统计、boundary analyzer 测试已改为各自模块自身断言。
+9. Cleanup-5 已删除 RegionMergeResult / RegionMergeOptions；RegionBoundaryAnalyzer 已改用 BoundaryAnalysisFailureReason。
+10. 修正 CTest 超时到 300 秒，并让 scripts/test.ps1 传播 native command 失败码。
+11. Cleanup-6 已删除 MergeRegionGrower 与 tests/test_analytic_candidate_detection.cpp；MergePlanner 只生成 FeatureBoundedRefit 候选。
+12. GUI / Viewer / ModelTree / Inspect / CandidateFilters / 候选统计测试已同步到 FeatureBoundedRefit / Unknown 当前主线。
+13. 整体旧无用代码清理完成；后续不应恢复旧 analytic candidate 检测或旧 Plane / Sphere 真实合并链路。
+```
+
+验证要求：
+
+```text
+.\scripts\build_debug.ps1
+.\scripts\test.ps1
+git diff --check
+rg -n "CylinderRegionMerger|ConeRegionMerger|TorusRegionMerger|RegionMergeStub" src tests CMakeLists.txt
+rg -n "mergePlaneCandidateAction_|mergeSphereCandidateAction_|mergeCurrentPlaneCandidate|mergeCurrentSphereCandidate|mergeAllApproximatePlaneCandidates" src/app
+rg -n "PlaneRegionMergeCommand|SphereRegionMergeCommand|mergePlaneCandidate\\(|mergeSphereCandidate\\(" src tests CMakeLists.txt
+rg -n "PlaneRegionMerger|SphereRegionMerger" src tests CMakeLists.txt
+rg -n "RegionMergeResult|RegionMergeOptions|RegionMergeFailureReason|regionMergeFailureReasonToString" src tests CMakeLists.txt
+rg -n "BoundaryAnalysisFailureReason" src tests CMakeLists.txt
+rg -n "PlaneLike|SphereLike|CylinderLike|ConeLike|TorusLike|FreeformG1|FreeformG2|MergeRegionGrower|test_analytic_candidate_detection|enable_plane_candidates|enable_cylinder_candidates|enable_sphere_candidates|enable_cone_candidates|enable_torus_candidates" src tests CMakeLists.txt
 ```
 
 ---
@@ -403,7 +447,7 @@ Approx mode:
 ```text
 1. 不删除 strict native Plane mode。
 2. 不修改 SameDomainUnifier。
-3. 不修改 SphereRegionMerger / CylinderRegionMerger / ConeRegionMerger / TorusRegionMerger。
+3. 不恢复已删除的 SphereRegionMerger / CylinderRegionMerger / ConeRegionMerger / TorusRegionMerger。
 4. 不修改 MergePlanner / MergeRegionGrower 的候选生成逻辑。
 5. 不做 Freeform B-spline / Plate Refit。
 6. 不支持多 boundary loop。

@@ -416,7 +416,7 @@ void run_command_tests() {
         const auto stlPath = create_test_stl_for_first_face(controller.document());
         assert(controller.openStlFile(stlPath).success());
         auto candidate = make_first_face_candidate(controller.document());
-        candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+        candidate.candidate_type = spo::MergeCandidateType::SameDomain;
 
         const auto result = spo::AppController::cropAndRunGeomagicForCandidateData(
             controller.document(),

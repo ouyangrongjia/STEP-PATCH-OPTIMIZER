@@ -8,6 +8,7 @@ namespace spo {
 enum class ProcessStage {
     Idle,
     LoadingStep,
+    ExportingStep,
     PreviewingMergeCandidates,
     AnalyzingBoundary,
     CroppingStl,
@@ -37,6 +38,7 @@ struct ProcessStatusSnapshot {
     std::filesystem::path patchStepPath;
     std::filesystem::path patchIgesPath;
     std::filesystem::path fitRegionLogPath;
+    std::filesystem::path patchPreviewRunLogPath;
 
     double selectedSewingTolerance = 0.0;
     int sewingAttemptIndex = 0;

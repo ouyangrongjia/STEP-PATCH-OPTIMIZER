@@ -7,10 +7,6 @@
 #include "command/LockEdgeCommand.h"
 #include "command/MergePatchCommand.h"
 #include "command/PatchReplacementCommand.h"
-#include "command/PlaneRegionBatchMergeCommand.h"
-#include "command/PlaneRegionMergeCommand.h"
-#include "command/SphereRegionBatchMergeCommand.h"
-#include "command/SphereRegionMergeCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
 #include "external/geomagic/GeomagicAutoSurfaceBackend.h"
@@ -30,6 +26,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstring>
 #include <iomanip>
 #include <sstream>
@@ -377,6 +374,7 @@ struct PatchPreviewProgressPaths {
     std::filesystem::path patchStepPath;
     std::filesystem::path patchIgesPath;
     std::filesystem::path fitRegionLogPath;
+    std::filesystem::path patchPreviewRunLogPath;
 };
 
 void publish_patch_preview_progress(
@@ -402,6 +400,7 @@ void publish_patch_preview_progress(
     status.patchStepPath = paths.patchStepPath;
     status.patchIgesPath = paths.patchIgesPath;
     status.fitRegionLogPath = paths.fitRegionLogPath;
+    status.patchPreviewRunLogPath = paths.patchPreviewRunLogPath;
     status.latestWarning = std::move(warning);
     progress(std::move(status));
 }
@@ -470,102 +469,122 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
     GeomagicFittingInputMode fittingMode,
     const StlRegionExtractorOptions& cropOptions,
     const StpSampledFittingOptions& samplingOptions,
-    PatchPreviewProgressCallback progress) {
-    const auto localStlPath = default_pipeline_local_stl_path(document, candidate, workspaceRoot);
-    PatchPreviewProgressPaths progressPaths;
-    progressPaths.localStlPath = localStlPath;
-
-    publish_patch_preview_progress(
-        progress,
-        ProcessStage::AnalyzingBoundary,
-        candidate,
-        "Patch preview pipeline preparing outputs: fitting_mode=" + std::string(toString(fittingMode)),
-        progressPaths);
-
-    std::string directoryMessage;
-    if (!ensure_parent_directory(localStlPath, directoryMessage)) {
-        publish_patch_preview_progress(
-            progress,
-            ProcessStage::CroppingStl,
-            candidate,
-            directoryMessage,
-            progressPaths,
-            directoryMessage);
-        return pipeline_error({}, {}, directoryMessage);
-    }
-
+    PatchPreviewProgressCallback progress,
+    PatchPreviewRunLogger runLogger) {
     const auto root = workspaceRoot.empty()
         ? std::filesystem::absolute(std::filesystem::current_path()).lexically_normal()
         : std::filesystem::absolute(workspaceRoot).lexically_normal();
+    if (runLogger.path().empty()) {
+        runLogger = PatchPreviewRunLogger::create(root, candidate.candidate_id);
+    }
+
+    const auto localStlPath = default_pipeline_local_stl_path(document, candidate, root);
+    PatchPreviewProgressPaths progressPaths;
+    progressPaths.localStlPath = localStlPath;
+    progressPaths.patchPreviewRunLogPath = runLogger.path();
+
+    auto withRunLog = [&](PatchPreviewPipelineResult result) {
+        result.patchPreviewRunLogPath = runLogger.path();
+        return result;
+    };
+
+    auto publish = [&](ProcessStage stage, std::string message, std::string warning = {}) {
+        const auto logMessage = warning.empty() ? message : message + " warning=" + warning;
+        runLogger.log(toString(stage), logMessage);
+        publish_patch_preview_progress(
+            progress,
+            stage,
+            candidate,
+            std::move(message),
+            progressPaths,
+            std::move(warning));
+    };
+
+    publish(
+        ProcessStage::AnalyzingBoundary,
+        "Patch preview pipeline preparing outputs: fitting_mode=" + std::string(toString(fittingMode)));
+
+    std::string directoryMessage;
+    if (!ensure_parent_directory(localStlPath, directoryMessage)) {
+        publish(
+            ProcessStage::CroppingStl,
+            directoryMessage,
+            directoryMessage);
+        return withRunLog(pipeline_error({}, {}, directoryMessage));
+    }
+
+    const auto outputResolveStart = std::chrono::steady_clock::now();
     const auto outputPaths = resolveGeomagicOutputPathsFromCropStl(
         localStlPath,
         root / "data" / "crop_stl",
         root / "data" / "crop_stp",
         root / "data" / "crop_igs");
     if (!outputPaths.success) {
-        publish_patch_preview_progress(
-            progress,
+        publish(
             ProcessStage::CroppingStl,
-            candidate,
             outputPaths.message,
-            progressPaths,
             outputPaths.message);
-        return pipeline_error({}, {}, outputPaths.message);
+        return withRunLog(pipeline_error({}, {}, outputPaths.message));
     }
     progressPaths.patchStepPath = outputPaths.outputStepPath;
     progressPaths.patchIgesPath = outputPaths.outputIgesPath;
     progressPaths.fitRegionLogPath = sidecar_path(outputPaths.outputStepPath, "_fit_region.log");
+    runLogger.logDuration(
+        "AnalyzingBoundary",
+        "Resolved patch preview output paths.",
+        outputResolveStart);
 
     StlCandidateCropResult crop;
     StpSampledFittingReport sampledReport;
 
     if (fittingMode == GeomagicFittingInputMode::StpSampledCandidateSurface) {
-        publish_patch_preview_progress(
-            progress,
+        publish(
             ProcessStage::CroppingStl,
-            candidate,
             "Generating fitting STL from STP sampled candidate surface: fitting_mode=" +
-                std::string(toString(fittingMode)),
-            progressPaths);
+                std::string(toString(fittingMode)));
+        const auto fittingBuildStart = std::chrono::steady_clock::now();
         StlMesh syntheticMesh;
         StpSampledFittingMeshBuilder builder;
         sampledReport = builder.build(document, candidate, samplingOptions, syntheticMesh);
         if (!sampledReport.success) {
-            publish_patch_preview_progress(
-                progress,
+            publish(
                 ProcessStage::CroppingStl,
-                candidate,
                 sampledReport.message,
-                progressPaths,
                 sampledReport.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
             result.stpSampledReport = std::move(sampledReport);
             result.message = sampledReport.message;
-            return result;
+            return withRunLog(std::move(result));
         }
+        runLogger.logDuration(
+            "CroppingStl",
+            "STP sampled fitting mesh built.",
+            fittingBuildStart);
 
         sampledReport.outputPath = localStlPath;
+        const auto stlWriteStart = std::chrono::steady_clock::now();
         StlWriter writer;
         const auto writeResult = writer.write(syntheticMesh, localStlPath);
         if (!writeResult.success) {
             sampledReport.success = false;
             sampledReport.message = writeResult.message;
-            publish_patch_preview_progress(
-                progress,
+            publish(
                 ProcessStage::CroppingStl,
-                candidate,
                 writeResult.message,
-                progressPaths,
                 writeResult.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.fittingInputMode = fittingMode;
             result.stpSampledReport = std::move(sampledReport);
             result.message = writeResult.message;
-            return result;
+            return withRunLog(std::move(result));
         }
+        runLogger.logDuration(
+            "CroppingStl",
+            "Fitting STL written from STP sampled mesh.",
+            stlWriteStart);
 
         crop.success = true;
         crop.outputPath = localStlPath;
@@ -575,13 +594,10 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         crop.extract.report.success = true;
         crop.extract.report.candidate_id = candidate.candidate_id;
         crop.message = "STP-sampled fitting STL written.";
-        publish_patch_preview_progress(
-            progress,
+        publish(
             ProcessStage::CroppingStl,
-            candidate,
             "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
-                ", triangles=" + std::to_string(sampledReport.outputTriangleCount),
-            progressPaths);
+                ", triangles=" + std::to_string(sampledReport.outputTriangleCount));
     } else {
         StlRegionExtractorOptions effectiveCropOptions = cropOptions;
         if (fittingMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop) {
@@ -590,35 +606,31 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
             effectiveCropOptions.mode = StlCropMode::CentroidOnly;
         }
 
-        publish_patch_preview_progress(
-            progress,
+        publish(
             ProcessStage::CroppingStl,
-            candidate,
-            "Generating fitting STL from source STL: fitting_mode=" + std::string(toString(fittingMode)),
-            progressPaths);
+            "Generating fitting STL from source STL: fitting_mode=" + std::string(toString(fittingMode)));
+        const auto stlCropStart = std::chrono::steady_clock::now();
         crop = cropStlForCandidateData(document, sourceMesh, candidate, localStlPath, effectiveCropOptions);
         if (!crop.success) {
-            publish_patch_preview_progress(
-                progress,
+            publish(
                 ProcessStage::CroppingStl,
-                candidate,
                 crop.message,
-                progressPaths,
                 crop.message);
             PatchPreviewPipelineResult result;
             result.success = false;
             result.crop = std::move(crop);
             result.fittingInputMode = fittingMode;
             result.message = crop.message;
-            return result;
+            return withRunLog(std::move(result));
         }
-        publish_patch_preview_progress(
-            progress,
+        runLogger.logDuration(
+            "CroppingStl",
+            "Source STL crop and fitting STL write finished.",
+            stlCropStart);
+        publish(
             ProcessStage::CroppingStl,
-            candidate,
             "Fitting STL ready: fitting_mode=" + std::string(toString(fittingMode)) +
-                ", triangles=" + std::to_string(crop.extract.localMesh.triangleCount()),
-            progressPaths);
+                ", triangles=" + std::to_string(crop.extract.localMesh.triangleCount()));
     }
 
     config.inputStlPath = localStlPath;
@@ -631,23 +643,22 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
     config.adaptiveFit = false;
     config.strictPatchTarget = false;
 
-    publish_patch_preview_progress(
-        progress,
+    publish(
         ProcessStage::RunningGeomagic,
-        candidate,
         "Geomagic AutoSurface started: fitting_mode=" + std::string(toString(fittingMode)) +
-            ", skip_remesh=" + std::string(config.skipRemesh ? "true" : "false"),
-        progressPaths);
+            ", skip_remesh=" + std::string(config.skipRemesh ? "true" : "false"));
+    const auto geomagicStart = std::chrono::steady_clock::now();
     auto geomagic = GeomagicAutoSurfaceBackend().run(config);
     if (!geomagic.success) {
         const auto message = geomagic.errorMessage.empty() ? geomagic.message : geomagic.errorMessage;
         const auto warning = message.empty() ? std::string("Geomagic AutoSurface failed.") : message;
-        publish_patch_preview_progress(
-            progress,
-            ProcessStage::RunningGeomagic,
-            candidate,
+        runLogger.logDuration(
+            "RunningGeomagic",
             warning,
-            progressPaths,
+            geomagicStart);
+        publish(
+            ProcessStage::RunningGeomagic,
+            warning,
             warning);
         PatchPreviewPipelineResult result;
         result.success = false;
@@ -656,14 +667,15 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
         result.fittingInputMode = fittingMode;
         result.stpSampledReport = std::move(sampledReport);
         result.message = message.empty() ? "Geomagic AutoSurface failed." : message;
-        return result;
+        return withRunLog(std::move(result));
     }
-    publish_patch_preview_progress(
-        progress,
-        ProcessStage::RunningGeomagic,
-        candidate,
+    runLogger.logDuration(
+        "RunningGeomagic",
         "Geomagic AutoSurface finished.",
-        progressPaths);
+        geomagicStart);
+    publish(
+        ProcessStage::RunningGeomagic,
+        "Geomagic AutoSurface finished.");
 
     PatchPreviewPipelineResult result;
     result.success = true;
@@ -671,6 +683,7 @@ PatchPreviewPipelineResult AppController::generateFittingStlAndRunGeomagicForCan
     result.geomagic = std::move(geomagic);
     result.fittingInputMode = fittingMode;
     result.stpSampledReport = std::move(sampledReport);
+    result.patchPreviewRunLogPath = runLogger.path();
     result.message = "Patch preview pipeline completed.";
     return result;
 }
@@ -715,66 +728,6 @@ SameDomainUnifyResult AppController::unifySameDomain(
     }
     const auto result = commandPtr->result();
     if (result.document.hasShape()) {
-        clearCurrentPatchOverlay();
-    }
-    return result;
-}
-
-RegionMergeResult AppController::mergePlaneCandidate(
-    const MergeCandidate& candidate,
-    const PlaneRegionMergeOptions& options) {
-    RegionMergeResult result;
-    auto command = std::make_unique<PlaneRegionMergeCommand>(candidate, options, &result);
-    const auto status = execute(std::move(command));
-    if (!status.success()) {
-        return result;
-    }
-    if (result.success) {
-        clearCurrentPatchOverlay();
-    }
-    return result;
-}
-
-RegionMergeResult AppController::mergePlaneCandidates(
-    const std::vector<MergeCandidate>& candidates,
-    const PlaneRegionMergeOptions& options) {
-    RegionMergeResult result;
-    auto command = std::make_unique<PlaneRegionBatchMergeCommand>(candidates, options, &result);
-    const auto status = execute(std::move(command));
-    if (!status.success()) {
-        return result;
-    }
-    if (result.success) {
-        clearCurrentPatchOverlay();
-    }
-    return result;
-}
-
-RegionMergeResult AppController::mergeSphereCandidate(
-    const MergeCandidate& candidate,
-    const SphereRegionMergeOptions& options) {
-    RegionMergeResult result;
-    auto command = std::make_unique<SphereRegionMergeCommand>(candidate, options, &result);
-    const auto status = execute(std::move(command));
-    if (!status.success()) {
-        return result;
-    }
-    if (result.success) {
-        clearCurrentPatchOverlay();
-    }
-    return result;
-}
-
-RegionMergeResult AppController::mergeSphereCandidates(
-    const std::vector<MergeCandidate>& candidates,
-    const SphereRegionMergeOptions& options) {
-    RegionMergeResult result;
-    auto command = std::make_unique<SphereRegionBatchMergeCommand>(candidates, options, &result);
-    const auto status = execute(std::move(command));
-    if (!status.success()) {
-        return result;
-    }
-    if (result.success) {
         clearCurrentPatchOverlay();
     }
     return result;

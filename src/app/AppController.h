@@ -8,12 +8,10 @@
 #include "common/Result.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "merge/MergePlanner.h"
-#include "merge/PlaneRegionMerger.h"
-#include "merge/RegionMergeResult.h"
 #include "merge/SameDomainUnifier.h"
-#include "merge/SphereRegionMerger.h"
 #include "external/geomagic/GeomagicAutoSurfaceConfig.h"
 #include "external/geomagic/GeomagicAutoSurfaceResult.h"
+#include "app/PatchPreviewRunLogger.h"
 #include "app/ProcessStatus.h"
 #include "patch/ImportedPatchInfo.h"
 #include "patch/CropBoundaryDiagnostics.h"
@@ -46,6 +44,7 @@ struct PatchPreviewPipelineResult {
     GeomagicAutoSurfaceResult geomagic;
     GeomagicFittingInputMode fittingInputMode = GeomagicFittingInputMode::LegacyStlCrop;
     StpSampledFittingReport stpSampledReport;
+    std::filesystem::path patchPreviewRunLogPath;
     std::string message;
 };
 
@@ -94,7 +93,8 @@ public:
         GeomagicFittingInputMode fittingMode = GeomagicFittingInputMode::LegacyStlCrop,
         const StlRegionExtractorOptions& cropOptions = {},
         const StpSampledFittingOptions& samplingOptions = {},
-        PatchPreviewProgressCallback progress = {});
+        PatchPreviewProgressCallback progress = {},
+        PatchPreviewRunLogger runLogger = {});
     FeatureEdgeDetectionResult detectFeatureEdges(double angularThresholdDegrees, double minEdgeLength = 0.0);
     MergePlannerResult previewMergeCandidates(
         double angularThresholdDegrees,
@@ -105,18 +105,6 @@ public:
         double minEdgeLength,
         double linearTolerance,
         bool concatBsplines);
-    RegionMergeResult mergePlaneCandidate(
-        const MergeCandidate& candidate,
-        const PlaneRegionMergeOptions& options);
-    RegionMergeResult mergePlaneCandidates(
-        const std::vector<MergeCandidate>& candidates,
-        const PlaneRegionMergeOptions& options);
-    RegionMergeResult mergeSphereCandidate(
-        const MergeCandidate& candidate,
-        const SphereRegionMergeOptions& options);
-    RegionMergeResult mergeSphereCandidates(
-        const std::vector<MergeCandidate>& candidates,
-        const SphereRegionMergeOptions& options);
     Result importPatchForCurrentCandidateFromLocalStl(
         const std::filesystem::path& localStlPath,
         const MergeCandidate* candidate = nullptr);

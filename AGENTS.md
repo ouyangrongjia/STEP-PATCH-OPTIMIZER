@@ -36,8 +36,8 @@
 
 如果任务涉及 Geomagic AutoSurface / patch preview / Apply 主线，还必须阅读：
 
-1. `docs/refactor_geomagic_autosurface/03_TODO.md`
-2. `docs/refactor_geomagic_autosurface/04_PROJECT_WORKFLOW.md`
+1. `docs/geomagic_patch_workflow.md`
+2. `docs/geomagic_patch_cleanup_plan.md`
 
 阅读完成后，必须先向用户说明已阅读哪些文档，再开始执行。
 

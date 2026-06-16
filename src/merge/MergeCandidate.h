@@ -9,14 +9,7 @@ namespace spo {
 
 enum class MergeCandidateType {
     SameDomain,
-    PlaneLike,
-    CylinderLike,
-    ConeLike,
-    SphereLike,
-    TorusLike,
     FeatureBoundedRefit,
-    FreeformG1,
-    FreeformG2,
     Unknown
 };
 

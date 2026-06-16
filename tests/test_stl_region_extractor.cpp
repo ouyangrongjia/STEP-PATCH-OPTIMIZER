@@ -579,7 +579,6 @@ void test_stl_region_extractor_real_clay_stp_stl_if_present() {
 
     const auto featureEdges = spo::FeatureEdgeDetector().detect(stepResult.document.topology(), 25.0, 0.0);
     spo::MergePlannerOptions options;
-    options.enable_plane_candidates = false;
     options.enable_feature_bounded_refit_candidates = true;
     options.min_feature_bounded_region_faces = 2;
     const auto plan = spo::MergePlanner().plan(stepResult.document, featureEdges, {}, options);

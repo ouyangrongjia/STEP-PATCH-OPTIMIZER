@@ -53,7 +53,7 @@ void test_surface_type_probe_reports_cylinder() {
 spo::MergeCandidate make_single_face_candidate(spo::FaceId faceId) {
     spo::MergeCandidate candidate;
     candidate.candidate_id = 12;
-    candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+    candidate.candidate_type = spo::MergeCandidateType::FeatureBoundedRefit;
     candidate.status = spo::MergeCandidateStatus::Pending;
     candidate.risk_level = spo::MergeRiskLevel::Medium;
     candidate.faces = {faceId};
@@ -79,7 +79,7 @@ void test_face_inspect_reports_candidate_info() {
     assert(info.surface_type == "Plane");
     assert(info.candidate_state == spo::FaceInspectCandidateState::InVisibleCandidate);
     assert(info.candidate_id == candidate.candidate_id);
-    assert(info.candidate_type == spo::MergeCandidateType::PlaneLike);
+    assert(info.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit);
     assert(info.candidate_status == spo::MergeCandidateStatus::Pending);
     assert(info.risk_level == spo::MergeRiskLevel::Medium);
     assert(info.candidate_face_count == 1);

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "brep/ShapeDocument.h"
+#include "merge/BoundaryAnalysisFailureReason.h"
 #include "merge/MergeCandidate.h"
-#include "merge/RegionMergeResult.h"
 
 #include <string>
 #include <vector>
@@ -20,7 +20,7 @@ struct RegionBoundaryAnalysis {
     bool has_branching_boundary = false;
     std::vector<EdgeId> ordered_boundary_edges;
     std::vector<std::vector<EdgeId>> boundary_loops;
-    RegionMergeFailureReason failure_reason = RegionMergeFailureReason::None;
+    BoundaryAnalysisFailureReason failure_reason = BoundaryAnalysisFailureReason::None;
     std::string message;
 };
 

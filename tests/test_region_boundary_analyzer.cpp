@@ -1,6 +1,5 @@
 #include "brep/ShapeDocument.h"
 #include "merge/RegionBoundaryAnalyzer.h"
-#include "merge/PlaneRegionMerger.h"
 
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -61,7 +60,7 @@ BoundaryFixture make_two_face_boundary_fixture() {
     BoundaryFixture fixture;
     fixture.document = spo::ShapeDocument(sewing.SewedShape(), {});
     fixture.candidate.candidate_id = 3;
-    fixture.candidate.candidate_type = spo::MergeCandidateType::PlaneLike;
+    fixture.candidate.candidate_type = spo::MergeCandidateType::FeatureBoundedRefit;
     fixture.candidate.status = spo::MergeCandidateStatus::Accepted;
     fixture.candidate.faces = {0, 1};
     fixture.candidate.face_count = 2;
@@ -165,7 +164,7 @@ BoundaryFixture make_branching_boundary_fixture() {
 
 void assert_failure_has_message(
     const spo::RegionBoundaryAnalysis& analysis,
-    spo::RegionMergeFailureReason reason) {
+    spo::BoundaryAnalysisFailureReason reason) {
     assert(!analysis.valid);
     assert(analysis.failure_reason == reason);
     assert(!analysis.message.empty());
@@ -177,7 +176,7 @@ void test_region_boundary_analyzer_accepts_simple_closed_boundary() {
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
     assert(analysis.valid);
-    assert(analysis.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(analysis.failure_reason == spo::BoundaryAnalysisFailureReason::None);
     assert(analysis.connected_component_count == 1);
     assert(analysis.outer_wire_count == 1);
     assert(analysis.inner_wire_count == 0);
@@ -210,7 +209,7 @@ void test_region_boundary_analyzer_rejects_invalid_face_id() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::InvalidCandidate);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::InvalidCandidate);
 }
 
 void test_region_boundary_analyzer_rejects_invalid_edge_id() {
@@ -220,7 +219,7 @@ void test_region_boundary_analyzer_rejects_invalid_edge_id() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::BoundaryLoopInvalid);
 }
 
 void test_region_boundary_analyzer_rejects_empty_faces() {
@@ -231,7 +230,7 @@ void test_region_boundary_analyzer_rejects_empty_faces() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::InvalidCandidate);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::InvalidCandidate);
 }
 
 void test_region_boundary_analyzer_rejects_empty_boundary_edges() {
@@ -242,7 +241,7 @@ void test_region_boundary_analyzer_rejects_empty_boundary_edges() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::BoundaryLoopInvalid);
 }
 
 void test_region_boundary_analyzer_rejects_open_boundary() {
@@ -252,7 +251,7 @@ void test_region_boundary_analyzer_rejects_open_boundary() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::BoundaryLoopInvalid);
     assert(!analysis.boundary_closed);
 }
 
@@ -266,7 +265,7 @@ void test_region_boundary_analyzer_rejects_disconnected_region() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::MultipleOuterLoopsNotSupported);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::MultipleOuterLoopsNotSupported);
     assert(analysis.connected_component_count > 1);
 }
 
@@ -276,7 +275,7 @@ void test_region_boundary_analyzer_rejects_multiple_boundary_loops() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::InnerLoopsNotSupported);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::InnerLoopsNotSupported);
     assert(analysis.boundary_closed);
     assert(analysis.outer_wire_count == 1);
     assert(analysis.inner_wire_count == 1);
@@ -289,7 +288,7 @@ void test_region_boundary_analyzer_rejects_hole_inner_loop() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::InnerLoopsNotSupported);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::InnerLoopsNotSupported);
     assert(analysis.has_holes);
     assert(analysis.inner_wire_count > 0);
 }
@@ -300,7 +299,7 @@ void test_region_boundary_analyzer_rejects_branching_boundary() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::BoundaryLoopInvalid);
     assert(analysis.has_branching_boundary);
 }
 
@@ -311,7 +310,7 @@ void test_region_boundary_analyzer_rejects_non_manifold_boundary() {
     const spo::RegionBoundaryAnalyzer analyzer;
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert_failure_has_message(analysis, spo::RegionMergeFailureReason::BoundaryLoopInvalid);
+    assert_failure_has_message(analysis, spo::BoundaryAnalysisFailureReason::BoundaryLoopInvalid);
     assert(analysis.has_non_manifold_edges);
 }
 
@@ -323,34 +322,34 @@ void test_region_boundary_analyzer_accepts_feature_bounded_refit_candidate() {
     const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
     assert(analysis.valid);
-    assert(analysis.failure_reason == spo::RegionMergeFailureReason::None);
+    assert(analysis.failure_reason == spo::BoundaryAnalysisFailureReason::None);
     assert(analysis.outer_wire_count == 1);
     assert(analysis.boundary_closed);
 }
 
-void test_plane_region_merger_still_merges_with_boundary_analyzer() {
+void test_region_boundary_analyzer_does_not_modify_document_stats() {
     const auto fixture = make_two_face_boundary_fixture();
-    const spo::PlaneRegionMerger merger;
-    const spo::PlaneRegionMergeOptions options;
     const auto before = fixture.document.stats();
 
-    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    const spo::RegionBoundaryAnalyzer analyzer;
+    const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert(result.success);
-    assert(result.document.stats().faces < before.faces);
+    assert(analysis.valid);
+    assert(fixture.document.stats().faces == before.faces);
+    assert(fixture.document.stats().edges == before.edges);
+    assert(fixture.document.stats().solids == before.solids);
 }
 
-void test_plane_region_merger_uses_analyzer_ordered_boundary_edges() {
+void test_region_boundary_analyzer_reports_ordered_edges_for_unsorted_boundary() {
     auto fixture = make_two_face_boundary_fixture();
     std::reverse(fixture.candidate.boundary_edges.begin(), fixture.candidate.boundary_edges.end());
-    const spo::PlaneRegionMerger merger;
-    const spo::PlaneRegionMergeOptions options;
-    const auto before = fixture.document.stats();
 
-    const auto result = merger.merge(fixture.document, fixture.candidate, options);
+    const spo::RegionBoundaryAnalyzer analyzer;
+    const auto analysis = analyzer.analyze(fixture.document, fixture.candidate);
 
-    assert(result.success);
-    assert(result.document.stats().faces < before.faces);
+    assert(analysis.valid);
+    assert(analysis.ordered_boundary_edges.size() == fixture.candidate.boundary_edges.size());
+    assert(analysis.ordered_boundary_edges != fixture.candidate.boundary_edges);
 }
 
 }
@@ -369,6 +368,6 @@ void run_region_boundary_analyzer_tests() {
     test_region_boundary_analyzer_rejects_branching_boundary();
     test_region_boundary_analyzer_rejects_non_manifold_boundary();
     test_region_boundary_analyzer_accepts_feature_bounded_refit_candidate();
-    test_plane_region_merger_still_merges_with_boundary_analyzer();
-    test_plane_region_merger_uses_analyzer_ordered_boundary_edges();
+    test_region_boundary_analyzer_does_not_modify_document_stats();
+    test_region_boundary_analyzer_reports_ordered_edges_for_unsorted_boundary();
 }
