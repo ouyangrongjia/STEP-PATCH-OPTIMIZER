@@ -216,7 +216,19 @@ B2.0 默认在 B1 加密采样基础上启用 `-GuardBandSamples 16 -GuardBandRi
 
 B2.1 会在当前 fitting STL patch 外围生成连续、小幅 over-cover strip，再通过原 STP candidate boundary re-trim 裁回；默认 `-OverCoverWidth 0.05 -OverCoverRings 1`，JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 统计。该入口仍不是 GUI 窗口点击自动化，真实质量结论必须看重新跑 Geomagic 后的 Patch preview / Apply / Gate 报告。2026-06-16 的 `03_配件_Clay.stp` candidate 179 默认 B2.1 真实运行中，fitting STL 导入 Geomagic 时为 `components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0`，Patch preview 为 5 faces / 20 edges 且非 high-risk，脚本继续执行 Apply、StrictTopologyGate、applied STEP export 和 readback；StrictTopologyGate 通过，但 CommercialCadLikeQualityGate 仍因 max drift 0.088487 失败。
 
-脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+B2.2 adjacent-face support collar 入口：
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2.2 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+B2.2 默认在 B1 加密采样基础上启用 `-SupportCollarWidth 0.05 -SupportCollarSamples 16 -SupportCollarRings 1`，不启用 B2.0 guard-band 或 B2.1 over-cover。JSON 的 `stp_sampled_fitting` 节输出 `adjacent_face_support_collar_*`，`commercial_cad_like_quality_gate` 节输出 `seam_continuity`。2026-06-17 的真实样例 auto-selected candidate 179 参数扫显示：输入 STL 干净，`components=1, boundaryCycles=1, nonManifoldVertices=0`，Patch preview 为 5 faces 且非 high-risk；但 `SupportCollarWidth=0.03/0.04/0.05` 均未通过 StrictTopologyGate / CommercialCadLikeQualityGate。B2.2 目前只能作为可验证的 seam-aware 输入实验，不是已收口方案。
+
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
 
@@ -274,7 +286,7 @@ log\patch_preview_<timestamp>_candidate_<id>.log
 
 状态栏会显示当前阶段和总 elapsed。若 `fit_region.log` 显示 Geomagic Wrap 内部很快结束，但 GUI 仍在运行，优先查看 root run log 中 `RunningGeomagic`、`ImportingPatch`、`PreviewReady` 的 `duration_ms`。
 
-报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary / corner anchor / feature edge drift。
+报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary drift、seam_continuity、corner anchor drift 和 feature edge drift。
 
 该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程中的核心后端路径变成可重复的 baseline 数据生成器。
 

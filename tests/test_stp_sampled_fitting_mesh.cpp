@@ -10,11 +10,13 @@
 #include "stl/StpSampledFittingMeshBuilder.h"
 
 #include <BRep_Builder.hxx>
+#include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
+#include <Bnd_Box.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Shape.hxx>
@@ -277,6 +279,39 @@ PlanarFixture make_planar_square_fixture(double size = 10.0) {
     return {document, candidate};
 }
 
+PlanarFixture make_box_top_face_fixture(double size = 10.0, double height = 2.0) {
+    auto box = BRepPrimAPI_MakeBox(size, size, height).Shape();
+    spo::ShapeDocument document(box, "");
+    const auto& topology = document.topology();
+
+    spo::FaceId topFace = -1;
+    double bestZ = -std::numeric_limits<double>::infinity();
+    for (std::size_t faceId = 0; faceId < topology.faceCount(); ++faceId) {
+        Bnd_Box faceBox;
+        BRepBndLib::Add(topology.face(static_cast<spo::FaceId>(faceId)), faceBox);
+        double xMin = 0.0, yMin = 0.0, zMin = 0.0;
+        double xMax = 0.0, yMax = 0.0, zMax = 0.0;
+        faceBox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+        const auto zCenter = (zMin + zMax) * 0.5;
+        if (zCenter > bestZ) {
+            bestZ = zCenter;
+            topFace = static_cast<spo::FaceId>(faceId);
+        }
+    }
+
+    assert(topFace >= 0);
+
+    spo::MergeCandidate candidate;
+    candidate.candidate_id = 22;
+    candidate.candidate_type = spo::MergeCandidateType::FeatureBoundedRefit;
+    candidate.face_count = 1;
+    candidate.faces.push_back(topFace);
+    candidate.boundary_edges = topology.edgesForFace(topFace);
+    assert(candidate.boundary_edges.size() == 4);
+
+    return {document, candidate};
+}
+
 void test_planar_face_sampling_produces_triangles() {
     auto fixture = make_planar_square_fixture(10.0);
     spo::StlMesh mesh;
@@ -444,6 +479,42 @@ void test_b2_1_over_cover_strip_preserves_planar_winding_and_normals() {
         assert(normal.z > 0.0);
         assert(triangles[index].normal.z > 0.0);
     }
+}
+
+void test_b2_2_adjacent_face_support_collar_adds_clean_neighbor_height_context() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+    assert(!baselineReport.adjacentFaceSupportCollarEnabled);
+    assert(baselineReport.adjacentFaceSupportCollarTriangleCount == 0);
+
+    spo::StpSampledFittingOptions b22Options;
+    b22Options.enableAdjacentFaceSupportCollar = true;
+    b22Options.adjacentFaceSupportCollarWidth = 0.25;
+    b22Options.adjacentFaceSupportCollarRingCount = 1;
+    b22Options.adjacentFaceSupportCollarSamplesPerEdge = 16;
+    spo::StlMesh b22Mesh;
+    const auto b22Report = builder.build(fixture.document, fixture.candidate, b22Options, b22Mesh);
+
+    assert(b22Report.success);
+    assert(b22Report.adjacentFaceSupportCollarEnabled);
+    assert(b22Report.adjacentFaceSupportCollarWidth == 0.25);
+    assert(b22Report.adjacentFaceSupportCollarRingCount == 1);
+    assert(b22Report.adjacentFaceSupportCollarEdgeCount == 4);
+    assert(b22Report.adjacentFaceSupportCollarSampleCount >= 4 * 16);
+    assert(b22Report.adjacentFaceSupportCollarTriangleCount > 0);
+    assert(b22Report.adjacentFaceSupportCollarAdjacentFaceSampleCount == b22Report.adjacentFaceSupportCollarSampleCount);
+    assert(b22Report.adjacentFaceSupportCollarFallbackCount == 0);
+    assert(b22Report.adjacentFaceSupportCollarRejectedCount == 0);
+    assert(b22Report.adjacentFaceSupportCollarBoundaryCoverage >= 0.99);
+    assert(b22Report.outputTriangleCount > baselineReport.outputTriangleCount);
+    assert(connected_component_count(b22Mesh) == 1);
+    assert(boundary_cycle_count(b22Mesh) == 1);
+    assert_triangle_normals_match_geometry(b22Mesh);
 }
 
 void test_increased_div_increases_triangle_count() {
@@ -640,6 +711,16 @@ void test_report_fields_present() {
     assert(report.boundaryOverCoverFallbackCount == 0);
     assert(report.boundaryOverCoverRejectedCount == 0);
     assert(report.boundaryOverCoverBoundaryCoverage == 0.0);
+    assert(!report.adjacentFaceSupportCollarEnabled);
+    assert(report.adjacentFaceSupportCollarWidth == 0.0);
+    assert(report.adjacentFaceSupportCollarRingCount == 0);
+    assert(report.adjacentFaceSupportCollarEdgeCount == 0);
+    assert(report.adjacentFaceSupportCollarSampleCount == 0);
+    assert(report.adjacentFaceSupportCollarTriangleCount == 0);
+    assert(report.adjacentFaceSupportCollarAdjacentFaceSampleCount == 0);
+    assert(report.adjacentFaceSupportCollarFallbackCount == 0);
+    assert(report.adjacentFaceSupportCollarRejectedCount == 0);
+    assert(report.adjacentFaceSupportCollarBoundaryCoverage == 0.0);
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);
@@ -705,6 +786,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_b2_boundary_guard_band_expands_connected_mesh();
     test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band();
     test_b2_1_over_cover_strip_preserves_planar_winding_and_normals();
+    test_b2_2_adjacent_face_support_collar_adds_clean_neighbor_height_context();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();

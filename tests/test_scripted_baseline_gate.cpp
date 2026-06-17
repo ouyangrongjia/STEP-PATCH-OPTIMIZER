@@ -45,8 +45,10 @@ void test_scripted_baseline_gate_is_not_hardcoded_to_one_sample() {
     assert(script.find("--b1-corner-feature-sampling") != std::string::npos);
     assert(script.find("--b2-boundary-guard-band") != std::string::npos);
     assert(script.find("B2.1") != std::string::npos);
+    assert(script.find("B2.2") != std::string::npos);
     assert(script.find("--b2-over-cover-strip") != std::string::npos);
     assert(script.find("--over-cover-width") != std::string::npos);
+    assert(script.find("--b2-adjacent-face-support-collar") != std::string::npos);
     assert(script.find("-RealGeomagic") != std::string::npos);
     assert(script.find("--candidate-id") != std::string::npos);
     assert(script.find("candidate_0179") == std::string::npos);
@@ -72,6 +74,18 @@ void test_corner_baseline_probe_reports_b2_1_over_cover_fields() {
     assert(source.find("boundary_over_cover_boundary_coverage") != std::string::npos);
 }
 
+void test_corner_baseline_probe_reports_b2_2_support_collar_fields() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+
+    assert(source.find("--b2-adjacent-face-support-collar") != std::string::npos);
+    assert(source.find("--support-collar-width") != std::string::npos);
+    assert(source.find("adjacent_face_support_collar_enabled") != std::string::npos);
+    assert(source.find("adjacent_face_support_collar_triangle_count") != std::string::npos);
+    assert(source.find("adjacent_face_support_collar_boundary_coverage") != std::string::npos);
+    assert(source.find("seam_continuity") != std::string::npos);
+}
+
 void test_corner_baseline_probe_exports_applied_step_for_acceptance() {
     const auto root = source_root();
     const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
@@ -93,5 +107,6 @@ void run_scripted_baseline_gate_tests() {
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
     test_corner_baseline_probe_reports_b2_1_over_cover_fields();
+    test_corner_baseline_probe_reports_b2_2_support_collar_fields();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
 }

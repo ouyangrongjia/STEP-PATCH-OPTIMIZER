@@ -9,15 +9,24 @@
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <BRep_Tool.hxx>
+#include <Geom2d_Curve.hxx>
+#include <GeomLProp_SLProps.hxx>
+#include <Geom_Surface.hxx>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <Standard_Failure.hxx>
+#include <TopAbs_Orientation.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Face.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -41,6 +50,12 @@ CommercialCadQualityGateReport fail_report(std::string message) {
     report.message = std::move(message);
     return report;
 }
+
+struct BoundaryParamSample {
+    EdgeId edgeId = -1;
+    gp_Pnt point;
+    double parameter = 0.0;
+};
 
 std::vector<EdgeId> boundary_edges_for(
     const RegionBoundaryAnalysis& boundary,
@@ -83,6 +98,42 @@ std::vector<gp_Pnt> sample_edge_points(
             const auto t = static_cast<double>(index) / static_cast<double>(sampleCount - 1);
             const auto parameter = first + (last - first) * t;
             points.push_back(curve.Value(parameter));
+        }
+    } catch (const Standard_Failure&) {
+        points.clear();
+    }
+    return points;
+}
+
+std::vector<BoundaryParamSample> sample_edge_param_points(
+    const TopologyGraph& topology,
+    EdgeId edgeId,
+    int requestedSamples) {
+    std::vector<BoundaryParamSample> points;
+    if (edgeId >= topology.edgeCount()) {
+        return points;
+    }
+
+    const auto sampleCount = std::max(requestedSamples, 2);
+    try {
+        BRepAdaptor_Curve curve(topology.edge(edgeId));
+        const auto first = curve.FirstParameter();
+        const auto last = curve.LastParameter();
+        if (!std::isfinite(first) || !std::isfinite(last)) {
+            return points;
+        }
+
+        points.reserve(static_cast<std::size_t>(sampleCount));
+        for (int index = 0; index < sampleCount; ++index) {
+            const auto t = sampleCount <= 1
+                ? 0.0
+                : static_cast<double>(index) / static_cast<double>(sampleCount - 1);
+            const auto parameter = first + (last - first) * t;
+            BoundaryParamSample sample;
+            sample.edgeId = edgeId;
+            sample.parameter = parameter;
+            sample.point = curve.Value(parameter);
+            points.push_back(sample);
         }
     } catch (const Standard_Failure&) {
         points.clear();
@@ -133,6 +184,78 @@ double distance_to_shape(const gp_Pnt& point, const TopoDS_Shape& shape) {
     }
 }
 
+std::optional<gp_Pnt> nearest_point_on_shape(const gp_Pnt& point, const TopoDS_Shape& shape) {
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    try {
+        auto vertex = BRepBuilderAPI_MakeVertex(point).Vertex();
+        BRepExtrema_DistShapeShape distance(vertex, shape);
+        distance.Perform();
+        if (!distance.IsDone() || distance.NbSolution() <= 0) {
+            return std::nullopt;
+        }
+        return distance.PointOnShape2(1);
+    } catch (const Standard_Failure&) {
+        return std::nullopt;
+    }
+}
+
+std::optional<FaceId> adjacent_non_candidate_face(
+    const TopologyGraph& topology,
+    EdgeId edgeId,
+    const std::unordered_set<FaceId>& candidateFaces) {
+    const auto* adjacency = topology.adjacencyForEdge(edgeId);
+    if (adjacency == nullptr) {
+        return std::nullopt;
+    }
+    for (const auto faceId : adjacency->faces) {
+        if (candidateFaces.find(faceId) == candidateFaces.end()) {
+            return faceId;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<gp_Vec> face_normal_at_edge_parameter(
+    const TopoDS_Edge& edge,
+    const TopoDS_Face& face,
+    double parameter) {
+    const auto surface = BRep_Tool::Surface(face);
+    if (surface.IsNull()) {
+        return std::nullopt;
+    }
+
+    double first = 0.0, last = 0.0;
+    const auto pcurve = BRep_Tool::CurveOnSurface(edge, face, first, last);
+    if (pcurve.IsNull()) {
+        return std::nullopt;
+    }
+
+    const auto clamped = first <= last
+        ? std::clamp(parameter, first, last)
+        : std::clamp(parameter, last, first);
+    try {
+        const auto uv = pcurve->Value(clamped);
+        GeomLProp_SLProps props(surface, uv.X(), uv.Y(), 1, 1.0e-7);
+        if (!props.IsNormalDefined()) {
+            return std::nullopt;
+        }
+        gp_Vec normal(props.Normal());
+        if (face.Orientation() == TopAbs_REVERSED) {
+            normal.Reverse();
+        }
+        if (normal.Magnitude() <= 1.0e-15) {
+            return std::nullopt;
+        }
+        normal.Normalize();
+        return normal;
+    } catch (const Standard_Failure&) {
+        return std::nullopt;
+    }
+}
+
 CommercialCadDistanceStats summarize_distances(
     const std::vector<gp_Pnt>& points,
     const TopoDS_Shape& shape,
@@ -173,6 +296,82 @@ CommercialCadDistanceStats summarize_distances(
     return stats;
 }
 
+CommercialCadSeamContinuityStats summarize_seam_continuity(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const std::vector<EdgeId>& boundaryEdges,
+    const TopoDS_Shape& patchShape,
+    int samplesPerEdge,
+    double tolerance) {
+    CommercialCadSeamContinuityStats stats;
+    stats.evaluated = true;
+    stats.tolerance = tolerance;
+
+    const auto& topology = document.topology();
+    std::unordered_set<FaceId> candidateFaces(candidate.faces.begin(), candidate.faces.end());
+    std::vector<double> signedOffsets;
+    std::vector<double> absOffsets;
+
+    for (const auto edgeId : boundaryEdges) {
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            continue;
+        }
+        const auto adjacentFaceId = adjacent_non_candidate_face(topology, edgeId, candidateFaces);
+        if (!adjacentFaceId.has_value() || *adjacentFaceId >= topology.faceCount()) {
+            continue;
+        }
+
+        const auto edgeSamples = sample_edge_param_points(topology, edgeId, samplesPerEdge);
+        for (const auto& sample : edgeSamples) {
+            const auto projected = nearest_point_on_shape(sample.point, patchShape);
+            if (!projected.has_value()) {
+                continue;
+            }
+            const auto normal = face_normal_at_edge_parameter(
+                topology.edge(edgeId),
+                topology.face(*adjacentFaceId),
+                sample.parameter);
+            if (!normal.has_value()) {
+                continue;
+            }
+
+            const gp_Vec delta(sample.point, *projected);
+            const auto signedOffset = delta.Dot(*normal);
+            const auto absOffset = std::abs(signedOffset);
+            signedOffsets.push_back(signedOffset);
+            absOffsets.push_back(absOffset);
+            if (absOffset > tolerance) {
+                ++stats.overTolerance;
+            }
+        }
+    }
+
+    stats.samples = static_cast<int>(absOffsets.size());
+    if (absOffsets.empty()) {
+        return stats;
+    }
+
+    const auto maxAbs = std::max_element(absOffsets.begin(), absOffsets.end());
+    stats.maxAbsSignedNormalOffset = *maxAbs;
+    const auto signedAtMaxAbs = static_cast<std::size_t>(std::distance(absOffsets.begin(), maxAbs));
+    stats.maxSignedNormalOffset = signedOffsets[signedAtMaxAbs];
+    stats.meanAbsSignedNormalOffset = std::accumulate(absOffsets.begin(), absOffsets.end(), 0.0) /
+        static_cast<double>(absOffsets.size());
+
+    double sumSquares = 0.0;
+    for (const auto offset : absOffsets) {
+        sumSquares += offset * offset;
+    }
+    stats.rmsAbsSignedNormalOffset = std::sqrt(sumSquares / static_cast<double>(absOffsets.size()));
+
+    std::sort(absOffsets.begin(), absOffsets.end());
+    const auto p95Index = std::min(
+        absOffsets.size() - 1,
+        static_cast<std::size_t>(std::ceil(static_cast<double>(absOffsets.size()) * 0.95)) - 1);
+    stats.p95AbsSignedNormalOffset = absOffsets[p95Index];
+    return stats;
+}
+
 std::unordered_set<EdgeId> sharp_feature_edge_ids(const FeatureEdgeDetectionResult* featureEdges) {
     std::unordered_set<EdgeId> result;
     if (featureEdges == nullptr) {
@@ -196,6 +395,11 @@ bool optional_stats_passed(const CommercialCadDistanceStats& stats) {
     return !stats.evaluated || stats.samples == 0 || stats.maxDistance <= stats.tolerance;
 }
 
+bool seam_stats_passed(const CommercialCadSeamContinuityStats& stats) {
+    return !stats.evaluated || stats.samples == 0 ||
+        stats.maxAbsSignedNormalOffset <= stats.tolerance;
+}
+
 QJsonObject stats_to_json(const CommercialCadDistanceStats& stats) {
     QJsonObject object;
     object.insert("evaluated", stats.evaluated);
@@ -206,6 +410,20 @@ QJsonObject stats_to_json(const CommercialCadDistanceStats& stats) {
     object.insert("mean_distance", stats.meanDistance);
     object.insert("rms_distance", stats.rmsDistance);
     object.insert("p95_distance", stats.p95Distance);
+    return object;
+}
+
+QJsonObject seam_to_json(const CommercialCadSeamContinuityStats& stats) {
+    QJsonObject object;
+    object.insert("evaluated", stats.evaluated);
+    object.insert("samples", stats.samples);
+    object.insert("over_tolerance", stats.overTolerance);
+    object.insert("tolerance", stats.tolerance);
+    object.insert("max_signed_normal_offset", stats.maxSignedNormalOffset);
+    object.insert("max_abs_signed_normal_offset", stats.maxAbsSignedNormalOffset);
+    object.insert("mean_abs_signed_normal_offset", stats.meanAbsSignedNormalOffset);
+    object.insert("rms_abs_signed_normal_offset", stats.rmsAbsSignedNormalOffset);
+    object.insert("p95_abs_signed_normal_offset", stats.p95AbsSignedNormalOffset);
     return object;
 }
 
@@ -272,6 +490,13 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
         boundarySamples,
         *input.patchShape,
         input.options.maxBoundaryDistance);
+    report.seamContinuity = summarize_seam_continuity(
+        *input.document,
+        *input.candidate,
+        boundaryEdges,
+        *input.patchShape,
+        input.options.boundarySamplesPerEdge,
+        input.options.maxSeamNormalOffset);
 
     const auto anchors = endpoint_anchors(
         input.document->topology(),
@@ -313,6 +538,7 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
 
     report.sharpCornerPreservationPassed =
         stats_passed(report.boundary) &&
+        seam_stats_passed(report.seamContinuity) &&
         stats_passed(report.cornerAnchors) &&
         optional_stats_passed(report.featureEdges);
     report.passed = report.sharpCornerPreservationPassed;
@@ -320,7 +546,7 @@ CommercialCadQualityGateReport CommercialCadQualityGate::evaluate(
     if (report.passed) {
         report.message = "CommercialCadLikeQualityGate passed.";
     } else {
-        report.message = "CommercialCadLikeQualityGate failed: boundary/corner/feature drift exceeds configured tolerance.";
+        report.message = "CommercialCadLikeQualityGate failed: boundary/seam/corner/feature drift exceeds configured tolerance.";
     }
     return report;
 }
@@ -335,6 +561,7 @@ std::string toJson(const CommercialCadQualityGateReport& report) {
     gate.insert("feature_boundary_edge_count", report.featureBoundaryEdgeCount);
     gate.insert("sampling_report", sampling_to_json(report.sampling));
     gate.insert("boundary", stats_to_json(report.boundary));
+    gate.insert("seam_continuity", seam_to_json(report.seamContinuity));
     gate.insert("corner_anchors", stats_to_json(report.cornerAnchors));
     gate.insert("feature_edges", stats_to_json(report.featureEdges));
     gate.insert("message", QString::fromStdString(report.message));

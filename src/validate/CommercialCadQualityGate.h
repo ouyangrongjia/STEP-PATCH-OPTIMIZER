@@ -24,6 +24,18 @@ struct CommercialCadDistanceStats {
     double p95Distance = 0.0;
 };
 
+struct CommercialCadSeamContinuityStats {
+    bool evaluated = false;
+    int samples = 0;
+    int overTolerance = 0;
+    double tolerance = 0.0;
+    double maxSignedNormalOffset = 0.0;
+    double maxAbsSignedNormalOffset = 0.0;
+    double meanAbsSignedNormalOffset = 0.0;
+    double rmsAbsSignedNormalOffset = 0.0;
+    double p95AbsSignedNormalOffset = 0.0;
+};
+
 struct CommercialCadSamplingReport {
     int boundarySamplesPerEdge = 0;
     int featureEdgeSamplesPerEdge = 0;
@@ -44,6 +56,7 @@ struct CommercialCadQualityGateOptions {
     double maxBoundaryDistance = 0.03;
     double maxCornerAnchorDistance = 0.02;
     double maxFeatureEdgeDistance = 0.03;
+    double maxSeamNormalOffset = 0.03;
     double anchorDedupTolerance = 1.0e-7;
 };
 
@@ -67,6 +80,7 @@ struct CommercialCadQualityGateReport {
 
     CommercialCadSamplingReport sampling;
     CommercialCadDistanceStats boundary;
+    CommercialCadSeamContinuityStats seamContinuity;
     CommercialCadDistanceStats cornerAnchors;
     CommercialCadDistanceStats featureEdges;
 

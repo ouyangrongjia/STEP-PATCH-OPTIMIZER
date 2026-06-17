@@ -83,6 +83,8 @@ void test_matching_patch_passes_dense_boundary_gate() {
     assert(report.passed);
     assert(report.boundary.samples > 0);
     assert(report.boundary.maxDistance <= 1.0e-7);
+    assert(report.seamContinuity.evaluated);
+    assert(report.seamContinuity.samples == 0);
     assert(report.cornerAnchors.samples == 4);
     assert(report.cornerAnchors.maxDistance <= 1.0e-7);
     assert(report.sharpCornerPreservationPassed);
@@ -113,6 +115,7 @@ void test_report_json_contains_machine_readable_metrics() {
     assert(json.find("\"boundary_samples_per_edge\"") != std::string::npos);
     assert(json.find("\"feature_edge_samples_per_edge\"") != std::string::npos);
     assert(json.find("\"boundary\"") != std::string::npos);
+    assert(json.find("\"seam_continuity\"") != std::string::npos);
     assert(json.find("\"corner_anchors\"") != std::string::npos);
     assert(json.find("\"sharp_corner_preservation_passed\"") != std::string::npos);
 }

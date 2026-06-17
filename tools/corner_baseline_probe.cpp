@@ -63,6 +63,10 @@ struct Options {
     bool enableB2OverCoverStrip = false;
     double boundaryOverCoverWidth = 0.05;
     int boundaryOverCoverRingCount = 1;
+    bool enableB2AdjacentFaceSupportCollar = false;
+    int adjacentFaceSupportCollarSamplesPerEdge = 16;
+    double adjacentFaceSupportCollarWidth = 0.05;
+    int adjacentFaceSupportCollarRingCount = 1;
 };
 
 struct AppliedStepExportReport {
@@ -128,7 +132,11 @@ void print_usage() {
         << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n"
         << "  --b2-over-cover-strip                   Enable B2.1 fitting STL boundary over-cover strip.\n"
         << "  --over-cover-width <value>               B2.1 over-cover strip total width, default 0.05.\n"
-        << "  --over-cover-rings <n>                   B2.1 over-cover ring count, default 1.\n";
+        << "  --over-cover-rings <n>                   B2.1 over-cover ring count, default 1.\n"
+        << "  --b2-adjacent-face-support-collar        Enable B2.2 adjacent-face seam support collar.\n"
+        << "  --support-collar-samples <n>             B2.2 samples per boundary edge, default 16.\n"
+        << "  --support-collar-width <value>           B2.2 adjacent support collar width, default 0.05.\n"
+        << "  --support-collar-rings <n>               B2.2 support collar ring count, default 1.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -301,6 +309,26 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.boundaryOverCoverRingCount = std::stoi(value);
+        } else if (arg == "--b2-adjacent-face-support-collar") {
+            options.enableB2AdjacentFaceSupportCollar = true;
+        } else if (arg == "--support-collar-samples") {
+            const auto* value = requireValue("--support-collar-samples");
+            if (value == nullptr) {
+                return false;
+            }
+            options.adjacentFaceSupportCollarSamplesPerEdge = std::stoi(value);
+        } else if (arg == "--support-collar-width") {
+            const auto* value = requireValue("--support-collar-width");
+            if (value == nullptr) {
+                return false;
+            }
+            options.adjacentFaceSupportCollarWidth = std::stod(value);
+        } else if (arg == "--support-collar-rings") {
+            const auto* value = requireValue("--support-collar-rings");
+            if (value == nullptr) {
+                return false;
+            }
+            options.adjacentFaceSupportCollarRingCount = std::stoi(value);
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -504,6 +532,20 @@ QJsonObject stats_to_json(const spo::CommercialCadDistanceStats& stats) {
     return object;
 }
 
+QJsonObject seam_to_json(const spo::CommercialCadSeamContinuityStats& stats) {
+    QJsonObject object;
+    object.insert("evaluated", stats.evaluated);
+    object.insert("samples", stats.samples);
+    object.insert("over_tolerance", stats.overTolerance);
+    object.insert("tolerance", stats.tolerance);
+    object.insert("max_signed_normal_offset", stats.maxSignedNormalOffset);
+    object.insert("max_abs_signed_normal_offset", stats.maxAbsSignedNormalOffset);
+    object.insert("mean_abs_signed_normal_offset", stats.meanAbsSignedNormalOffset);
+    object.insert("rms_abs_signed_normal_offset", stats.rmsAbsSignedNormalOffset);
+    object.insert("p95_abs_signed_normal_offset", stats.p95AbsSignedNormalOffset);
+    return object;
+}
+
 QJsonObject sampling_to_json(const spo::CommercialCadSamplingReport& sampling) {
     QJsonObject object;
     object.insert("boundary_samples_per_edge", sampling.boundarySamplesPerEdge);
@@ -529,6 +571,7 @@ QJsonObject quality_to_json(const spo::CommercialCadQualityGateReport& report) {
     object.insert("feature_boundary_edge_count", report.featureBoundaryEdgeCount);
     object.insert("sampling_report", sampling_to_json(report.sampling));
     object.insert("boundary", stats_to_json(report.boundary));
+    object.insert("seam_continuity", seam_to_json(report.seamContinuity));
     object.insert("corner_anchors", stats_to_json(report.cornerAnchors));
     object.insert("feature_edges", stats_to_json(report.featureEdges));
     object.insert("message", QString::fromStdString(report.message));
@@ -564,6 +607,16 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("boundary_over_cover_fallback_count", report.boundaryOverCoverFallbackCount);
     object.insert("boundary_over_cover_rejected_count", report.boundaryOverCoverRejectedCount);
     object.insert("boundary_over_cover_boundary_coverage", report.boundaryOverCoverBoundaryCoverage);
+    object.insert("adjacent_face_support_collar_enabled", report.adjacentFaceSupportCollarEnabled);
+    object.insert("adjacent_face_support_collar_width", report.adjacentFaceSupportCollarWidth);
+    object.insert("adjacent_face_support_collar_ring_count", report.adjacentFaceSupportCollarRingCount);
+    object.insert("adjacent_face_support_collar_edge_count", report.adjacentFaceSupportCollarEdgeCount);
+    object.insert("adjacent_face_support_collar_sample_count", report.adjacentFaceSupportCollarSampleCount);
+    object.insert("adjacent_face_support_collar_triangle_count", report.adjacentFaceSupportCollarTriangleCount);
+    object.insert("adjacent_face_support_collar_adjacent_face_sample_count", report.adjacentFaceSupportCollarAdjacentFaceSampleCount);
+    object.insert("adjacent_face_support_collar_fallback_count", report.adjacentFaceSupportCollarFallbackCount);
+    object.insert("adjacent_face_support_collar_rejected_count", report.adjacentFaceSupportCollarRejectedCount);
+    object.insert("adjacent_face_support_collar_boundary_coverage", report.adjacentFaceSupportCollarBoundaryCoverage);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -842,6 +895,10 @@ int main(int argc, char* argv[]) {
     samplingOptions.enableBoundaryOverCoverStrip = options.enableB2OverCoverStrip;
     samplingOptions.boundaryOverCoverWidth = options.boundaryOverCoverWidth;
     samplingOptions.boundaryOverCoverRingCount = options.boundaryOverCoverRingCount;
+    samplingOptions.enableAdjacentFaceSupportCollar = options.enableB2AdjacentFaceSupportCollar;
+    samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
+    samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
+    samplingOptions.adjacentFaceSupportCollarRingCount = options.adjacentFaceSupportCollarRingCount;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

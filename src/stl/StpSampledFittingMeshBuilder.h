@@ -30,6 +30,10 @@ struct StpSampledFittingOptions {
     bool enableBoundaryOverCoverStrip = false;
     double boundaryOverCoverWidth = 0.05;
     int boundaryOverCoverRingCount = 1;
+    bool enableAdjacentFaceSupportCollar = false;
+    int adjacentFaceSupportCollarSamplesPerEdge = 16;
+    double adjacentFaceSupportCollarWidth = 0.05;
+    int adjacentFaceSupportCollarRingCount = 1;
 };
 
 struct StpSampledFittingReport {
@@ -62,6 +66,16 @@ struct StpSampledFittingReport {
     int boundaryOverCoverFallbackCount = 0;
     int boundaryOverCoverRejectedCount = 0;
     double boundaryOverCoverBoundaryCoverage = 0.0;
+    bool adjacentFaceSupportCollarEnabled = false;
+    double adjacentFaceSupportCollarWidth = 0.0;
+    int adjacentFaceSupportCollarRingCount = 0;
+    int adjacentFaceSupportCollarEdgeCount = 0;
+    int adjacentFaceSupportCollarSampleCount = 0;
+    int adjacentFaceSupportCollarTriangleCount = 0;
+    int adjacentFaceSupportCollarAdjacentFaceSampleCount = 0;
+    int adjacentFaceSupportCollarFallbackCount = 0;
+    int adjacentFaceSupportCollarRejectedCount = 0;
+    double adjacentFaceSupportCollarBoundaryCoverage = 0.0;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

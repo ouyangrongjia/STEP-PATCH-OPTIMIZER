@@ -21,7 +21,7 @@ GUI 视觉连续和 OCCT BRepCheck 通过不足以证明 Creo 类软件打开后
 
 流程层面的约束：
 1. fitting STL 可以在原 STP boundary 内外增加采样，但最终 CAD boundary 仍只来自原 STP wire。
-2. B2.0 邻接 STP face guard-band 和 B2.1 fitting STL over-cover 都只能扩展 Geomagic 输入；拟合后必须用原 STP boundary 裁剪多余部分。
+2. B2.0 邻接 STP face guard-band、B2.1 fitting STL over-cover 和 B2.2 adjacent-face support collar 都只能扩展 Geomagic 输入；拟合后必须用原 STP boundary 裁剪多余部分。
 3. corner / feature anchors 只能约束 Geomagic 输入或后处理评估，不能替代 StrictTopologyGate。
 4. 新增质量门控必须能暴露 corner rounding / edge drift / boundary deviation，而不是只重复 BRepCheck。
 ```
@@ -35,7 +35,7 @@ Fitting input enhancement:
   STP candidate faces / boundary
   → detect sharp edges / corner vertices / feature junctions
   → generate corner-aware dense samples
-  → generate inner boundary band + B2.0 outer STP guard-band samples or B2.1 fitting STL over-cover strip
+  → generate inner boundary band + B2.0 outer STP guard-band samples or B2.1 fitting STL over-cover strip or B2.2 adjacent-face support collar
   → preserve feature / corner anchor set in report
   → write enhanced fitting STL
   → run Geomagic AutoSurface
@@ -55,7 +55,7 @@ Commercial-CAD-like quality gate:
 
 ```text
 1. Enhanced fitting STL 只改变 Geomagic 输入，不改变 final CAD boundary。
-2. B2.0 guard-band 采样来自 STP 邻接 face；B2.1 over-cover strip 必须围绕当前 fitting STL patch boundary 连续生成。两者都不信任 patch outer boundary。
+2. B2.0 guard-band 采样来自 STP 邻接 face；B2.1 over-cover strip 必须围绕当前 fitting STL patch boundary 连续生成；B2.2 support collar 从当前 fitting STL mesh boundary 接到原 STP 非候选邻接 face 的 pcurve rail。三者都不信任 patch outer boundary。
 3. Apply 仍通过 original STP boundary re-trim / multi-surface shell。
 4. Commercial-CAD-like gate 不替代 StrictTopologyGate；它在拓扑 gate 之外判断几何质量。
 5. A/B 实验分支为 experiment/corner-preservation-ab。
@@ -69,7 +69,8 @@ Commercial-CAD-like quality gate:
 | B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
 | B2.0 | adjacent-STP-face outer guard-band sampling | 已接入 `-Experiment B2`；真实样例 drift 下降但 Gate 未通过 |
 | B2.1 | fitting STL over-cover strip + original-boundary re-trim | 已接入 `-Experiment B2.1`；默认 `OverCoverWidth=0.05` 真实样例可进入 Apply / StrictTopologyGate / applied STEP export，但 CommercialCadLikeQualityGate 仍未通过 |
-| B3 | corner anchors + B2.1 over-cover | 是否同时降低 drift 且不恶化 repair / gate |
+| B2.2 | adjacent-face support collar + seam continuity report | 已接入 `-Experiment B2.2`；真实样例输入干净且 patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败 |
+| B3 | corner anchors + B2.2 seam-aware fitting input | 是否同时降低 drift 且不恶化 repair / gate |
 
 当前 A0 自动化入口：
 
@@ -135,6 +136,50 @@ B2.1 不是当前 `-Experiment B2` 的行为。B2.1 的基础版入口是：
 
 B2.1 在当前 STP-sampled fitting STL patch boundary 外围生成一圈连续、小幅、连通的 over-cover strip，让 Geomagic 拟合出的 surface 覆盖原 STP candidate boundary 外侧；Apply 阶段仍丢弃 Geomagic patch outer boundary，并使用 original STP boundary wire / pcurve 在 fitted surface 上 re-trim。这里所谓“相交裁剪”应优先落到 original-boundary re-trim / pcurve rebuild 上；直接用 patch outer boundary 或 STL boundary 做最终 CAD boundary 仍然禁止。JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 字段。
 
+B2.2 是独立入口，不是继续扩大 B2.0 guard-band，也不是 B2.1 over-cover 参数别名。B2.2 从当前 fitting STL mesh boundary 接出 adjacent-face support collar，外侧 support rail 来自原 STP 非候选邻接 face 的 pcurve 面内采样，用于给 Geomagic 提供 seam 高度上下文。Apply 阶段仍丢弃 Geomagic patch outer boundary，最终 CAD boundary 仍只来自 original STP boundary wire / pcurve。
+
+```powershell
+.\scripts\run_corner_baseline_gate.ps1 `
+  -Experiment B2.2 `
+  -SourceStep "D:\path\to\model.stp" `
+  -CandidateId auto `
+  -RealGeomagic
+```
+
+JSON 的 `stp_sampled_fitting` 节会输出 `adjacent_face_support_collar_*` 字段；`commercial_cad_like_quality_gate` 节新增 `seam_continuity`，测量原 boundary samples 到 patch 最近点在原 STP 邻接 face normal 方向上的 signed normal offset。
+
+2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 跑 B2.2 参数扫：
+
+```text
+共同输入事实：
+  adjacent_face_support_collar_sample_count=728
+  adjacent_face_support_collar_triangle_count=1456
+  adjacent_face_support_collar_boundary_coverage=1
+  adjacent_face_support_collar_fallback_count=0
+  adjacent_face_support_collar_rejected_count=0
+  Geomagic log before repair: components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0
+  patch_face_count=5, patch_edge_count=20, high_risk=false
+
+SupportCollarWidth=0.03:
+  StrictTopologyGate failed: FreeEdgeIncreased
+  boundary max/p95=0.106121/0.034150
+  seam max_abs/p95_abs=0.068317/0.032183
+
+SupportCollarWidth=0.04:
+  StrictTopologyGate failed: FreeEdgeIncreased
+  boundary max/p95=0.098052/0.036913
+  seam max_abs/p95_abs=0.068727/0.035968
+  corner max/p95=0.098052/0.059117
+
+SupportCollarWidth=0.05:
+  StrictTopologyGate failed: StepRoundtripFailed, roundtrip free_edges=1
+  boundary max/p95=0.090959/0.041232
+  seam max_abs/p95_abs=0.069443/0.040150
+  corner max/p95=0.090959/0.057764
+```
+
+结论：B2.2 初版证明 support collar 生成质量、真实 Geomagic 路径和 seam 指标可验证；它仍不是最终几何质量方案。下一步要解决的是 seam-aware 输入与 multi-surface boundary shell / STEP roundtrip 的水密稳定性，而不是继续盲目加宽 collar。
+
 2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
 
 ```text
@@ -168,7 +213,8 @@ commercial-CAD-like quality:
 conclusion:
   B2.1 默认参数已能走完 GUI 同源 Apply + StrictTopologyGate + applied STEP 导出验收链路。
   但 CommercialCadLikeQualityGate 仍未通过，不能标记为几何质量收口。
-  下一步应在不恶化 patch face count / StrictTopologyGate 的前提下降低 boundary / feature / corner drift。
+  B2.2 已继续验证 seam-aware 输入和 seam_continuity 指标，但真实样例仍未通过 StrictTopologyGate / CommercialCadLikeQualityGate。
+  下一步应优先解决 seam-aware 输入与 multi-surface boundary shell / STEP roundtrip 的水密稳定性。
 ```
 
 注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1/B2 drift 改善证据。它只能证明增强输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。

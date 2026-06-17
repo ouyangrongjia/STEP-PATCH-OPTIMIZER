@@ -198,6 +198,17 @@ struct OverCoverBuildResult {
     double boundaryCoverage = 0.0;
 };
 
+struct AdjacentFaceSupportCollarBuildResult {
+    int boundaryEdgeCount = 0;
+    int coveredBoundaryEdgeCount = 0;
+    int sampleCount = 0;
+    int triangleCount = 0;
+    int adjacentFaceSampleCount = 0;
+    int fallbackCount = 0;
+    int rejectedCount = 0;
+    double boundaryCoverage = 0.0;
+};
+
 struct QuantizedPoint {
     std::int64_t x = 0;
     std::int64_t y = 0;
@@ -644,6 +655,92 @@ std::optional<gp_Pnt> candidate_surface_over_cover_point(
     }
 }
 
+std::optional<gp_Pnt> adjacent_face_support_point(
+    const TopoDS_Edge& edge,
+    const TopoDS_Face& face,
+    const BoundarySample& sample,
+    const gp_Pnt& candidateCenter,
+    double distance,
+    gp_Vec& outNormal) {
+    const auto surface = BRep_Tool::Surface(face);
+    if (surface.IsNull() || distance <= 0.0) {
+        return std::nullopt;
+    }
+
+    double uMin = 0.0, uMax = 0.0, vMin = 0.0, vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    if (!std::isfinite(uMin) || !std::isfinite(uMax) ||
+        !std::isfinite(vMin) || !std::isfinite(vMax)) {
+        return std::nullopt;
+    }
+
+    double firstParam = 0.0, lastParam = 0.0;
+    const auto pcurve = BRep_Tool::CurveOnSurface(edge, face, firstParam, lastParam);
+    if (pcurve.IsNull()) {
+        return std::nullopt;
+    }
+
+    try {
+        gp_Pnt2d uv;
+        gp_Vec2d tangent;
+        pcurve->D1(clamp_range(sample.parameter, firstParam, lastParam), uv, tangent);
+        if (tangent.SquareMagnitude() <= 1.0e-24) {
+            return std::nullopt;
+        }
+
+        const auto normal = surface_normal_at(face, surface, uv);
+        if (!normal.has_value()) {
+            return std::nullopt;
+        }
+        outNormal = *normal;
+
+        gp_Vec2d left(-tangent.Y(), tangent.X());
+        gp_Vec2d right(tangent.Y(), -tangent.X());
+        left.Normalize();
+        right.Normalize();
+
+        const auto span = std::max({
+            std::abs(uMax - uMin),
+            std::abs(vMax - vMin),
+            1.0
+        });
+        const auto probeStep = span * 1.0e-5;
+        auto inside = [&](const gp_Vec2d& direction) {
+            const gp_Pnt2d probe(
+                uv.X() + direction.X() * probeStep,
+                uv.Y() + direction.Y() * probeStep);
+            return face_uv_inside(face, probe);
+        };
+
+        const auto leftPoint = surface_point_at_uv_offset(
+            surface, uv, left, distance, uMin, uMax, vMin, vMax);
+        const auto rightPoint = surface_point_at_uv_offset(
+            surface, uv, right, distance, uMin, uMax, vMin, vMax);
+        const auto leftInside = inside(left);
+        const auto rightInside = inside(right);
+
+        if (leftInside && !rightInside && leftPoint.has_value()) {
+            return leftPoint;
+        }
+        if (rightInside && !leftInside && rightPoint.has_value()) {
+            return rightPoint;
+        }
+        if (leftPoint.has_value() && rightPoint.has_value()) {
+            return leftPoint->Distance(candidateCenter) >= rightPoint->Distance(candidateCenter)
+                ? leftPoint
+                : rightPoint;
+        }
+        if (leftPoint.has_value()) {
+            return leftPoint;
+        }
+        return rightPoint;
+    } catch (const Standard_Failure&) {
+        return std::nullopt;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
 std::optional<gp_Pnt> adjacent_face_guard_point(
     const TopoDS_Edge& edge,
     const TopoDS_Face& face,
@@ -974,6 +1071,227 @@ MeshBoundaryLoop extract_ordered_mesh_boundary_loop(const std::vector<StlTriangl
         current = next;
     }
 
+    return result;
+}
+
+std::optional<FaceId> guard_face_for_edge(
+    const TopologyGraph& topology,
+    EdgeId edgeId,
+    const std::unordered_set<FaceId>& candidateFaces);
+
+AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const RegionBoundaryAnalysis& boundary,
+    const StpSampledFittingOptions& options,
+    const StlBoundingBox& candidateBBox,
+    const std::vector<StlTriangle>& baseTriangles,
+    std::vector<StlTriangle>& outTriangles) {
+    AdjacentFaceSupportCollarBuildResult result;
+    if (!options.enableAdjacentFaceSupportCollar ||
+        options.adjacentFaceSupportCollarWidth <= 0.0 ||
+        options.adjacentFaceSupportCollarRingCount <= 0 ||
+        baseTriangles.empty()) {
+        return result;
+    }
+
+    const auto& topology = document.topology();
+    std::unordered_set<FaceId> candidateFaces(candidate.faces.begin(), candidate.faces.end());
+    result.boundaryEdgeCount = static_cast<int>(boundary.ordered_boundary_edges.size());
+    if (boundary.ordered_boundary_edges.empty()) {
+        return result;
+    }
+
+    const auto center = bbox_center(candidateBBox);
+    const auto ringCount = std::max(options.adjacentFaceSupportCollarRingCount, 1);
+    const auto width = options.adjacentFaceSupportCollarWidth;
+    const auto samplesPerEdge = std::max(
+        options.adjacentFaceSupportCollarSamplesPerEdge,
+        options.minBoundarySamplesPerEdge);
+    constexpr double joinToleranceSquared = 1.0e-10;
+
+    std::vector<gp_Pnt> boundaryRing;
+    std::vector<gp_Vec> normalRing;
+    std::vector<std::vector<gp_Pnt>> supportRings(static_cast<std::size_t>(ringCount));
+    std::vector<std::vector<unsigned char>> supportRingFromAdjacent(static_cast<std::size_t>(ringCount));
+    boundaryRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    normalRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    for (auto& ring : supportRings) {
+        ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    }
+    for (auto& ring : supportRingFromAdjacent) {
+        ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    }
+
+    bool hasPreviousPoint = false;
+    gp_Pnt previousPoint;
+    gp_Pnt firstLoopPoint;
+
+    for (std::size_t edgeOrdinal = 0; edgeOrdinal < boundary.ordered_boundary_edges.size(); ++edgeOrdinal) {
+        const auto edgeId = boundary.ordered_boundary_edges[edgeOrdinal];
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            ++result.rejectedCount;
+            continue;
+        }
+
+        const auto adjacentFaceId = guard_face_for_edge(topology, edgeId, candidateFaces);
+        const auto& edge = topology.edge(edgeId);
+        const TopoDS_Face* adjacentFace = nullptr;
+        if (adjacentFaceId.has_value() && *adjacentFaceId < topology.faceCount()) {
+            adjacentFace = &topology.face(*adjacentFaceId);
+        }
+
+        BRepAdaptor_Curve adaptor(edge);
+        const auto firstParam = adaptor.FirstParameter();
+        const auto lastParam = adaptor.LastParameter();
+        const auto firstPoint = adaptor.Value(firstParam);
+        const auto lastPoint = adaptor.Value(lastParam);
+        const auto reverseEdge = hasPreviousPoint &&
+            lastPoint.SquareDistance(previousPoint) < firstPoint.SquareDistance(previousPoint);
+
+        int appendedForEdge = 0;
+        int adjacentSamplesForEdge = 0;
+        for (int sampleIndex = 0; sampleIndex <= samplesPerEdge; ++sampleIndex) {
+            const auto ratio = static_cast<double>(sampleIndex) / static_cast<double>(samplesPerEdge);
+            const auto parameter = reverseEdge
+                ? lastParam + (firstParam - lastParam) * ratio
+                : firstParam + (lastParam - firstParam) * ratio;
+            const auto point = adaptor.Value(parameter);
+
+            if (hasPreviousPoint && sampleIndex == 0 &&
+                point.SquareDistance(previousPoint) <= joinToleranceSquared) {
+                continue;
+            }
+            if (edgeOrdinal + 1 == boundary.ordered_boundary_edges.size() &&
+                sampleIndex == samplesPerEdge &&
+                !boundaryRing.empty() &&
+                point.SquareDistance(firstLoopPoint) <= joinToleranceSquared) {
+                continue;
+            }
+
+            BoundarySample sample;
+            sample.point = point;
+            sample.parameter = parameter;
+            sample.edgeId = edgeId;
+
+            if (boundaryRing.empty()) {
+                firstLoopPoint = point;
+            }
+            previousPoint = point;
+            hasPreviousPoint = true;
+            boundaryRing.push_back(point);
+
+            gp_Vec normal(0.0, 0.0, 1.0);
+            for (int ring = 1; ring <= ringCount; ++ring) {
+                const auto distance = width * static_cast<double>(ring) / static_cast<double>(ringCount);
+                std::optional<gp_Pnt> supportPoint;
+                gp_Vec supportNormal = normal;
+                if (adjacentFace != nullptr) {
+                    supportPoint = adjacent_face_support_point(
+                        edge,
+                        *adjacentFace,
+                        sample,
+                        center,
+                        distance,
+                        supportNormal);
+                }
+
+                const auto ringIndex = static_cast<std::size_t>(ring - 1);
+                if (supportPoint.has_value()) {
+                    normal = supportNormal;
+                    supportRings[ringIndex].push_back(*supportPoint);
+                    supportRingFromAdjacent[ringIndex].push_back(1);
+                    ++adjacentSamplesForEdge;
+                } else {
+                    ++result.fallbackCount;
+                    supportRings[ringIndex].push_back(
+                        radial_guard_point(point, center, distance));
+                    supportRingFromAdjacent[ringIndex].push_back(0);
+                }
+            }
+            normalRing.push_back(normal);
+            ++appendedForEdge;
+        }
+
+        if (appendedForEdge >= 2 && adjacentSamplesForEdge > 0) {
+            ++result.coveredBoundaryEdgeCount;
+        } else {
+            ++result.rejectedCount;
+        }
+    }
+
+    const auto meshBoundary = extract_ordered_mesh_boundary_loop(baseTriangles);
+    result.rejectedCount += meshBoundary.rejectedCount;
+    if (meshBoundary.points.size() < 3 || boundaryRing.empty()) {
+        result.boundaryCoverage = 0.0;
+        return result;
+    }
+
+    std::vector<gp_Vec> meshNormalRing;
+    std::vector<std::vector<gp_Pnt>> meshSupportRings(static_cast<std::size_t>(ringCount));
+    meshNormalRing.reserve(meshBoundary.points.size());
+    for (auto& ring : meshSupportRings) {
+        ring.reserve(meshBoundary.points.size());
+    }
+
+    for (const auto& meshPoint : meshBoundary.points) {
+        std::size_t nearestIndex = 0;
+        auto nearestDistance = std::numeric_limits<double>::infinity();
+        for (std::size_t index = 0; index < boundaryRing.size(); ++index) {
+            const auto distance = squared_distance(meshPoint, boundaryRing[index]);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+        }
+
+        meshNormalRing.push_back(normalRing[nearestIndex]);
+        for (int ring = 0; ring < ringCount; ++ring) {
+            const auto ringIndex = static_cast<std::size_t>(ring);
+            if (nearestIndex >= supportRings[ringIndex].size()) {
+                ++result.rejectedCount;
+                meshSupportRings[ringIndex].push_back(meshPoint);
+                continue;
+            }
+
+            gp_Vec offset(boundaryRing[nearestIndex], supportRings[ringIndex][nearestIndex]);
+            if (offset.Magnitude() <= 1.0e-12) {
+                ++result.rejectedCount;
+                meshSupportRings[ringIndex].push_back(meshPoint);
+                continue;
+            }
+
+            meshSupportRings[ringIndex].push_back(meshPoint.Translated(offset));
+            ++result.sampleCount;
+            if (nearestIndex < supportRingFromAdjacent[ringIndex].size() &&
+                supportRingFromAdjacent[ringIndex][nearestIndex] != 0) {
+                ++result.adjacentFaceSampleCount;
+            }
+        }
+    }
+
+    auto added = 0;
+    if (!meshSupportRings.empty()) {
+        added += append_oriented_closed_quad_strip(
+            meshBoundary.points,
+            meshSupportRings.front(),
+            meshNormalRing,
+            outTriangles,
+            result.rejectedCount);
+        for (std::size_t ring = 1; ring < meshSupportRings.size(); ++ring) {
+            added += append_oriented_closed_quad_strip(
+                meshSupportRings[ring - 1],
+                meshSupportRings[ring],
+                meshNormalRing,
+                outTriangles,
+                result.rejectedCount);
+        }
+    }
+    result.triangleCount += added;
+
+    result.boundaryCoverage = result.boundaryEdgeCount > 0
+        ? static_cast<double>(result.coveredBoundaryEdgeCount) / static_cast<double>(result.boundaryEdgeCount)
+        : 0.0;
     return result;
 }
 
@@ -1451,6 +1769,7 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     report.cornerFeatureDenseSamplingEnabled = options.enableCornerFeatureDenseSampling;
     report.boundaryGuardBandSamplingEnabled = options.enableBoundaryGuardBandSampling;
     report.boundaryOverCoverStripEnabled = options.enableBoundaryOverCoverStrip;
+    report.adjacentFaceSupportCollarEnabled = options.enableAdjacentFaceSupportCollar;
     if (options.enableBoundaryGuardBandSampling) {
         report.boundaryGuardBandRingCount = std::max(options.boundaryGuardBandRingCount, 0);
         report.boundaryGuardBandSpacing = options.boundaryGuardBandSpacing;
@@ -1458,6 +1777,10 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     if (options.enableBoundaryOverCoverStrip) {
         report.boundaryOverCoverWidth = options.boundaryOverCoverWidth;
         report.boundaryOverCoverRingCount = std::max(options.boundaryOverCoverRingCount, 0);
+    }
+    if (options.enableAdjacentFaceSupportCollar) {
+        report.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
+        report.adjacentFaceSupportCollarRingCount = std::max(options.adjacentFaceSupportCollarRingCount, 0);
     }
 
     // Validate inputs
@@ -1563,6 +1886,29 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             divisionsPerFace,
             allTriangles,
             faceTriCount);
+    }
+
+    if (options.enableAdjacentFaceSupportCollar) {
+        const auto supportCollar = append_adjacent_face_support_collar(
+            document,
+            candidate,
+            boundary,
+            options,
+            candidateBBox,
+            allTriangles,
+            allTriangles);
+        report.adjacentFaceSupportCollarEdgeCount = supportCollar.boundaryEdgeCount;
+        report.adjacentFaceSupportCollarSampleCount = supportCollar.sampleCount;
+        report.adjacentFaceSupportCollarTriangleCount = supportCollar.triangleCount;
+        report.adjacentFaceSupportCollarAdjacentFaceSampleCount = supportCollar.adjacentFaceSampleCount;
+        report.adjacentFaceSupportCollarFallbackCount = supportCollar.fallbackCount;
+        report.adjacentFaceSupportCollarRejectedCount = supportCollar.rejectedCount;
+        report.adjacentFaceSupportCollarBoundaryCoverage = supportCollar.boundaryCoverage;
+        if (supportCollar.triangleCount == 0) {
+            report.warningMessage = append_warning(
+                report.warningMessage,
+                "B2.2 adjacent-face support collar was enabled but no collar triangles were generated.");
+        }
     }
 
     if (options.enableBoundaryOverCoverStrip) {
