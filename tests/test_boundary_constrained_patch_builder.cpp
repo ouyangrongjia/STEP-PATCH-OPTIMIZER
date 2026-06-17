@@ -21,6 +21,7 @@
 #include <gp_Pnt.hxx>
 
 #include <cassert>
+#include <iostream>
 #include <set>
 #include <vector>
 
@@ -442,6 +443,16 @@ void test_multi_surface_boundary_shell_builds_when_surface_set_covers_boundary()
     options.surfaceRetrimOptions.projectionTolerance = 0.05;
     const auto result = spo::BoundaryConstrainedPatchBuilder().build(fixture.input(), analysis, options);
 
+    if (!result.success) {
+        std::cerr
+            << "multi-surface shell failed: " << result.message
+            << " warning=" << result.warningMessage
+            << " pcurve attempts=" << result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount
+            << " pcurve failures=" << result.multiSurfaceBoundaryEdgePcurveRebuildFailureCount
+            << " sameParameter failures=" << result.multiSurfaceBoundaryEdgeSameParameterFailureCount
+            << " maxdev=" << result.multiSurfaceBoundaryEdgeMaxSameParameterDeviation
+            << "\n";
+    }
     assert(result.success);
     assert(result.attemptedMultiSurfaceBoundaryShell);
     assert(result.usedMultiSurfaceBoundaryShell);
@@ -459,6 +470,14 @@ void test_multi_surface_boundary_shell_builds_when_surface_set_covers_boundary()
     assert(result.multiSurfaceFailedPatchFaceIndex == -1);
     assert(result.multiSurfaceFailedFaceEdgeCount == 0);
     assert(result.multiSurfaceFailedEdgeIds.empty());
+    assert(result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount >= fixture.candidate.boundary_edge_count);
+    assert(result.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount == result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
+    assert(result.multiSurfaceBoundaryEdgePcurveRebuildFailureCount == 0);
+    assert(result.multiSurfaceBoundaryEdgeSameParameterCheckCount == result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
+    assert(result.multiSurfaceBoundaryEdgeSameParameterFailureCount == 0);
+    assert(result.multiSurfaceBoundaryEdgeMaxSameParameterDeviation <= options.surfaceRetrimOptions.projectionTolerance);
+    assert(result.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds.empty());
+    assert(result.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds.empty());
 }
 
 void test_multi_surface_boundary_shell_fails_without_internal_seam_closure() {

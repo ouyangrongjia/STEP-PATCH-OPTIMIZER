@@ -12,6 +12,7 @@
 #include <iostream>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -90,6 +91,22 @@ const spo::MergeCandidate* find_candidate(
     return nullptr;
 }
 
+void print_edge_ids(const char* label, const std::vector<spo::EdgeId>& edgeIds) {
+    std::cout << label << ":";
+    if (edgeIds.empty()) {
+        std::cout << " []\n";
+        return;
+    }
+    std::cout << " [";
+    for (std::size_t index = 0; index < edgeIds.size(); ++index) {
+        if (index > 0) {
+            std::cout << ", ";
+        }
+        std::cout << edgeIds[index];
+    }
+    std::cout << "]\n";
+}
+
 void print_report(const spo::PatchReplacementReport& report) {
     std::cout << "patch status: " << (report.success ? "Applied" : "ApplyFailed") << "\n";
     std::cout << "candidate id: " << report.candidateId << "\n";
@@ -120,6 +137,20 @@ void print_report(const spo::PatchReplacementReport& report) {
               << report.multiSurfaceFailedPatchFaceIndex << "\n";
     std::cout << "multi-surface failed face edge count: "
               << report.multiSurfaceFailedFaceEdgeCount << "\n";
+    std::cout << "multi-surface boundary pcurve rebuild attempt/success/failure: "
+              << report.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount << " / "
+              << report.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount << " / "
+              << report.multiSurfaceBoundaryEdgePcurveRebuildFailureCount << "\n";
+    std::cout << "multi-surface boundary SameParameter check/failure/maxdev: "
+              << report.multiSurfaceBoundaryEdgeSameParameterCheckCount << " / "
+              << report.multiSurfaceBoundaryEdgeSameParameterFailureCount << " / "
+              << report.multiSurfaceBoundaryEdgeMaxSameParameterDeviation << "\n";
+    print_edge_ids(
+        "multi-surface boundary pcurve rebuild failed edge ids",
+        report.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds);
+    print_edge_ids(
+        "multi-surface boundary SameParameter failed edge ids",
+        report.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds);
     std::cout << "source faces replaced: " << report.sourceFacesReplaced << "\n";
     std::cout << "repair applied: " << report.repairApplied << "\n";
     std::cout << "repair before face/edge/shell/solid: "

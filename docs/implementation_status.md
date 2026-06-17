@@ -394,6 +394,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | B2.1 fitting STL over-cover strip 测试 | 已完成基础版，真实默认验证已跑 | 覆盖围绕当前 fitting STL patch boundary 的连续窄带生成、bbox 外扩、单连通、单 boundary cycle、normal/winding、report 字段、默认 A0 不启用 B2.1，以及脚本/CLI `-Experiment B2.1` / `--b2-over-cover-strip` / applied STEP export 合同；真实 Geomagic candidate 179 默认参数生成 5-face patch，StrictTopologyGate 与 applied STEP readback 通过，但 CommercialCadLikeQualityGate 未通过 |
 | B2.2 adjacent-face support collar 测试 | 已完成最小版，真实参数扫已跑 | 覆盖当前 fitting STL mesh boundary 到邻接 STP face support rail 的 collar 生成、单连通、单 boundary cycle、normal/winding、report 字段、默认 A0 不启用 B2.2、脚本/CLI `-Experiment B2.2` / `--b2-adjacent-face-support-collar` 合同，以及 `CommercialCadLikeQualityGate.seam_continuity` JSON 输出；真实 Geomagic candidate 179 的 B2.2 输入干净但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败 |
 | B2.3 corner-safe support collar / SharpenContours 测试 | 已完成最小版，真实 A/B 已跑 | 覆盖 B2.2 collar 上的 corner-safe clamp、最大 support offset 上限、单连通、单 boundary cycle、normal/winding、report 字段、默认 A0 不启用 B2.3、脚本/CLI `-Experiment B2.3` / `--b2-corner-safe-support-collar` / `--support-collar-max-offset-scale` 合同，以及 Geomagic `FIT_REGION_SHARPEN_CONTOURS` 环境变量；真实 Geomagic candidate 179 显示 SharpenContours 可降低 drift，但 StrictTopologyGate 仍因 FreeEdgeIncreased 失败 |
+| B2.4 Boundary Edge Rebuild + Local Closure Probe | 已完成最小版，真实 Apply 验证已跑 | Apply 侧增量，不是新的 fitting STL experiment：strict multi-surface boundary shell 会用原 STP boundary 3D curve 作为最终边界源，向对应 Geomagic fitted surface 显式投影并重建 pcurve / SameParameter；报告 pcurve rebuild attempt/success/failure、SameParameter failure、max deviation、failed edge ids；真实样例 27/27 pcurve rebuild 成功但 StrictTopologyGate 仍因 FreeEdgeIncreased 失败，说明剩余主因不是 pcurve 缺失，而是局部几何/拓扑闭合仍有 1 条 free edge |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 部分完成 | GUI 同源核心 pipeline 已有脚本 gate；窗口点击级 Qt/系统事件自动化仍未完成 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -655,7 +656,8 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
    - B2.1：当前 fitting STL patch 外围 over-cover strip 已完成基础版；真实 Geomagic 默认参数已重新生成 patch，并进入 Apply / StrictTopologyGate / applied STEP export；CommercialCadLikeQualityGate 仍因 drift 超限失败。
    - B2.2：邻接面 support collar 与 seam_continuity 指标已完成最小版；真实 Geomagic 参数扫显示输入 STL 干净、patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败。
    - B2.3：角点安全 support collar 与 SharpenContours A/B 已完成最小版；真实 Geomagic 显示 SharpenContours 可降低 drift，但 StrictTopologyGate 仍因 FreeEdgeIncreased 失败，未产生 applied STEP。
-   - B3：必须先解决 B2.3 seam-aware 输入后的 replacement shell / repair free edge 风险，再叠加 corner anchors；否则 B3 会叠加在一个拓扑未收口的输入形态上。
+   - B2.4：已从 Apply 侧修复 T6.7.4 multi-surface boundary shell 的边界边表征，对原 STP boundary 3D curve 在 fitted surface 上显式重建 pcurve / SameParameter，并新增 edge-level diagnostics；真实样例证明 pcurve rebuild 全部成功但 gate 仍有 1 条 free edge，因此后续要定位 free edge 空间位置和局部几何偏差，而不是继续把 pcurve 缺失当主因。
+   - B3：必须先解决 B2.3/B2.4 后 replacement shell / repair free edge 风险，再叠加 corner anchors；否则 B3 会叠加在一个拓扑未收口的输入形态上。
 
 6. `CommercialCadLikeQualityGate` 第一版已新增：
    - 不替代 StrictTopologyGate。

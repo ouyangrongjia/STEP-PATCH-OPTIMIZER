@@ -49,8 +49,16 @@ struct BoundaryConstrainedMultiSurfaceShellResult {
     int multipleClosedWireFaceCount = 0;
     int failedPatchFaceIndex = -1;
     int failedFaceEdgeCount = 0;
+    int boundaryEdgePcurveRebuildAttemptCount = 0;
+    int boundaryEdgePcurveRebuildSuccessCount = 0;
+    int boundaryEdgePcurveRebuildFailureCount = 0;
+    int boundaryEdgeSameParameterCheckCount = 0;
+    int boundaryEdgeSameParameterFailureCount = 0;
+    double boundaryEdgeMaxSameParameterDeviation = 0.0;
     std::vector<BoundaryConstrainedSplitBoundarySegment> splitBoundarySegments;
     std::vector<EdgeId> failedEdgeIds;
+    std::vector<EdgeId> boundaryEdgePcurveRebuildFailedEdgeIds;
+    std::vector<EdgeId> boundaryEdgeSameParameterFailedEdgeIds;
 
     std::string message;
     std::string warningMessage;

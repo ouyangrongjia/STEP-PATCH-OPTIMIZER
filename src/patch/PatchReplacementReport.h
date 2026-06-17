@@ -147,7 +147,15 @@ struct PatchReplacementReport {
     int multiSurfaceMultipleClosedWireFaceCount = 0;
     int multiSurfaceFailedPatchFaceIndex = -1;
     int multiSurfaceFailedFaceEdgeCount = 0;
+    int multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = 0;
+    int multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = 0;
+    int multiSurfaceBoundaryEdgePcurveRebuildFailureCount = 0;
+    int multiSurfaceBoundaryEdgeSameParameterCheckCount = 0;
+    int multiSurfaceBoundaryEdgeSameParameterFailureCount = 0;
+    double multiSurfaceBoundaryEdgeMaxSameParameterDeviation = 0.0;
     std::vector<EdgeId> multiSurfaceFailedEdgeIds;
+    std::vector<EdgeId> multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds;
+    std::vector<EdgeId> multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds;
 
     int faceCountBeforeRepair = 0;
     int edgeCountBeforeRepair = 0;

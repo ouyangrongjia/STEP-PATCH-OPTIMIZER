@@ -251,6 +251,23 @@ B2.3 corner-safe support collar 入口：
 
 B2.3 默认在 B1 + B2.2 collar 基础上启用角点 / offset 跳变局部平滑与最大 offset clamp，默认 `-SupportCollarMaxOffsetScale 1.25`。JSON 的 `stp_sampled_fitting` 节输出 `adjacent_face_support_collar_corner_clamp_*` 和 `adjacent_face_support_collar_max_offset`，根节点输出 `geomagic_sharpen_contours`。2026-06-17 的 `03_配件_Clay.stp` auto-selected candidate 179 真实 A/B 中，B2.3 默认 max drift=0.095701，B2.3 + `-SharpenContours` max drift=0.070672；两者均因 StrictTopologyGate `FreeEdgeIncreased` 失败，Patch Apply 未提交，因此没有 applied STEP 导出。
 
+B2.4 是 Apply 侧 Boundary Edge Rebuild + Local Closure Probe，不是新的 `-Experiment B2.4` fitting input。验证 B2.4 时仍可使用 B2.3 / `-SharpenContours` 生成或复用 patch；区别在于 Patch Apply report / baseline JSON 会新增 multi-surface boundary edge pcurve rebuild 与 SameParameter diagnostics：
+
+```text
+multi_surface_boundary_edge_pcurve_rebuild_attempt_count
+multi_surface_boundary_edge_pcurve_rebuild_success_count
+multi_surface_boundary_edge_pcurve_rebuild_failure_count
+multi_surface_boundary_edge_same_parameter_check_count
+multi_surface_boundary_edge_same_parameter_failure_count
+multi_surface_boundary_edge_max_same_parameter_deviation
+multi_surface_boundary_edge_pcurve_rebuild_failed_edge_ids
+multi_surface_boundary_edge_same_parameter_failed_edge_ids
+```
+
+这些字段用于判断真实缝合失败到底是原 STP boundary 3D curve 到 fitted surface 的 pcurve 投影失败、SameParameter 偏差超限，还是后续 repair / sewing / StrictTopologyGate 仍无法闭合。B2.4 不改变 redo 语义，不重跑 Geomagic，不把 STL crop boundary、support collar 外环或 Geomagic patch outer boundary 当最终 CAD boundary。
+
+2026-06-17 的真实样例复用 B2.3 + `SharpenContours` patch 后，B2.4 Apply report 显示 `pcurve_rebuild_attempt=27`、`success=27`、`failure=0`、`same_parameter_failure=0`，但 `StrictTopologyGate` 仍因 `FreeEdgeIncreased` 失败，`gate_after_free_edges=1`，因此仍没有 applied STEP 导出。这个结果说明 B2.4 已经把边界 pcurve 表征问题单独排除，但没有解决最终水密闭合。
+
 脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计；`-Experiment B2.3` 会输出 corner-safe collar clamp 统计和 SharpenContours A/B 标记。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：

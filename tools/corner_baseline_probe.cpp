@@ -16,6 +16,7 @@
 #include "validate/CommercialCadQualityGate.h"
 
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -97,6 +98,14 @@ std::string path_to_string(const std::filesystem::path& path) {
 QString path_to_qstring(const std::filesystem::path& path) {
     const auto utf8 = path.generic_u8string();
     return QString::fromUtf8(reinterpret_cast<const char*>(utf8.c_str()), static_cast<qsizetype>(utf8.size()));
+}
+
+QJsonArray edge_ids_to_json(const std::vector<spo::EdgeId>& edgeIds) {
+    QJsonArray array;
+    for (const auto edgeId : edgeIds) {
+        array.append(static_cast<int>(edgeId));
+    }
+    return array;
 }
 
 QJsonObject path_object(const std::filesystem::path& path) {
@@ -701,6 +710,30 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     object.insert("replacement_edge_count", report.replacementEdgeCount);
     object.insert("replacement_shell_count", report.replacementShellCount);
     object.insert("replacement_solid_count", report.replacementSolidCount);
+    object.insert(
+        "multi_surface_boundary_edge_pcurve_rebuild_attempt_count",
+        report.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
+    object.insert(
+        "multi_surface_boundary_edge_pcurve_rebuild_success_count",
+        report.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount);
+    object.insert(
+        "multi_surface_boundary_edge_pcurve_rebuild_failure_count",
+        report.multiSurfaceBoundaryEdgePcurveRebuildFailureCount);
+    object.insert(
+        "multi_surface_boundary_edge_same_parameter_check_count",
+        report.multiSurfaceBoundaryEdgeSameParameterCheckCount);
+    object.insert(
+        "multi_surface_boundary_edge_same_parameter_failure_count",
+        report.multiSurfaceBoundaryEdgeSameParameterFailureCount);
+    object.insert(
+        "multi_surface_boundary_edge_max_same_parameter_deviation",
+        report.multiSurfaceBoundaryEdgeMaxSameParameterDeviation);
+    object.insert(
+        "multi_surface_boundary_edge_pcurve_rebuild_failed_edge_ids",
+        edge_ids_to_json(report.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds));
+    object.insert(
+        "multi_surface_boundary_edge_same_parameter_failed_edge_ids",
+        edge_ids_to_json(report.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds));
     object.insert("gate_evaluated", report.gateEvaluated);
     object.insert("gate_passed", report.gatePassed);
     object.insert("gate_after_brep_check_valid", report.gateAfterBRepCheckValid);

@@ -9,16 +9,23 @@
 #include <BRepLib.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <Geom2d_Curve.hxx>
+#include <Geom_Curve.hxx>
 #include <GProp_GProps.hxx>
 #include <Precision.hxx>
+#include <ShapeAnalysis_Edge.hxx>
 #include <ShapeAnalysis_FreeBounds.hxx>
+#include <ShapeConstruct_ProjectCurveOnSurface.hxx>
 #include <ShapeFix_Face.hxx>
+#include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Wire.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
+#include <gp_Pnt2d.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -115,8 +122,16 @@ TopoDS_Edge make_boundary_segment_edge(
     const ShapeDocument& document,
     EdgeId edgeId,
     double firstParameter,
-    double lastParameter) {
+    double lastParameter,
+    const TopoDS_Face& targetFace,
+    double projectionTolerance,
+    BoundaryConstrainedMultiSurfaceShellResult& result) {
     if (edgeId >= document.topology().edgeCount()) {
+        return {};
+    }
+    if (targetFace.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
         return {};
     }
 
@@ -124,19 +139,86 @@ TopoDS_Edge make_boundary_segment_edge(
     double edgeFirst = 0.0;
     double edgeLast = 0.0;
     const auto curve = BRep_Tool::Curve(sourceEdge, edgeFirst, edgeLast);
-    if (curve.IsNull()) {
+    TopLoc_Location surfaceLocation;
+    const auto surface = BRep_Tool::Surface(targetFace, surfaceLocation);
+    if (curve.IsNull() || surface.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
         return {};
     }
 
     if (std::abs(lastParameter - firstParameter) <= Precision::PConfusion()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
         return {};
     }
 
+    ++result.boundaryEdgePcurveRebuildAttemptCount;
     BRepBuilderAPI_MakeEdge edgeBuilder(curve, firstParameter, lastParameter);
     if (!edgeBuilder.IsDone()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
         return {};
     }
-    return edgeBuilder.Edge();
+    auto edge = edgeBuilder.Edge();
+
+    Handle(Geom_Curve) projectedCurve = curve;
+    if (!surfaceLocation.IsIdentity()) {
+        projectedCurve = Handle(Geom_Curve)::DownCast(
+            curve->Transformed(surfaceLocation.Transformation().Inverted()));
+    }
+    Handle(Geom2d_Curve) pcurve;
+    bool projected = false;
+    try {
+        Handle(ShapeConstruct_ProjectCurveOnSurface) projector =
+            new ShapeConstruct_ProjectCurveOnSurface;
+        projector->Init(surface, projectionTolerance);
+        projected = projector->Perform(
+            projectedCurve,
+            firstParameter,
+            lastParameter,
+            pcurve,
+            projectionTolerance,
+            projectionTolerance);
+    } catch (const Standard_Failure&) {
+        projected = false;
+    }
+
+    if (!projected || pcurve.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+
+    BRep_Builder builder;
+    const gp_Pnt2d firstUv = pcurve->Value(firstParameter);
+    const gp_Pnt2d lastUv = pcurve->Value(lastParameter);
+    builder.UpdateEdge(edge, pcurve, surface, surfaceLocation, projectionTolerance, firstUv, lastUv);
+    builder.Range(edge, firstParameter, lastParameter, Standard_False);
+    builder.Range(edge, surface, surfaceLocation, firstParameter, lastParameter);
+    builder.SameRange(edge, Standard_True);
+    builder.UpdateEdge(edge, projectionTolerance);
+
+    ++result.boundaryEdgePcurveRebuildSuccessCount;
+    ++result.boundaryEdgeSameParameterCheckCount;
+    Standard_Real maxDeviation = 0.0;
+    ShapeAnalysis_Edge edgeAnalyzer;
+    const auto sameParameter = edgeAnalyzer.CheckSameParameter(edge, targetFace, maxDeviation, 23);
+    if (std::isfinite(maxDeviation)) {
+        result.boundaryEdgeMaxSameParameterDeviation =
+            std::max(result.boundaryEdgeMaxSameParameterDeviation, static_cast<double>(maxDeviation));
+    } else {
+        maxDeviation = std::numeric_limits<Standard_Real>::infinity();
+        result.boundaryEdgeMaxSameParameterDeviation = std::numeric_limits<double>::infinity();
+    }
+    if (!std::isfinite(maxDeviation) || maxDeviation > projectionTolerance) {
+        append_unique_edge(result.boundaryEdgeSameParameterFailedEdgeIds, edgeId);
+        ++result.boundaryEdgeSameParameterFailureCount;
+        return {};
+    }
+    (void)sameParameter;
+    builder.SameParameter(edge, Standard_True);
+    return edge;
 }
 
 std::vector<OwnedBoundarySegment> assign_boundary_segments(
@@ -500,7 +582,10 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
             document,
             segment.edgeId,
             segment.firstParameter,
-            segment.lastParameter);
+            segment.lastParameter,
+            faces[static_cast<std::size_t>(segment.faceIndex)],
+            options.projectionTolerance,
+            result);
         if (edge.IsNull()) {
             append_unique_edge(result.failedEdgeIds, segment.edgeId);
             continue;

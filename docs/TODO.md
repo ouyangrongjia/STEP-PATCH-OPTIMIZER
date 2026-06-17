@@ -135,6 +135,7 @@ OCCT gate 证明的是 OCCT 自己认为 B-rep 拓扑合法。
    - B2.1 目标路线改为围绕当前 fitting STL patch boundary 生成连续窄 over-cover strip，平行 / 跟随当前面片边缘，宁愿略微覆盖原 STP candidate boundary 外侧。
    - B2.2 改为邻接面约束 support collar：从当前 fitting STL mesh boundary 接出一圈窄 collar，外侧 rail 来自原 STP 非候选邻接 face 的 pcurve 面内采样，用于给 Geomagic 明确 seam 高度上下文。
    - B2.3 改为角点安全 support collar：保留 B2.2 的邻接面 support rail，但对当前 fitting STL mesh boundary 的角点 / offset 跳变点执行局部平滑和最大 offset clamp，避免角点处生成异常凸起；Geomagic `SharpenContours` 只作为显式 A/B 开关，默认关闭。
+   - B2.4 改为 Apply 侧 Boundary Edge Rebuild + Local Closure Probe：不再继续改 fitting STL 外扩带，而是在 multi-surface boundary shell 中把原 STP boundary 3D curve 投影到对应 Geomagic fitted surface，显式重建 pcurve / SameParameter，并报告失败 edge id、最大同参偏差和局部闭合风险。
    - 外扩带只用于 Geomagic fitting input，不作为最终 CAD boundary。
    - 拟合后必须继续使用原 STP candidate outer boundary wire / pcurve 在 fitted surface 上重裁剪。
 
@@ -197,6 +198,7 @@ experiment/corner-preservation-ab
 | B2.1 | 当前 fitting STL 外围 over-cover strip + 原 STP boundary re-trim | 已接入脚本；默认 `OverCoverWidth=0.05` 真实样例可进入 Apply / StrictTopologyGate / applied STEP export，但 CommercialCadLikeQualityGate 仍未通过 |
 | B2.2 | adjacent-face support collar + seam continuity report | 已接入脚本；真实样例输入 STL 干净且 p95 有改善，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍未通过 |
 | B2.3 | corner-safe support collar + optional Geomagic SharpenContours A/B | 已接入脚本；真实样例 `SharpenContours` 可降低 drift，但 StrictTopologyGate 仍因 `FreeEdgeIncreased` 失败 |
+| B2.4 | Boundary Edge Rebuild + Local Closure Probe | 已完成最小版；Apply multi-surface shell 会重建原 STP boundary edge 在 fitted surface 上的 pcurve / SameParameter，并输出 pcurve rebuild diagnostics；真实样例 27/27 pcurve rebuild 成功但 StrictTopologyGate 仍因 `FreeEdgeIncreased` 失败 |
 | B3 | corner anchors + B2.3 seam-aware fitting input | 验证 anchor 与 corner-safe collar 组合是否明显优于单独策略 |
 
 每组必须输出同一份实验报告：
@@ -1269,7 +1271,12 @@ corner preservation A/B 后续：
 7. B2.2 真实参数扫显示输入 STL components=1、boundaryCycles=1、fallback=0、rejected=0、coverage=1，AutoSurface 输出 5-face patch 且非 high-risk；但 SupportCollarWidth=0.03/0.04/0.05 均未通过 StrictTopologyGate / CommercialCadLikeQualityGate。
 8. B2.3 基础版已实现：在 B2.2 collar 上增加角点 / offset 跳变局部平滑与最大 offset clamp，报告 corner clamp count / max offset，并新增 `-SharpenContours` 显式 A/B。
 9. B2.3 真实样例显示 `SharpenContours=true` 可把 max drift 从 0.095701 降到 0.070672，但 StrictTopologyGate 仍因 FreeEdgeIncreased 失败，Patch Apply / applied STEP export 不提交。
-10. 下一步应优先解决 seam-aware replacement shell / repair / STEP roundtrip 的水密稳定性；在此之前，不应把 B3 叠加 corner anchors 当作收口方案。
+10. B2.4 最小版已实现：T6.7.4 multi-surface boundary shell 会把原 STP boundary 3D curve 显式投影到对应 Geomagic fitted surface，更新 edge pcurve、edge range 和 SameParameter 状态，并输出 pcurve rebuild attempt/success/failure、SameParameter failure、max deviation、failed edge ids。
+11. B2.4 还补充了 split boundary segment 在旧邻接面重建时的 pcurve rebuild，避免 split segment edge 只在 replacement face 一侧有合法 pcurve。
+12. 真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` patch 后，B2.4 报告显示 `pcurve_rebuild_attempt=27`、`success=27`、`failure=0`、`same_parameter_failure=0`，但 `max_same_parameter_deviation=0.093401`，StrictTopologyGate 仍因 `FreeEdgeIncreased` 失败，after free edges=1，未导出 applied STEP。
+13. B2.4 不移动原 STP candidate boundary，不信任 STL crop boundary / support collar outer rail / Geomagic patch outer boundary，也不通过扩大 sewing tolerance 或放宽 StrictTopologyGate 假装闭合。
+14. 下一步不应继续怀疑“边界 edge 没有 pcurve”作为主因；应定位那 1 条 free edge 对应的拓扑位置，并处理 fitted surface 与原 boundary / 邻接旧面之间约 0.09 量级的局部几何偏差。
+15. 在 B2.4 之后，仍不应把 B3 叠加 corner anchors 当作收口方案；否则只是把新的输入增强叠在一个边界拓扑仍不闭合的 Apply 路径上。
 ```
 
 极简 Codex 任务边界：

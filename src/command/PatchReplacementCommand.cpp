@@ -13,13 +13,21 @@
 #include <BRepLib.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools_ReShape.hxx>
+#include <Geom2d_Curve.hxx>
+#include <Geom_Curve.hxx>
 #include <Precision.hxx>
+#include <ShapeAnalysis_Edge.hxx>
+#include <ShapeConstruct_ProjectCurveOnSurface.hxx>
+#include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
+#include <gp_Pnt2d.hxx>
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <set>
 #include <string>
@@ -122,6 +130,74 @@ TopoDS_Edge oriented_segment_edge(
     return edge;
 }
 
+bool rebuild_edge_pcurve_on_face(
+    const TopoDS_Edge& edge,
+    const TopoDS_Face& face,
+    double tolerance) {
+    if (edge.IsNull() || face.IsNull()) {
+        return false;
+    }
+
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    const auto curve = BRep_Tool::Curve(edge, firstParameter, lastParameter);
+    TopLoc_Location surfaceLocation;
+    const auto surface = BRep_Tool::Surface(face, surfaceLocation);
+    if (curve.IsNull() || surface.IsNull()) {
+        return false;
+    }
+    if (std::abs(lastParameter - firstParameter) <= Precision::PConfusion()) {
+        return false;
+    }
+
+    Handle(Geom_Curve) projectedCurve = curve;
+    if (!surfaceLocation.IsIdentity()) {
+        projectedCurve = Handle(Geom_Curve)::DownCast(
+            curve->Transformed(surfaceLocation.Transformation().Inverted()));
+    }
+    if (projectedCurve.IsNull()) {
+        return false;
+    }
+
+    Handle(Geom2d_Curve) pcurve;
+    bool projected = false;
+    try {
+        Handle(ShapeConstruct_ProjectCurveOnSurface) projector =
+            new ShapeConstruct_ProjectCurveOnSurface;
+        projector->Init(surface, tolerance);
+        projected = projector->Perform(
+            projectedCurve,
+            firstParameter,
+            lastParameter,
+            pcurve,
+            tolerance,
+            tolerance);
+    } catch (const Standard_Failure&) {
+        projected = false;
+    }
+    if (!projected || pcurve.IsNull()) {
+        return false;
+    }
+
+    BRep_Builder builder;
+    const gp_Pnt2d firstUv = pcurve->Value(firstParameter);
+    const gp_Pnt2d lastUv = pcurve->Value(lastParameter);
+    builder.UpdateEdge(edge, pcurve, surface, surfaceLocation, tolerance, firstUv, lastUv);
+    builder.Range(edge, firstParameter, lastParameter, Standard_False);
+    builder.Range(edge, surface, surfaceLocation, firstParameter, lastParameter);
+    builder.SameRange(edge, Standard_True);
+    builder.UpdateEdge(edge, tolerance);
+
+    Standard_Real maxDeviation = 0.0;
+    ShapeAnalysis_Edge edgeAnalyzer;
+    edgeAnalyzer.CheckSameParameter(edge, face, maxDeviation, 23);
+    if (!std::isfinite(maxDeviation) || maxDeviation > tolerance) {
+        return false;
+    }
+    builder.SameParameter(edge, Standard_True);
+    return true;
+}
+
 TopoDS_Face rebuild_face_with_split_boundary_edges(
     const ShapeDocument& document,
     const BoundaryConstrainedPatchBuildResult& buildResult,
@@ -156,10 +232,16 @@ TopoDS_Face rebuild_face_with_split_boundary_edges(
 
             if (originalEdge.Orientation() == TopAbs_REVERSED) {
                 for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
+                    if (!rebuild_edge_pcurve_on_face(it->edge, face, Precision::Confusion())) {
+                        return {};
+                    }
                     wireBuilder.Add(oriented_segment_edge(it->edge, TopAbs_REVERSED));
                 }
             } else {
                 for (const auto& segment : segments) {
+                    if (!rebuild_edge_pcurve_on_face(segment.edge, face, Precision::Confusion())) {
+                        return {};
+                    }
                     wireBuilder.Add(oriented_segment_edge(segment.edge, originalEdge.Orientation()));
                 }
             }
@@ -551,6 +633,14 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.multiSurfaceFailedPatchFaceIndex = buildResult.multiSurfaceFailedPatchFaceIndex;
     report_.multiSurfaceFailedFaceEdgeCount = buildResult.multiSurfaceFailedFaceEdgeCount;
     report_.multiSurfaceFailedEdgeIds = buildResult.multiSurfaceFailedEdgeIds;
+    report_.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount;
+    report_.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount;
+    report_.multiSurfaceBoundaryEdgePcurveRebuildFailureCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildFailureCount;
+    report_.multiSurfaceBoundaryEdgeSameParameterCheckCount = buildResult.multiSurfaceBoundaryEdgeSameParameterCheckCount;
+    report_.multiSurfaceBoundaryEdgeSameParameterFailureCount = buildResult.multiSurfaceBoundaryEdgeSameParameterFailureCount;
+    report_.multiSurfaceBoundaryEdgeMaxSameParameterDeviation = buildResult.multiSurfaceBoundaryEdgeMaxSameParameterDeviation;
+    report_.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds = buildResult.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds;
+    report_.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds = buildResult.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds;
     append_warning(report_, buildResult.warningMessage);
 
     if (!buildResult.success) {

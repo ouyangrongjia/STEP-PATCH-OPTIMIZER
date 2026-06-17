@@ -71,6 +71,7 @@ Commercial-CAD-like quality gate:
 | B2.1 | fitting STL over-cover strip + original-boundary re-trim | 已接入 `-Experiment B2.1`；默认 `OverCoverWidth=0.05` 真实样例可进入 Apply / StrictTopologyGate / applied STEP export，但 CommercialCadLikeQualityGate 仍未通过 |
 | B2.2 | adjacent-face support collar + seam continuity report | 已接入 `-Experiment B2.2`；真实样例输入干净且 patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败 |
 | B2.3 | corner-safe support collar + optional SharpenContours A/B | 已接入 `-Experiment B2.3`；SharpenContours 降低 drift，但真实样例仍因 FreeEdgeIncreased 未通过 StrictTopologyGate |
+| B2.4 | Boundary Edge Rebuild + Local Closure Probe | Apply 侧增量：在 multi-surface boundary shell 中重建原 STP boundary edge 在 fitted surface 上的 pcurve / SameParameter，并输出 local closure diagnostics；真实样例 pcurve rebuild 全成功但仍有 1 条 free edge；不是新的 fitting STL experiment |
 | B3 | corner anchors + B2.3 seam-aware fitting input | 是否同时降低 drift 且不恶化 repair / gate |
 
 当前 A0 自动化入口：
@@ -223,6 +224,33 @@ B2.3, SupportCollarWidth=0.05, SharpenContours=true:
 ```
 
 结论：B2.3 + SharpenContours 能改善 drift，但没有解决 Apply 后 free edge 增量。由于 `StrictTopologyGate` 未通过，脚本不会导出 applied STEP；这保持了“失败不提交”的边界。
+
+B2.4 不是新的 Geomagic fitting input，也不是 `-Experiment` 参数别名。B2.4 发生在 Apply 的 strict multi-surface boundary shell 阶段：对被分配到某个 fitted patch face 的每段原 STP boundary edge，保留原 3D curve 和参数区间作为最终 CAD 边界源，再把该 3D curve 显式投影到目标 fitted surface，写入 edge pcurve / range，并做 SameParameter 检查。报告必须暴露 pcurve rebuild attempt/success/failure、SameParameter check/failure、max deviation 和 failed edge ids。若 B2.4 仍失败，失败应停留在 report / StrictTopologyGate，不允许回退到 Geomagic patch outer boundary，也不通过扩大 sewing tolerance 掩盖边界高低差。
+
+2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` patch 验证 B2.4 Apply 侧：
+
+```text
+B2.4 pcurve diagnostics:
+  multi_surface_boundary_edge_pcurve_rebuild_attempt_count=27
+  multi_surface_boundary_edge_pcurve_rebuild_success_count=27
+  multi_surface_boundary_edge_pcurve_rebuild_failure_count=0
+  multi_surface_boundary_edge_same_parameter_failure_count=0
+  multi_surface_boundary_edge_max_same_parameter_deviation=0.093401
+
+Apply / gate:
+  used_multi_surface_boundary_shell=true
+  replacement_face_count=5
+  StrictTopologyGate failed: FreeEdgeIncreased
+  gate_after_free_edges=1
+  gate_after_brep_check_valid=true
+  applied_step_export.success=false
+
+quality:
+  boundary max/p95=0.070672/0.038436
+  seam max_abs/p95_abs=0.055789/0.037368
+```
+
+结论：B2.4 已排除“原 STP boundary edge 无法在 fitted surface 上建立 pcurve / SameParameter”的主因；剩余失败是 repair / sewing 后仍出现 1 条 free edge，且 fitted surface 与原 boundary / 邻接旧面局部偏差仍高于 CommercialCadLikeQualityGate 的 0.03 量级。
 
 2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
 

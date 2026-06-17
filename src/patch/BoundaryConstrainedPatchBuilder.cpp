@@ -175,6 +175,12 @@ void copy_multi_surface_report(
     result.multiSurfaceMultipleClosedWireFaceCount = shell.multipleClosedWireFaceCount;
     result.multiSurfaceFailedPatchFaceIndex = shell.failedPatchFaceIndex;
     result.multiSurfaceFailedFaceEdgeCount = shell.failedFaceEdgeCount;
+    result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = shell.boundaryEdgePcurveRebuildAttemptCount;
+    result.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = shell.boundaryEdgePcurveRebuildSuccessCount;
+    result.multiSurfaceBoundaryEdgePcurveRebuildFailureCount = shell.boundaryEdgePcurveRebuildFailureCount;
+    result.multiSurfaceBoundaryEdgeSameParameterCheckCount = shell.boundaryEdgeSameParameterCheckCount;
+    result.multiSurfaceBoundaryEdgeSameParameterFailureCount = shell.boundaryEdgeSameParameterFailureCount;
+    result.multiSurfaceBoundaryEdgeMaxSameParameterDeviation = shell.boundaryEdgeMaxSameParameterDeviation;
     result.multiSurfaceSplitBoundarySegments.clear();
     result.multiSurfaceSplitBoundarySegments.reserve(shell.splitBoundarySegments.size());
     for (const auto& segment : shell.splitBoundarySegments) {
@@ -185,6 +191,8 @@ void copy_multi_surface_report(
             segment.edge});
     }
     result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;
+    result.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds = shell.boundaryEdgePcurveRebuildFailedEdgeIds;
+    result.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds = shell.boundaryEdgeSameParameterFailedEdgeIds;
 }
 
 }
