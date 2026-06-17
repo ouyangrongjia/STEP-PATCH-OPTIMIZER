@@ -31,6 +31,7 @@ struct GeomagicAutoSurfaceConfig {
     bool adaptiveFit = false;
     bool autoMerge = true;
     bool strictPatchTarget = true;
+    bool sharpenContours = false;
 
     int numPatches = 1;
     std::vector<int> fallbackNumPatches = {2, 4, 8};

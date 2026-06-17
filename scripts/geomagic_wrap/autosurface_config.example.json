@@ -12,6 +12,7 @@
   "adaptive_fit": false,
   "auto_merge": true,
   "strict_patch_target": false,
+  "sharpen_contours": false,
   "num_patches": 1,
   "detail": 0.1,
   "tolerance": 0.03,

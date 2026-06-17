@@ -93,6 +93,7 @@ QJsonObject config_to_json(const GeomagicAutoSurfaceConfig& config) {
     object.insert("adaptive_fit", config.adaptiveFit);
     object.insert("auto_merge", config.autoMerge);
     object.insert("strict_patch_target", config.strictPatchTarget);
+    object.insert("sharpen_contours", config.sharpenContours);
     object.insert("num_patches", config.numPatches);
     object.insert("fallback_num_patches", int_array_to_json(config.fallbackNumPatches));
     object.insert("detail", config.detail);

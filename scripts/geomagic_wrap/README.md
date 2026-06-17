@@ -11,10 +11,10 @@ data/crop_stl/<relative>/<name>.stl -> data/crop_stp/<relative>/<name>.stp
 Manual run from `cmd.exe`:
 
 ```cmd
-set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\example\candidate_0001.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001.stp" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
+set "FIT_REGION_INPUT=D:\pyProject\step-patch-optimizer\data\crop_stl\example\candidate_0001.stl" && set "FIT_REGION_OUTPUT=D:\pyProject\step-patch-optimizer\data\crop_stp\example\candidate_0001.stp" && set "FIT_REGION_STRICT_PATCH_TARGET=0" && set "FIT_REGION_SHARPEN_CONTOURS=0" && "E:\Geomagic Wrap\wrapCore.exe" --script "D:\pyProject\step-patch-optimizer\scripts\geomagic_wrap\autosurface_pipeline.py"
 ```
 
-The backend follows the same environment protocol: `FIT_REGION_INPUT`, `FIT_REGION_OUTPUT`, `FIT_REGION_LOG_FILE`, AutoSurface options, and `FIT_REGION_STRICT_PATCH_TARGET`. The script derives `<output>_fit_region.log` automatically when no log path is provided. `FIT_REGION_REPAIR_MESH=1` is the script default and enables the pre-AutoSurface repair step for small holes, non-manifold edges, and non-manifold vertices. `FIT_REGION_SKIP_REMESH=1` is the default because Geomagic Remesh can make small boundary crops fail AutoSurface initialization; set it to `0` only for explicit A/B experiments. If Remesh itself fails, the script logs a warning and continues with the repaired input mesh; if AutoSurface fails after Remesh, the script retries AutoSurface with the pre-remesh mesh. `FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. The default path is one-patch Mechanical AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`. `numPatches=1` is Geomagic's approximate AutoSurface target, not a guarantee that the exported STEP will contain one B-rep face. Existing output STEP / sidecar IGES files are deleted before each run so stale patch files cannot masquerade as a fresh AutoSurface result.
+The backend follows the same environment protocol: `FIT_REGION_INPUT`, `FIT_REGION_OUTPUT`, `FIT_REGION_LOG_FILE`, AutoSurface options, and `FIT_REGION_STRICT_PATCH_TARGET`. The script derives `<output>_fit_region.log` automatically when no log path is provided. `FIT_REGION_REPAIR_MESH=1` is the script default and enables the pre-AutoSurface repair step for small holes, non-manifold edges, and non-manifold vertices. `FIT_REGION_SKIP_REMESH=1` is the default because Geomagic Remesh can make small boundary crops fail AutoSurface initialization; set it to `0` only for explicit A/B experiments. If Remesh itself fails, the script logs a warning and continues with the repaired input mesh; if AutoSurface fails after Remesh, the script retries AutoSurface with the pre-remesh mesh. `FIT_REGION_STRICT_PATCH_TARGET=0` enables the script fallback attempts after the one-patch target. `FIT_REGION_SHARPEN_CONTOURS=0` is the default; set it to `1` only for explicit B2.3 / Sharp Contours A/B runs. The default path is one-patch Mechanical AutoSurface with `autoMerge=True` and `adaptiveFit=False`; if both flags are requested, the script keeps the Geomagic API-safe behavior and forces `adaptiveFit=False`. `numPatches=1` is Geomagic's approximate AutoSurface target, not a guarantee that the exported STEP will contain one B-rep face. Existing output STEP / sidecar IGES files are deleted before each run so stale patch files cannot masquerade as a fresh AutoSurface result.
 
 Required environment variables:
 
@@ -40,6 +40,7 @@ FIT_REGION_GEOMETRY_MODE
 FIT_REGION_ADAPTIVE_FIT
 FIT_REGION_AUTO_MERGE
 FIT_REGION_STRICT_PATCH_TARGET
+FIT_REGION_SHARPEN_CONTOURS
 ```
 
 The script does not write result JSON. Diagnostics go to `FIT_REGION_LOG_FILE`, or to `<output>_fit_region.log` when that variable is omitted.

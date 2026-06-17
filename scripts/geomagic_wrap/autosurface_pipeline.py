@@ -41,6 +41,7 @@ Main environment variables:
     FIT_REGION_ADAPTIVE_FIT             default: 0
     FIT_REGION_AUTO_MERGE               default: 1
     FIT_REGION_STRICT_PATCH_TARGET      default: 1
+    FIT_REGION_SHARPEN_CONTOURS        default: 0
 """
 
 import argparse
@@ -198,6 +199,7 @@ def parse_args():
     parser.add_argument("--adaptive-fit", action="store_true", default=False)
     parser.add_argument("--auto-merge", action="store_true", default=False)
     parser.add_argument("--strict-patch-target", action="store_true", default=False)
+    parser.add_argument("--sharpen-contours", action="store_true", default=False)
 
     try:
         args, unknown = parser.parse_known_args(sys.argv[1:])
@@ -232,6 +234,7 @@ def parse_args():
     args.adaptive_fit = args.adaptive_fit or env_bool("FIT_REGION_ADAPTIVE_FIT", False)
     args.auto_merge = args.auto_merge or env_bool("FIT_REGION_AUTO_MERGE", True)
     args.strict_patch_target = args.strict_patch_target or env_bool("FIT_REGION_STRICT_PATCH_TARGET", True)
+    args.sharpen_contours = args.sharpen_contours or env_bool("FIT_REGION_SHARPEN_CONTOURS", False)
 
     if args.auto_merge and args.adaptive_fit:
         # Geomagic API explicitly disallows autoMerge combined with adaptiveFit.
@@ -366,6 +369,7 @@ def print_args(args, temp_igs_path, final_igs_path, log_file):
         "fill_hole_length_ratio", "skip_remesh", "quick_smooth", "relax",
         "relax_iteration", "relax_strength", "autosurface_target", "autosurface_tolerance",
         "detail_level", "geometry_mode", "adaptive_fit", "auto_merge", "strict_patch_target",
+        "sharpen_contours",
         "work_dir", "keep_temp"
     ]:
         print_flush("  {}: {}".format(name, getattr(args, name)))
@@ -636,7 +640,7 @@ def remove_if_exists(path):
         pass
 
 
-def run_autosurface_once(mesh, igs_path, geometry_mode, adaptive_fit, num_patches, tolerance, detail_level, auto_merge, label):
+def run_autosurface_once(mesh, igs_path, geometry_mode, adaptive_fit, num_patches, tolerance, detail_level, auto_merge, sharpen_contours, label):
     remove_if_exists(igs_path)
     print_flush("  [AutoSurface attempt] {}".format(label))
     try:
@@ -664,14 +668,14 @@ def run_autosurface_once(mesh, igs_path, geometry_mode, adaptive_fit, num_patche
         except Exception:
             pass
         try:
-            autosurf.sharpenConstrainedContours = False
-        except Exception:
-            pass
+            autosurf.sharpenConstrainedContours = bool(sharpen_contours)
+        except Exception as exc:
+            print_flush("    Warning: failed to set sharpenConstrainedContours: {}".format(exc))
         if num_patches is not None:
             autosurf.numPatches = int(num_patches)
 
-        print_flush("    geometry={}, tolerance={}, detail={}, adaptiveFit={}, autoMerge={}, numPatches={}".format(
-            geom, tolerance, detail_level, adaptive_fit, auto_merge, num_patches
+        print_flush("    geometry={}, tolerance={}, detail={}, adaptiveFit={}, autoMerge={}, numPatches={}, sharpenContours={}".format(
+            geom, tolerance, detail_level, adaptive_fit, auto_merge, num_patches, sharpen_contours
         ))
         t0 = time.time()
         autosurf.run()
@@ -739,7 +743,7 @@ def run_autosurface(mesh, igs_path, args):
     log_autosurface_attrs()
     errors = []
     for _, label, geometry, adaptive, patches, tolerance, detail, auto_merge in build_autosurface_attempts(args):
-        ok, err = run_autosurface_once(mesh, igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, label)
+        ok, err = run_autosurface_once(mesh, igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, args.sharpen_contours, label)
         if ok:
             return True
         errors.append("{} => {}".format(label, err))
@@ -754,7 +758,7 @@ def try_run_autosurface_to_step(mesh, temp_igs_path, final_igs_path, args):
 
     for _, label, geometry, adaptive, patches, tolerance, detail, auto_merge in build_autosurface_attempts(args):
         set_stage("Step 5/7: AutoSurface to IGES")
-        ok, err = run_autosurface_once(mesh, temp_igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, label)
+        ok, err = run_autosurface_once(mesh, temp_igs_path, geometry, adaptive, patches, tolerance, detail, auto_merge, args.sharpen_contours, label)
         if not ok:
             errors.append("{} => {}".format(label, err))
             continue

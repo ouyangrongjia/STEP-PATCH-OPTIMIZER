@@ -196,6 +196,7 @@ QProcessEnvironment build_environment(const GeomagicAutoSurfaceConfig& config) {
     environment.remove(QStringLiteral("FIT_REGION_GEOMETRY_MODE"));
     environment.remove(QStringLiteral("FIT_REGION_AUTO_MERGE"));
     environment.remove(QStringLiteral("FIT_REGION_ADAPTIVE_FIT"));
+    environment.remove(QStringLiteral("FIT_REGION_SHARPEN_CONTOURS"));
     environment.remove(QStringLiteral("FIT_REGION_FILL_HOLE_MAX_EDGES"));
     environment.remove(QStringLiteral("FIT_REGION_FILL_HOLE_LENGTH_RATIO"));
 
@@ -215,6 +216,7 @@ QProcessEnvironment build_environment(const GeomagicAutoSurfaceConfig& config) {
     environment.insert(QStringLiteral("FIT_REGION_GEOMETRY_MODE"), QString::fromStdString(config.geometry));
     environment.insert(QStringLiteral("FIT_REGION_AUTO_MERGE"), bool_env(config.autoMerge));
     environment.insert(QStringLiteral("FIT_REGION_ADAPTIVE_FIT"), bool_env(config.adaptiveFit));
+    environment.insert(QStringLiteral("FIT_REGION_SHARPEN_CONTOURS"), bool_env(config.sharpenContours));
     environment.insert(
         QStringLiteral("FIT_REGION_STRICT_PATCH_TARGET"),
         config.strictPatchTarget ? QStringLiteral("1") : QStringLiteral("0"));

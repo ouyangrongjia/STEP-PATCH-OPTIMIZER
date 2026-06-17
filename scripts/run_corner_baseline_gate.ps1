@@ -1,6 +1,6 @@
 param(
     [string]$Preset = "windows-msvc-debug",
-    [ValidateSet("A0", "B1", "B2", "B2.0", "B2.1", "B2.2")]
+    [ValidateSet("A0", "B1", "B2", "B2.0", "B2.1", "B2.2", "B2.3")]
     [string]$Experiment = "A0",
     [string]$SourceStep = "",
     [string]$CandidateId = "auto",
@@ -18,10 +18,13 @@ param(
     [int]$SupportCollarSamples = 16,
     [double]$SupportCollarWidth = 0.05,
     [int]$SupportCollarRings = 1,
+    [double]$SupportCollarMaxOffsetScale = 1.25,
+    [switch]$SharpenContours,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
 )
 
+# B2.3 optional A/B switch is invoked by passing -SharpenContours.
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -217,7 +220,7 @@ $probeArgs = @(
     "--report", $Report
 )
 
-if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.0" -or $Experiment -eq "B2.1" -or $Experiment -eq "B2.2") {
+if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.0" -or $Experiment -eq "B2.1" -or $Experiment -eq "B2.2" -or $Experiment -eq "B2.3") {
     $probeArgs += @(
         "--b1-corner-feature-sampling",
         "--corner-feature-samples", "$CornerFeatureSamples"
@@ -248,6 +251,21 @@ if ($Experiment -eq "B2.2") {
         "--support-collar-width", "$SupportCollarWidth",
         "--support-collar-rings", "$SupportCollarRings"
     )
+}
+
+if ($Experiment -eq "B2.3") {
+    $probeArgs += @(
+        "--b2-adjacent-face-support-collar",
+        "--b2-corner-safe-support-collar",
+        "--support-collar-samples", "$SupportCollarSamples",
+        "--support-collar-width", "$SupportCollarWidth",
+        "--support-collar-rings", "$SupportCollarRings",
+        "--support-collar-max-offset-scale", "$SupportCollarMaxOffsetScale"
+    )
+}
+
+if ($SharpenContours) {
+    $probeArgs += @("--geomagic-sharpen-contours")
 }
 
 if ($Patch) {

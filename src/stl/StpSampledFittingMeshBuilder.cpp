@@ -207,6 +207,8 @@ struct AdjacentFaceSupportCollarBuildResult {
     int fallbackCount = 0;
     int rejectedCount = 0;
     double boundaryCoverage = 0.0;
+    int cornerClampCount = 0;
+    double maxOffset = 0.0;
 };
 
 struct QuantizedPoint {
@@ -413,6 +415,105 @@ StlTriangle make_stl_triangle(
 
 double dot_vec(const gp_Vec& lhs, const gp_Vec& rhs) {
     return lhs.X() * rhs.X() + lhs.Y() * rhs.Y() + lhs.Z() * rhs.Z();
+}
+
+double vector_delta_magnitude(const gp_Vec& lhs, const gp_Vec& rhs) {
+    const auto dx = lhs.X() - rhs.X();
+    const auto dy = lhs.Y() - rhs.Y();
+    const auto dz = lhs.Z() - rhs.Z();
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+std::optional<gp_Vec> normalized_vec(gp_Vec value) {
+    if (value.Magnitude() <= 1.0e-12) {
+        return std::nullopt;
+    }
+    value.Normalize();
+    return value;
+}
+
+bool normalized_dot_below(const gp_Vec& lhs, const gp_Vec& rhs, double threshold) {
+    const auto nl = normalized_vec(lhs);
+    const auto nr = normalized_vec(rhs);
+    if (!nl.has_value() || !nr.has_value()) {
+        return false;
+    }
+    return dot_vec(*nl, *nr) < threshold;
+}
+
+void apply_corner_safe_support_clamp(
+    const std::vector<gp_Pnt>& innerRing,
+    std::vector<gp_Pnt>& supportRing,
+    double targetDistance,
+    int iterations,
+    double maxOffsetScale,
+    int& adjustedCount,
+    double& maxOffset) {
+    const auto count = innerRing.size();
+    if (count < 3 || supportRing.size() != count || targetDistance <= 0.0) {
+        return;
+    }
+
+    std::vector<gp_Vec> offsets;
+    offsets.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        offsets.emplace_back(innerRing[index], supportRing[index]);
+    }
+
+    const auto safeIterations = std::clamp(iterations, 0, 8);
+    const auto safeScale = std::max(maxOffsetScale, 1.0);
+    const auto maxAllowedOffset = targetDistance * safeScale;
+    constexpr double kTurnDotThreshold = 0.94; // about 20 degrees.
+    constexpr double kChangeTolerance = 1.0e-9;
+    std::vector<unsigned char> touched(count, 0);
+
+    for (int iteration = 0; iteration < safeIterations; ++iteration) {
+        auto nextOffsets = offsets;
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto prev = index == 0 ? count - 1 : index - 1;
+            const auto next = (index + 1) % count;
+
+            const gp_Vec prevSegment(innerRing[prev], innerRing[index]);
+            const gp_Vec nextSegment(innerRing[index], innerRing[next]);
+            const auto boundaryCorner = normalized_dot_below(prevSegment, nextSegment, kTurnDotThreshold);
+            const auto offsetJump =
+                normalized_dot_below(offsets[index], offsets[prev], kTurnDotThreshold) ||
+                normalized_dot_below(offsets[index], offsets[next], kTurnDotThreshold);
+            const auto oversized = offsets[index].Magnitude() > maxAllowedOffset;
+            if (!boundaryCorner && !offsetJump && !oversized) {
+                continue;
+            }
+            touched[index] = 1;
+
+            auto blended = offsets[index].Multiplied(0.5);
+            blended += offsets[prev].Multiplied(0.25);
+            blended += offsets[next].Multiplied(0.25);
+            if (blended.Magnitude() <= 1.0e-12) {
+                blended = offsets[index];
+            }
+            if (blended.Magnitude() > maxAllowedOffset) {
+                blended.Normalize();
+                blended.Multiply(maxAllowedOffset);
+            }
+            if (vector_delta_magnitude(blended, offsets[index]) > kChangeTolerance) {
+                touched[index] = 1;
+            }
+            nextOffsets[index] = blended;
+        }
+        offsets = std::move(nextOffsets);
+    }
+
+    for (std::size_t index = 0; index < count; ++index) {
+        if (offsets[index].Magnitude() > maxAllowedOffset) {
+            offsets[index].Normalize();
+            offsets[index].Multiply(maxAllowedOffset);
+            touched[index] = 1;
+        }
+        maxOffset = std::max(maxOffset, offsets[index].Magnitude());
+        supportRing[index] = innerRing[index].Translated(offsets[index]);
+    }
+
+    adjustedCount += static_cast<int>(std::count(touched.begin(), touched.end(), 1));
 }
 
 std::optional<gp_Vec> triangle_normal(
@@ -1270,6 +1371,27 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
         }
     }
 
+    for (int ring = 0; ring < ringCount; ++ring) {
+        const auto ringIndex = static_cast<std::size_t>(ring);
+        const auto targetDistance = width * static_cast<double>(ring + 1) / static_cast<double>(ringCount);
+        if (options.enableAdjacentFaceSupportCollarCornerClamp) {
+            apply_corner_safe_support_clamp(
+                meshBoundary.points,
+                meshSupportRings[ringIndex],
+                targetDistance,
+                options.adjacentFaceSupportCollarCornerSmoothingIterations,
+                options.adjacentFaceSupportCollarMaxOffsetScale,
+                result.cornerClampCount,
+                result.maxOffset);
+        } else {
+            for (std::size_t index = 0; index < meshBoundary.points.size() &&
+                index < meshSupportRings[ringIndex].size(); ++index) {
+                const gp_Vec offset(meshBoundary.points[index], meshSupportRings[ringIndex][index]);
+                result.maxOffset = std::max(result.maxOffset, offset.Magnitude());
+            }
+        }
+    }
+
     auto added = 0;
     if (!meshSupportRings.empty()) {
         added += append_oriented_closed_quad_strip(
@@ -1781,6 +1903,8 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     if (options.enableAdjacentFaceSupportCollar) {
         report.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
         report.adjacentFaceSupportCollarRingCount = std::max(options.adjacentFaceSupportCollarRingCount, 0);
+        report.adjacentFaceSupportCollarCornerClampEnabled =
+            options.enableAdjacentFaceSupportCollarCornerClamp;
     }
 
     // Validate inputs
@@ -1904,6 +2028,8 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
         report.adjacentFaceSupportCollarFallbackCount = supportCollar.fallbackCount;
         report.adjacentFaceSupportCollarRejectedCount = supportCollar.rejectedCount;
         report.adjacentFaceSupportCollarBoundaryCoverage = supportCollar.boundaryCoverage;
+        report.adjacentFaceSupportCollarCornerClampCount = supportCollar.cornerClampCount;
+        report.adjacentFaceSupportCollarMaxOffset = supportCollar.maxOffset;
         if (supportCollar.triangleCount == 0) {
             report.warningMessage = append_warning(
                 report.warningMessage,

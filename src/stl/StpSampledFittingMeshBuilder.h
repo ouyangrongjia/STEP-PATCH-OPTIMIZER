@@ -34,6 +34,9 @@ struct StpSampledFittingOptions {
     int adjacentFaceSupportCollarSamplesPerEdge = 16;
     double adjacentFaceSupportCollarWidth = 0.05;
     int adjacentFaceSupportCollarRingCount = 1;
+    bool enableAdjacentFaceSupportCollarCornerClamp = false;
+    int adjacentFaceSupportCollarCornerSmoothingIterations = 2;
+    double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
 };
 
 struct StpSampledFittingReport {
@@ -76,6 +79,9 @@ struct StpSampledFittingReport {
     int adjacentFaceSupportCollarFallbackCount = 0;
     int adjacentFaceSupportCollarRejectedCount = 0;
     double adjacentFaceSupportCollarBoundaryCoverage = 0.0;
+    bool adjacentFaceSupportCollarCornerClampEnabled = false;
+    int adjacentFaceSupportCollarCornerClampCount = 0;
+    double adjacentFaceSupportCollarMaxOffset = 0.0;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

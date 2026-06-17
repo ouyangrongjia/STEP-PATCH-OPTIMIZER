@@ -67,6 +67,9 @@ struct Options {
     int adjacentFaceSupportCollarSamplesPerEdge = 16;
     double adjacentFaceSupportCollarWidth = 0.05;
     int adjacentFaceSupportCollarRingCount = 1;
+    bool enableB2CornerSafeSupportCollar = false;
+    double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
+    bool geomagicSharpenContours = false;
 };
 
 struct AppliedStepExportReport {
@@ -136,7 +139,10 @@ void print_usage() {
         << "  --b2-adjacent-face-support-collar        Enable B2.2 adjacent-face seam support collar.\n"
         << "  --support-collar-samples <n>             B2.2 samples per boundary edge, default 16.\n"
         << "  --support-collar-width <value>           B2.2 adjacent support collar width, default 0.05.\n"
-        << "  --support-collar-rings <n>               B2.2 support collar ring count, default 1.\n";
+        << "  --support-collar-rings <n>               B2.2 support collar ring count, default 1.\n"
+        << "  --b2-corner-safe-support-collar          Enable B2.3 support collar corner clamp.\n"
+        << "  --support-collar-max-offset-scale <v>    B2.3 max collar offset scale, default 1.25.\n"
+        << "  --geomagic-sharpen-contours              Enable Geomagic sharpenConstrainedContours.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -329,6 +335,17 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.adjacentFaceSupportCollarRingCount = std::stoi(value);
+        } else if (arg == "--b2-corner-safe-support-collar") {
+            options.enableB2AdjacentFaceSupportCollar = true;
+            options.enableB2CornerSafeSupportCollar = true;
+        } else if (arg == "--support-collar-max-offset-scale") {
+            const auto* value = requireValue("--support-collar-max-offset-scale");
+            if (value == nullptr) {
+                return false;
+            }
+            options.adjacentFaceSupportCollarMaxOffsetScale = std::stod(value);
+        } else if (arg == "--geomagic-sharpen-contours") {
+            options.geomagicSharpenContours = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -617,6 +634,15 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("adjacent_face_support_collar_fallback_count", report.adjacentFaceSupportCollarFallbackCount);
     object.insert("adjacent_face_support_collar_rejected_count", report.adjacentFaceSupportCollarRejectedCount);
     object.insert("adjacent_face_support_collar_boundary_coverage", report.adjacentFaceSupportCollarBoundaryCoverage);
+    object.insert(
+        "adjacent_face_support_collar_corner_clamp_enabled",
+        report.adjacentFaceSupportCollarCornerClampEnabled);
+    object.insert(
+        "adjacent_face_support_collar_corner_clamp_count",
+        report.adjacentFaceSupportCollarCornerClampCount);
+    object.insert(
+        "adjacent_face_support_collar_max_offset",
+        report.adjacentFaceSupportCollarMaxOffset);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -755,6 +781,7 @@ bool write_report(
     root.insert("source_step", path_to_qstring(options.sourceStep));
     root.insert("candidate_id", options.candidateId);
     root.insert("candidate_selection_mode", options.autoCandidateId ? "auto" : "explicit");
+    root.insert("geomagic_sharpen_contours", options.geomagicSharpenContours);
     root.insert("generated_candidate_count", options.generatedCandidateCount);
     root.insert("output_dir", path_to_qstring(options.outputDir));
     root.insert("report_path", path_to_qstring(options.reportPath));
@@ -899,6 +926,8 @@ int main(int argc, char* argv[]) {
     samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
     samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
     samplingOptions.adjacentFaceSupportCollarRingCount = options.adjacentFaceSupportCollarRingCount;
+    samplingOptions.enableAdjacentFaceSupportCollarCornerClamp = options.enableB2CornerSafeSupportCollar;
+    samplingOptions.adjacentFaceSupportCollarMaxOffsetScale = options.adjacentFaceSupportCollarMaxOffsetScale;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,
@@ -950,6 +979,7 @@ int main(int argc, char* argv[]) {
         config.strictPatchTarget = false;
         config.tolerance = options.geomagicTolerance;
         config.detail = options.geomagicDetail;
+        config.sharpenContours = options.geomagicSharpenContours;
         config.timeoutSeconds = options.timeoutSeconds;
 
         geomagicResult = spo::GeomagicAutoSurfaceBackend().run(config);

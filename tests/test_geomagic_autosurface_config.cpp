@@ -166,6 +166,7 @@ void test_write_config_json() {
     auto config = make_valid_config(root);
     config.geometry = "Mechanical";
     config.numPatches = 4;
+    config.sharpenContours = true;
     std::string error;
 
     const auto ok = spo::writeGeomagicAutoSurfaceConfigJson(config, config.configJsonPath, &error);
@@ -181,6 +182,7 @@ void test_write_config_json() {
     assert(object.value("script_path").toString() == path_to_qstring(config.scriptPath));
     assert(object.value("num_patches").toInt() == 4);
     assert(object.value("geometry").toString() == "Mechanical");
+    assert(object.value("sharpen_contours").toBool());
 
     std::filesystem::remove_all(root);
 }

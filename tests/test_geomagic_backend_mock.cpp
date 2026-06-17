@@ -97,6 +97,7 @@ std::string success_cmd_body(const std::filesystem::path& root) {
         "echo FIT_REGION_GEOMETRY_MODE=%FIT_REGION_GEOMETRY_MODE%\n"
         "echo FIT_REGION_AUTO_MERGE=%FIT_REGION_AUTO_MERGE%\n"
         "echo FIT_REGION_ADAPTIVE_FIT=%FIT_REGION_ADAPTIVE_FIT%\n"
+        "echo FIT_REGION_SHARPEN_CONTOURS=%FIT_REGION_SHARPEN_CONTOURS%\n"
         "echo FIT_REGION_LOG_FILE=%FIT_REGION_LOG_FILE%\n"
         "echo FIT_REGION_INPUT=%FIT_REGION_INPUT%\n"
         "echo FIT_REGION_OUTPUT=%FIT_REGION_OUTPUT%\n"
@@ -383,6 +384,7 @@ void test_config_fitting_flags_are_passed_to_backend_environment() {
     config.numPatches = 4;
     config.tolerance = 0.08;
     config.detail = 0.25;
+    config.sharpenContours = true;
 
     const auto result = spo::GeomagicAutoSurfaceBackend().run(config);
 
@@ -392,6 +394,7 @@ void test_config_fitting_flags_are_passed_to_backend_environment() {
     assert(result.message.find("FIT_REGION_AUTOSURFACE_TOLERANCE=0.08") != std::string::npos);
     assert(result.message.find("FIT_REGION_DETAIL_LEVEL=0.25") != std::string::npos);
     assert(result.message.find("FIT_REGION_ADAPTIVE_FIT=1") != std::string::npos);
+    assert(result.message.find("FIT_REGION_SHARPEN_CONTOURS=1") != std::string::npos);
     assert(!std::filesystem::exists(root / "legacy_env_present.txt"));
 
     remove_temp_root(root);

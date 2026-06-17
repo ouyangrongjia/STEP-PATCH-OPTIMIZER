@@ -55,6 +55,8 @@ void test_geomagic_pipeline_script_mentions_required_contract() {
     assert_contains(script, "FIT_REGION_FILL_HOLE_LENGTH_RATIO");
     assert_contains(script, "FIT_REGION_GEOMETRY_MODE");
     assert_contains(script, "FIT_REGION_SKIP_REMESH              default: 1");
+    assert_contains(script, "FIT_REGION_SHARPEN_CONTOURS        default: 0");
+    assert_contains(script, "sharpenConstrainedContours");
     assert_contains(script, "Removed stale output");
     assert_contains(script, "Warning: Remesh failed and original mesh will be used");
     assert_contains(script, "try_run_autosurface_to_step");
@@ -90,6 +92,7 @@ void test_geomagic_pipeline_readme_mentions_manual_contract() {
     assert_contains(readme, "FIT_REGION_LOG_FILE");
     assert_contains(readme, "FIT_REGION_REPAIR_MESH=1");
     assert_contains(readme, "FIT_REGION_STRICT_PATCH_TARGET=0");
+    assert_contains(readme, "FIT_REGION_SHARPEN_CONTOURS=0");
     assert_contains(readme, "data/crop_stl");
     assert_contains(readme, "data/crop_stp");
     assert_not_contains(readme, "FIT_REGION_OUTPUT_IGES");
@@ -116,6 +119,7 @@ void test_geomagic_pipeline_example_config_is_valid_json() {
     assert(!object.contains("stderr_log_path"));
     assert(object.value("geometry").toString() == "Mechanical");
     assert(object.value("num_patches").toInt() == 1);
+    assert(object.value("sharpen_contours").toBool() == false);
 }
 
 }
