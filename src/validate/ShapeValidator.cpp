@@ -1,8 +1,20 @@
 #include "validate/ShapeValidator.h"
 
 #include <BRepCheck_Analyzer.hxx>
+#include <BRep_Tool.hxx>
 
 namespace spo {
+
+namespace {
+
+bool is_closed_seam_edge(const TopologyGraph& topology, EdgeId edgeId, const EdgeAdjacency& adjacency) {
+    if (adjacency.faces.size() != 1 || adjacency.faces.front() >= topology.faceCount()) {
+        return false;
+    }
+    return BRep_Tool::IsClosed(topology.edge(edgeId), topology.face(adjacency.faces.front()));
+}
+
+}
 
 ShapeValidationReport ShapeValidator::validate(const ShapeDocument& document) const {
     ShapeValidationReport report;
@@ -20,6 +32,10 @@ ShapeValidationReport ShapeValidator::validate(const ShapeDocument& document) co
             continue;
         }
         if (adjacency->faces.size() == 1) {
+            if (BRep_Tool::Degenerated(topology.edge(id)) ||
+                is_closed_seam_edge(topology, id, *adjacency)) {
+                continue;
+            }
             ++report.free_edges;
         } else if (adjacency->faces.size() > 2) {
             ++report.multiple_edges;

@@ -302,6 +302,28 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(report.bestSewingFaceCount > 0);
     assert(report.bestSewingEdgeCount > 0);
     assert(report.bestSewingSolidCount > 0);
+    assert(report.preRepairClosureCaptured);
+    assert(report.preRepairFaceCount > 0);
+    assert(report.preRepairEdgeCount > 0);
+    assert(report.preRepairShellCount > 0);
+    assert(report.preRepairSolidCount > 0);
+    assert(report.preRepairBRepCheckValid);
+    assert(report.preRepairFreeEdgeCount == report.freeEdgesBeforeRepair);
+    assert(report.preRepairMultipleEdgeCount == report.multipleEdgesBeforeRepair);
+    assert(report.postRepairClosureCaptured);
+    assert(report.postRepairFaceCount > 0);
+    assert(report.postRepairEdgeCount > 0);
+    assert(report.postRepairShellCount > 0);
+    assert(report.postRepairSolidCount > 0);
+    assert(report.postRepairBRepCheckValid);
+    assert(report.postRepairFreeEdgeCount == report.freeEdgesAfterRepair);
+    assert(report.postRepairMultipleEdgeCount == report.multipleEdgesAfterRepair);
+    assert(report.freeEdgeDiagnostics.empty());
+    assert(report.trimDiagnostics.captured);
+    assert(report.trimDiagnostics.replacementFaceCount > 0);
+    assert(report.trimDiagnostics.overCoverSampleCount == 0);
+    assert(report.trimDiagnostics.underCoverSampleCount == 0);
+    assert(report.trimDiagnostics.boundaryGapMax <= 1.0e-6);
     assert(report.faceCountBeforeRepair > 0);
     assert(report.faceCountAfterRepair > 0);
     assert(report.gateEvaluated);
@@ -326,6 +348,8 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(same_stats(fixture.context.document.stats(), beforeStats));
     assert(command.report().repairRunCount == 1);
     assert(command.report().sewingAttemptCount == report.sewingAttemptCount);
+    assert(command.report().trimDiagnostics.captured);
+    assert(command.report().trimDiagnostics.replacementFaceCount == report.trimDiagnostics.replacementFaceCount);
     assert(report.success);
 }
 
@@ -343,6 +367,38 @@ void test_free_edge_increase_after_repair_is_rejected() {
     if (report.failureReason == spo::PatchReplacementFailureReason::GateFailed) {
         assert(report.rollbackApplied);
         assert(report.repairApplied);
+        assert(report.preRepairClosureCaptured);
+        assert(report.preRepairFreeEdgeCount > 0);
+        assert(report.preRepairDegeneratedFreeEdgeCount >= 0);
+        assert(report.postRepairClosureCaptured);
+        assert(report.postRepairFreeEdgeCount == report.freeEdgesAfterRepair);
+        assert(report.postRepairDegeneratedFreeEdgeCount >= 0);
+        assert(report.appearedAfterRepairDegeneratedFreeEdgeCount >= 0);
+        assert(report.bestSewingDegeneratedFreeEdgeCount >= 0);
+        assert(!report.freeEdgeDiagnostics.empty());
+        bool hasPreRepairFreeEdgeDiagnostic = false;
+        for (const auto& diagnostic : report.freeEdgeDiagnostics) {
+            assert(diagnostic.midpointValid);
+            assert(diagnostic.startPointValid);
+            assert(diagnostic.endPointValid);
+            assert(diagnostic.adjacentFaceCount > 0);
+            assert(diagnostic.edgeLength >= 0.0);
+            assert(diagnostic.edgeTolerance >= 0.0);
+            assert(diagnostic.sameOriginalBoundaryEdgeSplitSegmentCount >= 0);
+            assert(diagnostic.sameOriginalBoundaryEdgeOwnerSwitchCount >= 0);
+            assert(diagnostic.nearestSplitBoundarySegmentDistance >= 0.0);
+            assert(diagnostic.fittedPatchProjectionFaceCount >= 0);
+            assert(diagnostic.fittedPatchProjectionSampleCount >= 0);
+            assert(diagnostic.fittedPatchProjectionFailedCount >= 0);
+            assert(diagnostic.fittedPatchProjectionMinDistance >= 0.0);
+            assert(diagnostic.fittedPatchProjectionMaxDistance >= 0.0);
+            assert(diagnostic.fittedPatchProjectionAverageDistance >= 0.0);
+            assert(diagnostic.nearestOriginalBoundaryEdgeId >= -1);
+            if (!diagnostic.appearedAfterRepair) {
+                hasPreRepairFreeEdgeDiagnostic = true;
+            }
+        }
+        assert(hasPreRepairFreeEdgeDiagnostic);
         assert(report.freeEdgesAfterRepair > 0);
         assert(report.gateEvaluated);
         assert(!report.gatePassed);

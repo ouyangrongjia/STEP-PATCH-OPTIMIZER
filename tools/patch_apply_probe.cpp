@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <iostream>
 #include <set>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -20,13 +21,14 @@ struct Options {
     std::filesystem::path sourceStep;
     std::filesystem::path patchPath;
     int candidateId = -1;
+    bool autoCandidateId = false;
     double angularThresholdDegrees = 25.0;
     double minEdgeLength = 0.0;
 };
 
 void print_usage() {
     std::cerr
-        << "Usage: patch_apply_probe --source-step <model.stp> --patch <patch.stp|patch.igs> --candidate-id <id> "
+        << "Usage: patch_apply_probe --source-step <model.stp> --patch <patch.stp|patch.igs> --candidate-id <id|auto> "
         << "[--angle <degrees>] [--min-edge-length <value>]\n";
 }
 
@@ -58,7 +60,14 @@ bool parse_options(int argc, char* argv[], Options& options) {
             if (value == nullptr) {
                 return false;
             }
-            options.candidateId = std::stoi(value);
+            const std::string candidateValue(value);
+            if (candidateValue == "auto") {
+                options.autoCandidateId = true;
+                options.candidateId = -1;
+            } else {
+                options.autoCandidateId = false;
+                options.candidateId = std::stoi(candidateValue);
+            }
         } else if (arg == "--angle") {
             const auto* value = requireValue("--angle");
             if (value == nullptr) {
@@ -77,7 +86,9 @@ bool parse_options(int argc, char* argv[], Options& options) {
         }
     }
 
-    return !options.sourceStep.empty() && !options.patchPath.empty() && options.candidateId >= 0;
+    return !options.sourceStep.empty() &&
+        !options.patchPath.empty() &&
+        (options.autoCandidateId || options.candidateId >= 0);
 }
 
 const spo::MergeCandidate* find_candidate(
@@ -87,6 +98,70 @@ const spo::MergeCandidate* find_candidate(
         if (candidate.candidate_id == candidateId) {
             return &candidate;
         }
+    }
+    return nullptr;
+}
+
+int candidate_face_count(const spo::MergeCandidate& candidate) {
+    if (candidate.face_count > 0) {
+        return candidate.face_count;
+    }
+    return static_cast<int>(candidate.faces.size());
+}
+
+int candidate_boundary_edge_count(const spo::MergeCandidate& candidate) {
+    if (candidate.boundary_edge_count > 0) {
+        return candidate.boundary_edge_count;
+    }
+    return static_cast<int>(candidate.boundary_edges.size());
+}
+
+const spo::MergeCandidate* select_auto_candidate(
+    const spo::ShapeDocument& document,
+    const std::vector<spo::MergeCandidate>& candidates,
+    spo::RegionBoundaryAnalysis& outBoundary,
+    std::string& outMessage) {
+    std::vector<const spo::MergeCandidate*> ranked;
+    ranked.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        if (candidate.valid &&
+            candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit &&
+            candidate.status != spo::MergeCandidateStatus::Rejected &&
+            candidate.status != spo::MergeCandidateStatus::Hidden) {
+            ranked.push_back(&candidate);
+        }
+    }
+
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto* lhs, const auto* rhs) {
+        const auto lhsFaces = candidate_face_count(*lhs);
+        const auto rhsFaces = candidate_face_count(*rhs);
+        if (lhsFaces != rhsFaces) {
+            return lhsFaces > rhsFaces;
+        }
+        const auto lhsBoundary = candidate_boundary_edge_count(*lhs);
+        const auto rhsBoundary = candidate_boundary_edge_count(*rhs);
+        if (lhsBoundary != rhsBoundary) {
+            return lhsBoundary > rhsBoundary;
+        }
+        return lhs->candidate_id < rhs->candidate_id;
+    });
+
+    std::string firstFailure;
+    for (const auto* candidate : ranked) {
+        auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
+        if (boundary.valid) {
+            outBoundary = std::move(boundary);
+            outMessage = "Auto-selected largest valid FeatureBoundedRefit candidate.";
+            return candidate;
+        }
+        if (firstFailure.empty()) {
+            firstFailure = boundary.message;
+        }
+    }
+
+    outMessage = "Auto candidate selection found no valid boundary candidate.";
+    if (!firstFailure.empty()) {
+        outMessage += " First boundary failure: " + firstFailure;
     }
     return nullptr;
 }
@@ -163,9 +238,105 @@ void print_report(const spo::PatchReplacementReport& report) {
               << report.edgeCountAfterRepair << " / "
               << report.shellCountAfterRepair << " / "
               << report.solidCountAfterRepair << "\n";
+    std::cout << "pre-repair closure face/edge/shell/solid: "
+              << report.preRepairFaceCount << " / "
+              << report.preRepairEdgeCount << " / "
+              << report.preRepairShellCount << " / "
+              << report.preRepairSolidCount
+              << " brep=" << report.preRepairBRepCheckValid
+              << " free=" << report.preRepairFreeEdgeCount
+              << " multiple=" << report.preRepairMultipleEdgeCount
+              << " degenerated_free=" << report.preRepairDegeneratedFreeEdgeCount << "\n";
+    std::cout << "post-repair closure face/edge/shell/solid: "
+              << report.postRepairFaceCount << " / "
+              << report.postRepairEdgeCount << " / "
+              << report.postRepairShellCount << " / "
+              << report.postRepairSolidCount
+              << " brep=" << report.postRepairBRepCheckValid
+              << " free=" << report.postRepairFreeEdgeCount
+              << " multiple=" << report.postRepairMultipleEdgeCount
+              << " degenerated_free=" << report.postRepairDegeneratedFreeEdgeCount
+              << " appeared_after_repair_degenerated="
+              << report.appearedAfterRepairDegeneratedFreeEdgeCount << "\n";
+    std::cout << "free edge diagnostics: " << report.freeEdgeDiagnostics.size() << "\n";
+    for (const auto& diagnostic : report.freeEdgeDiagnostics) {
+        std::cout << "  edge_index=" << diagnostic.edgeIndex
+                  << " after_repair=" << diagnostic.afterRepair
+                  << " appeared_after_repair=" << diagnostic.appearedAfterRepair
+                  << " adjacent_faces=" << diagnostic.adjacentFaceCount
+                  << " length=" << diagnostic.edgeLength
+                  << " tolerance=" << diagnostic.edgeTolerance
+                  << " degenerated=" << diagnostic.degenerated
+                  << " nearest_original_boundary_edge_id=" << diagnostic.nearestOriginalBoundaryEdgeId
+                  << " nearest_distance=" << diagnostic.nearestOriginalBoundaryEdgeDistance
+                  << " original_boundary_length=" << diagnostic.nearestOriginalBoundaryEdgeLength
+                  << " original_boundary_tolerance=" << diagnostic.nearestOriginalBoundaryEdgeTolerance
+                  << " original_adjacent_faces=" << diagnostic.nearestOriginalBoundaryAdjacentFaceCount
+                  << " original_pcurve_faces=" << diagnostic.nearestOriginalBoundaryPcurveAvailableFaceCount
+                  << " matched_split=" << diagnostic.matchedSplitBoundarySegment
+                  << " split_range=[" << diagnostic.matchedSplitBoundaryFirstParameter
+                  << ", " << diagnostic.matchedSplitBoundaryLastParameter << "]"
+                  << " patch_face_owner=" << diagnostic.patchFaceOwner
+                  << " same_edge_split_count=" << diagnostic.sameOriginalBoundaryEdgeSplitSegmentCount
+                  << " owner_switch_count=" << diagnostic.sameOriginalBoundaryEdgeOwnerSwitchCount
+                  << " degenerated_split_count=" << diagnostic.sameOriginalBoundaryEdgeDegeneratedSegmentCount
+                  << " nearest_split=" << diagnostic.nearestSplitBoundarySegment
+                  << " nearest_split_edge_id=" << diagnostic.nearestSplitBoundaryOriginalEdgeId
+                  << " nearest_split_distance=" << diagnostic.nearestSplitBoundarySegmentDistance
+                  << " nearest_split_range=[" << diagnostic.nearestSplitBoundaryFirstParameter
+                  << ", " << diagnostic.nearestSplitBoundaryLastParameter << "]"
+                  << " nearest_split_owner=" << diagnostic.nearestSplitBoundaryPatchFaceOwner
+                  << " projection_faces=" << diagnostic.fittedPatchProjectionFaceCount
+                  << " projection_samples=" << diagnostic.fittedPatchProjectionSampleCount
+                  << " projection_failed=" << diagnostic.fittedPatchProjectionFailedCount
+                  << " projection_min=" << diagnostic.fittedPatchProjectionMinDistance
+                  << " projection_max=" << diagnostic.fittedPatchProjectionMaxDistance
+                  << " projection_avg=" << diagnostic.fittedPatchProjectionAverageDistance
+                  << " nearest_patch_face=" << diagnostic.nearestFittedPatchFaceIndex;
+        if (diagnostic.midpointValid) {
+            std::cout << " midpoint=(" << diagnostic.midpointX
+                      << ", " << diagnostic.midpointY
+                      << ", " << diagnostic.midpointZ << ")";
+        }
+        if (diagnostic.startPointValid && diagnostic.endPointValid) {
+            std::cout << " endpoints=(" << diagnostic.startX
+                      << ", " << diagnostic.startY
+                      << ", " << diagnostic.startZ << ") -> ("
+                      << diagnostic.endX
+                      << ", " << diagnostic.endY
+                      << ", " << diagnostic.endZ << ")";
+        }
+        std::cout << "\n";
+    }
     std::cout << "free edges before/after repair: "
               << report.freeEdgesBeforeRepair << " / "
               << report.freeEdgesAfterRepair << "\n";
+    std::cout << "trim diagnostics captured: " << report.trimDiagnostics.captured << "\n";
+    std::cout << "trim diagnostics replacement faces: "
+              << report.trimDiagnostics.replacementFaceCount << "\n";
+    std::cout << "trim diagnostics invalid wires / uv loop self intersections: "
+              << report.trimDiagnostics.trimWireInvalidCount << " / "
+              << report.trimDiagnostics.trimUvLoopSelfIntersectionCount << "\n";
+    std::cout << "trim diagnostics over-cover count/ratio/max: "
+              << report.trimDiagnostics.overCoverSampleCount << " / "
+              << report.trimDiagnostics.overCoverRatio << " / "
+              << report.trimDiagnostics.overCoverMaxDistance << "\n";
+    std::cout << "trim diagnostics under-cover count/max: "
+              << report.trimDiagnostics.underCoverSampleCount << " / "
+              << report.trimDiagnostics.underCoverMaxDistance << "\n";
+    std::cout << "trim diagnostics boundary gap max/p95/rms worst-edge: "
+              << report.trimDiagnostics.boundaryGapMax << " / "
+              << report.trimDiagnostics.boundaryGapP95 << " / "
+              << report.trimDiagnostics.boundaryGapRms << " / "
+              << report.trimDiagnostics.worstBoundaryEdgeId << "\n";
+    std::cout << "trim diagnostics internal seam gap max/p95/rms worst-edge: "
+              << report.trimDiagnostics.internalSeamGapMax << " / "
+              << report.trimDiagnostics.internalSeamGapP95 << " / "
+              << report.trimDiagnostics.internalSeamGapRms << " / "
+              << report.trimDiagnostics.worstInternalEdgeId << "\n";
+    std::cout << "trim diagnostics roundtrip compared/changed: "
+              << report.trimDiagnostics.roundtripCompared << " / "
+              << report.trimDiagnostics.roundtripChanged << "\n";
     std::cout << "selected sewing tolerance: " << report.selectedSewingTolerance << "\n";
     std::cout << "sewing attempt count: " << report.sewingAttemptCount << "\n";
     std::cout << "best sewing face/edge/shell/solid: "
@@ -176,6 +347,11 @@ void print_report(const spo::PatchReplacementReport& report) {
     std::cout << "best sewing free/multiple edges: "
               << report.bestSewingFreeEdges << " / "
               << report.bestSewingMultipleEdges << "\n";
+    std::cout << "repair degenerated free edges before/after: "
+              << report.degeneratedFreeEdgesBeforeRepair << " / "
+              << report.degeneratedFreeEdgesAfterRepair << "\n";
+    std::cout << "best sewing degenerated free edges: "
+              << report.bestSewingDegeneratedFreeEdgeCount << "\n";
     std::cout << "best sewing BRepCheck: " << report.bestSewingBRepCheckValid << "\n";
     std::cout << "best sewing collapsed: " << report.bestSewingCollapsed << "\n";
     std::cout << "StrictTopologyGate evaluated: " << report.gateEvaluated << "\n";
@@ -223,18 +399,31 @@ int main(int argc, char* argv[]) {
 
     print_stage("planning merge candidates");
     const auto planner = spo::MergePlanner().plan(document, featureEdges, {}, plannerOptions);
-    const auto* candidate = find_candidate(planner.candidates, options.candidateId);
+    spo::RegionBoundaryAnalysis boundary;
+    std::string selectionMessage;
+    const auto* candidate = options.autoCandidateId
+        ? select_auto_candidate(document, planner.candidates, boundary, selectionMessage)
+        : find_candidate(planner.candidates, options.candidateId);
     if (candidate == nullptr) {
-        std::cerr << "Candidate id not found. generated candidates: "
-                  << planner.candidates.size() << "\n";
+        std::cerr << (selectionMessage.empty()
+                ? "Candidate id not found."
+                : selectionMessage)
+                  << " generated candidates: " << planner.candidates.size() << "\n";
         return 1;
     }
+    std::cerr << "[patch_apply_probe] selected candidate id " << candidate->candidate_id;
+    if (!selectionMessage.empty()) {
+        std::cerr << " (" << selectionMessage << ")";
+    }
+    std::cerr << "\n";
 
-    print_stage("analyzing original boundary");
-    const auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
-    if (!boundary.valid) {
-        std::cerr << "Boundary analysis failed: " << boundary.message << "\n";
-        return 1;
+    if (!options.autoCandidateId) {
+        print_stage("analyzing original boundary");
+        boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
+        if (!boundary.valid) {
+            std::cerr << "Boundary analysis failed: " << boundary.message << "\n";
+            return 1;
+        }
     }
 
     print_stage("importing patch");

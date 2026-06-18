@@ -268,6 +268,12 @@ multi_surface_boundary_edge_same_parameter_failed_edge_ids
 
 2026-06-17 的真实样例复用 B2.3 + `SharpenContours` patch 后，B2.4 Apply report 显示 `pcurve_rebuild_attempt=27`、`success=27`、`failure=0`、`same_parameter_failure=0`，但 `StrictTopologyGate` 仍因 `FreeEdgeIncreased` 失败，`gate_after_free_edges=1`，因此仍没有 applied STEP 导出。这个结果说明 B2.4 已经把边界 pcurve 表征问题单独排除，但没有解决最终水密闭合。
 
+B2.5 pre-repair / post-repair closure probe 已接入。它不会删除 `PatchReplacementRepair`，也不会把 repair 前的 shape 当作可提交结果；它只是在 Apply report / baseline JSON 中新增 repair 前后的对照诊断，用于回答“free edge 是 shell 构造阶段已经存在，还是 repair/sewing 后才出现”。字段包括 pre/post repair free edge、multiple edge、BRepCheck、拓扑计数，以及 free edge midpoint / endpoints / matched original boundary edge / split segment / patch face owner / appeared_after_repair。2026-06-17 复用真实 B2.3 + SharpenContours patch 的 B2.5 报告显示：pre-repair free edges=66，post-repair free edges=1，post free edge `appeared_after_repair=true`，StrictTopologyGate 仍因 `FreeEdgeIncreased` 正确阻止提交。
+
+B2.6 是 Apply 侧 Local Free-edge Closure Fix 的最小诊断 / repair selection / validator 分类修正版，不是新的 `-Experiment B2.6` fitting input。验证入口仍复用 `corner_baseline_probe` / `patch_apply_probe` / GUI Apply report。当前已输出 detected edge 的 midpoint / endpoints / length / tolerance / degenerated、nearest original boundary edge context、split owner diagnostics、fitted patch projection-distance 和 repair degenerated-free-edge stats；repair best-result 在同等 free edge 数下惩罚 degenerated free edge。`ShapeValidator` 现在会把 closed seam / OCCT degenerated edge 从 StrictTopologyGate 的真实 open-boundary 计数中排除，普通 open face 仍会被计为 free edge。真实样例 `03_配件_Clay.stp` 复用 B2.3 + SharpenContours patch 后，`StrictTopologyGate` 与 applied STEP readback 已通过：gate after/roundtrip free edges=0，pre-repair free-edge-like diagnostics=66，post-repair free edge=0，post-repair degenerated diagnostic edge=1；`CommercialCadLikeQualityGate` 仍因 boundary/corner/feature drift 约 0.070672 失败。当前真实样例 nearest original boundary edge 为 1600，但 B2.6 不把该 id 写死。B2.6 不改变 redo 语义，不重跑 Geomagic，不把 Blender 四边形化或 STL/Geomagic patch outer boundary 当成最终 CAD boundary，也不放宽 StrictTopologyGate。
+
+B2.7 是结果定位诊断，不是新的 `-Experiment B2.7` fitting input，也不是 GUI 中新增的修复按钮。当前已接入 `trim_diagnostics`：replacement face count、trim wire invalid count、over-cover / under-cover samples、boundary seam gap、internal seam gap、worst boundary/internal edge、roundtrip_changed。输出路径包括 PatchReplacementReport、`corner_baseline_probe` baseline JSON、`patch_apply_probe` 和 GUI Apply report 摘要。2026-06-18 复用真实 B2.3 + SharpenContours patch 后，`StrictTopologyGate` 与 applied STEP readback 通过，`CommercialCadLikeQualityGate` 仍失败；B2.7 指标为 over-cover `0/29`、under-cover `81/256` 且 max `2.03433`、boundary gap max `0.0706854`、internal seam gap `0`、roundtrip changed `false`。这说明当前不是 STEP roundtrip 把面片弄坏，也不是 replacement face 大面积超出原 STP boundary 后没有裁掉；更直接的问题是局部 coverage 不足和边界贴合峰值误差。GUI 观察到的缝隙仍需要用该诊断定位到局部 boundary / owner / split，而不能用放宽 Gate 或替换最终边界来源处理。
+
 脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计；`-Experiment B2.3` 会输出 corner-safe collar clamp 统计和 SharpenContours A/B 标记。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
@@ -387,6 +393,7 @@ log\patch_preview_<timestamp>_candidate_<id>.log
 ```
 
 检测结果会以高亮线条显示，并在报告面板输出特征边数量。
+注意：FeatureEdgeDetector 的可视化 free edge 用于提示拓扑边界；Validate / Patch Apply / StrictTopologyGate 使用 `ShapeValidator`，会排除 closed seam / OCCT degenerated edge 的误报，但仍会拦截普通 open edge。
 
 ### 5.3 用户锁边 / 解锁边
 
@@ -435,7 +442,7 @@ OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 1. 是否存在 shape。
 2. OCCT BRepCheck 是否通过。
 3. 实体 / 壳 / 面 / 边数量统计。
-4. free edge 数量。
+4. free edge 数量（排除 closed seam / OCCT degenerated edge，普通 open edge 仍计入）。
 5. multiple edge 数量。
 ```
 

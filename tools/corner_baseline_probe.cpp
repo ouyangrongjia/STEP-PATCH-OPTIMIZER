@@ -108,6 +108,22 @@ QJsonArray edge_ids_to_json(const std::vector<spo::EdgeId>& edgeIds) {
     return array;
 }
 
+QJsonArray ints_to_json(const std::vector<int>& values) {
+    QJsonArray array;
+    for (const auto value : values) {
+        array.append(value);
+    }
+    return array;
+}
+
+QJsonArray strings_to_json(const std::vector<std::string>& values) {
+    QJsonArray array;
+    for (const auto& value : values) {
+        array.append(QString::fromStdString(value));
+    }
+    return array;
+}
+
 QJsonObject path_object(const std::filesystem::path& path) {
     QJsonObject object;
     object.insert("path", path_to_qstring(path));
@@ -699,6 +715,137 @@ QJsonObject preview_to_json(const spo::PatchPreviewReport& report) {
     return object;
 }
 
+QJsonObject point_to_json(bool valid, double x, double y, double z) {
+    QJsonObject object;
+    object.insert("valid", valid);
+    object.insert("x", x);
+    object.insert("y", y);
+    object.insert("z", z);
+    return object;
+}
+
+QJsonObject free_edge_diagnostic_to_json(const spo::PatchReplacementFreeEdgeDiagnostic& diagnostic) {
+    QJsonObject object;
+    object.insert("after_repair", diagnostic.afterRepair);
+    object.insert("appeared_after_repair", diagnostic.appearedAfterRepair);
+    object.insert("edge_index", diagnostic.edgeIndex);
+    object.insert("adjacent_face_count", diagnostic.adjacentFaceCount);
+    object.insert("edge_length", diagnostic.edgeLength);
+    object.insert("edge_tolerance", diagnostic.edgeTolerance);
+    object.insert("degenerated", diagnostic.degenerated);
+    object.insert(
+        "midpoint",
+        point_to_json(
+            diagnostic.midpointValid,
+            diagnostic.midpointX,
+            diagnostic.midpointY,
+            diagnostic.midpointZ));
+    object.insert(
+        "start",
+        point_to_json(
+            diagnostic.startPointValid,
+            diagnostic.startX,
+            diagnostic.startY,
+            diagnostic.startZ));
+    object.insert(
+        "end",
+        point_to_json(
+            diagnostic.endPointValid,
+            diagnostic.endX,
+            diagnostic.endY,
+            diagnostic.endZ));
+    object.insert("nearest_original_boundary_edge_id", diagnostic.nearestOriginalBoundaryEdgeId);
+    object.insert("nearest_original_boundary_edge_distance", diagnostic.nearestOriginalBoundaryEdgeDistance);
+    object.insert("nearest_original_boundary_edge_length", diagnostic.nearestOriginalBoundaryEdgeLength);
+    object.insert("nearest_original_boundary_edge_tolerance", diagnostic.nearestOriginalBoundaryEdgeTolerance);
+    object.insert(
+        "nearest_original_boundary_start",
+        point_to_json(
+            diagnostic.nearestOriginalBoundaryStartPointValid,
+            diagnostic.nearestOriginalBoundaryStartX,
+            diagnostic.nearestOriginalBoundaryStartY,
+            diagnostic.nearestOriginalBoundaryStartZ));
+    object.insert(
+        "nearest_original_boundary_midpoint",
+        point_to_json(
+            diagnostic.nearestOriginalBoundaryMidpointValid,
+            diagnostic.nearestOriginalBoundaryMidpointX,
+            diagnostic.nearestOriginalBoundaryMidpointY,
+            diagnostic.nearestOriginalBoundaryMidpointZ));
+    object.insert(
+        "nearest_original_boundary_end",
+        point_to_json(
+            diagnostic.nearestOriginalBoundaryEndPointValid,
+            diagnostic.nearestOriginalBoundaryEndX,
+            diagnostic.nearestOriginalBoundaryEndY,
+            diagnostic.nearestOriginalBoundaryEndZ));
+    object.insert("nearest_original_boundary_parameter_range_valid", diagnostic.nearestOriginalBoundaryParameterRangeValid);
+    object.insert("nearest_original_boundary_first_parameter", diagnostic.nearestOriginalBoundaryFirstParameter);
+    object.insert("nearest_original_boundary_last_parameter", diagnostic.nearestOriginalBoundaryLastParameter);
+    object.insert("nearest_original_boundary_adjacent_face_count", diagnostic.nearestOriginalBoundaryAdjacentFaceCount);
+    object.insert("nearest_original_boundary_adjacent_face_ids", ints_to_json(diagnostic.nearestOriginalBoundaryAdjacentFaceIds));
+    object.insert("nearest_original_boundary_adjacent_surface_types", strings_to_json(diagnostic.nearestOriginalBoundaryAdjacentSurfaceTypes));
+    object.insert("nearest_original_boundary_pcurve_available_face_count", diagnostic.nearestOriginalBoundaryPcurveAvailableFaceCount);
+    object.insert("matched_split_boundary_segment", diagnostic.matchedSplitBoundarySegment);
+    object.insert("matched_split_boundary_first_parameter", diagnostic.matchedSplitBoundaryFirstParameter);
+    object.insert("matched_split_boundary_last_parameter", diagnostic.matchedSplitBoundaryLastParameter);
+    object.insert("patch_face_owner", diagnostic.patchFaceOwner);
+    object.insert("same_original_boundary_edge_split_segment_count", diagnostic.sameOriginalBoundaryEdgeSplitSegmentCount);
+    object.insert("same_original_boundary_edge_owner_switch_count", diagnostic.sameOriginalBoundaryEdgeOwnerSwitchCount);
+    object.insert("same_original_boundary_edge_degenerated_segment_count", diagnostic.sameOriginalBoundaryEdgeDegeneratedSegmentCount);
+    object.insert("nearest_split_boundary_segment", diagnostic.nearestSplitBoundarySegment);
+    object.insert("nearest_split_boundary_original_edge_id", diagnostic.nearestSplitBoundaryOriginalEdgeId);
+    object.insert("nearest_split_boundary_segment_distance", diagnostic.nearestSplitBoundarySegmentDistance);
+    object.insert("nearest_split_boundary_first_parameter", diagnostic.nearestSplitBoundaryFirstParameter);
+    object.insert("nearest_split_boundary_last_parameter", diagnostic.nearestSplitBoundaryLastParameter);
+    object.insert("nearest_split_boundary_length", diagnostic.nearestSplitBoundaryLength);
+    object.insert("nearest_split_boundary_tolerance", diagnostic.nearestSplitBoundaryTolerance);
+    object.insert("nearest_split_boundary_patch_face_owner", diagnostic.nearestSplitBoundaryPatchFaceOwner);
+    object.insert("fitted_patch_projection_face_count", diagnostic.fittedPatchProjectionFaceCount);
+    object.insert("fitted_patch_projection_sample_count", diagnostic.fittedPatchProjectionSampleCount);
+    object.insert("fitted_patch_projection_failed_count", diagnostic.fittedPatchProjectionFailedCount);
+    object.insert("fitted_patch_projection_min_distance", diagnostic.fittedPatchProjectionMinDistance);
+    object.insert("fitted_patch_projection_max_distance", diagnostic.fittedPatchProjectionMaxDistance);
+    object.insert("fitted_patch_projection_average_distance", diagnostic.fittedPatchProjectionAverageDistance);
+    object.insert("nearest_fitted_patch_face_index", diagnostic.nearestFittedPatchFaceIndex);
+    return object;
+}
+
+QJsonArray free_edge_diagnostics_to_json(
+    const std::vector<spo::PatchReplacementFreeEdgeDiagnostic>& diagnostics) {
+    QJsonArray array;
+    for (const auto& diagnostic : diagnostics) {
+        array.append(free_edge_diagnostic_to_json(diagnostic));
+    }
+    return array;
+}
+
+QJsonObject trim_diagnostics_to_json(const spo::PatchTrimDiagnosticsReport& report) {
+    QJsonObject object;
+    object.insert("captured", report.captured);
+    object.insert("replacement_face_count", report.replacementFaceCount);
+    object.insert("trim_wire_invalid_count", report.trimWireInvalidCount);
+    object.insert("trim_uv_loop_self_intersection_count", report.trimUvLoopSelfIntersectionCount);
+    object.insert("over_cover_sample_count", report.overCoverSampleCount);
+    object.insert("over_cover_total_sample_count", report.overCoverTotalSampleCount);
+    object.insert("over_cover_ratio", report.overCoverRatio);
+    object.insert("over_cover_max_distance", report.overCoverMaxDistance);
+    object.insert("under_cover_sample_count", report.underCoverSampleCount);
+    object.insert("under_cover_total_sample_count", report.underCoverTotalSampleCount);
+    object.insert("under_cover_max_distance", report.underCoverMaxDistance);
+    object.insert("boundary_gap_max", report.boundaryGapMax);
+    object.insert("boundary_gap_p95", report.boundaryGapP95);
+    object.insert("boundary_gap_rms", report.boundaryGapRms);
+    object.insert("internal_seam_gap_max", report.internalSeamGapMax);
+    object.insert("internal_seam_gap_p95", report.internalSeamGapP95);
+    object.insert("internal_seam_gap_rms", report.internalSeamGapRms);
+    object.insert("worst_boundary_edge_id", report.worstBoundaryEdgeId);
+    object.insert("worst_internal_edge_id", report.worstInternalEdgeId);
+    object.insert("roundtrip_compared", report.roundtripCompared);
+    object.insert("roundtrip_changed", report.roundtripChanged);
+    return object;
+}
+
 QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     QJsonObject object;
     object.insert("success", report.success);
@@ -710,6 +857,29 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     object.insert("replacement_edge_count", report.replacementEdgeCount);
     object.insert("replacement_shell_count", report.replacementShellCount);
     object.insert("replacement_solid_count", report.replacementSolidCount);
+    object.insert("pre_repair_closure_captured", report.preRepairClosureCaptured);
+    object.insert("pre_repair_face_count", report.preRepairFaceCount);
+    object.insert("pre_repair_edge_count", report.preRepairEdgeCount);
+    object.insert("pre_repair_shell_count", report.preRepairShellCount);
+    object.insert("pre_repair_solid_count", report.preRepairSolidCount);
+    object.insert("pre_repair_brep_check_valid", report.preRepairBRepCheckValid);
+    object.insert("pre_repair_free_edge_count", report.preRepairFreeEdgeCount);
+    object.insert("pre_repair_multiple_edge_count", report.preRepairMultipleEdgeCount);
+    object.insert("pre_repair_degenerated_free_edge_count", report.preRepairDegeneratedFreeEdgeCount);
+    object.insert("post_repair_closure_captured", report.postRepairClosureCaptured);
+    object.insert("post_repair_face_count", report.postRepairFaceCount);
+    object.insert("post_repair_edge_count", report.postRepairEdgeCount);
+    object.insert("post_repair_shell_count", report.postRepairShellCount);
+    object.insert("post_repair_solid_count", report.postRepairSolidCount);
+    object.insert("post_repair_brep_check_valid", report.postRepairBRepCheckValid);
+    object.insert("post_repair_free_edge_count", report.postRepairFreeEdgeCount);
+    object.insert("post_repair_multiple_edge_count", report.postRepairMultipleEdgeCount);
+    object.insert("post_repair_degenerated_free_edge_count", report.postRepairDegeneratedFreeEdgeCount);
+    object.insert(
+        "appeared_after_repair_degenerated_free_edge_count",
+        report.appearedAfterRepairDegeneratedFreeEdgeCount);
+    object.insert("free_edge_diagnostics", free_edge_diagnostics_to_json(report.freeEdgeDiagnostics));
+    object.insert("trim_diagnostics", trim_diagnostics_to_json(report.trimDiagnostics));
     object.insert(
         "multi_surface_boundary_edge_pcurve_rebuild_attempt_count",
         report.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
@@ -743,6 +913,9 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     object.insert("gate_after_multiple_edges", report.gateAfterMultipleEdges);
     object.insert("gate_roundtrip_free_edges", report.gateRoundtripFreeEdges);
     object.insert("gate_roundtrip_multiple_edges", report.gateRoundtripMultipleEdges);
+    object.insert("repair_degenerated_free_edges_before", report.degeneratedFreeEdgesBeforeRepair);
+    object.insert("repair_degenerated_free_edges_after", report.degeneratedFreeEdgesAfterRepair);
+    object.insert("best_sewing_degenerated_free_edge_count", report.bestSewingDegeneratedFreeEdgeCount);
     object.insert("failure_reason", QString::fromStdString(spo::toString(report.failureReason)));
     object.insert("gate_failure_reason", QString::fromStdString(report.gateFailureReason));
     object.insert("message", QString::fromStdString(report.message));

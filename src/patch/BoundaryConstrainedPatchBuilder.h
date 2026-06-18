@@ -31,6 +31,7 @@ struct BoundaryConstrainedPatchSplitBoundarySegment {
     double firstParameter = 0.0;
     double lastParameter = 0.0;
     TopoDS_Edge edge;
+    int patchFaceIndex = -1;
 };
 
 struct BoundaryConstrainedPatchBuildOptions {

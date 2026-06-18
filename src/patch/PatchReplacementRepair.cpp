@@ -6,8 +6,11 @@
 #include <BRepBuilderAPI_MakeSolid.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepLib.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepTools_ReShape.hxx>
 #include <Bnd_Box.hxx>
+#include <Geom_Curve.hxx>
+#include <Precision.hxx>
 #include <ShapeFix_Face.hxx>
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_Shell.hxx>
@@ -16,10 +19,13 @@
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Edge.hxx>
 #include <TopoDS_Shell.hxx>
 #include <TopoDS_Solid.hxx>
+#include <TopoDS_Vertex.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +45,7 @@ struct RepairStats {
     int solids = 0;
     int freeEdges = 0;
     int multipleEdges = 0;
+    int degeneratedFreeEdges = 0;
     bool brepCheckValid = false;
 };
 
@@ -79,6 +86,60 @@ int count_shapes(const TopoDS_Shape& shape, TopAbs_ShapeEnum type) {
     return count;
 }
 
+double edge_chord_length(const TopoDS_Edge& edge) {
+    if (edge.IsNull()) {
+        return 0.0;
+    }
+
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    const auto curve = BRep_Tool::Curve(edge, firstParameter, lastParameter);
+    if (!curve.IsNull() &&
+        std::isfinite(firstParameter) &&
+        std::isfinite(lastParameter) &&
+        std::abs(lastParameter - firstParameter) > Precision::PConfusion()) {
+        const auto start = curve->Value(firstParameter);
+        const auto end = curve->Value(lastParameter);
+        const auto length = start.Distance(end);
+        return std::isfinite(length) ? length : 0.0;
+    }
+
+    TopoDS_Vertex firstVertex;
+    TopoDS_Vertex lastVertex;
+    TopExp::Vertices(edge, firstVertex, lastVertex);
+    if (!firstVertex.IsNull() && !lastVertex.IsNull()) {
+        const auto length = BRep_Tool::Pnt(firstVertex).Distance(BRep_Tool::Pnt(lastVertex));
+        return std::isfinite(length) ? length : 0.0;
+    }
+    return 0.0;
+}
+
+bool is_degenerated_free_edge(const TopoDS_Edge& edge) {
+    if (edge.IsNull()) {
+        return false;
+    }
+    if (BRep_Tool::Degenerated(edge)) {
+        return true;
+    }
+    const double tolerance = std::max(BRep_Tool::Tolerance(edge), Precision::Confusion());
+    return edge_chord_length(edge) <= tolerance;
+}
+
+int count_degenerated_free_edges(const ShapeDocument& document) {
+    int count = 0;
+    const auto& topology = document.topology();
+    for (EdgeId edgeId = 0; edgeId < topology.edgeCount(); ++edgeId) {
+        const auto* adjacency = topology.adjacencyForEdge(edgeId);
+        if (adjacency == nullptr || adjacency->faces.size() != 1) {
+            continue;
+        }
+        if (is_degenerated_free_edge(topology.edge(edgeId))) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 RepairStats capture_stats(const TopoDS_Shape& shape) {
     RepairStats stats;
     const ShapeDocument document(shape, {});
@@ -89,6 +150,7 @@ RepairStats capture_stats(const TopoDS_Shape& shape) {
     stats.solids = validation.stats.solids;
     stats.freeEdges = validation.free_edges;
     stats.multipleEdges = validation.multiple_edges;
+    stats.degeneratedFreeEdges = count_degenerated_free_edges(document);
     stats.brepCheckValid = validation.brep_check_valid;
     return stats;
 }
@@ -100,6 +162,7 @@ void copy_before_stats(PatchReplacementRepairReport& report, const RepairStats& 
     report.solidCountBeforeRepair = stats.solids;
     report.freeEdgesBeforeRepair = stats.freeEdges;
     report.multipleEdgesBeforeRepair = stats.multipleEdges;
+    report.degeneratedFreeEdgesBeforeRepair = stats.degeneratedFreeEdges;
 }
 
 void copy_after_stats(PatchReplacementRepairReport& report, const RepairStats& stats) {
@@ -109,12 +172,14 @@ void copy_after_stats(PatchReplacementRepairReport& report, const RepairStats& s
     report.solidCountAfterRepair = stats.solids;
     report.freeEdgesAfterRepair = stats.freeEdges;
     report.multipleEdgesAfterRepair = stats.multipleEdges;
+    report.degeneratedFreeEdgesAfterRepair = stats.degeneratedFreeEdges;
 }
 
 void copy_best_sewing_stats(PatchReplacementRepairReport& report, const SewingAttempt& attempt) {
     report.selectedSewingTolerance = attempt.tolerance;
     report.bestSewingFreeEdges = attempt.stats.freeEdges;
     report.bestSewingMultipleEdges = attempt.stats.multipleEdges;
+    report.bestSewingDegeneratedFreeEdgeCount = attempt.stats.degeneratedFreeEdges;
     report.bestSewingFaceCount = attempt.stats.faces;
     report.bestSewingEdgeCount = attempt.stats.edges;
     report.bestSewingShellCount = attempt.stats.shells;
@@ -345,6 +410,8 @@ const SewingAttempt* choose_best_attempt(
     const SewingAttempt* preferred = nullptr;
     for (const auto& attempt : attempts) {
         if (usable_sewing_result(attempt) &&
+            attempt.stats.freeEdges == 0 &&
+            attempt.stats.degeneratedFreeEdges == 0 &&
             std::abs(attempt.tolerance - preferredTolerance) <= 1.0e-9) {
             preferred = &attempt;
             break;
@@ -362,10 +429,12 @@ const SewingAttempt* choose_best_attempt(
         if (bestUsable == nullptr ||
             std::make_tuple(
                 attempt.stats.freeEdges,
+                attempt.stats.degeneratedFreeEdges,
                 std::abs(attempt.tolerance - preferredTolerance),
                 std::abs(attempt.stats.faces - inputFaceCount)) <
                 std::make_tuple(
                     bestUsable->stats.freeEdges,
+                    bestUsable->stats.degeneratedFreeEdges,
                     std::abs(bestUsable->tolerance - preferredTolerance),
                     std::abs(bestUsable->stats.faces - inputFaceCount))) {
             bestUsable = &attempt;
@@ -381,8 +450,14 @@ const SewingAttempt* choose_best_attempt(
             continue;
         }
         if (bestNonCollapsed == nullptr ||
-            std::make_tuple(attempt.stats.freeEdges, -attempt.stats.solids) <
-                std::make_tuple(bestNonCollapsed->stats.freeEdges, -bestNonCollapsed->stats.solids)) {
+            std::make_tuple(
+                attempt.stats.freeEdges,
+                attempt.stats.degeneratedFreeEdges,
+                -attempt.stats.solids) <
+                std::make_tuple(
+                    bestNonCollapsed->stats.freeEdges,
+                    bestNonCollapsed->stats.degeneratedFreeEdges,
+                    -bestNonCollapsed->stats.solids)) {
             bestNonCollapsed = &attempt;
         }
     }
@@ -393,7 +468,8 @@ const SewingAttempt* choose_best_attempt(
     const SewingAttempt* leastFreeEdges = nullptr;
     for (const auto& attempt : attempts) {
         if (leastFreeEdges == nullptr ||
-            attempt.stats.freeEdges < leastFreeEdges->stats.freeEdges) {
+            std::make_tuple(attempt.stats.freeEdges, attempt.stats.degeneratedFreeEdges) <
+                std::make_tuple(leastFreeEdges->stats.freeEdges, leastFreeEdges->stats.degeneratedFreeEdges)) {
             leastFreeEdges = &attempt;
         }
     }

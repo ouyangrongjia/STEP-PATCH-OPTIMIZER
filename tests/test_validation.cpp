@@ -30,11 +30,18 @@ void run_boundary_constrained_patch_builder_tests();
 void run_crop_boundary_diagnostics_tests();
 void run_patch_replacement_repair_tests();
 void run_patch_replacement_command_tests();
+void run_patch_trim_diagnostics_tests();
 void run_stp_sampled_fitting_mesh_tests();
 void run_stl_cut_chain_cutter_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
+
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
+#include <gp_Pnt.hxx>
 
 #include <cassert>
 #include <cstdlib>
@@ -64,16 +71,48 @@ void configure_test_process_error_reporting() {
 #endif
 }
 
+TopoDS_Shape make_open_face() {
+    const gp_Pnt p00(0.0, 0.0, 0.0);
+    const gp_Pnt p10(10.0, 0.0, 0.0);
+    const gp_Pnt p11(10.0, 10.0, 0.0);
+    const gp_Pnt p01(0.0, 10.0, 0.0);
+
+    BRepBuilderAPI_MakeWire wire;
+    wire.Add(BRepBuilderAPI_MakeEdge(p00, p10).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p10, p11).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p11, p01).Edge());
+    wire.Add(BRepBuilderAPI_MakeEdge(p01, p00).Edge());
+    return BRepBuilderAPI_MakeFace(wire.Wire()).Face();
+}
+
 }
 
 void run_validation_tests() {
-    const spo::ShapeDocument document;
-    const spo::ShapeValidator validator;
-    const auto report = validator.validate(document);
-    assert(!report.has_shape);
-    assert(report.free_edges == 0);
-    assert(report.multiple_edges == 0);
-    assert(!report.brep_check_valid);
+    {
+        const spo::ShapeDocument document;
+        const spo::ShapeValidator validator;
+        const auto report = validator.validate(document);
+        assert(!report.has_shape);
+        assert(report.free_edges == 0);
+        assert(report.multiple_edges == 0);
+        assert(!report.brep_check_valid);
+    }
+
+    {
+        const spo::ShapeDocument sphere(BRepPrimAPI_MakeSphere(10.0).Shape(), {});
+        const auto report = spo::ShapeValidator().validate(sphere);
+        assert(report.has_shape);
+        assert(report.brep_check_valid);
+        assert(report.free_edges == 0);
+        assert(report.multiple_edges == 0);
+    }
+
+    {
+        const spo::ShapeDocument openFace(make_open_face(), {});
+        const auto report = spo::ShapeValidator().validate(openFace);
+        assert(report.has_shape);
+        assert(report.free_edges > 0);
+    }
 }
 
 int main() {
@@ -111,6 +150,7 @@ int main() {
     run_crop_boundary_diagnostics_tests();
     run_patch_replacement_repair_tests();
     run_patch_replacement_command_tests();
+    run_patch_trim_diagnostics_tests();
     run_stp_sampled_fitting_mesh_tests();
     run_stl_cut_chain_cutter_tests();
     run_validation_tests();

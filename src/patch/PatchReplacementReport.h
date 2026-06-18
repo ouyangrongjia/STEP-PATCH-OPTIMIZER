@@ -2,6 +2,7 @@
 
 #include "common/GeometryTypes.h"
 #include "patch/PatchReplacementInput.h"
+#include "patch/PatchTrimDiagnostics.h"
 
 #include <string>
 #include <vector>
@@ -71,11 +72,14 @@ struct PatchReplacementRepairReport {
     int freeEdgesAfterRepair = 0;
     int multipleEdgesBeforeRepair = 0;
     int multipleEdgesAfterRepair = 0;
+    int degeneratedFreeEdgesBeforeRepair = 0;
+    int degeneratedFreeEdgesAfterRepair = 0;
 
     double selectedSewingTolerance = 0.0;
     int sewingAttemptCount = 0;
     int bestSewingFreeEdges = 0;
     int bestSewingMultipleEdges = 0;
+    int bestSewingDegeneratedFreeEdgeCount = 0;
     int bestSewingFaceCount = 0;
     int bestSewingEdgeCount = 0;
     int bestSewingShellCount = 0;
@@ -85,6 +89,77 @@ struct PatchReplacementRepairReport {
 
     std::string message;
     std::string warningMessage;
+};
+
+struct PatchReplacementFreeEdgeDiagnostic {
+    bool afterRepair = false;
+    bool appearedAfterRepair = false;
+    int edgeIndex = -1;
+    int adjacentFaceCount = 0;
+    double edgeLength = 0.0;
+    double edgeTolerance = 0.0;
+    bool degenerated = false;
+
+    bool midpointValid = false;
+    double midpointX = 0.0;
+    double midpointY = 0.0;
+    double midpointZ = 0.0;
+    bool startPointValid = false;
+    double startX = 0.0;
+    double startY = 0.0;
+    double startZ = 0.0;
+    bool endPointValid = false;
+    double endX = 0.0;
+    double endY = 0.0;
+    double endZ = 0.0;
+
+    int nearestOriginalBoundaryEdgeId = -1;
+    double nearestOriginalBoundaryEdgeDistance = 0.0;
+    double nearestOriginalBoundaryEdgeLength = 0.0;
+    double nearestOriginalBoundaryEdgeTolerance = 0.0;
+    bool nearestOriginalBoundaryStartPointValid = false;
+    double nearestOriginalBoundaryStartX = 0.0;
+    double nearestOriginalBoundaryStartY = 0.0;
+    double nearestOriginalBoundaryStartZ = 0.0;
+    bool nearestOriginalBoundaryMidpointValid = false;
+    double nearestOriginalBoundaryMidpointX = 0.0;
+    double nearestOriginalBoundaryMidpointY = 0.0;
+    double nearestOriginalBoundaryMidpointZ = 0.0;
+    bool nearestOriginalBoundaryEndPointValid = false;
+    double nearestOriginalBoundaryEndX = 0.0;
+    double nearestOriginalBoundaryEndY = 0.0;
+    double nearestOriginalBoundaryEndZ = 0.0;
+    bool nearestOriginalBoundaryParameterRangeValid = false;
+    double nearestOriginalBoundaryFirstParameter = 0.0;
+    double nearestOriginalBoundaryLastParameter = 0.0;
+    int nearestOriginalBoundaryAdjacentFaceCount = 0;
+    int nearestOriginalBoundaryPcurveAvailableFaceCount = 0;
+    std::vector<int> nearestOriginalBoundaryAdjacentFaceIds;
+    std::vector<std::string> nearestOriginalBoundaryAdjacentSurfaceTypes;
+
+    bool matchedSplitBoundarySegment = false;
+    double matchedSplitBoundaryFirstParameter = 0.0;
+    double matchedSplitBoundaryLastParameter = 0.0;
+    int patchFaceOwner = -1;
+    int sameOriginalBoundaryEdgeSplitSegmentCount = 0;
+    int sameOriginalBoundaryEdgeOwnerSwitchCount = 0;
+    int sameOriginalBoundaryEdgeDegeneratedSegmentCount = 0;
+    bool nearestSplitBoundarySegment = false;
+    int nearestSplitBoundaryOriginalEdgeId = -1;
+    double nearestSplitBoundarySegmentDistance = 0.0;
+    double nearestSplitBoundaryFirstParameter = 0.0;
+    double nearestSplitBoundaryLastParameter = 0.0;
+    double nearestSplitBoundaryLength = 0.0;
+    double nearestSplitBoundaryTolerance = 0.0;
+    int nearestSplitBoundaryPatchFaceOwner = -1;
+
+    int fittedPatchProjectionFaceCount = 0;
+    int fittedPatchProjectionSampleCount = 0;
+    int fittedPatchProjectionFailedCount = 0;
+    double fittedPatchProjectionMinDistance = 0.0;
+    double fittedPatchProjectionMaxDistance = 0.0;
+    double fittedPatchProjectionAverageDistance = 0.0;
+    int nearestFittedPatchFaceIndex = -1;
 };
 
 struct PatchReplacementReport {
@@ -170,6 +245,31 @@ struct PatchReplacementReport {
     int freeEdgesAfterRepair = 0;
     int multipleEdgesBeforeRepair = 0;
     int multipleEdgesAfterRepair = 0;
+    int degeneratedFreeEdgesBeforeRepair = 0;
+    int degeneratedFreeEdgesAfterRepair = 0;
+
+    bool preRepairClosureCaptured = false;
+    int preRepairFaceCount = 0;
+    int preRepairEdgeCount = 0;
+    int preRepairShellCount = 0;
+    int preRepairSolidCount = 0;
+    bool preRepairBRepCheckValid = false;
+    int preRepairFreeEdgeCount = 0;
+    int preRepairMultipleEdgeCount = 0;
+    int preRepairDegeneratedFreeEdgeCount = 0;
+
+    bool postRepairClosureCaptured = false;
+    int postRepairFaceCount = 0;
+    int postRepairEdgeCount = 0;
+    int postRepairShellCount = 0;
+    int postRepairSolidCount = 0;
+    bool postRepairBRepCheckValid = false;
+    int postRepairFreeEdgeCount = 0;
+    int postRepairMultipleEdgeCount = 0;
+    int postRepairDegeneratedFreeEdgeCount = 0;
+    int appearedAfterRepairDegeneratedFreeEdgeCount = 0;
+    std::vector<PatchReplacementFreeEdgeDiagnostic> freeEdgeDiagnostics;
+    PatchTrimDiagnosticsReport trimDiagnostics;
 
     bool gateEvaluated = false;
     bool gatePassed = false;
@@ -204,6 +304,7 @@ struct PatchReplacementReport {
     int sewingAttemptCount = 0;
     int bestSewingFreeEdges = 0;
     int bestSewingMultipleEdges = 0;
+    int bestSewingDegeneratedFreeEdgeCount = 0;
     int bestSewingFaceCount = 0;
     int bestSewingEdgeCount = 0;
     int bestSewingShellCount = 0;

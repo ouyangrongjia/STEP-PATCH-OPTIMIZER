@@ -165,11 +165,79 @@ QString patchApplyReportText(const PatchReplacementReport& report, const QString
         .arg(report.bestSewingFreeEdges)
         .arg(report.bestSewingMultipleEdges)
         .arg(boolText(report.bestSewingBRepCheckValid));
+    reportLines << QString("最佳缝合退化 free edge %1  |  repair 退化 free edge %2 → %3")
+        .arg(report.bestSewingDegeneratedFreeEdgeCount)
+        .arg(report.degeneratedFreeEdgesBeforeRepair)
+        .arg(report.degeneratedFreeEdgesAfterRepair);
     reportLines << QString("修复拓扑：free edge 修复前 %1 → 修复后 %2  |  multiple edge 修复前 %3 → 修复后 %4")
         .arg(report.freeEdgesBeforeRepair)
         .arg(report.freeEdgesAfterRepair)
         .arg(report.multipleEdgesBeforeRepair)
         .arg(report.multipleEdgesAfterRepair);
+    reportLines << QString("Pre-repair closure：BRepCheck %1  |  face/edge/shell/solid %2/%3/%4/%5  |  free %6  |  multiple %7")
+        .arg(boolText(report.preRepairBRepCheckValid))
+        .arg(report.preRepairFaceCount)
+        .arg(report.preRepairEdgeCount)
+        .arg(report.preRepairShellCount)
+        .arg(report.preRepairSolidCount)
+        .arg(report.preRepairFreeEdgeCount)
+        .arg(report.preRepairMultipleEdgeCount);
+    reportLines << QString("Pre/Post 退化 free edge：pre %1  |  post %2  |  appeared-after-repair %3")
+        .arg(report.preRepairDegeneratedFreeEdgeCount)
+        .arg(report.postRepairDegeneratedFreeEdgeCount)
+        .arg(report.appearedAfterRepairDegeneratedFreeEdgeCount);
+    reportLines << QString("Post-repair closure：BRepCheck %1  |  face/edge/shell/solid %2/%3/%4/%5  |  free %6  |  multiple %7")
+        .arg(boolText(report.postRepairBRepCheckValid))
+        .arg(report.postRepairFaceCount)
+        .arg(report.postRepairEdgeCount)
+        .arg(report.postRepairShellCount)
+        .arg(report.postRepairSolidCount)
+        .arg(report.postRepairFreeEdgeCount)
+        .arg(report.postRepairMultipleEdgeCount);
+    if (!report.freeEdgeDiagnostics.empty()) {
+        const auto& diagnostic = report.freeEdgeDiagnostics.front();
+        reportLines << QString("Free edge 定位：数量 %1  |  first edge %2  |  appeared_after_repair %3  |  adjacent faces %4  |  original boundary edge %5  |  patch face owner %6")
+            .arg(static_cast<int>(report.freeEdgeDiagnostics.size()))
+            .arg(diagnostic.edgeIndex)
+            .arg(boolText(diagnostic.appearedAfterRepair))
+            .arg(diagnostic.adjacentFaceCount)
+            .arg(diagnostic.nearestOriginalBoundaryEdgeId)
+            .arg(diagnostic.patchFaceOwner);
+        reportLines << QString("Free edge 局部：length %1  |  tolerance %2  |  degenerated %3  |  nearest split edge %4  |  split distance %5  |  projection max %6")
+            .arg(QString::number(diagnostic.edgeLength, 'g', 8))
+            .arg(QString::number(diagnostic.edgeTolerance, 'g', 8))
+            .arg(boolText(diagnostic.degenerated))
+            .arg(diagnostic.nearestSplitBoundaryOriginalEdgeId)
+            .arg(QString::number(diagnostic.nearestSplitBoundarySegmentDistance, 'g', 8))
+            .arg(QString::number(diagnostic.fittedPatchProjectionMaxDistance, 'g', 8));
+        if (diagnostic.midpointValid) {
+            reportLines << QString("Free edge midpoint：(%1, %2, %3)")
+                .arg(QString::number(diagnostic.midpointX, 'g', 8))
+                .arg(QString::number(diagnostic.midpointY, 'g', 8))
+                .arg(QString::number(diagnostic.midpointZ, 'g', 8));
+        }
+    }
+    if (report.trimDiagnostics.captured) {
+        reportLines << QString("B2.7 裁剪诊断：faces %1  |  invalid wires %2  |  over-cover %3/%4 max %5  |  under-cover %6/%7 max %8")
+            .arg(report.trimDiagnostics.replacementFaceCount)
+            .arg(report.trimDiagnostics.trimWireInvalidCount)
+            .arg(report.trimDiagnostics.overCoverSampleCount)
+            .arg(report.trimDiagnostics.overCoverTotalSampleCount)
+            .arg(QString::number(report.trimDiagnostics.overCoverMaxDistance, 'g', 8))
+            .arg(report.trimDiagnostics.underCoverSampleCount)
+            .arg(report.trimDiagnostics.underCoverTotalSampleCount)
+            .arg(QString::number(report.trimDiagnostics.underCoverMaxDistance, 'g', 8));
+        reportLines << QString("B2.7 缝隙诊断：boundary gap max/p95/rms %1/%2/%3 edge %4  |  internal seam max/p95/rms %5/%6/%7 edge %8  |  roundtrip changed %9")
+            .arg(QString::number(report.trimDiagnostics.boundaryGapMax, 'g', 8))
+            .arg(QString::number(report.trimDiagnostics.boundaryGapP95, 'g', 8))
+            .arg(QString::number(report.trimDiagnostics.boundaryGapRms, 'g', 8))
+            .arg(report.trimDiagnostics.worstBoundaryEdgeId)
+            .arg(QString::number(report.trimDiagnostics.internalSeamGapMax, 'g', 8))
+            .arg(QString::number(report.trimDiagnostics.internalSeamGapP95, 'g', 8))
+            .arg(QString::number(report.trimDiagnostics.internalSeamGapRms, 'g', 8))
+            .arg(report.trimDiagnostics.worstInternalEdgeId)
+            .arg(boolText(report.trimDiagnostics.roundtripChanged));
+    }
     reportLines << QString("Gate free edge：before %1  |  after %2  |  STEP roundtrip %3")
         .arg(report.gateBeforeFreeEdges)
         .arg(report.gateAfterFreeEdges)

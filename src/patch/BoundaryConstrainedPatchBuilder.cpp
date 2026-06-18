@@ -188,7 +188,8 @@ void copy_multi_surface_report(
             segment.edgeId,
             segment.firstParameter,
             segment.lastParameter,
-            segment.edge});
+            segment.edge,
+            segment.patchFaceIndex});
     }
     result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;
     result.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds = shell.boundaryEdgePcurveRebuildFailedEdgeIds;

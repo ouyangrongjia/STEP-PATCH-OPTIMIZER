@@ -72,7 +72,10 @@ Commercial-CAD-like quality gate:
 | B2.2 | adjacent-face support collar + seam continuity report | 已接入 `-Experiment B2.2`；真实样例输入干净且 patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败 |
 | B2.3 | corner-safe support collar + optional SharpenContours A/B | 已接入 `-Experiment B2.3`；SharpenContours 降低 drift，但真实样例仍因 FreeEdgeIncreased 未通过 StrictTopologyGate |
 | B2.4 | Boundary Edge Rebuild + Local Closure Probe | Apply 侧增量：在 multi-surface boundary shell 中重建原 STP boundary edge 在 fitted surface 上的 pcurve / SameParameter，并输出 local closure diagnostics；真实样例 pcurve rebuild 全成功但仍有 1 条 free edge；不是新的 fitting STL experiment |
-| B3 | corner anchors + B2.3 seam-aware fitting input | 是否同时降低 drift 且不恶化 repair / gate |
+| B2.5 | Pre-repair Closure Probe | 已完成最小版：在 PatchReplacementRepair 前后做 closure stats 和 free edge 定位；真实复用 patch 验证显示 pre-repair 已有 66 条 free edge，post-repair 剩 1 条且 `appeared_after_repair=true` |
+| B2.6 | Local Free-edge Closure Fix | 已完成最小诊断/repair selection/validator 分类修正版：围绕 detected edge 输出 length / tolerance / degenerated、nearest original boundary edge context、split-owner context 和 fitted patch projection diagnostics；`ShapeValidator` 排除 closed seam / degenerated edge 的 free-edge 误计数。真实样例 `StrictTopologyGate` 与 applied STEP readback 已通过，CommercialCadLikeQualityGate 仍失败；不是新的 fitting STL experiment |
+| B2.7 | Trim / over-cover / seam failure localization | 已完成最小诊断版：`trim_diagnostics` 已输出到 report / baseline JSON / patch_apply_probe / GUI Apply report；真实样例显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false |
+| B3 | corner anchors + B2.3 seam-aware fitting input | 条件分支：只有后续证明局部 under-cover / boundary gap 必须靠 fitting input 约束增强时再推进；否则先修 surface coverage / owner split / boundary projection |
 
 当前 A0 自动化入口：
 
@@ -251,6 +254,231 @@ quality:
 ```
 
 结论：B2.4 已排除“原 STP boundary edge 无法在 fitted surface 上建立 pcurve / SameParameter”的主因；剩余失败是 repair / sewing 后仍出现 1 条 free edge，且 fitted surface 与原 boundary / 邻接旧面局部偏差仍高于 CommercialCadLikeQualityGate 的 0.03 量级。
+
+B2.5 已完成最小版 Pre-repair Closure Probe。它不是去掉 repair，也不是把 pre-repair shape 当作可提交结果；它是在 `assemble_replacement_shape` 成功后、`PatchReplacementRepair` 运行前，对 assembled replacement shape 做一次和 Gate 同口径的 closure snapshot，并在 repair 后保留当前 repair / Gate snapshot。B2.5 输出：
+
+```text
+pre_repair_face/edge/shell/solid_count
+pre_repair_brep_check_valid
+pre_repair_free_edge_count
+pre_repair_multiple_edge_count
+post_repair_free_edge_count
+post_repair_multiple_edge_count
+free_edge_midpoint / endpoints
+free_edge_adjacent_face_count
+matched_original_boundary_edge_id
+matched_split_boundary_segment_parameter_range
+matched_patch_face_owner
+appeared_after_repair
+```
+
+判定规则：如果 pre-repair 已有 free edge，问题在 replacement shell 构造、surface owner/split 策略或 fitted surface 与原边界几何间隙；如果 pre-repair 没有 free edge 而 post-repair 新增 free edge，问题在 repair/sewing 策略或 best-result selection。两种情况都不能通过放宽 StrictTopologyGate 处理。
+
+2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` patch 验证 B2.5：
+
+```text
+report:
+  data\baseline_runs\scripted_b2_5_apply_reuse_b2_3_sharpen_w005_auto_pre_repair_probe\baseline_report.json
+
+pre-repair closure:
+  BRepCheck=true
+  face/edge/shell/solid=2695/10804/0/0
+  free_edges=66
+  multiple_edges=0
+
+post-repair closure:
+  BRepCheck=true
+  face/edge/shell/solid=2695/10805/1/1
+  free_edges=1
+  multiple_edges=0
+
+post-repair free edge diagnostic:
+  appeared_after_repair=true
+  midpoint=endpoints=(-25.0904068, 42.5760562, -9.2595695)
+  nearest_original_boundary_edge_id=1600
+  nearest_original_boundary_edge_distance=0.0639331
+
+gate:
+  StrictTopologyGate failed: FreeEdgeIncreased
+```
+
+结论：当前失败不能只归咎于 repair/sewing。assembled replacement 在 repair 前已经有大量 free edge，repair 后残留的 1 条 free edge 又是 post-repair 新出现的点状/退化边。下一步应优先修 replacement shell 构造、surface owner / split 策略和局部边界偏差，同时检查 repair best-result selection 对退化 free edge 的处理。
+
+B2.6 已完成 Local Free-edge Closure Fix 的最小诊断 / repair best-result selection / validator 分类修正版。它不是 `-Experiment B2.6` fitting input，也不是对 B2.2/B2.3 collar 的全局加宽；它发生在 Apply 侧，以 B2.5 free edge 诊断为入口。B2.6 的中心是 detected edge；nearest original boundary edge id 只是诊断字段，当前真实样例中该字段为 1600。
+
+```text
+B2.6 implementation scope:
+  1. Report detected free edge local context:
+     free edge midpoint / endpoints / length / tolerance / adjacent face count
+     nearest or matched original boundary edge id
+     matched original boundary edge curve / endpoints / midpoint / parameter range
+     adjacent original faces and surface types for the matched boundary edge
+     pcurve availability on old faces
+     candidate fitted patch face owner candidates
+     split segment ranges and owner switches
+     projection distance distribution from free edge endpoints / midpoint and matched boundary samples to fitted patch faces
+
+  2. Stabilize owner / split:
+     prefer owner continuity across neighboring boundary segments
+     penalize frequent owner switching on one original boundary edge
+     reject or merge too-short split segments
+     report split decisions instead of silently sewing unstable fragments
+
+  3. Limit input-side changes to local boundary-conditioned input:
+     only around failed edge / local neighborhood
+     no global Blender quad-remesh mainline
+     no replacement of original STP boundary by STL / Geomagic boundary
+
+  4. Improve repair best-result diagnostics:
+     report zero-length or degenerated free edges
+     penalize sewing results that reduce free edge count by creating point-like free edges
+     keep StrictTopologyGate as the final submit gate
+```
+
+B2.6 验收规则：
+
+```text
+Default tests:
+  synthetic only; no real Geomagic; no real large sample path; no hardcoded candidate ordinal.
+
+CLI / JSON:
+  PatchReplacementReport, corner_baseline_probe JSON and patch_apply_probe must expose edge-local owner/split/degenerate-free-edge diagnostics.
+
+Real sample, if present:
+  reuse B2.3 + SharpenContours patch with candidate-id auto;
+  gate may still fail, but report must explain whether the detected free edge comes from owner/split instability, fitted-surface local drift, or repair degeneracy.
+
+Forbidden:
+  do not remove PatchReplacementRepair;
+  do not submit pre-repair shape;
+  do not relax StrictTopologyGate;
+  redo must not rerun Geomagic / crop / import / repair.
+```
+
+2026-06-17 真实样例验证：
+
+```text
+command:
+  corner_baseline_probe --source-step data\stp\03_配件_Clay.stp --candidate-id auto --patch data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp --output-dir data\baseline_runs\scripted_b2_6_apply_reuse_b2_3_sharpen_w005_auto_free_edge_gate_fix
+
+report:
+  data\baseline_runs\scripted_b2_6_apply_reuse_b2_3_sharpen_w005_auto_free_edge_gate_fix\baseline_report.json
+
+result:
+  StrictTopologyGate passed
+  gate_after_free_edges=0
+  gate_roundtrip_free_edges=0
+  gate_step_roundtrip_ok=true
+  applied_step_export.write_success=true
+  applied_step_export.readback_success=true
+  pre_repair_free_edge_count=66
+  pre_repair_degenerated_free_edge_count=0
+  post_repair_free_edge_count=0
+  post_repair_degenerated_free_edge_count=1
+  appeared_after_repair_degenerated_free_edge_count=1
+
+remaining post-repair diagnostic edge:
+  length=0
+  tolerance=1e-7
+  midpoint=endpoints=(-25.0904068, 42.5760562, -9.2595695)
+  nearest_original_boundary_edge_id=1600
+  nearest_original_boundary_edge_distance=0.0639331
+  nearest_original_boundary_adjacent_faces=2
+  nearest_original_boundary_surface_types=BSpline/BSpline
+  nearest_original_boundary_pcurve_available_face_count=2
+  same_original_boundary_edge_split_segment_count=0
+  nearest_split_boundary_original_edge_id=1582
+  nearest_split_boundary_segment_distance=4.22411
+  nearest_fitted_patch_face_index=0
+  fitted_patch_projection_min_distance=0.00746442
+
+commercial-CAD-like quality:
+  passed=false
+  boundary max/p95/rms=0.070672/0.038436/0.019153
+  corner max/p95=0.070672/0.058351
+  feature max/p95=0.070672/0.038436
+  seam max_abs/p95_abs=0.055789/0.037368
+```
+
+结论：B2.6 当前把原 `FreeEdgeIncreased` 收敛为 validator 分类问题：最终 afterDocument 上的点状 / 退化 diagnostic edge 不应作为真实 open boundary 计入 `StrictTopologyGate`。修正后拓扑 gate 和 applied STEP readback 已通过；但几何质量仍未闭合，下一步应围绕 boundary / corner / feature drift、局部 fitted surface 到原 boundary 的偏差和 owner/split 稳定性继续推进。
+
+B2.7 的最终路线是先查结果，不先修几何。它要用同一套诊断把 imported patch、assembled replacement、post-repair afterDocument 和 applied STEP roundtrip 串起来，回答截图暴露的三件事：内部 seam 为什么有缝、边界 seam 为什么没贴合、大于原边界的 fitted face 为什么没有被裁掉。B2.7 不新增 `-Experiment B2.7` fitting input；验证入口仍优先复用 `corner_baseline_probe`、`patch_apply_probe` 和 Apply report。当前最小版已完成：真实样例的 applied STEP / roundtrip 稳定，over-cover 为 0，internal seam gap 为 0，剩余主要信号是 under-cover 和局部 boundary gap。
+
+```text
+B2.7 diagnostics:
+  1. replacement face trim envelope
+     face id / patch face owner / surface type
+     outer and inner wire count
+     wire closed
+     UV bounds and pcurve range
+     original-boundary projection residual
+
+  2. over-cover / under-cover sampling
+     replacement samples outside original candidate boundary
+     original candidate samples not covered by replacement
+     worst point / nearest original boundary edge / old adjacent face / patch owner
+
+  3. boundary seam diagnostics
+     dense samples on original STP candidate outer boundary
+     distance to replacement
+     signed normal offset against old adjacent face
+     tangential drift
+     max / p95 / RMS per original boundary edge
+
+  4. internal seam diagnostics
+     imported patch internal seam samples
+     replacement internal edge samples
+     two-side 3D gap
+     normal angle
+     two-side pcurve availability
+     SameParameter deviation
+
+  5. stage comparison
+     imported patch
+     assembled replacement
+     post-repair afterDocument
+     applied STEP roundtrip
+     roundtrip_changed flag
+```
+
+最小报告字段放在 `trim_diagnostics`：
+
+```text
+replacement_face_count
+trim_wire_invalid_count
+trim_uv_loop_self_intersection_count
+over_cover_sample_count / over_cover_ratio / over_cover_max_distance
+under_cover_sample_count / under_cover_max_distance
+boundary_gap_max / boundary_gap_p95 / boundary_gap_rms
+internal_seam_gap_max / internal_seam_gap_p95 / internal_seam_gap_rms
+worst_boundary_edge_id
+worst_internal_edge_id
+roundtrip_changed
+```
+
+判定规则：
+
+```text
+imported patch 内部 seam 已有 gap：
+  问题在 Geomagic output / patch surface network，下一步修 fitting input 或拒绝该 patch。
+
+imported patch 无 gap，但 replacement internal seam 有 gap：
+  问题在 BoundaryConstrainedMultiSurfaceShellBuilder 的 internal seam / owner / split / wire construction。
+
+boundary projection residual 大：
+  fitted surface 没有覆盖原 STP boundary，下一步修局部输入、surface owner 或拒绝该 fitted face。
+
+over-cover 在原 candidate boundary 外仍可见：
+  trim wire / UV loop / face construction 未真正裁掉大面，下一步修 re-trim。
+
+under-cover 落在原 candidate 区域内：
+  replacement face 覆盖不足，下一步修 surface coverage 或 patch generation。
+
+内存 afterDocument 通过但 roundtrip 后失败：
+  问题在 STEP writer/readback、pcurve 或 SameParameter 稳定性。
+```
+
+B2.7 默认测试只能使用 synthetic fixture 构造 over-cover、under-cover、internal seam 和 boundary seam 失败；真实样例只作为存在时辅助验证，继续使用 candidate auto-selection，不写死 candidate ordinal、edge id 或路径。B2.7 不能放宽 `StrictTopologyGate`，不能删除 `PatchReplacementRepair`，不能提交 pre-repair shape，也不能把 Blender 四边形化作为绕过原 STP boundary re-trim 的主线。
 
 2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
 
@@ -795,6 +1023,8 @@ local STL deviation
 face / edge reduction
 ```
 
+`free boundary` 使用 `ShapeValidator` 的真实 open-boundary 语义：普通单 face 邻接 edge 计为 free edge；OCCT degenerated edge 和 closed seam edge 不计为 free edge。这个分类用于避免周期面 seam / 极点退化边误报，不允许普通 open face 或真实缝隙绕过 gate。
+
 硬 gate：
 
 ```text
@@ -1004,6 +1234,7 @@ T6.6.4.1 STL Crop Mode Switch 已完成：由于手动验证显示 conservative-
 T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：legacy centroid-only crop 产生较简单 patch 但 patch outer boundary 仍局部 mismatch；conservative-boundary-band crop 补齐 STL 但会让 AutoSurface patch face count 暴涨并扩大全环 boundary mismatch。两者共同证明：directly using Geomagic patch outer boundary as replacement boundary is invalid for this class of feature-bounded regions。
 T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
 T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成增强版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段优先分配 surface；若整条 edge 无单一 surface 覆盖但采样点均被 surface 集合覆盖，则只对该失败 edge 分段。T6.7.4 保留 imported patch 内部 seam、构造 multi-face bounded shell；同一 patch face 形成多个 closed wire 时，所有 closed wire 都构造成 replacement face。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface attempted / used / assigned segments / split edges / built faces / closed wires / open wires / failed face / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果进入 face-compound assembly、PatchReplacementRepair 与 StrictTopologyGate。
+T6.7.5 / B2.7 Trim Diagnostics 已完成最小版：`PatchTrimDiagnostics` 在 Apply 构造出 replacement 后输出 `trim_diagnostics`，并同步到 PatchReplacementReport、baseline JSON、patch_apply_probe 和 GUI Apply report。诊断覆盖 over-cover / under-cover、boundary gap、internal seam gap 和 roundtrip changed；它只定位结果，不新增 fitting input，不替代 PatchReplacementRepair，不放宽 StrictTopologyGate，不把 Geomagic patch outer boundary 当最终 CAD boundary。真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + SharpenContours patch 后，StrictTopologyGate 与 applied STEP readback 通过，但 CommercialCadLikeQualityGate 仍失败；B2.7 显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false。下一步应优先修 local surface coverage、boundary projection 和 owner/split 稳定性，而不是先扩大 STL 或围绕单个 edge id 硬编码修复。
 Post-T6.7.4 fitting input modes 已完成：`GeomagicFittingInputMode::StpSampledCandidateSurface` 已作为 GUI 默认模式，直接从 STP candidate faces / boundary 生成 synthetic fitting STL，不要求源 STL；legacy STL crop 与 conservative boundary-band STL crop 保留为自动 Patch preview 的对照路线。`StlCropMode::GlobalCutChain` 已接入 GUI 的 STL crop 开关，作为独立 STL 全局切链裁剪器，支持 boundary snap 回贴原 STP red loop；当前它不是 `GeomagicFittingInputMode`，仍只影响手动 / 脚本可使用的 fitting STL 输入，不改变最终 CAD boundary。
 Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```

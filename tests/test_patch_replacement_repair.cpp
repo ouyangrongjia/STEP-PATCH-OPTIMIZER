@@ -43,6 +43,9 @@ void test_adaptive_sewing_records_attempts_and_prefers_preferred_tolerance() {
     assert(result.report.bestSewingEdgeCount > 0);
     assert(result.report.bestSewingSolidCount > 0);
     assert(result.report.bestSewingBRepCheckValid);
+    assert(result.report.degeneratedFreeEdgesBeforeRepair == 0);
+    assert(result.report.degeneratedFreeEdgesAfterRepair == 0);
+    assert(result.report.bestSewingDegeneratedFreeEdgeCount == 0);
     assert(!result.report.bestSewingCollapsed);
 }
 

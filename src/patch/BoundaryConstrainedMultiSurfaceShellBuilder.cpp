@@ -595,7 +595,8 @@ BoundaryConstrainedMultiSurfaceShellResult BoundaryConstrainedMultiSurfaceShellB
                 segment.edgeId,
                 segment.firstParameter,
                 segment.lastParameter,
-                edge});
+                edge,
+                segment.faceIndex});
         }
         faceEdges[static_cast<std::size_t>(segment.faceIndex)].push_back({edge, true, segment.edgeId});
     }
