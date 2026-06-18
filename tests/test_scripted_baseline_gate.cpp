@@ -114,6 +114,53 @@ void test_corner_baseline_probe_exports_applied_step_for_acceptance() {
     assert(source.find("StepReader().read") != std::string::npos);
     assert(script.find("applied_step_export") != std::string::npos);
     assert(script.find("readback_success") != std::string::npos);
+    assert(source.find("failed_quality_gate") != std::string::npos);
+    assert(script.find("failed_quality_gate") != std::string::npos);
+}
+
+void test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+
+    assert(source.find("external_cad_diagnostics") != std::string::npos);
+    assert(source.find("raw_patch_preflight_role") != std::string::npos);
+    assert(source.find("final_applied_step_diagnostic_eligible") != std::string::npos);
+    assert(source.find("final_applied_step_diagnostic_skipped_reason") != std::string::npos);
+    assert(source.find("AppliedStepAfterSuccessfulApply") != std::string::npos);
+}
+
+void test_creo_step_diagnostic_script_is_optional_background_runner() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_creo_step_diagnostic.ps1");
+
+    assert(script.find("param(") != std::string::npos);
+    assert(script.find("[string]$StepPath") != std::string::npos);
+    assert(script.find("[string]$CreoRoot") != std::string::npos);
+    assert(script.find("dbatchc.exe") != std::string::npos);
+    assert(script.find("-nographics") != std::string::npos);
+    assert(script.find("-process") != std::string::npos);
+    assert(script.find("DSQM=\"_LOCAL\"") != std::string::npos);
+    assert(script.find("MC_BATCH_REPORT_DIR") != std::string::npos);
+    assert(script.find("step_3d_import.ttd") != std::string::npos);
+    assert(script.find("modelcheck.ttd") != std::string::npos);
+    assert(script.find("creo_step_diagnostic_result.json") != std::string::npos);
+    assert(script.find("generated_prt") != std::string::npos);
+    assert(script.find("*.prt.*") != std::string::npos);
+    assert(script.find("@(Find-CreoPrtFiles") != std::string::npos);
+    assert(script.find("CreoStepImportNoPrt") != std::string::npos);
+    assert(script.find("CreoModelCheckReportReady") != std::string::npos);
+    assert(script.find("Get-ModelCheckSummary") != std::string::npos);
+    assert(script.find("diagnostic_passed") != std::string::npos);
+    assert(script.find("error_count") != std::string::npos);
+    assert(script.find("warning_count") != std::string::npos);
+    assert(script.find("key_checks") != std::string::npos);
+    assert(script.find("import_validation") != std::string::npos);
+    assert(script.find("PTC_VAL_IMP_SCORE") != std::string::npos);
+    assert(script.find("PTC_VAL_IMP_PART_STATUS") != std::string::npos);
+    assert(script.find("GEOM_CHECKS") != std::string::npos);
+    assert(script.find("SHORT_EDGES") != std::string::npos);
+    assert(script.find("candidate_0179") == std::string::npos);
+    assert(script.find("03_") == std::string::npos);
 }
 
 }
@@ -126,4 +173,6 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_reports_b2_2_support_collar_fields();
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
+    test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
+    test_creo_step_diagnostic_script_is_optional_background_runner();
 }

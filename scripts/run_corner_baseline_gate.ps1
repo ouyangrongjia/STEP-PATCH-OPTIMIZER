@@ -135,7 +135,7 @@ function Test-AllowableBaselineFailure {
     }
 
     $json = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
-    if ($json.stage -ne "failed_gate") {
+    if ($json.stage -ne "failed_quality_gate") {
         return $false
     }
     if (-not $json.patch_apply.gate_passed) {

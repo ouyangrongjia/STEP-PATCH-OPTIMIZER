@@ -337,6 +337,24 @@ void print_report(const spo::PatchReplacementReport& report) {
     std::cout << "trim diagnostics roundtrip compared/changed: "
               << report.trimDiagnostics.roundtripCompared << " / "
               << report.trimDiagnostics.roundtripChanged << "\n";
+    std::cout << "external CAD diagnostics captured: "
+              << report.externalCadDiagnostics.captured << "\n";
+    std::cout << "raw patch preflight available/executed/status: "
+              << report.externalCadDiagnostics.rawPatchPreflightAvailable << " / "
+              << report.externalCadDiagnostics.rawPatchPreflightExecuted << " / "
+              << report.externalCadDiagnostics.rawPatchPreflightStatus << "\n";
+    std::cout << "raw patch preflight role/path: "
+              << report.externalCadDiagnostics.rawPatchPreflightRole << " / "
+              << report.externalCadDiagnostics.rawPatchPreflightInputPath << "\n";
+    std::cout << "final applied STEP diagnostic eligible/executed/status: "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible << " / "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticExecuted << " / "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticStatus << "\n";
+    std::cout << "final applied STEP diagnostic stage/path: "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticStage << " / "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticInputPath << "\n";
+    std::cout << "final applied STEP diagnostic skipped reason: "
+              << report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason << "\n";
     std::cout << "selected sewing tolerance: " << report.selectedSewingTolerance << "\n";
     std::cout << "sewing attempt count: " << report.sewingAttemptCount << "\n";
     std::cout << "best sewing face/edge/shell/solid: "

@@ -324,6 +324,15 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(report.trimDiagnostics.overCoverSampleCount == 0);
     assert(report.trimDiagnostics.underCoverSampleCount == 0);
     assert(report.trimDiagnostics.boundaryGapMax <= 1.0e-6);
+    assert(report.externalCadDiagnostics.captured);
+    assert(report.externalCadDiagnostics.rawPatchPreflightAvailable);
+    assert(report.externalCadDiagnostics.rawPatchPreflightRole == "PatchPreflightOnly");
+    assert(!report.externalCadDiagnostics.rawPatchPreflightInputPath.empty());
+    assert(!report.externalCadDiagnostics.rawPatchPreflightExecuted);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticExecuted);
+    assert(report.externalCadDiagnostics.finalAppliedStepDiagnosticStage == "AppliedStepAfterSuccessfulApply");
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason.empty());
     assert(report.faceCountBeforeRepair > 0);
     assert(report.faceCountAfterRepair > 0);
     assert(report.gateEvaluated);
@@ -350,6 +359,9 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(command.report().sewingAttemptCount == report.sewingAttemptCount);
     assert(command.report().trimDiagnostics.captured);
     assert(command.report().trimDiagnostics.replacementFaceCount == report.trimDiagnostics.replacementFaceCount);
+    assert(command.report().externalCadDiagnostics.captured);
+    assert(!command.report().externalCadDiagnostics.rawPatchPreflightExecuted);
+    assert(!command.report().externalCadDiagnostics.finalAppliedStepDiagnosticExecuted);
     assert(report.success);
 }
 
@@ -413,6 +425,29 @@ void test_free_edge_increase_after_repair_is_rejected() {
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 }
 
+void test_external_cad_diagnostics_skip_final_when_apply_fails() {
+    CommandFixture fixture(make_open_face(10.0));
+    const auto beforeStats = fixture.context.document.stats();
+    spo::PatchReplacementReport report;
+    spo::PatchReplacementCommand command(fixture.input(), &report);
+
+    const auto result = command.execute(fixture.context);
+
+    assert(!result.success());
+    assert(report.externalCadDiagnostics.captured);
+    assert(report.externalCadDiagnostics.rawPatchPreflightAvailable);
+    assert(report.externalCadDiagnostics.rawPatchPreflightRole == "PatchPreflightOnly");
+    assert(!report.externalCadDiagnostics.rawPatchPreflightExecuted);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticExecuted);
+    assert(report.externalCadDiagnostics.finalAppliedStepDiagnosticStage == "AppliedStepAfterSuccessfulApply");
+    assert(report.externalCadDiagnostics.finalAppliedStepDiagnosticStatus == "Skipped");
+    assert(
+        report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason.find("applied STEP") !=
+        std::string::npos);
+    assert(same_stats(fixture.context.document.stats(), beforeStats));
+}
+
 void test_multi_face_internal_seams_are_not_unsupported() {
     CommandFixture fixture(make_box(10.0));
     const auto beforeStats = fixture.context.document.stats();
@@ -458,6 +493,7 @@ void run_patch_replacement_command_tests() {
     test_gate_failure_rolls_back();
     test_repair_pipeline_invoked_on_successful_minimal_path();
     test_free_edge_increase_after_repair_is_rejected();
+    test_external_cad_diagnostics_skip_final_when_apply_fails();
     test_multi_face_internal_seams_are_not_unsupported();
     test_no_hard_coded_real_sample_path_in_command_sources();
 }

@@ -238,6 +238,18 @@ QString patchApplyReportText(const PatchReplacementReport& report, const QString
             .arg(report.trimDiagnostics.worstInternalEdgeId)
             .arg(boolText(report.trimDiagnostics.roundtripChanged));
     }
+    if (report.externalCadDiagnostics.captured) {
+        reportLines << QString("B2.8 外部 CAD 诊断路由：原始补片预诊断 %1/%2  |  最终诊断 %3/%4  |  阶段 %5")
+            .arg(boolText(report.externalCadDiagnostics.rawPatchPreflightAvailable))
+            .arg(QString::fromStdString(report.externalCadDiagnostics.rawPatchPreflightStatus))
+            .arg(boolText(report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible))
+            .arg(QString::fromStdString(report.externalCadDiagnostics.finalAppliedStepDiagnosticStatus))
+            .arg(QString::fromStdString(report.externalCadDiagnostics.finalAppliedStepDiagnosticStage));
+        if (!report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason.empty()) {
+            reportLines << QString("B2.8 跳过原因：%1")
+                .arg(QString::fromStdString(report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason));
+        }
+    }
     reportLines << QString("Gate free edge：before %1  |  after %2  |  STEP roundtrip %3")
         .arg(report.gateBeforeFreeEdges)
         .arg(report.gateAfterFreeEdges)

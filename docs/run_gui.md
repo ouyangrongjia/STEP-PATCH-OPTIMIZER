@@ -274,6 +274,22 @@ B2.6 是 Apply 侧 Local Free-edge Closure Fix 的最小诊断 / repair selectio
 
 B2.7 是结果定位诊断，不是新的 `-Experiment B2.7` fitting input，也不是 GUI 中新增的修复按钮。当前已接入 `trim_diagnostics`：replacement face count、trim wire invalid count、over-cover / under-cover samples、boundary seam gap、internal seam gap、worst boundary/internal edge、roundtrip_changed。输出路径包括 PatchReplacementReport、`corner_baseline_probe` baseline JSON、`patch_apply_probe` 和 GUI Apply report 摘要。2026-06-18 复用真实 B2.3 + SharpenContours patch 后，`StrictTopologyGate` 与 applied STEP readback 通过，`CommercialCadLikeQualityGate` 仍失败；B2.7 指标为 over-cover `0/29`、under-cover `81/256` 且 max `2.03433`、boundary gap max `0.0706854`、internal seam gap `0`、roundtrip changed `false`。这说明当前不是 STEP roundtrip 把面片弄坏，也不是 replacement face 大面积超出原 STP boundary 后没有裁掉；更直接的问题是局部 coverage 不足和边界贴合峰值误差。GUI 观察到的缝隙仍需要用该诊断定位到局部 boundary / owner / split，而不能用放宽 Gate 或替换最终边界来源处理。
 
+B2.8 是外部 CAD 诊断路由，不是新的 `-Experiment B2.8` fitting input，也不是 GUI 中新增的修复按钮。当前已接入 `external_cad_diagnostics`：原始 Geomagic 补片 STEP 的预诊断角色、最终已合并 STEP 诊断资格、最终诊断输入路径、执行状态和跳过原因。输出路径包括 PatchReplacementReport、`corner_baseline_probe` baseline JSON、`patch_apply_probe` 和 GUI Apply report 摘要。规则很简单：原始补片只能做补片自身预诊断；只有 Patch Apply、StrictTopologyGate、已合并 STEP 导出和二次读取全部成功后，最终外部 CAD 诊断才 eligible，并且输入文件必须是已合并 STEP。
+
+2026-06-18 复用真实 B2.3 + SharpenContours 补片后，B2.8 报告为 `data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\baseline_report.json`，已合并 STEP 为 `data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\03_配件_Clay_candidate_0179_applied.stp`；`StrictTopologyGate` 与已合并 STEP 二次读取通过，`CommercialCadLikeQualityGate` 仍失败，最终外部 CAD 诊断状态为 `PendingExternalRunner`。
+
+如需在后台调用 Creo 检查 B2.8 标记的已合并 STEP，使用显式脚本，不通过 GUI redo 或默认测试触发：
+
+```powershell
+cd D:\pyProject\step-patch-optimizer
+.\scripts\run_creo_step_diagnostic.ps1 `
+  -StepPath "<applied STEP>" `
+  -CreoRoot "E:\Proe\Creo 11.0.0.0" `
+  -OutputDir "data\baseline_runs\creo_step_diagnostic"
+```
+
+该脚本的真实链路是先用 Creo Distributed Batch 无图形模式执行 `step_3d_import.ttd`，把 STEP 导入成 `.prt`；只有 `.prt` 生成后，才继续执行 `modelcheck.ttd`。结果写入 `creo_step_diagnostic_result.json`。当前已确认后台链路能跑通：`.dxc` 使用 `DSQM="_LOCAL"` 后，B2.8 已合并 STEP 可生成 `input.prt.1`，并生成 `input.p.html` / `input.p.xml`。脚本会解析 ModelCHECK XML，输出 `modelcheck.summary`。真实样例结果为 `diagnostic_passed=false`，统计 PASS=26、INFO=33、WARNING=3、ERROR=2；失败项为 `GEOM_CHECKS=1` 与 `SHORT_EDGES=1491`，导入校验为 `PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。因此 GUI/CLI 路由已经能接到 Creo 真实诊断，但当前已合并 STEP 没有通过 Creo 检查。
+
 脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计；`-Experiment B2.3` 会输出 corner-safe collar clamp 统计和 SharpenContours A/B 标记。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
@@ -332,7 +348,7 @@ log\patch_preview_<timestamp>_candidate_<id>.log
 
 状态栏会显示当前阶段和总 elapsed。若 `fit_region.log` 显示 Geomagic Wrap 内部很快结束，但 GUI 仍在运行，优先查看 root run log 中 `RunningGeomagic`、`ImportingPatch`、`PreviewReady` 的 `duration_ms`。
 
-报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计，以及 `CommercialCadLikeQualityGate` 的 boundary drift、seam_continuity、corner anchor drift 和 feature edge drift。
+报告包含 STP-sampled fitting STL 统计、Geomagic 输出路径、Patch preview/import 统计、Patch Apply / StrictTopologyGate 统计、B2.8 外部 CAD 诊断路由，以及 `CommercialCadLikeQualityGate` 的 boundary drift、seam_continuity、corner anchor drift 和 feature edge drift。
 
 该脚本是 A/B 实验入口，不等同于 Creo 最终验收。它的作用是把 GUI 手工流程中的核心后端路径变成可重复的 baseline 数据生成器。
 

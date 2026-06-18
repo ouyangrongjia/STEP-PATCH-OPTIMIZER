@@ -846,6 +846,35 @@ QJsonObject trim_diagnostics_to_json(const spo::PatchTrimDiagnosticsReport& repo
     return object;
 }
 
+QJsonObject external_cad_diagnostics_to_json(const spo::PatchExternalCadDiagnosticsReport& report) {
+    QJsonObject object;
+    object.insert("captured", report.captured);
+    object.insert("raw_patch_preflight_available", report.rawPatchPreflightAvailable);
+    object.insert("raw_patch_preflight_executed", report.rawPatchPreflightExecuted);
+    object.insert("raw_patch_preflight_input_path", QString::fromStdString(report.rawPatchPreflightInputPath));
+    object.insert("raw_patch_preflight_role", QString::fromStdString(report.rawPatchPreflightRole));
+    object.insert("raw_patch_preflight_status", QString::fromStdString(report.rawPatchPreflightStatus));
+    object.insert("raw_patch_preflight_message", QString::fromStdString(report.rawPatchPreflightMessage));
+    object.insert(
+        "final_applied_step_diagnostic_stage",
+        QString::fromStdString(report.finalAppliedStepDiagnosticStage));
+    object.insert("final_applied_step_diagnostic_eligible", report.finalAppliedStepDiagnosticEligible);
+    object.insert("final_applied_step_diagnostic_executed", report.finalAppliedStepDiagnosticExecuted);
+    object.insert(
+        "final_applied_step_diagnostic_input_path",
+        QString::fromStdString(report.finalAppliedStepDiagnosticInputPath));
+    object.insert(
+        "final_applied_step_diagnostic_status",
+        QString::fromStdString(report.finalAppliedStepDiagnosticStatus));
+    object.insert(
+        "final_applied_step_diagnostic_skipped_reason",
+        QString::fromStdString(report.finalAppliedStepDiagnosticSkippedReason));
+    object.insert(
+        "final_applied_step_diagnostic_message",
+        QString::fromStdString(report.finalAppliedStepDiagnosticMessage));
+    return object;
+}
+
 QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     QJsonObject object;
     object.insert("success", report.success);
@@ -880,6 +909,7 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
         report.appearedAfterRepairDegeneratedFreeEdgeCount);
     object.insert("free_edge_diagnostics", free_edge_diagnostics_to_json(report.freeEdgeDiagnostics));
     object.insert("trim_diagnostics", trim_diagnostics_to_json(report.trimDiagnostics));
+    object.insert("external_cad_diagnostics", external_cad_diagnostics_to_json(report.externalCadDiagnostics));
     object.insert(
         "multi_surface_boundary_edge_pcurve_rebuild_attempt_count",
         report.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
@@ -933,6 +963,39 @@ QJsonObject applied_step_export_to_json(const AppliedStepExportReport& report) {
     object.insert("exists", !report.path.empty() && std::filesystem::exists(report.path));
     object.insert("message", QString::fromStdString(report.message));
     return object;
+}
+
+void update_external_cad_diagnostics_after_applied_step_export(
+    spo::PatchReplacementReport& report,
+    const AppliedStepExportReport& appliedStepExport) {
+    auto& diagnostics = report.externalCadDiagnostics;
+    diagnostics.captured = true;
+    diagnostics.finalAppliedStepDiagnosticStage = "AppliedStepAfterSuccessfulApply";
+    diagnostics.finalAppliedStepDiagnosticExecuted = false;
+
+    if (appliedStepExport.success &&
+        !appliedStepExport.path.empty() &&
+        std::filesystem::exists(appliedStepExport.path)) {
+        diagnostics.finalAppliedStepDiagnosticEligible = true;
+        diagnostics.finalAppliedStepDiagnosticInputPath = path_to_string(appliedStepExport.path);
+        diagnostics.finalAppliedStepDiagnosticStatus = "PendingExternalRunner";
+        diagnostics.finalAppliedStepDiagnosticSkippedReason.clear();
+        diagnostics.finalAppliedStepDiagnosticMessage =
+            "Run the final external CAD diagnostic on the applied STEP exported after successful Patch Apply.";
+        return;
+    }
+
+    diagnostics.finalAppliedStepDiagnosticEligible = false;
+    diagnostics.finalAppliedStepDiagnosticInputPath.clear();
+    diagnostics.finalAppliedStepDiagnosticStatus = "Skipped";
+    if (appliedStepExport.attempted) {
+        diagnostics.finalAppliedStepDiagnosticSkippedReason =
+            "Applied STEP export or readback failed; final external CAD diagnostics require an exported and readable applied STEP.";
+    } else {
+        diagnostics.finalAppliedStepDiagnosticSkippedReason =
+            "Patch Apply did not produce an applied STEP; raw Geomagic patch diagnostics cannot validate the merged model.";
+    }
+    diagnostics.finalAppliedStepDiagnosticMessage.clear();
 }
 
 AppliedStepExportReport export_applied_step(
@@ -1280,6 +1343,7 @@ int main(int argc, char* argv[]) {
         print_stage("exporting applied STEP");
         appliedStepExportReport = export_applied_step(options, context.document, *candidate);
     }
+    update_external_cad_diagnostics_after_applied_step_export(applyReport, appliedStepExportReport);
 
     const auto exportOk = !appliedStepExportReport.attempted || appliedStepExportReport.success;
     const auto overallSuccess =
@@ -1289,7 +1353,11 @@ int main(int argc, char* argv[]) {
         qualityReport.passed;
     const auto finalStage = overallSuccess
         ? "completed"
-        : (strictApplySuccess && !exportOk ? "export_applied_step" : "failed_gate");
+        : (!strictApplySuccess
+            ? "failed_topology_gate"
+            : (!exportOk
+                ? "export_applied_step"
+                : "failed_quality_gate"));
 
     std::string reportError;
     if (!write_report(

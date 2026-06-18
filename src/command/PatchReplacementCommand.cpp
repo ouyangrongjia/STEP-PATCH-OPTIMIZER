@@ -6,6 +6,7 @@
 #include "patch/BoundaryConstrainedPatchBuilder.h"
 #include "patch/BoundaryConstrainedSurfaceRetrim.h"
 #include "patch/MultiFacePatchAnalyzer.h"
+#include "patch/PatchArtifactLocator.h"
 #include "patch/PatchReplacementRepair.h"
 #include "patch/PatchTrimDiagnostics.h"
 #include "validate/StrictTopologyGate.h"
@@ -37,6 +38,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <set>
@@ -93,6 +95,67 @@ std::string gate_failure_message(const StrictTopologyGateReport& gateReport) {
         message += gateReport.message;
     }
     return message;
+}
+
+std::string path_to_report_string(const std::filesystem::path& path) {
+    const auto utf8 = path.generic_u8string();
+    return {reinterpret_cast<const char*>(utf8.c_str()), utf8.size()};
+}
+
+void initialize_external_cad_diagnostics(
+    PatchReplacementReport& report,
+    const PatchReplacementInput& input) {
+    auto& diagnostics = report.externalCadDiagnostics;
+    diagnostics = {};
+    diagnostics.captured = true;
+    diagnostics.rawPatchPreflightRole = "PatchPreflightOnly";
+    diagnostics.rawPatchPreflightExecuted = false;
+    diagnostics.finalAppliedStepDiagnosticStage = "AppliedStepAfterSuccessfulApply";
+    diagnostics.finalAppliedStepDiagnosticEligible = false;
+    diagnostics.finalAppliedStepDiagnosticExecuted = false;
+
+    if (input.artifactPaths != nullptr &&
+        input.artifactPaths->foundStep &&
+        !input.artifactPaths->patchStepPath.empty()) {
+        diagnostics.rawPatchPreflightAvailable = true;
+        diagnostics.rawPatchPreflightInputPath = path_to_report_string(input.artifactPaths->patchStepPath);
+        diagnostics.rawPatchPreflightStatus = "NotConfigured";
+        diagnostics.rawPatchPreflightMessage =
+            "Raw Geomagic patch STEP can only be used as a pre-apply patch preflight; it does not validate the merged model.";
+    } else {
+        diagnostics.rawPatchPreflightAvailable = false;
+        diagnostics.rawPatchPreflightStatus = "Skipped";
+        diagnostics.rawPatchPreflightMessage = "No raw Geomagic patch STEP path was resolved.";
+    }
+
+    diagnostics.finalAppliedStepDiagnosticStatus = "Skipped";
+    diagnostics.finalAppliedStepDiagnosticSkippedReason =
+        "Final external CAD diagnostics require Patch Apply to pass and an applied STEP export to be written and read back.";
+}
+
+void mark_final_external_cad_diagnostic_after_gate(
+    PatchReplacementReport& report,
+    bool gatePassed) {
+    auto& diagnostics = report.externalCadDiagnostics;
+    diagnostics.captured = true;
+    diagnostics.finalAppliedStepDiagnosticStage = "AppliedStepAfterSuccessfulApply";
+    diagnostics.finalAppliedStepDiagnosticEligible = false;
+    diagnostics.finalAppliedStepDiagnosticExecuted = false;
+    diagnostics.finalAppliedStepDiagnosticInputPath.clear();
+
+    if (gatePassed) {
+        diagnostics.finalAppliedStepDiagnosticStatus = "WaitingForAppliedStepExport";
+        diagnostics.finalAppliedStepDiagnosticSkippedReason =
+            "Patch Apply passed; final external CAD diagnostics still require an applied STEP export path.";
+        diagnostics.finalAppliedStepDiagnosticMessage =
+            "Export the committed applied STEP first, then run the final external CAD diagnostic on that file.";
+        return;
+    }
+
+    diagnostics.finalAppliedStepDiagnosticStatus = "Skipped";
+    diagnostics.finalAppliedStepDiagnosticSkippedReason =
+        "Patch Apply did not pass StrictTopologyGate; final external CAD diagnostics require an applied STEP, not the raw Geomagic patch STEP.";
+    diagnostics.finalAppliedStepDiagnosticMessage.clear();
 }
 
 struct ReplacementAssemblyResult {
@@ -1145,6 +1208,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
 
     const auto inputReport = validatePatchReplacementInput(input_);
     report_ = inputReport;
+    initialize_external_cad_diagnostics(report_, input_);
     if (!inputReport.success) {
         publishReport();
         return Result::error(report_.message);
@@ -1314,6 +1378,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
             gateReport.roundtripBRepCheckValid != gateReport.afterBRepCheckValid);
     append_warning(report_, gateReport.warningMessage);
     if (!gateReport.passed) {
+        mark_final_external_cad_diagnostic_after_gate(report_, false);
         report_.success = false;
         report_.rollbackApplied = true;
         report_.failureReason = PatchReplacementFailureReason::GateFailed;
@@ -1331,6 +1396,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.rollbackApplied = false;
     report_.failureReason = PatchReplacementFailureReason::None;
     report_.message = "Patch replacement command committed after StrictTopologyGate passed.";
+    mark_final_external_cad_diagnostic_after_gate(report_, true);
     executed_ = true;
     committed_ = true;
     publishReport();

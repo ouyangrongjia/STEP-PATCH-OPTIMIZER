@@ -48,7 +48,8 @@ Commercial-CAD-like quality gate:
   → sharpness preservation
   → surface COPS-like deviation
   → STEP roundtrip geometry drift
-  → Creo / commercial CAD A/B confirmation
+  → B2.8 外部 CAD 诊断路由
+  → 只对已合并 STEP 做 Creo / commercial CAD 确认
 ```
 
 流程边界：
@@ -58,7 +59,8 @@ Commercial-CAD-like quality gate:
 2. B2.0 guard-band 采样来自 STP 邻接 face；B2.1 over-cover strip 必须围绕当前 fitting STL patch boundary 连续生成；B2.2 support collar 从当前 fitting STL mesh boundary 接到原 STP 非候选邻接 face 的 pcurve rail；B2.3 在 B2.2 collar 上增加角点安全 clamp。四者都不信任 patch outer boundary。
 3. Apply 仍通过 original STP boundary re-trim / multi-surface shell。
 4. Commercial-CAD-like gate 不替代 StrictTopologyGate；它在拓扑 gate 之外判断几何质量。
-5. A/B 实验分支为 experiment/corner-preservation-ab。
+5. B2.8 只决定外部 CAD 诊断对象和跳过原因；原始 Geomagic 补片 STEP 只能做预诊断，最终诊断只能接 applied STEP。
+6. A/B 实验分支为 experiment/corner-preservation-ab。
 ```
 
 最小实验矩阵：
@@ -75,6 +77,7 @@ Commercial-CAD-like quality gate:
 | B2.5 | Pre-repair Closure Probe | 已完成最小版：在 PatchReplacementRepair 前后做 closure stats 和 free edge 定位；真实复用 patch 验证显示 pre-repair 已有 66 条 free edge，post-repair 剩 1 条且 `appeared_after_repair=true` |
 | B2.6 | Local Free-edge Closure Fix | 已完成最小诊断/repair selection/validator 分类修正版：围绕 detected edge 输出 length / tolerance / degenerated、nearest original boundary edge context、split-owner context 和 fitted patch projection diagnostics；`ShapeValidator` 排除 closed seam / degenerated edge 的 free-edge 误计数。真实样例 `StrictTopologyGate` 与 applied STEP readback 已通过，CommercialCadLikeQualityGate 仍失败；不是新的 fitting STL experiment |
 | B2.7 | Trim / over-cover / seam failure localization | 已完成最小诊断版：`trim_diagnostics` 已输出到 report / baseline JSON / patch_apply_probe / GUI Apply report；真实样例显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false |
+| B2.8 | External CAD diagnostic routing + Creo background diagnostic | 已完成最小路由版与显式 Creo 后台检查入口：`external_cad_diagnostics` 已输出到 PatchReplacementReport / baseline JSON / patch_apply_probe / GUI Apply report；原始补片仅为预诊断，最终外部 CAD 输入只能是 Apply 成功后导出的已合并 STEP。真实样例已通过 Creo Distributed Batch 生成 `.prt.1` 与 ModelCHECK HTML/XML，并解析出 `diagnostic_passed=false`、`GEOM_CHECKS`、`SHORT_EDGES` 和导入校验 `SOLID_FAILED` / `FAIL` |
 | B3 | corner anchors + B2.3 seam-aware fitting input | 条件分支：只有后续证明局部 under-cover / boundary gap 必须靠 fitting input 约束增强时再推进；否则先修 surface coverage / owner split / boundary projection |
 
 当前 A0 自动化入口：
@@ -479,6 +482,157 @@ under-cover 落在原 candidate 区域内：
 ```
 
 B2.7 默认测试只能使用 synthetic fixture 构造 over-cover、under-cover、internal seam 和 boundary seam 失败；真实样例只作为存在时辅助验证，继续使用 candidate auto-selection，不写死 candidate ordinal、edge id 或路径。B2.7 不能放宽 `StrictTopologyGate`，不能删除 `PatchReplacementRepair`，不能提交 pre-repair shape，也不能把 Blender 四边形化作为绕过原 STP boundary re-trim 的主线。
+
+B2.8 是外部 CAD 诊断路由。它不修几何，也不在默认测试里调用 Creo / Geomagic 外部 API；它只把“该诊断哪个 STEP”变成可机读字段，避免把原始 Geomagic 补片 STEP 的预诊断误当成最终合并模型验收。
+
+```text
+B2.8 route:
+  原始 Geomagic 补片 STEP
+    → role=PatchPreflightOnly
+    → 可选外部 CAD 预诊断
+    → 只能说明补片自身是否可导入 / 是否已有补片缺陷
+
+  Patch Apply + PatchReplacementRepair + StrictTopologyGate
+    → failed:
+        final_applied_step_diagnostic_eligible=false
+        status=Skipped
+        reason=没有已合并 STEP，不能用原始补片验证合并模型
+    → passed:
+        export applied STEP
+        read back applied STEP
+        readback failed:
+          final_applied_step_diagnostic_eligible=false
+          status=Skipped
+        readback passed:
+          final_applied_step_diagnostic_eligible=true
+          input path=applied STEP
+          status=PendingExternalRunner
+```
+
+最小报告字段放在 `external_cad_diagnostics`：
+
+```text
+captured
+raw_patch_preflight_available
+raw_patch_preflight_executed
+raw_patch_preflight_input_path
+raw_patch_preflight_role
+raw_patch_preflight_status
+raw_patch_preflight_message
+final_applied_step_diagnostic_stage
+final_applied_step_diagnostic_eligible
+final_applied_step_diagnostic_executed
+final_applied_step_diagnostic_input_path
+final_applied_step_diagnostic_status
+final_applied_step_diagnostic_skipped_reason
+final_applied_step_diagnostic_message
+```
+
+B2.8 的硬边界：
+
+```text
+1. 不放宽 StrictTopologyGate。
+2. 不删除 PatchReplacementRepair。
+3. 不提交 pre-repair shape。
+4. 不让 redo 重新运行 Geomagic / crop / import / repair / 外部 CAD。
+5. 不把原始 Geomagic 补片 STEP 当成最终合并模型诊断对象。
+6. 默认测试不依赖真实样例、candidate ordinal、edge id、Creo 安装或 Geomagic 安装。
+```
+
+2026-06-18 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` 补片验证 B2.8：
+
+```text
+report:
+  data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\baseline_report.json
+
+applied STEP:
+  data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\03_配件_Clay_candidate_0179_applied.stp
+
+route:
+  raw_patch_preflight_available=true
+  raw_patch_preflight_executed=false
+  raw_patch_preflight_role=PatchPreflightOnly
+  final_applied_step_diagnostic_eligible=true
+  final_applied_step_diagnostic_executed=false
+  final_applied_step_diagnostic_status=PendingExternalRunner
+
+gate:
+  StrictTopologyGate passed=true
+  applied STEP write/readback=true/true
+  CommercialCadLikeQualityGate passed=false
+  stage=failed_quality_gate
+```
+
+结论：B2.8 已经把最终外部 CAD 诊断对象收敛到已合并 STEP；下一步若接 Creo / commercial CAD API，应读取 `final_applied_step_diagnostic_input_path`，而不是直接诊断原始 Geomagic 补片 STEP。
+
+2026-06-18 已新增显式后台 Creo 检查入口 `scripts\run_creo_step_diagnostic.ps1`：
+
+```text
+链路：
+  applied STEP
+    → Creo Distributed Batch -nographics -process step_import.dxc
+    → step_3d_import.ttd
+    → generated .prt
+    → Creo Distributed Batch -nographics -process modelcheck.dxc
+    → modelcheck.ttd
+    → ModelCHECK report files
+
+输出：
+  creo_step_diagnostic_result.json
+  step_import.dxc / modelcheck.dxc
+  stdout / stderr
+  generated_prt / prt_path
+  modelcheck.report_files
+  modelcheck.summary:
+    diagnostic_passed
+    pass/info/warning/error count
+    key_checks
+    failed_checks / warning_checks
+    import_validation
+
+默认测试边界：
+  不启动 Creo。
+  不依赖本机安装。
+  不依赖真实样例路径。
+  只检查脚本是否保持显式、后台、两段 TTD、JSON 结果、ModelCHECK 摘要字段和无样例硬编码。
+```
+
+本机真实样例结果：
+
+```text
+排障过程：
+  ObjectText / ObjectPathAttribute 两种 .dxc object 写法在 DSQM 为空时均超时。
+  修正 .dxc 为 DSQM="_LOCAL" 后，Creo 后台 STEP 导入能生成版本化零件 input.prt.1。
+  脚本已显式匹配 *.prt.*，避免把 input.prt.1 误判为没有 .prt。
+
+有效结果：
+  input:
+    data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\03_配件_Clay_candidate_0179_applied.stp
+  result:
+    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\creo_step_diagnostic_result.json
+  status=CreoModelCheckReportReady
+  success=true
+  generated_prt=true
+  prt_path=data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\step_import\input.prt.1
+  report_files:
+    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\modelcheck\input.p.html
+    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\modelcheck\input.p.xml
+  modelcheck.summary.parsed=true
+  modelcheck.diagnostic_passed=false
+  counts: PASS=26, INFO=33, WARNING=3, ERROR=2
+  failed checks:
+    GEOM_CHECKS ERROR, answer=1
+    SHORT_EDGES ERROR, answer=1491
+  warning checks:
+    IMPORT_FEAT WARNING, answer=1
+    ACCURACY_INFO WARNING, answer=0.004240749674
+  import_validation:
+    PTC_VAL_IMP_PART_STATUS=SOLID_FAILED
+    PTC_VAL_IMP_SCORE=FAIL
+    PTC_MP_VAL_IMP_AREA=1074.923639
+```
+
+当前判读：后台执行器已经真实跑通 `applied STEP -> Creo .prt -> ModelCHECK XML/HTML -> JSON 摘要`。结论不是“Creo 检查通过”，而是当前 B2.8 已合并 STEP 被 Creo 判为未通过；错误集中在几何检查、短边数量和导入实体状态。下一步应把 Creo 报告反向绑定到 B2.7 的局部 coverage / boundary projection / owner-split 诊断，而不是继续围绕后台启动链路。
 
 2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
 
@@ -1235,6 +1389,7 @@ T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：le
 T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
 T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成增强版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段优先分配 surface；若整条 edge 无单一 surface 覆盖但采样点均被 surface 集合覆盖，则只对该失败 edge 分段。T6.7.4 保留 imported patch 内部 seam、构造 multi-face bounded shell；同一 patch face 形成多个 closed wire 时，所有 closed wire 都构造成 replacement face。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface attempted / used / assigned segments / split edges / built faces / closed wires / open wires / failed face / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果进入 face-compound assembly、PatchReplacementRepair 与 StrictTopologyGate。
 T6.7.5 / B2.7 Trim Diagnostics 已完成最小版：`PatchTrimDiagnostics` 在 Apply 构造出 replacement 后输出 `trim_diagnostics`，并同步到 PatchReplacementReport、baseline JSON、patch_apply_probe 和 GUI Apply report。诊断覆盖 over-cover / under-cover、boundary gap、internal seam gap 和 roundtrip changed；它只定位结果，不新增 fitting input，不替代 PatchReplacementRepair，不放宽 StrictTopologyGate，不把 Geomagic patch outer boundary 当最终 CAD boundary。真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + SharpenContours patch 后，StrictTopologyGate 与 applied STEP readback 通过，但 CommercialCadLikeQualityGate 仍失败；B2.7 显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false。下一步应优先修 local surface coverage、boundary projection 和 owner/split 稳定性，而不是先扩大 STL 或围绕单个 edge id 硬编码修复。
+T6.7.6 / B2.8 External CAD Diagnostic Routing 已完成最小版：`PatchExternalCadDiagnosticsReport` 挂入 PatchReplacementReport，并同步到 baseline JSON、patch_apply_probe 和 GUI Apply report。原始 Geomagic 补片 STEP 仅标记为 `PatchPreflightOnly`，用于补片自身预诊断；最终外部 CAD 诊断只在 Patch Apply、StrictTopologyGate、已合并 STEP 导出和二次读取均成功后标记为 eligible，输入路径指向已合并 STEP。显式后台 Creo 脚本已可用并完成真实样例诊断：Creo 能生成 `.prt.1` 和 ModelCHECK HTML/XML，JSON 摘要显示 `diagnostic_passed=false`、`GEOM_CHECKS`、`SHORT_EDGES=1491`、`PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。默认测试只验证字段和路由，不调用 Creo / Geomagic 外部 API，不改变 repair / Gate / redo 语义。
 Post-T6.7.4 fitting input modes 已完成：`GeomagicFittingInputMode::StpSampledCandidateSurface` 已作为 GUI 默认模式，直接从 STP candidate faces / boundary 生成 synthetic fitting STL，不要求源 STL；legacy STL crop 与 conservative boundary-band STL crop 保留为自动 Patch preview 的对照路线。`StlCropMode::GlobalCutChain` 已接入 GUI 的 STL crop 开关，作为独立 STL 全局切链裁剪器，支持 boundary snap 回贴原 STP red loop；当前它不是 `GeomagicFittingInputMode`，仍只影响手动 / 脚本可使用的 fitting STL 输入，不改变最终 CAD boundary。
 Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
 ```

@@ -162,6 +162,25 @@ struct PatchReplacementFreeEdgeDiagnostic {
     int nearestFittedPatchFaceIndex = -1;
 };
 
+struct PatchExternalCadDiagnosticsReport {
+    bool captured = false;
+
+    bool rawPatchPreflightAvailable = false;
+    bool rawPatchPreflightExecuted = false;
+    std::string rawPatchPreflightInputPath;
+    std::string rawPatchPreflightRole = "PatchPreflightOnly";
+    std::string rawPatchPreflightStatus = "Skipped";
+    std::string rawPatchPreflightMessage;
+
+    std::string finalAppliedStepDiagnosticStage = "AppliedStepAfterSuccessfulApply";
+    bool finalAppliedStepDiagnosticEligible = false;
+    bool finalAppliedStepDiagnosticExecuted = false;
+    std::string finalAppliedStepDiagnosticInputPath;
+    std::string finalAppliedStepDiagnosticStatus = "Skipped";
+    std::string finalAppliedStepDiagnosticSkippedReason;
+    std::string finalAppliedStepDiagnosticMessage;
+};
+
 struct PatchReplacementReport {
     bool success = false;
     bool rollbackApplied = false;
@@ -270,6 +289,7 @@ struct PatchReplacementReport {
     int appearedAfterRepairDegeneratedFreeEdgeCount = 0;
     std::vector<PatchReplacementFreeEdgeDiagnostic> freeEdgeDiagnostics;
     PatchTrimDiagnosticsReport trimDiagnostics;
+    PatchExternalCadDiagnosticsReport externalCadDiagnostics;
 
     bool gateEvaluated = false;
     bool gatePassed = false;
