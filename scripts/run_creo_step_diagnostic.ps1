@@ -1,12 +1,15 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$StepPath,
+    [string]$StepPath = "",
     [string]$CreoRoot = "",
     [string]$OutputDir = "",
     [int]$TimeoutSeconds = 600,
     [ValidateSet("ObjectText", "ObjectPathAttribute")]
     [string]$DxcObjectSyntax = "ObjectText",
-    [switch]$SkipModelCheck
+    [switch]$SkipModelCheck,
+    [switch]$ParseModelCheckOnly,
+    [string]$ModelCheckXmlPath = "",
+    [string]$BaselineReportPath = "",
+    [int]$ShortEdgeItemSampleLimit = 25
 )
 
 $ErrorActionPreference = "Stop"
@@ -269,13 +272,248 @@ function Find-CreoPrtFiles {
 function Convert-ModelCheckCheck {
     param([Parameter(Mandatory = $true)]$Check)
 
+    $itemNodes = @()
+    if ($Check -is [System.Xml.XmlElement]) {
+        $itemNodes = @($Check.SelectNodes("item"))
+    } else {
+        $itemNodes = @($Check.item | Where-Object { $null -ne $_ })
+    }
+    $items = @(
+        foreach ($item in $itemNodes) {
+            Convert-ModelCheckItem -Item $item
+        }
+    )
+
     return [ordered]@{
-        name = [string]$Check.name
-        status = [string]$Check.stat
-        description = [string]$Check.desc
-        message = [string]$Check.msg
-        answer = [string]$Check.ans
-        item_count = @($Check.item).Count
+        name = Get-XmlText -Value $Check.name
+        status = Get-XmlText -Value $Check.stat
+        description = Get-XmlText -Value $Check.desc
+        message = Get-XmlText -Value $Check.msg
+        answer = Get-XmlText -Value $Check.ans
+        item_count = $items.Count
+        items = @($items)
+    }
+}
+
+function Get-XmlText {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return ([string]$Value).Trim()
+}
+
+function Convert-ModelCheckItem {
+    param([Parameter(Mandatory = $true)]$Item)
+
+    $info1 = Get-XmlText -Value $Item.info1
+    $info2 = Get-XmlText -Value $Item.info2
+    $rawText = $info1
+    if ($info2) {
+        $rawText = "$info1 $info2".Trim()
+    }
+
+    $edgeId = ""
+    $featureId = ""
+    if ($rawText -match "(?i)(?:edge id|边 id)\s+([0-9]+)") {
+        $edgeId = $Matches[1]
+    }
+    if ($rawText -match "(?i)(?:feature id|特征 id)\s+([0-9]+)") {
+        $featureId = $Matches[1]
+    }
+
+    return [ordered]@{
+        info1 = $info1
+        info2 = $info2
+        raw_text = $rawText
+        creo_edge_id = $edgeId
+        creo_feature_id = $featureId
+    }
+}
+
+function Get-MapValue {
+    param(
+        $Map,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+
+    if ($null -eq $Map) {
+        return $null
+    }
+    if ($Map -is [System.Collections.IDictionary]) {
+        if ($Map.Contains($Key)) {
+            return $Map[$Key]
+        }
+        return $null
+    }
+    $property = $Map.PSObject.Properties[$Key]
+    if ($property) {
+        return $property.Value
+    }
+    return $null
+}
+
+function Get-CheckByName {
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    foreach ($check in @($Summary.key_checks)) {
+        if ((Get-MapValue -Map $check -Key "name") -eq $Name) {
+            return $check
+        }
+    }
+    foreach ($check in @($Summary.failed_checks)) {
+        if ((Get-MapValue -Map $check -Key "name") -eq $Name) {
+            return $check
+        }
+    }
+    foreach ($check in @($Summary.warning_checks)) {
+        if ((Get-MapValue -Map $check -Key "name") -eq $Name) {
+            return $check
+        }
+    }
+    return $null
+}
+
+function Get-UniqueItemValues {
+    param(
+        [object[]]$Items,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+
+    $values = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($Items)) {
+        $value = [string](Get-MapValue -Map $item -Key $Key)
+        if ($value) {
+            $values.Add($value)
+        }
+    }
+
+    return @($values | Select-Object -Unique)
+}
+
+function Convert-CheckCorrelationSummary {
+    param($Check)
+
+    if ($null -eq $Check) {
+        return $null
+    }
+
+    return [ordered]@{
+        name = [string](Get-MapValue -Map $Check -Key "name")
+        status = [string](Get-MapValue -Map $Check -Key "status")
+        answer = [string](Get-MapValue -Map $Check -Key "answer")
+        item_count = [int](Get-MapValue -Map $Check -Key "item_count")
+    }
+}
+
+function Get-ProjectDiagnosticCorrelation {
+    param([string]$ReportPath)
+
+    $correlation = [ordered]@{
+        baseline_report_path = ""
+        baseline_report_supplied = $false
+        baseline_report_parsed = $false
+        parse_error = ""
+        trim_diagnostics_available = $false
+        replacement_face_count = $null
+        under_cover_sample_count = $null
+        under_cover_total_sample_count = $null
+        under_cover_max_distance = $null
+        boundary_gap_max = $null
+        boundary_gap_p95 = $null
+        boundary_gap_rms = $null
+        worst_boundary_edge_id = $null
+        internal_seam_gap_max = $null
+        roundtrip_changed = $null
+        multi_surface_boundary_shell_used = $null
+        owner_split_correlation_status = "BaselineReportNotProvided"
+    }
+
+    if (-not $ReportPath) {
+        return $correlation
+    }
+
+    $correlation.baseline_report_supplied = $true
+    $correlation.baseline_report_path = Convert-ToRepoAbsolutePath -PathValue $ReportPath
+    if (-not (Test-Path -LiteralPath $correlation.baseline_report_path)) {
+        $correlation.parse_error = "BaselineReportPath does not exist."
+        $correlation.owner_split_correlation_status = "BaselineReportMissing"
+        return $correlation
+    }
+
+    try {
+        $baseline = Get-Content -Raw -LiteralPath $correlation.baseline_report_path | ConvertFrom-Json
+        $trim = $baseline.patch_apply.trim_diagnostics
+        $correlation.baseline_report_parsed = $true
+        if ($trim) {
+            $correlation.trim_diagnostics_available = [bool]$trim.captured
+            $correlation.replacement_face_count = $trim.replacement_face_count
+            $correlation.under_cover_sample_count = $trim.under_cover_sample_count
+            $correlation.under_cover_total_sample_count = $trim.under_cover_total_sample_count
+            $correlation.under_cover_max_distance = $trim.under_cover_max_distance
+            $correlation.boundary_gap_max = $trim.boundary_gap_max
+            $correlation.boundary_gap_p95 = $trim.boundary_gap_p95
+            $correlation.boundary_gap_rms = $trim.boundary_gap_rms
+            $correlation.worst_boundary_edge_id = $trim.worst_boundary_edge_id
+            $correlation.internal_seam_gap_max = $trim.internal_seam_gap_max
+            $correlation.roundtrip_changed = $trim.roundtrip_changed
+        }
+        $correlation.multi_surface_boundary_shell_used = $baseline.patch_apply.used_multi_surface_boundary_shell
+        $correlation.owner_split_correlation_status = "StageLevelOnlyNoCreoCoordinates"
+    } catch {
+        $correlation.parse_error = $_.Exception.Message
+        $correlation.owner_split_correlation_status = "BaselineReportParseFailed"
+    }
+
+    return $correlation
+}
+
+function New-CreoDiagnosticCorrelation {
+    param(
+        [Parameter(Mandatory = $true)]$Summary,
+        [string[]]$ReportFiles,
+        [string]$BaselineReportPath,
+        [int]$ShortEdgeItemSampleLimit
+    )
+
+    $failedChecks = @(
+        foreach ($check in @($Summary.failed_checks)) {
+            Convert-CheckCorrelationSummary -Check $check
+        }
+    )
+    $geomCheck = Get-CheckByName -Summary $Summary -Name "GEOM_CHECKS"
+    $shortEdgesCheck = Get-CheckByName -Summary $Summary -Name "SHORT_EDGES"
+    $importFeatCheck = Get-CheckByName -Summary $Summary -Name "IMPORT_FEAT"
+    $shortEdgeItems = @((Get-MapValue -Map $shortEdgesCheck -Key "items"))
+    $geomItems = @((Get-MapValue -Map $geomCheck -Key "items"))
+    $importFeatItems = @((Get-MapValue -Map $importFeatCheck -Key "items"))
+    $allItems = @($shortEdgeItems + $geomItems + $importFeatItems)
+    $sampleLimit = [Math]::Max(0, $ShortEdgeItemSampleLimit)
+
+    return [ordered]@{
+        captured = [bool]$Summary.parsed
+        source = "ModelCHECK XML"
+        failed_checks = @($failedChecks)
+        geom_checks = Convert-CheckCorrelationSummary -Check $geomCheck
+        short_edges = Convert-CheckCorrelationSummary -Check $shortEdgesCheck
+        short_edge_item_count = $shortEdgeItems.Count
+        short_edge_item_sample_limit = $sampleLimit
+        short_edge_items_truncated = ($shortEdgeItems.Count -gt $sampleLimit)
+        short_edge_items = @($shortEdgeItems | Select-Object -First $sampleLimit)
+        imported_feature_ids = @(Get-UniqueItemValues -Items $allItems -Key "creo_feature_id")
+        short_edge_creo_edge_ids = @(Get-UniqueItemValues -Items $shortEdgeItems -Key "creo_edge_id")
+        import_validation = $Summary.import_validation
+        report_files = @($ReportFiles)
+        project_diagnostics = Get-ProjectDiagnosticCorrelation -ReportPath $BaselineReportPath
+        modelcheck_spatial_mapping_status = "CreoIdsOnlyNoCoordinates"
+        occt_edge_mapping_available = $false
+        occt_edge_mapping_reason = "ModelCHECK XML exposes Creo feature/edge identifiers but no STEP-space coordinates or OCCT edge ids. Preserve raw ids and use a Creo API/exported selection report before attempting spatial mapping."
+        next_diagnostic_step = "If raw ModelCHECK items are insufficient, query Creo for highlighted geometry coordinates or export a failure selection/report, then compare those points with B2.7 under-cover, boundary-gap, replacement owner, and split-segment diagnostics."
     }
 }
 
@@ -355,14 +593,14 @@ function Get-ModelCheckSummary {
         )
         $paramInfo = $checks | Where-Object { $_.name -eq "PARAM_INFO" } | Select-Object -First 1
         foreach ($item in @($paramInfo.item)) {
-            $key = [string]$item.info1
-            if (-not $key) {
-                continue
-            }
+                $key = Get-XmlText -Value $item.info1
+                if (-not $key) {
+                    continue
+                }
             if (($expectedImportValidationKeys -contains $key) -or
                 $key.StartsWith("PTC_VAL_IMP_") -or
                 $key.StartsWith("PTC_MP_VAL_IMP_")) {
-                $summary.import_validation[$key] = [string]$item.info2
+                $summary.import_validation[$key] = Get-XmlText -Value $item.info2
             }
         }
 
@@ -384,9 +622,18 @@ function Write-ResultJson {
     $Result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
-$stepAbsolute = Convert-ToRepoAbsolutePath -PathValue $StepPath
-if (-not (Test-Path -LiteralPath $stepAbsolute)) {
+$stepAbsolute = ""
+if ($StepPath) {
+    $stepAbsolute = Convert-ToRepoAbsolutePath -PathValue $StepPath
+}
+if (-not $ParseModelCheckOnly -and -not $stepAbsolute) {
+    throw "StepPath is required unless -ParseModelCheckOnly is used."
+}
+if ($stepAbsolute -and -not (Test-Path -LiteralPath $stepAbsolute)) {
     throw "StepPath does not exist: $stepAbsolute"
+}
+if ($ParseModelCheckOnly -and -not $ModelCheckXmlPath) {
+    throw "ModelCheckXmlPath is required when -ParseModelCheckOnly is used."
 }
 
 if (-not $OutputDir) {
@@ -449,10 +696,56 @@ $result = [ordered]@{
             import_validation = [ordered]@{}
         }
     }
+    creo_diagnostic_correlation = [ordered]@{
+        captured = $false
+        source = ""
+        failed_checks = @()
+        geom_checks = $null
+        short_edges = $null
+        short_edge_item_count = 0
+        short_edge_item_sample_limit = $ShortEdgeItemSampleLimit
+        short_edge_items_truncated = $false
+        short_edge_items = @()
+        imported_feature_ids = @()
+        short_edge_creo_edge_ids = @()
+        import_validation = [ordered]@{}
+        report_files = @()
+        project_diagnostics = Get-ProjectDiagnosticCorrelation -ReportPath $BaselineReportPath
+        modelcheck_spatial_mapping_status = "NotParsed"
+        occt_edge_mapping_available = $false
+        occt_edge_mapping_reason = ""
+        next_diagnostic_step = ""
+    }
     notes = @()
 }
 
 try {
+    if ($ParseModelCheckOnly) {
+        $xmlAbsolute = Convert-ToRepoAbsolutePath -PathValue $ModelCheckXmlPath
+        if (-not (Test-Path -LiteralPath $xmlAbsolute)) {
+            throw "ModelCheckXmlPath does not exist: $xmlAbsolute"
+        }
+
+        $result.status = "CreoModelCheckParseOnly"
+        $result.success = $true
+        $result.modelcheck.attempted = $true
+        $result.modelcheck.report_files = @($xmlAbsolute)
+        $result.modelcheck.summary = Get-ModelCheckSummary -ReportFiles $result.modelcheck.report_files
+        $result.modelcheck.diagnostic_passed = [bool]$result.modelcheck.summary.diagnostic_passed
+        $result.creo_diagnostic_correlation = New-CreoDiagnosticCorrelation `
+            -Summary $result.modelcheck.summary `
+            -ReportFiles $result.modelcheck.report_files `
+            -BaselineReportPath $BaselineReportPath `
+            -ShortEdgeItemSampleLimit $ShortEdgeItemSampleLimit
+        if ($result.modelcheck.summary.parsed -and -not $result.modelcheck.diagnostic_passed) {
+            $result.notes += "ModelCHECK XML was parsed in parse-only mode, but diagnostic_passed=false. Inspect modelcheck.summary and creo_diagnostic_correlation."
+        }
+        Write-ResultJson -Result $result -Path $resultPath
+        Write-Host "Creo STEP diagnostic status: $($result.status)"
+        Write-Host "Result JSON: $resultPath"
+        exit 0
+    }
+
     $resolvedCreoRoot = Find-CreoRoot -PreferredRoot $CreoRoot
     Set-CreoBatchEnvironment -Root $resolvedCreoRoot
 
@@ -547,6 +840,11 @@ try {
         } else {
             $result.modelcheck.summary = Get-ModelCheckSummary -ReportFiles $result.modelcheck.report_files
             $result.modelcheck.diagnostic_passed = [bool]$result.modelcheck.summary.diagnostic_passed
+            $result.creo_diagnostic_correlation = New-CreoDiagnosticCorrelation `
+                -Summary $result.modelcheck.summary `
+                -ReportFiles $result.modelcheck.report_files `
+                -BaselineReportPath $BaselineReportPath `
+                -ShortEdgeItemSampleLimit $ShortEdgeItemSampleLimit
             if ($result.modelcheck.summary.parsed -and -not $result.modelcheck.diagnostic_passed) {
                 $result.notes += "ModelCHECK report was generated, but diagnostic_passed=false. Inspect modelcheck.summary for failing checks."
             }

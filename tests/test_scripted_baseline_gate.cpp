@@ -1,4 +1,6 @@
 #include <cassert>
+#include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -20,6 +22,29 @@ std::filesystem::path source_root() {
 #else
     return std::filesystem::current_path();
 #endif
+}
+
+std::filesystem::path temp_root(const std::string& name) {
+    auto root = std::filesystem::temp_directory_path() / name;
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+    std::filesystem::create_directories(root);
+    return root;
+}
+
+std::string quote_for_command(const std::filesystem::path& path) {
+    return "\"" + path.string() + "\"";
+}
+
+std::string without_ascii_space(std::string value) {
+    std::string compact;
+    compact.reserve(value.size());
+    for (const unsigned char ch : value) {
+        if (!std::isspace(ch)) {
+            compact.push_back(static_cast<char>(ch));
+        }
+    }
+    return compact;
 }
 
 void test_corner_baseline_probe_supports_auto_candidate_selection() {
@@ -163,6 +188,38 @@ void test_creo_step_diagnostic_script_is_optional_background_runner() {
     assert(script.find("03_") == std::string::npos);
 }
 
+void test_creo_modelcheck_parse_only_exports_item_details_and_correlation() {
+    const auto root = source_root();
+    const auto outputRoot = temp_root("spo_creo_modelcheck_b2_9_fixture");
+    const auto scriptPath = root / "scripts" / "run_creo_step_diagnostic.ps1";
+    const auto fixturePath = root / "tests" / "fixtures" / "creo_modelcheck_b2_9.xml";
+
+    std::ostringstream command;
+    command << "powershell -NoProfile -ExecutionPolicy Bypass -File "
+            << quote_for_command(scriptPath)
+            << " -ParseModelCheckOnly"
+            << " -ModelCheckXmlPath " << quote_for_command(fixturePath)
+            << " -OutputDir " << quote_for_command(outputRoot)
+            << " -ShortEdgeItemSampleLimit 2";
+
+    const int exitCode = std::system(command.str().c_str());
+    assert(exitCode == 0);
+
+    const auto json = read_text_file(outputRoot / "creo_step_diagnostic_result.json");
+    const auto compactJson = without_ascii_space(json);
+    assert(compactJson.find("\"status\":\"CreoModelCheckParseOnly\"") != std::string::npos);
+    assert(json.find("\"items\"") != std::string::npos);
+    assert(compactJson.find("\"creo_edge_id\":\"18956\"") != std::string::npos);
+    assert(compactJson.find("\"creo_feature_id\":\"4\"") != std::string::npos);
+    assert(json.find("\"creo_diagnostic_correlation\"") != std::string::npos);
+    assert(json.find("\"failed_checks\"") != std::string::npos);
+    assert(compactJson.find("\"short_edge_items_truncated\":true") != std::string::npos);
+    assert(json.find("\"imported_feature_ids\"") != std::string::npos);
+    assert(json.find("\"import_validation\"") != std::string::npos);
+    assert(compactJson.find("\"modelcheck_spatial_mapping_status\":\"CreoIdsOnlyNoCoordinates\"") != std::string::npos);
+    assert(compactJson.find("\"occt_edge_mapping_available\":false") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
@@ -175,4 +232,5 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
     test_creo_step_diagnostic_script_is_optional_background_runner();
+    test_creo_modelcheck_parse_only_exports_item_details_and_correlation();
 }

@@ -288,7 +288,19 @@ cd D:\pyProject\step-patch-optimizer
   -OutputDir "data\baseline_runs\creo_step_diagnostic"
 ```
 
-该脚本的真实链路是先用 Creo Distributed Batch 无图形模式执行 `step_3d_import.ttd`，把 STEP 导入成 `.prt`；只有 `.prt` 生成后，才继续执行 `modelcheck.ttd`。结果写入 `creo_step_diagnostic_result.json`。当前已确认后台链路能跑通：`.dxc` 使用 `DSQM="_LOCAL"` 后，B2.8 已合并 STEP 可生成 `input.prt.1`，并生成 `input.p.html` / `input.p.xml`。脚本会解析 ModelCHECK XML，输出 `modelcheck.summary`。真实样例结果为 `diagnostic_passed=false`，统计 PASS=26、INFO=33、WARNING=3、ERROR=2；失败项为 `GEOM_CHECKS=1` 与 `SHORT_EDGES=1491`，导入校验为 `PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。因此 GUI/CLI 路由已经能接到 Creo 真实诊断，但当前已合并 STEP 没有通过 Creo 检查。
+该脚本的真实链路是先用 Creo Distributed Batch 无图形模式执行 `step_3d_import.ttd`，把 STEP 导入成 `.prt`；只有 `.prt` 生成后，才继续执行 `modelcheck.ttd`。结果写入 `creo_step_diagnostic_result.json`。当前已确认后台链路能跑通：`.dxc` 使用 `DSQM="_LOCAL"` 后，B2.8 已合并 STEP 可生成 `input.prt.1`，并生成 `input.p.html` / `input.p.xml`。脚本会解析 ModelCHECK XML，输出 `modelcheck.summary` 和 B2.9 的 `creo_diagnostic_correlation`。真实样例结果为 `diagnostic_passed=false`，统计 PASS=26、INFO=33、WARNING=3、ERROR=2；失败项为 `GEOM_CHECKS=1` 与 `SHORT_EDGES=1491`，导入校验为 `PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。因此 GUI/CLI 路由已经能接到 Creo 真实诊断，但当前已合并 STEP 没有通过 Creo 检查。
+
+如果只需要重新解析已有 ModelCHECK XML 并关联已有 baseline JSON，不启动 Creo：
+
+```powershell
+.\scripts\run_creo_step_diagnostic.ps1 `
+  -ParseModelCheckOnly `
+  -ModelCheckXmlPath "<modelcheck xml>" `
+  -BaselineReportPath "<baseline_report.json>" `
+  -OutputDir "data\baseline_runs\creo_modelcheck_parse"
+```
+
+该 parse-only 路径会保留 `GEOM_CHECKS` / `SHORT_EDGES` 的 item 明细，输出短边 Creo edge id 摘要和导入 feature id；但当前 ModelCHECK XML 不含空间坐标或 OCCT edge id，所以只能做阶段级关联，不能直接定位到项目内部 edge。
 
 脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计；`-Experiment B2.3` 会输出 corner-safe collar clamp 统计和 SharpenContours A/B 标记。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 

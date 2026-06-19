@@ -1639,11 +1639,19 @@ B2.8 是外部 CAD 诊断路由，不是几何修复关卡，也不是默认接�
     pass/info/warning/error count
     key_checks
     failed_checks / warning_checks
+    每个 check 的 item 明细，包括 raw_text、Creo edge id、Creo feature id
     import_validation，例如 PTC_VAL_IMP_PART_STATUS、PTC_VAL_IMP_SCORE、PTC_MP_VAL_IMP_AREA
+  B2.9 起还会输出 creo_diagnostic_correlation：
+    failed check 名称 / 状态 / answer / item_count
+    SHORT_EDGES item 摘要与 Creo edge id 列表
+    imported feature id
+    import validation 参数
+    ModelCHECK report 文件路径
+    可选 BaselineReportPath 中的 trim_diagnostics 阶段指标
 
 硬边界：
   该脚本是显式外部诊断入口，不由默认测试、redo、Patch Apply 或 GUI 自动触发。
-  默认测试只检查脚本契约，不启动 Creo，不依赖本机 Creo 安装或真实样例。
+  默认测试只使用 XML fixture / parse-only，不启动 Creo，不依赖本机 Creo 安装或真实样例。
   不能把原始 Geomagic 补片 STEP 当作最终合并模型诊断输入。
 ```
 
@@ -1681,10 +1689,27 @@ B2.8 是外部 CAD 诊断路由，不是几何修复关卡，也不是默认接�
     PTC_VAL_IMP_SCORE=FAIL
     PTC_MP_VAL_IMP_AREA=1074.923639
 
+B2.9 关联解析结果：
+  run_creo_step_diagnostic.ps1 新增 -ParseModelCheckOnly / -ModelCheckXmlPath / -BaselineReportPath。
+  modelcheck.summary 的 failed/key/warning checks 均展开 items。
+  GEOM_CHECKS item 当前为 Creo feature id 4。
+  SHORT_EDGES item 当前为 1491 个 Creo short-edge id，均关联到 feature id 4。
+  creo_diagnostic_correlation.short_edge_item_count=1491。
+  creo_diagnostic_correlation.imported_feature_ids=[4]。
+  与 B2.8 baseline_report.json 关联后：
+    trim_diagnostics_available=true
+    under_cover_sample_count=81
+    under_cover_max_distance=2.034330381907445
+    boundary_gap_max=0.07068536422379083
+    worst_boundary_edge_id=1540
+  modelcheck_spatial_mapping_status=CreoIdsOnlyNoCoordinates。
+  occt_edge_mapping_available=false。
+
 判读：
   Creo 后台诊断链路已经跑通：applied STEP -> Creo .prt -> ModelCHECK XML/HTML。
   诊断结论不是模型通过，而是模型未通过 Creo 检查；Creo 报告显示导入实体失败、存在几何检查项和大量短边。
-  下一步不是再证明 Creo 能否后台运行，而是把这些 Creo 错误反向定位到 B2.7 已揭示的 local surface coverage、boundary projection、owner/split 稳定性和短边/碎边来源。
+  B2.9 已经把这些 Creo 错误反向关联到 B2.7 的 local surface coverage / boundary projection 阶段指标，但当前 ModelCHECK XML 不含空间坐标或 OCCT edge id，不能直接定位具体 OCCT edge。
+  下一步若要继续定位短边来源，应评估 Creo API、失败选区导出或修复报告导出，再与 B2.7 owner/split 和 boundary-gap 诊断做空间比对。
 ```
 
 极简 Codex 任务边界：

@@ -220,6 +220,8 @@ step-patch-optimizer/
 │       └── Tolerance.h
 │
 ├── tests/
+│   ├── fixtures/
+│   │   └── creo_modelcheck_b2_9.xml
 │   ├── test_commands.cpp
 │   ├── test_feature_edges.cpp
 │   ├── test_same_domain_merge.cpp
