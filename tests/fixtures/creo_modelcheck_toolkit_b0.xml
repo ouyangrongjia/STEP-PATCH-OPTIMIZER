@@ -1,0 +1,45 @@
+<?xml version='1.0'?>
+<mc_report type='PRT'>
+  <mc_head>
+    <model>SPO_TK_BASELINE.PRT</model>
+    <last_saved>ERROR</last_saved>
+  </mc_head>
+  <mc_strtabs>
+    <err>错误</err>
+    <wrn>警告</wrn>
+  </mc_strtabs>
+  <mc_bom />
+  <mc_checks>
+    <check name='ACCURACY_INFO' tab='MISC' type='UPDATE'>
+      <stat>WARNING</stat>
+      <desc>模型精度</desc>
+      <msg>模型精度 (绝对):</msg>
+      <ans>0.004240749674</ans>
+    </check>
+    <check name='GEOM_CHECKS' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+      <stat>ERROR</stat>
+      <desc>几何检查</desc>
+      <msg>零件包含几何检查:</msg>
+      <ans>1</ans>
+      <item><info1>特征 id 4</info1><info2> </info2></item>
+    </check>
+    <check name='PARAM_INFO' tab='PARAMETER' type='INFO'>
+      <stat>INFO</stat>
+      <desc>参数信息</desc>
+      <msg>参数信息:</msg>
+      <ans>3</ans>
+      <item><info1>PTC_VAL_IMP_PART_STATUS</info1><info2>SOLID_FAILED</info2></item>
+      <item><info1>PTC_MP_VAL_IMP_AREA</info1><info2>1074.923639</info2></item>
+      <item><info1>PTC_VAL_IMP_SCORE</info1><info2>FAIL</info2></item>
+    </check>
+    <check name='SHORT_EDGES' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+      <stat>ERROR</stat>
+      <desc>短边</desc>
+      <msg>短于 0.500000 的边数:</msg>
+      <ans>1491</ans>
+      <item><info1>边 id 18956 of 特征 id 4</info1><info2> </info2></item>
+      <item><info1>边 id 18957 of 特征 id 4</info1><info2> </info2></item>
+    </check>
+  </mc_checks>
+  <mc_lists />
+</mc_report>

@@ -285,11 +285,11 @@ function Convert-ModelCheckCheck {
     )
 
     return [ordered]@{
-        name = Get-XmlText -Value $Check.name
-        status = Get-XmlText -Value $Check.stat
-        description = Get-XmlText -Value $Check.desc
-        message = Get-XmlText -Value $Check.msg
-        answer = Get-XmlText -Value $Check.ans
+        name = Get-ModelCheckCheckName -Check $Check
+        status = Get-XmlChildText -Node $Check -ChildName "stat"
+        description = Get-XmlChildText -Node $Check -ChildName "desc"
+        message = Get-XmlChildText -Node $Check -ChildName "msg"
+        answer = Get-XmlChildText -Node $Check -ChildName "ans"
         item_count = $items.Count
         items = @($items)
     }
@@ -302,14 +302,47 @@ function Get-XmlText {
         return ""
     }
 
+    if ($Value -is [System.Xml.XmlAttribute]) {
+        return ([string]$Value.Value).Trim()
+    }
+    if ($Value -is [System.Xml.XmlNode]) {
+        return ([string]$Value.InnerText).Trim()
+    }
+
     return ([string]$Value).Trim()
+}
+
+function Get-XmlChildText {
+    param(
+        $Node,
+        [Parameter(Mandatory = $true)][string]$ChildName
+    )
+
+    if ($null -eq $Node) {
+        return ""
+    }
+    if ($Node -is [System.Xml.XmlElement]) {
+        return Get-XmlText -Value $Node.SelectSingleNode($ChildName)
+    }
+
+    return Get-XmlText -Value $Node.$ChildName
+}
+
+function Get-ModelCheckCheckName {
+    param($Check)
+
+    if ($Check -is [System.Xml.XmlElement]) {
+        return Get-XmlText -Value $Check.GetAttributeNode("name")
+    }
+
+    return Get-XmlText -Value $Check.name
 }
 
 function Convert-ModelCheckItem {
     param([Parameter(Mandatory = $true)]$Item)
 
-    $info1 = Get-XmlText -Value $Item.info1
-    $info2 = Get-XmlText -Value $Item.info2
+    $info1 = Get-XmlChildText -Node $Item -ChildName "info1"
+    $info2 = Get-XmlChildText -Node $Item -ChildName "info2"
     $rawText = $info1
     if ($info2) {
         $rawText = "$info1 $info2".Trim()
@@ -546,10 +579,11 @@ function Get-ModelCheckSummary {
 
     $summary.xml_path = $xmlReports[0]
     try {
-        [xml]$doc = Get-Content -Raw -LiteralPath $summary.xml_path
-        $checks = @($doc.mc_report.mc_checks.check)
+        $doc = New-Object System.Xml.XmlDocument
+        $doc.Load($summary.xml_path)
+        $checks = @($doc.SelectNodes("/mc_report/mc_checks/check"))
 
-        foreach ($group in ($checks | Group-Object stat)) {
+        foreach ($group in ($checks | Group-Object { Get-XmlChildText -Node $_ -ChildName "stat" })) {
             switch ($group.Name) {
                 "PASS" { $summary.pass_count = $group.Count }
                 "INFO" { $summary.info_count = $group.Count }
@@ -560,12 +594,12 @@ function Get-ModelCheckSummary {
 
         $summary.failed_checks = @(
             $checks |
-                Where-Object { $_.stat -eq "ERROR" } |
+                Where-Object { (Get-XmlChildText -Node $_ -ChildName "stat") -eq "ERROR" } |
                 ForEach-Object { Convert-ModelCheckCheck -Check $_ }
         )
         $summary.warning_checks = @(
             $checks |
-                Where-Object { $_.stat -eq "WARNING" } |
+                Where-Object { (Get-XmlChildText -Node $_ -ChildName "stat") -eq "WARNING" } |
                 ForEach-Object { Convert-ModelCheckCheck -Check $_ }
         )
 
@@ -579,7 +613,7 @@ function Get-ModelCheckSummary {
         )
         $summary.key_checks = @(
             foreach ($keyName in $keyNames) {
-                $check = $checks | Where-Object { $_.name -eq $keyName } | Select-Object -First 1
+                $check = $checks | Where-Object { (Get-ModelCheckCheckName -Check $_) -eq $keyName } | Select-Object -First 1
                 if ($check) {
                     Convert-ModelCheckCheck -Check $check
                 }
@@ -591,16 +625,22 @@ function Get-ModelCheckSummary {
             "PTC_VAL_IMP_PART_STATUS",
             "PTC_MP_VAL_IMP_AREA"
         )
-        $paramInfo = $checks | Where-Object { $_.name -eq "PARAM_INFO" } | Select-Object -First 1
-        foreach ($item in @($paramInfo.item)) {
-                $key = Get-XmlText -Value $item.info1
-                if (-not $key) {
-                    continue
-                }
+        $paramInfo = $checks | Where-Object { (Get-ModelCheckCheckName -Check $_) -eq "PARAM_INFO" } | Select-Object -First 1
+        $paramItems = @()
+        if ($paramInfo -is [System.Xml.XmlElement]) {
+            $paramItems = @($paramInfo.SelectNodes("item"))
+        } elseif ($paramInfo) {
+            $paramItems = @($paramInfo.item | Where-Object { $null -ne $_ })
+        }
+        foreach ($item in $paramItems) {
+            $key = Get-XmlChildText -Node $item -ChildName "info1"
+            if (-not $key) {
+                continue
+            }
             if (($expectedImportValidationKeys -contains $key) -or
                 $key.StartsWith("PTC_VAL_IMP_") -or
                 $key.StartsWith("PTC_MP_VAL_IMP_")) {
-                $summary.import_validation[$key] = Get-XmlText -Value $item.info2
+                $summary.import_validation[$key] = Get-XmlChildText -Node $item -ChildName "info2"
             }
         }
 

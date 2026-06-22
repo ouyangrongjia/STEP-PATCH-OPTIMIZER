@@ -220,6 +220,63 @@ void test_creo_modelcheck_parse_only_exports_item_details_and_correlation() {
     assert(compactJson.find("\"occt_edge_mapping_available\":false") != std::string::npos);
 }
 
+void test_creo_toolkit_baseline_probe_contract_is_optional() {
+    const auto root = source_root();
+    const auto scriptPath = root / "scripts" / "run_creo_toolkit_baseline_probe.ps1";
+    const auto sourcePath = root / "tools" / "creo_toolkit_baseline_probe" / "creo_toolkit_baseline_probe.cpp";
+
+    assert(std::filesystem::exists(scriptPath));
+    assert(std::filesystem::exists(sourcePath));
+
+    const auto script = read_text_file(scriptPath);
+    const auto source = read_text_file(sourcePath);
+
+    assert(script.find("[string]$StepPath") != std::string::npos);
+    assert(script.find("$UseLatestAppliedStep") != std::string::npos);
+    assert(script.find("*_applied.stp") != std::string::npos);
+    assert(script.find("protoolkit") != std::string::npos);
+    assert(script.find("creo_toolkit_baseline_result.json") != std::string::npos);
+    assert(script.find("candidate_0179") == std::string::npos);
+    assert(script.find("03_") == std::string::npos);
+
+    assert(source.find("ProEngineerStart") != std::string::npos);
+    assert(source.find("ProIntfimportModelWithOptionsMdlnameCreate") != std::string::npos);
+    assert(source.find("PRO_INTF_IMPORT_STEP") != std::string::npos);
+    assert(source.find("ProIntfimportValidationscoreGet") != std::string::npos);
+    assert(source.find("ProModelcheckExecute") != std::string::npos);
+    assert(source.find("ProIntf3DFileWriteWithDefaultProfile") != std::string::npos);
+    assert(source.find("short_edges_diagnostic_only") != std::string::npos);
+    assert(source.find("SHORT_EDGES") != std::string::npos);
+}
+
+void test_creo_modelcheck_parse_only_handles_toolkit_xml_shape() {
+    const auto root = source_root();
+    const auto outputRoot = temp_root("spo_creo_modelcheck_toolkit_b0_fixture");
+    const auto scriptPath = root / "scripts" / "run_creo_step_diagnostic.ps1";
+    const auto fixturePath = root / "tests" / "fixtures" / "creo_modelcheck_toolkit_b0.xml";
+
+    std::ostringstream command;
+    command << "powershell -NoProfile -ExecutionPolicy Bypass -File "
+            << quote_for_command(scriptPath)
+            << " -ParseModelCheckOnly"
+            << " -ModelCheckXmlPath " << quote_for_command(fixturePath)
+            << " -OutputDir " << quote_for_command(outputRoot)
+            << " -ShortEdgeItemSampleLimit 2";
+
+    const int exitCode = std::system(command.str().c_str());
+    assert(exitCode == 0);
+
+    const auto json = read_text_file(outputRoot / "creo_step_diagnostic_result.json");
+    const auto compactJson = without_ascii_space(json);
+    assert(compactJson.find("\"error_count\":2") != std::string::npos);
+    assert(compactJson.find("\"warning_count\":1") != std::string::npos);
+    assert(compactJson.find("\"name\":\"GEOM_CHECKS\"") != std::string::npos);
+    assert(compactJson.find("\"name\":\"SHORT_EDGES\"") != std::string::npos);
+    assert(compactJson.find("\"short_edge_item_count\":2") != std::string::npos);
+    assert(compactJson.find("\"PTC_VAL_IMP_PART_STATUS\":\"SOLID_FAILED\"") != std::string::npos);
+    assert(compactJson.find("\"PTC_VAL_IMP_SCORE\":\"FAIL\"") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
@@ -233,4 +290,6 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
     test_creo_step_diagnostic_script_is_optional_background_runner();
     test_creo_modelcheck_parse_only_exports_item_details_and_correlation();
+    test_creo_toolkit_baseline_probe_contract_is_optional();
+    test_creo_modelcheck_parse_only_handles_toolkit_xml_shape();
 }
