@@ -155,6 +155,9 @@ if(SPO_BUILD_TOOLS)
     add_executable(creo_phase1_input_exporter tools/creo_phase1_input_exporter.cpp)
     target_link_libraries(creo_phase1_input_exporter PRIVATE spo_core)
 
+    add_executable(step_unit_normalizer tools/step_unit_normalizer.cpp)
+    target_link_libraries(step_unit_normalizer PRIVATE spo_core)
+
     add_executable(strict_topology_gate_probe tools/strict_topology_gate_probe.cpp)
     target_link_libraries(strict_topology_gate_probe PRIVATE spo_core)
 endif()
