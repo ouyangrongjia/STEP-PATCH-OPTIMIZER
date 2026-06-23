@@ -36,6 +36,7 @@ namespace {
 
 struct ProbeOptions {
     std::string stepPath;
+    std::string importKind = "step";
     std::string creoCommand;
     std::string textPath;
     std::string outputDir;
@@ -159,6 +160,13 @@ ProbeOptions options_from_args(const int argc, char** argv) {
     };
 
     options.stepPath = get("step");
+    const auto importKind = get("import-kind");
+    if (!importKind.empty()) {
+        options.importKind = importKind;
+        std::transform(options.importKind.begin(), options.importKind.end(), options.importKind.begin(), [](const unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+    }
     options.creoCommand = get("creo-command");
     options.textPath = get("text-path");
     options.outputDir = get("output-dir");
@@ -195,7 +203,14 @@ std::vector<std::string> validate_options(const ProbeOptions& options) {
     if (!options.stepPath.empty() && !std::filesystem::exists(options.stepPath)) {
         errors.push_back("--step does not exist: " + options.stepPath);
     }
+    if (options.importKind != "step" && options.importKind != "stl") {
+        errors.push_back("--import-kind must be either step or stl.");
+    }
     return errors;
+}
+
+ProIntfImportType import_type_from_kind(const std::string& importKind) {
+    return importKind == "stl" ? PRO_INTF_IMPORT_STL : PRO_INTF_IMPORT_STEP;
 }
 
 void write_result(
@@ -219,10 +234,12 @@ void write_result(
     out << "  \"status\": " << quote_json(status) << ",\n";
     out << "  \"runner_success\": " << bool_json(runnerSuccess) << ",\n";
     out << "  \"stage0_acceptance_passed\": " << bool_json(stage0Accepted) << ",\n";
+    out << "  \"import_kind\": " << quote_json(options.importKind) << ",\n";
+    out << "  \"import_api\": " << quote_json(options.importKind == "stl" ? "PRO_INTF_IMPORT_STL" : "PRO_INTF_IMPORT_STEP") << ",\n";
     out << "  \"acceptance_rule\": \"Stage 0 treats SHORT_EDGES as diagnostic-only; import validation and Creo solid/export evidence are the primary baseline signals.\",\n";
     out << "  \"short_edges_diagnostic_only\": true,\n";
     out << "  \"known_modelcheck_item_names\": [\"GEOM_CHECKS\", \"SHORT_EDGES\", \"IMPORT_FEAT\", \"PARAM_INFO\"],\n";
-    out << "  \"step_input\": " << quote_json(options.stepPath) << ",\n";
+    out << "  \"input_path\": " << quote_json(options.stepPath) << ",\n";
     out << "  \"output_dir\": " << quote_json(options.outputDir) << ",\n";
     out << "  \"modelcheck_output_dir\": " << quote_json(options.modelcheckOutputDir) << ",\n";
     out << "  \"export_step_base\": " << quote_json(exportedStepBase) << ",\n";
@@ -343,23 +360,24 @@ int main(int argc, char** argv) {
         return 4;
     }
 
+    const ProIntfImportType importType = import_type_from_kind(options.importKind);
     err = ProIntfimportModelWithOptionsMdlnameCreate(
         stepPath,
         nullptr,
-        PRO_INTF_IMPORT_STEP,
+        importType,
         PRO_MDL_PART,
         PRO_IMPORTREP_MASTER,
         modelName,
         nullptr,
         nullptr,
         &createdModel);
-    calls.push_back({"ProIntfimportModelWithOptionsMdlnameCreate", err});
+    calls.push_back({"ProIntfimportModelWithOptionsMdlnameCreate(" + options.importKind + ")", err});
     if (err != PRO_TK_NO_ERROR || createdModel == nullptr) {
-        notes.push_back("STEP import through Pro/TOOLKIT failed before ModelCHECK.");
+        notes.push_back("Input import through Pro/TOOLKIT failed before ModelCHECK.");
         ProEngineerEnd();
         write_result(
             options,
-            "CreoToolkitStepImportFailed",
+            "CreoToolkitInputImportFailed",
             false,
             false,
             calls,

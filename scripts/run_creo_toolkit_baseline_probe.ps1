@@ -4,6 +4,8 @@ param(
     [string]$CreoRoot = "",
     [string]$OutputDir = "",
     [string]$Configuration = "Release",
+    [ValidateSet("step", "stl")]
+    [string]$ImportKind = "step",
     [int]$TimeoutSeconds = 900,
     [switch]$BuildOnly,
     [switch]$SkipRun
@@ -228,7 +230,8 @@ $exportStepBase = Join-Path $OutputDir "creo_toolkit_import_export"
 
 if ($BuildOnly -or $SkipRun) {
     Write-Host "Creo Toolkit baseline probe built: $($exe.FullName)"
-    Write-Host "Staged STEP: $stagedStep"
+    Write-Host "Import kind: $ImportKind"
+    Write-Host "Staged input: $stagedStep"
     exit 0
 }
 
@@ -241,12 +244,13 @@ $env:PATH = "$(Join-Path $commonFiles 'bin');$(Join-Path $commonFiles 'x86e_win6
 
 $probeArgs = @(
     "--step", $stagedStep,
+    "--import-kind", $ImportKind,
     "--creo-command", $creoCommand,
     "--output-dir", $OutputDir,
     "--modelcheck-output-dir", $modelcheckOutputDir,
     "--export-step-base", $exportStepBase,
     "--result", $resultPath,
-    "--model-name", "spo_tk_baseline"
+    "--model-name", $(if ($ImportKind -eq "stl") { "spo_tk_stl" } else { "spo_tk_baseline" })
 )
 if ($textPath) {
     $probeArgs += @("--text-path", $textPath)
