@@ -498,6 +498,9 @@ void MainWindow::createActions() {
     useGeomagicRemeshAction_ = new QAction("启用 Geomagic Remesh", this);
     useGeomagicRemeshAction_->setCheckable(true);
     useGeomagicRemeshAction_->setChecked(false);
+    useStpSupportCollarAction_ = new QAction("启用 STP 邻接面支撑带", this);
+    useStpSupportCollarAction_->setCheckable(true);
+    useStpSupportCollarAction_->setChecked(true);
     importPatchForCurrentCandidateAction_ = new QAction("从 local STL 定位并导入 Patch", this);
     importPatchFromFileAction_ = new QAction("从文件导入 Patch", this);
     applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
@@ -625,6 +628,7 @@ void MainWindow::createMenus() {
     patchMenu_->addSeparator();
     patchMenu_->addAction(generateAndPreviewCurrentPatchAction_);
     patchMenu_->addAction(useGeomagicRemeshAction_);
+    patchMenu_->addAction(useStpSupportCollarAction_);
     patchMenu_->addSeparator();
     patchMenu_->addAction(importPatchForCurrentCandidateAction_);
     patchMenu_->addAction(importPatchFromFileAction_);
@@ -684,6 +688,7 @@ void MainWindow::createToolBars() {
     fittingInputModeToolMenu->addAction(fittingModeConservativeBandAction_);
     fittingInputModeToolMenu->addAction(fittingModeStpSampledAction_);
     patchToolMenu->addAction(useGeomagicRemeshAction_);
+    patchToolMenu->addAction(useStpSupportCollarAction_);
     patchToolMenu->addSeparator();
     patchToolMenu->addAction(clearPatchOverlayAction_);
 
@@ -1284,12 +1289,16 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto cropOptions = currentStlCropOptions();
     const auto fittingModeStr = QString::fromStdString(toString(fittingInputMode));
     const bool useGeomagicRemesh = useGeomagicRemeshAction_ != nullptr && useGeomagicRemeshAction_->isChecked();
+    const bool useStpSupportCollar =
+        useStpSupportCollarAction_ != nullptr && useStpSupportCollarAction_->isChecked();
     const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
+    const auto stpSupportCollarMode = useStpSupportCollar ? QString("enabled") : QString("disabled");
     const auto runLogger = PatchPreviewRunLogger::create(workspaceRoot, candidateSnapshot.candidate_id);
     runLogger.log(
         "Start",
         "Patch preview requested: fitting_mode=" + fittingModeStr.toStdString() +
-            ", geomagic_remesh=" + geomagicRemeshMode.toStdString());
+            ", geomagic_remesh=" + geomagicRemeshMode.toStdString() +
+            ", stp_support_collar=" + stpSupportCollarMode.toStdString());
     if (runLogger.ready()) {
         logPanel_->appendInfo(QString("Patch preview run log：%1").arg(pathToQString(runLogger.path())));
     } else {
@@ -1299,8 +1308,8 @@ void MainWindow::generateAndPreviewCurrentPatch() {
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::AnalyzingBoundary,
-        QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2")
-            .arg(fittingModeStr, geomagicRemeshMode)
+        QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2, stp_support_collar=%3")
+            .arg(fittingModeStr, geomagicRemeshMode, stpSupportCollarMode)
             .toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
@@ -1310,12 +1319,13 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     setStlCropInProgress(true);
     startPatchPreviewProgressReport(
         pipelineStatus,
-        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\nrun log：%6\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
+        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\nSTP support collar：%6\nrun log：%7\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
         .arg(fittingModeStr)
         .arg(geomagicRemeshMode)
+        .arg(stpSupportCollarMode)
         .arg(pathToQString(runLogger.path())));
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
@@ -1451,7 +1461,16 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         runLogger.logDuration("PreviewReady", "Viewer overlay and crop boundary diagnostics finished.", previewStart);
         runLogger.log("Finished", "Patch preview ready.");
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, progressCallback, runLogger]() {
+    StpSampledFittingOptions samplingOptions;
+    if (useStpSupportCollar) {
+        samplingOptions.enableAdjacentFaceSupportCollar = true;
+        samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = 64;
+        samplingOptions.adjacentFaceSupportCollarWidth = 0.25;
+        samplingOptions.adjacentFaceSupportCollarRingCount = 2;
+        samplingOptions.enableAdaptiveAdjacentFaceSupportCollarWidth = true;
+    }
+
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, samplingOptions, progressCallback, runLogger]() {
         GeomagicAutoSurfaceConfig config;
         config.strictPatchTarget = false;
         config.skipRemesh = !useGeomagicRemesh;
@@ -1463,7 +1482,7 @@ void MainWindow::generateAndPreviewCurrentPatch() {
             config,
             fittingInputMode,
             cropOptions,
-            {},
+            samplingOptions,
             progressCallback,
             runLogger);
     }));
@@ -2662,6 +2681,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     useGlobalCutChainCropAction_->setEnabled(!inProgress);
     generateAndPreviewCurrentPatchAction_->setEnabled(!inProgress);
     useGeomagicRemeshAction_->setEnabled(!inProgress);
+    useStpSupportCollarAction_->setEnabled(!inProgress);
     importPatchForCurrentCandidateAction_->setEnabled(!inProgress);
     importPatchFromFileAction_->setEnabled(!inProgress);
     detectAction_->setEnabled(!inProgress);

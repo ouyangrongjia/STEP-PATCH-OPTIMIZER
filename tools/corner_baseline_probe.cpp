@@ -57,17 +57,10 @@ struct Options {
 
     bool enableB1CornerFeatureSampling = false;
     int cornerFeatureSamplesPerEdge = 64;
-    bool enableB2BoundaryGuardBand = false;
-    int boundaryGuardBandSamplesPerEdge = 16;
-    int boundaryGuardBandRingCount = 1;
-    double boundaryGuardBandSpacing = 0.10;
-    bool enableB2OverCoverStrip = false;
-    double boundaryOverCoverWidth = 0.05;
-    int boundaryOverCoverRingCount = 1;
     bool enableB2AdjacentFaceSupportCollar = false;
-    int adjacentFaceSupportCollarSamplesPerEdge = 16;
-    double adjacentFaceSupportCollarWidth = 0.05;
-    int adjacentFaceSupportCollarRingCount = 1;
+    int adjacentFaceSupportCollarSamplesPerEdge = 64;
+    double adjacentFaceSupportCollarWidth = 0.25;
+    int adjacentFaceSupportCollarRingCount = 2;
     bool enableAdaptiveAdjacentFaceSupportCollarWidth = false;
     double adjacentFaceSupportCollarUnderCover = 0.0;
     bool enableB2CornerSafeSupportCollar = false;
@@ -158,18 +151,11 @@ void print_usage() {
         << "  --timeout-seconds <n>                    Default 1800.\n"
         << "  --b1-corner-feature-sampling            Enable B1 corner / feature edge dense anchors.\n"
         << "  --corner-feature-samples <n>             B1 dense samples per feature edge, default 64.\n"
-        << "  --b2-boundary-guard-band                Enable B2 STP boundary guard-band sampling.\n"
-        << "  --guard-band-samples <n>                 B2 samples per boundary edge, default 16.\n"
-        << "  --guard-band-rings <n>                   B2 guard-band ring count, default 1.\n"
-        << "  --guard-band-spacing <value>             B2 guard-band spacing, default 0.10.\n"
-        << "  --b2-over-cover-strip                   Enable B2.1 fitting STL boundary over-cover strip.\n"
-        << "  --over-cover-width <value>               B2.1 over-cover strip total width, default 0.05.\n"
-        << "  --over-cover-rings <n>                   B2.1 over-cover ring count, default 1.\n"
-        << "  --b2-adjacent-face-support-collar        Enable B2.2 adjacent-face seam support collar.\n"
-        << "  --support-collar-samples <n>             B2.2 samples per boundary edge, default 16.\n"
-        << "  --support-collar-width <value>           B2.2 adjacent support collar width, default 0.05.\n"
-        << "  --support-collar-rings <n>               B2.2 support collar ring count, default 1.\n"
-        << "  --adaptive-support-collar-width          Use max(2*g_under, 2*h95) per boundary edge.\n"
+        << "  --b2-adjacent-face-support-collar        Enable B2 adjacent-face seam support collar.\n"
+        << "  --support-collar-samples <n>             B2 samples per boundary edge, default 64.\n"
+        << "  --support-collar-width <value>           B2 adjacent support collar width, default 0.25.\n"
+        << "  --support-collar-rings <n>               B2 support collar ring count, default 2.\n"
+        << "  --adaptive-support-collar-width          Use max(configured_width, 2*g_under, 2*h95) per boundary edge.\n"
         << "  --support-collar-under-cover <value>     Current max under-cover used by adaptive support width.\n"
         << "  --b2-corner-safe-support-collar          Enable B2.3 support collar corner clamp.\n"
         << "  --support-collar-max-offset-scale <v>    B2.3 max collar offset scale, default 1.25.\n"
@@ -314,40 +300,6 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.cornerFeatureSamplesPerEdge = std::stoi(value);
-        } else if (arg == "--b2-boundary-guard-band") {
-            options.enableB2BoundaryGuardBand = true;
-        } else if (arg == "--guard-band-samples") {
-            const auto* value = requireValue("--guard-band-samples");
-            if (value == nullptr) {
-                return false;
-            }
-            options.boundaryGuardBandSamplesPerEdge = std::stoi(value);
-        } else if (arg == "--guard-band-rings") {
-            const auto* value = requireValue("--guard-band-rings");
-            if (value == nullptr) {
-                return false;
-            }
-            options.boundaryGuardBandRingCount = std::stoi(value);
-        } else if (arg == "--guard-band-spacing") {
-            const auto* value = requireValue("--guard-band-spacing");
-            if (value == nullptr) {
-                return false;
-            }
-            options.boundaryGuardBandSpacing = std::stod(value);
-        } else if (arg == "--b2-over-cover-strip") {
-            options.enableB2OverCoverStrip = true;
-        } else if (arg == "--over-cover-width") {
-            const auto* value = requireValue("--over-cover-width");
-            if (value == nullptr) {
-                return false;
-            }
-            options.boundaryOverCoverWidth = std::stod(value);
-        } else if (arg == "--over-cover-rings") {
-            const auto* value = requireValue("--over-cover-rings");
-            if (value == nullptr) {
-                return false;
-            }
-            options.boundaryOverCoverRingCount = std::stoi(value);
         } else if (arg == "--b2-adjacent-face-support-collar") {
             options.enableB2AdjacentFaceSupportCollar = true;
         } else if (arg == "--support-collar-samples") {
@@ -654,22 +606,6 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("feature_edge_dense_sample_count", report.featureEdgeDenseSampleCount);
     object.insert("corner_anchor_sample_count", report.cornerAnchorSampleCount);
     object.insert("corner_feature_surface_division_count", report.cornerFeatureSurfaceDivisionCount);
-    object.insert("boundary_guard_band_sampling_enabled", report.boundaryGuardBandSamplingEnabled);
-    object.insert("boundary_guard_band_edge_count", report.boundaryGuardBandEdgeCount);
-    object.insert("boundary_guard_band_sample_count", report.boundaryGuardBandSampleCount);
-    object.insert("boundary_guard_band_triangle_count", report.boundaryGuardBandTriangleCount);
-    object.insert("boundary_guard_band_ring_count", report.boundaryGuardBandRingCount);
-    object.insert("boundary_guard_band_spacing", report.boundaryGuardBandSpacing);
-    object.insert("boundary_guard_band_adjacent_face_sample_count", report.boundaryGuardBandAdjacentFaceSampleCount);
-    object.insert("boundary_guard_band_fallback_sample_count", report.boundaryGuardBandFallbackSampleCount);
-    object.insert("boundary_over_cover_strip_enabled", report.boundaryOverCoverStripEnabled);
-    object.insert("boundary_over_cover_width", report.boundaryOverCoverWidth);
-    object.insert("boundary_over_cover_ring_count", report.boundaryOverCoverRingCount);
-    object.insert("boundary_over_cover_sample_count", report.boundaryOverCoverSampleCount);
-    object.insert("boundary_over_cover_triangle_count", report.boundaryOverCoverTriangleCount);
-    object.insert("boundary_over_cover_fallback_count", report.boundaryOverCoverFallbackCount);
-    object.insert("boundary_over_cover_rejected_count", report.boundaryOverCoverRejectedCount);
-    object.insert("boundary_over_cover_boundary_coverage", report.boundaryOverCoverBoundaryCoverage);
     object.insert("adjacent_face_support_collar_enabled", report.adjacentFaceSupportCollarEnabled);
     object.insert("adjacent_face_support_collar_width", report.adjacentFaceSupportCollarWidth);
     object.insert("adjacent_face_support_collar_ring_count", report.adjacentFaceSupportCollarRingCount);
@@ -1326,13 +1262,6 @@ int main(int argc, char* argv[]) {
     spo::StpSampledFittingOptions samplingOptions;
     samplingOptions.enableCornerFeatureDenseSampling = options.enableB1CornerFeatureSampling;
     samplingOptions.cornerFeatureSamplesPerEdge = options.cornerFeatureSamplesPerEdge;
-    samplingOptions.enableBoundaryGuardBandSampling = options.enableB2BoundaryGuardBand;
-    samplingOptions.boundaryGuardBandSamplesPerEdge = options.boundaryGuardBandSamplesPerEdge;
-    samplingOptions.boundaryGuardBandRingCount = options.boundaryGuardBandRingCount;
-    samplingOptions.boundaryGuardBandSpacing = options.boundaryGuardBandSpacing;
-    samplingOptions.enableBoundaryOverCoverStrip = options.enableB2OverCoverStrip;
-    samplingOptions.boundaryOverCoverWidth = options.boundaryOverCoverWidth;
-    samplingOptions.boundaryOverCoverRingCount = options.boundaryOverCoverRingCount;
     samplingOptions.enableAdjacentFaceSupportCollar = options.enableB2AdjacentFaceSupportCollar;
     samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
     samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;

@@ -10,8 +10,7 @@ param(
     [double]$G1Tolerance3d = 0.03,
     [double]$G1ToleranceAngle = 0.01,
     [int]$CornerFeatureSamples = 96,
-    [double]$OverCoverWidth = 0.15,
-    [int]$OverCoverRings = 2,
+    [double]$SupportCollarWidth = 0.25,
     [int]$SupportCollarRings = 2,
     [double]$SupportCollarUnderCover = 0.0,
     [switch]$SkipCreo
@@ -916,8 +915,7 @@ $result = [ordered]@{
         g1_tolerance3d = $G1Tolerance3d
         g1_tolerance_angle = $G1ToleranceAngle
         corner_feature_samples = $CornerFeatureSamples
-        over_cover_width = $OverCoverWidth
-        over_cover_rings = $OverCoverRings
+        support_collar_width = $SupportCollarWidth
         support_collar_rings = $SupportCollarRings
         support_collar_under_cover = $SupportCollarUnderCover
         skip_creo = [bool]$SkipCreo
@@ -1063,6 +1061,7 @@ if (Test-Path -LiteralPath $WrapCore) {
             "--corner-feature-samples", "$CornerFeatureSamples",
             "--b2-adjacent-face-support-collar",
             "--support-collar-samples", "$CornerFeatureSamples",
+            "--support-collar-width", "$SupportCollarWidth",
             "--support-collar-rings", "$SupportCollarRings",
             "--adaptive-support-collar-width",
             "--support-collar-under-cover", "$SupportCollarUnderCover",
@@ -1154,6 +1153,7 @@ if (Test-Path -LiteralPath $route2NormalizedPatch) {
             "--corner-feature-samples", "$CornerFeatureSamples",
             "--b2-adjacent-face-support-collar",
             "--support-collar-samples", "$CornerFeatureSamples",
+            "--support-collar-width", "$SupportCollarWidth",
             "--support-collar-rings", "$SupportCollarRings",
             "--adaptive-support-collar-width",
             "--support-collar-under-cover", "$SupportCollarUnderCover",

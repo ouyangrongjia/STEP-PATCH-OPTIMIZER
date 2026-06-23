@@ -2,7 +2,7 @@
 
 本文档说明如何在 VS Code 或命令行中启动 `step-patch-optimizer` GUI，并给出当前 GUI 的主要交互方式和手动验证流程。
 
-> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer，支持 STEP/STP 模型显示、face/edge 命中选择、特征边显示、锁边高亮、same-domain 合并、undo/redo、合法性检查和 STEP 导出。
+> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer，支持 STEP/STP 模型显示、face/edge 命中选择、特征边显示、锁边高亮、same-domain 合并、undo/redo、合法性检查和 STEP 导出。Patch / Geomagic 菜单默认启用 `STP 邻接面支撑带`，这是当前唯一保留的 STL 扩宽机制；旧 B2 guard-band 和 B2.1 over-cover strip 不再作为可执行入口维护。
 
 ---
 
@@ -302,7 +302,7 @@ cd D:\pyProject\step-patch-optimizer
 
 该 parse-only 路径会保留 `GEOM_CHECKS` / `SHORT_EDGES` 的 item 明细，输出短边 Creo edge id 摘要和导入 feature id；但当前 ModelCHECK XML 不含空间坐标或 OCCT edge id，所以只能做阶段级关联，不能直接定位到项目内部 edge。
 
-脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` 会额外输出 B2.0 STP boundary guard-band 样本和三角形统计；`-Experiment B2.1` 会输出 B2.1 over-cover strip 统计；`-Experiment B2.2` 会输出 adjacent-face support collar 和 seam continuity 统计；`-Experiment B2.3` 会输出 corner-safe collar clamp 统计和 SharpenContours A/B 标记。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` / `-Experiment B2.2` 会启用 adjacent-face support collar，并显式传递 support collar 宽度、ring、adaptive 参数；`-Experiment B2.3` 会在 support collar 上额外启用 corner-safe clamp，并可用 `-SharpenContours` 做 Geomagic A/B。旧 B2.0 guard-band 和 B2.1 over-cover strip 已移除，不再是可选实验入口。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
 

@@ -68,14 +68,14 @@ void test_scripted_baseline_gate_is_not_hardcoded_to_one_sample() {
     assert(script.find("Find-ExistingPatchForCandidate") != std::string::npos);
     assert(script.find("corner_baseline_probe") != std::string::npos);
     assert(script.find("--b1-corner-feature-sampling") != std::string::npos);
-    assert(script.find("--b2-boundary-guard-band") != std::string::npos);
-    assert(script.find("B2.1") != std::string::npos);
     assert(script.find("B2.2") != std::string::npos);
     assert(script.find("B2.3") != std::string::npos);
-    assert(script.find("--b2-over-cover-strip") != std::string::npos);
-    assert(script.find("--over-cover-width") != std::string::npos);
+    assert(script.find("--b2-boundary-guard-band") == std::string::npos);
+    assert(script.find("--b2-over-cover-strip") == std::string::npos);
+    assert(script.find("--over-cover-width") == std::string::npos);
     assert(script.find("--b2-adjacent-face-support-collar") != std::string::npos);
     assert(script.find("--b2-corner-safe-support-collar") != std::string::npos);
+    assert(script.find("--adaptive-support-collar-width") != std::string::npos);
     assert(script.find("-SharpenContours") != std::string::npos);
     assert(script.find("-RealGeomagic") != std::string::npos);
     assert(script.find("--candidate-id") != std::string::npos);
@@ -91,21 +91,14 @@ void test_verify_real_geomagic_runs_scripted_baseline_gate() {
     assert(script.find("-RealGeomagic") != std::string::npos);
 }
 
-void test_corner_baseline_probe_reports_b2_1_over_cover_fields() {
-    const auto root = source_root();
-    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
-
-    assert(source.find("--b2-over-cover-strip") != std::string::npos);
-    assert(source.find("--over-cover-width") != std::string::npos);
-    assert(source.find("boundary_over_cover_strip_enabled") != std::string::npos);
-    assert(source.find("boundary_over_cover_triangle_count") != std::string::npos);
-    assert(source.find("boundary_over_cover_boundary_coverage") != std::string::npos);
-}
-
 void test_corner_baseline_probe_reports_b2_2_support_collar_fields() {
     const auto root = source_root();
     const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
 
+    assert(source.find("--b2-boundary-guard-band") == std::string::npos);
+    assert(source.find("--b2-over-cover-strip") == std::string::npos);
+    assert(source.find("boundary_guard_band") == std::string::npos);
+    assert(source.find("boundary_over_cover") == std::string::npos);
     assert(source.find("--b2-adjacent-face-support-collar") != std::string::npos);
     assert(source.find("--support-collar-width") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_enabled") != std::string::npos);
@@ -125,6 +118,29 @@ void test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields() {
     assert(source.find("adjacent_face_support_collar_corner_clamp_count") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_max_offset") != std::string::npos);
     assert(source.find("geomagic_sharpen_contours") != std::string::npos);
+}
+
+void test_route2_runner_expands_only_with_explicit_support_collar_arguments() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
+
+    assert(script.find("OverCoverWidth") == std::string::npos);
+    assert(script.find("OverCoverRings") == std::string::npos);
+    assert(script.find("--b2-over-cover-strip") == std::string::npos);
+    assert(script.find("--support-collar-width") != std::string::npos);
+    assert(script.find("--support-collar-rings") != std::string::npos);
+    assert(script.find("--adaptive-support-collar-width") != std::string::npos);
+}
+
+void test_gui_exposes_stp_support_collar_switch() {
+    const auto root = source_root();
+    const auto header = read_text_file(root / "src" / "app" / "MainWindow.h");
+    const auto source = read_text_file(root / "src" / "app" / "MainWindow.cpp");
+
+    assert(header.find("useStpSupportCollarAction_") != std::string::npos);
+    assert(source.find("启用 STP 邻接面支撑带") != std::string::npos);
+    assert(source.find("enableAdjacentFaceSupportCollar") != std::string::npos);
+    assert(source.find("useStpSupportCollarAction_->isChecked()") != std::string::npos);
 }
 
 void test_corner_baseline_probe_exports_applied_step_for_acceptance() {
@@ -326,9 +342,10 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_supports_auto_candidate_selection();
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
-    test_corner_baseline_probe_reports_b2_1_over_cover_fields();
     test_corner_baseline_probe_reports_b2_2_support_collar_fields();
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();
+    test_route2_runner_expands_only_with_explicit_support_collar_arguments();
+    test_gui_exposes_stp_support_collar_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
     test_creo_step_diagnostic_script_is_optional_background_runner();

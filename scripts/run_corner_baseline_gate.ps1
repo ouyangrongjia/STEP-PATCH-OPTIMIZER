@@ -1,6 +1,6 @@
 param(
     [string]$Preset = "windows-msvc-debug",
-    [ValidateSet("A0", "B1", "B2", "B2.0", "B2.1", "B2.2", "B2.3")]
+    [ValidateSet("A0", "B1", "B2", "B2.2", "B2.3")]
     [string]$Experiment = "A0",
     [string]$SourceStep = "",
     [string]$CandidateId = "auto",
@@ -10,14 +10,10 @@ param(
     [string]$WrapCore = "E:\Geomagic Wrap\wrapCore.exe",
     [int]$TimeoutSeconds = 1800,
     [int]$CornerFeatureSamples = 64,
-    [int]$GuardBandSamples = 16,
-    [int]$GuardBandRings = 1,
-    [double]$GuardBandSpacing = 0.10,
-    [double]$OverCoverWidth = 0.05,
-    [int]$OverCoverRings = 1,
-    [int]$SupportCollarSamples = 16,
-    [double]$SupportCollarWidth = 0.05,
-    [int]$SupportCollarRings = 1,
+    [int]$SupportCollarSamples = 64,
+    [double]$SupportCollarWidth = 0.25,
+    [int]$SupportCollarRings = 2,
+    [double]$SupportCollarUnderCover = 0.0,
     [double]$SupportCollarMaxOffsetScale = 1.25,
     [switch]$SharpenContours,
     [switch]$RealGeomagic,
@@ -220,36 +216,21 @@ $probeArgs = @(
     "--report", $Report
 )
 
-if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.0" -or $Experiment -eq "B2.1" -or $Experiment -eq "B2.2" -or $Experiment -eq "B2.3") {
+if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.2" -or $Experiment -eq "B2.3") {
     $probeArgs += @(
         "--b1-corner-feature-sampling",
         "--corner-feature-samples", "$CornerFeatureSamples"
     )
 }
 
-if ($Experiment -eq "B2" -or $Experiment -eq "B2.0") {
-    $probeArgs += @(
-        "--b2-boundary-guard-band",
-        "--guard-band-samples", "$GuardBandSamples",
-        "--guard-band-rings", "$GuardBandRings",
-        "--guard-band-spacing", "$GuardBandSpacing"
-    )
-}
-
-if ($Experiment -eq "B2.1") {
-    $probeArgs += @(
-        "--b2-over-cover-strip",
-        "--over-cover-width", "$OverCoverWidth",
-        "--over-cover-rings", "$OverCoverRings"
-    )
-}
-
-if ($Experiment -eq "B2.2") {
+if ($Experiment -eq "B2" -or $Experiment -eq "B2.2") {
     $probeArgs += @(
         "--b2-adjacent-face-support-collar",
         "--support-collar-samples", "$SupportCollarSamples",
         "--support-collar-width", "$SupportCollarWidth",
-        "--support-collar-rings", "$SupportCollarRings"
+        "--support-collar-rings", "$SupportCollarRings",
+        "--adaptive-support-collar-width",
+        "--support-collar-under-cover", "$SupportCollarUnderCover"
     )
 }
 
@@ -260,6 +241,8 @@ if ($Experiment -eq "B2.3") {
         "--support-collar-samples", "$SupportCollarSamples",
         "--support-collar-width", "$SupportCollarWidth",
         "--support-collar-rings", "$SupportCollarRings",
+        "--adaptive-support-collar-width",
+        "--support-collar-under-cover", "$SupportCollarUnderCover",
         "--support-collar-max-offset-scale", "$SupportCollarMaxOffsetScale"
     )
 }

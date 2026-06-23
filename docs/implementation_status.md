@@ -30,6 +30,7 @@ STEP 读取
    - 直接从当前 STP candidate faces / boundary 采样生成 fitting STL。
    - 不要求先加载原始 STL。
    - 当前推荐作为默认模式，速度更快，效果与 STL 裁剪路线接近。
+   - 当前保留的扩宽机制只有 adjacent-face support collar；GUI 默认启用该开关，Route 2 runner 必须显式传 support-collar width/ring/adaptive 参数。旧 B2 guard-band 与 B2.1 over-cover strip 已从可执行入口移除。
 3. 备用 / 诊断路线：原始 STL crop。
    - Legacy centroid-only crop 保留为基线。
    - Conservative boundary-band crop 保留为 A/B 验证。

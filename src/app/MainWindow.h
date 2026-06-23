@@ -132,6 +132,7 @@ private:
     QAction* showStlCropBoxAction_ = nullptr;
     QAction* generateAndPreviewCurrentPatchAction_ = nullptr;
     QAction* useGeomagicRemeshAction_ = nullptr;
+    QAction* useStpSupportCollarAction_ = nullptr;
     QAction* fittingModeLegacyStlCropAction_ = nullptr;
     QAction* fittingModeConservativeBandAction_ = nullptr;
     QAction* fittingModeStpSampledAction_ = nullptr;
