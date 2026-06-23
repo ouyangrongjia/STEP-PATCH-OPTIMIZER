@@ -192,6 +192,20 @@ void print_report(const spo::PatchReplacementReport& report) {
     std::cout << "used original-boundary surface retrim: " << report.usedOriginalBoundarySurfaceRetrim << "\n";
     std::cout << "attempted multi-surface boundary shell: " << report.attemptedMultiSurfaceBoundaryShell << "\n";
     std::cout << "used multi-surface boundary shell: " << report.usedMultiSurfaceBoundaryShell << "\n";
+    std::cout << "retrim boundary pcurve rebuild attempt/success/failure: "
+              << report.retrimBoundaryEdgePcurveRebuildAttemptCount << " / "
+              << report.retrimBoundaryEdgePcurveRebuildSuccessCount << " / "
+              << report.retrimBoundaryEdgePcurveRebuildFailureCount << "\n";
+    std::cout << "retrim boundary SameParameter check/failure/maxdev: "
+              << report.retrimBoundaryEdgeSameParameterCheckCount << " / "
+              << report.retrimBoundaryEdgeSameParameterFailureCount << " / "
+              << report.retrimBoundaryEdgeMaxSameParameterDeviation << "\n";
+    print_edge_ids(
+        "retrim boundary pcurve rebuild failed edge ids",
+        report.retrimBoundaryEdgePcurveRebuildFailedEdgeIds);
+    print_edge_ids(
+        "retrim boundary SameParameter failed edge ids",
+        report.retrimBoundaryEdgeSameParameterFailedEdgeIds);
     std::cout << "multi-surface projected/failed samples: "
               << report.multiSurfaceProjectedSampleCount << " / "
               << report.multiSurfaceFailedProjectionCount << "\n";

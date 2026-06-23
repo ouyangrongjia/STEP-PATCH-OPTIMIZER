@@ -1158,6 +1158,8 @@ PatchReplacementCommand::PatchReplacementCommand(
     PatchReplacementCommandOptions options)
     : outReport_(outReport),
       options_(options) {
+    input_.allowHighRiskPatchPreview = input.allowHighRiskPatchPreview;
+    input_.strictOriginalBoundaryRetrim = input.strictOriginalBoundaryRetrim;
     hasDocumentInput_ = input.document != nullptr;
     hasCandidateInput_ = input.candidate != nullptr;
     hasBoundaryInput_ = input.boundary != nullptr;
@@ -1251,6 +1253,14 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.retrimSurfaceCoverageMaxProjectionDistance = buildResult.retrimSurfaceCoverageMaxProjectionDistance;
     report_.retrimSurfaceCoverageAverageProjectionDistance = buildResult.retrimSurfaceCoverageAverageProjectionDistance;
     report_.retrimSurfaceCoverageUncoveredEdgeIds = buildResult.retrimSurfaceCoverageUncoveredEdgeIds;
+    report_.retrimBoundaryEdgePcurveRebuildAttemptCount = buildResult.retrimBoundaryEdgePcurveRebuildAttemptCount;
+    report_.retrimBoundaryEdgePcurveRebuildSuccessCount = buildResult.retrimBoundaryEdgePcurveRebuildSuccessCount;
+    report_.retrimBoundaryEdgePcurveRebuildFailureCount = buildResult.retrimBoundaryEdgePcurveRebuildFailureCount;
+    report_.retrimBoundaryEdgeSameParameterCheckCount = buildResult.retrimBoundaryEdgeSameParameterCheckCount;
+    report_.retrimBoundaryEdgeSameParameterFailureCount = buildResult.retrimBoundaryEdgeSameParameterFailureCount;
+    report_.retrimBoundaryEdgeMaxSameParameterDeviation = buildResult.retrimBoundaryEdgeMaxSameParameterDeviation;
+    report_.retrimBoundaryEdgePcurveRebuildFailedEdgeIds = buildResult.retrimBoundaryEdgePcurveRebuildFailedEdgeIds;
+    report_.retrimBoundaryEdgeSameParameterFailedEdgeIds = buildResult.retrimBoundaryEdgeSameParameterFailedEdgeIds;
     report_.multiSurfaceBoundarySampleCount = buildResult.multiSurfaceBoundarySampleCount;
     report_.multiSurfaceProjectedSampleCount = buildResult.multiSurfaceProjectedSampleCount;
     report_.multiSurfaceFailedProjectionCount = buildResult.multiSurfaceFailedProjectionCount;
@@ -1262,9 +1272,45 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     report_.multiSurfaceClosedWireCount = buildResult.multiSurfaceClosedWireCount;
     report_.multiSurfaceOpenWireCount = buildResult.multiSurfaceOpenWireCount;
     report_.multiSurfaceMultipleClosedWireFaceCount = buildResult.multiSurfaceMultipleClosedWireFaceCount;
+    report_.multiSurfaceSkippedUnownedOpenWireFaceCount =
+        buildResult.multiSurfaceSkippedUnownedOpenWireFaceCount;
     report_.multiSurfaceFailedPatchFaceIndex = buildResult.multiSurfaceFailedPatchFaceIndex;
     report_.multiSurfaceFailedFaceEdgeCount = buildResult.multiSurfaceFailedFaceEdgeCount;
+    report_.multiSurfaceFailedFaceOriginalBoundarySegmentCount =
+        buildResult.multiSurfaceFailedFaceOriginalBoundarySegmentCount;
+    report_.multiSurfaceFailedFaceInternalEdgeCount =
+        buildResult.multiSurfaceFailedFaceInternalEdgeCount;
+    report_.multiSurfaceFailedOpenWireEdgeCount =
+        buildResult.multiSurfaceFailedOpenWireEdgeCount;
+    report_.multiSurfaceFailedOpenWireLength =
+        buildResult.multiSurfaceFailedOpenWireLength;
+    report_.multiSurfaceFailedOpenWireEndpointGap =
+        buildResult.multiSurfaceFailedOpenWireEndpointGap;
+    report_.multiSurfaceFailedOpenWireStartPointValid =
+        buildResult.multiSurfaceFailedOpenWireStartPointValid;
+    report_.multiSurfaceFailedOpenWireStartX =
+        buildResult.multiSurfaceFailedOpenWireStartX;
+    report_.multiSurfaceFailedOpenWireStartY =
+        buildResult.multiSurfaceFailedOpenWireStartY;
+    report_.multiSurfaceFailedOpenWireStartZ =
+        buildResult.multiSurfaceFailedOpenWireStartZ;
+    report_.multiSurfaceFailedOpenWireEndPointValid =
+        buildResult.multiSurfaceFailedOpenWireEndPointValid;
+    report_.multiSurfaceFailedOpenWireEndX =
+        buildResult.multiSurfaceFailedOpenWireEndX;
+    report_.multiSurfaceFailedOpenWireEndY =
+        buildResult.multiSurfaceFailedOpenWireEndY;
+    report_.multiSurfaceFailedOpenWireEndZ =
+        buildResult.multiSurfaceFailedOpenWireEndZ;
+    report_.multiSurfaceSelectedWireConnectTolerance =
+        buildResult.multiSurfaceSelectedWireConnectTolerance;
+    report_.multiSurfaceFallbackWireConnectAttempted =
+        buildResult.multiSurfaceFallbackWireConnectAttempted;
+    report_.multiSurfaceFallbackWireConnectSucceeded =
+        buildResult.multiSurfaceFallbackWireConnectSucceeded;
     report_.multiSurfaceFailedEdgeIds = buildResult.multiSurfaceFailedEdgeIds;
+    report_.multiSurfaceFailedFaceOriginalBoundaryEdgeIds =
+        buildResult.multiSurfaceFailedFaceOriginalBoundaryEdgeIds;
     report_.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount;
     report_.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount;
     report_.multiSurfaceBoundaryEdgePcurveRebuildFailureCount = buildResult.multiSurfaceBoundaryEdgePcurveRebuildFailureCount;
@@ -1433,6 +1479,10 @@ Result PatchReplacementCommand::redo(CommandContext& context) {
 
 const PatchReplacementReport& PatchReplacementCommand::report() const {
     return report_;
+}
+
+const ShapeDocument& PatchReplacementCommand::afterDocument() const {
+    return afterDocument_;
 }
 
 void PatchReplacementCommand::publishReport() {

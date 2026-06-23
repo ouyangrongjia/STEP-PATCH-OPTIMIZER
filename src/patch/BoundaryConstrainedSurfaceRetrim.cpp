@@ -5,12 +5,31 @@
 #include "brep/TopologyGraph.h"
 
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepGProp.hxx>
 #include <BRepLib.hxx>
+#include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <Geom2d_Curve.hxx>
+#include <Geom_Curve.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
+#include <Precision.hxx>
+#include <ShapeAnalysis_Edge.hxx>
+#include <ShapeAnalysis_FreeBounds.hxx>
+#include <ShapeConstruct_ProjectCurveOnSurface.hxx>
+#include <ShapeFix_Face.hxx>
+#include <Standard_Failure.hxx>
+#include <TopAbs_ShapeEnum.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Wire.hxx>
+#include <TopTools_HSequenceOfShape.hxx>
+#include <gp_Pnt2d.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -77,6 +96,193 @@ bool better_candidate(
         return lhs.maxProjectionDistance < rhs.maxProjectionDistance;
     }
     return lhs.averageProjectionDistance < rhs.averageProjectionDistance;
+}
+
+void append_unique_edge(std::vector<EdgeId>& edgeIds, EdgeId edgeId) {
+    if (std::find(edgeIds.begin(), edgeIds.end(), edgeId) == edgeIds.end()) {
+        edgeIds.push_back(edgeId);
+    }
+}
+
+TopoDS_Edge make_projected_boundary_edge(
+    const ShapeDocument& document,
+    EdgeId edgeId,
+    const TopoDS_Face& targetFace,
+    double projectionTolerance,
+    BoundaryConstrainedSurfaceRetrimResult& result) {
+    if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= document.topology().edgeCount()) {
+        return {};
+    }
+    if (targetFace.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+
+    const auto& sourceEdge = document.topology().edge(edgeId);
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    const auto curve = BRep_Tool::Curve(sourceEdge, firstParameter, lastParameter);
+    TopLoc_Location surfaceLocation;
+    const auto surface = BRep_Tool::Surface(targetFace, surfaceLocation);
+    if (curve.IsNull() || surface.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+    if (std::abs(lastParameter - firstParameter) <= Precision::PConfusion()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+
+    ++result.boundaryEdgePcurveRebuildAttemptCount;
+    BRepBuilderAPI_MakeEdge edgeBuilder(curve, firstParameter, lastParameter);
+    if (!edgeBuilder.IsDone()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+    auto edge = edgeBuilder.Edge();
+    edge.Orientation(sourceEdge.Orientation());
+
+    Handle(Geom_Curve) projectedCurve = curve;
+    if (!surfaceLocation.IsIdentity()) {
+        projectedCurve = Handle(Geom_Curve)::DownCast(
+            curve->Transformed(surfaceLocation.Transformation().Inverted()));
+    }
+    if (projectedCurve.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+
+    Handle(Geom2d_Curve) pcurve;
+    bool projected = false;
+    try {
+        Handle(ShapeConstruct_ProjectCurveOnSurface) projector =
+            new ShapeConstruct_ProjectCurveOnSurface;
+        projector->Init(surface, projectionTolerance);
+        projected = projector->Perform(
+            projectedCurve,
+            firstParameter,
+            lastParameter,
+            pcurve,
+            projectionTolerance,
+            projectionTolerance);
+    } catch (const Standard_Failure&) {
+        projected = false;
+    }
+
+    if (!projected || pcurve.IsNull()) {
+        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
+        ++result.boundaryEdgePcurveRebuildFailureCount;
+        return {};
+    }
+
+    BRep_Builder builder;
+    const gp_Pnt2d firstUv = pcurve->Value(firstParameter);
+    const gp_Pnt2d lastUv = pcurve->Value(lastParameter);
+    builder.UpdateEdge(edge, pcurve, surface, surfaceLocation, projectionTolerance, firstUv, lastUv);
+    builder.Range(edge, firstParameter, lastParameter, Standard_False);
+    builder.Range(edge, surface, surfaceLocation, firstParameter, lastParameter);
+    builder.SameRange(edge, Standard_True);
+    builder.UpdateEdge(edge, projectionTolerance);
+
+    ++result.boundaryEdgePcurveRebuildSuccessCount;
+    ++result.boundaryEdgeSameParameterCheckCount;
+    Standard_Real maxDeviation = 0.0;
+    ShapeAnalysis_Edge edgeAnalyzer;
+    edgeAnalyzer.CheckSameParameter(edge, targetFace, maxDeviation, 23);
+    if (std::isfinite(maxDeviation)) {
+        result.boundaryEdgeMaxSameParameterDeviation =
+            std::max(result.boundaryEdgeMaxSameParameterDeviation, static_cast<double>(maxDeviation));
+    } else {
+        maxDeviation = std::numeric_limits<Standard_Real>::infinity();
+        result.boundaryEdgeMaxSameParameterDeviation = std::numeric_limits<double>::infinity();
+    }
+    if (!std::isfinite(maxDeviation) || maxDeviation > projectionTolerance) {
+        append_unique_edge(result.boundaryEdgeSameParameterFailedEdgeIds, edgeId);
+        ++result.boundaryEdgeSameParameterFailureCount;
+        return {};
+    }
+    builder.SameParameter(edge, Standard_True);
+    return edge;
+}
+
+TopoDS_Wire connect_projected_boundary_edges(
+    const std::vector<TopoDS_Edge>& edges,
+    double tolerance,
+    std::string& message) {
+    if (edges.empty()) {
+        message = "No projected original CAD boundary edges were available for strict re-trim.";
+        return {};
+    }
+
+    Handle(TopTools_HSequenceOfShape) edgeSequence = new TopTools_HSequenceOfShape;
+    for (const auto& edge : edges) {
+        if (!edge.IsNull()) {
+            edgeSequence->Append(edge);
+        }
+    }
+    if (edgeSequence->Length() == 0) {
+        message = "Only null projected original CAD boundary edges were available for strict re-trim.";
+        return {};
+    }
+
+    Handle(TopTools_HSequenceOfShape) wires = new TopTools_HSequenceOfShape;
+    ShapeAnalysis_FreeBounds::ConnectEdgesToWires(
+        edgeSequence,
+        tolerance,
+        Standard_False,
+        wires);
+
+    Handle(TopTools_HSequenceOfShape) closedWires = new TopTools_HSequenceOfShape;
+    Handle(TopTools_HSequenceOfShape) openWires = new TopTools_HSequenceOfShape;
+    ShapeAnalysis_FreeBounds::SplitWires(
+        wires,
+        tolerance,
+        Standard_False,
+        closedWires,
+        openWires);
+
+    if (openWires->Length() != 0 || closedWires->Length() != 1) {
+        message = "Strict original-boundary re-trim projected edges did not form exactly one closed wire.";
+        return {};
+    }
+
+    auto wire = TopoDS::Wire(closedWires->Value(1));
+    if (wire.IsNull() || !wire.Closed()) {
+        message = "Strict original-boundary re-trim projected wire is not closed.";
+        return {};
+    }
+    return wire;
+}
+
+TopoDS_Wire build_strict_projected_boundary_wire(
+    const ShapeDocument& document,
+    const RegionBoundaryAnalysis& boundary,
+    const TopoDS_Face& targetFace,
+    double projectionTolerance,
+    BoundaryConstrainedSurfaceRetrimResult& result,
+    std::string& message) {
+    std::vector<TopoDS_Edge> projectedEdges;
+    projectedEdges.reserve(boundary.ordered_boundary_edges.size());
+    for (const auto edgeId : boundary.ordered_boundary_edges) {
+        const auto edge = make_projected_boundary_edge(
+            document,
+            edgeId,
+            targetFace,
+            projectionTolerance,
+            result);
+        if (edge.IsNull()) {
+            message = "Strict original-boundary re-trim could not rebuild a boundary edge pcurve on the selected Geomagic surface.";
+            return {};
+        }
+        projectedEdges.push_back(edge);
+    }
+
+    return connect_projected_boundary_edges(projectedEdges, projectionTolerance, message);
 }
 
 }
@@ -260,20 +466,56 @@ BoundaryConstrainedSurfaceRetrimResult BoundaryConstrainedSurfaceRetrim::retrim(
         return result;
     }
 
-    const auto surface = BRep_Tool::Surface(patchFaces[static_cast<std::size_t>(result.selectedPatchFaceIndex)]);
-    BRepBuilderAPI_MakeFace faceBuilder(surface, wire.wire, Standard_True);
+    const auto& selectedFace = patchFaces[static_cast<std::size_t>(result.selectedPatchFaceIndex)];
+    TopoDS_Wire boundaryWire;
+    if (options.rebuildBoundaryPcurves) {
+        std::string strictWireMessage;
+        boundaryWire = build_strict_projected_boundary_wire(
+            document,
+            boundary,
+            selectedFace,
+            options.projectionTolerance,
+            result,
+            strictWireMessage);
+        if (boundaryWire.IsNull()) {
+            return fail(strictWireMessage.empty()
+                ? "Strict original-boundary re-trim failed to build a projected boundary wire."
+                : strictWireMessage);
+        }
+    } else {
+        boundaryWire = wire.wire;
+        if (boundaryWire.IsNull()) {
+            return fail("Boundary-constrained surface re-trim failed to build the original CAD boundary wire.");
+        }
+    }
+
+    const auto surface = BRep_Tool::Surface(selectedFace);
+    BRepBuilderAPI_MakeFace faceBuilder(surface, boundaryWire, Standard_True);
     if (!faceBuilder.IsDone()) {
-        return fail("Could not re-trim the selected Geomagic surface with the original CAD boundary wire.");
+        return fail("Could not strictly re-trim the selected Geomagic surface with the projected original CAD boundary wire.");
     }
 
     result.replacementFace = faceBuilder.Face();
     if (!sourceOrientationFace.IsNull()) {
         result.replacementFace.Orientation(sourceOrientationFace.Orientation());
     }
+    ShapeFix_Face faceFixer(result.replacementFace);
+    faceFixer.SetPrecision(options.projectionTolerance);
+    faceFixer.Perform();
+    const auto fixedFace = faceFixer.Face();
+    if (!fixedFace.IsNull()) {
+        result.replacementFace = fixedFace;
+        if (!sourceOrientationFace.IsNull()) {
+            result.replacementFace.Orientation(sourceOrientationFace.Orientation());
+        }
+    }
     BRepLib::BuildCurves3d(result.replacementFace);
+    BRepLib::SameParameter(result.replacementFace, options.projectionTolerance, Standard_True);
 
     result.success = true;
-    result.message = "Re-trimmed selected Geomagic surface with the original CAD boundary wire.";
+    result.message = options.rebuildBoundaryPcurves
+        ? "Strictly re-trimmed selected Geomagic surface with original CAD boundary curves and rebuilt pcurves."
+        : "Re-trimmed selected Geomagic surface with the original CAD boundary wire.";
     return result;
 }
 

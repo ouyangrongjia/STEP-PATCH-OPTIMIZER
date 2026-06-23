@@ -77,6 +77,14 @@ struct BoundaryConstrainedPatchBuildResult {
     double retrimSurfaceCoverageMaxProjectionDistance = 0.0;
     double retrimSurfaceCoverageAverageProjectionDistance = 0.0;
     std::vector<EdgeId> retrimSurfaceCoverageUncoveredEdgeIds;
+    int retrimBoundaryEdgePcurveRebuildAttemptCount = 0;
+    int retrimBoundaryEdgePcurveRebuildSuccessCount = 0;
+    int retrimBoundaryEdgePcurveRebuildFailureCount = 0;
+    int retrimBoundaryEdgeSameParameterCheckCount = 0;
+    int retrimBoundaryEdgeSameParameterFailureCount = 0;
+    double retrimBoundaryEdgeMaxSameParameterDeviation = 0.0;
+    std::vector<EdgeId> retrimBoundaryEdgePcurveRebuildFailedEdgeIds;
+    std::vector<EdgeId> retrimBoundaryEdgeSameParameterFailedEdgeIds;
 
     int multiSurfaceBoundarySampleCount = 0;
     int multiSurfaceProjectedSampleCount = 0;
@@ -89,8 +97,25 @@ struct BoundaryConstrainedPatchBuildResult {
     int multiSurfaceClosedWireCount = 0;
     int multiSurfaceOpenWireCount = 0;
     int multiSurfaceMultipleClosedWireFaceCount = 0;
+    int multiSurfaceSkippedUnownedOpenWireFaceCount = 0;
     int multiSurfaceFailedPatchFaceIndex = -1;
     int multiSurfaceFailedFaceEdgeCount = 0;
+    int multiSurfaceFailedFaceOriginalBoundarySegmentCount = 0;
+    int multiSurfaceFailedFaceInternalEdgeCount = 0;
+    int multiSurfaceFailedOpenWireEdgeCount = 0;
+    double multiSurfaceFailedOpenWireLength = 0.0;
+    double multiSurfaceFailedOpenWireEndpointGap = 0.0;
+    bool multiSurfaceFailedOpenWireStartPointValid = false;
+    double multiSurfaceFailedOpenWireStartX = 0.0;
+    double multiSurfaceFailedOpenWireStartY = 0.0;
+    double multiSurfaceFailedOpenWireStartZ = 0.0;
+    bool multiSurfaceFailedOpenWireEndPointValid = false;
+    double multiSurfaceFailedOpenWireEndX = 0.0;
+    double multiSurfaceFailedOpenWireEndY = 0.0;
+    double multiSurfaceFailedOpenWireEndZ = 0.0;
+    double multiSurfaceSelectedWireConnectTolerance = 0.0;
+    bool multiSurfaceFallbackWireConnectAttempted = false;
+    bool multiSurfaceFallbackWireConnectSucceeded = false;
     int multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = 0;
     int multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = 0;
     int multiSurfaceBoundaryEdgePcurveRebuildFailureCount = 0;
@@ -99,6 +124,7 @@ struct BoundaryConstrainedPatchBuildResult {
     double multiSurfaceBoundaryEdgeMaxSameParameterDeviation = 0.0;
     std::vector<BoundaryConstrainedPatchSplitBoundarySegment> multiSurfaceSplitBoundarySegments;
     std::vector<EdgeId> multiSurfaceFailedEdgeIds;
+    std::vector<EdgeId> multiSurfaceFailedFaceOriginalBoundaryEdgeIds;
     std::vector<EdgeId> multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds;
     std::vector<EdgeId> multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds;
 

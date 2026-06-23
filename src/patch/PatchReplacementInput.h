@@ -16,6 +16,8 @@ struct PatchReplacementInput {
     const ImportedPatchInfo* importedPatch = nullptr;
     const PatchArtifactPaths* artifactPaths = nullptr;
     const PatchPreviewReport* previewReport = nullptr;
+    bool allowHighRiskPatchPreview = false;
+    bool strictOriginalBoundaryRetrim = false;
 };
 
 }

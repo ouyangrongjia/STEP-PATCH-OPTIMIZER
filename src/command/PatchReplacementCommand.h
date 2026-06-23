@@ -33,6 +33,7 @@ public:
     Result redo(CommandContext& context) override;
 
     const PatchReplacementReport& report() const;
+    const ShapeDocument& afterDocument() const;
 
 private:
     void publishReport();

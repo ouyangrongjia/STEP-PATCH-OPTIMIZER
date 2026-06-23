@@ -68,9 +68,13 @@ struct Options {
     int adjacentFaceSupportCollarSamplesPerEdge = 16;
     double adjacentFaceSupportCollarWidth = 0.05;
     int adjacentFaceSupportCollarRingCount = 1;
+    bool enableAdaptiveAdjacentFaceSupportCollarWidth = false;
+    double adjacentFaceSupportCollarUnderCover = 0.0;
     bool enableB2CornerSafeSupportCollar = false;
     double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
     bool geomagicSharpenContours = false;
+    bool allowHighRiskPatchPreview = false;
+    bool strictOriginalBoundaryRetrim = false;
 };
 
 struct AppliedStepExportReport {
@@ -165,9 +169,13 @@ void print_usage() {
         << "  --support-collar-samples <n>             B2.2 samples per boundary edge, default 16.\n"
         << "  --support-collar-width <value>           B2.2 adjacent support collar width, default 0.05.\n"
         << "  --support-collar-rings <n>               B2.2 support collar ring count, default 1.\n"
+        << "  --adaptive-support-collar-width          Use max(2*g_under, 2*h95) per boundary edge.\n"
+        << "  --support-collar-under-cover <value>     Current max under-cover used by adaptive support width.\n"
         << "  --b2-corner-safe-support-collar          Enable B2.3 support collar corner clamp.\n"
         << "  --support-collar-max-offset-scale <v>    B2.3 max collar offset scale, default 1.25.\n"
-        << "  --geomagic-sharpen-contours              Enable Geomagic sharpenConstrainedContours.\n";
+        << "  --geomagic-sharpen-contours              Enable Geomagic sharpenConstrainedContours.\n"
+        << "  --allow-high-risk-patch-preview          Continue past patch preview high-risk warnings for experiments.\n"
+        << "  --strict-original-boundary-retrim        Rebuild original-boundary pcurves on the selected patch surface for experiments.\n";
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -360,6 +368,15 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.adjacentFaceSupportCollarRingCount = std::stoi(value);
+        } else if (arg == "--adaptive-support-collar-width") {
+            options.enableB2AdjacentFaceSupportCollar = true;
+            options.enableAdaptiveAdjacentFaceSupportCollarWidth = true;
+        } else if (arg == "--support-collar-under-cover") {
+            const auto* value = requireValue("--support-collar-under-cover");
+            if (value == nullptr) {
+                return false;
+            }
+            options.adjacentFaceSupportCollarUnderCover = std::stod(value);
         } else if (arg == "--b2-corner-safe-support-collar") {
             options.enableB2AdjacentFaceSupportCollar = true;
             options.enableB2CornerSafeSupportCollar = true;
@@ -371,6 +388,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
             options.adjacentFaceSupportCollarMaxOffsetScale = std::stod(value);
         } else if (arg == "--geomagic-sharpen-contours") {
             options.geomagicSharpenContours = true;
+        } else if (arg == "--allow-high-risk-patch-preview") {
+            options.allowHighRiskPatchPreview = true;
+        } else if (arg == "--strict-original-boundary-retrim") {
+            options.strictOriginalBoundaryRetrim = true;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return false;
@@ -660,6 +681,42 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("adjacent_face_support_collar_rejected_count", report.adjacentFaceSupportCollarRejectedCount);
     object.insert("adjacent_face_support_collar_boundary_coverage", report.adjacentFaceSupportCollarBoundaryCoverage);
     object.insert(
+        "adjacent_face_support_collar_adaptive_width_enabled",
+        report.adjacentFaceSupportCollarAdaptiveWidthEnabled);
+    object.insert(
+        "adjacent_face_support_collar_under_cover",
+        report.adjacentFaceSupportCollarUnderCover);
+    object.insert(
+        "adjacent_face_support_collar_boundary_h95",
+        report.adjacentFaceSupportCollarBoundaryH95);
+    object.insert(
+        "adjacent_face_support_collar_effective_width_min",
+        report.adjacentFaceSupportCollarEffectiveWidthMin);
+    object.insert(
+        "adjacent_face_support_collar_effective_width_mean",
+        report.adjacentFaceSupportCollarEffectiveWidthMean);
+    object.insert(
+        "adjacent_face_support_collar_effective_width_max",
+        report.adjacentFaceSupportCollarEffectiveWidthMax);
+    object.insert(
+        "adjacent_face_support_collar_anchor_count",
+        report.adjacentFaceSupportCollarAnchorCount);
+    object.insert(
+        "adjacent_face_support_collar_body_bridge_sample_count",
+        report.adjacentFaceSupportCollarBodyBridgeSampleCount);
+    object.insert(
+        "adjacent_face_support_collar_body_bridge_triangle_count",
+        report.adjacentFaceSupportCollarBodyBridgeTriangleCount);
+    object.insert(
+        "adjacent_face_support_collar_body_bridge_rejected_count",
+        report.adjacentFaceSupportCollarBodyBridgeRejectedCount);
+    object.insert(
+        "adjacent_face_support_collar_body_bridge_component_count",
+        report.adjacentFaceSupportCollarBodyBridgeComponentCount);
+    object.insert(
+        "adjacent_face_support_collar_body_bridge_max_gap",
+        report.adjacentFaceSupportCollarBodyBridgeMaxGap);
+    object.insert(
         "adjacent_face_support_collar_corner_clamp_enabled",
         report.adjacentFaceSupportCollarCornerClampEnabled);
     object.insert(
@@ -880,6 +937,7 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     object.insert("success", report.success);
     object.insert("candidate_id", report.candidateId);
     object.insert("used_original_boundary_surface_retrim", report.usedOriginalBoundarySurfaceRetrim);
+    object.insert("attempted_multi_surface_boundary_shell", report.attemptedMultiSurfaceBoundaryShell);
     object.insert("used_multi_surface_boundary_shell", report.usedMultiSurfaceBoundaryShell);
     object.insert("patch_face_count", report.patchFaceCount);
     object.insert("replacement_face_count", report.replacementFaceCount);
@@ -910,6 +968,90 @@ QJsonObject apply_to_json(const spo::PatchReplacementReport& report) {
     object.insert("free_edge_diagnostics", free_edge_diagnostics_to_json(report.freeEdgeDiagnostics));
     object.insert("trim_diagnostics", trim_diagnostics_to_json(report.trimDiagnostics));
     object.insert("external_cad_diagnostics", external_cad_diagnostics_to_json(report.externalCadDiagnostics));
+    object.insert(
+        "retrim_boundary_edge_pcurve_rebuild_attempt_count",
+        report.retrimBoundaryEdgePcurveRebuildAttemptCount);
+    object.insert(
+        "retrim_boundary_edge_pcurve_rebuild_success_count",
+        report.retrimBoundaryEdgePcurveRebuildSuccessCount);
+    object.insert(
+        "retrim_boundary_edge_pcurve_rebuild_failure_count",
+        report.retrimBoundaryEdgePcurveRebuildFailureCount);
+    object.insert(
+        "retrim_boundary_edge_same_parameter_check_count",
+        report.retrimBoundaryEdgeSameParameterCheckCount);
+    object.insert(
+        "retrim_boundary_edge_same_parameter_failure_count",
+        report.retrimBoundaryEdgeSameParameterFailureCount);
+    object.insert(
+        "retrim_boundary_edge_max_same_parameter_deviation",
+        report.retrimBoundaryEdgeMaxSameParameterDeviation);
+    object.insert(
+        "retrim_boundary_edge_pcurve_rebuild_failed_edge_ids",
+        edge_ids_to_json(report.retrimBoundaryEdgePcurveRebuildFailedEdgeIds));
+    object.insert(
+        "retrim_boundary_edge_same_parameter_failed_edge_ids",
+        edge_ids_to_json(report.retrimBoundaryEdgeSameParameterFailedEdgeIds));
+    object.insert("multi_surface_boundary_sample_count", report.multiSurfaceBoundarySampleCount);
+    object.insert("multi_surface_projected_sample_count", report.multiSurfaceProjectedSampleCount);
+    object.insert("multi_surface_failed_projection_count", report.multiSurfaceFailedProjectionCount);
+    object.insert("multi_surface_max_projection_distance", report.multiSurfaceMaxProjectionDistance);
+    object.insert("multi_surface_average_projection_distance", report.multiSurfaceAverageProjectionDistance);
+    object.insert("multi_surface_assigned_boundary_segment_count", report.multiSurfaceAssignedBoundarySegmentCount);
+    object.insert("multi_surface_split_boundary_edge_count", report.multiSurfaceSplitBoundaryEdgeCount);
+    object.insert("multi_surface_built_face_count", report.multiSurfaceBuiltFaceCount);
+    object.insert("multi_surface_closed_wire_count", report.multiSurfaceClosedWireCount);
+    object.insert("multi_surface_open_wire_count", report.multiSurfaceOpenWireCount);
+    object.insert(
+        "multi_surface_multiple_closed_wire_face_count",
+        report.multiSurfaceMultipleClosedWireFaceCount);
+    object.insert(
+        "multi_surface_skipped_unowned_open_wire_face_count",
+        report.multiSurfaceSkippedUnownedOpenWireFaceCount);
+    object.insert("multi_surface_failed_patch_face_index", report.multiSurfaceFailedPatchFaceIndex);
+    object.insert("multi_surface_failed_face_edge_count", report.multiSurfaceFailedFaceEdgeCount);
+    object.insert(
+        "multi_surface_failed_face_original_boundary_segment_count",
+        report.multiSurfaceFailedFaceOriginalBoundarySegmentCount);
+    object.insert(
+        "multi_surface_failed_face_internal_edge_count",
+        report.multiSurfaceFailedFaceInternalEdgeCount);
+    object.insert(
+        "multi_surface_failed_open_wire_edge_count",
+        report.multiSurfaceFailedOpenWireEdgeCount);
+    object.insert(
+        "multi_surface_failed_open_wire_length",
+        report.multiSurfaceFailedOpenWireLength);
+    object.insert(
+        "multi_surface_failed_open_wire_endpoint_gap",
+        report.multiSurfaceFailedOpenWireEndpointGap);
+    object.insert(
+        "multi_surface_failed_open_wire_start",
+        point_to_json(
+            report.multiSurfaceFailedOpenWireStartPointValid,
+            report.multiSurfaceFailedOpenWireStartX,
+            report.multiSurfaceFailedOpenWireStartY,
+            report.multiSurfaceFailedOpenWireStartZ));
+    object.insert(
+        "multi_surface_failed_open_wire_end",
+        point_to_json(
+            report.multiSurfaceFailedOpenWireEndPointValid,
+            report.multiSurfaceFailedOpenWireEndX,
+            report.multiSurfaceFailedOpenWireEndY,
+            report.multiSurfaceFailedOpenWireEndZ));
+    object.insert(
+        "multi_surface_selected_wire_connect_tolerance",
+        report.multiSurfaceSelectedWireConnectTolerance);
+    object.insert(
+        "multi_surface_fallback_wire_connect_attempted",
+        report.multiSurfaceFallbackWireConnectAttempted);
+    object.insert(
+        "multi_surface_fallback_wire_connect_succeeded",
+        report.multiSurfaceFallbackWireConnectSucceeded);
+    object.insert("multi_surface_failed_edge_ids", edge_ids_to_json(report.multiSurfaceFailedEdgeIds));
+    object.insert(
+        "multi_surface_failed_face_original_boundary_edge_ids",
+        edge_ids_to_json(report.multiSurfaceFailedFaceOriginalBoundaryEdgeIds));
     object.insert(
         "multi_surface_boundary_edge_pcurve_rebuild_attempt_count",
         report.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount);
@@ -1195,6 +1337,10 @@ int main(int argc, char* argv[]) {
     samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
     samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
     samplingOptions.adjacentFaceSupportCollarRingCount = options.adjacentFaceSupportCollarRingCount;
+    samplingOptions.enableAdaptiveAdjacentFaceSupportCollarWidth =
+        options.enableAdaptiveAdjacentFaceSupportCollarWidth;
+    samplingOptions.adjacentFaceSupportCollarUnderCover =
+        options.adjacentFaceSupportCollarUnderCover;
     samplingOptions.enableAdjacentFaceSupportCollarCornerClamp = options.enableB2CornerSafeSupportCollar;
     samplingOptions.adjacentFaceSupportCollarMaxOffsetScale = options.adjacentFaceSupportCollarMaxOffsetScale;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
@@ -1287,7 +1433,7 @@ int main(int argc, char* argv[]) {
         candidate,
         importedPatch,
         artifacts);
-    if (!previewReport.success || previewReport.highRisk) {
+    if (!previewReport.success || (previewReport.highRisk && !options.allowHighRiskPatchPreview)) {
         return fail(
             "patch_preview",
             "Patch preview is not apply-ready. success=" +
@@ -1318,6 +1464,8 @@ int main(int argc, char* argv[]) {
     input.importedPatch = &importedPatch;
     input.artifactPaths = &artifacts;
     input.previewReport = &previewReport;
+    input.allowHighRiskPatchPreview = options.allowHighRiskPatchPreview;
+    input.strictOriginalBoundaryRetrim = options.strictOriginalBoundaryRetrim;
 
     spo::PatchReplacementCommandOptions commandOptions;
     commandOptions.requireWatertightSolidGate = true;
@@ -1342,6 +1490,13 @@ int main(int argc, char* argv[]) {
     if (strictApplySuccess) {
         print_stage("exporting applied STEP");
         appliedStepExportReport = export_applied_step(options, context.document, *candidate);
+    } else if (command.afterDocument().hasShape()) {
+        print_stage("exporting gate-failed applied STEP");
+        appliedStepExportReport = export_applied_step(options, command.afterDocument(), *candidate);
+        if (appliedStepExportReport.success) {
+            appliedStepExportReport.message =
+                "Gate-failed applied STEP exported for diagnostics; StrictTopologyGate did not pass.";
+        }
     }
     update_external_cad_diagnostics_after_applied_step_export(applyReport, appliedStepExportReport);
 

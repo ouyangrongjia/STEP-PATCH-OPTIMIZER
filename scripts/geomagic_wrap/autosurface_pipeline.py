@@ -397,6 +397,31 @@ def apply_mm_file_open_options(reader):
         return False
 
 
+def apply_mm_file_save_options(writer):
+    try:
+        options = geo.FileSaveOptions()
+        try:
+            options.units = geo.Length.Millimeters
+        except Exception as exc:
+            print_flush("  Warning: failed to set FileSaveOptions.units: {}".format(exc))
+        writer.options = options
+        print_flush("  FileSaveOptions units set to millimeters")
+        return True
+    except Exception as exc:
+        print_flush("  Warning: failed to set FileSaveOptions units: {}".format(exc))
+        return False
+
+
+def apply_mm_autosurface_units(autosurf):
+    try:
+        autosurf.units = geo.Length.Millimeters
+        print_flush("    AutoSurface units set to millimeters")
+        return True
+    except Exception as exc:
+        print_flush("    Warning: failed to set AutoSurface.units: {}".format(exc))
+        return False
+
+
 def ensure_geomagic_api_imported():
     global _GEOMAGIC_API_IMPORTED
     global geo, ReadFile, Remesh, CalculateTargetEdgeLength, WriteFile, AutoSurface, QuickSmooth, Relax
@@ -651,6 +676,7 @@ def run_autosurface_once(mesh, igs_path, geometry_mode, adaptive_fit, num_patche
         autosurf = AutoSurface()
         autosurf.mesh = mesh
         autosurf.fileName = igs_path
+        apply_mm_autosurface_units(autosurf)
         geom = set_autosurface_geometry(autosurf, geometry_mode)
         autosurf.tolerance = float(tolerance)
         autosurf.autoMerge = bool(auto_merge)
@@ -808,8 +834,10 @@ def convert_igs_to_stp_plain(igs_path, stp_path):
         writer = WriteFile()
         writer.cadModel = cad_model
         writer.filename = stp_path
+        apply_mm_file_save_options(writer)
         try:
             writer.filterId = 5  # STEP214, harmless if unsupported
+            print_flush("  WriteFile filterId set to STEP214 (5)")
         except Exception:
             pass
         writer.run()

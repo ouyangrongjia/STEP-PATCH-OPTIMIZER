@@ -207,6 +207,16 @@ struct AdjacentFaceSupportCollarBuildResult {
     int fallbackCount = 0;
     int rejectedCount = 0;
     double boundaryCoverage = 0.0;
+    double boundaryH95 = 0.0;
+    double effectiveWidthMin = 0.0;
+    double effectiveWidthMean = 0.0;
+    double effectiveWidthMax = 0.0;
+    int anchorCount = 0;
+    int bodyBridgeSampleCount = 0;
+    int bodyBridgeTriangleCount = 0;
+    int bodyBridgeRejectedCount = 0;
+    int bodyBridgeComponentCount = 0;
+    double bodyBridgeMaxGap = 0.0;
     int cornerClampCount = 0;
     double maxOffset = 0.0;
 };
@@ -656,9 +666,25 @@ std::optional<gp_Pnt> surface_point_at_uv_offset(
             return std::nullopt;
         }
 
-        const auto target = surface->Value(
-            uv.X() + direction.X() * paramStep,
-            uv.Y() + direction.Y() * paramStep);
+        auto targetStep = paramStep;
+        gp_Pnt target;
+        for (int iteration = 0; iteration < 6; ++iteration) {
+            target = surface->Value(
+                uv.X() + direction.X() * targetStep,
+                uv.Y() + direction.Y() * targetStep);
+            const auto currentDistance = base.Distance(target);
+            if (!std::isfinite(currentDistance) || currentDistance <= 1.0e-12) {
+                return std::nullopt;
+            }
+            if (std::abs(currentDistance - distance) <= std::max(distance * 0.02, 1.0e-8)) {
+                break;
+            }
+            const auto correction = distance / currentDistance;
+            targetStep *= correction;
+            if (!std::isfinite(targetStep) || targetStep <= 0.0) {
+                return std::nullopt;
+            }
+        }
         if (!std::isfinite(target.X()) || !std::isfinite(target.Y()) || !std::isfinite(target.Z())) {
             return std::nullopt;
         }
@@ -1051,6 +1077,186 @@ int append_oriented_closed_quad_strip(
     return added;
 }
 
+std::vector<gp_Pnt> rotate_loop_to_start(
+    const std::vector<gp_Pnt>& loop,
+    std::size_t start,
+    bool reverse) {
+    std::vector<gp_Pnt> result;
+    if (loop.empty()) {
+        return result;
+    }
+    result.reserve(loop.size());
+    const auto count = loop.size();
+    for (std::size_t offset = 0; offset < count; ++offset) {
+        const auto index = reverse ?
+            (start + count - offset) % count :
+            (start + offset) % count;
+        result.push_back(loop[index]);
+    }
+    return result;
+}
+
+double loop_alignment_score(
+    const std::vector<gp_Pnt>& loop,
+    const std::vector<gp_Pnt>& reference) {
+    if (loop.empty() || reference.empty()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const auto samples = std::max<std::size_t>(
+        1,
+        std::min<std::size_t>({64, loop.size(), reference.size()}));
+    double score = 0.0;
+    for (std::size_t sample = 0; sample < samples; ++sample) {
+        const auto loopIndex = std::min(
+            loop.size() - 1,
+            static_cast<std::size_t>(
+                std::llround(static_cast<double>(sample) *
+                    static_cast<double>(loop.size() - 1) /
+                    static_cast<double>(samples - 1 == 0 ? 1 : samples - 1))));
+        const auto referenceIndex = std::min(
+            reference.size() - 1,
+            static_cast<std::size_t>(
+                std::llround(static_cast<double>(sample) *
+                    static_cast<double>(reference.size() - 1) /
+                    static_cast<double>(samples - 1 == 0 ? 1 : samples - 1))));
+        score += squared_distance(loop[loopIndex], reference[referenceIndex]);
+    }
+    return score / static_cast<double>(samples);
+}
+
+std::vector<gp_Pnt> align_loop_to_reference(
+    const std::vector<gp_Pnt>& loop,
+    const std::vector<gp_Pnt>& reference) {
+    if (loop.empty() || reference.empty()) {
+        return loop;
+    }
+
+    std::size_t nearest = 0;
+    auto nearestDistance = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < loop.size(); ++index) {
+        const auto distance = squared_distance(loop[index], reference.front());
+        if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearest = index;
+        }
+    }
+
+    auto forward = rotate_loop_to_start(loop, nearest, false);
+    auto backward = rotate_loop_to_start(loop, nearest, true);
+    return loop_alignment_score(forward, reference) <= loop_alignment_score(backward, reference) ?
+        forward :
+        backward;
+}
+
+std::vector<double> cumulative_closed_loop_lengths(const std::vector<gp_Pnt>& loop) {
+    std::vector<double> cumulative(loop.size() + 1, 0.0);
+    for (std::size_t index = 0; index < loop.size(); ++index) {
+        cumulative[index + 1] = cumulative[index] + loop[index].Distance(loop[(index + 1) % loop.size()]);
+    }
+    return cumulative;
+}
+
+double max_nearest_distance_between_loops(
+    const std::vector<gp_Pnt>& source,
+    const std::vector<gp_Pnt>& target) {
+    if (source.empty() || target.empty()) {
+        return 0.0;
+    }
+    double maxDistance = 0.0;
+    for (const auto& point : source) {
+        auto nearestDistance = std::numeric_limits<double>::infinity();
+        for (const auto& candidate : target) {
+            nearestDistance = std::min(nearestDistance, squared_distance(point, candidate));
+        }
+        if (std::isfinite(nearestDistance)) {
+            maxDistance = std::max(maxDistance, std::sqrt(nearestDistance));
+        }
+    }
+    return maxDistance;
+}
+
+int append_oriented_closed_loop_bridge(
+    const std::vector<gp_Pnt>& innerInput,
+    const std::vector<gp_Pnt>& outer,
+    const std::vector<gp_Vec>& normals,
+    std::vector<StlTriangle>& outTriangles,
+    int& rejected) {
+    if (innerInput.size() < 3 || outer.size() < 3 || normals.empty()) {
+        return 0;
+    }
+
+    const auto inner = align_loop_to_reference(innerInput, outer);
+    const auto innerCumulative = cumulative_closed_loop_lengths(inner);
+    const auto outerCumulative = cumulative_closed_loop_lengths(outer);
+    const auto innerLength = innerCumulative.back();
+    const auto outerLength = outerCumulative.back();
+    if (innerLength <= 1.0e-15 || outerLength <= 1.0e-15) {
+        return 0;
+    }
+
+    auto addTriangle = [&](const gp_Pnt& p0, const gp_Pnt& p1, const gp_Pnt& p2, std::size_t normalIndex) {
+        auto referenceNormal = normals[normalIndex % normals.size()];
+        if (referenceNormal.Magnitude() <= 1.0e-15) {
+            referenceNormal = gp_Vec(0.0, 0.0, 1.0);
+        }
+        referenceNormal.Normalize();
+        auto triangle = make_oriented_stl_triangle(p0, p1, p2, referenceNormal);
+        if (!is_degenerate(triangle, 1.0e-15)) {
+            outTriangles.push_back(triangle);
+            return 1;
+        }
+        ++rejected;
+        return 0;
+    };
+
+    int added = 0;
+    std::size_t innerIndex = 0;
+    std::size_t outerIndex = 0;
+    constexpr double parameterTolerance = 1.0e-12;
+    while (innerIndex < inner.size() || outerIndex < outer.size()) {
+        const auto nextInner = innerIndex < inner.size() ?
+            innerCumulative[innerIndex + 1] / innerLength :
+            std::numeric_limits<double>::infinity();
+        const auto nextOuter = outerIndex < outer.size() ?
+            outerCumulative[outerIndex + 1] / outerLength :
+            std::numeric_limits<double>::infinity();
+
+        if (innerIndex < inner.size() &&
+            outerIndex < outer.size() &&
+            std::abs(nextInner - nextOuter) <= parameterTolerance) {
+            added += addTriangle(
+                inner[innerIndex % inner.size()],
+                inner[(innerIndex + 1) % inner.size()],
+                outer[outerIndex % outer.size()],
+                outerIndex);
+            added += addTriangle(
+                inner[(innerIndex + 1) % inner.size()],
+                outer[(outerIndex + 1) % outer.size()],
+                outer[outerIndex % outer.size()],
+                outerIndex);
+            ++innerIndex;
+            ++outerIndex;
+        } else if (innerIndex < inner.size() && nextInner < nextOuter) {
+            added += addTriangle(
+                inner[innerIndex % inner.size()],
+                inner[(innerIndex + 1) % inner.size()],
+                outer[outerIndex % outer.size()],
+                outerIndex);
+            ++innerIndex;
+        } else if (outerIndex < outer.size()) {
+            added += addTriangle(
+                inner[innerIndex % inner.size()],
+                outer[(outerIndex + 1) % outer.size()],
+                outer[outerIndex % outer.size()],
+                outerIndex);
+            ++outerIndex;
+        } else {
+            break;
+        }
+    }
+    return added;
+}
+
 struct MeshBoundaryLoop {
     std::vector<gp_Pnt> points;
     int edgeCount = 0;
@@ -1205,28 +1411,23 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
 
     const auto center = bbox_center(candidateBBox);
     const auto ringCount = std::max(options.adjacentFaceSupportCollarRingCount, 1);
-    const auto width = options.adjacentFaceSupportCollarWidth;
     const auto samplesPerEdge = std::max(
         options.adjacentFaceSupportCollarSamplesPerEdge,
         options.minBoundarySamplesPerEdge);
-    constexpr double joinToleranceSquared = 1.0e-10;
 
+    bool hasPreviousPoint = false;
+    gp_Pnt previousPoint;
     std::vector<gp_Pnt> boundaryRing;
     std::vector<gp_Vec> normalRing;
     std::vector<std::vector<gp_Pnt>> supportRings(static_cast<std::size_t>(ringCount));
-    std::vector<std::vector<unsigned char>> supportRingFromAdjacent(static_cast<std::size_t>(ringCount));
+    std::vector<double> boundaryNearEdgeLengths;
+    std::vector<double> effectiveWidths;
+    constexpr double joinToleranceSquared = 1.0e-10;
     boundaryRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     normalRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     for (auto& ring : supportRings) {
         ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     }
-    for (auto& ring : supportRingFromAdjacent) {
-        ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
-    }
-
-    bool hasPreviousPoint = false;
-    gp_Pnt previousPoint;
-    gp_Pnt firstLoopPoint;
 
     for (std::size_t edgeOrdinal = 0; edgeOrdinal < boundary.ordered_boundary_edges.size(); ++edgeOrdinal) {
         const auto edgeId = boundary.ordered_boundary_edges[edgeOrdinal];
@@ -1241,6 +1442,10 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
         if (adjacentFaceId.has_value() && *adjacentFaceId < topology.faceCount()) {
             adjacentFace = &topology.face(*adjacentFaceId);
         }
+        if (adjacentFace == nullptr) {
+            ++result.rejectedCount;
+            continue;
+        }
 
         BRepAdaptor_Curve adaptor(edge);
         const auto firstParam = adaptor.FirstParameter();
@@ -1250,8 +1455,35 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
         const auto reverseEdge = hasPreviousPoint &&
             lastPoint.SquareDistance(previousPoint) < firstPoint.SquareDistance(previousPoint);
 
-        int appendedForEdge = 0;
-        int adjacentSamplesForEdge = 0;
+        const auto length = edge_length(edge);
+        const auto boundaryNearLength = length > 0.0
+            ? length / static_cast<double>(samplesPerEdge)
+            : 0.0;
+        if (std::isfinite(boundaryNearLength) && boundaryNearLength > 0.0) {
+            boundaryNearEdgeLengths.push_back(boundaryNearLength);
+        }
+
+        auto effectiveWidth = options.adjacentFaceSupportCollarWidth;
+        if (options.enableAdaptiveAdjacentFaceSupportCollarWidth) {
+            effectiveWidth = std::max(
+                2.0 * std::max(options.adjacentFaceSupportCollarUnderCover, 0.0),
+                2.0 * boundaryNearLength);
+        }
+        if (!std::isfinite(effectiveWidth) || effectiveWidth <= 0.0) {
+            ++result.rejectedCount;
+            continue;
+        }
+
+        std::vector<gp_Pnt> edgeBoundaryRing;
+        std::vector<gp_Vec> edgeNormalRing;
+        std::vector<std::vector<gp_Pnt>> edgeSupportRings(static_cast<std::size_t>(ringCount));
+        edgeBoundaryRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        edgeNormalRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        for (auto& ring : edgeSupportRings) {
+            ring.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        }
+
+        int rejectedForEdge = 0;
         for (int sampleIndex = 0; sampleIndex <= samplesPerEdge; ++sampleIndex) {
             const auto ratio = static_cast<double>(sampleIndex) / static_cast<double>(samplesPerEdge);
             const auto parameter = reverseEdge
@@ -1259,158 +1491,158 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
                 : firstParam + (lastParam - firstParam) * ratio;
             const auto point = adaptor.Value(parameter);
 
-            if (hasPreviousPoint && sampleIndex == 0 &&
-                point.SquareDistance(previousPoint) <= joinToleranceSquared) {
-                continue;
-            }
-            if (edgeOrdinal + 1 == boundary.ordered_boundary_edges.size() &&
-                sampleIndex == samplesPerEdge &&
-                !boundaryRing.empty() &&
-                point.SquareDistance(firstLoopPoint) <= joinToleranceSquared) {
-                continue;
-            }
-
             BoundarySample sample;
             sample.point = point;
             sample.parameter = parameter;
             sample.edgeId = edgeId;
 
-            if (boundaryRing.empty()) {
-                firstLoopPoint = point;
-            }
             previousPoint = point;
             hasPreviousPoint = true;
-            boundaryRing.push_back(point);
 
             gp_Vec normal(0.0, 0.0, 1.0);
+            std::vector<gp_Pnt> sampleSupportPoints;
+            sampleSupportPoints.reserve(static_cast<std::size_t>(ringCount));
+            bool sampleOk = true;
             for (int ring = 1; ring <= ringCount; ++ring) {
-                const auto distance = width * static_cast<double>(ring) / static_cast<double>(ringCount);
-                std::optional<gp_Pnt> supportPoint;
+                const auto distance = effectiveWidth * static_cast<double>(ring) / static_cast<double>(ringCount);
                 gp_Vec supportNormal = normal;
-                if (adjacentFace != nullptr) {
-                    supportPoint = adjacent_face_support_point(
-                        edge,
-                        *adjacentFace,
-                        sample,
-                        center,
-                        distance,
-                        supportNormal);
-                }
-
-                const auto ringIndex = static_cast<std::size_t>(ring - 1);
+                const auto supportPoint = adjacent_face_support_point(
+                    edge,
+                    *adjacentFace,
+                    sample,
+                    center,
+                    distance,
+                    supportNormal);
                 if (supportPoint.has_value()) {
                     normal = supportNormal;
-                    supportRings[ringIndex].push_back(*supportPoint);
-                    supportRingFromAdjacent[ringIndex].push_back(1);
-                    ++adjacentSamplesForEdge;
+                    sampleSupportPoints.push_back(*supportPoint);
                 } else {
-                    ++result.fallbackCount;
-                    supportRings[ringIndex].push_back(
-                        radial_guard_point(point, center, distance));
-                    supportRingFromAdjacent[ringIndex].push_back(0);
+                    sampleOk = false;
+                    break;
                 }
             }
-            normalRing.push_back(normal);
-            ++appendedForEdge;
+
+            if (!sampleOk || sampleSupportPoints.size() != static_cast<std::size_t>(ringCount)) {
+                ++rejectedForEdge;
+                continue;
+            }
+
+            edgeBoundaryRing.push_back(point);
+            edgeNormalRing.push_back(normal);
+            for (int ring = 0; ring < ringCount; ++ring) {
+                edgeSupportRings[static_cast<std::size_t>(ring)].push_back(
+                    sampleSupportPoints[static_cast<std::size_t>(ring)]);
+            }
+            if (sampleIndex == 0 || sampleIndex == samplesPerEdge) {
+                ++result.anchorCount;
+            }
         }
 
-        if (appendedForEdge >= 2 && adjacentSamplesForEdge > 0) {
+        if (edgeBoundaryRing.size() >= 2 && rejectedForEdge == 0) {
+            for (int ring = 0; ring < ringCount; ++ring) {
+                const auto ringIndex = static_cast<std::size_t>(ring);
+                const auto targetDistance =
+                    effectiveWidth * static_cast<double>(ring + 1) / static_cast<double>(ringCount);
+                if (options.enableAdjacentFaceSupportCollarCornerClamp) {
+                    apply_corner_safe_support_clamp(
+                        edgeBoundaryRing,
+                        edgeSupportRings[ringIndex],
+                        targetDistance,
+                        options.adjacentFaceSupportCollarCornerSmoothingIterations,
+                        options.adjacentFaceSupportCollarMaxOffsetScale,
+                        result.cornerClampCount,
+                        result.maxOffset);
+                } else {
+                    for (std::size_t index = 0; index < edgeBoundaryRing.size() &&
+                        index < edgeSupportRings[ringIndex].size(); ++index) {
+                        const gp_Vec offset(edgeBoundaryRing[index], edgeSupportRings[ringIndex][index]);
+                        result.maxOffset = std::max(result.maxOffset, offset.Magnitude());
+                    }
+                }
+            }
+
+            for (std::size_t index = 0; index < edgeBoundaryRing.size(); ++index) {
+                if (!boundaryRing.empty() &&
+                    edgeBoundaryRing[index].SquareDistance(boundaryRing.back()) <= joinToleranceSquared) {
+                    continue;
+                }
+                boundaryRing.push_back(edgeBoundaryRing[index]);
+                normalRing.push_back(edgeNormalRing[index]);
+                for (int ring = 0; ring < ringCount; ++ring) {
+                    supportRings[static_cast<std::size_t>(ring)].push_back(
+                        edgeSupportRings[static_cast<std::size_t>(ring)][index]);
+                }
+            }
             ++result.coveredBoundaryEdgeCount;
+            result.sampleCount += static_cast<int>(edgeBoundaryRing.size()) * ringCount;
+            result.adjacentFaceSampleCount += static_cast<int>(edgeBoundaryRing.size()) * ringCount;
+            effectiveWidths.push_back(effectiveWidth);
         } else {
-            ++result.rejectedCount;
+            result.rejectedCount += std::max(rejectedForEdge, 1);
+        }
+    }
+
+    if (boundaryRing.size() >= 3 && boundaryRing.front().SquareDistance(boundaryRing.back()) <= joinToleranceSquared) {
+        boundaryRing.pop_back();
+        normalRing.pop_back();
+        for (auto& ring : supportRings) {
+            if (!ring.empty()) {
+                ring.pop_back();
+            }
         }
     }
 
     const auto meshBoundary = extract_ordered_mesh_boundary_loop(baseTriangles);
-    result.rejectedCount += meshBoundary.rejectedCount;
-    if (meshBoundary.points.size() < 3 || boundaryRing.empty()) {
-        result.boundaryCoverage = 0.0;
-        return result;
-    }
-
-    std::vector<gp_Vec> meshNormalRing;
-    std::vector<std::vector<gp_Pnt>> meshSupportRings(static_cast<std::size_t>(ringCount));
-    meshNormalRing.reserve(meshBoundary.points.size());
-    for (auto& ring : meshSupportRings) {
-        ring.reserve(meshBoundary.points.size());
-    }
-
-    for (const auto& meshPoint : meshBoundary.points) {
-        std::size_t nearestIndex = 0;
-        auto nearestDistance = std::numeric_limits<double>::infinity();
-        for (std::size_t index = 0; index < boundaryRing.size(); ++index) {
-            const auto distance = squared_distance(meshPoint, boundaryRing[index]);
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
-                nearestIndex = index;
-            }
-        }
-
-        meshNormalRing.push_back(normalRing[nearestIndex]);
-        for (int ring = 0; ring < ringCount; ++ring) {
-            const auto ringIndex = static_cast<std::size_t>(ring);
-            if (nearestIndex >= supportRings[ringIndex].size()) {
-                ++result.rejectedCount;
-                meshSupportRings[ringIndex].push_back(meshPoint);
-                continue;
-            }
-
-            gp_Vec offset(boundaryRing[nearestIndex], supportRings[ringIndex][nearestIndex]);
-            if (offset.Magnitude() <= 1.0e-12) {
-                ++result.rejectedCount;
-                meshSupportRings[ringIndex].push_back(meshPoint);
-                continue;
-            }
-
-            meshSupportRings[ringIndex].push_back(meshPoint.Translated(offset));
-            ++result.sampleCount;
-            if (nearestIndex < supportRingFromAdjacent[ringIndex].size() &&
-                supportRingFromAdjacent[ringIndex][nearestIndex] != 0) {
-                ++result.adjacentFaceSampleCount;
-            }
-        }
-    }
-
-    for (int ring = 0; ring < ringCount; ++ring) {
-        const auto ringIndex = static_cast<std::size_t>(ring);
-        const auto targetDistance = width * static_cast<double>(ring + 1) / static_cast<double>(ringCount);
-        if (options.enableAdjacentFaceSupportCollarCornerClamp) {
-            apply_corner_safe_support_clamp(
-                meshBoundary.points,
-                meshSupportRings[ringIndex],
-                targetDistance,
-                options.adjacentFaceSupportCollarCornerSmoothingIterations,
-                options.adjacentFaceSupportCollarMaxOffsetScale,
-                result.cornerClampCount,
-                result.maxOffset);
-        } else {
-            for (std::size_t index = 0; index < meshBoundary.points.size() &&
-                index < meshSupportRings[ringIndex].size(); ++index) {
-                const gp_Vec offset(meshBoundary.points[index], meshSupportRings[ringIndex][index]);
-                result.maxOffset = std::max(result.maxOffset, offset.Magnitude());
-            }
-        }
-    }
-
-    auto added = 0;
-    if (!meshSupportRings.empty()) {
-        added += append_oriented_closed_quad_strip(
+    result.bodyBridgeRejectedCount += meshBoundary.rejectedCount;
+    result.bodyBridgeComponentCount = meshBoundary.componentCount;
+    if (meshBoundary.points.size() >= 3 && boundaryRing.size() >= 3) {
+        result.bodyBridgeMaxGap = std::max(
+            max_nearest_distance_between_loops(meshBoundary.points, boundaryRing),
+            max_nearest_distance_between_loops(boundaryRing, meshBoundary.points));
+        result.bodyBridgeSampleCount = static_cast<int>(meshBoundary.points.size() + boundaryRing.size());
+        int bridgeRejectedCount = 0;
+        result.bodyBridgeTriangleCount = append_oriented_closed_loop_bridge(
             meshBoundary.points,
-            meshSupportRings.front(),
-            meshNormalRing,
+            boundaryRing,
+            normalRing,
+            outTriangles,
+            bridgeRejectedCount);
+        result.bodyBridgeRejectedCount += bridgeRejectedCount;
+        result.triangleCount += result.bodyBridgeTriangleCount;
+    }
+
+    if (boundaryRing.size() >= 3 && !supportRings.empty()) {
+        result.triangleCount += append_oriented_closed_quad_strip(
+            boundaryRing,
+            supportRings.front(),
+            normalRing,
             outTriangles,
             result.rejectedCount);
-        for (std::size_t ring = 1; ring < meshSupportRings.size(); ++ring) {
-            added += append_oriented_closed_quad_strip(
-                meshSupportRings[ring - 1],
-                meshSupportRings[ring],
-                meshNormalRing,
+        for (std::size_t ring = 1; ring < supportRings.size(); ++ring) {
+            result.triangleCount += append_oriented_closed_quad_strip(
+                supportRings[ring - 1],
+                supportRings[ring],
+                normalRing,
                 outTriangles,
                 result.rejectedCount);
         }
     }
-    result.triangleCount += added;
-
+    if (!boundaryNearEdgeLengths.empty()) {
+        std::sort(boundaryNearEdgeLengths.begin(), boundaryNearEdgeLengths.end());
+        const auto index = static_cast<std::size_t>(std::ceil(
+            0.95 * static_cast<double>(boundaryNearEdgeLengths.size())) - 1.0);
+        result.boundaryH95 = boundaryNearEdgeLengths[
+            std::min(index, boundaryNearEdgeLengths.size() - 1)];
+    }
+    if (!effectiveWidths.empty()) {
+        result.effectiveWidthMin = *std::min_element(effectiveWidths.begin(), effectiveWidths.end());
+        result.effectiveWidthMax = *std::max_element(effectiveWidths.begin(), effectiveWidths.end());
+        double sum = 0.0;
+        for (const auto width : effectiveWidths) {
+            sum += width;
+        }
+        result.effectiveWidthMean = sum / static_cast<double>(effectiveWidths.size());
+    }
     result.boundaryCoverage = result.boundaryEdgeCount > 0
         ? static_cast<double>(result.coveredBoundaryEdgeCount) / static_cast<double>(result.boundaryEdgeCount)
         : 0.0;
@@ -1903,6 +2135,9 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     if (options.enableAdjacentFaceSupportCollar) {
         report.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
         report.adjacentFaceSupportCollarRingCount = std::max(options.adjacentFaceSupportCollarRingCount, 0);
+        report.adjacentFaceSupportCollarAdaptiveWidthEnabled =
+            options.enableAdaptiveAdjacentFaceSupportCollarWidth;
+        report.adjacentFaceSupportCollarUnderCover = options.adjacentFaceSupportCollarUnderCover;
         report.adjacentFaceSupportCollarCornerClampEnabled =
             options.enableAdjacentFaceSupportCollarCornerClamp;
     }
@@ -2028,6 +2263,16 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
         report.adjacentFaceSupportCollarFallbackCount = supportCollar.fallbackCount;
         report.adjacentFaceSupportCollarRejectedCount = supportCollar.rejectedCount;
         report.adjacentFaceSupportCollarBoundaryCoverage = supportCollar.boundaryCoverage;
+        report.adjacentFaceSupportCollarBoundaryH95 = supportCollar.boundaryH95;
+        report.adjacentFaceSupportCollarEffectiveWidthMin = supportCollar.effectiveWidthMin;
+        report.adjacentFaceSupportCollarEffectiveWidthMean = supportCollar.effectiveWidthMean;
+        report.adjacentFaceSupportCollarEffectiveWidthMax = supportCollar.effectiveWidthMax;
+        report.adjacentFaceSupportCollarAnchorCount = supportCollar.anchorCount;
+        report.adjacentFaceSupportCollarBodyBridgeSampleCount = supportCollar.bodyBridgeSampleCount;
+        report.adjacentFaceSupportCollarBodyBridgeTriangleCount = supportCollar.bodyBridgeTriangleCount;
+        report.adjacentFaceSupportCollarBodyBridgeRejectedCount = supportCollar.bodyBridgeRejectedCount;
+        report.adjacentFaceSupportCollarBodyBridgeComponentCount = supportCollar.bodyBridgeComponentCount;
+        report.adjacentFaceSupportCollarBodyBridgeMaxGap = supportCollar.bodyBridgeMaxGap;
         report.adjacentFaceSupportCollarCornerClampCount = supportCollar.cornerClampCount;
         report.adjacentFaceSupportCollarMaxOffset = supportCollar.maxOffset;
         if (supportCollar.triangleCount == 0) {
