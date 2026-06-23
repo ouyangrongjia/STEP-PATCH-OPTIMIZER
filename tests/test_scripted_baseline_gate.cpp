@@ -277,6 +277,49 @@ void test_creo_modelcheck_parse_only_handles_toolkit_xml_shape() {
     assert(compactJson.find("\"PTC_VAL_IMP_SCORE\":\"FAIL\"") != std::string::npos);
 }
 
+void test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs() {
+    const auto root = source_root();
+    const auto scriptPath = root / "scripts" / "run_creo_toolkit_phase1_repair.ps1";
+    const auto inputExporterPath = root / "tools" / "creo_phase1_input_exporter.cpp";
+    const auto toolkitProbePath =
+        root / "tools" / "creo_toolkit_phase1_repair_probe" / "creo_toolkit_phase1_repair_probe.cpp";
+
+    assert(std::filesystem::exists(scriptPath));
+    assert(std::filesystem::exists(inputExporterPath));
+    assert(std::filesystem::exists(toolkitProbePath));
+
+    const auto script = read_text_file(scriptPath);
+    const auto inputExporter = read_text_file(inputExporterPath);
+    const auto toolkitProbe = read_text_file(toolkitProbePath);
+
+    assert(script.find("-RealGeomagic") != std::string::npos);
+    assert(script.find("run_corner_baseline_gate.ps1") != std::string::npos);
+    assert(script.find("base_removed_candidate.stp") != std::string::npos);
+    assert(script.find("geomagic_patch.stp") != std::string::npos);
+    assert(script.find("creo_phase1_input_exporter") != std::string::npos);
+    assert(script.find("creo_toolkit_phase1_repair_probe") != std::string::npos);
+    assert(script.find("run_creo_step_diagnostic.ps1") != std::string::npos);
+    assert(script.find("-ParseModelCheckOnly") != std::string::npos);
+    assert(script.find("step_stats") != std::string::npos);
+    assert(script.find("StrictTopologyGate") != std::string::npos);
+    assert(script.find("phase1_result.json") != std::string::npos);
+    assert(script.find("*_applied.stp") == std::string::npos);
+    assert(script.find("UseLatestAppliedStep") == std::string::npos);
+
+    assert(inputExporter.find("BRepTools_ReShape") != std::string::npos);
+    assert(inputExporter.find("Remove(") != std::string::npos);
+    assert(inputExporter.find("base_removed_candidate") != std::string::npos);
+    assert(inputExporter.find("--base-removed-output") != std::string::npos);
+
+    assert(toolkitProbe.find("ProImportfeatCreate") != std::string::npos);
+    assert(toolkitProbe.find("ProImportfeatAttr") != std::string::npos);
+    assert(toolkitProbe.find("join_surfaces") != std::string::npos);
+    assert(toolkitProbe.find("attempt_make_solid") != std::string::npos);
+    assert(toolkitProbe.find("ProModelcheckExecute") != std::string::npos);
+    assert(toolkitProbe.find("ProIntf3DFileWriteWithDefaultProfile") != std::string::npos);
+    assert(toolkitProbe.find("short_edges_diagnostic_only") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
@@ -292,4 +335,5 @@ void run_scripted_baseline_gate_tests() {
     test_creo_modelcheck_parse_only_exports_item_details_and_correlation();
     test_creo_toolkit_baseline_probe_contract_is_optional();
     test_creo_modelcheck_parse_only_handles_toolkit_xml_shape();
+    test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs();
 }

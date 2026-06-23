@@ -151,6 +151,12 @@ if(SPO_BUILD_TOOLS)
     add_executable(corner_baseline_probe tools/corner_baseline_probe.cpp)
     target_link_libraries(corner_baseline_probe PRIVATE spo_core)
     target_compile_definitions(corner_baseline_probe PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_executable(creo_phase1_input_exporter tools/creo_phase1_input_exporter.cpp)
+    target_link_libraries(creo_phase1_input_exporter PRIVATE spo_core)
+
+    add_executable(strict_topology_gate_probe tools/strict_topology_gate_probe.cpp)
+    target_link_libraries(strict_topology_gate_probe PRIVATE spo_core)
 endif()
 
 if(SPO_BUILD_TESTS)
