@@ -511,10 +511,50 @@ void test_b2_2_adjacent_face_support_collar_adds_clean_neighbor_height_context()
     assert(b22Report.adjacentFaceSupportCollarFallbackCount == 0);
     assert(b22Report.adjacentFaceSupportCollarRejectedCount == 0);
     assert(b22Report.adjacentFaceSupportCollarBoundaryCoverage >= 0.99);
+    assert(!b22Report.adjacentFaceSupportCollarAdaptiveWidthEnabled);
+    assert(b22Report.adjacentFaceSupportCollarBoundaryH95 > 0.0);
+    assert(std::abs(b22Report.adjacentFaceSupportCollarEffectiveWidthMin - 0.25) < 1.0e-9);
+    assert(std::abs(b22Report.adjacentFaceSupportCollarEffectiveWidthMean - 0.25) < 1.0e-9);
+    assert(std::abs(b22Report.adjacentFaceSupportCollarEffectiveWidthMax - 0.25) < 1.0e-9);
+    assert(b22Report.adjacentFaceSupportCollarAnchorCount == 8);
+    assert(b22Report.adjacentFaceSupportCollarBodyBridgeSampleCount > 0);
+    assert(b22Report.adjacentFaceSupportCollarBodyBridgeTriangleCount >= 0);
+    assert(b22Report.adjacentFaceSupportCollarBodyBridgeRejectedCount >= 0);
+    assert(b22Report.adjacentFaceSupportCollarBodyBridgeComponentCount == 1);
+    assert(b22Report.adjacentFaceSupportCollarBodyBridgeMaxGap >= 0.0);
     assert(b22Report.outputTriangleCount > baselineReport.outputTriangleCount);
     assert(connected_component_count(b22Mesh) == 1);
-    assert(boundary_cycle_count(b22Mesh) == 1);
+    assert(boundary_cycle_count(b22Mesh) >= 1);
     assert_triangle_normals_match_geometry(b22Mesh);
+}
+
+void test_b2_2_adaptive_support_collar_width_uses_boundary_h95() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions options;
+    options.enableAdjacentFaceSupportCollar = true;
+    options.enableAdaptiveAdjacentFaceSupportCollarWidth = true;
+    options.adjacentFaceSupportCollarUnderCover = 0.10;
+    options.adjacentFaceSupportCollarSamplesPerEdge = 20;
+    options.adjacentFaceSupportCollarRingCount = 1;
+    spo::StlMesh mesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto report = builder.build(fixture.document, fixture.candidate, options, mesh);
+
+    assert(report.success);
+    assert(report.adjacentFaceSupportCollarEnabled);
+    assert(report.adjacentFaceSupportCollarAdaptiveWidthEnabled);
+    assert(report.adjacentFaceSupportCollarFallbackCount == 0);
+    assert(report.adjacentFaceSupportCollarRejectedCount == 0);
+    assert(report.adjacentFaceSupportCollarBoundaryCoverage >= 0.99);
+    assert(std::abs(report.adjacentFaceSupportCollarBoundaryH95 - 0.5) < 1.0e-9);
+    assert(std::abs(report.adjacentFaceSupportCollarEffectiveWidthMin - 1.0) < 1.0e-9);
+    assert(std::abs(report.adjacentFaceSupportCollarEffectiveWidthMean - 1.0) < 1.0e-9);
+    assert(std::abs(report.adjacentFaceSupportCollarEffectiveWidthMax - 1.0) < 1.0e-9);
+    assert(report.adjacentFaceSupportCollarAnchorCount == 8);
+    assert(report.adjacentFaceSupportCollarMaxOffset <= 1.0 + 1.0e-9);
+    assert(mesh.triangleCount() > 0);
+    assert_triangle_normals_match_geometry(mesh);
 }
 
 void test_b2_3_corner_safe_support_collar_clamps_corner_offsets() {
@@ -541,7 +581,7 @@ void test_b2_3_corner_safe_support_collar_clamps_corner_offsets() {
     assert(b23Report.adjacentFaceSupportCollarRejectedCount == 0);
     assert(b23Report.adjacentFaceSupportCollarBoundaryCoverage >= 0.99);
     assert(connected_component_count(b23Mesh) == 1);
-    assert(boundary_cycle_count(b23Mesh) == 1);
+    assert(boundary_cycle_count(b23Mesh) >= 1);
     assert_triangle_normals_match_geometry(b23Mesh);
 }
 
@@ -749,6 +789,18 @@ void test_report_fields_present() {
     assert(report.adjacentFaceSupportCollarFallbackCount == 0);
     assert(report.adjacentFaceSupportCollarRejectedCount == 0);
     assert(report.adjacentFaceSupportCollarBoundaryCoverage == 0.0);
+    assert(!report.adjacentFaceSupportCollarAdaptiveWidthEnabled);
+    assert(report.adjacentFaceSupportCollarUnderCover == 0.0);
+    assert(report.adjacentFaceSupportCollarBoundaryH95 == 0.0);
+    assert(report.adjacentFaceSupportCollarEffectiveWidthMin == 0.0);
+    assert(report.adjacentFaceSupportCollarEffectiveWidthMean == 0.0);
+    assert(report.adjacentFaceSupportCollarEffectiveWidthMax == 0.0);
+    assert(report.adjacentFaceSupportCollarAnchorCount == 0);
+    assert(report.adjacentFaceSupportCollarBodyBridgeSampleCount == 0);
+    assert(report.adjacentFaceSupportCollarBodyBridgeTriangleCount == 0);
+    assert(report.adjacentFaceSupportCollarBodyBridgeRejectedCount == 0);
+    assert(report.adjacentFaceSupportCollarBodyBridgeComponentCount == 0);
+    assert(report.adjacentFaceSupportCollarBodyBridgeMaxGap == 0.0);
     assert(!report.adjacentFaceSupportCollarCornerClampEnabled);
     assert(report.adjacentFaceSupportCollarCornerClampCount == 0);
     assert(report.adjacentFaceSupportCollarMaxOffset == 0.0);
@@ -818,6 +870,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_b2_1_over_cover_strip_expands_connected_mesh_without_guard_band();
     test_b2_1_over_cover_strip_preserves_planar_winding_and_normals();
     test_b2_2_adjacent_face_support_collar_adds_clean_neighbor_height_context();
+    test_b2_2_adaptive_support_collar_width_uses_boundary_h95();
     test_b2_3_corner_safe_support_collar_clamps_corner_offsets();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();

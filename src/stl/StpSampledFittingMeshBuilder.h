@@ -34,6 +34,8 @@ struct StpSampledFittingOptions {
     int adjacentFaceSupportCollarSamplesPerEdge = 16;
     double adjacentFaceSupportCollarWidth = 0.05;
     int adjacentFaceSupportCollarRingCount = 1;
+    bool enableAdaptiveAdjacentFaceSupportCollarWidth = false;
+    double adjacentFaceSupportCollarUnderCover = 0.0;
     bool enableAdjacentFaceSupportCollarCornerClamp = false;
     int adjacentFaceSupportCollarCornerSmoothingIterations = 2;
     double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
@@ -79,6 +81,18 @@ struct StpSampledFittingReport {
     int adjacentFaceSupportCollarFallbackCount = 0;
     int adjacentFaceSupportCollarRejectedCount = 0;
     double adjacentFaceSupportCollarBoundaryCoverage = 0.0;
+    bool adjacentFaceSupportCollarAdaptiveWidthEnabled = false;
+    double adjacentFaceSupportCollarUnderCover = 0.0;
+    double adjacentFaceSupportCollarBoundaryH95 = 0.0;
+    double adjacentFaceSupportCollarEffectiveWidthMin = 0.0;
+    double adjacentFaceSupportCollarEffectiveWidthMean = 0.0;
+    double adjacentFaceSupportCollarEffectiveWidthMax = 0.0;
+    int adjacentFaceSupportCollarAnchorCount = 0;
+    int adjacentFaceSupportCollarBodyBridgeSampleCount = 0;
+    int adjacentFaceSupportCollarBodyBridgeTriangleCount = 0;
+    int adjacentFaceSupportCollarBodyBridgeRejectedCount = 0;
+    int adjacentFaceSupportCollarBodyBridgeComponentCount = 0;
+    double adjacentFaceSupportCollarBodyBridgeMaxGap = 0.0;
     bool adjacentFaceSupportCollarCornerClampEnabled = false;
     int adjacentFaceSupportCollarCornerClampCount = 0;
     double adjacentFaceSupportCollarMaxOffset = 0.0;
