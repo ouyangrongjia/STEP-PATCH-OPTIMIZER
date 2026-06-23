@@ -158,6 +158,9 @@ if(SPO_BUILD_TOOLS)
     add_executable(step_unit_normalizer tools/step_unit_normalizer.cpp)
     target_link_libraries(step_unit_normalizer PRIVATE spo_core)
 
+    add_executable(g1_boundary_fill_patch_exporter tools/g1_boundary_fill_patch_exporter.cpp)
+    target_link_libraries(g1_boundary_fill_patch_exporter PRIVATE spo_core)
+
     add_executable(strict_topology_gate_probe tools/strict_topology_gate_probe.cpp)
     target_link_libraries(strict_topology_gate_probe PRIVATE spo_core)
 endif()
