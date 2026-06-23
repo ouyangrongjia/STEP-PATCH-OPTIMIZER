@@ -205,7 +205,7 @@ PatchReplacementReport validatePatchReplacementInput(const PatchReplacementInput
     if (!input.previewReport->success) {
         return fail(input, PatchReplacementFailureReason::PreviewNotReady, "Patch preview report is not ready.");
     }
-    if (input.previewReport->highRisk) {
+    if (input.previewReport->highRisk && !input.allowHighRiskPatchPreview) {
         return fail(input, PatchReplacementFailureReason::PreviewHighRisk, "Patch preview is high risk.");
     }
     if (input.importedPatch->faceCount <= 0) {

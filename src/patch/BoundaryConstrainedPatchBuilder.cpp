@@ -156,6 +156,14 @@ void copy_retrim_report(
     result.retrimSurfaceCoverageMaxProjectionDistance = retrim.surfaceCoverageMaxProjectionDistance;
     result.retrimSurfaceCoverageAverageProjectionDistance = retrim.surfaceCoverageAverageProjectionDistance;
     result.retrimSurfaceCoverageUncoveredEdgeIds = retrim.surfaceCoverageUncoveredEdgeIds;
+    result.retrimBoundaryEdgePcurveRebuildAttemptCount = retrim.boundaryEdgePcurveRebuildAttemptCount;
+    result.retrimBoundaryEdgePcurveRebuildSuccessCount = retrim.boundaryEdgePcurveRebuildSuccessCount;
+    result.retrimBoundaryEdgePcurveRebuildFailureCount = retrim.boundaryEdgePcurveRebuildFailureCount;
+    result.retrimBoundaryEdgeSameParameterCheckCount = retrim.boundaryEdgeSameParameterCheckCount;
+    result.retrimBoundaryEdgeSameParameterFailureCount = retrim.boundaryEdgeSameParameterFailureCount;
+    result.retrimBoundaryEdgeMaxSameParameterDeviation = retrim.boundaryEdgeMaxSameParameterDeviation;
+    result.retrimBoundaryEdgePcurveRebuildFailedEdgeIds = retrim.boundaryEdgePcurveRebuildFailedEdgeIds;
+    result.retrimBoundaryEdgeSameParameterFailedEdgeIds = retrim.boundaryEdgeSameParameterFailedEdgeIds;
 }
 
 void copy_multi_surface_report(
@@ -173,8 +181,27 @@ void copy_multi_surface_report(
     result.multiSurfaceClosedWireCount = shell.closedWireCount;
     result.multiSurfaceOpenWireCount = shell.openWireCount;
     result.multiSurfaceMultipleClosedWireFaceCount = shell.multipleClosedWireFaceCount;
+    result.multiSurfaceSkippedUnownedOpenWireFaceCount =
+        shell.skippedUnownedOpenWireFaceCount;
     result.multiSurfaceFailedPatchFaceIndex = shell.failedPatchFaceIndex;
     result.multiSurfaceFailedFaceEdgeCount = shell.failedFaceEdgeCount;
+    result.multiSurfaceFailedFaceOriginalBoundarySegmentCount =
+        shell.failedFaceOriginalBoundarySegmentCount;
+    result.multiSurfaceFailedFaceInternalEdgeCount = shell.failedFaceInternalEdgeCount;
+    result.multiSurfaceFailedOpenWireEdgeCount = shell.failedOpenWireEdgeCount;
+    result.multiSurfaceFailedOpenWireLength = shell.failedOpenWireLength;
+    result.multiSurfaceFailedOpenWireEndpointGap = shell.failedOpenWireEndpointGap;
+    result.multiSurfaceFailedOpenWireStartPointValid = shell.failedOpenWireStartPointValid;
+    result.multiSurfaceFailedOpenWireStartX = shell.failedOpenWireStartX;
+    result.multiSurfaceFailedOpenWireStartY = shell.failedOpenWireStartY;
+    result.multiSurfaceFailedOpenWireStartZ = shell.failedOpenWireStartZ;
+    result.multiSurfaceFailedOpenWireEndPointValid = shell.failedOpenWireEndPointValid;
+    result.multiSurfaceFailedOpenWireEndX = shell.failedOpenWireEndX;
+    result.multiSurfaceFailedOpenWireEndY = shell.failedOpenWireEndY;
+    result.multiSurfaceFailedOpenWireEndZ = shell.failedOpenWireEndZ;
+    result.multiSurfaceSelectedWireConnectTolerance = shell.selectedWireConnectTolerance;
+    result.multiSurfaceFallbackWireConnectAttempted = shell.fallbackWireConnectAttempted;
+    result.multiSurfaceFallbackWireConnectSucceeded = shell.fallbackWireConnectSucceeded;
     result.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = shell.boundaryEdgePcurveRebuildAttemptCount;
     result.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount = shell.boundaryEdgePcurveRebuildSuccessCount;
     result.multiSurfaceBoundaryEdgePcurveRebuildFailureCount = shell.boundaryEdgePcurveRebuildFailureCount;
@@ -192,6 +219,8 @@ void copy_multi_surface_report(
             segment.patchFaceIndex});
     }
     result.multiSurfaceFailedEdgeIds = shell.failedEdgeIds;
+    result.multiSurfaceFailedFaceOriginalBoundaryEdgeIds =
+        shell.failedFaceOriginalBoundaryEdgeIds;
     result.multiSurfaceBoundaryEdgePcurveRebuildFailedEdgeIds = shell.boundaryEdgePcurveRebuildFailedEdgeIds;
     result.multiSurfaceBoundaryEdgeSameParameterFailedEdgeIds = shell.boundaryEdgeSameParameterFailedEdgeIds;
 }
@@ -223,6 +252,10 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
     const MultiFacePatchAnalysis& analysis,
     const BoundaryConstrainedPatchBuildOptions& options) const {
     BoundaryConstrainedPatchBuildResult result;
+    auto effectiveOptions = options;
+    if (input.strictOriginalBoundaryRetrim) {
+        effectiveOptions.surfaceRetrimOptions.rebuildBoundaryPcurves = true;
+    }
 
     if (input.candidate != nullptr) {
         result.sourceFaceIds = input.candidate->faces;
@@ -248,17 +281,17 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
 
     const auto candidateBox = candidate_bbox(*input.document, *input.candidate);
     const auto patchBox = shape_bbox(input.importedPatch->shape);
-    if (bbox_mismatch(candidateBox, patchBox, options.bboxToleranceRatio)) {
+    if (bbox_mismatch(candidateBox, patchBox, effectiveOptions.bboxToleranceRatio)) {
         result.boundaryMismatch = true;
         append_warning(result, "Patch bounding box differs from the selected candidate boundary reference.");
     }
 
-    if (options.keepInternalPatchEdges) {
+    if (effectiveOptions.keepInternalPatchEdges) {
         result.internalPatchEdges = analysis.internalEdges;
         result.internalPatchEdgeCount = static_cast<int>(result.internalPatchEdges.size());
     }
 
-    if (options.preferOriginalBoundarySurfaceRetrim) {
+    if (effectiveOptions.preferOriginalBoundarySurfaceRetrim) {
         TopoDS_Face sourceOrientationFace;
         if (!result.sourceFaceIds.empty()) {
             const auto sourceFaceId = result.sourceFaceIds.front();
@@ -272,7 +305,7 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
             *input.boundary,
             faces,
             sourceOrientationFace,
-            options.surfaceRetrimOptions);
+            effectiveOptions.surfaceRetrimOptions);
         copy_retrim_report(result, retrim);
         if (retrim.success) {
             result.replacementFaces = {retrim.replacementFace};
@@ -291,13 +324,13 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
         std::string replacementBuildFailureMessage = retrim.message.empty()
             ? "Boundary-constrained surface re-trim failed."
             : retrim.message;
-        if (options.enableMultiSurfaceBoundaryShell &&
+        if (effectiveOptions.enableMultiSurfaceBoundaryShell &&
             retrim.surfaceCoverageFailedProjectionCount == 0 &&
             faces.size() > 1) {
             BoundaryConstrainedMultiSurfaceShellOptions shellOptions;
-            shellOptions.samplesPerEdge = options.surfaceRetrimOptions.samplesPerEdge;
-            shellOptions.projectionTolerance = options.surfaceRetrimOptions.projectionTolerance;
-            shellOptions.wireConnectTolerance = options.surfaceRetrimOptions.projectionTolerance;
+            shellOptions.samplesPerEdge = effectiveOptions.surfaceRetrimOptions.samplesPerEdge;
+            shellOptions.projectionTolerance = effectiveOptions.surfaceRetrimOptions.projectionTolerance;
+            shellOptions.wireConnectTolerance = effectiveOptions.surfaceRetrimOptions.projectionTolerance;
 
             const auto shell = BoundaryConstrainedMultiSurfaceShellBuilder().build(
                 *input.document,
@@ -322,7 +355,7 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
                 replacementBuildFailureMessage = shell.message;
             }
         }
-        if (!options.allowPatchOuterBoundaryFallback) {
+        if (!effectiveOptions.allowPatchOuterBoundaryFallback) {
             return fail(
                 result,
                 BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed,
@@ -334,14 +367,14 @@ BoundaryConstrainedPatchBuildResult BoundaryConstrainedPatchBuilder::build(
     result.replacementFaceCount = static_cast<int>(result.replacementFaces.size());
 
     if (analysis.isSingleFace && result.replacementFaceCount == 1) {
-        if (!options.allowOneFaceSpecialPath) {
+        if (!effectiveOptions.allowOneFaceSpecialPath) {
             return fail(result, BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed, "One-face replacement path is disabled.");
         }
         result.replacementShape = result.replacementFaces.front();
         result.usedOneFaceSpecialPath = true;
         append_warning(result, "One-face special path starts from the imported patch face; PatchReplacementCommand may re-trim it with the original CAD boundary, and StrictTopologyGate must still validate the final document.");
     } else {
-        if (!options.allowMultiFaceFragment) {
+        if (!effectiveOptions.allowMultiFaceFragment) {
             return fail(result, BoundaryConstrainedBuildFailureReason::ReplacementBuildFailed, "Multi-face replacement fragment path is disabled.");
         }
 

@@ -17,6 +17,7 @@ class ShapeDocument;
 struct BoundaryConstrainedSurfaceRetrimOptions {
     int samplesPerEdge = 5;
     double projectionTolerance = 0.2;
+    bool rebuildBoundaryPcurves = false;
 };
 
 struct BoundarySurfaceSample {
@@ -59,6 +60,14 @@ struct BoundaryConstrainedSurfaceRetrimResult {
     double surfaceCoverageMaxProjectionDistance = 0.0;
     double surfaceCoverageAverageProjectionDistance = 0.0;
     std::vector<EdgeId> surfaceCoverageUncoveredEdgeIds;
+    int boundaryEdgePcurveRebuildAttemptCount = 0;
+    int boundaryEdgePcurveRebuildSuccessCount = 0;
+    int boundaryEdgePcurveRebuildFailureCount = 0;
+    int boundaryEdgeSameParameterCheckCount = 0;
+    int boundaryEdgeSameParameterFailureCount = 0;
+    double boundaryEdgeMaxSameParameterDeviation = 0.0;
+    std::vector<EdgeId> boundaryEdgePcurveRebuildFailedEdgeIds;
+    std::vector<EdgeId> boundaryEdgeSameParameterFailedEdgeIds;
     std::string message;
     std::string warningMessage;
 };

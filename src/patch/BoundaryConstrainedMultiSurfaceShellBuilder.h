@@ -20,6 +20,7 @@ struct BoundaryConstrainedMultiSurfaceShellOptions {
     int samplesPerEdge = 5;
     double projectionTolerance = 0.2;
     double wireConnectTolerance = 0.2;
+    double fallbackWireConnectTolerance = 0.6;
 };
 
 struct BoundaryConstrainedSplitBoundarySegment {
@@ -48,8 +49,25 @@ struct BoundaryConstrainedMultiSurfaceShellResult {
     int closedWireCount = 0;
     int openWireCount = 0;
     int multipleClosedWireFaceCount = 0;
+    int skippedUnownedOpenWireFaceCount = 0;
     int failedPatchFaceIndex = -1;
     int failedFaceEdgeCount = 0;
+    int failedFaceOriginalBoundarySegmentCount = 0;
+    int failedFaceInternalEdgeCount = 0;
+    int failedOpenWireEdgeCount = 0;
+    double failedOpenWireLength = 0.0;
+    double failedOpenWireEndpointGap = 0.0;
+    bool failedOpenWireStartPointValid = false;
+    double failedOpenWireStartX = 0.0;
+    double failedOpenWireStartY = 0.0;
+    double failedOpenWireStartZ = 0.0;
+    bool failedOpenWireEndPointValid = false;
+    double failedOpenWireEndX = 0.0;
+    double failedOpenWireEndY = 0.0;
+    double failedOpenWireEndZ = 0.0;
+    double selectedWireConnectTolerance = 0.0;
+    bool fallbackWireConnectAttempted = false;
+    bool fallbackWireConnectSucceeded = false;
     int boundaryEdgePcurveRebuildAttemptCount = 0;
     int boundaryEdgePcurveRebuildSuccessCount = 0;
     int boundaryEdgePcurveRebuildFailureCount = 0;
@@ -58,6 +76,7 @@ struct BoundaryConstrainedMultiSurfaceShellResult {
     double boundaryEdgeMaxSameParameterDeviation = 0.0;
     std::vector<BoundaryConstrainedSplitBoundarySegment> splitBoundarySegments;
     std::vector<EdgeId> failedEdgeIds;
+    std::vector<EdgeId> failedFaceOriginalBoundaryEdgeIds;
     std::vector<EdgeId> boundaryEdgePcurveRebuildFailedEdgeIds;
     std::vector<EdgeId> boundaryEdgeSameParameterFailedEdgeIds;
 
