@@ -1,6 +1,6 @@
 # STEP 曲面片优化器
 
-Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测特征边、冻结边、执行 same-domain 合并、检查合法性并导出 STEP。
+Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，执行 Geomagic patch preview / original-boundary constrained Apply，并通过拓扑与外部 CAD 诊断验证后导出 STEP。
 
 ## 当前核心能力
 
@@ -11,6 +11,12 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 - 冻结边常驻高亮
 - 特征边检测
 - same-domain 合并
+- FeatureBoundedRefit 候选区域预览、选择、接受、拒绝、隐藏和恢复
+- STP Sampled Candidate Surface fitting STL 生成
+- Geomagic AutoSurface patch 生成、导入和 overlay preview
+- original STP boundary constrained Patch Apply
+- PatchReplacementRepair、StrictTopologyGate 和 CommercialCadLikeQualityGate
+- applied STEP 外部 CAD 诊断路由和 Creo ModelCHECK 脚本入口
 - 命令级 undo/redo
 - 合法性检查
 - 导出 STEP 并二次读取校验
@@ -26,16 +32,19 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 2. docs/implementation_status.md
    当前实现进度、已完成能力、待办任务、近期开发顺序和验收方式。
 
-3. docs/run_gui.md
+3. docs/completed_features.md
+   已完成、已验证或已退役的功能事实，承接旧 TODO 中的历史计划。
+
+4. docs/run_gui.md
    GUI 启动方式、操作说明、快捷键、手动验证流程。
 
-4. docs/project_structure.md
+5. docs/project_structure.md
    当前目录结构、文件职责、开发边界和后续增强边界。
 
-5. docs/TODO.md
+6. docs/TODO.md
    当前执行 TODO、阶段边界和验收要求。
 
-6. docs/geomagic_patch_workflow.md
+7. docs/geomagic_patch_workflow.md
    Geomagic patch preview / Apply 主线流程。
 ```
 
@@ -43,7 +52,8 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 
 ```text
 架构边界以 docs/module_design.md 为准。
-当前任务优先级和验收标准以 docs/implementation_status.md 为准。
+当前任务优先级和验收标准以 docs/implementation_status.md / docs/TODO.md 为准。
+已完成和已退役功能事实以 docs/completed_features.md 为准。
 构建、运行、测试命令以 README.md 和 docs/run_gui.md 为准。
 目录结构以真实仓库和 CMakeLists.txt 为准，再同步更新 docs/project_structure.md。
 Geomagic patch preview / Apply 主线以 docs/TODO.md 和 docs/geomagic_patch_workflow.md 为准。
@@ -115,7 +125,10 @@ scripts\configure.ps1          执行 cmake --preset windows-msvc-debug
 scripts\build_debug.ps1        配置并构建 GUI 和测试
 scripts\run_gui.ps1            启动 GUI，如果 exe 不存在会先构建
 scripts\test.ps1               构建测试并运行 ctest
+scripts\verify_spo.ps1         本地统一验证入口，可按参数覆盖 GUI / Geomagic / step_stats
 scripts\run_corner_baseline_gate.ps1 运行脚本化 A0 baseline / commercial-CAD-like gate
+scripts\run_boundary_trim_fill_experiments.ps1 运行 Route 2 support collar 真实样例实验
+scripts\run_creo_step_diagnostic.ps1 显式运行后台 Creo STEP import + ModelCHECK 诊断
 ```
 
 默认路径：
@@ -336,11 +349,14 @@ LINK : fatal error LNK1168: 无法打开 ... step-patch-optimizer.exe 进行写�
 
 ```text
 src\app       应用入口、MainWindow、AppController
-src\command   命令系统、CommandContext、CommandHistory、undo/redo、冻结边命令、合并命令
+src\command   命令系统、CommandContext、CommandHistory、undo/redo、锁边命令、合并命令、PatchReplacementCommand
 src\brep      ShapeDocument、TopologyGraph、face/edge 索引
 src\feature   特征边检测、曲率估计接口、边界分类接口
-src\merge     same-domain 合并、候选区域规划、区域生长、局部重拟合接口
-src\validate  合法性检查、误差评估接口、报告生成接口
+src\merge     same-domain 合并、FeatureBoundedRefit 候选区域规划、边界分析、Face Inspect
+src\stl       STL 读写对象、STP sampled fitting mesh、legacy/conservative crop、Global Cut Chain
+src\patch     Patch import / preview / original-boundary constrained replacement / repair / trim diagnostics
+src\external  Geomagic AutoSurface backend、配置、输出路径解析
+src\validate  ShapeValidator、StrictTopologyGate、CommercialCadLikeQualityGate、误差/报告接口
 src\gui       Qt/OCCT GUI 组件
 src\io        STEP 读写、项目文件保存恢复接口
 tests         单元测试、命令测试、流程回归测试
@@ -351,20 +367,27 @@ tools         批处理和 STEP 统计工具
 
 ## 当前开发阶段
 
-当前项目已经完成 MVP 基础闭环和候选区域基础框架，当前重点已经转向 Geomagic AutoSurface patch preview / Apply 主线：
+当前项目已经完成 MVP 基础闭环、候选区域基础框架和 Geomagic patch preview / Apply 主线的核心接入。当前主线是 Route 2 support collar 后的 strict original-boundary multi-surface shell closure 诊断：
 
 ```text
 1. 默认 Geomagic fitting input mode：STP Sampled Candidate Surface。
    - 直接从当前 STP candidate faces / boundary 采样生成 fitting STL。
    - 不要求先加载原始 STL。
-   - 当前推荐作为默认模式，速度更快，实际 AutoSurface 效果与 STL 裁剪路线接近。
+   - 当前唯一保留的 STL 扩宽机制是 adjacent-face support collar。
 2. 备用 / 诊断路线：原始 STL crop。
-   - Legacy centroid-only crop 保留为基线。
-   - Conservative boundary-band crop 保留为 A/B 验证。
-   - Global Cut Chain crop 已接入 GUI 作为可选的独立 STL 全局切链裁剪器。
+   - Legacy centroid-only crop 和 conservative boundary-band crop 保留为对照路线。
+   - Global Cut Chain crop 是独立 STL 全局切链裁剪器，不是默认 one-click fitting input。
 3. Apply 仍以原 STP candidate outer boundary wire 作为最终 CAD boundary。
-   - STP 采样 STL、裁剪 STL、Geomagic patch outer boundary 都只是拟合输入或诊断证据。
-   - 最终提交仍必须通过 PatchReplacementRepair 和 StrictTopologyGate。
+   - STP sampled fitting STL、support collar、STL crop boundary、Geomagic patch outer boundary 都只是拟合输入或诊断证据。
+   - 最终提交仍必须通过 PatchReplacementRepair、StrictTopologyGate、STEP roundtrip。
+4. 当前 P0 是定位 Route 2 open-wire closure。
+   - 最新真实样例输入 STL 干净、normalized patch 单位正确、patch 质量门控已有改善。
+   - blocker 在 72-face Geomagic patch 下 strict multi-surface boundary shell open-wire closure。
+   - 下一步应定位 failed patch face 的 original-boundary segments / internal seams / owner split / segment ordering，而不是恢复 guard-band / over-cover 或放宽 Gate。
+5. 外部 CAD 诊断只允许读取 Apply 成功后导出的已合并 STEP。
+   - 原始 Geomagic patch STEP 只能做 PatchPreflightOnly。
+   - Creo runner 成功、ModelCHECK 报告存在、STEP 文件存在，都不是验收成功。
+   - 验收仍看水密 B-rep 实体、StrictTopologyGate、STEP roundtrip 和 Creo 灰色实体显示。
 ```
 
 后续开发时，Codex 或人工修改应优先遵循：

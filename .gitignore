@@ -18,3 +18,5 @@ scripts/geomagic_wrap/fit_region_temp/
 *.exp
 scripts/industrial_sew.py
 scripts/cutter_global_chain_mode.py
+start_codexpro_ngrok.cmd
+scripts/start_codexpro_ngrok.ps1

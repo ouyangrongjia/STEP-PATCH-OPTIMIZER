@@ -41,6 +41,69 @@ STEP 读取
 7. 下一阶段重点转为 Geomagic 输出在 sharp corner / feature junction 附近圆角化所造成的商业 CAD 缝隙问题；该问题不能只靠 OCCT BRepCheck / free edge / multiple edge 判断。
 ```
 
+### 1.0 2026-06-25 Route 2 support collar 真实样例结果
+
+本轮真实样例：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+output: data/baseline_runs/route2_support_collar_real_20260625_0020
+```
+
+结论：
+
+```text
+Route 2 仍失败，但失败点已经更清楚。
+
+support collar 输入 STL 是干净的：
+  Geomagic pre-repair components=1
+  boundaryCycles=1
+  nonManifoldEdges=0
+  nonManifoldVertices=0
+  degenerateTriangles=0
+  effective support collar width min/mean/max=0.25/0.25/0.25
+
+normalized patch 单位正确：
+  source=millimeter
+  raw patch=meter
+  normalized patch=millimeter
+
+patch 几何偏差明显改善：
+  CommercialCadLikeQualityGate passed=true
+  boundary max=0.0117107
+  corner max=0.0108314
+  seam max_abs=0.0117086
+
+但 Geomagic 输出 patch face count=72，preview high_risk=true。
+strict original-boundary multi-surface shell 仍失败：
+  failure_reason=BuildFailed
+  message=Multi-surface replacement face edges produced open wires.
+  built_faces=6
+  closed_wires=11
+  open_wires=2
+  failed_patch_face_index=2
+  failed original boundary edge ids=1540,1543,1546
+  failed open-wire endpoint gap=0.879063
+
+Creo Toolkit sewing 仍不能救回灰色水密实体：
+  runner_success=true
+  stage1_toolkit_acceptance_passed=true
+  exported STEP stats: solids=0, shells=2, faces=2762, BRepCheck=false
+  StrictTopologyGate failed: BRepCheckFailed
+  after_free_edges=60
+  ModelCHECK diagnostic_passed=false
+  SHORT_EDGES item count=1608
+```
+
+判读：
+
+```text
+本轮不再是 support collar 断开或 adaptive width 被压小的问题。
+当前 blocker 是 Geomagic 72-face patch 下的 strict multi-surface boundary shell open-wire closure，以及 Creo sewing 后仍为 shells=2 / solids=0。
+下一步不应恢复 guard-band / over-cover，也不应继续盲目加宽 support collar；应优先定位 failed_patch_face_index=2 上的 original-boundary segments 和 internal seams 为什么无法闭合。
+```
+
 ### 1.1 当前关键诊断（2026-05-27）
 
 ```text
