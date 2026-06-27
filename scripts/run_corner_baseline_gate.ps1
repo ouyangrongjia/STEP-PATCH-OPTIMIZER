@@ -10,9 +10,13 @@ param(
     [string]$WrapCore = "E:\Geomagic Wrap\wrapCore.exe",
     [int]$TimeoutSeconds = 1800,
     [int]$CornerFeatureSamples = 64,
+    [int]$CandidateOverCoverSamples = 64,
+    [double]$CandidateOverCoverWidth = 0.25,
+    [int]$CandidateOverCoverRings = 3,
+    [double]$CandidateOverCoverMiterMaxScale = 1.25,
     [int]$SupportCollarSamples = 64,
-    [double]$SupportCollarWidth = 0.25,
-    [int]$SupportCollarRings = 2,
+    [double]$SupportCollarWidth = 0.05,
+    [int]$SupportCollarRings = 1,
     [double]$SupportCollarUnderCover = 0.0,
     [double]$SupportCollarMaxOffsetScale = 1.25,
     [switch]$SharpenContours,
@@ -223,14 +227,13 @@ if ($Experiment -eq "B1" -or $Experiment -eq "B2" -or $Experiment -eq "B2.2" -or
     )
 }
 
-if ($Experiment -eq "B2" -or $Experiment -eq "B2.2") {
+if ($Experiment -eq "B2" -or $Experiment -eq "B2.2" -or $Experiment -eq "B2.3") {
     $probeArgs += @(
-        "--b2-adjacent-face-support-collar",
-        "--support-collar-samples", "$SupportCollarSamples",
-        "--support-collar-width", "$SupportCollarWidth",
-        "--support-collar-rings", "$SupportCollarRings",
-        "--adaptive-support-collar-width",
-        "--support-collar-under-cover", "$SupportCollarUnderCover"
+        "--candidate-surface-over-cover",
+        "--candidate-over-cover-samples", "$CandidateOverCoverSamples",
+        "--candidate-over-cover-width", "$CandidateOverCoverWidth",
+        "--candidate-over-cover-rings", "$CandidateOverCoverRings",
+        "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
     )
 }
 

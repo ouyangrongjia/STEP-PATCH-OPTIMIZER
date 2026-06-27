@@ -227,6 +227,23 @@ double dot(const spo::StlVec3& lhs, const spo::StlVec3& rhs) {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
 }
 
+double distance_between(const spo::StlVec3& lhs, const spo::StlVec3& rhs) {
+    const auto dx = lhs.x - rhs.x;
+    const auto dy = lhs.y - rhs.y;
+    const auto dz = lhs.z - rhs.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double max_triangle_edge_length(const spo::StlMesh& mesh) {
+    double maxLength = 0.0;
+    for (const auto& triangle : mesh.triangles()) {
+        maxLength = std::max(maxLength, distance_between(triangle.v0, triangle.v1));
+        maxLength = std::max(maxLength, distance_between(triangle.v1, triangle.v2));
+        maxLength = std::max(maxLength, distance_between(triangle.v2, triangle.v0));
+    }
+    return maxLength;
+}
+
 void assert_triangle_normals_match_geometry(const spo::StlMesh& mesh) {
     for (const auto& triangle : mesh.triangles()) {
         const auto normal = geometric_normal(triangle);
@@ -510,6 +527,130 @@ void test_b2_3_corner_safe_support_collar_clamps_corner_offsets() {
     assert_triangle_normals_match_geometry(b23Mesh);
 }
 
+void test_candidate_surface_over_cover_extends_source_face_without_adjacent_drop() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+
+    spo::StpSampledFittingOptions options;
+    options.enableCandidateSurfaceOverCover = true;
+    options.candidateSurfaceOverCoverWidth = 0.25;
+    options.candidateSurfaceOverCoverRingCount = 3;
+    options.candidateSurfaceOverCoverSamplesPerEdge = 16;
+    spo::StlMesh mesh;
+    const auto report = builder.build(fixture.document, fixture.candidate, options, mesh);
+
+    assert(report.success);
+    assert(report.candidateSurfaceOverCoverEnabled);
+    assert(!report.adjacentFaceSupportCollarEnabled);
+    assert(report.candidateSurfaceOverCoverWidth == 0.25);
+    assert(report.candidateSurfaceOverCoverRingCount == 3);
+    assert(report.candidateSurfaceOverCoverEdgeCount == 4);
+    assert(report.candidateSurfaceOverCoverSampleCount >= 4 * 16 * 3);
+    assert(report.candidateSurfaceOverCoverTriangleCount > 0);
+    assert(report.candidateSurfaceOverCoverFallbackCount == 0);
+    assert(report.candidateSurfaceOverCoverRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverBoundaryCoverage >= 0.99);
+    assert(report.candidateSurfaceOverCoverCornerMiterCount >= 0);
+    assert(report.candidateSurfaceOverCoverMaxOffset <=
+        options.candidateSurfaceOverCoverWidth *
+            options.candidateSurfaceOverCoverCornerMiterMaxScale + 1.0e-9);
+    assert(report.candidateSurfaceOverCoverNormalLeakageMax <= 0.20 + 1.0e-9);
+    assert(report.candidateSurfaceOverCoverDirectionFallbackCount >= 0);
+    assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength > 0.0);
+    assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength <= 5.0 * (10.0 / 16.0));
+    assert(report.outputTriangleCount > baselineReport.outputTriangleCount);
+    assert(report.output_bbox.min.x < baselineReport.output_bbox.min.x - 0.20);
+    assert(report.output_bbox.min.y < baselineReport.output_bbox.min.y - 0.20);
+    assert(report.output_bbox.max.x > baselineReport.output_bbox.max.x + 0.20);
+    assert(report.output_bbox.max.y > baselineReport.output_bbox.max.y + 0.20);
+    assert(std::abs(report.output_bbox.min.z - baselineReport.output_bbox.min.z) < 1.0e-6);
+    assert(std::abs(report.output_bbox.max.z - baselineReport.output_bbox.max.z) < 1.0e-6);
+    assert(connected_component_count(mesh) == 1);
+    assert(boundary_cycle_count(mesh) >= 1);
+    assert_triangle_normals_match_geometry(mesh);
+}
+
+void test_candidate_surface_over_cover_reverse_traversal_keeps_all_sides_outward() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+
+    spo::StpSampledFittingOptions options;
+    options.enableCandidateSurfaceOverCover = true;
+    options.candidateSurfaceOverCoverWidth = 0.25;
+    options.candidateSurfaceOverCoverRingCount = 3;
+    options.candidateSurfaceOverCoverSamplesPerEdge = 16;
+    spo::StlMesh mesh;
+    const auto report = builder.build(fixture.document, fixture.candidate, options, mesh);
+
+    assert(report.success);
+    assert(report.candidateSurfaceOverCoverBoundaryCoverage >= 0.99);
+    assert(report.candidateSurfaceOverCoverDirectionFlipCount == 0);
+    assert(report.output_bbox.min.x < baselineReport.output_bbox.min.x - 0.20);
+    assert(report.output_bbox.max.x > baselineReport.output_bbox.max.x + 0.20);
+    assert(report.output_bbox.min.y < baselineReport.output_bbox.min.y - 0.20);
+    assert(report.output_bbox.max.y > baselineReport.output_bbox.max.y + 0.20);
+    assert(std::abs(report.output_bbox.min.z - baselineReport.output_bbox.min.z) < 1.0e-6);
+    assert(std::abs(report.output_bbox.max.z - baselineReport.output_bbox.max.z) < 1.0e-6);
+}
+
+void test_candidate_surface_over_cover_respects_configured_width() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions baselineOptions;
+    spo::StlMesh baselineMesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto baselineReport = builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+
+    spo::StpSampledFittingOptions options;
+    options.enableCandidateSurfaceOverCover = true;
+    options.candidateSurfaceOverCoverWidth = 0.40;
+    options.candidateSurfaceOverCoverRingCount = 2;
+    options.candidateSurfaceOverCoverSamplesPerEdge = 16;
+    spo::StlMesh mesh;
+    const auto report = builder.build(fixture.document, fixture.candidate, options, mesh);
+
+    assert(report.success);
+    assert(report.candidateSurfaceOverCoverWidth == 0.40);
+    assert(report.output_bbox.min.x < baselineReport.output_bbox.min.x - 0.35);
+    assert(report.output_bbox.min.y < baselineReport.output_bbox.min.y - 0.35);
+    assert(report.output_bbox.max.x > baselineReport.output_bbox.max.x + 0.35);
+    assert(report.output_bbox.max.y > baselineReport.output_bbox.max.y + 0.35);
+    assert(report.candidateSurfaceOverCoverMaxOffset <=
+        options.candidateSurfaceOverCoverWidth *
+            options.candidateSurfaceOverCoverCornerMiterMaxScale + 1.0e-9);
+}
+
+void test_candidate_surface_over_cover_reports_long_triangle_diagnostics() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingOptions options;
+    options.enableCandidateSurfaceOverCover = true;
+    options.candidateSurfaceOverCoverWidth = 0.25;
+    options.candidateSurfaceOverCoverRingCount = 3;
+    options.candidateSurfaceOverCoverSamplesPerEdge = 16;
+    spo::StlMesh mesh;
+    spo::StpSampledFittingMeshBuilder builder;
+    const auto report = builder.build(fixture.document, fixture.candidate, options, mesh);
+
+    assert(report.success);
+    assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength > 0.0);
+    assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength <= max_triangle_edge_length(mesh) + 1.0e-9);
+    assert(report.candidateSurfaceOverCoverNormalLeakageMax <= 0.20 + 1.0e-9);
+}
+
 void test_increased_div_increases_triangle_count() {
     auto fixture = make_planar_square_fixture(10.0);
 
@@ -719,6 +860,23 @@ void test_report_fields_present() {
     assert(!report.adjacentFaceSupportCollarCornerClampEnabled);
     assert(report.adjacentFaceSupportCollarCornerClampCount == 0);
     assert(report.adjacentFaceSupportCollarMaxOffset == 0.0);
+    assert(!report.candidateSurfaceOverCoverEnabled);
+    assert(report.candidateSurfaceOverCoverWidth == 0.0);
+    assert(report.candidateSurfaceOverCoverRingCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeCount == 0);
+    assert(report.candidateSurfaceOverCoverSampleCount == 0);
+    assert(report.candidateSurfaceOverCoverTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverFallbackCount == 0);
+    assert(report.candidateSurfaceOverCoverRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverBoundaryCoverage == 0.0);
+    assert(report.candidateSurfaceOverCoverCornerMiterCount == 0);
+    assert(report.candidateSurfaceOverCoverMaxOffset == 0.0);
+    assert(report.candidateSurfaceOverCoverNormalLeakageMax == 0.0);
+    assert(report.candidateSurfaceOverCoverDirectionFallbackCount == 0);
+    assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength == 0.0);
+    assert(report.candidateSurfaceOverCoverSourceFaceCount == 0);
+    assert(report.candidateSurfaceOverCoverDirectionFlipCount == 0);
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);
@@ -785,6 +943,10 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_b2_2_adaptive_support_collar_width_uses_boundary_h95();
     test_b2_2_adaptive_support_collar_width_keeps_configured_floor();
     test_b2_3_corner_safe_support_collar_clamps_corner_offsets();
+    test_candidate_surface_over_cover_extends_source_face_without_adjacent_drop();
+    test_candidate_surface_over_cover_reverse_traversal_keeps_all_sides_outward();
+    test_candidate_surface_over_cover_respects_configured_width();
+    test_candidate_surface_over_cover_reports_long_triangle_diagnostics();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();

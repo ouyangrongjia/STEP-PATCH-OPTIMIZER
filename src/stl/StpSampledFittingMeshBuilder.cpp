@@ -122,6 +122,29 @@ double triangle_area(const StlTriangle& t) {
     return 0.5 * std::sqrt(cx * cx + cy * cy + cz * cz);
 }
 
+double stl_vec_distance(const StlVec3& lhs, const StlVec3& rhs) {
+    const auto dx = lhs.x - rhs.x;
+    const auto dy = lhs.y - rhs.y;
+    const auto dz = lhs.z - rhs.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+double triangle_max_edge_length(const StlTriangle& triangle) {
+    return std::max({
+        stl_vec_distance(triangle.v0, triangle.v1),
+        stl_vec_distance(triangle.v1, triangle.v2),
+        stl_vec_distance(triangle.v2, triangle.v0)
+    });
+}
+
+double triangle_min_edge_length(const StlTriangle& triangle) {
+    return std::min({
+        stl_vec_distance(triangle.v0, triangle.v1),
+        stl_vec_distance(triangle.v1, triangle.v2),
+        stl_vec_distance(triangle.v2, triangle.v0)
+    });
+}
+
 FaceSurfaceInfo extract_face_info(const TopoDS_Face& face) {
     FaceSurfaceInfo info;
     info.face = face;
@@ -200,6 +223,33 @@ struct AdjacentFaceSupportCollarBuildResult {
     double bodyBridgeMaxGap = 0.0;
     int cornerClampCount = 0;
     double maxOffset = 0.0;
+};
+
+struct CandidateSurfaceOverCoverBuildResult {
+    int boundaryEdgeCount = 0;
+    int coveredBoundaryEdgeCount = 0;
+    int sampleCount = 0;
+    int triangleCount = 0;
+    int fallbackCount = 0;
+    int rejectedCount = 0;
+    double boundaryCoverage = 0.0;
+    int bodyBridgeRejectedCount = 0;
+    int cornerMiterCount = 0;
+    double maxOffset = 0.0;
+    double normalLeakageMax = 0.0;
+    int directionFallbackCount = 0;
+    int longTriangleCount = 0;
+    double maxTriangleEdgeLength = 0.0;
+    int sourceFaceCount = 0;
+    int directionFlipCount = 0;
+};
+
+struct CandidateSurfaceOverCoverPoint {
+    gp_Pnt point;
+    gp_Vec normal;
+    gp_Vec outwardDirection;
+    double normalLeakage = 0.0;
+    bool usedFallbackDirection = false;
 };
 
 struct QuantizedPoint {
@@ -533,6 +583,41 @@ bool is_degenerate(const StlTriangle& t, double minArea) {
     return triangle_area(t) < minArea;
 }
 
+bool exceeds_triangle_quality_guard(
+    const StlTriangle& triangle,
+    double maxAllowedEdgeLength,
+    int* longTriangleCount,
+    double* maxTriangleEdgeLength) {
+    const auto maxEdge = triangle_max_edge_length(triangle);
+    if (maxTriangleEdgeLength != nullptr && std::isfinite(maxEdge)) {
+        *maxTriangleEdgeLength = std::max(*maxTriangleEdgeLength, maxEdge);
+    }
+    if (!std::isfinite(maxAllowedEdgeLength) || maxAllowedEdgeLength <= 0.0) {
+        return false;
+    }
+    const auto minEdge = triangle_min_edge_length(triangle);
+    const auto extremeAspectRatio =
+        minEdge > 1.0e-12 && maxEdge / minEdge > 100.0;
+    if (maxEdge > maxAllowedEdgeLength || extremeAspectRatio) {
+        if (longTriangleCount != nullptr) {
+            ++(*longTriangleCount);
+        }
+        return true;
+    }
+    return false;
+}
+
+double closed_loop_mean_spacing(const std::vector<gp_Pnt>& loop) {
+    if (loop.size() < 2) {
+        return 0.0;
+    }
+    double length = 0.0;
+    for (std::size_t index = 0; index < loop.size(); ++index) {
+        length += loop[index].Distance(loop[(index + 1) % loop.size()]);
+    }
+    return length / static_cast<double>(loop.size());
+}
+
 bool face_uv_inside(const TopoDS_Face& face, const gp_Pnt2d& uv) {
     BRepClass_FaceClassifier classifier(face, uv, 1.0e-6, Standard_True);
     const auto state = classifier.State();
@@ -721,6 +806,249 @@ std::optional<gp_Pnt> adjacent_face_support_point(
     }
 }
 
+std::optional<CandidateSurfaceOverCoverPoint> candidate_surface_over_cover_point(
+    const TopoDS_Edge& edge,
+    const TopoDS_Face& face,
+    const BoundarySample& sample,
+    const gp_Pnt& candidateCenter,
+    double distance,
+    bool reverseEdge) {
+    const auto surface = BRep_Tool::Surface(face);
+    if (surface.IsNull() || distance <= 0.0) {
+        return std::nullopt;
+    }
+
+    double uMin = 0.0, uMax = 0.0, vMin = 0.0, vMax = 0.0;
+    BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+    if (!std::isfinite(uMin) || !std::isfinite(uMax) ||
+        !std::isfinite(vMin) || !std::isfinite(vMax)) {
+        return std::nullopt;
+    }
+
+    double firstParam = 0.0, lastParam = 0.0;
+    const auto pcurve = BRep_Tool::CurveOnSurface(edge, face, firstParam, lastParam);
+    if (pcurve.IsNull()) {
+        return std::nullopt;
+    }
+
+    try {
+        gp_Pnt2d uv;
+        gp_Vec2d tangent;
+        pcurve->D1(clamp_range(sample.parameter, firstParam, lastParam), uv, tangent);
+        if (reverseEdge) {
+            tangent.Reverse();
+        }
+        if (tangent.SquareMagnitude() <= 1.0e-24) {
+            return std::nullopt;
+        }
+
+        const auto normal = surface_normal_at(face, surface, uv);
+        if (!normal.has_value()) {
+            return std::nullopt;
+        }
+
+        gp_Pnt surfacePoint;
+        gp_Vec dU;
+        gp_Vec dV;
+        surface->D1(uv.X(), uv.Y(), surfacePoint, dU, dV);
+        gp_Vec tangent3d = dU.Multiplied(tangent.X());
+        tangent3d += dV.Multiplied(tangent.Y());
+        tangent3d.Subtract(normal->Multiplied(dot_vec(tangent3d, *normal)));
+        const auto normalizedTangent = normalized_vec(tangent3d);
+        if (!normalizedTangent.has_value()) {
+            return std::nullopt;
+        }
+
+        gp_Vec2d left(-tangent.Y(), tangent.X());
+        gp_Vec2d right(tangent.Y(), -tangent.X());
+        left.Normalize();
+        right.Normalize();
+
+        auto tangent_plane_direction = [&](const gp_Vec2d& uvDirection) -> std::optional<gp_Vec> {
+            gp_Vec direction = dU.Multiplied(uvDirection.X());
+            direction += dV.Multiplied(uvDirection.Y());
+            direction.Subtract(normal->Multiplied(dot_vec(direction, *normal)));
+            return normalized_vec(direction);
+        };
+
+        const auto span = std::max({
+            std::abs(uMax - uMin),
+            std::abs(vMax - vMin),
+            1.0
+        });
+        const auto probeStep = span * 1.0e-5;
+        auto inside = [&](const gp_Vec2d& direction) {
+            const gp_Pnt2d probe(
+                uv.X() + direction.X() * probeStep,
+                uv.Y() + direction.Y() * probeStep);
+            return face_uv_inside(face, probe);
+        };
+
+        const auto leftPoint = surface_point_at_uv_offset(
+            surface, uv, left, distance, uMin, uMax, vMin, vMax);
+        const auto rightPoint = surface_point_at_uv_offset(
+            surface, uv, right, distance, uMin, uMax, vMin, vMax);
+        const auto leftInside = inside(left);
+        const auto rightInside = inside(right);
+        auto leftDirection = tangent_plane_direction(left);
+        auto rightDirection = tangent_plane_direction(right);
+        if (!leftDirection.has_value()) {
+            auto fallback = normal->Crossed(*normalizedTangent);
+            leftDirection = normalized_vec(fallback);
+        }
+        if (!rightDirection.has_value()) {
+            auto fallback = normalizedTangent->Crossed(*normal);
+            rightDirection = normalized_vec(fallback);
+        }
+        if (!leftDirection.has_value() || !rightDirection.has_value()) {
+            return std::nullopt;
+        }
+
+        auto normal_leakage = [&](const std::optional<gp_Pnt>& surfacePointCandidate) {
+            if (!surfacePointCandidate.has_value()) {
+                return 0.0;
+            }
+            auto offset = gp_Vec(sample.point, *surfacePointCandidate);
+            if (offset.Magnitude() <= 1.0e-12) {
+                return 0.0;
+            }
+            offset.Normalize();
+            return std::abs(dot_vec(offset, *normal));
+        };
+
+        auto make_result = [&](const gp_Vec& direction,
+                               const std::optional<gp_Pnt>& surfacePointCandidate,
+                               bool fallback) {
+            auto outwardDirection = direction;
+            if (outwardDirection.Magnitude() <= 1.0e-12) {
+                return std::optional<CandidateSurfaceOverCoverPoint>{};
+            }
+            outwardDirection.Normalize();
+            const auto leakage = normal_leakage(surfacePointCandidate);
+            if (surfacePointCandidate.has_value() && leakage > 0.20) {
+                fallback = true;
+            }
+            CandidateSurfaceOverCoverPoint result;
+            result.point = sample.point.Translated(outwardDirection.Multiplied(distance));
+            result.normal = *normal;
+            result.outwardDirection = outwardDirection;
+            result.normalLeakage = leakage;
+            result.usedFallbackDirection = fallback;
+            return std::optional<CandidateSurfaceOverCoverPoint>{result};
+        };
+
+        if (!leftInside && rightInside) {
+            return make_result(*leftDirection, leftPoint, false);
+        }
+        if (!rightInside && leftInside) {
+            return make_result(*rightDirection, rightPoint, false);
+        }
+
+        const auto leftPlanar = sample.point.Translated(leftDirection->Multiplied(distance));
+        const auto rightPlanar = sample.point.Translated(rightDirection->Multiplied(distance));
+        return leftPlanar.Distance(candidateCenter) >= rightPlanar.Distance(candidateCenter)
+            ? make_result(*leftDirection, leftPoint, true)
+            : make_result(*rightDirection, rightPoint, true);
+    } catch (const Standard_Failure&) {
+        return std::nullopt;
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+void apply_candidate_surface_corner_miter(
+    const std::vector<gp_Pnt>& innerRing,
+    std::vector<gp_Pnt>& overCoverRing,
+    double targetDistance,
+    double maxOffsetScale,
+    int& adjustedCount,
+    double& maxOffset) {
+    const auto count = innerRing.size();
+    if (count < 3 || overCoverRing.size() != count || targetDistance <= 0.0) {
+        return;
+    }
+
+    std::vector<gp_Vec> offsets;
+    offsets.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        offsets.emplace_back(innerRing[index], overCoverRing[index]);
+    }
+
+    const auto safeScale = std::max(maxOffsetScale, 1.0);
+    const auto maxAllowedOffset = targetDistance * safeScale;
+    constexpr double kTurnDotThreshold = 0.94; // about 20 degrees.
+    constexpr double kChangeTolerance = 1.0e-9;
+    std::vector<unsigned char> touched(count, 0);
+
+    auto clamped = [&](gp_Vec value) {
+        if (value.Magnitude() <= 1.0e-12) {
+            return value;
+        }
+        if (value.Magnitude() > maxAllowedOffset) {
+            value.Normalize();
+            value.Multiply(maxAllowedOffset);
+        }
+        return value;
+    };
+
+    auto nextOffsets = offsets;
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto prev = index == 0 ? count - 1 : index - 1;
+        const auto next = (index + 1) % count;
+
+        const gp_Vec prevSegment(innerRing[prev], innerRing[index]);
+        const gp_Vec nextSegment(innerRing[index], innerRing[next]);
+        const auto boundaryCorner = normalized_dot_below(prevSegment, nextSegment, kTurnDotThreshold);
+        if (!boundaryCorner) {
+            nextOffsets[index] = clamped(nextOffsets[index]);
+            continue;
+        }
+        if (safeScale <= 1.0 + 1.0e-12) {
+            nextOffsets[index] = clamped(nextOffsets[index]);
+            continue;
+        }
+
+        gp_Vec miter = offsets[index];
+        if (offsets[prev].Magnitude() > 1.0e-12 &&
+            offsets[index].Magnitude() > 1.0e-12 &&
+            offsets[next].Magnitude() > 1.0e-12) {
+            auto prevDir = offsets[prev];
+            auto nextDir = offsets[next];
+            auto currentDir = offsets[index];
+            prevDir.Normalize();
+            nextDir.Normalize();
+            currentDir.Normalize();
+            const auto adjacentDot = dot_vec(prevDir, nextDir);
+            const auto currentPrevDot = dot_vec(currentDir, prevDir);
+            const auto currentNextDot = dot_vec(currentDir, nextDir);
+            if (adjacentDot < 0.0 || currentPrevDot < 0.0 || currentNextDot < 0.0) {
+                nextOffsets[index] = clamped(nextOffsets[index]);
+                continue;
+            }
+            miter = prevDir + nextDir;
+            if (miter.Magnitude() > 1.0e-12) {
+                miter.Normalize();
+                miter.Multiply(std::min(maxAllowedOffset, targetDistance * std::sqrt(2.0)));
+            } else {
+                miter = offsets[index];
+            }
+        }
+
+        miter = clamped(miter);
+        if (vector_delta_magnitude(miter, offsets[index]) > kChangeTolerance) {
+            touched[index] = 1;
+        }
+        nextOffsets[index] = miter;
+    }
+
+    for (std::size_t index = 0; index < count; ++index) {
+        nextOffsets[index] = clamped(nextOffsets[index]);
+        maxOffset = std::max(maxOffset, nextOffsets[index].Magnitude());
+        overCoverRing[index] = innerRing[index].Translated(nextOffsets[index]);
+    }
+    adjustedCount += static_cast<int>(std::count(touched.begin(), touched.end(), 1));
+}
+
 int append_oriented_quad_strip(
     const std::vector<gp_Pnt>& inner,
     const std::vector<gp_Pnt>& outer,
@@ -769,13 +1097,37 @@ int append_oriented_closed_quad_strip(
     const std::vector<gp_Vec>& normals,
     std::vector<StlTriangle>& outTriangles,
     int& rejected,
-    bool countRejected = true) {
+    bool countRejected = true,
+    double maxAllowedTriangleEdgeLength = std::numeric_limits<double>::infinity(),
+    int* longTriangleCount = nullptr,
+    double* maxTriangleEdgeLength = nullptr) {
     const auto count = std::min({inner.size(), outer.size(), normals.size()});
     if (count < 3) {
         return 0;
     }
 
     int added = 0;
+    auto addTriangle = [&](const StlTriangle& triangle) {
+        if (is_degenerate(triangle, 1.0e-15)) {
+            if (countRejected) {
+                ++rejected;
+            }
+            return;
+        }
+        if (exceeds_triangle_quality_guard(
+                triangle,
+                maxAllowedTriangleEdgeLength,
+                longTriangleCount,
+                maxTriangleEdgeLength)) {
+            if (countRejected) {
+                ++rejected;
+            }
+            return;
+        }
+        outTriangles.push_back(triangle);
+        ++added;
+    };
+
     for (std::size_t index = 0; index < count; ++index) {
         const auto next = (index + 1) % count;
         auto referenceNormal = normals[index];
@@ -788,20 +1140,10 @@ int append_oriented_closed_quad_strip(
         referenceNormal.Normalize();
 
         auto first = make_oriented_stl_triangle(inner[index], inner[next], outer[index], referenceNormal);
-        if (!is_degenerate(first, 1.0e-15)) {
-            outTriangles.push_back(first);
-            ++added;
-        } else if (countRejected) {
-            ++rejected;
-        }
+        addTriangle(first);
 
         auto second = make_oriented_stl_triangle(inner[next], outer[next], outer[index], referenceNormal);
-        if (!is_degenerate(second, 1.0e-15)) {
-            outTriangles.push_back(second);
-            ++added;
-        } else if (countRejected) {
-            ++rejected;
-        }
+        addTriangle(second);
     }
     return added;
 }
@@ -909,7 +1251,10 @@ int append_oriented_closed_loop_bridge(
     const std::vector<gp_Pnt>& outer,
     const std::vector<gp_Vec>& normals,
     std::vector<StlTriangle>& outTriangles,
-    int& rejected) {
+    int& rejected,
+    double maxAllowedTriangleEdgeLength = std::numeric_limits<double>::infinity(),
+    int* longTriangleCount = nullptr,
+    double* maxTriangleEdgeLength = nullptr) {
     if (innerInput.size() < 3 || outer.size() < 3 || normals.empty()) {
         return 0;
     }
@@ -931,6 +1276,14 @@ int append_oriented_closed_loop_bridge(
         referenceNormal.Normalize();
         auto triangle = make_oriented_stl_triangle(p0, p1, p2, referenceNormal);
         if (!is_degenerate(triangle, 1.0e-15)) {
+            if (exceeds_triangle_quality_guard(
+                    triangle,
+                    maxAllowedTriangleEdgeLength,
+                    longTriangleCount,
+                    maxTriangleEdgeLength)) {
+                ++rejected;
+                return 0;
+            }
             outTriangles.push_back(triangle);
             return 1;
         }
@@ -1111,6 +1464,11 @@ MeshBoundaryLoop extract_ordered_mesh_boundary_loop(const std::vector<StlTriangl
 }
 
 std::optional<FaceId> guard_face_for_edge(
+    const TopologyGraph& topology,
+    EdgeId edgeId,
+    const std::unordered_set<FaceId>& candidateFaces);
+
+std::optional<FaceId> source_face_for_edge(
     const TopologyGraph& topology,
     EdgeId edgeId,
     const std::unordered_set<FaceId>& candidateFaces);
@@ -1380,6 +1738,263 @@ AdjacentFaceSupportCollarBuildResult append_adjacent_face_support_collar(
     return result;
 }
 
+CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const RegionBoundaryAnalysis& boundary,
+    const StpSampledFittingOptions& options,
+    const StlBoundingBox& candidateBBox,
+    const std::vector<StlTriangle>& baseTriangles,
+    std::vector<StlTriangle>& outTriangles) {
+    CandidateSurfaceOverCoverBuildResult result;
+    if (!options.enableCandidateSurfaceOverCover ||
+        options.candidateSurfaceOverCoverWidth <= 0.0 ||
+        options.candidateSurfaceOverCoverRingCount <= 0 ||
+        baseTriangles.empty()) {
+        return result;
+    }
+
+    const auto& topology = document.topology();
+    std::unordered_set<FaceId> candidateFaces(candidate.faces.begin(), candidate.faces.end());
+    result.boundaryEdgeCount = static_cast<int>(boundary.ordered_boundary_edges.size());
+    if (boundary.ordered_boundary_edges.empty()) {
+        return result;
+    }
+
+    const auto center = bbox_center(candidateBBox);
+    const auto ringCount = std::max(options.candidateSurfaceOverCoverRingCount, 1);
+    const auto samplesPerEdge = std::max(
+        options.candidateSurfaceOverCoverSamplesPerEdge,
+        options.minBoundarySamplesPerEdge);
+
+    bool hasPreviousPoint = false;
+    gp_Pnt previousPoint;
+    std::vector<gp_Pnt> boundaryRing;
+    std::vector<gp_Vec> normalRing;
+    std::vector<std::vector<gp_Pnt>> overCoverRings(static_cast<std::size_t>(ringCount));
+    std::unordered_set<FaceId> sourceFacesUsed;
+    constexpr double joinToleranceSquared = 1.0e-10;
+    boundaryRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    normalRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    for (auto& ring : overCoverRings) {
+        ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    }
+
+    for (std::size_t edgeOrdinal = 0; edgeOrdinal < boundary.ordered_boundary_edges.size(); ++edgeOrdinal) {
+        const auto edgeId = boundary.ordered_boundary_edges[edgeOrdinal];
+        if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
+            ++result.rejectedCount;
+            continue;
+        }
+
+        const auto sourceFaceId = source_face_for_edge(topology, edgeId, candidateFaces);
+        const auto& edge = topology.edge(edgeId);
+        const TopoDS_Face* sourceFace = nullptr;
+        if (sourceFaceId.has_value() && *sourceFaceId < topology.faceCount()) {
+            sourceFace = &topology.face(*sourceFaceId);
+        }
+        if (sourceFace == nullptr) {
+            ++result.rejectedCount;
+            continue;
+        }
+
+        BRepAdaptor_Curve adaptor(edge);
+        const auto firstParam = adaptor.FirstParameter();
+        const auto lastParam = adaptor.LastParameter();
+        const auto firstPoint = adaptor.Value(firstParam);
+        const auto lastPoint = adaptor.Value(lastParam);
+        const auto reverseEdge = hasPreviousPoint &&
+            lastPoint.SquareDistance(previousPoint) < firstPoint.SquareDistance(previousPoint);
+
+        std::vector<gp_Pnt> edgeBoundaryRing;
+        std::vector<gp_Vec> edgeNormalRing;
+        std::vector<std::vector<gp_Pnt>> edgeOverCoverRings(static_cast<std::size_t>(ringCount));
+        edgeBoundaryRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        edgeNormalRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        for (auto& ring : edgeOverCoverRings) {
+            ring.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        }
+
+        int rejectedForEdge = 0;
+        bool hasPreviousEdgeDirection = false;
+        gp_Vec previousEdgeDirection;
+        for (int sampleIndex = 0; sampleIndex <= samplesPerEdge; ++sampleIndex) {
+            const auto ratio = static_cast<double>(sampleIndex) / static_cast<double>(samplesPerEdge);
+            const auto parameter = reverseEdge
+                ? lastParam + (firstParam - lastParam) * ratio
+                : firstParam + (lastParam - firstParam) * ratio;
+            const auto point = adaptor.Value(parameter);
+
+            BoundarySample sample;
+            sample.point = point;
+            sample.parameter = parameter;
+            sample.edgeId = edgeId;
+
+            previousPoint = point;
+            hasPreviousPoint = true;
+
+            gp_Vec normal(0.0, 0.0, 1.0);
+            std::vector<gp_Pnt> sampleOverCoverPoints;
+            sampleOverCoverPoints.reserve(static_cast<std::size_t>(ringCount));
+            bool sampleOk = true;
+            for (int ring = 1; ring <= ringCount; ++ring) {
+                const auto distance =
+                    options.candidateSurfaceOverCoverWidth *
+                    static_cast<double>(ring) /
+                    static_cast<double>(ringCount);
+                const auto overCoverPoint = candidate_surface_over_cover_point(
+                    edge,
+                    *sourceFace,
+                    sample,
+                    center,
+                    distance,
+                    reverseEdge);
+                if (overCoverPoint.has_value()) {
+                    normal = overCoverPoint->normal;
+                    result.normalLeakageMax = std::max(
+                        result.normalLeakageMax,
+                        overCoverPoint->normalLeakage);
+                    if (overCoverPoint->usedFallbackDirection) {
+                        ++result.fallbackCount;
+                        ++result.directionFallbackCount;
+                    }
+                    if (ring == 1) {
+                        if (hasPreviousEdgeDirection &&
+                            previousEdgeDirection.Magnitude() > 1.0e-12 &&
+                            overCoverPoint->outwardDirection.Magnitude() > 1.0e-12) {
+                            auto previous = previousEdgeDirection;
+                            auto current = overCoverPoint->outwardDirection;
+                            previous.Normalize();
+                            current.Normalize();
+                            if (dot_vec(previous, current) < -0.25) {
+                                ++result.directionFlipCount;
+                            }
+                        }
+                        previousEdgeDirection = overCoverPoint->outwardDirection;
+                        hasPreviousEdgeDirection = true;
+                    }
+                    sampleOverCoverPoints.push_back(overCoverPoint->point);
+                } else {
+                    sampleOk = false;
+                    break;
+                }
+            }
+
+            if (!sampleOk || sampleOverCoverPoints.size() != static_cast<std::size_t>(ringCount)) {
+                ++rejectedForEdge;
+                continue;
+            }
+
+            edgeBoundaryRing.push_back(point);
+            edgeNormalRing.push_back(normal);
+            for (int ring = 0; ring < ringCount; ++ring) {
+                edgeOverCoverRings[static_cast<std::size_t>(ring)].push_back(
+                    sampleOverCoverPoints[static_cast<std::size_t>(ring)]);
+            }
+        }
+
+        if (edgeBoundaryRing.size() >= 2 && rejectedForEdge == 0) {
+            for (std::size_t index = 0; index < edgeBoundaryRing.size(); ++index) {
+                if (!boundaryRing.empty() &&
+                    edgeBoundaryRing[index].SquareDistance(boundaryRing.back()) <= joinToleranceSquared) {
+                    continue;
+                }
+                boundaryRing.push_back(edgeBoundaryRing[index]);
+                normalRing.push_back(edgeNormalRing[index]);
+                for (int ring = 0; ring < ringCount; ++ring) {
+                    overCoverRings[static_cast<std::size_t>(ring)].push_back(
+                        edgeOverCoverRings[static_cast<std::size_t>(ring)][index]);
+                }
+            }
+            ++result.coveredBoundaryEdgeCount;
+            result.sampleCount += static_cast<int>(edgeBoundaryRing.size()) * ringCount;
+            if (sourceFaceId.has_value()) {
+                sourceFacesUsed.insert(*sourceFaceId);
+            }
+        } else {
+            result.rejectedCount += std::max(rejectedForEdge, 1);
+        }
+    }
+
+    if (boundaryRing.size() >= 3 && boundaryRing.front().SquareDistance(boundaryRing.back()) <= joinToleranceSquared) {
+        boundaryRing.pop_back();
+        normalRing.pop_back();
+        for (auto& ring : overCoverRings) {
+            if (!ring.empty()) {
+                ring.pop_back();
+            }
+        }
+    }
+
+    if (boundaryRing.size() >= 3 && !overCoverRings.empty()) {
+        for (std::size_t ring = 0; ring < overCoverRings.size(); ++ring) {
+            const auto targetDistance =
+                options.candidateSurfaceOverCoverWidth *
+                static_cast<double>(ring + 1) /
+                static_cast<double>(ringCount);
+            apply_candidate_surface_corner_miter(
+                boundaryRing,
+                overCoverRings[ring],
+                targetDistance,
+                options.candidateSurfaceOverCoverCornerMiterMaxScale,
+                result.cornerMiterCount,
+                result.maxOffset);
+        }
+    }
+
+    const auto meshBoundary = extract_ordered_mesh_boundary_loop(baseTriangles);
+    result.bodyBridgeRejectedCount += meshBoundary.rejectedCount;
+    const auto localSpacing = closed_loop_mean_spacing(boundaryRing);
+    const auto maxAllowedTriangleEdgeLength = localSpacing > 0.0
+        ? 5.0 * localSpacing
+        : std::numeric_limits<double>::infinity();
+    if (meshBoundary.points.size() >= 3 && boundaryRing.size() >= 3) {
+        int bridgeRejectedCount = 0;
+        const auto bridgeTriangles = append_oriented_closed_loop_bridge(
+            meshBoundary.points,
+            boundaryRing,
+            normalRing,
+            outTriangles,
+            bridgeRejectedCount,
+            maxAllowedTriangleEdgeLength,
+            &result.longTriangleCount,
+            &result.maxTriangleEdgeLength);
+        result.bodyBridgeRejectedCount += bridgeRejectedCount;
+        result.triangleCount += bridgeTriangles;
+    }
+
+    if (boundaryRing.size() >= 3 && !overCoverRings.empty()) {
+        result.triangleCount += append_oriented_closed_quad_strip(
+            boundaryRing,
+            overCoverRings.front(),
+            normalRing,
+            outTriangles,
+            result.rejectedCount,
+            true,
+            maxAllowedTriangleEdgeLength,
+            &result.longTriangleCount,
+            &result.maxTriangleEdgeLength);
+        for (std::size_t ring = 1; ring < overCoverRings.size(); ++ring) {
+            result.triangleCount += append_oriented_closed_quad_strip(
+                overCoverRings[ring - 1],
+                overCoverRings[ring],
+                normalRing,
+                outTriangles,
+                result.rejectedCount,
+                true,
+                maxAllowedTriangleEdgeLength,
+                &result.longTriangleCount,
+                &result.maxTriangleEdgeLength);
+        }
+    }
+
+    result.boundaryCoverage = result.boundaryEdgeCount > 0
+        ? static_cast<double>(result.coveredBoundaryEdgeCount) / static_cast<double>(result.boundaryEdgeCount)
+        : 0.0;
+    result.sourceFaceCount = static_cast<int>(sourceFacesUsed.size());
+    return result;
+}
+
 std::optional<FaceId> guard_face_for_edge(
     const TopologyGraph& topology,
     EdgeId edgeId,
@@ -1390,6 +2005,22 @@ std::optional<FaceId> guard_face_for_edge(
     }
     for (const auto faceId : adjacency->faces) {
         if (candidateFaces.find(faceId) == candidateFaces.end()) {
+            return faceId;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<FaceId> source_face_for_edge(
+    const TopologyGraph& topology,
+    EdgeId edgeId,
+    const std::unordered_set<FaceId>& candidateFaces) {
+    const auto* adjacency = topology.adjacencyForEdge(edgeId);
+    if (adjacency == nullptr) {
+        return std::nullopt;
+    }
+    for (const auto faceId : adjacency->faces) {
+        if (candidateFaces.find(faceId) != candidateFaces.end()) {
             return faceId;
         }
     }
@@ -1475,6 +2106,7 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     report.sourceFaceCount = static_cast<int>(candidate.faces.size());
     report.cornerFeatureDenseSamplingEnabled = options.enableCornerFeatureDenseSampling;
     report.adjacentFaceSupportCollarEnabled = options.enableAdjacentFaceSupportCollar;
+    report.candidateSurfaceOverCoverEnabled = options.enableCandidateSurfaceOverCover;
     if (options.enableAdjacentFaceSupportCollar) {
         report.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
         report.adjacentFaceSupportCollarRingCount = std::max(options.adjacentFaceSupportCollarRingCount, 0);
@@ -1483,6 +2115,10 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
         report.adjacentFaceSupportCollarUnderCover = options.adjacentFaceSupportCollarUnderCover;
         report.adjacentFaceSupportCollarCornerClampEnabled =
             options.enableAdjacentFaceSupportCollarCornerClamp;
+    }
+    if (options.enableCandidateSurfaceOverCover) {
+        report.candidateSurfaceOverCoverWidth = options.candidateSurfaceOverCoverWidth;
+        report.candidateSurfaceOverCoverRingCount = std::max(options.candidateSurfaceOverCoverRingCount, 0);
     }
 
     // Validate inputs
@@ -1584,6 +2220,37 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             faceTriCount);
     }
 
+    const auto baseTriangles = allTriangles;
+    if (options.enableCandidateSurfaceOverCover) {
+        const auto overCover = append_candidate_surface_over_cover(
+            document,
+            candidate,
+            boundary,
+            options,
+            candidateBBox,
+            baseTriangles,
+            allTriangles);
+        report.candidateSurfaceOverCoverEdgeCount = overCover.boundaryEdgeCount;
+        report.candidateSurfaceOverCoverSampleCount = overCover.sampleCount;
+        report.candidateSurfaceOverCoverTriangleCount = overCover.triangleCount;
+        report.candidateSurfaceOverCoverFallbackCount = overCover.fallbackCount;
+        report.candidateSurfaceOverCoverRejectedCount = overCover.rejectedCount;
+        report.candidateSurfaceOverCoverBoundaryCoverage = overCover.boundaryCoverage;
+        report.candidateSurfaceOverCoverCornerMiterCount = overCover.cornerMiterCount;
+        report.candidateSurfaceOverCoverMaxOffset = overCover.maxOffset;
+        report.candidateSurfaceOverCoverNormalLeakageMax = overCover.normalLeakageMax;
+        report.candidateSurfaceOverCoverDirectionFallbackCount = overCover.directionFallbackCount;
+        report.candidateSurfaceOverCoverLongTriangleCount = overCover.longTriangleCount;
+        report.candidateSurfaceOverCoverMaxTriangleEdgeLength = overCover.maxTriangleEdgeLength;
+        report.candidateSurfaceOverCoverSourceFaceCount = overCover.sourceFaceCount;
+        report.candidateSurfaceOverCoverDirectionFlipCount = overCover.directionFlipCount;
+        if (overCover.triangleCount == 0) {
+            report.warningMessage = append_warning(
+                report.warningMessage,
+                "Candidate surface over-cover was enabled but no over-cover triangles were generated.");
+        }
+    }
+
     if (options.enableAdjacentFaceSupportCollar) {
         const auto supportCollar = append_adjacent_face_support_collar(
             document,
@@ -1591,7 +2258,7 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             boundary,
             options,
             candidateBBox,
-            allTriangles,
+            baseTriangles,
             allTriangles);
         report.adjacentFaceSupportCollarEdgeCount = supportCollar.boundaryEdgeCount;
         report.adjacentFaceSupportCollarSampleCount = supportCollar.sampleCount;

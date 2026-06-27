@@ -30,7 +30,7 @@ STEP 读取
    - 直接从当前 STP candidate faces / boundary 采样生成 fitting STL。
    - 不要求先加载原始 STL。
    - 当前推荐作为默认模式，速度更快，效果与 STL 裁剪路线接近。
-   - 当前保留的扩宽机制只有 adjacent-face support collar；GUI 默认启用该开关，Route 2 runner 必须显式传 support-collar width/ring/adaptive 参数。旧 B2 guard-band 与 B2.1 over-cover strip 已从可执行入口移除。
+   - 当前 Route 2 主扩宽机制已切到 Candidate / Source Face Parallel Over-Cover；GUI 默认启用 `启用 STP 候选面外扩带`，Route 2 runner 默认只传 candidate over-cover 参数。窄 adjacent-face support collar 仅作为显式 A/B 辅助上下文保留。旧 B2 guard-band 与 B2.1 over-cover strip 已从可执行入口移除。
 3. 备用 / 诊断路线：原始 STL crop。
    - Legacy centroid-only crop 保留为基线。
    - Conservative boundary-band crop 保留为 A/B 验证。
@@ -41,7 +41,191 @@ STEP 读取
 7. 下一阶段重点转为 Geomagic 输出在 sharp corner / feature junction 附近圆角化所造成的商业 CAD 缝隙问题；该问题不能只靠 OCCT BRepCheck / free edge / multiple edge 判断。
 ```
 
-### 1.0 2026-06-25 Route 2 support collar 真实样例结果
+### 1.0 2026-06-26 Route 2 candidate/source-face parallel over-cover 落地
+
+本轮按 2026-06-25 Route 2 失败截图和指标调整扩宽主路线：
+
+```text
+原主路线：adjacent-face support collar 主导扩宽
+新主路线：Candidate / Source Face Parallel Over-Cover 主导扩宽
+```
+
+已落地：
+
+```text
+1. StpSampledFittingOptions / Report 新增 candidateSurfaceOverCover* 参数和报告字段。
+2. StpSampledFittingMeshBuilder 沿原候选 STP face 边界生成 2~3 圈平行 over-cover，并桥接回主体 STL。
+3. GUI 默认开关改为“启用 STP 候选面外扩带”，默认 width=0.25、rings=3、samples=64、corner miter max scale=1.25。
+4. corner_baseline_probe 支持 --candidate-surface-over-cover、--candidate-over-cover-width、--candidate-over-cover-rings 等参数，并输出 candidate_surface_over_cover_* JSON 字段。
+5. run_boundary_trim_fill_experiments.ps1 Route 2 默认启用 candidate over-cover；adjacent-face support collar 降级为显式 A/B 辅助项，只有 `-EnableAuxiliarySupportCollar` 时才叠加，默认不启用。
+6. run_corner_baseline_gate.ps1 的 B2 / B2.2 改为 candidate over-cover；B2.3 为 candidate over-cover + corner-safe auxiliary support collar。
+7. GUI Apply 路径显式启用 strict original-boundary re-trim。
+8. 显式 strict retrim 的 replacement face 使用 face-compound assembly 后再进入 repair / sewing，避免新重裁边直接替换旧 solid face 后产生 BRepCheck 失败。
+```
+
+已验证：
+
+```text
+cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
+ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+```
+
+真实样例已跑（保守 tangent-plane 修复前的 candidate over-cover 结果）：
+
+```text
+output: data/baseline_runs/route2_candidate_overcover_real_20260626_1632
+status: AllRoutesFailed
+
+STP sampled fitting 输入已恢复为干净单组件：
+  Geomagic pre-repair components=1
+  boundaryCycles=1
+  nonManifoldEdges=0
+  nonManifoldVertices=0
+  degenerateTriangles=2
+  candidate_surface_over_cover coverage=1
+  rejected=0
+  fallback=0
+  triangle_count=12168
+
+Geomagic 成功输出 patch：
+  patch faces=13
+  patch edges=57
+  preview high_risk=false
+  raw patch unit=meter
+  normalized patch unit=millimeter
+
+Apply 仍失败：
+  failure_reason=BuildFailed
+  message=Multi-surface replacement face edges produced open wires. Fallback wire-connect tolerance was also insufficient.
+  built_faces=4
+  closed_wires=6
+  open_wires=1
+  failed_patch_face_index=3
+  failed original boundary edge ids=1591
+  endpoint_gap=0.6898656017706906
+  pcurve rebuild failure=0
+  SameParameter failure=0
+
+CommercialCadLikeQualityGate 仍失败：
+  boundary max/p95=0.0606937588/0.0338442211
+  corner max=0.0392015215
+  seam max_abs=0.0435434508
+
+Creo sewing 仍失败最终验收：
+  exported STEP solids=0
+  shells=2
+  BRepCheck=false
+  StrictTopologyGate failure=BRepCheckFailed
+  after_free_edges=45
+  ModelCHECK diagnostic_passed=false
+  GEOM_CHECKS=1
+  SHORT_EDGES=1497
+```
+
+判读：
+
+```text
+本轮修正已经把 Route 2 失败点从“输入 STL 多组件 / Geomagic 初始化失败”推进回 Apply / multi-surface open-wire closure。
+candidate over-cover 方向和连通性不再是当前 blocker；下一步应定位 failed_patch_face_index=3 与 original boundary edge 1591 的 segment / internal seam closure。
+```
+
+### 1.1 2026-06-26 candidate/source-face over-cover 保守稳定修复
+
+本轮针对 2026-06-26 截图中出现的局部下翻、侧壁方向生长和角点尖刺做保守修复，不改 OCCT 曲面重建、不恢复旧 guard-band / old over-cover strip。
+
+已落地：
+
+```text
+1. reverseEdge 遍历时，pcurve D1 tangent 会先反向，再参与 left/right 外侧判断。
+2. over-cover 点优先用 source face 切平面 3D offset：P_offset = P + D * distance。
+3. surface UV 外推只作为 normal leakage 诊断参考；leakage > 0.20 计入 fallback。
+4. corner miter 默认 max scale 从 2.0 降到 1.25；相邻 offset 方向突变或近似反向时只 clamp，不做 miter 放大。
+5. candidate over-cover bridge / quad strip 增加长三角保护，按 boundary ring 平均采样间距设置局部阈值。
+6. StpSampledFittingReport / corner_baseline_probe JSON 新增：
+   candidate_surface_over_cover_normal_leakage_max
+   candidate_surface_over_cover_direction_fallback_count
+   candidate_surface_over_cover_long_triangle_count
+   candidate_surface_over_cover_max_triangle_edge_length
+   candidate_surface_over_cover_source_face_count
+   candidate_surface_over_cover_direction_flip_count
+```
+
+已验证：
+
+```text
+cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
+ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+.\scripts\build_debug.ps1
+```
+
+真实样例复测：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+output: data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810
+status: AllRoutesFailed
+
+fitting STL 本体质量：
+  components=1
+  boundaryCycles=1
+  nonManifoldEdges=0
+  degenerateTriangles=0
+
+candidate over-cover 诊断：
+  boundary_coverage=1
+  normal_leakage_max=0.7464534307
+  direction_fallback_count=3935
+  direction_flip_count=0
+  long_triangle_count=9984
+  rejected_count=9984
+  max_triangle_edge_length=0.3965649168
+  triangle_count=2184
+  max_offset=0.3125
+
+Geomagic patch：
+  faces=68
+  edges=326
+  preview high_risk=true
+  boundary max=0.0101759896
+  corner max=0.0101759896
+
+normalized patch：
+  raw patch unit=meter
+  normalized patch unit=millimeter
+  normalized_patch_unit_is_millimeter=true
+
+Apply 失败：
+  failure_reason=BuildFailed
+  message=Multi-surface replacement face edges produced open wires.
+  built_faces=14
+  closed_wires=19
+  open_wires=2
+  failed_patch_face_index=7
+  failed original boundary edge ids=1585
+  endpoint_gap=0.7593067905601413
+  pcurve rebuild failure=0
+  SameParameter failure=0
+
+Creo sewing 失败：
+  exported STEP solids=0
+  shells=2
+  BRepCheck=false
+  StrictTopologyGate failure=BRepCheckFailed
+  after_free_edges=52
+  ModelCHECK diagnostic_passed=false
+  SHORT_EDGES item count=1593
+```
+
+判读：
+
+```text
+reverseEdge 方向翻转不再是当前证据（direction_flip_count=0）。
+但 normal leakage 和 longTriangle rejection 明显过高，导致有效 over-cover 三角过少，Geomagic patch 又碎化为 68 faces/high-risk。
+下一步应先把 longTriangleCount/rejectedCount 分解到 bridge vs quad strip，并修正 ring 对应或局部 bevel/fan 补洞；在 over-cover 输入稳定前，不应继续把主要精力放到 Apply / sewing 调参。
+```
+
+### 1.1 2026-06-25 Route 2 support collar 真实样例结果
 
 本轮真实样例：
 
@@ -104,7 +288,7 @@ Creo Toolkit sewing 仍不能救回灰色水密实体：
 下一步不应恢复 guard-band / over-cover，也不应继续盲目加宽 support collar；应优先定位 failed_patch_face_index=2 上的 original-boundary segments 和 internal seams 为什么无法闭合。
 ```
 
-### 1.1 当前关键诊断（2026-05-27）
+### 1.2 当前关键诊断（2026-05-27）
 
 ```text
 GUI 显示”看起来连续” ≠ STEP/B-rep 拓扑合法。
@@ -699,60 +883,48 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ---
 
-## 8. 近期推荐开发顺序（2026-06-11 修订）
+## 8. 近期推荐开发顺序（2026-06-26 修订）
 
-**当前默认路线：STP-sampled fitting input**
+当前默认路线：
 
 ```text
-1. 继续把 STP Sampled Candidate Surface 作为默认 Geomagic fitting input mode。
-   - 不要求用户先加载原始 STL。
-   - 使用当前 STP candidate faces / boundary 生成 fitting STL。
-   - 重点验证速度、AutoSurface patch face count、Apply report 和失败形态。
-
-2. 保留 STL 全局切链裁剪器作为备用 / 诊断路线。
-   - Global Cut Chain 用于需要从真实源 STL 取局部三角片的场景。
-   - 它可以改善 local STL 边界跟随，但不能改变最终 CAD boundary。
-   - 不应在没有更多真实样例证据前替代 STP-sampled 默认模式。
-
-3. Apply 收口仍围绕 T6.7.4 后的问题：
-   - split boundary 与邻接旧拓扑 / bridge closure。
-   - PatchReplacementRepair 后 free edge / multiple edge 归零。
-   - BRepCheck、solid/watertight 和 STEP roundtrip 全部通过。
-
-4. 文档、报告和 GUI 文案必须明确区分：
-   - fitting input mode：STP sampled / legacy STL crop / conservative STL crop。
-   - STL crop mode：centroid-only / conservative boundary-band / global cut chain。
-   - final CAD boundary：只能来自原 STP candidate outer boundary wire。
-
-5. 当前下一步执行 corner preservation A/B 实验：
-   - A0：用 `corner_baseline_probe` 跑当前 STP sampled baseline，并保存 JSON 报告。
-   - B1：corner / feature edge 加密采样已完成第一版；真实质量改善必须用重新跑 Geomagic 后的 B1 patch 判断，不能用复用 A0 patch 的报告替代。
-   - B2.0：原 STP boundary 外邻接面 guard-band 采样已完成第一版；真实样例显示 max drift 明显下降，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍未通过，且几何形态不是目标方案。
-   - B2.1：当前 fitting STL patch 外围 over-cover strip 已完成基础版；真实 Geomagic 默认参数已重新生成 patch，并进入 Apply / StrictTopologyGate / applied STEP export；CommercialCadLikeQualityGate 仍因 drift 超限失败。
-   - B2.2：邻接面 support collar 与 seam_continuity 指标已完成最小版；真实 Geomagic 参数扫显示输入 STL 干净、patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败。
-   - B2.3：角点安全 support collar 与 SharpenContours A/B 已完成最小版；真实 Geomagic 显示 SharpenContours 可降低 drift，但 StrictTopologyGate 仍因 FreeEdgeIncreased 失败，未产生 applied STEP。
-   - B2.4：已从 Apply 侧修复 T6.7.4 multi-surface boundary shell 的边界边表征，对原 STP boundary 3D curve 在 fitted surface 上显式重建 pcurve / SameParameter，并新增 edge-level diagnostics；真实样例证明 pcurve rebuild 全部成功但 gate 仍有 1 条 free edge，因此后续要定位 free edge 空间位置和局部几何偏差，而不是继续把 pcurve 缺失当主因。
-   - B2.5：已补 pre-repair / post-repair closure probe；真实样例 `03_配件_Clay.stp` candidate 179 复用 B2.3 + SharpenContours patch 后，`pre_repair_free_edge_count=66`、`post_repair_free_edge_count=1`、post free edge `appeared_after_repair=true`、nearest original boundary edge id `1600`、distance 约 `0.0639331`，因此下一步应同时看 replacement shell 构造和 repair best-result / 退化 free-edge 处理。
-   - B2.6：已完成 Local Free-edge Closure Fix 的最小诊断/repair selection/validator 分类修正版。当前真实样例显示 pre-repair 仍有 66 条 free-edge-like 诊断边，post-repair 仍有 1 条新出现的退化 diagnostic edge（`length=0`、`tolerance=1e-7`，nearest original boundary edge id 为 1600 但同一 edge 上没有 matched split segment），但该边属于 closed seam / degenerated edge 误计数范畴；修正后 `StrictTopologyGate` 与 applied STEP readback 通过。下一步不再围绕这条点状边硬修拓扑，而是压低 boundary/corner/feature drift、owner/split 稳定性和 commercial-CAD-like quality 指标；B2.6 不放宽 StrictTopologyGate，不删除 PatchReplacementRepair，不提交 pre-repair shape，不把 Blender 四边形化作为主线。
-   - B2.7：已完成 Trim / over-cover / seam failure localization 的最小诊断版。真实样例显示 applied STEP 与 roundtrip 拓扑稳定，over-cover 为 0，internal seam gap 为 0；剩余主要信号是 under-cover 与局部 boundary gap。下一步不应围绕某个硬编码 edge，也不应先扩大 STL 或替换最终边界来源，而应优先检查 replacement surface coverage、local boundary projection 和 owner/split 稳定性。
-   - B2.8：已完成外部 CAD 诊断路由最小版，并新增显式后台 Creo 检查脚本。外部 CAD 入口必须读取 B2.8 的 `final_applied_step_diagnostic_eligible` 和 input path；不能直接拿原始 Geomagic 补片 STEP 当最终合并诊断对象。当前本机真实试跑已跑通 Creo Distributed Batch STEP 导入和 ModelCHECK，生成 `.prt.1`、HTML/XML 报告和 JSON 摘要；诊断结果为 `diagnostic_passed=false`，Creo 报告指向 `GEOM_CHECKS`、`SHORT_EDGES` 和导入校验 `SOLID_FAILED` / `FAIL`。
-   - B2.9：已完成 Creo ModelCHECK XML item 明细解析与阶段级关联 JSON。当前真实 XML 的 `GEOM_CHECKS` 只给 `feature id 4`，`SHORT_EDGES` 给 1491 个 Creo edge id，脚本会原样记录并提取 id；由于 XML 不含空间坐标或 OCCT edge id，只能和 B2.7 under-cover / boundary gap / worst boundary edge 做阶段级关联。下一步若要定位具体短边空间位置，应先评估 Creo API 或导出失败选区/修复报告，而不是臆造 Creo edge 到 OCCT edge 的映射。
-   - B3：继续暂缓为条件分支；只有后续修复证明局部 under-cover / boundary-gap 需要 Geomagic fitting input 约束增强，才做 corner anchors + seam-aware fitting input 组合。不能把 corner anchors 当成替代 topology / quality gate 的捷径。
-
-6. `CommercialCadLikeQualityGate` 第一版已新增：
-   - 不替代 StrictTopologyGate。
-   - 当前输出 boundary max/p95/RMS deviation、seam_continuity signed normal offset、corner anchor drift、feature edge drift、sharp-corner-preservation pass/fail 和 sampling_report。
-   - 后续仍需补 STEP roundtrip 后几何重复测量、surface COPS-like deviation 和 Creo / commercial CAD 阈值标定。
+STP Sampled Candidate Surface
+→ Candidate / Source Face Parallel Over-Cover
+→ Geomagic AutoSurface
+→ normalized patch mm
+→ strict original-boundary re-trim
+→ OCCT / Creo 双重诊断
 ```
 
-**冻结范围：**
+下一步只围绕最新真实样例的实际失败点推进：
+
+```text
+1. 定位 failed_patch_face_index=3 与 original boundary edge 1591。
+   - 输出 patch face 3 的 edge / wire 组成。
+   - 输出 edge 1591 的 split segment、owner face、adjacent face 和 pcurve 状态。
+   - 解释 endpoint_gap=0.6898656017706906 是 segment ordering、internal seam 缺失，还是局部 surface coverage 不足。
+
+2. 若 STL 输入仍被证据证明向下翻，再修 candidate over-cover 外侧方向判定。
+   当前真实样例中 candidate over-cover STL 已是 components=1、boundaryCycles=1、coverage=1，
+   所以不能把“继续加宽”当默认下一步。
+
+3. 若 Geomagic patch 仍圆角化或过碎，先做 Geomagic 参数 / 角点 miter A/B。
+   不恢复旧 guard-band 或旧 over-cover strip 作为主入口。
+
+4. 若 Apply 闭合后 OCCT 通过但 Creo 失败，再走 Creo 失败区域定位。
+   OCCT strict 通过只是必要条件；Creo 灰色水密实体才是验收。
+```
+
+冻结范围：
 
 ```text
 - 不继续把 OCCT PlaneRegionMerge / A6 作为当前主线增强。
-- 不把 Geomagic patch outer boundary 或 STL crop boundary 当最终 CAD boundary。
-- 不绕过 StrictTopologyGate。
-- 不让 redo 重新运行 Geomagic / crop / import / repair。
-- 不在默认单元测试里依赖真实 Geomagic 或真实大样例路径。
+- 不恢复 BestFitFreeform。
+- 不恢复旧 B2.0 guard-band 或旧 B2.1 over-cover strip 作为可执行实验入口。
+- 不把 Geomagic patch outer boundary、STL crop boundary 或支撑带外环当最终 CAD boundary。
+- 不放宽 StrictTopologyGate。
+- 不默认叠加 adjacent-face support collar；它只保留为显式 A/B 窄辅助上下文。
+- 不在默认单元测试里依赖真实 Geomagic、Creo 或真实大样例路径。
 ```
 
 ---

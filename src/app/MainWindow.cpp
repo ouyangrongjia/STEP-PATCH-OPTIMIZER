@@ -498,7 +498,7 @@ void MainWindow::createActions() {
     useGeomagicRemeshAction_ = new QAction("启用 Geomagic Remesh", this);
     useGeomagicRemeshAction_->setCheckable(true);
     useGeomagicRemeshAction_->setChecked(false);
-    useStpSupportCollarAction_ = new QAction("启用 STP 邻接面支撑带", this);
+    useStpSupportCollarAction_ = new QAction("启用 STP 候选面外扩带", this);
     useStpSupportCollarAction_->setCheckable(true);
     useStpSupportCollarAction_->setChecked(true);
     importPatchForCurrentCandidateAction_ = new QAction("从 local STL 定位并导入 Patch", this);
@@ -1289,16 +1289,17 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     const auto cropOptions = currentStlCropOptions();
     const auto fittingModeStr = QString::fromStdString(toString(fittingInputMode));
     const bool useGeomagicRemesh = useGeomagicRemeshAction_ != nullptr && useGeomagicRemeshAction_->isChecked();
-    const bool useStpSupportCollar =
+    const bool useCandidateSurfaceOverCover =
         useStpSupportCollarAction_ != nullptr && useStpSupportCollarAction_->isChecked();
     const auto geomagicRemeshMode = useGeomagicRemesh ? QString("enabled") : QString("disabled");
-    const auto stpSupportCollarMode = useStpSupportCollar ? QString("enabled") : QString("disabled");
+    const auto candidateSurfaceOverCoverMode =
+        useCandidateSurfaceOverCover ? QString("enabled") : QString("disabled");
     const auto runLogger = PatchPreviewRunLogger::create(workspaceRoot, candidateSnapshot.candidate_id);
     runLogger.log(
         "Start",
         "Patch preview requested: fitting_mode=" + fittingModeStr.toStdString() +
             ", geomagic_remesh=" + geomagicRemeshMode.toStdString() +
-            ", stp_support_collar=" + stpSupportCollarMode.toStdString());
+            ", candidate_surface_over_cover=" + candidateSurfaceOverCoverMode.toStdString());
     if (runLogger.ready()) {
         logPanel_->appendInfo(QString("Patch preview run log：%1").arg(pathToQString(runLogger.path())));
     } else {
@@ -1308,8 +1309,8 @@ void MainWindow::generateAndPreviewCurrentPatch() {
 
     ProcessStatusSnapshot pipelineStatus = makeProcessStatus(
         ProcessStage::AnalyzingBoundary,
-        QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2, stp_support_collar=%3")
-            .arg(fittingModeStr, geomagicRemeshMode, stpSupportCollarMode)
+        QString("Patch preview pipeline started: fitting_mode=%1, geomagic_remesh=%2, candidate_surface_over_cover=%3")
+            .arg(fittingModeStr, geomagicRemeshMode, candidateSurfaceOverCoverMode)
             .toStdString());
     pipelineStatus.candidateId = candidateSnapshot.candidate_id;
     pipelineStatus.sourceFaceCount = candidateSnapshot.face_count;
@@ -1319,13 +1320,13 @@ void MainWindow::generateAndPreviewCurrentPatch() {
     setStlCropInProgress(true);
     startPatchPreviewProgressReport(
         pipelineStatus,
-        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\nSTP support collar：%6\nrun log：%7\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
+        QString("Patch 预览链路正在后台运行\nsource STL：%1\ncandidate id：%2\ncandidate type：%3\nfitting input mode：%4\nGeomagic Remesh：%5\nSTP candidate over-cover：%6\nrun log：%7\n刷新策略：阶段事件立即追加；长阶段每 2 秒刷新心跳行。")
         .arg(pathToQString(sourceStlPath))
         .arg(candidateSnapshot.candidate_id)
         .arg(candidateTypeText(candidateSnapshot.candidate_type))
         .arg(fittingModeStr)
         .arg(geomagicRemeshMode)
-        .arg(stpSupportCollarMode)
+        .arg(candidateSurfaceOverCoverMode)
         .arg(pathToQString(runLogger.path())));
     logPanel_->appendInfo(QString("开始生成 Patch 预览：候选 %1").arg(candidateSnapshot.candidate_id));
     setStatus("Patch 预览生成中");
@@ -1462,12 +1463,12 @@ void MainWindow::generateAndPreviewCurrentPatch() {
         runLogger.log("Finished", "Patch preview ready.");
     });
     StpSampledFittingOptions samplingOptions;
-    if (useStpSupportCollar) {
-        samplingOptions.enableAdjacentFaceSupportCollar = true;
-        samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = 64;
-        samplingOptions.adjacentFaceSupportCollarWidth = 0.25;
-        samplingOptions.adjacentFaceSupportCollarRingCount = 2;
-        samplingOptions.enableAdaptiveAdjacentFaceSupportCollarWidth = true;
+    if (useCandidateSurfaceOverCover) {
+        samplingOptions.enableCandidateSurfaceOverCover = true;
+        samplingOptions.candidateSurfaceOverCoverSamplesPerEdge = 64;
+        samplingOptions.candidateSurfaceOverCoverWidth = 0.25;
+        samplingOptions.candidateSurfaceOverCoverRingCount = 3;
+        samplingOptions.candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
     }
 
     watcher->setFuture(QtConcurrent::run([documentSnapshot, sourceMeshSnapshot, candidateSnapshot, workspaceRoot, cropOptions, fittingInputMode, useGeomagicRemesh, samplingOptions, progressCallback, runLogger]() {

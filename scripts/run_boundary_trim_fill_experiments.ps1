@@ -10,8 +10,14 @@ param(
     [double]$G1Tolerance3d = 0.03,
     [double]$G1ToleranceAngle = 0.01,
     [int]$CornerFeatureSamples = 96,
-    [double]$SupportCollarWidth = 0.25,
-    [int]$SupportCollarRings = 2,
+    [int]$CandidateOverCoverSamples = 64,
+    [double]$CandidateOverCoverWidth = 0.25,
+    [int]$CandidateOverCoverRings = 3,
+    [double]$CandidateOverCoverMiterMaxScale = 1.25,
+    [switch]$EnableAuxiliarySupportCollar,
+    [int]$SupportCollarSamples = 64,
+    [double]$SupportCollarWidth = 0.05,
+    [int]$SupportCollarRings = 1,
     [double]$SupportCollarUnderCover = 0.0,
     [switch]$SkipCreo
 )
@@ -915,6 +921,12 @@ $result = [ordered]@{
         g1_tolerance3d = $G1Tolerance3d
         g1_tolerance_angle = $G1ToleranceAngle
         corner_feature_samples = $CornerFeatureSamples
+        candidate_over_cover_samples = $CandidateOverCoverSamples
+        candidate_over_cover_width = $CandidateOverCoverWidth
+        candidate_over_cover_rings = $CandidateOverCoverRings
+        candidate_over_cover_miter_max_scale = $CandidateOverCoverMiterMaxScale
+        enable_auxiliary_support_collar = [bool]$EnableAuxiliarySupportCollar
+        support_collar_samples = $SupportCollarSamples
         support_collar_width = $SupportCollarWidth
         support_collar_rings = $SupportCollarRings
         support_collar_under_cover = $SupportCollarUnderCover
@@ -923,7 +935,7 @@ $result = [ordered]@{
     flow = @(
         "Route 1: build a fresh OCCT BRepFill_Filling patch constrained by the original CAD boundary and adjacent support faces with G1 constraints.",
         "Route 1: feed that patch into PatchReplacementCommand, then export the applied STEP only if internal StrictTopologyGate passes.",
-        "Route 2: freshly generate a Geomagic patch from B1 dense edge sampling plus CAD-adjacent retained-face support band, align it to the original candidate bbox in the base-removed STEP coordinate space, then re-apply with strict original-boundary re-trim.",
+        "Route 2: freshly generate a Geomagic patch from B1 dense edge sampling plus candidate/source-face parallel over-cover, align it to the original candidate bbox in the base-removed STEP coordinate space, then re-apply with strict original-boundary re-trim. A narrow adjacent-face support collar is added only when -EnableAuxiliarySupportCollar is set.",
         "Both OCCT-sewn routes: run OCCT step_stats, independent StrictTopologyGate, and Creo Distributed Batch + ModelCHECK on the exported applied STEP when it exists.",
         "Both Creo-sewn routes: import the same base_removed_candidate STEP and each route patch into Creo Toolkit with join_surfaces=1 and attempt_make_solid=1, then export and validate the Creo result."
     )
@@ -1047,27 +1059,42 @@ $route2BaselineApply = $null
 $baseRemoved = ""
 $baseRemovedManifest = ""
 
+$route2SupportCollarArgs = @()
+if ($EnableAuxiliarySupportCollar) {
+    $route2SupportCollarArgs = @(
+        "--b2-adjacent-face-support-collar",
+        "--support-collar-samples", "$SupportCollarSamples",
+        "--support-collar-width", "$SupportCollarWidth",
+        "--support-collar-rings", "$SupportCollarRings",
+        "--adaptive-support-collar-width",
+        "--support-collar-under-cover", "$SupportCollarUnderCover"
+    )
+}
+
 if (Test-Path -LiteralPath $WrapCore) {
+    $route2GenerationArgs = @(
+        "--source-step", $SourceStep,
+        "--candidate-id", $CandidateId,
+        "--output-dir", $route2GenerationDir,
+        "--report", $route2GenerationReport,
+        "--wrap-core", $WrapCore,
+        "--timeout-seconds", "$TimeoutSeconds",
+        "--b1-corner-feature-sampling",
+        "--corner-feature-samples", "$CornerFeatureSamples",
+        "--candidate-surface-over-cover",
+        "--candidate-over-cover-samples", "$CandidateOverCoverSamples",
+        "--candidate-over-cover-width", "$CandidateOverCoverWidth",
+        "--candidate-over-cover-rings", "$CandidateOverCoverRings",
+        "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
+    )
+    $route2GenerationArgs += $route2SupportCollarArgs
+    $route2GenerationArgs += @(
+        "--allow-high-risk-patch-preview",
+        "--strict-original-boundary-retrim"
+    )
     $route2GenRun = Invoke-LoggedProcess `
         -FilePath $cornerProbeExe `
-        -Arguments @(
-            "--source-step", $SourceStep,
-            "--candidate-id", $CandidateId,
-            "--output-dir", $route2GenerationDir,
-            "--report", $route2GenerationReport,
-            "--wrap-core", $WrapCore,
-            "--timeout-seconds", "$TimeoutSeconds",
-            "--b1-corner-feature-sampling",
-            "--corner-feature-samples", "$CornerFeatureSamples",
-            "--b2-adjacent-face-support-collar",
-            "--support-collar-samples", "$CornerFeatureSamples",
-            "--support-collar-width", "$SupportCollarWidth",
-            "--support-collar-rings", "$SupportCollarRings",
-            "--adaptive-support-collar-width",
-            "--support-collar-under-cover", "$SupportCollarUnderCover",
-            "--allow-high-risk-patch-preview",
-            "--strict-original-boundary-retrim"
-        ) `
+        -Arguments $route2GenerationArgs `
         -WorkingDirectory $route2GenerationDir `
         -LogPrefix "route2_fresh_geomagic_generation" `
         -Timeout ($TimeoutSeconds + 300)
@@ -1141,25 +1168,28 @@ if ($route2RawPatch -and (Test-Path -LiteralPath $route2RawPatch)) {
 }
 
 if (Test-Path -LiteralPath $route2NormalizedPatch) {
+    $route2ApplyArgs = @(
+        "--source-step", $SourceStep,
+        "--candidate-id", $route2CandidateId,
+        "--patch", $route2NormalizedPatch,
+        "--output-dir", $route2ApplyDir,
+        "--report", $route2ApplyReport,
+        "--b1-corner-feature-sampling",
+        "--corner-feature-samples", "$CornerFeatureSamples",
+        "--candidate-surface-over-cover",
+        "--candidate-over-cover-samples", "$CandidateOverCoverSamples",
+        "--candidate-over-cover-width", "$CandidateOverCoverWidth",
+        "--candidate-over-cover-rings", "$CandidateOverCoverRings",
+        "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
+    )
+    $route2ApplyArgs += $route2SupportCollarArgs
+    $route2ApplyArgs += @(
+        "--allow-high-risk-patch-preview",
+        "--strict-original-boundary-retrim"
+    )
     $route2ApplyRun = Invoke-LoggedProcess `
         -FilePath $cornerProbeExe `
-        -Arguments @(
-            "--source-step", $SourceStep,
-            "--candidate-id", $route2CandidateId,
-            "--patch", $route2NormalizedPatch,
-            "--output-dir", $route2ApplyDir,
-            "--report", $route2ApplyReport,
-            "--b1-corner-feature-sampling",
-            "--corner-feature-samples", "$CornerFeatureSamples",
-            "--b2-adjacent-face-support-collar",
-            "--support-collar-samples", "$CornerFeatureSamples",
-            "--support-collar-width", "$SupportCollarWidth",
-            "--support-collar-rings", "$SupportCollarRings",
-            "--adaptive-support-collar-width",
-            "--support-collar-under-cover", "$SupportCollarUnderCover",
-            "--allow-high-risk-patch-preview",
-            "--strict-original-boundary-retrim"
-        ) `
+        -Arguments $route2ApplyArgs `
         -WorkingDirectory $route2ApplyDir `
         -LogPrefix "route2_apply_normalized_patch" `
         -Timeout $TimeoutSeconds
@@ -1171,7 +1201,7 @@ $route2Validation = Invoke-PostValidation -RouteDir $route2Dir -RouteName "route
 $result.routes.route2_expanded_strict_trim = [ordered]@{
     status = if ($route2Validation.attempted -and $route2Validation.strict_topology_gate.report.passed -and ($SkipCreo -or $route2Validation.creo.metrics.diagnostic_passed)) { "Passed" } else { "Failed" }
     flow = @(
-        "Freshly generate Geomagic STEP patch from B1 feature-edge samples and CAD-adjacent retained-face support band.",
+        "Freshly generate Geomagic STEP patch from B1 feature-edge samples and candidate/source-face parallel over-cover; optionally include a narrow auxiliary adjacent-face support band when requested.",
         "Normalize the fresh Geomagic STEP through OCCT STEP read/write to produce normalized_patch_mm.stp and align STEP units with the project/original STEP path.",
         "Apply the normalized patch through strict original-boundary re-trim and current PatchReplacementCommand.",
         "Validate exported applied STEP with OCCT stats, independent StrictTopologyGate, and Creo ModelCHECK."

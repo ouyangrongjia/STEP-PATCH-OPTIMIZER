@@ -373,6 +373,10 @@ void test_app_controller_valid_preview_applies_through_command_history_and_undo_
     assert(report.gateStepExportOk);
     assert(report.gateStepRoundtripOk);
     assert(report.gateRoundtripBRepCheckValid);
+    assert(report.usedOriginalBoundarySurfaceRetrim);
+    assert(report.retrimBoundaryEdgePcurveRebuildAttemptCount > 0);
+    assert(report.retrimBoundaryEdgePcurveRebuildFailureCount == 0);
+    assert(report.retrimBoundaryEdgeSameParameterFailureCount == 0);
     assert(controller.history().executedCommands().size() == commandCountBefore + 1);
     assert(!controller.patchPreviewReady());
     assert(controller.currentPatchStatus() == spo::RegionPatchStatus::Applied);

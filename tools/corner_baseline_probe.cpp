@@ -59,12 +59,17 @@ struct Options {
     int cornerFeatureSamplesPerEdge = 64;
     bool enableB2AdjacentFaceSupportCollar = false;
     int adjacentFaceSupportCollarSamplesPerEdge = 64;
-    double adjacentFaceSupportCollarWidth = 0.25;
-    int adjacentFaceSupportCollarRingCount = 2;
+    double adjacentFaceSupportCollarWidth = 0.05;
+    int adjacentFaceSupportCollarRingCount = 1;
     bool enableAdaptiveAdjacentFaceSupportCollarWidth = false;
     double adjacentFaceSupportCollarUnderCover = 0.0;
     bool enableB2CornerSafeSupportCollar = false;
     double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
+    bool enableCandidateSurfaceOverCover = false;
+    int candidateSurfaceOverCoverSamplesPerEdge = 64;
+    double candidateSurfaceOverCoverWidth = 0.25;
+    int candidateSurfaceOverCoverRingCount = 3;
+    double candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
     bool geomagicSharpenContours = false;
     bool allowHighRiskPatchPreview = false;
     bool strictOriginalBoundaryRetrim = false;
@@ -153,12 +158,17 @@ void print_usage() {
         << "  --corner-feature-samples <n>             B1 dense samples per feature edge, default 64.\n"
         << "  --b2-adjacent-face-support-collar        Enable B2 adjacent-face seam support collar.\n"
         << "  --support-collar-samples <n>             B2 samples per boundary edge, default 64.\n"
-        << "  --support-collar-width <value>           B2 adjacent support collar width, default 0.25.\n"
-        << "  --support-collar-rings <n>               B2 support collar ring count, default 2.\n"
+        << "  --support-collar-width <value>           B2 auxiliary adjacent support collar width, default 0.05.\n"
+        << "  --support-collar-rings <n>               B2 auxiliary support collar ring count, default 1.\n"
         << "  --adaptive-support-collar-width          Use max(configured_width, 2*g_under, 2*h95) per boundary edge.\n"
         << "  --support-collar-under-cover <value>     Current max under-cover used by adaptive support width.\n"
         << "  --b2-corner-safe-support-collar          Enable B2.3 support collar corner clamp.\n"
         << "  --support-collar-max-offset-scale <v>    B2.3 max collar offset scale, default 1.25.\n"
+        << "  --candidate-surface-over-cover           Enable source-face parallel candidate over-cover.\n"
+        << "  --candidate-over-cover-samples <n>       Candidate over-cover samples per edge, default 64.\n"
+        << "  --candidate-over-cover-width <value>     Candidate over-cover width, default 0.25.\n"
+        << "  --candidate-over-cover-rings <n>         Candidate over-cover ring count, default 3.\n"
+        << "  --candidate-over-cover-miter-max-scale <v> Candidate over-cover miter cap scale, default 1.25.\n"
         << "  --geomagic-sharpen-contours              Enable Geomagic sharpenConstrainedContours.\n"
         << "  --allow-high-risk-patch-preview          Continue past patch preview high-risk warnings for experiments.\n"
         << "  --strict-original-boundary-retrim        Rebuild original-boundary pcurves on the selected patch surface for experiments.\n";
@@ -338,6 +348,32 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.adjacentFaceSupportCollarMaxOffsetScale = std::stod(value);
+        } else if (arg == "--candidate-surface-over-cover") {
+            options.enableCandidateSurfaceOverCover = true;
+        } else if (arg == "--candidate-over-cover-samples") {
+            const auto* value = requireValue("--candidate-over-cover-samples");
+            if (value == nullptr) {
+                return false;
+            }
+            options.candidateSurfaceOverCoverSamplesPerEdge = std::stoi(value);
+        } else if (arg == "--candidate-over-cover-width") {
+            const auto* value = requireValue("--candidate-over-cover-width");
+            if (value == nullptr) {
+                return false;
+            }
+            options.candidateSurfaceOverCoverWidth = std::stod(value);
+        } else if (arg == "--candidate-over-cover-rings") {
+            const auto* value = requireValue("--candidate-over-cover-rings");
+            if (value == nullptr) {
+                return false;
+            }
+            options.candidateSurfaceOverCoverRingCount = std::stoi(value);
+        } else if (arg == "--candidate-over-cover-miter-max-scale") {
+            const auto* value = requireValue("--candidate-over-cover-miter-max-scale");
+            if (value == nullptr) {
+                return false;
+            }
+            options.candidateSurfaceOverCoverCornerMiterMaxScale = std::stod(value);
         } else if (arg == "--geomagic-sharpen-contours") {
             options.geomagicSharpenContours = true;
         } else if (arg == "--allow-high-risk-patch-preview") {
@@ -661,6 +697,23 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert(
         "adjacent_face_support_collar_max_offset",
         report.adjacentFaceSupportCollarMaxOffset);
+    object.insert("candidate_surface_over_cover_enabled", report.candidateSurfaceOverCoverEnabled);
+    object.insert("candidate_surface_over_cover_width", report.candidateSurfaceOverCoverWidth);
+    object.insert("candidate_surface_over_cover_ring_count", report.candidateSurfaceOverCoverRingCount);
+    object.insert("candidate_surface_over_cover_edge_count", report.candidateSurfaceOverCoverEdgeCount);
+    object.insert("candidate_surface_over_cover_sample_count", report.candidateSurfaceOverCoverSampleCount);
+    object.insert("candidate_surface_over_cover_triangle_count", report.candidateSurfaceOverCoverTriangleCount);
+    object.insert("candidate_surface_over_cover_fallback_count", report.candidateSurfaceOverCoverFallbackCount);
+    object.insert("candidate_surface_over_cover_rejected_count", report.candidateSurfaceOverCoverRejectedCount);
+    object.insert("candidate_surface_over_cover_boundary_coverage", report.candidateSurfaceOverCoverBoundaryCoverage);
+    object.insert("candidate_surface_over_cover_corner_miter_count", report.candidateSurfaceOverCoverCornerMiterCount);
+    object.insert("candidate_surface_over_cover_max_offset", report.candidateSurfaceOverCoverMaxOffset);
+    object.insert("candidate_surface_over_cover_normal_leakage_max", report.candidateSurfaceOverCoverNormalLeakageMax);
+    object.insert("candidate_surface_over_cover_direction_fallback_count", report.candidateSurfaceOverCoverDirectionFallbackCount);
+    object.insert("candidate_surface_over_cover_long_triangle_count", report.candidateSurfaceOverCoverLongTriangleCount);
+    object.insert("candidate_surface_over_cover_max_triangle_edge_length", report.candidateSurfaceOverCoverMaxTriangleEdgeLength);
+    object.insert("candidate_surface_over_cover_source_face_count", report.candidateSurfaceOverCoverSourceFaceCount);
+    object.insert("candidate_surface_over_cover_direction_flip_count", report.candidateSurfaceOverCoverDirectionFlipCount);
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -1272,6 +1325,13 @@ int main(int argc, char* argv[]) {
         options.adjacentFaceSupportCollarUnderCover;
     samplingOptions.enableAdjacentFaceSupportCollarCornerClamp = options.enableB2CornerSafeSupportCollar;
     samplingOptions.adjacentFaceSupportCollarMaxOffsetScale = options.adjacentFaceSupportCollarMaxOffsetScale;
+    samplingOptions.enableCandidateSurfaceOverCover = options.enableCandidateSurfaceOverCover;
+    samplingOptions.candidateSurfaceOverCoverSamplesPerEdge =
+        options.candidateSurfaceOverCoverSamplesPerEdge;
+    samplingOptions.candidateSurfaceOverCoverWidth = options.candidateSurfaceOverCoverWidth;
+    samplingOptions.candidateSurfaceOverCoverRingCount = options.candidateSurfaceOverCoverRingCount;
+    samplingOptions.candidateSurfaceOverCoverCornerMiterMaxScale =
+        options.candidateSurfaceOverCoverCornerMiterMaxScale;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

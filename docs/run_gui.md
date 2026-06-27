@@ -2,7 +2,7 @@
 
 本文档说明如何在 VS Code 或命令行中启动 `step-patch-optimizer` GUI，并给出当前 GUI 的主要交互方式和手动验证流程。
 
-> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer，支持 STEP/STP 模型显示、face/edge 命中选择、特征边显示、锁边高亮、same-domain 合并、undo/redo、合法性检查和 STEP 导出。Patch / Geomagic 菜单默认启用 `STP 邻接面支撑带`，这是当前唯一保留的 STL 扩宽机制；旧 B2 guard-band 和 B2.1 over-cover strip 不再作为可执行入口维护。
+> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer，支持 STEP/STP 模型显示、face/edge 命中选择、特征边显示、锁边高亮、same-domain 合并、undo/redo、合法性检查和 STEP 导出。Patch / Geomagic 菜单默认启用 `STP 候选面外扩带`；Route 2 当前主扩宽机制是沿原候选 STP 面边界做 parallel over-cover，adjacent-face support collar 只作为显式 A/B 窄辅助上下文保留。旧 B2 guard-band 和旧 B2.1 over-cover strip 不再作为可执行入口维护。
 
 ---
 
@@ -192,7 +192,7 @@ B1 复用已有 patch 时：
   -AllowQualityGateFailure
 ```
 
-B2 原 STP boundary 外 guard-band 采样：
+B2 / B2.2 candidate/source-face parallel over-cover：
 
 ```powershell
 .\scripts\run_corner_baseline_gate.ps1 `
@@ -202,21 +202,28 @@ B2 原 STP boundary 外 guard-band 采样：
   -RealGeomagic
 ```
 
-B2.0 默认在 B1 加密采样基础上启用 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`，并在 `stp_sampled_fitting` 节输出 `boundary_guard_band_*` 统计。guard-band 只改变 Geomagic fitting STL 输入，最终 Apply 仍使用原 STP candidate boundary wire。
+B2 和 B2.2 现在都表示候选源面平行外扩。默认参数：
 
-注意：当前 `-Experiment B2` 对应 B2.0 邻接 STP face guard-band，不是 B2.1。B2.1 入口已单独接入：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2.1 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
+```text
+CandidateOverCoverWidth = 0.25
+CandidateOverCoverRings = 3
+CandidateOverCoverSamples = 64
+CandidateOverCoverMiterMaxScale = 1.25
 ```
 
-B2.1 会在当前 fitting STL patch 外围生成连续、小幅 over-cover strip，再通过原 STP candidate boundary re-trim 裁回；默认 `-OverCoverWidth 0.05 -OverCoverRings 1`，JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 统计。该入口仍不是 GUI 窗口点击自动化，真实质量结论必须看重新跑 Geomagic 后的 Patch preview / Apply / Gate 报告。2026-06-16 的 `03_配件_Clay.stp` candidate 179 默认 B2.1 真实运行中，fitting STL 导入 Geomagic 时为 `components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0`，Patch preview 为 5 faces / 20 edges 且非 high-risk，脚本继续执行 Apply、StrictTopologyGate、applied STEP export 和 readback；StrictTopologyGate 通过，但 CommercialCadLikeQualityGate 仍因 max drift 0.088487 失败。
+底层 probe 参数为：
 
-B2.2 adjacent-face support collar 入口：
+```text
+--candidate-surface-over-cover
+--candidate-over-cover-width
+--candidate-over-cover-rings
+--candidate-over-cover-samples
+--candidate-over-cover-miter-max-scale
+```
+
+JSON 的 `stp_sampled_fitting` 节输出 `candidate_surface_over_cover_*` 字段。该路线沿原候选 STP face 边界生成外扩带，外扩点优先使用 source face 切平面 3D offset；`normal_leakage`、`direction_fallback`、`long_triangle`、`max_triangle_edge_length`、`source_face_count` 和 `direction_flip` 字段用于解释方向回退和异常三角保护。最终 Apply 仍使用原 STP boundary strict re-trim 裁回。
+
+B2.2 等价入口：
 
 ```powershell
 .\scripts\run_corner_baseline_gate.ps1 `
@@ -226,9 +233,7 @@ B2.2 adjacent-face support collar 入口：
   -RealGeomagic
 ```
 
-B2.2 默认在 B1 加密采样基础上启用 `-SupportCollarWidth 0.05 -SupportCollarSamples 16 -SupportCollarRings 1`，不启用 B2.0 guard-band 或 B2.1 over-cover。JSON 的 `stp_sampled_fitting` 节输出 `adjacent_face_support_collar_*`，`commercial_cad_like_quality_gate` 节输出 `seam_continuity`。2026-06-17 的真实样例 auto-selected candidate 179 参数扫显示：输入 STL 干净，`components=1, boundaryCycles=1, nonManifoldVertices=0`，Patch preview 为 5 faces 且非 high-risk；但 `SupportCollarWidth=0.03/0.04/0.05` 均未通过 StrictTopologyGate / CommercialCadLikeQualityGate。B2.2 目前只能作为可验证的 seam-aware 输入实验，不是已收口方案。
-
-B2.3 corner-safe support collar 入口：
+B2.3 candidate over-cover + corner-safe auxiliary support collar：
 
 ```powershell
 .\scripts\run_corner_baseline_gate.ps1 `
@@ -249,7 +254,16 @@ B2.3 corner-safe support collar 入口：
   -SharpenContours
 ```
 
-B2.3 默认在 B1 + B2.2 collar 基础上启用角点 / offset 跳变局部平滑与最大 offset clamp，默认 `-SupportCollarMaxOffsetScale 1.25`。JSON 的 `stp_sampled_fitting` 节输出 `adjacent_face_support_collar_corner_clamp_*` 和 `adjacent_face_support_collar_max_offset`，根节点输出 `geomagic_sharpen_contours`。2026-06-17 的 `03_配件_Clay.stp` auto-selected candidate 179 真实 A/B 中，B2.3 默认 max drift=0.095701，B2.3 + `-SharpenContours` max drift=0.070672；两者均因 StrictTopologyGate `FreeEdgeIncreased` 失败，Patch Apply 未提交，因此没有 applied STEP 导出。
+B2.3 在 candidate over-cover 基础上额外启用窄 adjacent-face support collar 和 corner-safe clamp。默认辅助参数：
+
+```text
+SupportCollarWidth = 0.05
+SupportCollarRings = 1
+SupportCollarSamples = 64
+SupportCollarMaxOffsetScale = 1.25
+```
+
+这条路线用于 A/B 验证相邻面上下文是否仍有帮助，不再让 adjacent-face support collar 作为主扩宽方向。`-SharpenContours` 仍是 Geomagic A/B 开关，默认关闭。
 
 B2.4 是 Apply 侧 Boundary Edge Rebuild + Local Closure Probe，不是新的 `-Experiment B2.4` fitting input。验证 B2.4 时仍可使用 B2.3 / `-SharpenContours` 生成或复用 patch；区别在于 Patch Apply report / baseline JSON 会新增 multi-surface boundary edge pcurve rebuild 与 SameParameter diagnostics：
 
@@ -302,7 +316,7 @@ cd D:\pyProject\step-patch-optimizer
 
 该 parse-only 路径会保留 `GEOM_CHECKS` / `SHORT_EDGES` 的 item 明细，输出短边 Creo edge id 摘要和导入 feature id；但当前 ModelCHECK XML 不含空间坐标或 OCCT edge id，所以只能做阶段级关联，不能直接定位到项目内部 edge。
 
-脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` / `-Experiment B2.2` 会启用 adjacent-face support collar，并显式传递 support collar 宽度、ring、adaptive 参数；`-Experiment B2.3` 会在 support collar 上额外启用 corner-safe clamp，并可用 `-SharpenContours` 做 Geomagic A/B。旧 B2.0 guard-band 和 B2.1 over-cover strip 已移除，不再是可选实验入口。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
+脚本会构建 `corner_baseline_probe`、运行与 GUI 同源的核心 pipeline、写出 JSON 报告。默认不传 `-RealGeomagic` 且找不到已有 patch 时会跳过，避免普通验证依赖真实 Geomagic。`-Experiment B1` 会提高 STP-sampled fitting STL 的连接 surface grid 密度，并在 `stp_sampled_fitting` 节输出 dense sample / corner anchor / surface division 统计；`-Experiment B2` / `-Experiment B2.2` 会启用 candidate/source-face parallel over-cover，并显式传递 candidate over-cover 宽度、ring、samples 和 miter 参数；`-Experiment B2.3` 会在 candidate over-cover 上额外启用窄 adjacent-face support collar 与 corner-safe clamp，并可用 `-SharpenContours` 做 Geomagic A/B。旧 B2.0 guard-band 和 B2.1 over-cover strip 已移除，不再是可选实验入口。它不是窗口点击级 GUI 自动化，但覆盖的是 GUI Patch preview / Apply 使用的核心后端链路。
 
 底层 probe 也可直接运行：
 

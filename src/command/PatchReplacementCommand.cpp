@@ -964,7 +964,7 @@ ReplacementAssemblyResult assemble_face_compound_replacement(
     result.message = result.success
         ? "Assembled replacement as a face compound before repair sewing."
         : "Patch replacement face-compound assembly produced an empty shape.";
-    result.warning = "Multi-surface boundary shell used face-compound assembly before repair sewing.";
+    result.warning = "Boundary-constrained replacement used face-compound assembly before repair sewing.";
     return result;
 }
 
@@ -1001,9 +1001,11 @@ TopoDS_Shape boundary_trimmed_patch_face(
 ReplacementAssemblyResult assemble_replacement_shape(
     const ShapeDocument& beforeDocument,
     const RegionBoundaryAnalysis& boundary,
-    const BoundaryConstrainedPatchBuildResult& buildResult) {
+    const BoundaryConstrainedPatchBuildResult& buildResult,
+    bool forceFaceCompoundAssembly) {
     ReplacementAssemblyResult result;
-    if (buildResult.usedMultiSurfaceBoundaryShell) {
+    if (buildResult.usedMultiSurfaceBoundaryShell ||
+        (forceFaceCompoundAssembly && buildResult.usedOriginalBoundarySurfaceRetrim)) {
         return assemble_face_compound_replacement(beforeDocument, buildResult);
     }
 
@@ -1341,7 +1343,11 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     trimOptions.maxSurfaceSamples = 256;
     report_.trimDiagnostics = PatchTrimDiagnostics().analyze(trimInput, trimOptions);
 
-    const auto assemblyResult = assemble_replacement_shape(beforeDocument_, *input_.boundary, buildResult);
+    const auto assemblyResult = assemble_replacement_shape(
+        beforeDocument_,
+        *input_.boundary,
+        buildResult,
+        input_.strictOriginalBoundaryRetrim);
     if (!assemblyResult.success) {
         report_.success = false;
         report_.failureReason = PatchReplacementFailureReason::BuildFailed;

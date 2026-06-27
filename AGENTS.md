@@ -6,16 +6,21 @@
 
 本项目不再强制读取 `D:\Desktop\WorkSpace\00_Global\` 下的全局工作文档。除非用户明确要求，不要在本项目任务开始时读取这些全局文档；这些文件也可能已经被删除。
 
-## 必须先读的项目记忆文档
+## 项目记忆文档规则
 
-在执行任何代码修改、调试、文档整理、规划、复盘或状态同步之前，先阅读：
+本项目不再要求在任务开始时读取 `D:\Desktop\WorkSpace\10_Projects\step-patch-optimizer\` 下的项目记忆文档。
 
-1. `D:\Desktop\WorkSpace\10_Projects\step-patch-optimizer\00_PROJECT_OVERVIEW.md`
-2. `D:\Desktop\WorkSpace\10_Projects\step-patch-optimizer\01_REQUIREMENTS.md`
-3. `D:\Desktop\WorkSpace\10_Projects\step-patch-optimizer\02_TECH_STACK.md`
-4. `D:\Desktop\WorkSpace\10_Projects\step-patch-optimizer\05_PROJECT_SOP.md`
+除非用户明确要求，不要把以下文件作为启动依赖读取：
 
-`03_DEV_LOG.md`、`04_PITFALL_LOG.md`、`06_REVIEW.md` 等追加型历史记录文档已从项目记忆启动依赖中移除；不要把它们当作必需文件。
+1. `00_PROJECT_OVERVIEW.md`
+2. `01_REQUIREMENTS.md`
+3. `02_TECH_STACK.md`
+4. `05_PROJECT_SOP.md`
+5. `03_DEV_LOG.md`
+6. `04_PITFALL_LOG.md`
+7. `06_REVIEW.md`
+
+后续以仓库内文档作为当前事实来源。
 
 ## 必须先读的仓库文档
 
@@ -49,14 +54,14 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **STEP-PATCH-OPTIMIZER** (5479 symbols, 16897 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **STEP-PATCH-OPTIMIZER** (5495 symbols, 16912 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
 ## Always Do
 
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "feature-bounded-refit"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.

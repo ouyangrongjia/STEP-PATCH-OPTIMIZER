@@ -32,6 +32,11 @@ struct StpSampledFittingOptions {
     bool enableAdjacentFaceSupportCollarCornerClamp = false;
     int adjacentFaceSupportCollarCornerSmoothingIterations = 2;
     double adjacentFaceSupportCollarMaxOffsetScale = 1.25;
+    bool enableCandidateSurfaceOverCover = false;
+    int candidateSurfaceOverCoverSamplesPerEdge = 64;
+    double candidateSurfaceOverCoverWidth = 0.25;
+    int candidateSurfaceOverCoverRingCount = 3;
+    double candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
 };
 
 struct StpSampledFittingReport {
@@ -73,6 +78,23 @@ struct StpSampledFittingReport {
     bool adjacentFaceSupportCollarCornerClampEnabled = false;
     int adjacentFaceSupportCollarCornerClampCount = 0;
     double adjacentFaceSupportCollarMaxOffset = 0.0;
+    bool candidateSurfaceOverCoverEnabled = false;
+    double candidateSurfaceOverCoverWidth = 0.0;
+    int candidateSurfaceOverCoverRingCount = 0;
+    int candidateSurfaceOverCoverEdgeCount = 0;
+    int candidateSurfaceOverCoverSampleCount = 0;
+    int candidateSurfaceOverCoverTriangleCount = 0;
+    int candidateSurfaceOverCoverFallbackCount = 0;
+    int candidateSurfaceOverCoverRejectedCount = 0;
+    double candidateSurfaceOverCoverBoundaryCoverage = 0.0;
+    int candidateSurfaceOverCoverCornerMiterCount = 0;
+    double candidateSurfaceOverCoverMaxOffset = 0.0;
+    double candidateSurfaceOverCoverNormalLeakageMax = 0.0;
+    int candidateSurfaceOverCoverDirectionFallbackCount = 0;
+    int candidateSurfaceOverCoverLongTriangleCount = 0;
+    double candidateSurfaceOverCoverMaxTriangleEdgeLength = 0.0;
+    int candidateSurfaceOverCoverSourceFaceCount = 0;
+    int candidateSurfaceOverCoverDirectionFlipCount = 0;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

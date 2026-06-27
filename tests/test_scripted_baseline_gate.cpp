@@ -99,6 +99,11 @@ void test_corner_baseline_probe_reports_b2_2_support_collar_fields() {
     assert(source.find("--b2-over-cover-strip") == std::string::npos);
     assert(source.find("boundary_guard_band") == std::string::npos);
     assert(source.find("boundary_over_cover") == std::string::npos);
+    assert(source.find("--candidate-surface-over-cover") != std::string::npos);
+    assert(source.find("--candidate-over-cover-width") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_enabled") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_triangle_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_boundary_coverage") != std::string::npos);
     assert(source.find("--b2-adjacent-face-support-collar") != std::string::npos);
     assert(source.find("--support-collar-width") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_enabled") != std::string::npos);
@@ -120,26 +125,33 @@ void test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields() {
     assert(source.find("geomagic_sharpen_contours") != std::string::npos);
 }
 
-void test_route2_runner_expands_only_with_explicit_support_collar_arguments() {
+void test_route2_runner_uses_candidate_over_cover_as_default_expansion() {
     const auto root = source_root();
     const auto script = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
 
-    assert(script.find("OverCoverWidth") == std::string::npos);
-    assert(script.find("OverCoverRings") == std::string::npos);
+    assert(script.find("$OverCoverWidth") == std::string::npos);
+    assert(script.find("$OverCoverRings") == std::string::npos);
     assert(script.find("--b2-over-cover-strip") == std::string::npos);
+    assert(script.find("--candidate-surface-over-cover") != std::string::npos);
+    assert(script.find("--candidate-over-cover-width") != std::string::npos);
+    assert(script.find("--candidate-over-cover-rings") != std::string::npos);
+    assert(script.find("EnableAuxiliarySupportCollar") != std::string::npos);
+    assert(script.find("if ($EnableAuxiliarySupportCollar)") != std::string::npos);
     assert(script.find("--support-collar-width") != std::string::npos);
     assert(script.find("--support-collar-rings") != std::string::npos);
     assert(script.find("--adaptive-support-collar-width") != std::string::npos);
 }
 
-void test_gui_exposes_stp_support_collar_switch() {
+void test_gui_exposes_candidate_surface_over_cover_switch() {
     const auto root = source_root();
     const auto header = read_text_file(root / "src" / "app" / "MainWindow.h");
     const auto source = read_text_file(root / "src" / "app" / "MainWindow.cpp");
 
     assert(header.find("useStpSupportCollarAction_") != std::string::npos);
-    assert(source.find("启用 STP 邻接面支撑带") != std::string::npos);
-    assert(source.find("enableAdjacentFaceSupportCollar") != std::string::npos);
+    assert(source.find("启用 STP 候选面外扩带") != std::string::npos);
+    assert(source.find("enableCandidateSurfaceOverCover") != std::string::npos);
+    assert(source.find("candidateSurfaceOverCoverWidth = 0.25") != std::string::npos);
+    assert(source.find("candidateSurfaceOverCoverRingCount = 3") != std::string::npos);
     assert(source.find("useStpSupportCollarAction_->isChecked()") != std::string::npos);
 }
 
@@ -344,8 +356,8 @@ void run_scripted_baseline_gate_tests() {
     test_verify_real_geomagic_runs_scripted_baseline_gate();
     test_corner_baseline_probe_reports_b2_2_support_collar_fields();
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();
-    test_route2_runner_expands_only_with_explicit_support_collar_arguments();
-    test_gui_exposes_stp_support_collar_switch();
+    test_route2_runner_uses_candidate_over_cover_as_default_expansion();
+    test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
     test_creo_step_diagnostic_script_is_optional_background_runner();

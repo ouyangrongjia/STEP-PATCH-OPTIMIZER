@@ -2,7 +2,7 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-06-25
+更新时间：2026-06-26
 
 ---
 
@@ -68,18 +68,38 @@ STEP/STP
 
 ---
 
-## 4. Geomagic 输入与支撑带路线
+## 4. Geomagic 输入与候选面外扩路线
 
 当前可执行输入主线：
 
 - 默认 fitting input mode 是 `StpSampledCandidateSurface`。
-- GUI 默认开启 `启用 STP 邻接面支撑带`。
-- 当前唯一保留的 STL 扩宽机制是 adjacent-face support collar。
+- GUI 默认开启 `启用 STP 候选面外扩带`。
+- 当前 Route 2 主扩宽机制是 Candidate / Source Face Parallel Over-Cover：沿原候选 STP 面边界在 source face 切平面上做 3D 平行外扩，再由 Apply 阶段用原 STP boundary strict re-trim 裁回。
 - GUI 默认参数：
-  - support collar width = `0.25`
-  - rings = `2`
+  - candidate over-cover width = `0.25`
+  - rings = `3`
   - samples per edge = `64`
-  - adaptive width = `true`
+  - corner miter max scale = `1.25`
+- Candidate over-cover 的保守稳定策略：
+  - reverseEdge 遍历会反向 pcurve tangent 后再判断 left/right 外侧。
+  - 外扩点优先使用 `P + D * distance` 的 source face 切平面 offset。
+  - surface UV 外推只作为泄漏诊断参考；normal leakage 超过阈值时报告 fallback。
+  - corner miter 遇到方向突变、相邻 offset 近似反向时只做 clamp，不放大角点。
+  - candidate bridge / quad strip 会拒绝明显异常长三角。
+- `StpSampledFittingReport` / `corner_baseline_probe` JSON 输出 candidate over-cover 诊断字段：
+  - `candidate_surface_over_cover_normal_leakage_max`
+  - `candidate_surface_over_cover_direction_fallback_count`
+  - `candidate_surface_over_cover_long_triangle_count`
+  - `candidate_surface_over_cover_max_triangle_edge_length`
+  - `candidate_surface_over_cover_source_face_count`
+  - `candidate_surface_over_cover_direction_flip_count`
+- `AppController::applyCurrentPatchToCurrentCandidate` 会显式启用 `strictOriginalBoundaryRetrim`。
+- 显式 strict retrim 生成的新重裁边不直接塞回旧 solid face 拓扑，而是用 face-compound assembly 后再进入 repair / sewing / StrictTopologyGate。
+
+Adjacent-face support collar 当前降级为显式辅助上下文：
+
+- `corner_baseline_probe` 默认辅助 collar width = `0.05`，rings = `1`。
+- Route 2 runner 默认不叠加 adjacent collar；只有传 `-EnableAuxiliarySupportCollar` 时才拼接 `--b2-adjacent-face-support-collar` / `--support-collar-*`。
 - adaptive support-collar 宽度公式：
 
 ```text
@@ -92,6 +112,7 @@ max(configured_width, 2*g_under, 2*h95)
 
 - B2.0 原 STP boundary 外 guard-band 采样曾实现并验证，但不是当前保留入口。
 - B2.1 over-cover strip 曾实现并验证，但不再作为可执行实验入口维护。
+- 2026-06-25 的 width=`0.25` adjacent-face support collar 真实样例证明输入 STL 干净，但 Geomagic 输出 72 faces 且 strong collar 会把输入曲面拉向相邻面 / 侧壁方向，因此不再作为主扩宽策略。
 - 旧 `OverCoverWidth` / `OverCoverRings` CLI 参数已从 Route 2 runner 移除。
 - `corner_baseline_probe` 不再接受 guard-band / over-cover flags，也不再输出对应 JSON 字段。
 
@@ -99,10 +120,12 @@ max(configured_width, 2*g_under, 2*h95)
 
 ```text
 scripts/run_boundary_trim_fill_experiments.ps1
-→ 显式传递 --support-collar-width
-→ 显式传递 --support-collar-rings
-→ 显式传递 --adaptive-support-collar-width
-→ 显式传递 --support-collar-under-cover
+→ 显式传递 --candidate-surface-over-cover
+→ 显式传递 --candidate-over-cover-width
+→ 显式传递 --candidate-over-cover-rings
+→ 显式传递 --candidate-over-cover-miter-max-scale
+→ 默认不传 --b2-adjacent-face-support-collar
+→ -EnableAuxiliarySupportCollar 时才传 --support-collar-width/rings/adaptive/under-cover
 ```
 
 ---
@@ -167,7 +190,7 @@ candidate: 179
   - unowned Geomagic fringe / internal seam faces
   - boundary-owned faces 的 original-boundary segments + internal seams 不闭合
 - 支撑带必须和主体 fitting STL 拓扑连通；只靠视觉贴近不够。
-- Route 2 当前重点是确认新版 support collar 输入 STL 的连通性、有效宽度、角点覆盖和后续 Apply / Creo 诊断。
+- Route 2 当前重点是确认 candidate/source-face parallel over-cover 的方向、角点覆盖、连通性，以及后续 Apply / Creo 诊断。
 
 ---
 
@@ -187,6 +210,8 @@ Route 2 真实样例入口：
 .\scripts\run_boundary_trim_fill_experiments.ps1 `
   -SourceStep data\stp\03_配件_Clay.stp `
   -CandidateId 179 `
+  -CandidateOverCoverWidth 0.25 `
+  -CandidateOverCoverRings 3 `
   -OutputDir data\baseline_runs\<run-name> `
   -WrapCore "E:\Geomagic Wrap\wrapCore.exe" `
   -CreoRoot "E:\Proe\Creo 11.0.0.0"

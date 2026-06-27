@@ -1062,6 +1062,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
     input.importedPatch = &currentImportedPatchInfo_;
     input.artifactPaths = &currentPatchArtifactPaths_;
     input.previewReport = &currentPatchPreviewReport_;
+    input.strictOriginalBoundaryRetrim = true;
 
     PatchReplacementCommandOptions options;
     options.requireWatertightSolidGate = true;
