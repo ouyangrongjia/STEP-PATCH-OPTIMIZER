@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -122,6 +123,33 @@ QJsonArray strings_to_json(const std::vector<std::string>& values) {
     QJsonArray array;
     for (const auto& value : values) {
         array.append(QString::fromStdString(value));
+    }
+    return array;
+}
+
+QJsonObject vec3_to_json(const spo::StlVec3& value) {
+    QJsonObject object;
+    object.insert("x", value.x);
+    object.insert("y", value.y);
+    object.insert("z", value.z);
+    return object;
+}
+
+QJsonArray over_cover_problem_edges_to_json(
+    const std::vector<spo::CandidateSurfaceOverCoverProblemEdgeReport>& edges) {
+    QJsonArray array;
+    for (const auto& edge : edges) {
+        QJsonObject object;
+        object.insert("edge_id", edge.edgeId);
+        object.insert("source_face_id", edge.sourceFaceId);
+        object.insert("sample_rejected_count", edge.sampleRejectedCount);
+        object.insert("body_bridge_rejected_count", edge.bodyBridgeRejectedCount);
+        object.insert("boundary_to_ring_rejected_count", edge.boundaryToRingRejectedCount);
+        object.insert("ring_to_ring_rejected_count", edge.ringToRingRejectedCount);
+        object.insert("long_triangle_count", edge.longTriangleCount);
+        object.insert("max_normal_leakage", edge.maxNormalLeakage);
+        object.insert("max_triangle_edge_length", edge.maxTriangleEdgeLength);
+        array.append(object);
     }
     return array;
 }
@@ -714,6 +742,14 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("candidate_surface_over_cover_max_triangle_edge_length", report.candidateSurfaceOverCoverMaxTriangleEdgeLength);
     object.insert("candidate_surface_over_cover_source_face_count", report.candidateSurfaceOverCoverSourceFaceCount);
     object.insert("candidate_surface_over_cover_direction_flip_count", report.candidateSurfaceOverCoverDirectionFlipCount);
+    object.insert("candidate_surface_over_cover_body_bridge_rejected_count", report.candidateSurfaceOverCoverBodyBridgeRejectedCount);
+    object.insert("candidate_surface_over_cover_boundary_to_ring_rejected_count", report.candidateSurfaceOverCoverBoundaryToRingRejectedCount);
+    object.insert("candidate_surface_over_cover_ring_to_ring_rejected_count", report.candidateSurfaceOverCoverRingToRingRejectedCount);
+    object.insert("candidate_surface_over_cover_edge_build_rejected_count", report.candidateSurfaceOverCoverEdgeBuildRejectedCount);
+    object.insert("candidate_surface_over_cover_problem_edge_count", report.candidateSurfaceOverCoverProblemEdgeCount);
+    object.insert("candidate_surface_over_cover_max_normal_leakage_edge_id", report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId);
+    object.insert("candidate_surface_over_cover_max_normal_leakage_source_face_id", report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId);
+    object.insert("candidate_surface_over_cover_problem_edges", over_cover_problem_edges_to_json(report.candidateSurfaceOverCoverProblemEdges));
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -723,6 +759,182 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("message", QString::fromStdString(report.message));
     object.insert("warning", QString::fromStdString(report.warningMessage));
     return object;
+}
+
+std::filesystem::path over_cover_diagnostic_dir(const Options& options) {
+    return options.outputDir / "candidate_surface_over_cover_diagnostics";
+}
+
+std::filesystem::path over_cover_rejections_csv_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_rejections.csv";
+}
+
+std::filesystem::path over_cover_rejected_body_bridge_stl_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_rejected_body_bridge.stl";
+}
+
+std::filesystem::path over_cover_rejected_boundary_to_ring_stl_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_rejected_boundary_to_ring.stl";
+}
+
+std::filesystem::path over_cover_rejected_ring_to_ring_stl_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_rejected_ring_to_ring.stl";
+}
+
+std::filesystem::path over_cover_worst_points_obj_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_worst_points.obj";
+}
+
+QJsonObject over_cover_artifacts_to_json(const Options& options) {
+    QJsonObject object;
+    object.insert("directory", path_to_qstring(over_cover_diagnostic_dir(options)));
+    object.insert("overcover_rejections_csv", path_to_qstring(over_cover_rejections_csv_path(options)));
+    object.insert("overcover_rejected_body_bridge_stl", path_to_qstring(over_cover_rejected_body_bridge_stl_path(options)));
+    object.insert("overcover_rejected_boundary_to_ring_stl", path_to_qstring(over_cover_rejected_boundary_to_ring_stl_path(options)));
+    object.insert("overcover_rejected_ring_to_ring_stl", path_to_qstring(over_cover_rejected_ring_to_ring_stl_path(options)));
+    object.insert("overcover_worst_points_obj", path_to_qstring(over_cover_worst_points_obj_path(options)));
+    return object;
+}
+
+std::string csv_escape(const std::string& value) {
+    std::string escaped = "\"";
+    for (const char ch : value) {
+        if (ch == '"') {
+            escaped += "\"\"";
+        } else {
+            escaped += ch;
+        }
+    }
+    escaped += "\"";
+    return escaped;
+}
+
+void write_vec3_csv(std::ofstream& out, const spo::StlVec3& value) {
+    out << value.x << ',' << value.y << ',' << value.z;
+}
+
+bool write_over_cover_rejections_csv(
+    const std::filesystem::path& path,
+    const spo::StpSampledFittingReport& report,
+    std::string* errorMessage) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out.good()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "Could not open over-cover rejection CSV.";
+        }
+        return false;
+    }
+
+    out << "category,edge_id,source_face_id,sample_index,ring_index_a,ring_index_b,"
+        << "p0_x,p0_y,p0_z,p1_x,p1_y,p1_z,p2_x,p2_y,p2_z,"
+        << "centroid_x,centroid_y,centroid_z,max_edge_length,min_edge_length,"
+        << "local_spacing,edge_length_ratio,normal_leakage,long_triangle,degenerate\n";
+    out << std::setprecision(17);
+    for (const auto& record : report.candidateSurfaceOverCoverRejections) {
+        out << csv_escape(record.category) << ','
+            << record.edgeId << ','
+            << record.sourceFaceId << ','
+            << record.sampleIndex << ','
+            << record.ringIndexA << ','
+            << record.ringIndexB << ',';
+        write_vec3_csv(out, record.triangle.v0);
+        out << ',';
+        write_vec3_csv(out, record.triangle.v1);
+        out << ',';
+        write_vec3_csv(out, record.triangle.v2);
+        out << ',';
+        write_vec3_csv(out, record.centroid);
+        out << ','
+            << record.maxEdgeLength << ','
+            << record.minEdgeLength << ','
+            << record.localSpacing << ','
+            << record.edgeLengthRatio << ','
+            << record.normalLeakage << ','
+            << (record.longTriangle ? 1 : 0) << ','
+            << (record.degenerate ? 1 : 0) << '\n';
+    }
+    return true;
+}
+
+void write_rejection_category_stl(
+    const std::filesystem::path& path,
+    const spo::StpSampledFittingReport& report,
+    const std::string& category) {
+    spo::StlMesh mesh;
+    for (const auto& record : report.candidateSurfaceOverCoverRejections) {
+        if (record.category == category) {
+            mesh.addTriangle(record.triangle);
+        }
+    }
+    if (mesh.empty()) {
+        return;
+    }
+    std::filesystem::create_directories(path.parent_path());
+    (void)spo::StlWriter().write(mesh, path);
+}
+
+bool write_over_cover_worst_points_obj(
+    const std::filesystem::path& path,
+    const spo::StpSampledFittingReport& report,
+    std::string* errorMessage) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out.good()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "Could not open over-cover worst-points OBJ.";
+        }
+        return false;
+    }
+
+    auto points = report.candidateSurfaceOverCoverLeakagePoints;
+    std::sort(points.begin(), points.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.normalLeakage > rhs.normalLeakage;
+    });
+    constexpr std::size_t kMaxObjPoints = 200;
+    out << "# candidate surface over-cover worst normal leakage points\n";
+    out << std::setprecision(17);
+    for (std::size_t index = 0; index < points.size() && index < kMaxObjPoints; ++index) {
+        const auto& point = points[index];
+        out << "# edge_id=" << point.edgeId
+            << " source_face_id=" << point.sourceFaceId
+            << " sample_index=" << point.sampleIndex
+            << " ring_index=" << point.ringIndex
+            << " normal_leakage=" << point.normalLeakage << '\n';
+        out << "v " << point.point.x << ' ' << point.point.y << ' ' << point.point.z << '\n';
+    }
+    return true;
+}
+
+void write_over_cover_diagnostic_artifacts(
+    const Options& options,
+    spo::StpSampledFittingReport& report) {
+    if (!report.candidateSurfaceOverCoverEnabled) {
+        return;
+    }
+
+    std::string error;
+    if (!write_over_cover_rejections_csv(over_cover_rejections_csv_path(options), report, &error) &&
+        !error.empty()) {
+        report.warningMessage += report.warningMessage.empty() ? error : " | " + error;
+    }
+    write_rejection_category_stl(
+        over_cover_rejected_body_bridge_stl_path(options),
+        report,
+        "body_bridge");
+    write_rejection_category_stl(
+        over_cover_rejected_boundary_to_ring_stl_path(options),
+        report,
+        "boundary_to_ring_quad");
+    write_rejection_category_stl(
+        over_cover_rejected_ring_to_ring_stl_path(options),
+        report,
+        "ring_to_ring_quad");
+    error.clear();
+    if (!write_over_cover_worst_points_obj(over_cover_worst_points_obj_path(options), report, &error) &&
+        !error.empty()) {
+        report.warningMessage += report.warningMessage.empty() ? error : " | " + error;
+    }
 }
 
 QJsonObject geomagic_to_json(const spo::GeomagicAutoSurfaceResult& result) {
@@ -1191,6 +1403,7 @@ bool write_report(
     root.insert("patch_iges_path", path_object(artifacts.patchIgesSidecarPath));
     root.insert("fit_region_log_path", path_object(artifacts.fitRegionLogPath));
     root.insert("stp_sampled_fitting", fitting_to_json(fitting));
+    root.insert("candidate_surface_over_cover_diagnostic_artifacts", over_cover_artifacts_to_json(options));
     root.insert("geomagic", geomagic_to_json(geomagic));
     root.insert("patch_preview", preview_to_json(preview));
     root.insert("patch_apply", apply_to_json(apply));
@@ -1356,6 +1569,7 @@ int main(int argc, char* argv[]) {
         fittingReport.message = writeStl.message;
         return fail("write_fitting_stl", writeStl.message);
     }
+    write_over_cover_diagnostic_artifacts(options, fittingReport);
 
     if (options.patchPath.empty()) {
         print_stage("running Geomagic AutoSurface");

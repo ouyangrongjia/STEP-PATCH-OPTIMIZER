@@ -39,6 +39,45 @@ struct StpSampledFittingOptions {
     double candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
 };
 
+struct CandidateSurfaceOverCoverRejectionRecord {
+    std::string category;
+    int edgeId = -1;
+    int sourceFaceId = -1;
+    int sampleIndex = -1;
+    int ringIndexA = -1;
+    int ringIndexB = -1;
+    StlTriangle triangle;
+    StlVec3 centroid;
+    double maxEdgeLength = 0.0;
+    double minEdgeLength = 0.0;
+    double localSpacing = 0.0;
+    double edgeLengthRatio = 0.0;
+    double normalLeakage = 0.0;
+    bool longTriangle = false;
+    bool degenerate = false;
+};
+
+struct CandidateSurfaceOverCoverProblemEdgeReport {
+    int edgeId = -1;
+    int sourceFaceId = -1;
+    int sampleRejectedCount = 0;
+    int bodyBridgeRejectedCount = 0;
+    int boundaryToRingRejectedCount = 0;
+    int ringToRingRejectedCount = 0;
+    int longTriangleCount = 0;
+    double maxNormalLeakage = 0.0;
+    double maxTriangleEdgeLength = 0.0;
+};
+
+struct CandidateSurfaceOverCoverLeakagePoint {
+    int edgeId = -1;
+    int sourceFaceId = -1;
+    int sampleIndex = -1;
+    int ringIndex = -1;
+    StlVec3 point;
+    double normalLeakage = 0.0;
+};
+
 struct StpSampledFittingReport {
     bool success = false;
     std::string message;
@@ -95,6 +134,16 @@ struct StpSampledFittingReport {
     double candidateSurfaceOverCoverMaxTriangleEdgeLength = 0.0;
     int candidateSurfaceOverCoverSourceFaceCount = 0;
     int candidateSurfaceOverCoverDirectionFlipCount = 0;
+    int candidateSurfaceOverCoverBodyBridgeRejectedCount = 0;
+    int candidateSurfaceOverCoverBoundaryToRingRejectedCount = 0;
+    int candidateSurfaceOverCoverRingToRingRejectedCount = 0;
+    int candidateSurfaceOverCoverEdgeBuildRejectedCount = 0;
+    int candidateSurfaceOverCoverProblemEdgeCount = 0;
+    int candidateSurfaceOverCoverMaxNormalLeakageEdgeId = -1;
+    int candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId = -1;
+    std::vector<CandidateSurfaceOverCoverRejectionRecord> candidateSurfaceOverCoverRejections;
+    std::vector<CandidateSurfaceOverCoverProblemEdgeReport> candidateSurfaceOverCoverProblemEdges;
+    std::vector<CandidateSurfaceOverCoverLeakagePoint> candidateSurfaceOverCoverLeakagePoints;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;
     std::filesystem::path outputPath;

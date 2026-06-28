@@ -242,6 +242,14 @@ struct CandidateSurfaceOverCoverBuildResult {
     double maxTriangleEdgeLength = 0.0;
     int sourceFaceCount = 0;
     int directionFlipCount = 0;
+    int boundaryToRingRejectedCount = 0;
+    int ringToRingRejectedCount = 0;
+    int edgeBuildRejectedCount = 0;
+    int maxNormalLeakageEdgeId = -1;
+    int maxNormalLeakageSourceFaceId = -1;
+    std::vector<CandidateSurfaceOverCoverRejectionRecord> rejections;
+    std::vector<CandidateSurfaceOverCoverProblemEdgeReport> problemEdges;
+    std::vector<CandidateSurfaceOverCoverLeakagePoint> leakagePoints;
 };
 
 struct CandidateSurfaceOverCoverPoint {
@@ -250,6 +258,13 @@ struct CandidateSurfaceOverCoverPoint {
     gp_Vec outwardDirection;
     double normalLeakage = 0.0;
     bool usedFallbackDirection = false;
+};
+
+struct CandidateSurfaceOverCoverLoopMetadata {
+    int edgeId = -1;
+    int sourceFaceId = -1;
+    int sampleIndex = -1;
+    double normalLeakage = 0.0;
 };
 
 struct QuantizedPoint {
@@ -616,6 +631,129 @@ double closed_loop_mean_spacing(const std::vector<gp_Pnt>& loop) {
         length += loop[index].Distance(loop[(index + 1) % loop.size()]);
     }
     return length / static_cast<double>(loop.size());
+}
+
+StlVec3 triangle_centroid(const StlTriangle& triangle) {
+    return {
+        (triangle.v0.x + triangle.v1.x + triangle.v2.x) / 3.0,
+        (triangle.v0.y + triangle.v1.y + triangle.v2.y) / 3.0,
+        (triangle.v0.z + triangle.v1.z + triangle.v2.z) / 3.0
+    };
+}
+
+CandidateSurfaceOverCoverProblemEdgeReport& over_cover_problem_edge(
+    CandidateSurfaceOverCoverBuildResult& result,
+    int edgeId,
+    int sourceFaceId) {
+    const auto found = std::find_if(
+        result.problemEdges.begin(),
+        result.problemEdges.end(),
+        [&](const CandidateSurfaceOverCoverProblemEdgeReport& item) {
+            return item.edgeId == edgeId && item.sourceFaceId == sourceFaceId;
+        });
+    if (found != result.problemEdges.end()) {
+        return *found;
+    }
+    CandidateSurfaceOverCoverProblemEdgeReport item;
+    item.edgeId = edgeId;
+    item.sourceFaceId = sourceFaceId;
+    result.problemEdges.push_back(item);
+    return result.problemEdges.back();
+}
+
+void record_over_cover_sample_rejection(
+    CandidateSurfaceOverCoverBuildResult& result,
+    int edgeId,
+    int sourceFaceId,
+    int count) {
+    if (count <= 0) {
+        return;
+    }
+    result.edgeBuildRejectedCount += count;
+    result.rejectedCount += count;
+    auto& problem = over_cover_problem_edge(result, edgeId, sourceFaceId);
+    problem.sampleRejectedCount += count;
+}
+
+void record_over_cover_normal_leakage(
+    CandidateSurfaceOverCoverBuildResult& result,
+    int edgeId,
+    int sourceFaceId,
+    int sampleIndex,
+    int ringIndex,
+    const gp_Pnt& point,
+    double normalLeakage) {
+    if (!std::isfinite(normalLeakage) || normalLeakage <= 1.0e-12) {
+        return;
+    }
+    if (normalLeakage >= result.normalLeakageMax) {
+        result.maxNormalLeakageEdgeId = edgeId;
+        result.maxNormalLeakageSourceFaceId = sourceFaceId;
+    }
+    auto& problem = over_cover_problem_edge(result, edgeId, sourceFaceId);
+    problem.maxNormalLeakage = std::max(problem.maxNormalLeakage, normalLeakage);
+
+    CandidateSurfaceOverCoverLeakagePoint leakage;
+    leakage.edgeId = edgeId;
+    leakage.sourceFaceId = sourceFaceId;
+    leakage.sampleIndex = sampleIndex;
+    leakage.ringIndex = ringIndex;
+    leakage.point = point_to_vec3(point);
+    leakage.normalLeakage = normalLeakage;
+    result.leakagePoints.push_back(leakage);
+}
+
+void record_over_cover_triangle_rejection(
+    CandidateSurfaceOverCoverBuildResult& result,
+    const char* category,
+    const CandidateSurfaceOverCoverLoopMetadata* metadata,
+    int ringIndexA,
+    int ringIndexB,
+    const StlTriangle& triangle,
+    double localSpacing,
+    bool longTriangle,
+    bool degenerate) {
+    const auto maxEdge = triangle_max_edge_length(triangle);
+    const auto minEdge = triangle_min_edge_length(triangle);
+    const auto ratio = localSpacing > 0.0 && std::isfinite(maxEdge)
+        ? maxEdge / localSpacing
+        : 0.0;
+
+    CandidateSurfaceOverCoverRejectionRecord record;
+    record.category = category != nullptr ? category : "";
+    if (metadata != nullptr) {
+        record.edgeId = metadata->edgeId;
+        record.sourceFaceId = metadata->sourceFaceId;
+        record.sampleIndex = metadata->sampleIndex;
+        record.normalLeakage = metadata->normalLeakage;
+    }
+    record.ringIndexA = ringIndexA;
+    record.ringIndexB = ringIndexB;
+    record.triangle = triangle;
+    record.centroid = triangle_centroid(triangle);
+    record.maxEdgeLength = maxEdge;
+    record.minEdgeLength = minEdge;
+    record.localSpacing = localSpacing;
+    record.edgeLengthRatio = ratio;
+    record.longTriangle = longTriangle;
+    record.degenerate = degenerate;
+    result.rejections.push_back(record);
+
+    auto& problem = over_cover_problem_edge(result, record.edgeId, record.sourceFaceId);
+    problem.maxTriangleEdgeLength = std::max(problem.maxTriangleEdgeLength, maxEdge);
+    if (longTriangle) {
+        ++problem.longTriangleCount;
+    }
+    if (record.category == "body_bridge") {
+        ++result.bodyBridgeRejectedCount;
+        ++problem.bodyBridgeRejectedCount;
+    } else if (record.category == "boundary_to_ring_quad") {
+        ++result.boundaryToRingRejectedCount;
+        ++problem.boundaryToRingRejectedCount;
+    } else if (record.category == "ring_to_ring_quad") {
+        ++result.ringToRingRejectedCount;
+        ++problem.ringToRingRejectedCount;
+    }
 }
 
 bool face_uv_inside(const TopoDS_Face& face, const gp_Pnt2d& uv) {
@@ -1100,15 +1238,36 @@ int append_oriented_closed_quad_strip(
     bool countRejected = true,
     double maxAllowedTriangleEdgeLength = std::numeric_limits<double>::infinity(),
     int* longTriangleCount = nullptr,
-    double* maxTriangleEdgeLength = nullptr) {
+    double* maxTriangleEdgeLength = nullptr,
+    CandidateSurfaceOverCoverBuildResult* overCoverDiagnostics = nullptr,
+    const char* rejectionCategory = nullptr,
+    const std::vector<CandidateSurfaceOverCoverLoopMetadata>* metadata = nullptr,
+    int ringIndexA = -1,
+    int ringIndexB = -1,
+    double localSpacing = 0.0) {
     const auto count = std::min({inner.size(), outer.size(), normals.size()});
     if (count < 3) {
         return 0;
     }
 
     int added = 0;
-    auto addTriangle = [&](const StlTriangle& triangle) {
+    auto addTriangle = [&](const StlTriangle& triangle, std::size_t metadataIndex) {
         if (is_degenerate(triangle, 1.0e-15)) {
+            if (overCoverDiagnostics != nullptr && rejectionCategory != nullptr) {
+                const auto* item = metadata != nullptr && metadataIndex < metadata->size()
+                    ? &(*metadata)[metadataIndex]
+                    : nullptr;
+                record_over_cover_triangle_rejection(
+                    *overCoverDiagnostics,
+                    rejectionCategory,
+                    item,
+                    ringIndexA,
+                    ringIndexB,
+                    triangle,
+                    localSpacing,
+                    false,
+                    true);
+            }
             if (countRejected) {
                 ++rejected;
             }
@@ -1119,6 +1278,21 @@ int append_oriented_closed_quad_strip(
                 maxAllowedTriangleEdgeLength,
                 longTriangleCount,
                 maxTriangleEdgeLength)) {
+            if (overCoverDiagnostics != nullptr && rejectionCategory != nullptr) {
+                const auto* item = metadata != nullptr && metadataIndex < metadata->size()
+                    ? &(*metadata)[metadataIndex]
+                    : nullptr;
+                record_over_cover_triangle_rejection(
+                    *overCoverDiagnostics,
+                    rejectionCategory,
+                    item,
+                    ringIndexA,
+                    ringIndexB,
+                    triangle,
+                    localSpacing,
+                    true,
+                    false);
+            }
             if (countRejected) {
                 ++rejected;
             }
@@ -1140,10 +1314,10 @@ int append_oriented_closed_quad_strip(
         referenceNormal.Normalize();
 
         auto first = make_oriented_stl_triangle(inner[index], inner[next], outer[index], referenceNormal);
-        addTriangle(first);
+        addTriangle(first, index);
 
         auto second = make_oriented_stl_triangle(inner[next], outer[next], outer[index], referenceNormal);
-        addTriangle(second);
+        addTriangle(second, index);
     }
     return added;
 }
@@ -1254,7 +1428,10 @@ int append_oriented_closed_loop_bridge(
     int& rejected,
     double maxAllowedTriangleEdgeLength = std::numeric_limits<double>::infinity(),
     int* longTriangleCount = nullptr,
-    double* maxTriangleEdgeLength = nullptr) {
+    double* maxTriangleEdgeLength = nullptr,
+    CandidateSurfaceOverCoverBuildResult* overCoverDiagnostics = nullptr,
+    const std::vector<CandidateSurfaceOverCoverLoopMetadata>* metadata = nullptr,
+    double localSpacing = 0.0) {
     if (innerInput.size() < 3 || outer.size() < 3 || normals.empty()) {
         return 0;
     }
@@ -1281,11 +1458,41 @@ int append_oriented_closed_loop_bridge(
                     maxAllowedTriangleEdgeLength,
                     longTriangleCount,
                     maxTriangleEdgeLength)) {
+                if (overCoverDiagnostics != nullptr) {
+                    const auto* item = metadata != nullptr && !metadata->empty()
+                        ? &(*metadata)[normalIndex % metadata->size()]
+                        : nullptr;
+                    record_over_cover_triangle_rejection(
+                        *overCoverDiagnostics,
+                        "body_bridge",
+                        item,
+                        0,
+                        0,
+                        triangle,
+                        localSpacing,
+                        true,
+                        false);
+                }
                 ++rejected;
                 return 0;
             }
             outTriangles.push_back(triangle);
             return 1;
+        }
+        if (overCoverDiagnostics != nullptr) {
+            const auto* item = metadata != nullptr && !metadata->empty()
+                ? &(*metadata)[normalIndex % metadata->size()]
+                : nullptr;
+            record_over_cover_triangle_rejection(
+                *overCoverDiagnostics,
+                "body_bridge",
+                item,
+                0,
+                0,
+                triangle,
+                localSpacing,
+                false,
+                true);
         }
         ++rejected;
         return 0;
@@ -1771,11 +1978,13 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
     gp_Pnt previousPoint;
     std::vector<gp_Pnt> boundaryRing;
     std::vector<gp_Vec> normalRing;
+    std::vector<CandidateSurfaceOverCoverLoopMetadata> loopMetadata;
     std::vector<std::vector<gp_Pnt>> overCoverRings(static_cast<std::size_t>(ringCount));
     std::unordered_set<FaceId> sourceFacesUsed;
     constexpr double joinToleranceSquared = 1.0e-10;
     boundaryRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     normalRing.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
+    loopMetadata.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     for (auto& ring : overCoverRings) {
         ring.reserve(static_cast<std::size_t>(result.boundaryEdgeCount * samplesPerEdge));
     }
@@ -1783,18 +1992,19 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
     for (std::size_t edgeOrdinal = 0; edgeOrdinal < boundary.ordered_boundary_edges.size(); ++edgeOrdinal) {
         const auto edgeId = boundary.ordered_boundary_edges[edgeOrdinal];
         if (edgeId < 0 || static_cast<std::size_t>(edgeId) >= topology.edgeCount()) {
-            ++result.rejectedCount;
+            record_over_cover_sample_rejection(result, edgeId, -1, 1);
             continue;
         }
 
         const auto sourceFaceId = source_face_for_edge(topology, edgeId, candidateFaces);
+        const auto sourceFaceIdValue = sourceFaceId.has_value() ? *sourceFaceId : -1;
         const auto& edge = topology.edge(edgeId);
         const TopoDS_Face* sourceFace = nullptr;
         if (sourceFaceId.has_value() && *sourceFaceId < topology.faceCount()) {
             sourceFace = &topology.face(*sourceFaceId);
         }
         if (sourceFace == nullptr) {
-            ++result.rejectedCount;
+            record_over_cover_sample_rejection(result, edgeId, sourceFaceIdValue, 1);
             continue;
         }
 
@@ -1808,9 +2018,11 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
 
         std::vector<gp_Pnt> edgeBoundaryRing;
         std::vector<gp_Vec> edgeNormalRing;
+        std::vector<CandidateSurfaceOverCoverLoopMetadata> edgeMetadata;
         std::vector<std::vector<gp_Pnt>> edgeOverCoverRings(static_cast<std::size_t>(ringCount));
         edgeBoundaryRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
         edgeNormalRing.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
+        edgeMetadata.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
         for (auto& ring : edgeOverCoverRings) {
             ring.reserve(static_cast<std::size_t>(samplesPerEdge + 1));
         }
@@ -1837,6 +2049,7 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
             std::vector<gp_Pnt> sampleOverCoverPoints;
             sampleOverCoverPoints.reserve(static_cast<std::size_t>(ringCount));
             bool sampleOk = true;
+            double sampleNormalLeakageMax = 0.0;
             for (int ring = 1; ring <= ringCount; ++ring) {
                 const auto distance =
                     options.candidateSurfaceOverCoverWidth *
@@ -1851,6 +2064,17 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
                     reverseEdge);
                 if (overCoverPoint.has_value()) {
                     normal = overCoverPoint->normal;
+                    sampleNormalLeakageMax = std::max(
+                        sampleNormalLeakageMax,
+                        overCoverPoint->normalLeakage);
+                    record_over_cover_normal_leakage(
+                        result,
+                        edgeId,
+                        sourceFaceIdValue,
+                        sampleIndex,
+                        ring,
+                        point,
+                        overCoverPoint->normalLeakage);
                     result.normalLeakageMax = std::max(
                         result.normalLeakageMax,
                         overCoverPoint->normalLeakage);
@@ -1887,6 +2111,12 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
 
             edgeBoundaryRing.push_back(point);
             edgeNormalRing.push_back(normal);
+            CandidateSurfaceOverCoverLoopMetadata metadata;
+            metadata.edgeId = edgeId;
+            metadata.sourceFaceId = sourceFaceIdValue;
+            metadata.sampleIndex = sampleIndex;
+            metadata.normalLeakage = sampleNormalLeakageMax;
+            edgeMetadata.push_back(metadata);
             for (int ring = 0; ring < ringCount; ++ring) {
                 edgeOverCoverRings[static_cast<std::size_t>(ring)].push_back(
                     sampleOverCoverPoints[static_cast<std::size_t>(ring)]);
@@ -1901,6 +2131,7 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
                 }
                 boundaryRing.push_back(edgeBoundaryRing[index]);
                 normalRing.push_back(edgeNormalRing[index]);
+                loopMetadata.push_back(edgeMetadata[index]);
                 for (int ring = 0; ring < ringCount; ++ring) {
                     overCoverRings[static_cast<std::size_t>(ring)].push_back(
                         edgeOverCoverRings[static_cast<std::size_t>(ring)][index]);
@@ -1912,13 +2143,20 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
                 sourceFacesUsed.insert(*sourceFaceId);
             }
         } else {
-            result.rejectedCount += std::max(rejectedForEdge, 1);
+            record_over_cover_sample_rejection(
+                result,
+                edgeId,
+                sourceFaceIdValue,
+                std::max(rejectedForEdge, 1));
         }
     }
 
     if (boundaryRing.size() >= 3 && boundaryRing.front().SquareDistance(boundaryRing.back()) <= joinToleranceSquared) {
         boundaryRing.pop_back();
         normalRing.pop_back();
+        if (!loopMetadata.empty()) {
+            loopMetadata.pop_back();
+        }
         for (auto& ring : overCoverRings) {
             if (!ring.empty()) {
                 ring.pop_back();
@@ -1958,8 +2196,10 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
             bridgeRejectedCount,
             maxAllowedTriangleEdgeLength,
             &result.longTriangleCount,
-            &result.maxTriangleEdgeLength);
-        result.bodyBridgeRejectedCount += bridgeRejectedCount;
+            &result.maxTriangleEdgeLength,
+            &result,
+            &loopMetadata,
+            localSpacing);
         result.triangleCount += bridgeTriangles;
     }
 
@@ -1973,7 +2213,13 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
             true,
             maxAllowedTriangleEdgeLength,
             &result.longTriangleCount,
-            &result.maxTriangleEdgeLength);
+            &result.maxTriangleEdgeLength,
+            &result,
+            "boundary_to_ring_quad",
+            &loopMetadata,
+            0,
+            1,
+            localSpacing);
         for (std::size_t ring = 1; ring < overCoverRings.size(); ++ring) {
             result.triangleCount += append_oriented_closed_quad_strip(
                 overCoverRings[ring - 1],
@@ -1984,7 +2230,13 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
                 true,
                 maxAllowedTriangleEdgeLength,
                 &result.longTriangleCount,
-                &result.maxTriangleEdgeLength);
+                &result.maxTriangleEdgeLength,
+                &result,
+                "ring_to_ring_quad",
+                &loopMetadata,
+                static_cast<int>(ring),
+                static_cast<int>(ring + 1),
+                localSpacing);
         }
     }
 
@@ -2244,6 +2496,22 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
         report.candidateSurfaceOverCoverMaxTriangleEdgeLength = overCover.maxTriangleEdgeLength;
         report.candidateSurfaceOverCoverSourceFaceCount = overCover.sourceFaceCount;
         report.candidateSurfaceOverCoverDirectionFlipCount = overCover.directionFlipCount;
+        report.candidateSurfaceOverCoverBodyBridgeRejectedCount = overCover.bodyBridgeRejectedCount;
+        report.candidateSurfaceOverCoverBoundaryToRingRejectedCount =
+            overCover.boundaryToRingRejectedCount;
+        report.candidateSurfaceOverCoverRingToRingRejectedCount =
+            overCover.ringToRingRejectedCount;
+        report.candidateSurfaceOverCoverEdgeBuildRejectedCount =
+            overCover.edgeBuildRejectedCount;
+        report.candidateSurfaceOverCoverProblemEdgeCount =
+            static_cast<int>(overCover.problemEdges.size());
+        report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId =
+            overCover.maxNormalLeakageEdgeId;
+        report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId =
+            overCover.maxNormalLeakageSourceFaceId;
+        report.candidateSurfaceOverCoverRejections = overCover.rejections;
+        report.candidateSurfaceOverCoverProblemEdges = overCover.problemEdges;
+        report.candidateSurfaceOverCoverLeakagePoints = overCover.leakagePoints;
         if (overCover.triangleCount == 0) {
             report.warningMessage = append_warning(
                 report.warningMessage,

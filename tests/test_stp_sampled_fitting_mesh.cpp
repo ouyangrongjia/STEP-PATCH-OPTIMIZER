@@ -562,6 +562,16 @@ void test_candidate_surface_over_cover_extends_source_face_without_adjacent_drop
     assert(report.candidateSurfaceOverCoverNormalLeakageMax <= 0.20 + 1.0e-9);
     assert(report.candidateSurfaceOverCoverDirectionFallbackCount >= 0);
     assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverBodyBridgeRejectedCount >= 0);
+    assert(report.candidateSurfaceOverCoverBoundaryToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverRingToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeBuildRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverProblemEdgeCount ==
+        static_cast<int>(report.candidateSurfaceOverCoverProblemEdges.size()));
+    assert(report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId >= -1);
+    assert(report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId >= -1);
+    assert(report.candidateSurfaceOverCoverRejections.size() >=
+        static_cast<std::size_t>(report.candidateSurfaceOverCoverBodyBridgeRejectedCount));
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength > 0.0);
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength <= 5.0 * (10.0 / 16.0));
     assert(report.outputTriangleCount > baselineReport.outputTriangleCount);
@@ -646,6 +656,10 @@ void test_candidate_surface_over_cover_reports_long_triangle_diagnostics() {
 
     assert(report.success);
     assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverBodyBridgeRejectedCount >= 0);
+    assert(report.candidateSurfaceOverCoverBoundaryToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverRingToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeBuildRejectedCount == 0);
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength > 0.0);
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength <= max_triangle_edge_length(mesh) + 1.0e-9);
     assert(report.candidateSurfaceOverCoverNormalLeakageMax <= 0.20 + 1.0e-9);
@@ -874,6 +888,16 @@ void test_report_fields_present() {
     assert(report.candidateSurfaceOverCoverNormalLeakageMax == 0.0);
     assert(report.candidateSurfaceOverCoverDirectionFallbackCount == 0);
     assert(report.candidateSurfaceOverCoverLongTriangleCount == 0);
+    assert(report.candidateSurfaceOverCoverBodyBridgeRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverBoundaryToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverRingToRingRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeBuildRejectedCount == 0);
+    assert(report.candidateSurfaceOverCoverProblemEdgeCount == 0);
+    assert(report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId == -1);
+    assert(report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId == -1);
+    assert(report.candidateSurfaceOverCoverRejections.empty());
+    assert(report.candidateSurfaceOverCoverProblemEdges.empty());
+    assert(report.candidateSurfaceOverCoverLeakagePoints.empty());
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength == 0.0);
     assert(report.candidateSurfaceOverCoverSourceFaceCount == 0);
     assert(report.candidateSurfaceOverCoverDirectionFlipCount == 0);
