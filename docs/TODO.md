@@ -2,7 +2,7 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-06-26
+更新时间：2026-06-28
 
 ---
 
@@ -78,6 +78,15 @@ adjacent-face support collar 只保留为窄辅助上下文
     - corner miter 默认降到 1.25，方向突变时只 clamp 不放大。
     - candidate bridge / quad strip 会记录并拒绝明显异常长三角。
     - report / JSON 新增 normalLeakage、directionFallback、longTriangle、maxTriangleEdgeLength、sourceFaceCount、directionFlip 指标。
+11. Candidate over-cover rejected/normal-leakage 可定位诊断已补：
+    - rejected count 分桶为 body bridge、boundary-to-ring quad、ring-to-ring quad、edge-build。
+    - JSON 输出 per edge/source face problem summary 和 max normal leakage edge/source face。
+    - corner_baseline_probe 会导出：
+      overcover_rejections.csv
+      overcover_rejected_body_bridge.stl
+      overcover_rejected_boundary_to_ring.stl
+      overcover_rejected_ring_to_ring.stl
+      overcover_worst_points.obj
 ```
 
 已验证：
@@ -169,6 +178,32 @@ data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810
    after_free_edges=52
    ModelCHECK diagnostic_passed=false
    SHORT_EDGES=1593
+
+7. raw patch UnifySameDomain 诊断已完成：
+   input=route2_expanded_strict_trim/normalized_patch_mm.stp
+   output=route2_expanded_strict_trim/raw_patch_unify_probe/normalized_patch_mm_unified.stp
+   report=route2_expanded_strict_trim/raw_patch_unify_probe/raw_patch_unify_report.json
+
+   before normalized patch:
+     faces=68
+     edges=326
+     shells=1
+     free_edges=26
+     BRepCheck=true
+
+   after UnifySameDomain in memory:
+     faces=59
+     edges=306
+     shells=1
+     free_edges=26
+     BRepCheck=false
+
+   after unified STEP roundtrip:
+     faces=59
+     edges=306
+     shells=1
+     free_edges=26
+     BRepCheck=true
 ```
 
 判读：
@@ -176,12 +211,14 @@ data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810
 ```text
 这轮修复证明 reverseEdge 不再出现方向翻转（direction_flip_count=0），但 normal leakage 很大，且长三角保护拒绝过多。
 当前 blocker 已不是“STL 拓扑脏”，而是 over-cover 采样点对应/桥接策略过保守或错配，导致写入的有效外扩带不足，Geomagic 输出又碎化。
-下一步应先降低 longTriangle rejection 的误伤，或改为局部 bevel/重采样补洞，而不是进入 Apply / sewing 调参。
+raw patch UnifySameDomain 可把 Geomagic patch 从 68 面降到 59 面、326 边降到 306 边，但 free_edges 仍为 26；内存态 BRepCheck 还会变为 false，写出 STEP 再读回才恢复 true。
+因此 UnifySameDomain 不能作为当前 Apply 的直接修复步骤，只能作为“Geomagic 输出确实存在同域碎片”的诊断证据。
+下一步仍应先降低 longTriangle rejection 的误伤，或改为局部 bevel/重采样补洞，而不是进入 Apply / sewing 调参。
 ```
 
 ---
 
-## 4. 当前 P0：修正 over-cover 长三角拒绝过多 / 有效外扩带不足
+## 4. 当前 P0：降低 Geomagic raw patch 碎化 / 修正 over-cover 有效外扩带不足
 
 下一步不是继续调 candidate over-cover 宽度，也不是恢复 adjacent collar。
 
@@ -196,15 +233,62 @@ Geomagic patch faces=68
 preview high_risk=true
 ```
 
-必须检查：
+已排除：
 
 ```text
-1. longTriangleCount 中有多少是 bridge 错配，多少是 quad strip 相邻 ring 错配。
-2. 当前 5 * meanSpacing 阈值是否误杀正常角点/高曲率段外扩三角。
-3. 被拒绝的三角是否应改为局部 bevel / fan 补洞，而不是直接丢弃。
-4. normal leakage 是否集中在少数 source face / edge；如果集中，记录 problem edge ids。
-5. 对 source face 切平面 offset 后的 ring 对应关系是否仍按原 boundary 采样顺序一一配对；若不是，应先重采样/重排 ring。
+raw patch UnifySameDomain 不是直接修复：
+  faces 68 -> 59
+  edges 326 -> 306
+  free_edges 26 -> 26
+  in-memory BRepCheck true -> false
+  unified STEP roundtrip BRepCheck=true
+```
+
+继续检查：
+
+```text
+1. 用新的 over-cover artifacts 复跑完整 Route 2 真实样例，确认 rejected 分桶是否仍近似：
+   body bridge << boundary-to-ring quad < ring-to-ring quad。
+2. 重点查看 `overcover_rejected_boundary_to_ring.stl` 与 `overcover_rejected_ring_to_ring.stl`：
+   如果 ring-to-ring 占主导，优先修 ring 对应 / miter 后顺序稳定性；
+   如果 boundary-to-ring 占主导，优先修第一圈 offset / source-face 方向。
+3. 用 `overcover_worst_points.obj` 定位 max normal leakage 局部区域，判断是否集中在少数 edge/source face。
+4. 当前 artifact-only 验证显示 max normal leakage 出现在 edge 1576 / source face 1710；
+   该 id 只能作为本轮真实样例线索，不能写进默认测试或硬编码修复。
+5. 当前 5 * meanSpacing 阈值可能误杀正常高曲率/角点段；
+   下一步应基于 CSV 的 `edge_length_ratio` 和 rejected STL 可视化决定是放宽阈值，还是改局部 bevel / fan 补洞。
 6. 只有当 longTriangleCount 和 rejectedCount 收到可解释低值后，再继续定位 failed_patch_face_index=7 / original boundary edge 1585 的 open-wire closure。
+```
+
+每轮 Route 2 真实样例目录必须收敛到 `route2_artifacts/`：
+
+```text
+1. Geomagic 输入裁剪 STL：
+   crop_stl_candidate_<id>.stl
+2. Geomagic 原始未归一化导出 STP：
+   raw_geomagic_crop_stp_candidate_<id>.stp
+3. 归一化后的 patch STP：
+   normalized_patch_mm.stp
+4. base_removed_candidate：
+   base_removed_candidate.stp
+5. Geomagic 真实运行记录：
+   GEOMAGIC_RUN.md
+   geomagic_fit_region.log
+   geomagic_generation.stdout.txt
+   geomagic_generation.stderr.txt（仅非空时保留）
+6. OCCT strict re-trim / PatchReplacementCommand 尝试合并后的 STEP：
+   如果未生成，目录表必须标记 exists=false 并记录失败原因。
+7. Creo API import-feature sewing 尝试合并后的 STEP：
+   creo_api_merged.stp
+
+对应说明文件：
+  ROUTE2_SUMMARY.md
+
+不保留低价值文件：
+  run_exit_code.txt
+  顶层 run_boundary_trim_fill_experiments.stdout.txt / stderr.txt
+  run_invocation.txt
+  artifact_inventory.json
 ```
 
 ---

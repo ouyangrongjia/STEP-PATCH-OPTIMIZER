@@ -225,7 +225,236 @@ reverseEdge 方向翻转不再是当前证据（direction_flip_count=0）。
 下一步应先把 longTriangleCount/rejectedCount 分解到 bridge vs quad strip，并修正 ring 对应或局部 bevel/fan 补洞；在 over-cover 输入稳定前，不应继续把主要精力放到 Apply / sewing 调参。
 ```
 
-### 1.1 2026-06-25 Route 2 support collar 真实样例结果
+### 1.2 2026-06-27 raw patch UnifySameDomain 诊断
+
+本轮先不改 Apply / sewing，也不放宽 StrictTopologyGate，只对 Geomagic 输出的 normalized raw patch 做独立诊断：
+
+```text
+normalized_patch_mm.stp -> stats -> UnifySameDomain -> stats
+```
+
+新增工具：
+
+```text
+tools/raw_patch_unify_probe.cpp
+```
+
+命令：
+
+```powershell
+build\windows-msvc-debug\Debug\raw_patch_unify_probe.exe `
+  --input-step data\baseline_runs\route2_candidate_overcover_conservative_20260626_1810\route2_expanded_strict_trim\normalized_patch_mm.stp `
+  --unified-step data\baseline_runs\route2_candidate_overcover_conservative_20260626_1810\route2_expanded_strict_trim\raw_patch_unify_probe\normalized_patch_mm_unified.stp `
+  --report data\baseline_runs\route2_candidate_overcover_conservative_20260626_1810\route2_expanded_strict_trim\raw_patch_unify_probe\raw_patch_unify_report.json
+```
+
+结果：
+
+```text
+before normalized patch:
+  faces=68
+  edges=326
+  shells=1
+  free_edges=26
+  BRepCheck=true
+
+after UnifySameDomain in memory:
+  faces=59
+  edges=306
+  shells=1
+  free_edges=26
+  BRepCheck=false
+
+after unified STEP roundtrip:
+  faces=59
+  edges=306
+  shells=1
+  free_edges=26
+  BRepCheck=true
+```
+
+判读：
+
+```text
+UnifySameDomain 可降低 raw patch 的碎面和碎边数量，但 free_edges 完全不变。
+内存态 BRepCheck=false，说明不能直接把该结果当作 Apply 修复输入；写出 STEP 再读回后 BRepCheck=true，只能证明 STEP roundtrip 对该 shape 有恢复/规整作用。
+当前 blocker 仍是 over-cover 有效外扩带不足导致 Geomagic 输出碎化，以及后续 multi-surface open-wire closure，不是单纯的 same-domain 合并缺失。
+```
+
+已验证：
+
+```text
+cmake --build --preset windows-msvc-debug --target raw_patch_unify_probe -- /m:1
+raw_patch_unify_probe on normalized_patch_mm.stp
+build\windows-msvc-debug\Debug\step_stats.exe data\baseline_runs\route2_candidate_overcover_conservative_20260626_1810\route2_expanded_strict_trim\raw_patch_unify_probe\normalized_patch_mm_unified.stp
+```
+
+### 1.3 2026-06-28 Candidate over-cover rejected 可定位诊断
+
+本轮只补 over-cover 诊断，不改变三角生成策略，不改 Apply / PatchReplacementRepair / StrictTopologyGate。
+
+已落地：
+
+```text
+1. StpSampledFittingReport 新增 candidate over-cover rejected 分桶：
+   candidateSurfaceOverCoverBodyBridgeRejectedCount
+   candidateSurfaceOverCoverBoundaryToRingRejectedCount
+   candidateSurfaceOverCoverRingToRingRejectedCount
+   candidateSurfaceOverCoverEdgeBuildRejectedCount
+
+2. StpSampledFittingReport 新增可定位记录：
+   candidateSurfaceOverCoverProblemEdges
+   candidateSurfaceOverCoverRejections
+   candidateSurfaceOverCoverLeakagePoints
+   candidateSurfaceOverCoverMaxNormalLeakageEdgeId
+   candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId
+
+3. corner_baseline_probe JSON 新增：
+   candidate_surface_over_cover_body_bridge_rejected_count
+   candidate_surface_over_cover_boundary_to_ring_rejected_count
+   candidate_surface_over_cover_ring_to_ring_rejected_count
+   candidate_surface_over_cover_edge_build_rejected_count
+   candidate_surface_over_cover_problem_edges
+   candidate_surface_over_cover_max_normal_leakage_edge_id
+   candidate_surface_over_cover_max_normal_leakage_source_face_id
+
+4. corner_baseline_probe artifact 导出目录：
+   <output-dir>/candidate_surface_over_cover_diagnostics/
+
+   导出文件：
+   overcover_rejections.csv
+   overcover_rejected_body_bridge.stl
+   overcover_rejected_boundary_to_ring.stl
+   overcover_rejected_ring_to_ring.stl
+   overcover_worst_points.obj
+```
+
+artifact-only 验证：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+patch: data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810/route2_expanded_strict_trim/normalized_patch_mm.stp
+output: data/baseline_runs/overcover_diagnostic_probe_20260628
+
+artifact 已落盘：
+  overcover_rejections.csv
+  overcover_rejected_body_bridge.stl
+  overcover_rejected_boundary_to_ring.stl
+  overcover_rejected_ring_to_ring.stl
+  overcover_worst_points.obj
+
+CSV 分桶：
+  body_bridge=208
+  boundary_to_ring_quad=3328
+  ring_to_ring_quad=6656
+
+max normal leakage:
+  category=ring_to_ring_quad
+  edge_id=1576
+  source_face_id=1710
+  sample_index=16
+  ring_index_a=2
+  ring_index_b=3
+  normal_leakage=0.74645343073406678
+  edge_length_ratio=7.182430623008532
+```
+
+注意：
+
+```text
+本次 artifact-only probe 为验证诊断文件落盘，运行到后续 Apply 路径时超时并已手动停止；
+因此它不是完整 Route 2 验收结果，也不替代下一轮真实样例实验。
+```
+
+判读：
+
+```text
+单独 edge/source face id 仍不足以定位问题；现在 CSV/STL/OBJ artifact 能把 id 映射到三角、centroid、sample/ring 和可视化局部。
+当前验证显示 ring-to-ring rejected 占主导，下一步优先检查 ring 对应 / miter 后环顺序，而不是先进入 Apply / sewing 调参。
+edge 1576 / source face 1710 只能作为本轮真实样例线索，不能写死进默认测试或修复逻辑。
+```
+
+已验证：
+
+```text
+cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
+ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe -- /m:1
+corner_baseline_probe artifact-only run produced candidate_surface_over_cover_diagnostics files, then timed out in later Apply path and was stopped.
+```
+
+### 1.4 2026-06-28 Route 2 真实样例精简产物目录
+
+`scripts/run_boundary_trim_fill_experiments.ps1` 已补充每轮 Route 2 精简产物目录：
+
+```text
+route2_artifacts/
+  ROUTE2_SUMMARY.md
+  GEOMAGIC_RUN.md
+  crop_stl_candidate_<id>.stl
+  raw_geomagic_crop_stp_candidate_<id>.stp
+  normalized_patch_mm.stp
+  base_removed_candidate.stp
+  geomagic_fit_region.log
+  geomagic_generation.stdout.txt
+  geomagic_generation.stderr.txt（仅非空时保留）
+  occt_applied_merged.stp（若生成）
+  creo_api_merged.stp（若生成）
+```
+
+不再保留：
+
+```text
+run_exit_code.txt
+顶层 run_boundary_trim_fill_experiments.stdout.txt / stderr.txt
+run_invocation.txt
+artifact_inventory.json
+空的 route1_g1_boundary_fill 目录
+```
+
+如果 OCCT 或 Creo 某一路未生成 STEP，不允许从别处补伪产物；`ROUTE2_SUMMARY.md` 应保留该行并标记 `exists=false`，同时记录失败原因。
+
+本轮复跑：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+output: data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653
+参数对齐 route2_candidate_overcover_conservative_20260626_1810：
+  candidate_over_cover_samples=64
+  candidate_over_cover_width=0.25
+  candidate_over_cover_rings=3
+  candidate_over_cover_miter_max_scale=1.25
+  enable_auxiliary_support_collar=false
+```
+
+产物状态：
+
+```text
+crop STL: exists=true
+raw Geomagic crop STP: exists=true
+normalized patch STP: exists=true
+base_removed_candidate: exists=true
+Geomagic run log / command record: exists=true
+OCCT applied/merged STEP: exists=false
+Creo API merged STEP: exists=true
+```
+
+本轮目录已清理为只保留：
+
+```text
+data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653/route2_artifacts/
+```
+
+OCCT 未导出 applied STEP 的原因：
+
+```text
+Multi-surface replacement face edges produced open wires.
+Fallback wire-connect tolerance was also insufficient.
+```
+
+### 1.5 2026-06-25 Route 2 support collar 真实样例结果
 
 本轮真实样例：
 

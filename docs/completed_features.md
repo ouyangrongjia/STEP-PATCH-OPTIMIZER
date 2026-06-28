@@ -2,7 +2,7 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-06-26
+更新时间：2026-06-27
 
 ---
 
@@ -142,6 +142,47 @@ scripts/run_boundary_trim_fill_experiments.ps1
 - `CommercialCadLikeQualityGate` 输出 boundary / corner / feature drift、seam continuity 和 sampling report。
 - `trim_diagnostics` 输出 under-cover、over-cover、boundary gap、internal seam gap 和 roundtrip_changed。
 - `short_edge_diagnostics`、ModelCHECK parse-only、Creo diagnostic correlation 已接入。
+- `raw_patch_unify_probe` 可对 normalized raw patch 执行 `stats -> UnifySameDomain -> stats` 诊断，并保留 unified STEP 与 JSON 报告。
+
+2026-06-27 raw patch UnifySameDomain 诊断事实：
+
+```text
+input:
+  data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810/route2_expanded_strict_trim/normalized_patch_mm.stp
+
+output:
+  data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810/route2_expanded_strict_trim/raw_patch_unify_probe/normalized_patch_mm_unified.stp
+  data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810/route2_expanded_strict_trim/raw_patch_unify_probe/raw_patch_unify_report.json
+
+before normalized patch:
+  faces=68
+  edges=326
+  shells=1
+  free_edges=26
+  BRepCheck=true
+
+after UnifySameDomain in memory:
+  faces=59
+  edges=306
+  shells=1
+  free_edges=26
+  BRepCheck=false
+
+after unified STEP roundtrip:
+  faces=59
+  edges=306
+  shells=1
+  free_edges=26
+  BRepCheck=true
+```
+
+结论：
+
+```text
+UnifySameDomain 能减少同域碎面和碎边，但不减少 raw patch 的自由边。
+内存态 BRepCheck 会失败，写出 STEP 后再读回才恢复通过。
+因此它目前只能作为 raw patch 碎化诊断，不作为 Patch Apply / StrictTopologyGate 的直接修复策略。
+```
 
 验收判断：
 
