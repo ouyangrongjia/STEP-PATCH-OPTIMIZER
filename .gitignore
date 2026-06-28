@@ -20,3 +20,14 @@ scripts/industrial_sew.py
 scripts/cutter_global_chain_mode.py
 start_codexpro_ngrok.cmd
 scripts/start_codexpro_ngrok.ps1
+
+# Local agent / bridge files
+.ai-bridge/
+AGENTS.md
+CLAUDE.md
+.claude/skills/gitnexus/gitnexus-cli/SKILL.md
+.claude/skills/gitnexus/gitnexus-debugging/SKILL.md
+.claude/skills/gitnexus/gitnexus-exploring/SKILL.md
+.claude/skills/gitnexus/gitnexus-guide/SKILL.md
+.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md
+.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md
