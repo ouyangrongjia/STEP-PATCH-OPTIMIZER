@@ -239,6 +239,81 @@ function Get-CreoVariantExportedStep {
     return ""
 }
 
+function Copy-RunArtifactIfAvailable {
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath
+    )
+
+    if (-not $SourcePath -or -not (Test-Path -LiteralPath $SourcePath)) {
+        return ""
+    }
+
+    $destinationDir = Split-Path -Parent $DestinationPath
+    New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+    Copy-Item -LiteralPath $SourcePath -Destination $DestinationPath -Force
+    return $DestinationPath
+}
+
+function Copy-RunArtifactIfNonEmpty {
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath
+    )
+
+    if (-not $SourcePath -or -not (Test-Path -LiteralPath $SourcePath)) {
+        return ""
+    }
+    if ((Get-Item -LiteralPath $SourcePath).Length -le 0) {
+        return ""
+    }
+
+    return Copy-RunArtifactIfAvailable -SourcePath $SourcePath -DestinationPath $DestinationPath
+}
+
+function Convert-Route2SummaryCell {
+    param([string]$Text)
+
+    if (-not $Text) {
+        return ""
+    }
+
+    return (($Text -replace '[\r\n|]', ' ') -replace '\s+', ' ').Trim()
+}
+
+function Write-Route2ArtifactSummary {
+    param(
+        [Parameter(Mandatory = $true)][string]$OutputDir,
+        [Parameter(Mandatory = $true)][object[]]$Items
+    )
+
+    $markdownPath = Join-Path $OutputDir "ROUTE2_SUMMARY.md"
+
+    $lines = @(
+        "# Route 2 Artifact Summary",
+        "",
+        "Run directory: $OutputDir",
+        "",
+        "| Role | Required | Exists | Path | Source | Note |",
+        "|---|---:|---:|---|---|---|"
+    )
+    foreach ($item in $Items) {
+        $lines += ("| {0} | {1} | {2} | {3} | {4} | {5} |" -f `
+            (Convert-Route2SummaryCell -Text ([string]$item.role)),
+            $item.required,
+            $item.exists,
+            (Convert-Route2SummaryCell -Text ([string]$item.path)),
+            (Convert-Route2SummaryCell -Text ([string]$item.source)),
+            (Convert-Route2SummaryCell -Text ([string]$item.note)))
+    }
+
+    $lines | Set-Content -LiteralPath $markdownPath -Encoding UTF8
+
+    return [ordered]@{
+        markdown = Get-FileEvidence -PathValue $markdownPath
+    }
+}
+
 function Get-ObjectValue {
     param(
         $Object,
@@ -1271,24 +1346,128 @@ $result.routes.route2_expanded_strict_trim_creo_sewing = [ordered]@{
     metrics = if ($route2Creo.metrics) { $route2Creo.metrics } else { $null }
 }
 
+$route2CropStl = ""
+if ($route2BaselineGeneration -and $route2BaselineGeneration.fitting_stl -and $route2BaselineGeneration.fitting_stl.path) {
+    $route2CropStl = [string]$route2BaselineGeneration.fitting_stl.path
+}
+$retainedCandidateId = if ($route2CandidateId) { $route2CandidateId } else { $CandidateId }
+$retainedCandidateId = $retainedCandidateId -replace '[^0-9A-Za-z_-]', '_'
+$route2ArtifactsDir = Join-Path $OutputDir "route2_artifacts"
+$route2CropStlLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2CropStl `
+    -DestinationPath (Join-Path $route2ArtifactsDir "crop_stl_candidate_$retainedCandidateId.stl")
+$route2RawPatchLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2RawPatch `
+    -DestinationPath (Join-Path $route2ArtifactsDir "raw_geomagic_crop_stp_candidate_$retainedCandidateId.stp")
+
+$route2OcctAppliedNote = "PatchReplacementCommand did not export an applied STEP."
+if ($route2BaselineApply -and $route2BaselineApply.patch_apply -and $route2BaselineApply.patch_apply.message) {
+    $route2OcctAppliedNote = [string]$route2BaselineApply.patch_apply.message
+}
+$route2CreoExportedStep = Get-CreoVariantExportedStep -Variant $route2Creo
+$route2NormalizedPatchLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2NormalizedPatch `
+    -DestinationPath (Join-Path $route2ArtifactsDir "normalized_patch_mm.stp")
+$baseRemovedLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $baseRemoved `
+    -DestinationPath (Join-Path $route2ArtifactsDir "base_removed_candidate.stp")
+$route2OcctAppliedLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2AppliedStep `
+    -DestinationPath (Join-Path $route2ArtifactsDir "occt_applied_merged.stp")
+$route2CreoExportedLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2CreoExportedStep `
+    -DestinationPath (Join-Path $route2ArtifactsDir "creo_api_merged.stp")
+$route2FitRegionLog = ""
+if ($route2BaselineGeneration -and $route2BaselineGeneration.fit_region_log_path -and $route2BaselineGeneration.fit_region_log_path.path) {
+    $route2FitRegionLog = [string]$route2BaselineGeneration.fit_region_log_path.path
+}
+$route2FitRegionLogLocal = Copy-RunArtifactIfAvailable `
+    -SourcePath $route2FitRegionLog `
+    -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_fit_region.log")
+$route2GeomagicStdoutLocal = ""
+$route2GeomagicStderrLocal = ""
+if ($route2GenRun) {
+    $route2GeomagicStdoutLocal = Copy-RunArtifactIfNonEmpty `
+        -SourcePath ([string]$route2GenRun.stdout_path) `
+        -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_generation.stdout.txt")
+    $route2GeomagicStderrLocal = Copy-RunArtifactIfNonEmpty `
+        -SourcePath ([string]$route2GenRun.stderr_path) `
+        -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_generation.stderr.txt")
+}
+$geomagicRunMarkdown = Join-Path $route2ArtifactsDir "GEOMAGIC_RUN.md"
+$geomagicArguments = ""
+if ($route2GenRun -and $route2GenRun.arguments) {
+    $geomagicArguments = Convert-ArgumentsToLine -Arguments ([string[]]$route2GenRun.arguments)
+}
+$geomagicLines = @(
+    "# Geomagic Run",
+    "",
+    "This is the actual Route 2 Geomagic generation command for the successful raw patch export.",
+    "",
+    "| Field | Value |",
+    "|---|---|",
+    "| executable | $($route2GenRun.file_path) |",
+    "| working_directory | $($route2GenRun.working_directory) |",
+    "| started_at | $($route2GenRun.started_at) |",
+    "| ended_at | $($route2GenRun.ended_at) |",
+    "| timed_out | $($route2GenRun.timed_out) |",
+    "| exit_code | $($route2GenRun.exit_code) |",
+    "| raw_step_success | $($route2BaselineGeneration.geomagic.success) |",
+    "| raw_step_path | $route2RawPatchLocal |",
+    "| input_stl_path | $route2CropStlLocal |",
+    "",
+    '```powershell',
+    "$($route2GenRun.file_path) $geomagicArguments",
+    '```'
+)
+New-Item -ItemType Directory -Force -Path $route2ArtifactsDir | Out-Null
+$geomagicLines | Set-Content -LiteralPath $geomagicRunMarkdown -Encoding UTF8
+$route2SummaryItems = @(
+    [ordered]@{ role = "Geomagic input crop STL"; required = $true; exists = [bool]$route2CropStlLocal; path = $route2CropStlLocal; source = $route2CropStl; note = "Run-local copy of data/crop_stl output." },
+    [ordered]@{ role = "Raw Geomagic crop STP"; required = $true; exists = [bool]$route2RawPatchLocal; path = $route2RawPatchLocal; source = $route2RawPatch; note = "Run-local copy of unnormalized data/crop_stp output." },
+    [ordered]@{ role = "Normalized patch STP"; required = $true; exists = [bool]$route2NormalizedPatchLocal; path = $route2NormalizedPatchLocal; source = "generated in this run"; note = "Millimeter normalized patch used by strict apply and Creo sewing." },
+    [ordered]@{ role = "base_removed_candidate STP"; required = $true; exists = [bool]$baseRemovedLocal; path = $baseRemovedLocal; source = "generated in this run"; note = "Original candidate removed from the source STEP." },
+    [ordered]@{ role = "Geomagic fit-region log"; required = $true; exists = [bool]$route2FitRegionLogLocal; path = $route2FitRegionLogLocal; source = $route2FitRegionLog; note = "Geomagic fit-region script log for the successful raw patch export." },
+    [ordered]@{ role = "Geomagic generation stdout"; required = $true; exists = [bool]$route2GeomagicStdoutLocal; path = $route2GeomagicStdoutLocal; source = [string]$route2GenRun.stdout_path; note = "Route 2 Geomagic generation subprocess stdout." },
+    [ordered]@{ role = "Geomagic generation stderr"; required = $false; exists = [bool]$route2GeomagicStderrLocal; path = $route2GeomagicStderrLocal; source = [string]$route2GenRun.stderr_path; note = "Copied only when non-empty." },
+    [ordered]@{ role = "Geomagic command record"; required = $true; exists = $true; path = $geomagicRunMarkdown; source = "route2_fresh_geomagic_generation command"; note = "Actual successful raw patch generation command and parameters." },
+    [ordered]@{ role = "OCCT applied/merged STEP"; required = $true; exists = [bool]$route2OcctAppliedLocal; path = $route2OcctAppliedLocal; source = "PatchReplacementCommand/OCCT route"; note = $route2OcctAppliedNote },
+    [ordered]@{ role = "Creo API merged STEP"; required = $true; exists = [bool]$route2CreoExportedLocal; path = $route2CreoExportedLocal; source = "Creo Toolkit sewing route"; note = "STEP exported after Creo Toolkit import-feature sewing attempt." }
+)
+$route2SummaryFiles = Write-Route2ArtifactSummary -OutputDir $route2ArtifactsDir -Items $route2SummaryItems
+$result.route2_artifacts = [ordered]@{
+    directory = $route2ArtifactsDir
+    summary = $route2SummaryFiles.markdown
+    geomagic_run = Get-FileEvidence -PathValue $geomagicRunMarkdown
+}
+$result.routes.route2_expanded_strict_trim.route2_artifacts = $result.route2_artifacts
+$result.routes.route2_expanded_strict_trim.source_files.crop_stl_local = Get-FileEvidence -PathValue $route2CropStlLocal
+$result.routes.route2_expanded_strict_trim.source_files.raw_geomagic_patch_local = Get-FileEvidence -PathValue $route2RawPatchLocal
+
 $result.preserved_artifacts = [ordered]@{
     output_dir = $OutputDir
     result_json = $resultPath
     source_step = Get-FileEvidence -PathValue $SourceStep
+    route2_artifacts = $result.route2_artifacts
+    route2_input_meshes = [ordered]@{
+        crop_stl_local = Get-FileEvidence -PathValue $route2CropStlLocal
+        crop_stl_original = Get-FileEvidence -PathValue $route2CropStl
+    }
     patch_steps = [ordered]@{
         route1_g1_patch = Get-FileEvidence -PathValue $route1Patch
         route2_fresh_geomagic_patch = Get-FileEvidence -PathValue $route2RawPatch
-        route2_normalized_patch_mm = Get-FileEvidence -PathValue $route2NormalizedPatch
+        route2_fresh_geomagic_patch_local = Get-FileEvidence -PathValue $route2RawPatchLocal
+        route2_normalized_patch_mm = Get-FileEvidence -PathValue $route2NormalizedPatchLocal
     }
     base_removed = [ordered]@{
-        base_removed_candidate = Get-FileEvidence -PathValue $baseRemoved
+        base_removed_candidate = Get-FileEvidence -PathValue $baseRemovedLocal
         base_removed_manifest = Get-FileEvidence -PathValue $baseRemovedManifest
     }
     stitched_steps = [ordered]@{
         route1_occt_applied_step = Get-FileEvidence -PathValue $route1AppliedStep
-        route2_occt_applied_step = Get-FileEvidence -PathValue $route2AppliedStep
+        route2_occt_applied_step = Get-FileEvidence -PathValue $route2OcctAppliedLocal
         route1_creo_exported_step = Get-FileEvidence -PathValue (Get-CreoVariantExportedStep -Variant $route1Creo)
-        route2_creo_exported_step = Get-FileEvidence -PathValue (Get-CreoVariantExportedStep -Variant $route2Creo)
+        route2_creo_exported_step = Get-FileEvidence -PathValue $route2CreoExportedLocal
     }
     manifests_and_reports = [ordered]@{
         route1_g1_manifest = Get-FileEvidence -PathValue $route1Manifest

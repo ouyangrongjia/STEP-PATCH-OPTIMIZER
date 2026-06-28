@@ -112,6 +112,23 @@ void test_corner_baseline_probe_reports_b2_2_support_collar_fields() {
     assert(source.find("seam_continuity") != std::string::npos);
 }
 
+void test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+
+    assert(source.find("candidate_surface_over_cover_body_bridge_rejected_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_boundary_to_ring_rejected_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_ring_to_ring_rejected_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_edge_build_rejected_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_problem_edges") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_max_normal_leakage_edge_id") != std::string::npos);
+    assert(source.find("overcover_rejections.csv") != std::string::npos);
+    assert(source.find("overcover_rejected_body_bridge.stl") != std::string::npos);
+    assert(source.find("overcover_rejected_boundary_to_ring.stl") != std::string::npos);
+    assert(source.find("overcover_rejected_ring_to_ring.stl") != std::string::npos);
+    assert(source.find("overcover_worst_points.obj") != std::string::npos);
+}
+
 void test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields() {
     const auto root = source_root();
     const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
@@ -140,6 +157,25 @@ void test_route2_runner_uses_candidate_over_cover_as_default_expansion() {
     assert(script.find("--support-collar-width") != std::string::npos);
     assert(script.find("--support-collar-rings") != std::string::npos);
     assert(script.find("--adaptive-support-collar-width") != std::string::npos);
+}
+
+void test_route2_runner_exports_compact_artifact_directory() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
+
+    assert(script.find("route2_artifacts") != std::string::npos);
+    assert(script.find("ROUTE2_SUMMARY.md") != std::string::npos);
+    assert(script.find("GEOMAGIC_RUN.md") != std::string::npos);
+    assert(script.find("crop_stl_candidate_") != std::string::npos);
+    assert(script.find("raw_geomagic_crop_stp_candidate_") != std::string::npos);
+    assert(script.find("normalized_patch_mm.stp") != std::string::npos);
+    assert(script.find("base_removed_candidate.stp") != std::string::npos);
+    assert(script.find("occt_applied_merged.stp") != std::string::npos);
+    assert(script.find("creo_api_merged.stp") != std::string::npos);
+    assert(script.find("geomagic_fit_region.log") != std::string::npos);
+    assert(script.find("geomagic_generation.stdout.txt") != std::string::npos);
+    assert(script.find("retained_route2_inputs") == std::string::npos);
+    assert(script.find("artifact_inventory.json") == std::string::npos);
 }
 
 void test_gui_exposes_candidate_surface_over_cover_switch() {
@@ -355,8 +391,10 @@ void run_scripted_baseline_gate_tests() {
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
     test_corner_baseline_probe_reports_b2_2_support_collar_fields();
+    test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts();
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();
     test_route2_runner_uses_candidate_over_cover_as_default_expansion();
+    test_route2_runner_exports_compact_artifact_directory();
     test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
