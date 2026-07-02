@@ -14,12 +14,19 @@ param(
     [double]$CandidateOverCoverWidth = 0.25,
     [int]$CandidateOverCoverRings = 3,
     [double]$CandidateOverCoverMiterMaxScale = 1.25,
+    [int]$CandidateOverCoverDisableOuterRings = 0,
+    [ValidateSet("normal", "none", "smooth")]
+    [string]$CandidateOverCoverBodyBridgeMode = "normal",
+    [switch]$CandidateOverCoverSmoothStrip,
+    [switch]$CandidateOverCoverSmoothTransition,
+    [switch]$CandidateOverCoverDisableBodyBridge,
     [int]$SupportCollarSamples = 64,
     [double]$SupportCollarWidth = 0.05,
     [int]$SupportCollarRings = 1,
     [double]$SupportCollarUnderCover = 0.0,
     [double]$SupportCollarMaxOffsetScale = 1.25,
     [switch]$SharpenContours,
+    [switch]$NoSharpenContours,
     [switch]$RealGeomagic,
     [switch]$AllowQualityGateFailure
 )
@@ -235,6 +242,19 @@ if ($Experiment -eq "B2" -or $Experiment -eq "B2.2" -or $Experiment -eq "B2.3") 
         "--candidate-over-cover-rings", "$CandidateOverCoverRings",
         "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
     )
+    if ($CandidateOverCoverDisableOuterRings -gt 0) {
+        $probeArgs += @("--candidate-over-cover-disable-outer-rings", "$CandidateOverCoverDisableOuterRings")
+    }
+    if ($CandidateOverCoverSmoothStrip) {
+        $probeArgs += @("--candidate-over-cover-smooth-strip")
+    }
+    if ($CandidateOverCoverDisableBodyBridge) {
+        $probeArgs += @("--candidate-over-cover-disable-body-bridge")
+    } elseif ($CandidateOverCoverSmoothTransition) {
+        $probeArgs += @("--candidate-over-cover-smooth-transition")
+    } elseif ($CandidateOverCoverBodyBridgeMode -ne "normal") {
+        $probeArgs += @("--candidate-over-cover-body-bridge-mode", $CandidateOverCoverBodyBridgeMode)
+    }
 }
 
 if ($Experiment -eq "B2.3") {
@@ -252,6 +272,9 @@ if ($Experiment -eq "B2.3") {
 
 if ($SharpenContours) {
     $probeArgs += @("--geomagic-sharpen-contours")
+}
+if ($NoSharpenContours) {
+    $probeArgs += @("--geomagic-no-sharpen-contours")
 }
 
 if ($Patch) {

@@ -242,6 +242,17 @@ struct CandidateSurfaceOverCoverBuildResult {
     double maxTriangleEdgeLength = 0.0;
     int sourceFaceCount = 0;
     int directionFlipCount = 0;
+    int generatedRingCount = 0;
+    int emittedRingCount = 0;
+    int disabledOuterRingCount = 0;
+    int emittedSampleCount = 0;
+    CandidateSurfaceOverCoverBodyBridgeMode bodyBridgeMode =
+        CandidateSurfaceOverCoverBodyBridgeMode::Normal;
+    bool smoothStripEnabled = false;
+    bool smoothTransitionEnabled = false;
+    int smoothingPointCount = 0;
+    double smoothingMaxDisplacement = 0.0;
+    int bodyBridgeTriangleCount = 0;
     int boundaryToRingRejectedCount = 0;
     int ringToRingRejectedCount = 0;
     int edgeBuildRejectedCount = 0;
@@ -637,6 +648,78 @@ double closed_loop_mean_spacing(const std::vector<gp_Pnt>& loop) {
         length += loop[index].Distance(loop[(index + 1) % loop.size()]);
     }
     return length / static_cast<double>(loop.size());
+}
+
+const char* candidate_surface_over_cover_body_bridge_mode_name(
+    CandidateSurfaceOverCoverBodyBridgeMode mode) {
+    switch (mode) {
+    case CandidateSurfaceOverCoverBodyBridgeMode::None:
+        return "none";
+    case CandidateSurfaceOverCoverBodyBridgeMode::Smooth:
+        return "smooth";
+    case CandidateSurfaceOverCoverBodyBridgeMode::Normal:
+    default:
+        return "normal";
+    }
+}
+
+double smooth_closed_ring_once(std::vector<gp_Pnt>& ring, double alpha) {
+    if (ring.size() < 3 || alpha <= 0.0) {
+        return 0.0;
+    }
+
+    std::vector<gp_Pnt> smoothed(ring.size());
+    double maxDisplacement = 0.0;
+    for (std::size_t index = 0; index < ring.size(); ++index) {
+        const auto previous = (index + ring.size() - 1) % ring.size();
+        const auto next = (index + 1) % ring.size();
+        const auto midpoint = gp_Pnt(
+            (ring[previous].X() + ring[next].X()) * 0.5,
+            (ring[previous].Y() + ring[next].Y()) * 0.5,
+            (ring[previous].Z() + ring[next].Z()) * 0.5);
+        gp_Vec delta(ring[index], midpoint);
+        const auto localLimit = 0.25 * std::min(
+            ring[index].Distance(ring[previous]),
+            ring[index].Distance(ring[next]));
+        delta.Multiply(alpha);
+        if (localLimit > 0.0 && delta.Magnitude() > localLimit) {
+            delta.Normalize();
+            delta.Multiply(localLimit);
+        }
+        smoothed[index] = ring[index].Translated(delta);
+        maxDisplacement = std::max(maxDisplacement, ring[index].Distance(smoothed[index]));
+    }
+    ring = std::move(smoothed);
+    return maxDisplacement;
+}
+
+std::vector<gp_Pnt> nearest_blend_ring(
+    const std::vector<gp_Pnt>& inner,
+    const std::vector<gp_Pnt>& outer,
+    double outerWeight) {
+    std::vector<gp_Pnt> blended;
+    blended.reserve(outer.size());
+    if (inner.empty() || outer.empty()) {
+        return blended;
+    }
+
+    const auto innerWeight = 1.0 - outerWeight;
+    for (const auto& point : outer) {
+        const gp_Pnt* nearest = &inner.front();
+        auto nearestDistance = point.SquareDistance(*nearest);
+        for (const auto& candidate : inner) {
+            const auto distance = point.SquareDistance(candidate);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearest = &candidate;
+            }
+        }
+        blended.emplace_back(
+            nearest->X() * innerWeight + point.X() * outerWeight,
+            nearest->Y() * innerWeight + point.Y() * outerWeight,
+            nearest->Z() * innerWeight + point.Z() * outerWeight);
+    }
+    return blended;
 }
 
 StlVec3 triangle_centroid(const StlTriangle& triangle) {
@@ -2109,9 +2192,22 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
 
     const auto center = bbox_center(candidateBBox);
     const auto ringCount = std::max(options.candidateSurfaceOverCoverRingCount, 1);
+    const auto disabledOuterRingCount = std::clamp(
+        options.candidateSurfaceOverCoverDisableOuterRings,
+        0,
+        ringCount);
+    const auto emittedRingCount = std::max(0, ringCount - disabledOuterRingCount);
     const auto samplesPerEdge = std::max(
         options.candidateSurfaceOverCoverSamplesPerEdge,
         options.minBoundarySamplesPerEdge);
+    result.generatedRingCount = ringCount;
+    result.emittedRingCount = emittedRingCount;
+    result.disabledOuterRingCount = disabledOuterRingCount;
+    result.bodyBridgeMode = options.candidateSurfaceOverCoverBodyBridgeMode;
+    result.smoothStripEnabled = options.candidateSurfaceOverCoverSmoothStrip;
+    result.smoothTransitionEnabled =
+        options.candidateSurfaceOverCoverBodyBridgeMode ==
+        CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
 
     bool hasPreviousPoint = false;
     gp_Pnt previousPoint;
@@ -2332,10 +2428,34 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
         }
     }
 
+    if (options.candidateSurfaceOverCoverSmoothStrip && boundaryRing.size() >= 3) {
+        constexpr double kDiagnosticStripSmoothAlpha = 0.20;
+        auto maxSmoothingDisplacement =
+            smooth_closed_ring_once(boundaryRing, kDiagnosticStripSmoothAlpha);
+        result.smoothingPointCount += static_cast<int>(boundaryRing.size());
+        for (auto& ring : overCoverRings) {
+            maxSmoothingDisplacement = std::max(
+                maxSmoothingDisplacement,
+                smooth_closed_ring_once(ring, kDiagnosticStripSmoothAlpha));
+            result.smoothingPointCount += static_cast<int>(ring.size());
+        }
+        result.smoothingMaxDisplacement = std::max(
+            result.smoothingMaxDisplacement,
+            maxSmoothingDisplacement);
+    }
+
+    std::vector<std::vector<gp_Pnt>> emittedOverCoverRings;
+    emittedOverCoverRings.reserve(static_cast<std::size_t>(emittedRingCount));
+    for (int ring = 0; ring < emittedRingCount; ++ring) {
+        emittedOverCoverRings.push_back(overCoverRings[static_cast<std::size_t>(ring)]);
+    }
+    result.emittedSampleCount =
+        static_cast<int>(boundaryRing.size()) * result.emittedRingCount;
+
     diagnose_candidate_surface_over_cover_rings(
         result,
         boundaryRing,
-        overCoverRings,
+        emittedOverCoverRings,
         normalRing,
         loopMetadata);
 
@@ -2345,27 +2465,68 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
     const auto maxAllowedTriangleEdgeLength = localSpacing > 0.0
         ? 5.0 * localSpacing
         : std::numeric_limits<double>::infinity();
-    if (meshBoundary.points.size() >= 3 && boundaryRing.size() >= 3) {
+    if (meshBoundary.points.size() >= 3 &&
+        boundaryRing.size() >= 3 &&
+        options.candidateSurfaceOverCoverBodyBridgeMode !=
+            CandidateSurfaceOverCoverBodyBridgeMode::None) {
         int bridgeRejectedCount = 0;
-        const auto bridgeTriangles = append_oriented_closed_loop_bridge(
-            meshBoundary.points,
-            boundaryRing,
-            normalRing,
-            outTriangles,
-            bridgeRejectedCount,
-            maxAllowedTriangleEdgeLength,
-            &result.longTriangleCount,
-            &result.maxTriangleEdgeLength,
-            &result,
-            &loopMetadata,
-            localSpacing);
-        result.triangleCount += bridgeTriangles;
+        if (options.candidateSurfaceOverCoverBodyBridgeMode ==
+            CandidateSurfaceOverCoverBodyBridgeMode::Smooth) {
+            auto transitionRing = nearest_blend_ring(meshBoundary.points, boundaryRing, 0.50);
+            if (transitionRing.size() == boundaryRing.size()) {
+                auto bridgeTriangles = append_oriented_closed_loop_bridge(
+                    meshBoundary.points,
+                    transitionRing,
+                    normalRing,
+                    outTriangles,
+                    bridgeRejectedCount,
+                    maxAllowedTriangleEdgeLength,
+                    &result.longTriangleCount,
+                    &result.maxTriangleEdgeLength,
+                    &result,
+                    &loopMetadata,
+                    localSpacing);
+                bridgeTriangles += append_oriented_closed_quad_strip(
+                    transitionRing,
+                    boundaryRing,
+                    normalRing,
+                    outTriangles,
+                    bridgeRejectedCount,
+                    true,
+                    maxAllowedTriangleEdgeLength,
+                    &result.longTriangleCount,
+                    &result.maxTriangleEdgeLength,
+                    &result,
+                    "body_bridge",
+                    &loopMetadata,
+                    0,
+                    0,
+                    localSpacing);
+                result.triangleCount += bridgeTriangles;
+                result.bodyBridgeTriangleCount += bridgeTriangles;
+            }
+        } else {
+            const auto bridgeTriangles = append_oriented_closed_loop_bridge(
+                meshBoundary.points,
+                boundaryRing,
+                normalRing,
+                outTriangles,
+                bridgeRejectedCount,
+                maxAllowedTriangleEdgeLength,
+                &result.longTriangleCount,
+                &result.maxTriangleEdgeLength,
+                &result,
+                &loopMetadata,
+                localSpacing);
+            result.triangleCount += bridgeTriangles;
+            result.bodyBridgeTriangleCount += bridgeTriangles;
+        }
     }
 
-    if (boundaryRing.size() >= 3 && !overCoverRings.empty()) {
+    if (boundaryRing.size() >= 3 && !emittedOverCoverRings.empty()) {
         result.triangleCount += append_oriented_closed_quad_strip(
             boundaryRing,
-            overCoverRings.front(),
+            emittedOverCoverRings.front(),
             normalRing,
             outTriangles,
             result.rejectedCount,
@@ -2379,10 +2540,10 @@ CandidateSurfaceOverCoverBuildResult append_candidate_surface_over_cover(
             0,
             1,
             localSpacing);
-        for (std::size_t ring = 1; ring < overCoverRings.size(); ++ring) {
+        for (std::size_t ring = 1; ring < emittedOverCoverRings.size(); ++ring) {
             result.triangleCount += append_oriented_closed_quad_strip(
-                overCoverRings[ring - 1],
-                overCoverRings[ring],
+                emittedOverCoverRings[ring - 1],
+                emittedOverCoverRings[ring],
                 normalRing,
                 outTriangles,
                 result.rejectedCount,
@@ -2530,6 +2691,26 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     if (options.enableCandidateSurfaceOverCover) {
         report.candidateSurfaceOverCoverWidth = options.candidateSurfaceOverCoverWidth;
         report.candidateSurfaceOverCoverRingCount = std::max(options.candidateSurfaceOverCoverRingCount, 0);
+        report.candidateSurfaceOverCoverGeneratedRingCount =
+            std::max(options.candidateSurfaceOverCoverRingCount, 0);
+        report.candidateSurfaceOverCoverDisabledOuterRingCount =
+            std::clamp(
+                options.candidateSurfaceOverCoverDisableOuterRings,
+                0,
+                std::max(options.candidateSurfaceOverCoverRingCount, 0));
+        report.candidateSurfaceOverCoverEmittedRingCount =
+            std::max(
+                0,
+                report.candidateSurfaceOverCoverGeneratedRingCount -
+                    report.candidateSurfaceOverCoverDisabledOuterRingCount);
+        report.candidateSurfaceOverCoverBodyBridgeMode =
+            candidate_surface_over_cover_body_bridge_mode_name(
+                options.candidateSurfaceOverCoverBodyBridgeMode);
+        report.candidateSurfaceOverCoverSmoothStripEnabled =
+            options.candidateSurfaceOverCoverSmoothStrip;
+        report.candidateSurfaceOverCoverSmoothTransitionEnabled =
+            options.candidateSurfaceOverCoverBodyBridgeMode ==
+            CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
     }
 
     // Validate inputs
@@ -2655,6 +2836,21 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
         report.candidateSurfaceOverCoverMaxTriangleEdgeLength = overCover.maxTriangleEdgeLength;
         report.candidateSurfaceOverCoverSourceFaceCount = overCover.sourceFaceCount;
         report.candidateSurfaceOverCoverDirectionFlipCount = overCover.directionFlipCount;
+        report.candidateSurfaceOverCoverGeneratedRingCount = overCover.generatedRingCount;
+        report.candidateSurfaceOverCoverEmittedRingCount = overCover.emittedRingCount;
+        report.candidateSurfaceOverCoverDisabledOuterRingCount =
+            overCover.disabledOuterRingCount;
+        report.candidateSurfaceOverCoverEmittedSampleCount = overCover.emittedSampleCount;
+        report.candidateSurfaceOverCoverBodyBridgeMode =
+            candidate_surface_over_cover_body_bridge_mode_name(overCover.bodyBridgeMode);
+        report.candidateSurfaceOverCoverSmoothStripEnabled = overCover.smoothStripEnabled;
+        report.candidateSurfaceOverCoverSmoothTransitionEnabled =
+            overCover.smoothTransitionEnabled;
+        report.candidateSurfaceOverCoverSmoothingPointCount = overCover.smoothingPointCount;
+        report.candidateSurfaceOverCoverSmoothingMaxDisplacement =
+            overCover.smoothingMaxDisplacement;
+        report.candidateSurfaceOverCoverBodyBridgeTriangleCount =
+            overCover.bodyBridgeTriangleCount;
         report.candidateSurfaceOverCoverBodyBridgeRejectedCount = overCover.bodyBridgeRejectedCount;
         report.candidateSurfaceOverCoverBoundaryToRingRejectedCount =
             overCover.boundaryToRingRejectedCount;

@@ -2,7 +2,7 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-06-28
+更新时间：2026-07-02
 
 ---
 
@@ -93,6 +93,18 @@ adjacent-face support collar 只保留为窄辅助上下文
     - 不恢复旧 guard-band / adjacent collar 主路线，不改 Apply、PatchReplacementRepair、StrictTopologyGate。
     - 保留并扩展诊断：ring closure、direction flip、index mismatch、source-face transition、edge/source face distribution。
     - corner_baseline_probe 保留 overcover_rejections.csv / rejected STL / worst points OBJ，并新增 overcover_ring_diagnostics.csv。
+13. 2026-07-02 Route 2 / Geomagic face-count 诊断层已落地：
+    - 不改变默认 conservative over-cover；新增显式 A/B 参数：
+      --candidate-over-cover-disable-outer-rings
+      --candidate-over-cover-body-bridge-mode <normal|none|smooth>
+      --candidate-over-cover-disable-body-bridge
+      --candidate-over-cover-smooth-transition
+      --candidate-over-cover-smooth-strip
+      --geomagic-no-sharpen-contours
+    - JSON/CSV 新增 generated/emitted/disabled ring count、emitted sample count、body bridge mode、body bridge triangle count、smooth strip/transition 标记。
+    - candidate_surface_over_cover_diagnostics 新增 overcover_experiment_summary.json/csv。
+    - corner_baseline_probe 新增 probe_artifacts，保存本轮 fitting STL、raw patch STP/IGES、fit_region log 的 run-local copy。
+    - run_boundary_trim_fill_experiments.ps1 会把 candidate_surface_over_cover_diagnostics 复制进 route2_artifacts。
 ```
 
 已验证：
@@ -188,11 +200,57 @@ ModelCHECK diagnostic_passed=false
 SHORT_EDGES item count=1593
 ```
 
+2026-07-02 face-count A/B 真实复跑：
+
+```text
+output:
+  data/baseline_runs/route2_facecount_ab_20260702_180826/
+comparison:
+  data/baseline_runs/route2_facecount_ab_20260702_180826/comparison.csv
+source:
+  data/stp/03_配件_Clay.stp
+candidate:
+  179
+```
+
+| variant | emitted rings | bridge mode | over-cover tris | rejected | patch faces | patch edges | high risk | boundary max/p95 | seam max/p95 abs | result |
+|---|---:|---|---:|---:|---:|---:|---|---:|---:|---|
+| A_conservative_no_sharpen | 3 | normal | 2184 | 9984 | 68 | 326 | true | 0.010176 / 0.000648 | 0.002880 / 0.000568 | Apply gate failed |
+| B_minus_outer_ring | 2 | normal | 2184 | 6656 | 68 | 326 | true | 0.010176 / 0.000648 | 0.002880 / 0.000568 | Apply gate failed |
+| C_smooth_transition | 3 | smooth | 5096 | 9984 | 633 | 3054 | true | 0.007553 / 0.000129 | 0.001282 / 0.000106 | Apply gate failed |
+| D_sharpen_contours | 3 | normal | 2184 | 9984 | 68 | 326 | true | 0.010176 / 0.000633 | 0.002880 / 0.000563 | Apply gate failed |
+| E_disable_body_bridge | 3 | none | 0 | 9984 | 5 | 20 | false | 0.123518 / 0.044745 | 0.065219 / 0.026933 | Quality gate failed |
+| F_smooth_strip | 3 | normal | 2196 | 9984 | 0 | 0 | false | n/a | n/a | Geomagic failed: Initialization of surface data failed |
+
+判读：
+
+```text
+1. A -> B：禁用最外 ring 只把 rejected_count 从 9984 降到 6656；实际 emitted STL triangle_count、patch faces/edges/high_risk 完全不变。
+   说明这次 68-face patch network 不是最外 ring 的已写出三角片导致；那些 ring-to-ring 三角本来就被 long-triangle guard 拒绝，没有进入 STL。
+
+2. A -> D：sharpenConstrainedContours 开/关没有改变 faces=68 / edges=326 / high_risk=true。
+   当前 face count 主因不是这个 Geomagic contour 开关。
+
+3. A -> C：把 body-to-ring transition 做成 smooth bridge 后，patch faces 从 68 增到 633。
+   说明 Geomagic 对 body bridge / transition 附近的人造三角结构非常敏感，平滑过渡如果增加可见三角带，反而会诱导更多 contour。
+
+4. A -> E：禁用 body bridge 后，patch faces 降到 5、high_risk=false，但 boundary/corner/seam drift 大幅超限。
+   说明 body bridge 是当前覆盖质量所必需，同时也是最可能诱导 68-face segmentation 的输入结构。
+```
+
+当前结论：
+
+```text
+conservative 输入视觉够用，是因为 body bridge 把主体 STL 连到原 boundary 附近；
+Geomagic 仍导出 68 faces，最可能不是外圈 ring 数量或 sharpen 参数，而是 body-to-ring bridge 形成的人造特征线 / 三角化过渡。
+下一步不要继续加宽或恢复 full over-cover；应诊断并降低 body bridge 的可见 contour 复杂度，同时保持 boundary/corner/seam drift 接近 A 基线。
+```
+
 判读：
 
 ```text
 conservative over-cover 的视觉覆盖与拐角保留优于 wire-ring / direction-field 尝试，当前本地代码以它为新基线继续开发。
-当前主问题不是继续加宽外扩带，而是定位 Geomagic patch faces=68/high_risk 的面片数过多原因，以及让 multi-surface segmentation 可缝合。
+当前 face-count A/B 已指向 body-to-ring bridge 人造三角化过渡；后续问题不是继续加宽外扩带，而是降低该 transition 的可见 contour 复杂度，并让 multi-surface segmentation 可缝合。
 wire-ring / direction-field 两次实验可作为失败证据保留在历史 run 目录中，但不作为最新实现基线。
 ```
 

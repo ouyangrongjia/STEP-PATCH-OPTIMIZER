@@ -647,10 +647,112 @@ fresh Geomagic patch:
 wire-ring 与 direction-field 两次实验降低了 rejected/longTriangle 计数，但真实截图与 mesh 质量显示外扩方向和长三角形态仍不如 conservative baseline。
 因此当前本地代码恢复 conservative per-edge over-cover 作为新基线，并只保留有助于定位的 ring/source-face 诊断。
 后续 Route 2 测试目录继续以 data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653/route2_artifacts/ 的紧凑分布为参考。
-下一步不应改 Apply / repair / Gate；应定位 conservative baseline 下 Geomagic patch faces=68/high_risk 的面片数过多原因，以及 multi-surface segmentation 为什么不可缝合。
+下一步不应改 Apply / repair / Gate；face-count A/B 已将主要嫌疑收敛到 body-to-ring bridge 的人造三角化 transition。
 ```
 
-### 1.6 2026-06-25 Route 2 support collar 真实样例结果
+### 1.6 2026-07-02 Route 2 / Geomagic face-count A/B 诊断
+
+本轮只加诊断层，不改变默认 conservative candidate/source-face over-cover，不改 Apply、PatchReplacementRepair、StrictTopologyGate 或 CommercialCadLikeQualityGate 判定语义。
+
+已落地：
+
+```text
+1. StpSampledFittingOptions / Report 新增：
+   candidateSurfaceOverCoverDisableOuterRings
+   candidateSurfaceOverCoverBodyBridgeMode
+   candidateSurfaceOverCoverSmoothStrip
+   generated/emitted/disabled ring count
+   emitted sample count
+   body bridge mode / body bridge triangle count
+   smooth strip / smooth transition 标记和 displacement 统计
+
+2. corner_baseline_probe 新增显式实验参数：
+   --candidate-over-cover-disable-outer-rings <n>
+   --candidate-over-cover-body-bridge-mode <normal|none|smooth>
+   --candidate-over-cover-disable-body-bridge
+   --candidate-over-cover-smooth-transition
+   --candidate-over-cover-smooth-strip
+   --geomagic-no-sharpen-contours
+
+3. candidate_surface_over_cover_diagnostics 新增：
+   overcover_experiment_summary.json
+   overcover_experiment_summary.csv
+   overcover_ring_diagnostics.csv 扩展 emitted ring / body bridge / smoothing 字段
+
+4. corner_baseline_probe 新增 probe_artifacts：
+   fitting STL
+   raw patch STEP/IGES
+   fit_region log
+   这些是 run-local copy，避免后续 candidate 179 复跑覆盖 data/crop_stl / data/crop_stp 下的共享文件。
+
+5. run_corner_baseline_gate.ps1 与 run_boundary_trim_fill_experiments.ps1 透传上述 A/B 参数。
+   Route 2 compact artifacts 会额外复制 candidate_surface_over_cover_diagnostics。
+```
+
+已验证：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
+ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe -- /m:1
+```
+
+真实 A/B 输出：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+output: data/baseline_runs/route2_facecount_ab_20260702_180826/
+comparison: data/baseline_runs/route2_facecount_ab_20260702_180826/comparison.csv
+```
+
+| variant | emitted rings | bridge mode | over-cover tris | rejected | patch faces | patch edges | high risk | boundary max/p95 | seam max/p95 abs | result |
+|---|---:|---|---:|---:|---:|---:|---|---:|---:|---|
+| A_conservative_no_sharpen | 3 | normal | 2184 | 9984 | 68 | 326 | true | 0.010176 / 0.000648 | 0.002880 / 0.000568 | Apply gate failed |
+| B_minus_outer_ring | 2 | normal | 2184 | 6656 | 68 | 326 | true | 0.010176 / 0.000648 | 0.002880 / 0.000568 | Apply gate failed |
+| C_smooth_transition | 3 | smooth | 5096 | 9984 | 633 | 3054 | true | 0.007553 / 0.000129 | 0.001282 / 0.000106 | Apply gate failed |
+| D_sharpen_contours | 3 | normal | 2184 | 9984 | 68 | 326 | true | 0.010176 / 0.000633 | 0.002880 / 0.000563 | Apply gate failed |
+| E_disable_body_bridge | 3 | none | 0 | 9984 | 5 | 20 | false | 0.123518 / 0.044745 | 0.065219 / 0.026933 | Quality gate failed |
+| F_smooth_strip | 3 | normal | 2196 | 9984 | 0 | 0 | false | n/a | n/a | Geomagic failed: Initialization of surface data failed |
+
+判读：
+
+```text
+1. A -> B：
+   禁用最外 ring 后 rejected_count 9984 -> 6656，
+   但 actual emitted over-cover triangle_count 仍是 2184，
+   Geomagic faces/edges/high_risk 仍是 68/326/true。
+   这说明最外 ring 的 rejected long triangles 没进入 STL，不是 68-face patch network 的直接诱因。
+
+2. A -> D：
+   sharpenConstrainedContours 开关不改变 68/326/high_risk。
+   当前 face count 不是 Geomagic sharpen contour 开关主导。
+
+3. A -> C：
+   smoothed body-to-ring transition 把 accepted over-cover triangles 提到 5096，
+   Geomagic faces/edges 增到 633/3054。
+   说明 Geomagic 对 body bridge / transition 的人造三角结构高度敏感，增加可见过渡三角会诱导更多 contour。
+
+4. A -> E：
+   禁用 body bridge 后 faces/edges 降到 5/20，high_risk=false，
+   但 boundary/corner/seam drift 大幅超限，CommercialCadLikeQualityGate 失败。
+   body bridge 同时是覆盖质量所必需，也是当前 68-face segmentation 的最可能输入来源。
+
+5. F：
+   smoothing strip 触发 Geomagic AutoSurface Initialization of surface data failed。
+   该方向不能作为默认修复。
+```
+
+当前结论：
+
+```text
+conservative 输入视觉够用的主要原因是 body bridge 让主体 STL 覆盖到原 boundary 附近。
+Geomagic 仍输出 68 faces / 326 edges / high_risk=true，最可能由 body-to-ring bridge 的人造特征线 / 三角化 transition 诱导。
+外圈 ring 数量和 sharpenContours 参数不是本轮真实样例的主因。
+后续应围绕 body bridge 的几何简化、contour 降噪或更少特征线的过渡策略做 A/B；不应继续加宽 ring / width / adjacent collar。
+```
+
+### 1.7 2026-06-25 Route 2 support collar 真实样例结果
 
 本轮真实样例：
 

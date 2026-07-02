@@ -688,6 +688,61 @@ void test_candidate_surface_over_cover_reports_long_triangle_diagnostics() {
     assert(report.candidateSurfaceOverCoverNormalLeakageMax <= 0.20 + 1.0e-9);
 }
 
+void test_candidate_surface_over_cover_diagnostic_variants_report_flags() {
+    auto fixture = make_box_top_face_fixture(10.0, 2.0);
+
+    spo::StpSampledFittingMeshBuilder builder;
+    spo::StpSampledFittingOptions baselineOptions;
+    baselineOptions.enableCandidateSurfaceOverCover = true;
+    baselineOptions.candidateSurfaceOverCoverWidth = 0.25;
+    baselineOptions.candidateSurfaceOverCoverRingCount = 3;
+    baselineOptions.candidateSurfaceOverCoverSamplesPerEdge = 16;
+    spo::StlMesh baselineMesh;
+    const auto baselineReport =
+        builder.build(fixture.document, fixture.candidate, baselineOptions, baselineMesh);
+    assert(baselineReport.success);
+    assert(baselineReport.candidateSurfaceOverCoverGeneratedRingCount == 3);
+    assert(baselineReport.candidateSurfaceOverCoverEmittedRingCount == 3);
+    assert(baselineReport.candidateSurfaceOverCoverDisabledOuterRingCount == 0);
+    assert(baselineReport.candidateSurfaceOverCoverEmittedSampleCount ==
+        baselineReport.candidateSurfaceOverCoverRingPointCount * 3);
+    assert(baselineReport.candidateSurfaceOverCoverBodyBridgeMode == "normal");
+    assert(!baselineReport.candidateSurfaceOverCoverSmoothStripEnabled);
+    assert(!baselineReport.candidateSurfaceOverCoverSmoothTransitionEnabled);
+    assert(baselineReport.candidateSurfaceOverCoverBodyBridgeTriangleCount >= 0);
+
+    spo::StpSampledFittingOptions minusOuterOptions = baselineOptions;
+    minusOuterOptions.candidateSurfaceOverCoverDisableOuterRings = 1;
+    spo::StlMesh minusOuterMesh;
+    const auto minusOuterReport =
+        builder.build(fixture.document, fixture.candidate, minusOuterOptions, minusOuterMesh);
+    assert(minusOuterReport.success);
+    assert(minusOuterReport.candidateSurfaceOverCoverGeneratedRingCount == 3);
+    assert(minusOuterReport.candidateSurfaceOverCoverEmittedRingCount == 2);
+    assert(minusOuterReport.candidateSurfaceOverCoverDisabledOuterRingCount == 1);
+    assert(minusOuterReport.candidateSurfaceOverCoverEmittedSampleCount ==
+        minusOuterReport.candidateSurfaceOverCoverRingPointCount * 2);
+    assert(minusOuterReport.candidateSurfaceOverCoverSampleCount ==
+        minusOuterReport.candidateSurfaceOverCoverRingPointCount * 3);
+    assert(minusOuterReport.candidateSurfaceOverCoverTriangleCount <
+        baselineReport.candidateSurfaceOverCoverTriangleCount);
+
+    spo::StpSampledFittingOptions smoothOptions = baselineOptions;
+    smoothOptions.candidateSurfaceOverCoverSmoothStrip = true;
+    smoothOptions.candidateSurfaceOverCoverBodyBridgeMode =
+        spo::CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
+    spo::StlMesh smoothMesh;
+    const auto smoothReport =
+        builder.build(fixture.document, fixture.candidate, smoothOptions, smoothMesh);
+    assert(smoothReport.success);
+    assert(smoothReport.candidateSurfaceOverCoverBodyBridgeMode == "smooth");
+    assert(smoothReport.candidateSurfaceOverCoverSmoothStripEnabled);
+    assert(smoothReport.candidateSurfaceOverCoverSmoothTransitionEnabled);
+    assert(smoothReport.candidateSurfaceOverCoverSmoothingPointCount > 0);
+    assert(smoothReport.candidateSurfaceOverCoverSmoothingMaxDisplacement >= 0.0);
+    assert(smoothReport.candidateSurfaceOverCoverIndexMismatchCount == 0);
+}
+
 void test_increased_div_increases_triangle_count() {
     auto fixture = make_planar_square_fixture(10.0);
 
@@ -924,6 +979,16 @@ void test_report_fields_present() {
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength == 0.0);
     assert(report.candidateSurfaceOverCoverSourceFaceCount == 0);
     assert(report.candidateSurfaceOverCoverDirectionFlipCount == 0);
+    assert(report.candidateSurfaceOverCoverGeneratedRingCount == 0);
+    assert(report.candidateSurfaceOverCoverEmittedRingCount == 0);
+    assert(report.candidateSurfaceOverCoverDisabledOuterRingCount == 0);
+    assert(report.candidateSurfaceOverCoverEmittedSampleCount == 0);
+    assert(report.candidateSurfaceOverCoverBodyBridgeMode == "normal");
+    assert(!report.candidateSurfaceOverCoverSmoothStripEnabled);
+    assert(!report.candidateSurfaceOverCoverSmoothTransitionEnabled);
+    assert(report.candidateSurfaceOverCoverSmoothingPointCount == 0);
+    assert(report.candidateSurfaceOverCoverSmoothingMaxDisplacement == 0.0);
+    assert(report.candidateSurfaceOverCoverBodyBridgeTriangleCount == 0);
     assert(report.candidateSurfaceOverCoverRingPointCount == 0);
     assert(report.candidateSurfaceOverCoverRingClosureMaxGap == 0.0);
     assert(report.candidateSurfaceOverCoverRingClosureMaxRatio == 0.0);
@@ -1001,6 +1066,7 @@ void run_stp_sampled_fitting_mesh_tests() {
     test_candidate_surface_over_cover_reverse_traversal_keeps_all_sides_outward();
     test_candidate_surface_over_cover_respects_configured_width();
     test_candidate_surface_over_cover_reports_long_triangle_diagnostics();
+    test_candidate_surface_over_cover_diagnostic_variants_report_flags();
     test_increased_div_increases_triangle_count();
     test_empty_candidate_fails();
     test_output_bbox_covers_candidate();

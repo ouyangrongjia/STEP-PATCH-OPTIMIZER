@@ -71,6 +71,10 @@ struct Options {
     double candidateSurfaceOverCoverWidth = 0.25;
     int candidateSurfaceOverCoverRingCount = 3;
     double candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
+    int candidateSurfaceOverCoverDisableOuterRings = 0;
+    bool candidateSurfaceOverCoverSmoothStrip = false;
+    spo::CandidateSurfaceOverCoverBodyBridgeMode candidateSurfaceOverCoverBodyBridgeMode =
+        spo::CandidateSurfaceOverCoverBodyBridgeMode::Normal;
     bool geomagicSharpenContours = false;
     bool allowHighRiskPatchPreview = false;
     bool strictOriginalBoundaryRetrim = false;
@@ -101,6 +105,36 @@ std::string path_to_string(const std::filesystem::path& path) {
 QString path_to_qstring(const std::filesystem::path& path) {
     const auto utf8 = path.generic_u8string();
     return QString::fromUtf8(reinterpret_cast<const char*>(utf8.c_str()), static_cast<qsizetype>(utf8.size()));
+}
+
+const char* body_bridge_mode_name(spo::CandidateSurfaceOverCoverBodyBridgeMode mode) {
+    switch (mode) {
+    case spo::CandidateSurfaceOverCoverBodyBridgeMode::None:
+        return "none";
+    case spo::CandidateSurfaceOverCoverBodyBridgeMode::Smooth:
+        return "smooth";
+    case spo::CandidateSurfaceOverCoverBodyBridgeMode::Normal:
+    default:
+        return "normal";
+    }
+}
+
+bool parse_body_bridge_mode(
+    const std::string& value,
+    spo::CandidateSurfaceOverCoverBodyBridgeMode& mode) {
+    if (value == "normal") {
+        mode = spo::CandidateSurfaceOverCoverBodyBridgeMode::Normal;
+        return true;
+    }
+    if (value == "none") {
+        mode = spo::CandidateSurfaceOverCoverBodyBridgeMode::None;
+        return true;
+    }
+    if (value == "smooth") {
+        mode = spo::CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
+        return true;
+    }
+    return false;
 }
 
 QJsonArray edge_ids_to_json(const std::vector<spo::EdgeId>& edgeIds) {
@@ -217,7 +251,13 @@ void print_usage() {
         << "  --candidate-over-cover-width <value>     Candidate over-cover width, default 0.25.\n"
         << "  --candidate-over-cover-rings <n>         Candidate over-cover ring count, default 3.\n"
         << "  --candidate-over-cover-miter-max-scale <v> Candidate over-cover miter cap scale, default 1.25.\n"
+        << "  --candidate-over-cover-disable-outer-rings <n> Omit N outer generated rings from diagnostic STL emission.\n"
+        << "  --candidate-over-cover-smooth-strip      Smooth boundary/over-cover strip positions for diagnostics.\n"
+        << "  --candidate-over-cover-smooth-transition Use a smoothed body-to-ring bridge for diagnostics.\n"
+        << "  --candidate-over-cover-disable-body-bridge Skip the body-to-boundary bridge for diagnostics.\n"
+        << "  --candidate-over-cover-body-bridge-mode <normal|none|smooth> Diagnostic body bridge mode.\n"
         << "  --geomagic-sharpen-contours              Enable Geomagic sharpenConstrainedContours.\n"
+        << "  --geomagic-no-sharpen-contours           Explicitly disable Geomagic sharpenConstrainedContours.\n"
         << "  --allow-high-risk-patch-preview          Continue past patch preview high-risk warnings for experiments.\n"
         << "  --strict-original-boundary-retrim        Rebuild original-boundary pcurves on the selected patch surface for experiments.\n";
 }
@@ -422,8 +462,33 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.candidateSurfaceOverCoverCornerMiterMaxScale = std::stod(value);
+        } else if (arg == "--candidate-over-cover-disable-outer-rings") {
+            const auto* value = requireValue("--candidate-over-cover-disable-outer-rings");
+            if (value == nullptr) {
+                return false;
+            }
+            options.candidateSurfaceOverCoverDisableOuterRings = std::stoi(value);
+        } else if (arg == "--candidate-over-cover-smooth-strip") {
+            options.candidateSurfaceOverCoverSmoothStrip = true;
+        } else if (arg == "--candidate-over-cover-smooth-transition") {
+            options.candidateSurfaceOverCoverBodyBridgeMode =
+                spo::CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
+        } else if (arg == "--candidate-over-cover-disable-body-bridge") {
+            options.candidateSurfaceOverCoverBodyBridgeMode =
+                spo::CandidateSurfaceOverCoverBodyBridgeMode::None;
+        } else if (arg == "--candidate-over-cover-body-bridge-mode") {
+            const auto* value = requireValue("--candidate-over-cover-body-bridge-mode");
+            if (value == nullptr) {
+                return false;
+            }
+            if (!parse_body_bridge_mode(value, options.candidateSurfaceOverCoverBodyBridgeMode)) {
+                std::cerr << "--candidate-over-cover-body-bridge-mode must be normal, none, or smooth.\n";
+                return false;
+            }
         } else if (arg == "--geomagic-sharpen-contours") {
             options.geomagicSharpenContours = true;
+        } else if (arg == "--geomagic-no-sharpen-contours") {
+            options.geomagicSharpenContours = false;
         } else if (arg == "--allow-high-risk-patch-preview") {
             options.allowHighRiskPatchPreview = true;
         } else if (arg == "--strict-original-boundary-retrim") {
@@ -762,6 +827,16 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("candidate_surface_over_cover_max_triangle_edge_length", report.candidateSurfaceOverCoverMaxTriangleEdgeLength);
     object.insert("candidate_surface_over_cover_source_face_count", report.candidateSurfaceOverCoverSourceFaceCount);
     object.insert("candidate_surface_over_cover_direction_flip_count", report.candidateSurfaceOverCoverDirectionFlipCount);
+    object.insert("candidate_surface_over_cover_generated_ring_count", report.candidateSurfaceOverCoverGeneratedRingCount);
+    object.insert("candidate_surface_over_cover_emitted_ring_count", report.candidateSurfaceOverCoverEmittedRingCount);
+    object.insert("candidate_surface_over_cover_disabled_outer_ring_count", report.candidateSurfaceOverCoverDisabledOuterRingCount);
+    object.insert("candidate_surface_over_cover_emitted_sample_count", report.candidateSurfaceOverCoverEmittedSampleCount);
+    object.insert("candidate_surface_over_cover_body_bridge_mode", QString::fromStdString(report.candidateSurfaceOverCoverBodyBridgeMode));
+    object.insert("candidate_surface_over_cover_smooth_strip_enabled", report.candidateSurfaceOverCoverSmoothStripEnabled);
+    object.insert("candidate_surface_over_cover_smooth_transition_enabled", report.candidateSurfaceOverCoverSmoothTransitionEnabled);
+    object.insert("candidate_surface_over_cover_smoothing_point_count", report.candidateSurfaceOverCoverSmoothingPointCount);
+    object.insert("candidate_surface_over_cover_smoothing_max_displacement", report.candidateSurfaceOverCoverSmoothingMaxDisplacement);
+    object.insert("candidate_surface_over_cover_body_bridge_triangle_count", report.candidateSurfaceOverCoverBodyBridgeTriangleCount);
     object.insert("candidate_surface_over_cover_body_bridge_rejected_count", report.candidateSurfaceOverCoverBodyBridgeRejectedCount);
     object.insert("candidate_surface_over_cover_boundary_to_ring_rejected_count", report.candidateSurfaceOverCoverBoundaryToRingRejectedCount);
     object.insert("candidate_surface_over_cover_ring_to_ring_rejected_count", report.candidateSurfaceOverCoverRingToRingRejectedCount);
@@ -816,6 +891,88 @@ std::filesystem::path over_cover_worst_points_obj_path(const Options& options) {
     return over_cover_diagnostic_dir(options) / "overcover_worst_points.obj";
 }
 
+std::filesystem::path over_cover_experiment_summary_json_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_experiment_summary.json";
+}
+
+std::filesystem::path over_cover_experiment_summary_csv_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_experiment_summary.csv";
+}
+
+std::filesystem::path probe_artifacts_dir(const Options& options) {
+    return options.outputDir / "probe_artifacts";
+}
+
+std::filesystem::path probe_artifact_path(
+    const Options& options,
+    const std::filesystem::path& sourcePath,
+    const char* fallbackName) {
+    if (!sourcePath.filename().empty()) {
+        return probe_artifacts_dir(options) / sourcePath.filename();
+    }
+    return probe_artifacts_dir(options) / fallbackName;
+}
+
+bool copy_file_if_exists(
+    const std::filesystem::path& source,
+    const std::filesystem::path& destination) {
+    if (source.empty() || !std::filesystem::exists(source)) {
+        return false;
+    }
+    std::error_code error;
+    std::filesystem::create_directories(destination.parent_path(), error);
+    if (error) {
+        return false;
+    }
+    std::filesystem::copy_file(
+        source,
+        destination,
+        std::filesystem::copy_options::overwrite_existing,
+        error);
+    return !error;
+}
+
+QJsonObject copied_artifact_to_json(
+    const std::filesystem::path& source,
+    const std::filesystem::path& local) {
+    QJsonObject object;
+    object.insert("source", path_to_qstring(source));
+    object.insert("path", path_to_qstring(local));
+    object.insert("source_exists", !source.empty() && std::filesystem::exists(source));
+    object.insert("exists", !local.empty() && std::filesystem::exists(local));
+    return object;
+}
+
+QJsonObject probe_artifacts_to_json(
+    const Options& options,
+    const spo::StpSampledFittingReport& fitting,
+    const spo::GeomagicAutoSurfaceResult& geomagic,
+    const spo::PatchArtifactPaths& artifacts) {
+    const auto localStl = probe_artifact_path(options, fitting.outputPath, "fitting.stl");
+    const auto rawPatchSource = !geomagic.outputStepPath.empty()
+        ? geomagic.outputStepPath
+        : artifacts.patchStepPath;
+    const auto localRawPatch = probe_artifact_path(options, rawPatchSource, "raw_patch.stp");
+    const auto rawIgesSource = !geomagic.outputIgesPath.empty()
+        ? geomagic.outputIgesPath
+        : artifacts.patchIgesSidecarPath;
+    const auto localRawIges = probe_artifact_path(options, rawIgesSource, "raw_patch.igs");
+    const auto localFitLog = probe_artifact_path(options, geomagic.fitRegionLogPath, "geomagic_fit_region.log");
+
+    copy_file_if_exists(fitting.outputPath, localStl);
+    copy_file_if_exists(rawPatchSource, localRawPatch);
+    copy_file_if_exists(rawIgesSource, localRawIges);
+    copy_file_if_exists(geomagic.fitRegionLogPath, localFitLog);
+
+    QJsonObject object;
+    object.insert("directory", path_to_qstring(probe_artifacts_dir(options)));
+    object.insert("fitting_stl", copied_artifact_to_json(fitting.outputPath, localStl));
+    object.insert("raw_patch_step", copied_artifact_to_json(rawPatchSource, localRawPatch));
+    object.insert("raw_patch_iges", copied_artifact_to_json(rawIgesSource, localRawIges));
+    object.insert("fit_region_log", copied_artifact_to_json(geomagic.fitRegionLogPath, localFitLog));
+    return object;
+}
+
 QJsonObject over_cover_artifacts_to_json(const Options& options) {
     QJsonObject object;
     object.insert("directory", path_to_qstring(over_cover_diagnostic_dir(options)));
@@ -825,6 +982,8 @@ QJsonObject over_cover_artifacts_to_json(const Options& options) {
     object.insert("overcover_rejected_boundary_to_ring_stl", path_to_qstring(over_cover_rejected_boundary_to_ring_stl_path(options)));
     object.insert("overcover_rejected_ring_to_ring_stl", path_to_qstring(over_cover_rejected_ring_to_ring_stl_path(options)));
     object.insert("overcover_worst_points_obj", path_to_qstring(over_cover_worst_points_obj_path(options)));
+    object.insert("overcover_experiment_summary_json", path_to_qstring(over_cover_experiment_summary_json_path(options)));
+    object.insert("overcover_experiment_summary_csv", path_to_qstring(over_cover_experiment_summary_csv_path(options)));
     return object;
 }
 
@@ -904,6 +1063,9 @@ bool write_over_cover_ring_diagnostics_csv(
 
     out << "ring_point_count,index_mismatch_count,direction_flip_count,"
         << "source_face_transition_count,ring_closure_max_gap,ring_closure_max_ratio,"
+        << "generated_ring_count,emitted_ring_count,disabled_outer_ring_count,"
+        << "emitted_sample_count,body_bridge_mode,smooth_strip_enabled,"
+        << "smooth_transition_enabled,smoothing_point_count,smoothing_max_displacement,"
         << "edge_id,source_face_id,sample_count,first_sample_index,last_sample_index\n";
     out << std::setprecision(17);
     if (report.candidateSurfaceOverCoverEdgeSourceDistribution.empty()) {
@@ -913,6 +1075,16 @@ bool write_over_cover_ring_diagnostics_csv(
             << report.candidateSurfaceOverCoverSourceFaceTransitionCount << ','
             << report.candidateSurfaceOverCoverRingClosureMaxGap << ','
             << report.candidateSurfaceOverCoverRingClosureMaxRatio
+            << ','
+            << report.candidateSurfaceOverCoverGeneratedRingCount << ','
+            << report.candidateSurfaceOverCoverEmittedRingCount << ','
+            << report.candidateSurfaceOverCoverDisabledOuterRingCount << ','
+            << report.candidateSurfaceOverCoverEmittedSampleCount << ','
+            << csv_escape(report.candidateSurfaceOverCoverBodyBridgeMode) << ','
+            << (report.candidateSurfaceOverCoverSmoothStripEnabled ? 1 : 0) << ','
+            << (report.candidateSurfaceOverCoverSmoothTransitionEnabled ? 1 : 0) << ','
+            << report.candidateSurfaceOverCoverSmoothingPointCount << ','
+            << report.candidateSurfaceOverCoverSmoothingMaxDisplacement
             << ",-1,-1,0,-1,-1\n";
         return true;
     }
@@ -924,6 +1096,15 @@ bool write_over_cover_ring_diagnostics_csv(
             << report.candidateSurfaceOverCoverSourceFaceTransitionCount << ','
             << report.candidateSurfaceOverCoverRingClosureMaxGap << ','
             << report.candidateSurfaceOverCoverRingClosureMaxRatio << ','
+            << report.candidateSurfaceOverCoverGeneratedRingCount << ','
+            << report.candidateSurfaceOverCoverEmittedRingCount << ','
+            << report.candidateSurfaceOverCoverDisabledOuterRingCount << ','
+            << report.candidateSurfaceOverCoverEmittedSampleCount << ','
+            << csv_escape(report.candidateSurfaceOverCoverBodyBridgeMode) << ','
+            << (report.candidateSurfaceOverCoverSmoothStripEnabled ? 1 : 0) << ','
+            << (report.candidateSurfaceOverCoverSmoothTransitionEnabled ? 1 : 0) << ','
+            << report.candidateSurfaceOverCoverSmoothingPointCount << ','
+            << report.candidateSurfaceOverCoverSmoothingMaxDisplacement << ','
             << edge.edgeId << ','
             << edge.sourceFaceId << ','
             << edge.sampleCount << ','
@@ -1016,6 +1197,147 @@ void write_over_cover_diagnostic_artifacts(
         !error.empty()) {
         report.warningMessage += report.warningMessage.empty() ? error : " | " + error;
     }
+}
+
+std::string over_cover_experiment_name(const Options& options) {
+    std::string name = options.enableCandidateSurfaceOverCover
+        ? "conservative"
+        : "candidate_over_cover_disabled";
+    if (options.candidateSurfaceOverCoverDisableOuterRings > 0) {
+        name += "_minus_outer_";
+        name += std::to_string(options.candidateSurfaceOverCoverDisableOuterRings);
+    }
+    if (options.candidateSurfaceOverCoverSmoothStrip) {
+        name += "_smooth_strip";
+    }
+    const auto bridgeMode = body_bridge_mode_name(options.candidateSurfaceOverCoverBodyBridgeMode);
+    if (std::string(bridgeMode) != "normal") {
+        name += "_body_bridge_";
+        name += bridgeMode;
+    }
+    name += options.geomagicSharpenContours ? "_sharpen_contours" : "_no_sharpen_contours";
+    return name;
+}
+
+QJsonObject over_cover_experiment_summary_to_json(
+    const Options& options,
+    const std::string& stage,
+    const spo::StpSampledFittingReport& fitting,
+    const spo::GeomagicAutoSurfaceResult& geomagic,
+    const spo::PatchPreviewReport& preview,
+    const spo::CommercialCadQualityGateReport& quality,
+    const spo::PatchArtifactPaths& artifacts) {
+    QJsonObject object;
+    object.insert("experiment_name", QString::fromStdString(over_cover_experiment_name(options)));
+    object.insert("stage", QString::fromStdString(stage));
+    object.insert("source_step", path_to_qstring(options.sourceStep));
+    object.insert("candidate_id", options.candidateId);
+    object.insert("input_stl_path", path_to_qstring(fitting.outputPath));
+    object.insert("raw_patch_path", path_to_qstring(geomagic.outputStepPath));
+    object.insert("normalized_patch_path", path_to_qstring(artifacts.patchStepPath));
+    object.insert("patch_iges_path", path_to_qstring(artifacts.patchIgesSidecarPath));
+    object.insert("fit_region_log_path", path_to_qstring(geomagic.fitRegionLogPath));
+    object.insert("geomagic_sharpen_contours", options.geomagicSharpenContours);
+    object.insert("candidate_surface_over_cover_disable_outer_rings", options.candidateSurfaceOverCoverDisableOuterRings);
+    object.insert("candidate_surface_over_cover_smooth_strip", options.candidateSurfaceOverCoverSmoothStrip);
+    object.insert("candidate_surface_over_cover_body_bridge_mode", body_bridge_mode_name(options.candidateSurfaceOverCoverBodyBridgeMode));
+    object.insert("output_triangle_count", fitting.outputTriangleCount);
+    object.insert("candidate_surface_over_cover_triangle_count", fitting.candidateSurfaceOverCoverTriangleCount);
+    object.insert("candidate_surface_over_cover_rejected_count", fitting.candidateSurfaceOverCoverRejectedCount);
+    object.insert("candidate_surface_over_cover_boundary_to_ring_rejected_count", fitting.candidateSurfaceOverCoverBoundaryToRingRejectedCount);
+    object.insert("candidate_surface_over_cover_ring_to_ring_rejected_count", fitting.candidateSurfaceOverCoverRingToRingRejectedCount);
+    object.insert("candidate_surface_over_cover_long_triangle_count", fitting.candidateSurfaceOverCoverLongTriangleCount);
+    object.insert("candidate_surface_over_cover_generated_ring_count", fitting.candidateSurfaceOverCoverGeneratedRingCount);
+    object.insert("candidate_surface_over_cover_emitted_ring_count", fitting.candidateSurfaceOverCoverEmittedRingCount);
+    object.insert("candidate_surface_over_cover_ring_closure_max_gap", fitting.candidateSurfaceOverCoverRingClosureMaxGap);
+    object.insert("candidate_surface_over_cover_ring_closure_max_ratio", fitting.candidateSurfaceOverCoverRingClosureMaxRatio);
+    object.insert("candidate_surface_over_cover_index_mismatch_count", fitting.candidateSurfaceOverCoverIndexMismatchCount);
+    object.insert("candidate_surface_over_cover_source_face_transition_count", fitting.candidateSurfaceOverCoverSourceFaceTransitionCount);
+    object.insert("candidate_surface_over_cover_edge_source_distribution_count", fitting.candidateSurfaceOverCoverEdgeSourceDistributionCount);
+    object.insert("patch_face_count", preview.patchFaceCount);
+    object.insert("patch_edge_count", preview.patchEdgeCount);
+    object.insert("patch_preview_high_risk", preview.highRisk);
+    object.insert("boundary_max_distance", quality.boundary.maxDistance);
+    object.insert("boundary_p95_distance", quality.boundary.p95Distance);
+    object.insert("corner_max_distance", quality.cornerAnchors.maxDistance);
+    object.insert("corner_p95_distance", quality.cornerAnchors.p95Distance);
+    object.insert("seam_max_abs_signed_normal_offset", quality.seamContinuity.maxAbsSignedNormalOffset);
+    object.insert("seam_p95_abs_signed_normal_offset", quality.seamContinuity.p95AbsSignedNormalOffset);
+    return object;
+}
+
+void write_over_cover_experiment_summary_artifacts(
+    const Options& options,
+    const std::string& stage,
+    const spo::StpSampledFittingReport& fitting,
+    const spo::GeomagicAutoSurfaceResult& geomagic,
+    const spo::PatchPreviewReport& preview,
+    const spo::CommercialCadQualityGateReport& quality,
+    const spo::PatchArtifactPaths& artifacts) {
+    if (!fitting.candidateSurfaceOverCoverEnabled) {
+        return;
+    }
+
+    std::filesystem::create_directories(over_cover_diagnostic_dir(options));
+    const auto summary = over_cover_experiment_summary_to_json(
+        options,
+        stage,
+        fitting,
+        geomagic,
+        preview,
+        quality,
+        artifacts);
+
+    QFile jsonFile(path_to_qstring(over_cover_experiment_summary_json_path(options)));
+    if (jsonFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        const QJsonDocument document(summary);
+        jsonFile.write(document.toJson(QJsonDocument::Indented));
+    }
+
+    std::ofstream csv(
+        over_cover_experiment_summary_csv_path(options),
+        std::ios::binary | std::ios::trunc);
+    if (!csv.good()) {
+        return;
+    }
+    csv << "experiment_name,stage,input_stl_path,raw_patch_path,normalized_patch_path,"
+        << "patch_face_count,patch_edge_count,high_risk,geomagic_sharpen_contours,"
+        << "disable_outer_rings,body_bridge_mode,smooth_strip,output_triangle_count,"
+        << "candidate_surface_over_cover_triangle_count,rejected_count,"
+        << "boundary_to_ring_rejected_count,ring_to_ring_rejected_count,long_triangle_count,"
+        << "ring_closure_max_gap,ring_closure_max_ratio,index_mismatch_count,"
+        << "source_face_transition_count,edge_source_distribution_count,boundary_max,"
+        << "boundary_p95,corner_max,corner_p95,seam_max_abs,seam_p95_abs\n";
+    csv << std::setprecision(17)
+        << csv_escape(over_cover_experiment_name(options)) << ','
+        << csv_escape(stage) << ','
+        << csv_escape(path_to_string(fitting.outputPath)) << ','
+        << csv_escape(path_to_string(geomagic.outputStepPath)) << ','
+        << csv_escape(path_to_string(artifacts.patchStepPath)) << ','
+        << preview.patchFaceCount << ','
+        << preview.patchEdgeCount << ','
+        << (preview.highRisk ? 1 : 0) << ','
+        << (options.geomagicSharpenContours ? 1 : 0) << ','
+        << options.candidateSurfaceOverCoverDisableOuterRings << ','
+        << csv_escape(body_bridge_mode_name(options.candidateSurfaceOverCoverBodyBridgeMode)) << ','
+        << (options.candidateSurfaceOverCoverSmoothStrip ? 1 : 0) << ','
+        << fitting.outputTriangleCount << ','
+        << fitting.candidateSurfaceOverCoverTriangleCount << ','
+        << fitting.candidateSurfaceOverCoverRejectedCount << ','
+        << fitting.candidateSurfaceOverCoverBoundaryToRingRejectedCount << ','
+        << fitting.candidateSurfaceOverCoverRingToRingRejectedCount << ','
+        << fitting.candidateSurfaceOverCoverLongTriangleCount << ','
+        << fitting.candidateSurfaceOverCoverRingClosureMaxGap << ','
+        << fitting.candidateSurfaceOverCoverRingClosureMaxRatio << ','
+        << fitting.candidateSurfaceOverCoverIndexMismatchCount << ','
+        << fitting.candidateSurfaceOverCoverSourceFaceTransitionCount << ','
+        << fitting.candidateSurfaceOverCoverEdgeSourceDistributionCount << ','
+        << quality.boundary.maxDistance << ','
+        << quality.boundary.p95Distance << ','
+        << quality.cornerAnchors.maxDistance << ','
+        << quality.cornerAnchors.p95Distance << ','
+        << quality.seamContinuity.maxAbsSignedNormalOffset << ','
+        << quality.seamContinuity.p95AbsSignedNormalOffset << '\n';
 }
 
 QJsonObject geomagic_to_json(const spo::GeomagicAutoSurfaceResult& result) {
@@ -1475,6 +1797,10 @@ bool write_report(
     root.insert("candidate_id", options.candidateId);
     root.insert("candidate_selection_mode", options.autoCandidateId ? "auto" : "explicit");
     root.insert("geomagic_sharpen_contours", options.geomagicSharpenContours);
+    root.insert("candidate_surface_over_cover_experiment_name", QString::fromStdString(over_cover_experiment_name(options)));
+    root.insert("candidate_surface_over_cover_disable_outer_rings", options.candidateSurfaceOverCoverDisableOuterRings);
+    root.insert("candidate_surface_over_cover_smooth_strip", options.candidateSurfaceOverCoverSmoothStrip);
+    root.insert("candidate_surface_over_cover_body_bridge_mode", body_bridge_mode_name(options.candidateSurfaceOverCoverBodyBridgeMode));
     root.insert("generated_candidate_count", options.generatedCandidateCount);
     root.insert("output_dir", path_to_qstring(options.outputDir));
     root.insert("report_path", path_to_qstring(options.reportPath));
@@ -1485,6 +1811,7 @@ bool write_report(
     root.insert("fit_region_log_path", path_object(artifacts.fitRegionLogPath));
     root.insert("stp_sampled_fitting", fitting_to_json(fitting));
     root.insert("candidate_surface_over_cover_diagnostic_artifacts", over_cover_artifacts_to_json(options));
+    root.insert("probe_artifacts", probe_artifacts_to_json(options, fitting, geomagic, artifacts));
     root.insert("geomagic", geomagic_to_json(geomagic));
     root.insert("patch_preview", preview_to_json(preview));
     root.insert("patch_apply", apply_to_json(apply));
@@ -1515,6 +1842,15 @@ bool write_report(
         }
         return false;
     }
+
+    write_over_cover_experiment_summary_artifacts(
+        options,
+        stage,
+        fitting,
+        geomagic,
+        preview,
+        quality,
+        artifacts);
 
     if (errorMessage != nullptr) {
         errorMessage->clear();
@@ -1626,6 +1962,12 @@ int main(int argc, char* argv[]) {
     samplingOptions.candidateSurfaceOverCoverRingCount = options.candidateSurfaceOverCoverRingCount;
     samplingOptions.candidateSurfaceOverCoverCornerMiterMaxScale =
         options.candidateSurfaceOverCoverCornerMiterMaxScale;
+    samplingOptions.candidateSurfaceOverCoverDisableOuterRings =
+        options.candidateSurfaceOverCoverDisableOuterRings;
+    samplingOptions.candidateSurfaceOverCoverSmoothStrip =
+        options.candidateSurfaceOverCoverSmoothStrip;
+    samplingOptions.candidateSurfaceOverCoverBodyBridgeMode =
+        options.candidateSurfaceOverCoverBodyBridgeMode;
     fittingReport = spo::StpSampledFittingMeshBuilder().build(
         document,
         *candidate,

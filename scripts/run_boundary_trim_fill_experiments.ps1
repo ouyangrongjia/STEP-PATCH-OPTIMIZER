@@ -14,6 +14,14 @@ param(
     [double]$CandidateOverCoverWidth = 0.25,
     [int]$CandidateOverCoverRings = 3,
     [double]$CandidateOverCoverMiterMaxScale = 1.25,
+    [int]$CandidateOverCoverDisableOuterRings = 0,
+    [ValidateSet("normal", "none", "smooth")]
+    [string]$CandidateOverCoverBodyBridgeMode = "normal",
+    [switch]$CandidateOverCoverSmoothStrip,
+    [switch]$CandidateOverCoverSmoothTransition,
+    [switch]$CandidateOverCoverDisableBodyBridge,
+    [switch]$GeomagicSharpenContours,
+    [switch]$GeomagicNoSharpenContours,
     [switch]$EnableAuxiliarySupportCollar,
     [int]$SupportCollarSamples = 64,
     [double]$SupportCollarWidth = 0.05,
@@ -269,6 +277,22 @@ function Copy-RunArtifactIfNonEmpty {
     }
 
     return Copy-RunArtifactIfAvailable -SourcePath $SourcePath -DestinationPath $DestinationPath
+}
+
+function Copy-RunDirectoryIfAvailable {
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath
+    )
+
+    if (-not $SourcePath -or -not (Test-Path -LiteralPath $SourcePath -PathType Container)) {
+        return ""
+    }
+
+    New-Item -ItemType Directory -Force -Path $DestinationPath | Out-Null
+    Get-ChildItem -LiteralPath $SourcePath -Force |
+        Copy-Item -Destination $DestinationPath -Recurse -Force
+    return $DestinationPath
 }
 
 function Convert-Route2SummaryCell {
@@ -1000,6 +1024,13 @@ $result = [ordered]@{
         candidate_over_cover_width = $CandidateOverCoverWidth
         candidate_over_cover_rings = $CandidateOverCoverRings
         candidate_over_cover_miter_max_scale = $CandidateOverCoverMiterMaxScale
+        candidate_over_cover_disable_outer_rings = $CandidateOverCoverDisableOuterRings
+        candidate_over_cover_body_bridge_mode = $CandidateOverCoverBodyBridgeMode
+        candidate_over_cover_smooth_strip = [bool]$CandidateOverCoverSmoothStrip
+        candidate_over_cover_smooth_transition = [bool]$CandidateOverCoverSmoothTransition
+        candidate_over_cover_disable_body_bridge = [bool]$CandidateOverCoverDisableBodyBridge
+        geomagic_sharpen_contours = [bool]$GeomagicSharpenContours
+        geomagic_no_sharpen_contours = [bool]$GeomagicNoSharpenContours
         enable_auxiliary_support_collar = [bool]$EnableAuxiliarySupportCollar
         support_collar_samples = $SupportCollarSamples
         support_collar_width = $SupportCollarWidth
@@ -1146,6 +1177,27 @@ if ($EnableAuxiliarySupportCollar) {
     )
 }
 
+$route2OverCoverDiagnosticArgs = @()
+if ($CandidateOverCoverDisableOuterRings -gt 0) {
+    $route2OverCoverDiagnosticArgs += @("--candidate-over-cover-disable-outer-rings", "$CandidateOverCoverDisableOuterRings")
+}
+if ($CandidateOverCoverSmoothStrip) {
+    $route2OverCoverDiagnosticArgs += @("--candidate-over-cover-smooth-strip")
+}
+if ($CandidateOverCoverDisableBodyBridge) {
+    $route2OverCoverDiagnosticArgs += @("--candidate-over-cover-disable-body-bridge")
+} elseif ($CandidateOverCoverSmoothTransition) {
+    $route2OverCoverDiagnosticArgs += @("--candidate-over-cover-smooth-transition")
+} elseif ($CandidateOverCoverBodyBridgeMode -ne "normal") {
+    $route2OverCoverDiagnosticArgs += @("--candidate-over-cover-body-bridge-mode", $CandidateOverCoverBodyBridgeMode)
+}
+if ($GeomagicSharpenContours) {
+    $route2OverCoverDiagnosticArgs += @("--geomagic-sharpen-contours")
+}
+if ($GeomagicNoSharpenContours) {
+    $route2OverCoverDiagnosticArgs += @("--geomagic-no-sharpen-contours")
+}
+
 if (Test-Path -LiteralPath $WrapCore) {
     $route2GenerationArgs = @(
         "--source-step", $SourceStep,
@@ -1162,6 +1214,7 @@ if (Test-Path -LiteralPath $WrapCore) {
         "--candidate-over-cover-rings", "$CandidateOverCoverRings",
         "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
     )
+    $route2GenerationArgs += $route2OverCoverDiagnosticArgs
     $route2GenerationArgs += $route2SupportCollarArgs
     $route2GenerationArgs += @(
         "--allow-high-risk-patch-preview",
@@ -1257,6 +1310,7 @@ if (Test-Path -LiteralPath $route2NormalizedPatch) {
         "--candidate-over-cover-rings", "$CandidateOverCoverRings",
         "--candidate-over-cover-miter-max-scale", "$CandidateOverCoverMiterMaxScale"
     )
+    $route2ApplyArgs += $route2OverCoverDiagnosticArgs
     $route2ApplyArgs += $route2SupportCollarArgs
     $route2ApplyArgs += @(
         "--allow-high-risk-patch-preview",
@@ -1384,6 +1438,15 @@ if ($route2BaselineGeneration -and $route2BaselineGeneration.fit_region_log_path
 $route2FitRegionLogLocal = Copy-RunArtifactIfAvailable `
     -SourcePath $route2FitRegionLog `
     -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_fit_region.log")
+$route2OverCoverDiagnostics = ""
+if ($route2BaselineGeneration -and
+    $route2BaselineGeneration.candidate_surface_over_cover_diagnostic_artifacts -and
+    $route2BaselineGeneration.candidate_surface_over_cover_diagnostic_artifacts.directory) {
+    $route2OverCoverDiagnostics = [string]$route2BaselineGeneration.candidate_surface_over_cover_diagnostic_artifacts.directory
+}
+$route2OverCoverDiagnosticsLocal = Copy-RunDirectoryIfAvailable `
+    -SourcePath $route2OverCoverDiagnostics `
+    -DestinationPath (Join-Path $route2ArtifactsDir "candidate_surface_over_cover_diagnostics")
 $route2GeomagicStdoutLocal = ""
 $route2GeomagicStderrLocal = ""
 if ($route2GenRun) {
@@ -1428,6 +1491,7 @@ $route2SummaryItems = @(
     [ordered]@{ role = "Normalized patch STP"; required = $true; exists = [bool]$route2NormalizedPatchLocal; path = $route2NormalizedPatchLocal; source = "generated in this run"; note = "Millimeter normalized patch used by strict apply and Creo sewing." },
     [ordered]@{ role = "base_removed_candidate STP"; required = $true; exists = [bool]$baseRemovedLocal; path = $baseRemovedLocal; source = "generated in this run"; note = "Original candidate removed from the source STEP." },
     [ordered]@{ role = "Geomagic fit-region log"; required = $true; exists = [bool]$route2FitRegionLogLocal; path = $route2FitRegionLogLocal; source = $route2FitRegionLog; note = "Geomagic fit-region script log for the successful raw patch export." },
+    [ordered]@{ role = "Candidate surface over-cover diagnostics"; required = $false; exists = [bool]$route2OverCoverDiagnosticsLocal; path = $route2OverCoverDiagnosticsLocal; source = $route2OverCoverDiagnostics; note = "CSV/STL/JSON diagnostics for emitted over-cover rings and rejected diagnostic triangles." },
     [ordered]@{ role = "Geomagic generation stdout"; required = $true; exists = [bool]$route2GeomagicStdoutLocal; path = $route2GeomagicStdoutLocal; source = [string]$route2GenRun.stdout_path; note = "Route 2 Geomagic generation subprocess stdout." },
     [ordered]@{ role = "Geomagic generation stderr"; required = $false; exists = [bool]$route2GeomagicStderrLocal; path = $route2GeomagicStderrLocal; source = [string]$route2GenRun.stderr_path; note = "Copied only when non-empty." },
     [ordered]@{ role = "Geomagic command record"; required = $true; exists = $true; path = $geomagicRunMarkdown; source = "route2_fresh_geomagic_generation command"; note = "Actual successful raw patch generation command and parameters." },
@@ -1439,6 +1503,10 @@ $result.route2_artifacts = [ordered]@{
     directory = $route2ArtifactsDir
     summary = $route2SummaryFiles.markdown
     geomagic_run = Get-FileEvidence -PathValue $geomagicRunMarkdown
+    candidate_surface_over_cover_diagnostics = [ordered]@{
+        path = $route2OverCoverDiagnosticsLocal
+        exists = [bool]($route2OverCoverDiagnosticsLocal -and (Test-Path -LiteralPath $route2OverCoverDiagnosticsLocal -PathType Container))
+    }
 }
 $result.routes.route2_expanded_strict_trim.route2_artifacts = $result.route2_artifacts
 $result.routes.route2_expanded_strict_trim.source_files.crop_stl_local = Get-FileEvidence -PathValue $route2CropStlLocal

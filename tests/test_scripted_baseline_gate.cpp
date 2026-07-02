@@ -77,7 +77,13 @@ void test_scripted_baseline_gate_is_not_hardcoded_to_one_sample() {
     assert(script.find("--b2-corner-safe-support-collar") != std::string::npos);
     assert(script.find("--adaptive-support-collar-width") != std::string::npos);
     assert(script.find("-SharpenContours") != std::string::npos);
+    assert(script.find("NoSharpenContours") != std::string::npos);
     assert(script.find("-RealGeomagic") != std::string::npos);
+    assert(script.find("CandidateOverCoverDisableOuterRings") != std::string::npos);
+    assert(script.find("CandidateOverCoverBodyBridgeMode") != std::string::npos);
+    assert(script.find("CandidateOverCoverSmoothStrip") != std::string::npos);
+    assert(script.find("CandidateOverCoverSmoothTransition") != std::string::npos);
+    assert(script.find("CandidateOverCoverDisableBodyBridge") != std::string::npos);
     assert(script.find("--candidate-id") != std::string::npos);
     assert(script.find("candidate_0179") == std::string::npos);
     assert(script.find("03_") == std::string::npos);
@@ -126,12 +132,26 @@ void test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts
     assert(source.find("candidate_surface_over_cover_source_face_transition_count") != std::string::npos);
     assert(source.find("candidate_surface_over_cover_edge_source_distribution") != std::string::npos);
     assert(source.find("candidate_surface_over_cover_max_normal_leakage_edge_id") != std::string::npos);
+    assert(source.find("--candidate-over-cover-disable-outer-rings") != std::string::npos);
+    assert(source.find("--candidate-over-cover-body-bridge-mode") != std::string::npos);
+    assert(source.find("--candidate-over-cover-disable-body-bridge") != std::string::npos);
+    assert(source.find("--candidate-over-cover-smooth-transition") != std::string::npos);
+    assert(source.find("--candidate-over-cover-smooth-strip") != std::string::npos);
+    assert(source.find("--geomagic-no-sharpen-contours") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_emitted_ring_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_body_bridge_mode") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_body_bridge_triangle_count") != std::string::npos);
     assert(source.find("overcover_rejections.csv") != std::string::npos);
     assert(source.find("overcover_ring_diagnostics.csv") != std::string::npos);
     assert(source.find("overcover_rejected_body_bridge.stl") != std::string::npos);
     assert(source.find("overcover_rejected_boundary_to_ring.stl") != std::string::npos);
     assert(source.find("overcover_rejected_ring_to_ring.stl") != std::string::npos);
     assert(source.find("overcover_worst_points.obj") != std::string::npos);
+    assert(source.find("overcover_experiment_summary.json") != std::string::npos);
+    assert(source.find("overcover_experiment_summary.csv") != std::string::npos);
+    assert(source.find("probe_artifacts") != std::string::npos);
+    assert(source.find("raw_patch_step") != std::string::npos);
+    assert(source.find("fitting_stl") != std::string::npos);
 }
 
 void test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields() {
@@ -141,6 +161,7 @@ void test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields() {
     assert(source.find("--b2-corner-safe-support-collar") != std::string::npos);
     assert(source.find("--support-collar-max-offset-scale") != std::string::npos);
     assert(source.find("--geomagic-sharpen-contours") != std::string::npos);
+    assert(source.find("--geomagic-no-sharpen-contours") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_corner_clamp_enabled") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_corner_clamp_count") != std::string::npos);
     assert(source.find("adjacent_face_support_collar_max_offset") != std::string::npos);
@@ -157,6 +178,12 @@ void test_route2_runner_uses_candidate_over_cover_as_default_expansion() {
     assert(script.find("--candidate-surface-over-cover") != std::string::npos);
     assert(script.find("--candidate-over-cover-width") != std::string::npos);
     assert(script.find("--candidate-over-cover-rings") != std::string::npos);
+    assert(script.find("--candidate-over-cover-disable-outer-rings") != std::string::npos);
+    assert(script.find("--candidate-over-cover-body-bridge-mode") != std::string::npos);
+    assert(script.find("--candidate-over-cover-smooth-strip") != std::string::npos);
+    assert(script.find("--candidate-over-cover-smooth-transition") != std::string::npos);
+    assert(script.find("--candidate-over-cover-disable-body-bridge") != std::string::npos);
+    assert(script.find("--geomagic-no-sharpen-contours") != std::string::npos);
     assert(script.find("EnableAuxiliarySupportCollar") != std::string::npos);
     assert(script.find("if ($EnableAuxiliarySupportCollar)") != std::string::npos);
     assert(script.find("--support-collar-width") != std::string::npos);
@@ -178,6 +205,7 @@ void test_route2_runner_exports_compact_artifact_directory() {
     assert(script.find("occt_applied_merged.stp") != std::string::npos);
     assert(script.find("creo_api_merged.stp") != std::string::npos);
     assert(script.find("geomagic_fit_region.log") != std::string::npos);
+    assert(script.find("candidate_surface_over_cover_diagnostics") != std::string::npos);
     assert(script.find("geomagic_generation.stdout.txt") != std::string::npos);
     assert(script.find("retained_route2_inputs") == std::string::npos);
     assert(script.find("artifact_inventory.json") == std::string::npos);

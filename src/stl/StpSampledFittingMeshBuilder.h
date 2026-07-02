@@ -11,6 +11,12 @@
 
 namespace spo {
 
+enum class CandidateSurfaceOverCoverBodyBridgeMode {
+    Normal,
+    None,
+    Smooth
+};
+
 struct StpSampledFittingOptions {
     int boundarySamplesPerEdge = 16;
     int minBoundarySamplesPerEdge = 8;
@@ -37,6 +43,10 @@ struct StpSampledFittingOptions {
     double candidateSurfaceOverCoverWidth = 0.25;
     int candidateSurfaceOverCoverRingCount = 3;
     double candidateSurfaceOverCoverCornerMiterMaxScale = 1.25;
+    int candidateSurfaceOverCoverDisableOuterRings = 0;
+    bool candidateSurfaceOverCoverSmoothStrip = false;
+    CandidateSurfaceOverCoverBodyBridgeMode candidateSurfaceOverCoverBodyBridgeMode =
+        CandidateSurfaceOverCoverBodyBridgeMode::Normal;
 };
 
 struct CandidateSurfaceOverCoverRejectionRecord {
@@ -147,6 +157,16 @@ struct StpSampledFittingReport {
     double candidateSurfaceOverCoverMaxTriangleEdgeLength = 0.0;
     int candidateSurfaceOverCoverSourceFaceCount = 0;
     int candidateSurfaceOverCoverDirectionFlipCount = 0;
+    int candidateSurfaceOverCoverGeneratedRingCount = 0;
+    int candidateSurfaceOverCoverEmittedRingCount = 0;
+    int candidateSurfaceOverCoverDisabledOuterRingCount = 0;
+    int candidateSurfaceOverCoverEmittedSampleCount = 0;
+    std::string candidateSurfaceOverCoverBodyBridgeMode = "normal";
+    bool candidateSurfaceOverCoverSmoothStripEnabled = false;
+    bool candidateSurfaceOverCoverSmoothTransitionEnabled = false;
+    int candidateSurfaceOverCoverSmoothingPointCount = 0;
+    double candidateSurfaceOverCoverSmoothingMaxDisplacement = 0.0;
+    int candidateSurfaceOverCoverBodyBridgeTriangleCount = 0;
     int candidateSurfaceOverCoverBodyBridgeRejectedCount = 0;
     int candidateSurfaceOverCoverBoundaryToRingRejectedCount = 0;
     int candidateSurfaceOverCoverRingToRingRejectedCount = 0;
