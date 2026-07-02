@@ -121,8 +121,13 @@ void test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts
     assert(source.find("candidate_surface_over_cover_ring_to_ring_rejected_count") != std::string::npos);
     assert(source.find("candidate_surface_over_cover_edge_build_rejected_count") != std::string::npos);
     assert(source.find("candidate_surface_over_cover_problem_edges") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_ring_point_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_index_mismatch_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_source_face_transition_count") != std::string::npos);
+    assert(source.find("candidate_surface_over_cover_edge_source_distribution") != std::string::npos);
     assert(source.find("candidate_surface_over_cover_max_normal_leakage_edge_id") != std::string::npos);
     assert(source.find("overcover_rejections.csv") != std::string::npos);
+    assert(source.find("overcover_ring_diagnostics.csv") != std::string::npos);
     assert(source.find("overcover_rejected_body_bridge.stl") != std::string::npos);
     assert(source.find("overcover_rejected_boundary_to_ring.stl") != std::string::npos);
     assert(source.find("overcover_rejected_ring_to_ring.stl") != std::string::npos);

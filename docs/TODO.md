@@ -87,6 +87,12 @@ adjacent-face support collar 只保留为窄辅助上下文
       overcover_rejected_boundary_to_ring.stl
       overcover_rejected_ring_to_ring.stl
       overcover_worst_points.obj
+12. 2026-07-02 本地基线恢复到 conservative candidate/source-face over-cover：
+    - 放弃 2026-07-01 global wire-ring 与 2026-07-02 direction-field follow-up 作为主实现。
+    - StpSampledFittingMeshBuilder 继续按 original boundary wire 的 edge 顺序逐 edge 采样；每条 edge 的 ring1/ring2/ring3 全部成功后才并入全局 ring。
+    - 不恢复旧 guard-band / adjacent collar 主路线，不改 Apply、PatchReplacementRepair、StrictTopologyGate。
+    - 保留并扩展诊断：ring closure、direction flip、index mismatch、source-face transition、edge/source face distribution。
+    - corner_baseline_probe 保留 overcover_rejections.csv / rejected STL / worst points OBJ，并新增 overcover_ring_diagnostics.csv。
 ```
 
 已验证：
@@ -108,10 +114,86 @@ candidate: 179
 previous baseline: data/baseline_runs/route2_support_collar_real_20260625_0020
 ```
 
-本轮输出目录：
+本轮复跑输出目录：
 
 ```text
-data/baseline_runs/route2_candidate_overcover_conservative_20260626_1810
+data/baseline_runs/route2_conservative_restored_baseline_20260702_134331/route2_artifacts/
+```
+
+历史对照基线目录：
+
+```text
+data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653/route2_artifacts/
+```
+
+后续每次测试都必须保留同类 route2_artifacts 角色文件：
+
+```text
+ROUTE2_SUMMARY.md
+GEOMAGIC_RUN.md
+crop_stl_candidate_<id>.stl
+raw_geomagic_crop_stp_candidate_<id>.stp
+normalized_patch_mm.stp
+base_removed_candidate.stp
+geomagic_fit_region.log
+geomagic_generation.stdout.txt
+geomagic_generation.stderr.txt
+creo_api_merged.stp（若生成）
+```
+
+本轮复跑结果：
+
+```text
+status=AllRoutesFailed
+crop STL exists=true
+raw Geomagic crop STP exists=true
+normalized patch STP exists=true
+base_removed_candidate STP exists=true
+OCCT applied/merged STEP exists=false
+Creo API merged STEP exists=true
+
+candidate over-cover:
+  rejected_count=9984
+  boundary_to_ring_rejected_count=3328
+  ring_to_ring_rejected_count=6656
+  body_bridge_rejected_count=208
+  long_triangle_count=9984
+  triangle_count=2184
+  ring_point_count=1664
+  index_mismatch_count=0
+  direction_flip_count=0
+  source_face_transition_count=22
+  ring_closure_max_ratio=9.21257873636548
+  max_triangle_edge_length=0.39656491680174
+
+Patch faces=68
+Patch edges=326
+Patch preview high_risk=true
+Boundary max distance=0.0101759896178517
+Boundary p95 distance=0.000647815619539007
+Corner max distance=0.0101759896178517
+Seam max abs normal offset=0.0028804812728491
+
+OCCT apply success=false
+OCCT failed patch face index=7
+OCCT failed original boundary edge ids=1585
+OCCT failed endpoint gap=0.759306790560141
+
+Creo Toolkit runner success=true
+StrictTopologyGate on Creo exported STEP=false
+StrictTopologyGate failure=BRepCheckFailed
+after_free_edges=52
+after_multiple_edges=0
+ModelCHECK diagnostic_passed=false
+SHORT_EDGES item count=1593
+```
+
+判读：
+
+```text
+conservative over-cover 的视觉覆盖与拐角保留优于 wire-ring / direction-field 尝试，当前本地代码以它为新基线继续开发。
+当前主问题不是继续加宽外扩带，而是定位 Geomagic patch faces=68/high_risk 的面片数过多原因，以及让 multi-surface segmentation 可缝合。
+wire-ring / direction-field 两次实验可作为失败证据保留在历史 run 目录中，但不作为最新实现基线。
 ```
 
 命令：

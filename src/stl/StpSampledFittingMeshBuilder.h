@@ -60,13 +60,26 @@ struct CandidateSurfaceOverCoverRejectionRecord {
 struct CandidateSurfaceOverCoverProblemEdgeReport {
     int edgeId = -1;
     int sourceFaceId = -1;
+    int acceptedSampleCount = 0;
     int sampleRejectedCount = 0;
     int bodyBridgeRejectedCount = 0;
     int boundaryToRingRejectedCount = 0;
     int ringToRingRejectedCount = 0;
     int longTriangleCount = 0;
+    int directionFlipCount = 0;
+    int indexMismatchCount = 0;
     double maxNormalLeakage = 0.0;
     double maxTriangleEdgeLength = 0.0;
+    double maxRingClosureGap = 0.0;
+    double maxRingClosureRatio = 0.0;
+};
+
+struct CandidateSurfaceOverCoverEdgeSourceReport {
+    int edgeId = -1;
+    int sourceFaceId = -1;
+    int sampleCount = 0;
+    int firstSampleIndex = -1;
+    int lastSampleIndex = -1;
 };
 
 struct CandidateSurfaceOverCoverLeakagePoint {
@@ -139,10 +152,17 @@ struct StpSampledFittingReport {
     int candidateSurfaceOverCoverRingToRingRejectedCount = 0;
     int candidateSurfaceOverCoverEdgeBuildRejectedCount = 0;
     int candidateSurfaceOverCoverProblemEdgeCount = 0;
+    int candidateSurfaceOverCoverRingPointCount = 0;
+    double candidateSurfaceOverCoverRingClosureMaxGap = 0.0;
+    double candidateSurfaceOverCoverRingClosureMaxRatio = 0.0;
+    int candidateSurfaceOverCoverIndexMismatchCount = 0;
+    int candidateSurfaceOverCoverSourceFaceTransitionCount = 0;
+    int candidateSurfaceOverCoverEdgeSourceDistributionCount = 0;
     int candidateSurfaceOverCoverMaxNormalLeakageEdgeId = -1;
     int candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId = -1;
     std::vector<CandidateSurfaceOverCoverRejectionRecord> candidateSurfaceOverCoverRejections;
     std::vector<CandidateSurfaceOverCoverProblemEdgeReport> candidateSurfaceOverCoverProblemEdges;
+    std::vector<CandidateSurfaceOverCoverEdgeSourceReport> candidateSurfaceOverCoverEdgeSourceDistribution;
     std::vector<CandidateSurfaceOverCoverLeakagePoint> candidateSurfaceOverCoverLeakagePoints;
     int interiorSampleCount = 0;
     int outputTriangleCount = 0;

@@ -568,6 +568,29 @@ void test_candidate_surface_over_cover_extends_source_face_without_adjacent_drop
     assert(report.candidateSurfaceOverCoverEdgeBuildRejectedCount == 0);
     assert(report.candidateSurfaceOverCoverProblemEdgeCount ==
         static_cast<int>(report.candidateSurfaceOverCoverProblemEdges.size()));
+    assert(report.candidateSurfaceOverCoverRingPointCount > 0);
+    assert(report.candidateSurfaceOverCoverSampleCount ==
+        report.candidateSurfaceOverCoverRingPointCount *
+            report.candidateSurfaceOverCoverRingCount);
+    assert(report.candidateSurfaceOverCoverIndexMismatchCount == 0);
+    assert(report.candidateSurfaceOverCoverRingClosureMaxGap > 0.0);
+    assert(report.candidateSurfaceOverCoverRingClosureMaxRatio < 2.0);
+    assert(report.candidateSurfaceOverCoverSourceFaceTransitionCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeSourceDistributionCount ==
+        static_cast<int>(report.candidateSurfaceOverCoverEdgeSourceDistribution.size()));
+    assert(report.candidateSurfaceOverCoverEdgeSourceDistributionCount == 4);
+    int distributedSamples = 0;
+    int previousLastSampleIndex = -1;
+    for (const auto& item : report.candidateSurfaceOverCoverEdgeSourceDistribution) {
+        assert(item.edgeId >= 0);
+        assert(item.sourceFaceId >= 0);
+        assert(item.sampleCount > 0);
+        assert(item.firstSampleIndex <= item.lastSampleIndex);
+        assert(item.firstSampleIndex > previousLastSampleIndex);
+        previousLastSampleIndex = item.lastSampleIndex;
+        distributedSamples += item.sampleCount;
+    }
+    assert(distributedSamples == report.candidateSurfaceOverCoverRingPointCount);
     assert(report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId >= -1);
     assert(report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId >= -1);
     assert(report.candidateSurfaceOverCoverRejections.size() >=
@@ -901,6 +924,13 @@ void test_report_fields_present() {
     assert(report.candidateSurfaceOverCoverMaxTriangleEdgeLength == 0.0);
     assert(report.candidateSurfaceOverCoverSourceFaceCount == 0);
     assert(report.candidateSurfaceOverCoverDirectionFlipCount == 0);
+    assert(report.candidateSurfaceOverCoverRingPointCount == 0);
+    assert(report.candidateSurfaceOverCoverRingClosureMaxGap == 0.0);
+    assert(report.candidateSurfaceOverCoverRingClosureMaxRatio == 0.0);
+    assert(report.candidateSurfaceOverCoverIndexMismatchCount == 0);
+    assert(report.candidateSurfaceOverCoverSourceFaceTransitionCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeSourceDistributionCount == 0);
+    assert(report.candidateSurfaceOverCoverEdgeSourceDistribution.empty());
     assert(report.interiorSampleCount > 0);
     assert(report.outputTriangleCount > 0);
     assert(report.samplingSpacing > 0.0);

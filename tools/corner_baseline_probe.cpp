@@ -142,13 +142,33 @@ QJsonArray over_cover_problem_edges_to_json(
         QJsonObject object;
         object.insert("edge_id", edge.edgeId);
         object.insert("source_face_id", edge.sourceFaceId);
+        object.insert("accepted_sample_count", edge.acceptedSampleCount);
         object.insert("sample_rejected_count", edge.sampleRejectedCount);
         object.insert("body_bridge_rejected_count", edge.bodyBridgeRejectedCount);
         object.insert("boundary_to_ring_rejected_count", edge.boundaryToRingRejectedCount);
         object.insert("ring_to_ring_rejected_count", edge.ringToRingRejectedCount);
         object.insert("long_triangle_count", edge.longTriangleCount);
+        object.insert("direction_flip_count", edge.directionFlipCount);
+        object.insert("index_mismatch_count", edge.indexMismatchCount);
         object.insert("max_normal_leakage", edge.maxNormalLeakage);
         object.insert("max_triangle_edge_length", edge.maxTriangleEdgeLength);
+        object.insert("max_ring_closure_gap", edge.maxRingClosureGap);
+        object.insert("max_ring_closure_ratio", edge.maxRingClosureRatio);
+        array.append(object);
+    }
+    return array;
+}
+
+QJsonArray over_cover_edge_source_distribution_to_json(
+    const std::vector<spo::CandidateSurfaceOverCoverEdgeSourceReport>& edges) {
+    QJsonArray array;
+    for (const auto& edge : edges) {
+        QJsonObject object;
+        object.insert("edge_id", edge.edgeId);
+        object.insert("source_face_id", edge.sourceFaceId);
+        object.insert("sample_count", edge.sampleCount);
+        object.insert("first_sample_index", edge.firstSampleIndex);
+        object.insert("last_sample_index", edge.lastSampleIndex);
         array.append(object);
     }
     return array;
@@ -747,9 +767,16 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
     object.insert("candidate_surface_over_cover_ring_to_ring_rejected_count", report.candidateSurfaceOverCoverRingToRingRejectedCount);
     object.insert("candidate_surface_over_cover_edge_build_rejected_count", report.candidateSurfaceOverCoverEdgeBuildRejectedCount);
     object.insert("candidate_surface_over_cover_problem_edge_count", report.candidateSurfaceOverCoverProblemEdgeCount);
+    object.insert("candidate_surface_over_cover_ring_point_count", report.candidateSurfaceOverCoverRingPointCount);
+    object.insert("candidate_surface_over_cover_ring_closure_max_gap", report.candidateSurfaceOverCoverRingClosureMaxGap);
+    object.insert("candidate_surface_over_cover_ring_closure_max_ratio", report.candidateSurfaceOverCoverRingClosureMaxRatio);
+    object.insert("candidate_surface_over_cover_index_mismatch_count", report.candidateSurfaceOverCoverIndexMismatchCount);
+    object.insert("candidate_surface_over_cover_source_face_transition_count", report.candidateSurfaceOverCoverSourceFaceTransitionCount);
+    object.insert("candidate_surface_over_cover_edge_source_distribution_count", report.candidateSurfaceOverCoverEdgeSourceDistributionCount);
     object.insert("candidate_surface_over_cover_max_normal_leakage_edge_id", report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId);
     object.insert("candidate_surface_over_cover_max_normal_leakage_source_face_id", report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId);
     object.insert("candidate_surface_over_cover_problem_edges", over_cover_problem_edges_to_json(report.candidateSurfaceOverCoverProblemEdges));
+    object.insert("candidate_surface_over_cover_edge_source_distribution", over_cover_edge_source_distribution_to_json(report.candidateSurfaceOverCoverEdgeSourceDistribution));
     object.insert("interior_sample_count", report.interiorSampleCount);
     object.insert("output_triangle_count", report.outputTriangleCount);
     object.insert("sampling_spacing", report.samplingSpacing);
@@ -767,6 +794,10 @@ std::filesystem::path over_cover_diagnostic_dir(const Options& options) {
 
 std::filesystem::path over_cover_rejections_csv_path(const Options& options) {
     return over_cover_diagnostic_dir(options) / "overcover_rejections.csv";
+}
+
+std::filesystem::path over_cover_ring_diagnostics_csv_path(const Options& options) {
+    return over_cover_diagnostic_dir(options) / "overcover_ring_diagnostics.csv";
 }
 
 std::filesystem::path over_cover_rejected_body_bridge_stl_path(const Options& options) {
@@ -789,6 +820,7 @@ QJsonObject over_cover_artifacts_to_json(const Options& options) {
     QJsonObject object;
     object.insert("directory", path_to_qstring(over_cover_diagnostic_dir(options)));
     object.insert("overcover_rejections_csv", path_to_qstring(over_cover_rejections_csv_path(options)));
+    object.insert("overcover_ring_diagnostics_csv", path_to_qstring(over_cover_ring_diagnostics_csv_path(options)));
     object.insert("overcover_rejected_body_bridge_stl", path_to_qstring(over_cover_rejected_body_bridge_stl_path(options)));
     object.insert("overcover_rejected_boundary_to_ring_stl", path_to_qstring(over_cover_rejected_boundary_to_ring_stl_path(options)));
     object.insert("overcover_rejected_ring_to_ring_stl", path_to_qstring(over_cover_rejected_ring_to_ring_stl_path(options)));
@@ -857,6 +889,50 @@ bool write_over_cover_rejections_csv(
     return true;
 }
 
+bool write_over_cover_ring_diagnostics_csv(
+    const std::filesystem::path& path,
+    const spo::StpSampledFittingReport& report,
+    std::string* errorMessage) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out.good()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = "Could not open over-cover ring diagnostics CSV.";
+        }
+        return false;
+    }
+
+    out << "ring_point_count,index_mismatch_count,direction_flip_count,"
+        << "source_face_transition_count,ring_closure_max_gap,ring_closure_max_ratio,"
+        << "edge_id,source_face_id,sample_count,first_sample_index,last_sample_index\n";
+    out << std::setprecision(17);
+    if (report.candidateSurfaceOverCoverEdgeSourceDistribution.empty()) {
+        out << report.candidateSurfaceOverCoverRingPointCount << ','
+            << report.candidateSurfaceOverCoverIndexMismatchCount << ','
+            << report.candidateSurfaceOverCoverDirectionFlipCount << ','
+            << report.candidateSurfaceOverCoverSourceFaceTransitionCount << ','
+            << report.candidateSurfaceOverCoverRingClosureMaxGap << ','
+            << report.candidateSurfaceOverCoverRingClosureMaxRatio
+            << ",-1,-1,0,-1,-1\n";
+        return true;
+    }
+
+    for (const auto& edge : report.candidateSurfaceOverCoverEdgeSourceDistribution) {
+        out << report.candidateSurfaceOverCoverRingPointCount << ','
+            << report.candidateSurfaceOverCoverIndexMismatchCount << ','
+            << report.candidateSurfaceOverCoverDirectionFlipCount << ','
+            << report.candidateSurfaceOverCoverSourceFaceTransitionCount << ','
+            << report.candidateSurfaceOverCoverRingClosureMaxGap << ','
+            << report.candidateSurfaceOverCoverRingClosureMaxRatio << ','
+            << edge.edgeId << ','
+            << edge.sourceFaceId << ','
+            << edge.sampleCount << ','
+            << edge.firstSampleIndex << ','
+            << edge.lastSampleIndex << '\n';
+    }
+    return true;
+}
+
 void write_rejection_category_stl(
     const std::filesystem::path& path,
     const spo::StpSampledFittingReport& report,
@@ -915,6 +991,11 @@ void write_over_cover_diagnostic_artifacts(
 
     std::string error;
     if (!write_over_cover_rejections_csv(over_cover_rejections_csv_path(options), report, &error) &&
+        !error.empty()) {
+        report.warningMessage += report.warningMessage.empty() ? error : " | " + error;
+    }
+    error.clear();
+    if (!write_over_cover_ring_diagnostics_csv(over_cover_ring_diagnostics_csv_path(options), report, &error) &&
         !error.empty()) {
         report.warningMessage += report.warningMessage.empty() ? error : " | " + error;
     }

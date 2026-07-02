@@ -454,7 +454,203 @@ Multi-surface replacement face edges produced open wires.
 Fallback wire-connect tolerance was also insufficient.
 ```
 
-### 1.5 2026-06-25 Route 2 support collar 真实样例结果
+### 1.5 2026-07-02 conservative over-cover baseline 恢复
+
+本轮只修改 STP sampled fitting STL 的 candidate/source-face parallel over-cover 输入，不改 Apply、PatchReplacementRepair、StrictTopologyGate，也不恢复旧 guard-band / adjacent collar 主路线。
+
+当前本地最新状态：
+
+```text
+1. 放弃 2026-07-01 global wire-ring 和 2026-07-02 direction-field follow-up 作为主实现。
+2. StpSampledFittingMeshBuilder 恢复 conservative per-edge over-cover：
+   每条 original boundary edge 独立生成 boundary ring 与 ring1/ring2/ring3，
+   只有该 edge 的所有 ring sample 成功后才按 original wire 顺序并入全局 ring。
+3. boundary -> ring1、ring1 -> ring2、ring2 -> ring3 仍使用一一对应 closed quad strip；
+   不保留上一轮为压低 longTriangle false rejection 加入的 radial/edge subdivision。
+4. 保留并扩展诊断：
+   ring_point_count
+   ring_closure_max_gap / ring_closure_max_ratio
+   index_mismatch_count
+   source_face_transition_count
+   edge_source_distribution
+5. corner_baseline_probe 保留原 overcover_rejections.csv / rejected STL / worst points OBJ，并新增 overcover_ring_diagnostics.csv。
+```
+
+已验证：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
+ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+cmake --build --preset windows-msvc-debug --target corner_baseline_probe -- /m:1
+```
+
+本轮真实复跑：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+output: data/baseline_runs/route2_conservative_restored_baseline_20260702_134331
+compact artifacts:
+  data/baseline_runs/route2_conservative_restored_baseline_20260702_134331/route2_artifacts/
+
+artifact roles:
+  crop STL exists=true
+  raw Geomagic crop STP exists=true
+  normalized patch STP exists=true
+  base_removed_candidate STP exists=true
+  OCCT applied/merged STEP exists=false
+  Creo API merged STEP exists=true
+
+candidate over-cover:
+  rejected_count=9984
+  boundary_to_ring_rejected_count=3328
+  ring_to_ring_rejected_count=6656
+  body_bridge_rejected_count=208
+  long_triangle_count=9984
+  triangle_count=2184
+  ring_point_count=1664
+  index_mismatch_count=0
+  direction_flip_count=0
+  source_face_transition_count=22
+  ring_closure_max_ratio=9.21257873636548
+  max_triangle_edge_length=0.39656491680174
+
+Geomagic patch:
+  faces=68
+  edges=326
+  high_risk=true
+  boundary max/p95=0.0101759896178517/0.000647815619539007
+  seam max_abs/p95_abs=0.0028804812728491/0.000567814618038171
+
+Apply:
+  success=false
+  failure_reason=BuildFailed
+  message=Multi-surface replacement face edges produced open wires. Fallback wire-connect tolerance was also insufficient.
+  built_faces=14
+  closed_wires=19
+  open_wires=2
+  failed_patch_face_index=7
+  failed original boundary edge ids=1585
+  endpoint_gap=0.759306790560141
+
+Creo / external validation:
+  Creo Toolkit runner success=true
+  StrictTopologyGate on Creo exported STEP=false
+  failure=BRepCheckFailed
+  after_free_edges=52
+  after_multiple_edges=0
+  ModelCHECK diagnostic_passed=false
+  SHORT_EDGES item count=1593
+```
+
+失败实验留档（不作为当前基线）：
+
+```text
+source: data/stp/03_配件_Clay.stp
+candidate: 179
+full run output:
+  data/baseline_runs/route2_candidate_overcover_wire_rings_20260701_230918
+reuse-patch final-code probe:
+  data/baseline_runs/overcover_wire_rings_reuse_patch_20260701_233801
+
+candidate over-cover:
+  candidate_surface_over_cover_rejected_count=0
+  boundary_to_ring_rejected_count=0
+  ring_to_ring_rejected_count=0
+  body_bridge_rejected_count=208
+  long_triangle_count=0
+  triangle_count=12168
+  ring_point_count=1664
+  index_mismatch_count=0
+  direction_flip_count=0
+  source_face_transition_count=22
+  ring_closure_max_ratio=9.21257873636548
+  normal_leakage_max=0.719130368301623
+
+Geomagic patch:
+  faces=63
+  edges=295
+  high_risk=true
+
+Apply:
+  success=false
+  failure_reason=BuildFailed
+  message=Multi-surface replacement face edges produced open wires. Fallback wire-connect tolerance was also insufficient.
+  built_faces=2
+  closed_wires=6
+  open_wires=2
+  failed_patch_face_index=2
+
+Creo / external validation:
+  Creo Toolkit runner succeeded and exported creo_api_merged.stp.
+  StrictTopologyGate on Creo exported STEP failed: BRepCheckFailed.
+  after_free_edges=58
+  after_multiple_edges=0
+  after_brep_check_valid=false
+  ModelCHECK diagnostic_passed=false
+  SHORT_EDGES item count=1582
+```
+
+失败实验对比 2026-06-26 conservative over-cover 结果（只说明 rejection 下降，不说明视觉质量收敛）：
+
+```text
+旧结果：
+  rejected_count=9984
+  boundary_to_ring_rejected_count=3328
+  ring_to_ring_rejected_count=6656
+  long_triangle_count=9984
+  triangle_count=2184
+  Geomagic patch faces=68
+  high_risk=true
+
+新结果：
+  rejected_count=0
+  boundary_to_ring_rejected_count=0
+  ring_to_ring_rejected_count=0
+  long_triangle_count=0
+  triangle_count=12168
+  Geomagic patch faces=63
+  high_risk=true
+```
+
+2026-07-02 boundary direction-field follow-up:
+
+```text
+fresh Geomagic output:
+  data/baseline_runs/overcover_direction_field_fix_fresh_geomagic_20260702_003000
+reuse-patch probe:
+  data/baseline_runs/overcover_direction_field_fix_reuse_patch_20260702_002500
+
+candidate over-cover:
+  rejected_count=0
+  boundary_to_ring_rejected_count=0
+  ring_to_ring_rejected_count=0
+  body_bridge_rejected_count=208
+  long_triangle_count=0
+  triangle_count=12194
+  ring_point_count=1664
+  direction_flip_count=0
+  source_face_transition_count=22
+  ring_closure_max_ratio=1.05507330248097
+  max_triangle_edge_length=0.187747056537918
+  normal_leakage_max=0.719130368301623
+
+fresh Geomagic patch:
+  faces=71
+  edges=325
+  high_risk=true
+```
+
+判读：
+
+```text
+wire-ring 与 direction-field 两次实验降低了 rejected/longTriangle 计数，但真实截图与 mesh 质量显示外扩方向和长三角形态仍不如 conservative baseline。
+因此当前本地代码恢复 conservative per-edge over-cover 作为新基线，并只保留有助于定位的 ring/source-face 诊断。
+后续 Route 2 测试目录继续以 data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653/route2_artifacts/ 的紧凑分布为参考。
+下一步不应改 Apply / repair / Gate；应定位 conservative baseline 下 Geomagic patch faces=68/high_risk 的面片数过多原因，以及 multi-surface segmentation 为什么不可缝合。
+```
+
+### 1.6 2026-06-25 Route 2 support collar 真实样例结果
 
 本轮真实样例：
 
