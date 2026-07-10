@@ -64,6 +64,15 @@ cd D:\pyProject\step-patch-optimizer
 .\scripts\test.ps1
 ```
 
+该命令只运行不依赖仓库真实大文件和外部 GUI 程序的默认单元测试。需要显式运行较慢测试时：
+
+```powershell
+cmake --build --preset windows-msvc-debug --target spo_real_file_tests -- /m:1
+cmake --build --preset windows-msvc-debug --target spo_real_geomagic_tests -- /m:1
+```
+
+前者读取仓库中的真实 STL/STEP 样例；后者会实际启动 Geomagic。`verify_spo.ps1 -RealGeomagic` 只执行一次完整 scripted baseline，不会再由默认 `spo_tests` 预先重复启动 Geomagic。
+
 ---
 
 ## 3. VS Code 启动方式
@@ -144,7 +153,7 @@ cmake --build --preset windows-msvc-debug --target step-patch-optimizer
 
 ```powershell
 cmake --build --preset windows-msvc-debug --target spo_tests
-ctest --preset windows-msvc-debug --output-on-failure --timeout 30
+ctest --preset windows-msvc-debug --output-on-failure --timeout 120
 ```
 
 ---

@@ -41,6 +41,25 @@ STEP 读取
 7. 下一阶段重点转为 Geomagic 输出在 sharp corner / feature junction 附近圆角化所造成的商业 CAD 缝隙问题；该问题不能只靠 OCCT BRepCheck / free edge / multiple edge 判断。
 ```
 
+### 2026-07-10 测试与真实实验链路去重
+
+本轮只调整测试编排和重复验证，不改变几何算法、单位对齐或 Creo 验收边界：
+
+```text
+1. corner_baseline_probe 新增 --generate-only：完成 STP sampled fitting、Geomagic、补片导入和 preview 后停止，不再提前执行一次质量门和 PatchReplacementCommand。
+2. corner_baseline_probe 新增 --apply-only：复用已有补片时仍读取源 STEP、发现候选并执行质量门和 Apply，但不再重建 fitting STL、over-cover 诊断文件或补片副本。
+3. run_boundary_trim_fill_experiments.ps1：
+   - Route 2 生成阶段使用 --generate-only；归一化后只执行一次 --apply-only。
+   - Route 1 已有补片的 Apply 同样使用 --apply-only。
+   - step_unit_normalizer 及 --target-step/--source-step/--candidate-id 坐标对齐输入完整保留。
+   - Creo Distributed Batch + ModelCHECK 和两条 Creo Toolkit sewing 对照路线完整保留。
+4. 独立 StrictTopologyGate 已经包含 STEP 读取、ShapeStats 和 BRepCheck；实验脚本直接复用其 after_stats，不再用 step_stats.exe 二次读取同一大 STEP。兼容报告中的 step_stats.bbox_valid 明确为 null，其余统计来自 StrictTopologyGate。
+5. spo_tests 默认只运行不依赖仓库真实大文件的单元测试；真实文件和真实 Geomagic 分别改为显式 spo_real_file_tests、spo_real_geomagic_tests 目标。
+6. verify_spo.ps1 -RealGeomagic 只运行一次完整 scripted baseline，不再先在 spo_tests 内重复调用 Geomagic。
+```
+
+本机验证中，默认 `spo_tests` 从此前约 93.58 秒降至 11.45 秒；真实文件和外部程序测试未删除，只是不再混入日常默认测试。
+
 ### 1.0 2026-06-26 Route 2 candidate/source-face parallel over-cover 落地
 
 本轮按 2026-06-25 Route 2 失败截图和指标调整扩宽主路线：

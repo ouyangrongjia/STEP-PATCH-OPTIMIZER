@@ -2,7 +2,7 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-07-02
+更新时间：2026-07-10
 
 ---
 
@@ -105,6 +105,12 @@ adjacent-face support collar 只保留为窄辅助上下文
     - candidate_surface_over_cover_diagnostics 新增 overcover_experiment_summary.json/csv。
     - corner_baseline_probe 新增 probe_artifacts，保存本轮 fitting STL、raw patch STP/IGES、fit_region log 的 run-local copy。
     - run_boundary_trim_fill_experiments.ps1 会把 candidate_surface_over_cover_diagnostics 复制进 route2_artifacts。
+14. 2026-07-10 测试耗时去重已落地：
+    - Route 2 的 Geomagic 生成阶段只生成并预览补片；单位归一化后只执行一次 Apply。
+    - 已有补片的 Apply 不再重复生成 fitting STL 和 over-cover 诊断产物。
+    - 单位归一化、坐标对齐输入、Creo ModelCHECK 诊断和 Creo Toolkit sewing 对照路线全部保留。
+    - StrictTopologyGate 的 after_stats 复用于指标汇报，不再用 step_stats.exe 二次读取同一 STEP。
+    - 默认 spo_tests 只跑单元测试；真实文件与真实 Geomagic 改为显式测试目标。
 ```
 
 已验证：
@@ -112,6 +118,8 @@ adjacent-face support collar 只保留为窄辅助上下文
 ```powershell
 cmake --build --preset windows-msvc-debug --target spo_tests -- /m:1
 ctest --preset windows-msvc-debug --output-on-failure --timeout 180
+cmake --build --preset windows-msvc-debug --target spo_real_file_tests -- /m:1
+cmake --build --preset windows-msvc-debug --target spo_real_geomagic_tests -- /m:1
 ```
 
 ---

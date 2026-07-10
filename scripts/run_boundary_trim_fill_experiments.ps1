@@ -354,25 +354,6 @@ function Get-ObjectValue {
     return $null
 }
 
-function Convert-StepStatsTextToObject {
-    param([string]$Text)
-
-    $result = [ordered]@{}
-    foreach ($line in ($Text -split "`r?`n")) {
-        if ($line -match "^([A-Za-z_]+):\s*(.*)$") {
-            $key = $Matches[1]
-            $value = $Matches[2].Trim()
-            $intValue = 0
-            if ([int]::TryParse($value, [ref]$intValue)) {
-                $result[$key] = $intValue
-            } else {
-                $result[$key] = $value
-            }
-        }
-    }
-    return $result
-}
-
 function Resolve-PathFromJsonValue {
     param([string]$PathValue)
 
@@ -466,30 +447,6 @@ function Get-CreoMetrics {
     }
 }
 
-function Invoke-StepStats {
-    param(
-        [Parameter(Mandatory = $true)][string]$StepPath,
-        [Parameter(Mandatory = $true)][string]$OutputDir,
-        [Parameter(Mandatory = $true)][string]$Prefix
-    )
-
-    $exe = Find-BuiltExe -ExeName "step_stats.exe"
-    $run = Invoke-LoggedProcess `
-        -FilePath $exe `
-        -Arguments @($StepPath) `
-        -WorkingDirectory $OutputDir `
-        -LogPrefix $Prefix `
-        -Timeout 300
-    $stats = [ordered]@{}
-    if (Test-Path -LiteralPath $run.stdout_path) {
-        $stats = Convert-StepStatsTextToObject -Text (Get-Content -LiteralPath $run.stdout_path -Raw)
-    }
-    return [ordered]@{
-        run = $run
-        stats = $stats
-    }
-}
-
 function Invoke-StrictGate {
     param(
         [Parameter(Mandatory = $true)][string]$BeforeStep,
@@ -515,6 +472,37 @@ function Invoke-StrictGate {
         run = $run
         report = Read-JsonFile -PathValue $reportPath
         report_path = $reportPath
+    }
+}
+
+function New-StepStatsFromStrictGate {
+    param(
+        [Parameter(Mandatory = $true)]$StrictGate,
+        [Parameter(Mandatory = $true)][string]$StepPath
+    )
+
+    $report = $StrictGate.report
+    if (-not $report) {
+        return $null
+    }
+
+    return [ordered]@{
+        run = [ordered]@{
+            reused_strict_topology_gate = $true
+            source_report = $StrictGate.report_path
+        }
+        stats = [ordered]@{
+            path = $StepPath
+            success = 1
+            faces = $report.after_stats.faces
+            edges = $report.after_stats.edges
+            vertices = $report.after_stats.vertices
+            shells = $report.after_stats.shells
+            solids = $report.after_stats.solids
+            bbox_valid = $null
+            brep_check_valid = [int][bool]$report.after_brep_check_valid
+            message = "Reused the STEP import and shape validation already performed by StrictTopologyGate."
+        }
     }
 }
 
@@ -825,8 +813,8 @@ function Invoke-CreoToolkitMergeVariant {
     $stepStats = $null
     $strictGate = $null
     if ($exportedStep -and (Test-Path -LiteralPath $exportedStep)) {
-        $stepStats = Invoke-StepStats -StepPath $exportedStep -OutputDir $validationDir -Prefix "${RouteName}_creo_step_stats"
         $strictGate = Invoke-StrictGate -BeforeStep $SourceStep -AfterStep $exportedStep -OutputDir $validationDir -Prefix "${RouteName}_creo_strict_topology_gate"
+        $stepStats = New-StepStatsFromStrictGate -StrictGate $strictGate -StepPath $exportedStep
     }
     $parse = Invoke-ModelcheckParseOnly -ModelCheckDir $modelcheckDir -OutputDir $parseDir -BaselineReportPath $BaselineReportPath
     $toolkitResult = Read-JsonFile -PathValue $toolkitResultPath
@@ -876,8 +864,8 @@ function Invoke-PostValidation {
         }
     }
 
-    $stepStats = Invoke-StepStats -StepPath $AppliedStepPath -OutputDir $validationDir -Prefix "${RouteName}_step_stats"
     $strictGate = Invoke-StrictGate -BeforeStep $SourceStep -AfterStep $AppliedStepPath -OutputDir $validationDir -Prefix "${RouteName}_strict_topology_gate"
+    $stepStats = New-StepStatsFromStrictGate -StrictGate $strictGate -StepPath $AppliedStepPath
     $creo = Invoke-CreoDiagnostic -StepPath $AppliedStepPath -OutputDir (Join-Path $validationDir "creo") -BaselineReportPath $BaselineReportPath
 
     return [ordered]@{
@@ -972,7 +960,6 @@ foreach ($target in @(
         "step_unit_normalizer",
         "creo_phase1_input_exporter",
         "corner_baseline_probe",
-        "step_stats",
         "strict_topology_gate_probe"
     )) {
     Invoke-BuildTarget -Target $target
@@ -1110,6 +1097,7 @@ if (Test-Path -LiteralPath $route1Patch) {
             "--source-step", $SourceStep,
             "--candidate-id", $route1CandidateId,
             "--patch", $route1Patch,
+            "--apply-only",
             "--output-dir", $route1ApplyDir,
             "--report", $route1ApplyReport
         ) `
@@ -1202,6 +1190,7 @@ if (Test-Path -LiteralPath $WrapCore) {
     $route2GenerationArgs = @(
         "--source-step", $SourceStep,
         "--candidate-id", $CandidateId,
+        "--generate-only",
         "--output-dir", $route2GenerationDir,
         "--report", $route2GenerationReport,
         "--wrap-core", $WrapCore,
@@ -1300,6 +1289,7 @@ if (Test-Path -LiteralPath $route2NormalizedPatch) {
         "--source-step", $SourceStep,
         "--candidate-id", $route2CandidateId,
         "--patch", $route2NormalizedPatch,
+        "--apply-only",
         "--output-dir", $route2ApplyDir,
         "--report", $route2ApplyReport,
         "--b1-corner-feature-sampling",

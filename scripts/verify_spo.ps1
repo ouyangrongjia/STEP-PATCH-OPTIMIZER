@@ -138,22 +138,7 @@ Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--
 Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "patch_apply_probe")
 Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "corner_baseline_probe")
 
-$oldRealGeomagic = $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS
-try {
-    if ($RealGeomagic) {
-        $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS = "1"
-    } else {
-        $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS = "0"
-    }
-
-    Invoke-Native -FilePath "ctest" -Arguments @("--preset", $Preset, "-R", "spo_tests", "--output-on-failure")
-} finally {
-    if ($null -eq $oldRealGeomagic) {
-        Remove-Item Env:SPO_ENABLE_REAL_GEOMAGIC_TESTS -ErrorAction SilentlyContinue
-    } else {
-        $env:SPO_ENABLE_REAL_GEOMAGIC_TESTS = $oldRealGeomagic
-    }
-}
+Invoke-Native -FilePath "ctest" -Arguments @("--preset", $Preset, "-R", "spo_tests", "--output-on-failure")
 
 if ($RealGeomagic) {
     Invoke-Native -FilePath "powershell" -Arguments @(

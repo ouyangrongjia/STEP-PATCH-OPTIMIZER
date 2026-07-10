@@ -10,14 +10,17 @@ void run_candidate_type_statistics_tests();
 void run_feature_bounded_region_builder_tests();
 void run_boundary_wire_builder_tests();
 void run_stl_io_tests();
+void run_stl_io_real_file_tests();
 void run_stl_mesh_tests();
 void run_stl_region_extractor_tests();
+void run_stl_region_extractor_real_file_tests();
 void run_geomagic_output_path_resolver_tests();
 void run_geomagic_autosurface_config_tests();
 void run_geomagic_backend_mock_tests();
 void run_geomagic_pipeline_script_tests();
 void run_patch_import_service_tests();
 void run_patch_import_service_real_tests();
+void run_patch_import_service_real_geomagic_tests();
 void run_patch_artifact_locator_tests();
 void run_patch_preview_report_tests();
 void run_patch_preview_run_logger_tests();
@@ -45,6 +48,8 @@ void run_stl_cut_chain_cutter_tests();
 
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
+#include <string>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -115,9 +120,7 @@ void run_validation_tests() {
     }
 }
 
-int main() {
-    configure_test_process_error_reporting();
-
+void run_unit_tests() {
     run_step_io_tests();
     run_topology_graph_tests();
     run_feature_edges_tests();
@@ -137,7 +140,6 @@ int main() {
     run_geomagic_backend_mock_tests();
     run_geomagic_pipeline_script_tests();
     run_patch_import_service_tests();
-    run_patch_import_service_real_tests();
     run_patch_artifact_locator_tests();
     run_patch_preview_report_tests();
     run_patch_preview_run_logger_tests();
@@ -154,5 +156,34 @@ int main() {
     run_stp_sampled_fitting_mesh_tests();
     run_stl_cut_chain_cutter_tests();
     run_validation_tests();
+}
+
+void run_real_file_tests() {
+    run_stl_io_real_file_tests();
+    run_stl_region_extractor_real_file_tests();
+    run_patch_import_service_real_tests();
+}
+
+int main(int argc, char* argv[]) {
+    configure_test_process_error_reporting();
+
+    std::string suite = "unit";
+    if (argc == 3 && std::string(argv[1]) == "--suite") {
+        suite = argv[2];
+    } else if (argc != 1) {
+        std::cerr << "Usage: spo_tests [--suite unit|real-files|real-geomagic]\n";
+        return 2;
+    }
+
+    if (suite == "unit") {
+        run_unit_tests();
+    } else if (suite == "real-files") {
+        run_real_file_tests();
+    } else if (suite == "real-geomagic") {
+        run_patch_import_service_real_geomagic_tests();
+    } else {
+        std::cerr << "Unknown test suite: " << suite << "\n";
+        return 2;
+    }
     return 0;
 }

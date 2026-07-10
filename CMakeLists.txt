@@ -212,6 +212,19 @@ if(SPO_BUILD_TESTS)
 
     target_link_libraries(spo_tests PRIVATE spo_core)
     target_compile_definitions(spo_tests PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    add_test(NAME spo_tests COMMAND spo_tests)
-    set_tests_properties(spo_tests PROPERTIES TIMEOUT 300)
+    add_test(NAME spo_tests COMMAND spo_tests --suite unit)
+    set_tests_properties(spo_tests PROPERTIES TIMEOUT 120)
+
+    add_custom_target(spo_real_file_tests
+        COMMAND $<TARGET_FILE:spo_tests> --suite real-files
+        DEPENDS spo_tests
+        USES_TERMINAL
+    )
+    add_custom_target(spo_real_geomagic_tests
+        COMMAND ${CMAKE_COMMAND} -E env
+            SPO_ENABLE_REAL_GEOMAGIC_TESTS=1
+            $<TARGET_FILE:spo_tests> --suite real-geomagic
+        DEPENDS spo_tests
+        USES_TERMINAL
+    )
 endif()

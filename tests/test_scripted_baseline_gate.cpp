@@ -97,6 +97,38 @@ void test_verify_real_geomagic_runs_scripted_baseline_gate() {
     assert(script.find("-RealGeomagic") != std::string::npos);
 }
 
+void test_long_running_tests_are_split_into_explicit_suites() {
+    const auto root = source_root();
+    const auto cmake = read_text_file(root / "CMakeLists.txt");
+    const auto validation = read_text_file(root / "tests" / "test_validation.cpp");
+    const auto verify = read_text_file(root / "scripts" / "verify_spo.ps1");
+
+    assert(cmake.find("spo_tests --suite unit") != std::string::npos);
+    assert(cmake.find("spo_real_file_tests") != std::string::npos);
+    assert(cmake.find("spo_real_geomagic_tests") != std::string::npos);
+    assert(validation.find("--suite unit|real-files|real-geomagic") != std::string::npos);
+    assert(verify.find("SPO_ENABLE_REAL_GEOMAGIC_TESTS") == std::string::npos);
+}
+
+void test_boundary_runner_avoids_duplicate_generation_and_validation_work() {
+    const auto root = source_root();
+    const auto probe = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+    const auto script = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
+
+    assert(probe.find("--generate-only") != std::string::npos);
+    assert(probe.find("--apply-only") != std::string::npos);
+    assert(probe.find("generated_patch") != std::string::npos);
+    assert(script.find("--generate-only") != std::string::npos);
+    assert(script.find("--apply-only") != std::string::npos);
+    assert(script.find("New-StepStatsFromStrictGate") != std::string::npos);
+    assert(script.find("Invoke-StepStats") == std::string::npos);
+
+    assert(script.find("step_unit_normalizer") != std::string::npos);
+    assert(script.find("--target-step", script.find("step_unit_normalizer")) != std::string::npos);
+    assert(script.find("Invoke-CreoDiagnostic") != std::string::npos);
+    assert(script.find("Invoke-CreoToolkitMergeVariant") != std::string::npos);
+}
+
 void test_corner_baseline_probe_reports_b2_2_support_collar_fields() {
     const auto root = source_root();
     const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
@@ -423,6 +455,8 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_supports_auto_candidate_selection();
     test_scripted_baseline_gate_is_not_hardcoded_to_one_sample();
     test_verify_real_geomagic_runs_scripted_baseline_gate();
+    test_long_running_tests_are_split_into_explicit_suites();
+    test_boundary_runner_avoids_duplicate_generation_and_validation_work();
     test_corner_baseline_probe_reports_b2_2_support_collar_fields();
     test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts();
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();

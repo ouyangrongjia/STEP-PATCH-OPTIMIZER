@@ -207,5 +207,8 @@ void test_real_geomagic_crop_stl_to_imported_patch() {
 
 void run_patch_import_service_real_tests() {
     test_optional_real_patch_files_import();
+}
+
+void run_patch_import_service_real_geomagic_tests() {
     test_real_geomagic_crop_stl_to_imported_patch();
 }

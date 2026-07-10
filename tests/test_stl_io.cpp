@@ -173,5 +173,8 @@ void run_stl_io_tests() {
     test_stl_reader_rejects_truncated_binary_file();
     test_stl_reader_rejects_triangle_count_mismatch();
     test_stl_reader_reports_ascii_stl_unsupported();
+}
+
+void run_stl_io_real_file_tests() {
     test_stl_reader_reads_real_clay_stl_if_present();
 }

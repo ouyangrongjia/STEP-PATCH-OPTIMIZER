@@ -647,5 +647,8 @@ void run_stl_region_extractor_tests() {
     test_negative_min_margin_fails();
     test_empty_crop_result_fails();
     test_crop_report_fields_are_populated();
+}
+
+void run_stl_region_extractor_real_file_tests() {
     test_stl_region_extractor_real_clay_stp_stl_if_present();
 }

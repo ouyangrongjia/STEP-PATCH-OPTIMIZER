@@ -78,6 +78,8 @@ struct Options {
     bool geomagicSharpenContours = false;
     bool allowHighRiskPatchPreview = false;
     bool strictOriginalBoundaryRetrim = false;
+    bool generateOnly = false;
+    bool applyOnly = false;
 };
 
 struct AppliedStepExportReport {
@@ -222,6 +224,8 @@ void print_usage() {
         << "Options:\n"
         << "  --candidate-id <id|auto>                 Default: auto.\n"
         << "  --patch <patch.stp|patch.igs>             Reuse an existing patch and skip Geomagic.\n"
+        << "  --generate-only                           Stop after Geomagic patch import and preview.\n"
+        << "  --apply-only                              Reuse --patch without rebuilding fitting STL diagnostics.\n"
         << "  --output-dir <dir>                       Default: <repo>/data/baseline_runs.\n"
         << "  --report <path>                          Default: <output-dir>/baseline_report.json.\n"
         << "  --wrap-core <path>                       Default: E:/Geomagic Wrap/wrapCore.exe.\n"
@@ -289,6 +293,10 @@ bool parse_options(int argc, char* argv[], Options& options) {
                 return false;
             }
             options.patchPath = value;
+        } else if (arg == "--generate-only") {
+            options.generateOnly = true;
+        } else if (arg == "--apply-only") {
+            options.applyOnly = true;
         } else if (arg == "--output-dir") {
             const auto* value = requireValue("--output-dir");
             if (value == nullptr) {
@@ -504,6 +512,19 @@ bool parse_options(int argc, char* argv[], Options& options) {
         options.reportPath = options.outputDir / "baseline_report.json";
     } else {
         options.reportPath = std::filesystem::absolute(options.reportPath).lexically_normal();
+    }
+
+    if (options.generateOnly && options.applyOnly) {
+        std::cerr << "--generate-only and --apply-only cannot be used together.\n";
+        return false;
+    }
+    if (options.generateOnly && !options.patchPath.empty()) {
+        std::cerr << "--generate-only cannot be used with --patch.\n";
+        return false;
+    }
+    if (options.applyOnly && options.patchPath.empty()) {
+        std::cerr << "--apply-only requires --patch.\n";
+        return false;
     }
 
     return !options.sourceStep.empty();
@@ -1793,6 +1814,7 @@ bool write_report(
     QJsonObject root;
     root.insert("overall_success", overallSuccess);
     root.insert("stage", QString::fromStdString(stage));
+    root.insert("probe_mode", options.generateOnly ? "generate_only" : (options.applyOnly ? "apply_only" : "full"));
     root.insert("source_step", path_to_qstring(options.sourceStep));
     root.insert("candidate_id", options.candidateId);
     root.insert("candidate_selection_mode", options.autoCandidateId ? "auto" : "explicit");
@@ -1811,7 +1833,14 @@ bool write_report(
     root.insert("fit_region_log_path", path_object(artifacts.fitRegionLogPath));
     root.insert("stp_sampled_fitting", fitting_to_json(fitting));
     root.insert("candidate_surface_over_cover_diagnostic_artifacts", over_cover_artifacts_to_json(options));
-    root.insert("probe_artifacts", probe_artifacts_to_json(options, fitting, geomagic, artifacts));
+    if (options.applyOnly) {
+        QJsonObject probeArtifacts;
+        probeArtifacts.insert("skipped", true);
+        probeArtifacts.insert("reason", "apply-only reuses the provided patch artifact");
+        root.insert("probe_artifacts", probeArtifacts);
+    } else {
+        root.insert("probe_artifacts", probe_artifacts_to_json(options, fitting, geomagic, artifacts));
+    }
     root.insert("geomagic", geomagic_to_json(geomagic));
     root.insert("patch_preview", preview_to_json(preview));
     root.insert("patch_apply", apply_to_json(apply));
@@ -1843,14 +1872,16 @@ bool write_report(
         return false;
     }
 
-    write_over_cover_experiment_summary_artifacts(
-        options,
-        stage,
-        fitting,
-        geomagic,
-        preview,
-        quality,
-        artifacts);
+    if (!options.applyOnly) {
+        write_over_cover_experiment_summary_artifacts(
+            options,
+            stage,
+            fitting,
+            geomagic,
+            preview,
+            quality,
+            artifacts);
+    }
 
     if (errorMessage != nullptr) {
         errorMessage->clear();
@@ -1940,59 +1971,62 @@ int main(int argc, char* argv[]) {
     options.candidateId = candidate->candidate_id;
     const auto boundary = selection.boundary;
 
-    print_stage("building STP-sampled fitting STL");
-    spo::StlMesh fittingMesh;
-    spo::StpSampledFittingOptions samplingOptions;
-    samplingOptions.enableCornerFeatureDenseSampling = options.enableB1CornerFeatureSampling;
-    samplingOptions.cornerFeatureSamplesPerEdge = options.cornerFeatureSamplesPerEdge;
-    samplingOptions.enableAdjacentFaceSupportCollar = options.enableB2AdjacentFaceSupportCollar;
-    samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
-    samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
-    samplingOptions.adjacentFaceSupportCollarRingCount = options.adjacentFaceSupportCollarRingCount;
-    samplingOptions.enableAdaptiveAdjacentFaceSupportCollarWidth =
-        options.enableAdaptiveAdjacentFaceSupportCollarWidth;
-    samplingOptions.adjacentFaceSupportCollarUnderCover =
-        options.adjacentFaceSupportCollarUnderCover;
-    samplingOptions.enableAdjacentFaceSupportCollarCornerClamp = options.enableB2CornerSafeSupportCollar;
-    samplingOptions.adjacentFaceSupportCollarMaxOffsetScale = options.adjacentFaceSupportCollarMaxOffsetScale;
-    samplingOptions.enableCandidateSurfaceOverCover = options.enableCandidateSurfaceOverCover;
-    samplingOptions.candidateSurfaceOverCoverSamplesPerEdge =
-        options.candidateSurfaceOverCoverSamplesPerEdge;
-    samplingOptions.candidateSurfaceOverCoverWidth = options.candidateSurfaceOverCoverWidth;
-    samplingOptions.candidateSurfaceOverCoverRingCount = options.candidateSurfaceOverCoverRingCount;
-    samplingOptions.candidateSurfaceOverCoverCornerMiterMaxScale =
-        options.candidateSurfaceOverCoverCornerMiterMaxScale;
-    samplingOptions.candidateSurfaceOverCoverDisableOuterRings =
-        options.candidateSurfaceOverCoverDisableOuterRings;
-    samplingOptions.candidateSurfaceOverCoverSmoothStrip =
-        options.candidateSurfaceOverCoverSmoothStrip;
-    samplingOptions.candidateSurfaceOverCoverBodyBridgeMode =
-        options.candidateSurfaceOverCoverBodyBridgeMode;
-    fittingReport = spo::StpSampledFittingMeshBuilder().build(
-        document,
-        *candidate,
-        samplingOptions,
-        fittingMesh);
-    if (!fittingReport.success) {
-        return fail("stp_sampled_fitting", fittingReport.message);
-    }
+    std::filesystem::path localStlPath;
+    if (!options.applyOnly) {
+        print_stage("building STP-sampled fitting STL");
+        spo::StlMesh fittingMesh;
+        spo::StpSampledFittingOptions samplingOptions;
+        samplingOptions.enableCornerFeatureDenseSampling = options.enableB1CornerFeatureSampling;
+        samplingOptions.cornerFeatureSamplesPerEdge = options.cornerFeatureSamplesPerEdge;
+        samplingOptions.enableAdjacentFaceSupportCollar = options.enableB2AdjacentFaceSupportCollar;
+        samplingOptions.adjacentFaceSupportCollarSamplesPerEdge = options.adjacentFaceSupportCollarSamplesPerEdge;
+        samplingOptions.adjacentFaceSupportCollarWidth = options.adjacentFaceSupportCollarWidth;
+        samplingOptions.adjacentFaceSupportCollarRingCount = options.adjacentFaceSupportCollarRingCount;
+        samplingOptions.enableAdaptiveAdjacentFaceSupportCollarWidth =
+            options.enableAdaptiveAdjacentFaceSupportCollarWidth;
+        samplingOptions.adjacentFaceSupportCollarUnderCover =
+            options.adjacentFaceSupportCollarUnderCover;
+        samplingOptions.enableAdjacentFaceSupportCollarCornerClamp = options.enableB2CornerSafeSupportCollar;
+        samplingOptions.adjacentFaceSupportCollarMaxOffsetScale = options.adjacentFaceSupportCollarMaxOffsetScale;
+        samplingOptions.enableCandidateSurfaceOverCover = options.enableCandidateSurfaceOverCover;
+        samplingOptions.candidateSurfaceOverCoverSamplesPerEdge =
+            options.candidateSurfaceOverCoverSamplesPerEdge;
+        samplingOptions.candidateSurfaceOverCoverWidth = options.candidateSurfaceOverCoverWidth;
+        samplingOptions.candidateSurfaceOverCoverRingCount = options.candidateSurfaceOverCoverRingCount;
+        samplingOptions.candidateSurfaceOverCoverCornerMiterMaxScale =
+            options.candidateSurfaceOverCoverCornerMiterMaxScale;
+        samplingOptions.candidateSurfaceOverCoverDisableOuterRings =
+            options.candidateSurfaceOverCoverDisableOuterRings;
+        samplingOptions.candidateSurfaceOverCoverSmoothStrip =
+            options.candidateSurfaceOverCoverSmoothStrip;
+        samplingOptions.candidateSurfaceOverCoverBodyBridgeMode =
+            options.candidateSurfaceOverCoverBodyBridgeMode;
+        fittingReport = spo::StpSampledFittingMeshBuilder().build(
+            document,
+            *candidate,
+            samplingOptions,
+            fittingMesh);
+        if (!fittingReport.success) {
+            return fail("stp_sampled_fitting", fittingReport.message);
+        }
 
-    const auto localStlPath = fitting_stl_path(document, *candidate);
-    fittingReport.outputPath = localStlPath;
-    std::error_code stlDirError;
-    std::filesystem::create_directories(localStlPath.parent_path(), stlDirError);
-    if (stlDirError) {
-        fittingReport.success = false;
-        fittingReport.message = "Could not create fitting STL directory: " + stlDirError.message();
-        return fail("write_fitting_stl", fittingReport.message);
+        localStlPath = fitting_stl_path(document, *candidate);
+        fittingReport.outputPath = localStlPath;
+        std::error_code stlDirError;
+        std::filesystem::create_directories(localStlPath.parent_path(), stlDirError);
+        if (stlDirError) {
+            fittingReport.success = false;
+            fittingReport.message = "Could not create fitting STL directory: " + stlDirError.message();
+            return fail("write_fitting_stl", fittingReport.message);
+        }
+        const auto writeStl = spo::StlWriter().write(fittingMesh, localStlPath);
+        if (!writeStl.success) {
+            fittingReport.success = false;
+            fittingReport.message = writeStl.message;
+            return fail("write_fitting_stl", writeStl.message);
+        }
+        write_over_cover_diagnostic_artifacts(options, fittingReport);
     }
-    const auto writeStl = spo::StlWriter().write(fittingMesh, localStlPath);
-    if (!writeStl.success) {
-        fittingReport.success = false;
-        fittingReport.message = writeStl.message;
-        return fail("write_fitting_stl", writeStl.message);
-    }
-    write_over_cover_diagnostic_artifacts(options, fittingReport);
 
     if (options.patchPath.empty()) {
         print_stage("running Geomagic AutoSurface");
@@ -2067,6 +2101,27 @@ int main(int argc, char* argv[]) {
                 " highRisk=" + std::to_string(previewReport.highRisk) +
                 " message=" + previewReport.message +
                 " warning=" + previewReport.warningMessage);
+    }
+
+    if (options.generateOnly) {
+        std::string reportError;
+        if (!write_report(
+                options,
+                true,
+                "generated_patch",
+                fittingReport,
+                geomagicResult,
+                previewReport,
+                applyReport,
+                appliedStepExportReport,
+                qualityReport,
+                artifacts,
+                &reportError)) {
+            std::cerr << "Report write failed: " << reportError << "\n";
+            return 1;
+        }
+        std::cout << "corner baseline report: " << path_to_string(options.reportPath) << "\n";
+        return 0;
     }
 
     print_stage("evaluating commercial-CAD-like drift gate");
