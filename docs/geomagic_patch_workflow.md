@@ -716,8 +716,10 @@ cmake --build --preset windows-msvc-debug --target corner_baseline_probe
 默认输出报告：
 
 ```text
-data/baseline_runs/baseline_report.json
+data/runs/<timestamp>__corner-baseline__<model>__cand-<id|auto>__direct/baseline_report.json
 ```
+
+通过 `run_corner_baseline_gate.ps1`、Route 2 runner 或 Creo runner 启动时，同一运行目录还会生成 `run.json`、`RUN.md`、`artifacts/`、`diagnostics/`、`logs/`。底层 probe 直接运行时也使用唯一时间戳目录，但统一 Git/参数清单以脚本入口为准。
 
 Geomagic staging 与 GUI 相同：
 
@@ -1235,31 +1237,33 @@ candidate patch status = Applied
 
 ---
 
-## 9. Workspace 规范
+## 9. 运行产物规范
 
-推荐：
+新运行统一写入：
 
 ```text
-workspace/
-  session_YYYYMMDD_HHMMSS/
-    input/
-      source.step
-      source.stl
+data/runs/
+  <yyyyMMdd_HHmmss_fff>__<workflow>__<model>__cand-<四位编号|auto|na>__<variant>/
+    run.json
+    RUN.md
+    artifacts/
+      fitting input / raw patch / normalized patch / applied STEP
+    diagnostics/
+      over-cover / OCCT / ModelCHECK diagnostics
+    logs/
+      build / ctest / Geomagic / external runner stdout/stderr
+```
 
-    region_0001/
-      candidate.json
-      boundary_report.json
-      local_input.stl
-      crop_report.json
-      autosurface_stdout.log
-      autosurface_stderr.log
-      fit_region.log
-      local_output.stp
-      local_output_autosurface.igs
-      patch_import_report.json
-      patch_preview_report.json
-      replacement_report.json
-      validation_report.json
+`run.json` 是机器可读真值，记录 Git commit/branch/dirty、源文件 SHA-256、入口参数、阶段状态和关键产物；`RUN.md` 是人工摘要。数字 candidate 统一四位补零。
+
+兼容边界：
+
+```text
+1. data/crop_stl、data/crop_stp、data/crop_igs 继续作为 GUI / Geomagic staging，允许覆盖。
+2. staging 文件不能单独作为某轮验收证据；应使用 run-local artifacts 和 run.json 中登记的来源。
+3. 旧 data/baseline_runs 保持只读历史，不批量迁移或删除。
+4. 显式 -OutputDir 仍支持，但目录中已有 run.json 时拒绝覆盖。
+5. scripts/list_runs.ps1 用于按 workflow、model、candidate、status 和时间查找运行。
 ```
 
 ---

@@ -134,11 +134,14 @@ $env:VCPKG_ROOT = $vcpkgRoot
 $env:Path = "C:\Program Files\CMake\bin;$vcpkgRoot;" + $env:Path
 
 Invoke-Native -FilePath "cmake" -Arguments @("--preset", $Preset)
-Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "spo_tests")
+Invoke-Native -FilePath "powershell" -Arguments @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", (Join-Path $repoRoot "scripts\test.ps1"),
+    "-Preset", $Preset
+)
 Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "patch_apply_probe")
 Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "corner_baseline_probe")
-
-Invoke-Native -FilePath "ctest" -Arguments @("--preset", $Preset, "-R", "spo_tests", "--output-on-failure")
 
 if ($RealGeomagic) {
     Invoke-Native -FilePath "powershell" -Arguments @(

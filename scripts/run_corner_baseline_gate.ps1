@@ -36,6 +36,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 function Invoke-Native {
     param(
@@ -182,12 +183,17 @@ if (-not (Test-Path $SourceStep)) {
     throw "SourceStep does not exist: $SourceStep"
 }
 
-if (-not $OutputDir) {
-    $experimentSlug = $Experiment.ToLowerInvariant()
-    $OutputDir = Join-Path $repoRoot "data\baseline_runs\scripted_${experimentSlug}_gate"
-} else {
-    $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
-}
+$experimentSlug = $Experiment.ToLowerInvariant()
+$runContext = New-SpoRunContext `
+    -RepoRoot $repoRoot `
+    -Workflow "corner-baseline" `
+    -SourcePath $SourceStep `
+    -CandidateId $CandidateId `
+    -Variant $experimentSlug `
+    -OutputDir $OutputDir `
+    -ScriptPath $PSCommandPath `
+    -Parameters (Get-SpoEffectiveScriptParameters -ParameterNames $MyInvocation.MyCommand.Parameters.Keys)
+$OutputDir = $runContext.output_dir
 
 if (-not $Report) {
     $Report = Join-Path $OutputDir "baseline_report.json"
@@ -198,6 +204,7 @@ if (-not $Report) {
 if ($Patch) {
     $Patch = Convert-ToRepoAbsolutePath -PathValue $Patch
     if (-not (Test-Path $Patch)) {
+        Complete-SpoRun -Context $runContext -Status "failed" -Message "Patch does not exist: $Patch"
         throw "Patch does not exist: $Patch"
     }
 }
@@ -209,16 +216,22 @@ if (-not $Patch -and -not $RealGeomagic -and $candidateIdIsNumeric) {
 }
 
 if (-not $Patch -and -not $RealGeomagic) {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "skipped" `
+        -Message "No existing patch was found and RealGeomagic was not requested."
     Write-Host "SKIPPED: no existing patch found. Pass -Patch, numeric -CandidateId with an existing staged patch, or -RealGeomagic."
     exit 0
 }
 
 if ($RealGeomagic -and -not $Patch -and -not (Test-Path $WrapCore)) {
+    Complete-SpoRun -Context $runContext -Status "failed" -Message "wrapCore was not found: $WrapCore"
     throw "wrapCore was not found: $WrapCore"
 }
 
-Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "corner_baseline_probe")
-$probeExe = Find-CornerBaselineProbeExe
+try {
+    Invoke-Native -FilePath "cmake" -Arguments @("--build", "--preset", $Preset, "--target", "corner_baseline_probe")
+    $probeExe = Find-CornerBaselineProbeExe
 
 $probeArgs = @(
     "--source-step", $SourceStep,
@@ -290,15 +303,58 @@ Write-Host ""
 Write-Host "==> $probeExe $($probeArgs -join ' ')"
 & $probeExe @probeArgs
 $probeExitCode = $LASTEXITCODE
-
-if ($probeExitCode -ne 0) {
-    if ($AllowQualityGateFailure -and (Test-AllowableBaselineFailure -ReportPath $Report)) {
-        Write-Warning "Baseline pipeline completed but CommercialCadLikeQualityGate failed; report preserved at $Report"
-        exit 0
+$resolvedCandidateId = ""
+if (Test-Path -LiteralPath $Report) {
+    try {
+        $baselineResult = Get-Content -Raw -LiteralPath $Report | ConvertFrom-Json
+        if ($null -ne $baselineResult.candidate_id) {
+            $resolvedCandidateId = [string]$baselineResult.candidate_id
+        }
+    } catch {
     }
-
-    throw "$probeExe failed with exit code $probeExitCode"
 }
 
-Write-Host ""
-Write-Host "corner baseline gate completed: $Report"
+    if ($probeExitCode -ne 0) {
+        if ($AllowQualityGateFailure -and (Test-AllowableBaselineFailure -ReportPath $Report)) {
+            Complete-SpoRun `
+                -Context $runContext `
+                -Status "failed_quality_gate" `
+                -Message "Pipeline completed, but CommercialCadLikeQualityGate failed as allowed." `
+                -ResolvedCandidateId $resolvedCandidateId `
+                -Artifacts ([ordered]@{
+                    baseline_report = $Report
+                    artifacts = $runContext.directories.artifacts
+                    diagnostics = $runContext.directories.diagnostics
+                }) `
+                -Stages ([ordered]@{ corner_baseline_probe = [ordered]@{ exit_code = $probeExitCode; passed = $false } })
+            Write-Warning "Baseline pipeline completed but CommercialCadLikeQualityGate failed; report preserved at $Report"
+            exit 0
+        }
+
+        throw "$probeExe failed with exit code $probeExitCode"
+    }
+
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "passed" `
+        -Message "Corner baseline gate completed." `
+        -ResolvedCandidateId $resolvedCandidateId `
+        -Artifacts ([ordered]@{
+            baseline_report = $Report
+            artifacts = $runContext.directories.artifacts
+            diagnostics = $runContext.directories.diagnostics
+        }) `
+        -Stages ([ordered]@{ corner_baseline_probe = [ordered]@{ exit_code = $probeExitCode; passed = $true } })
+
+    Write-Host ""
+    Write-Host "corner baseline gate completed: $Report"
+    Write-Host "Run directory: $OutputDir"
+} catch {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message $_.Exception.Message `
+        -ResolvedCandidateId $resolvedCandidateId `
+        -Artifacts ([ordered]@{ baseline_report = $Report })
+    throw
+}

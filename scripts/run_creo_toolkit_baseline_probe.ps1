@@ -15,6 +15,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 function Convert-ToRepoAbsolutePath {
     param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -98,18 +99,21 @@ function Find-CreoToolkitRoot {
 }
 
 function Find-LatestAppliedStep {
-    $root = Join-Path $repoRoot "data\baseline_runs"
-    if (-not (Test-Path -LiteralPath $root)) {
-        throw "No baseline_runs directory exists. Pass -StepPath explicitly."
+    $roots = @(
+        (Join-Path $repoRoot "data\runs"),
+        (Join-Path $repoRoot "data\baseline_runs")
+    ) | Where-Object { Test-Path -LiteralPath $_ }
+    if ($roots.Count -eq 0) {
+        throw "No data/runs or legacy data/baseline_runs directory exists. Pass -StepPath explicitly."
     }
 
-    $latest = Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+    $latest = Get-ChildItem -LiteralPath $roots -Recurse -File -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -like "*_applied.stp" -or $_.Name -like "*_applied.step" } |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
 
     if (-not $latest) {
-        throw "No *_applied.stp or *_applied.step file was found under data\baseline_runs. Pass -StepPath explicitly."
+        throw "No *_applied.stp or *_applied.step file was found under data/runs or legacy data/baseline_runs. Pass -StepPath explicitly."
     }
 
     return $latest.FullName
@@ -134,11 +138,14 @@ function Invoke-ProcessWithTimeout {
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [Parameter(Mandatory = $true)][string]$WorkingDirectory,
         [Parameter(Mandatory = $true)][string]$LogPrefix,
-        [Parameter(Mandatory = $true)][int]$Timeout
+        [Parameter(Mandatory = $true)][int]$Timeout,
+        [string]$LogDirectory = ""
     )
 
-    $stdoutPath = Join-Path $WorkingDirectory "$LogPrefix.stdout.txt"
-    $stderrPath = Join-Path $WorkingDirectory "$LogPrefix.stderr.txt"
+    $effectiveLogDirectory = if ($LogDirectory) { $LogDirectory } else { $WorkingDirectory }
+    New-Item -ItemType Directory -Force -Path $effectiveLogDirectory | Out-Null
+    $stdoutPath = Join-Path $effectiveLogDirectory "$LogPrefix.stdout.txt"
+    $stderrPath = Join-Path $effectiveLogDirectory "$LogPrefix.stderr.txt"
     if (Test-Path -LiteralPath $stdoutPath) {
         Remove-Item -LiteralPath $stdoutPath -Force
     }
@@ -186,20 +193,25 @@ if (-not (Test-Path -LiteralPath $StepPath)) {
     throw "StepPath does not exist: $StepPath"
 }
 
-if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot "data\baseline_runs\creo_toolkit_baseline_probe"
-} else {
-    $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
-}
+$runContext = New-SpoRunContext `
+    -RepoRoot $repoRoot `
+    -Workflow "creo-toolkit-baseline" `
+    -SourcePath $StepPath `
+    -CandidateId "na" `
+    -Variant $ImportKind `
+    -OutputDir $OutputDir `
+    -ScriptPath $PSCommandPath `
+    -Parameters (Get-SpoEffectiveScriptParameters -ParameterNames $MyInvocation.MyCommand.Parameters.Keys)
+$OutputDir = $runContext.output_dir
 
 $sourceDir = Join-Path $repoRoot "tools\creo_toolkit_baseline_probe"
 $buildDir = Join-Path $repoRoot "build\creo_toolkit_baseline_probe"
-$stageDir = Join-Path $OutputDir "stage"
-$modelcheckOutputDir = Join-Path $OutputDir "modelcheck"
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+$stageDir = Join-Path $runContext.directories.artifacts "stage"
+$modelcheckOutputDir = Join-Path $runContext.directories.diagnostics "modelcheck"
 New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
 New-Item -ItemType Directory -Force -Path $modelcheckOutputDir | Out-Null
 
+try {
 $stagedStep = Join-Path $stageDir ("input" + [System.IO.Path]::GetExtension($StepPath).ToLowerInvariant())
 Copy-Item -LiteralPath $StepPath -Destination $stagedStep -Force
 
@@ -226,9 +238,14 @@ if (-not $exe) {
 }
 
 $resultPath = Join-Path $OutputDir "creo_toolkit_baseline_result.json"
-$exportStepBase = Join-Path $OutputDir "creo_toolkit_import_export"
+$exportStepBase = Join-Path $runContext.directories.artifacts "creo_toolkit_import_export"
 
 if ($BuildOnly -or $SkipRun) {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "built" `
+        -Message "Creo Toolkit baseline probe built without execution." `
+        -Artifacts ([ordered]@{ staged_input = $stagedStep })
     Write-Host "Creo Toolkit baseline probe built: $($exe.FullName)"
     Write-Host "Import kind: $ImportKind"
     Write-Host "Staged input: $stagedStep"
@@ -261,7 +278,8 @@ $run = Invoke-ProcessWithTimeout `
     -Arguments $probeArgs `
     -WorkingDirectory $OutputDir `
     -LogPrefix "creo_toolkit_baseline" `
-    -Timeout $TimeoutSeconds
+    -Timeout $TimeoutSeconds `
+    -LogDirectory $runContext.directories.logs
 
 Write-Host "Creo Toolkit baseline probe exit code: $($run.exit_code)"
 Write-Host "Result JSON: $resultPath"
@@ -269,5 +287,34 @@ Write-Host "Stdout: $($run.stdout_path)"
 Write-Host "Stderr: $($run.stderr_path)"
 
 if ($run.exit_code -ne 0) {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message "Creo Toolkit baseline probe exited with code $($run.exit_code)." `
+        -Artifacts ([ordered]@{
+            result_json = $resultPath
+            stdout = $run.stdout_path
+            stderr = $run.stderr_path
+        }) `
+        -Stages ([ordered]@{ toolkit_probe = $run })
     exit $run.exit_code
+}
+
+Complete-SpoRun `
+    -Context $runContext `
+    -Status "passed" `
+    -Message "Creo Toolkit baseline probe completed." `
+    -Artifacts ([ordered]@{
+        result_json = $resultPath
+        exported_step_base = $exportStepBase
+        stdout = $run.stdout_path
+        stderr = $run.stderr_path
+    }) `
+    -Stages ([ordered]@{ toolkit_probe = $run })
+} catch {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message $_.Exception.Message
+    throw
 }

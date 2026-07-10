@@ -18,6 +18,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 function Convert-ToRepoAbsolutePath {
     param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -364,21 +365,28 @@ if (-not (Test-Path -LiteralPath $SourceStep)) {
     throw "SourceStep does not exist: $SourceStep"
 }
 
-if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot ("data\baseline_runs\creo_toolkit_phase1_repair\" + (Get-Date -Format "yyyyMMdd_HHmmss"))
-} else {
-    $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
-}
+$runContext = New-SpoRunContext `
+    -RepoRoot $repoRoot `
+    -Workflow "creo-toolkit-phase1-repair" `
+    -SourcePath $SourceStep `
+    -CandidateId $CandidateId `
+    -Variant $Experiment.ToLowerInvariant() `
+    -OutputDir $OutputDir `
+    -ScriptPath $PSCommandPath `
+    -Parameters (Get-SpoEffectiveScriptParameters -ParameterNames $MyInvocation.MyCommand.Parameters.Keys)
+$OutputDir = $runContext.output_dir
 
-$resolvedCreoRoot = Find-CreoToolkitRoot -PreferredRoot $CreoRoot
-$geomagicRunDir = Join-Path $OutputDir "geomagic_generation"
-$inputsDir = Join-Path $OutputDir "phase1_inputs"
-$creoRunDir = Join-Path $OutputDir "creo_toolkit"
-$occtRunDir = Join-Path $OutputDir "occt_validation"
-$modelcheckParseDir = Join-Path $OutputDir "modelcheck_parse"
+$geomagicRunDir = Join-Path $runContext.directories.artifacts "geomagic_generation"
+$inputsDir = Join-Path $runContext.directories.artifacts "phase1_inputs"
+$creoRunDir = Join-Path $runContext.directories.artifacts "creo_toolkit"
+$occtRunDir = Join-Path $runContext.directories.diagnostics "occt_validation"
+$modelcheckParseDir = Join-Path $runContext.directories.diagnostics "modelcheck_parse"
 foreach ($dir in @($OutputDir, $geomagicRunDir, $inputsDir, $creoRunDir, $occtRunDir, $modelcheckParseDir)) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
+
+try {
+$resolvedCreoRoot = Find-CreoToolkitRoot -PreferredRoot $CreoRoot
 
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USERPROFILE "vcpkg" }
 $env:VCPKG_ROOT = $vcpkgRoot
@@ -395,6 +403,10 @@ Invoke-NativeCommand -FilePath "cmake" -Arguments @("-S", $toolkitSourceDir, "-B
 Invoke-NativeCommand -FilePath "cmake" -Arguments @("--build", $toolkitBuildDir, "--config", $Configuration) -WorkingDirectory $repoRoot
 
 if ($BuildOnly -or $SkipRun) {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "built" `
+        -Message "Creo Toolkit phase1 repair tools built without execution."
     Write-Host "Creo Toolkit phase1 probe built under: $toolkitBuildDir"
     Write-Host "Output directory prepared: $OutputDir"
     exit 0
@@ -650,5 +662,45 @@ Write-Host "Creo exported STEP: $exportedStep"
 Write-Host "StrictTopologyGate report: $strictGateReportPath"
 
 if (-not $overallPassed) {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message "Creo Toolkit phase 1 repair acceptance failed." `
+        -ResolvedCandidateId ([string]$resolvedCandidateId) `
+        -Artifacts ([ordered]@{
+            result_json = $summaryPath
+            baseline_report = $baselineReport
+            artifacts = $runContext.directories.artifacts
+            diagnostics = $runContext.directories.diagnostics
+        }) `
+        -Stages ([ordered]@{
+            geomagic_generation = $geomagicGenerationRun.exit_code
+            creo_toolkit = $creoRun.exit_code
+            strict_topology_gate = if ($strictGateRun) { $strictGateRun.exit_code } else { $null }
+        })
     exit 20
+}
+
+Complete-SpoRun `
+    -Context $runContext `
+    -Status "passed" `
+    -Message "Creo Toolkit phase 1 repair acceptance passed." `
+    -ResolvedCandidateId ([string]$resolvedCandidateId) `
+    -Artifacts ([ordered]@{
+        result_json = $summaryPath
+        baseline_report = $baselineReport
+        artifacts = $runContext.directories.artifacts
+        diagnostics = $runContext.directories.diagnostics
+    }) `
+    -Stages ([ordered]@{
+        geomagic_generation = $geomagicGenerationRun.exit_code
+        creo_toolkit = $creoRun.exit_code
+        strict_topology_gate = if ($strictGateRun) { $strictGateRun.exit_code } else { $null }
+    })
+} catch {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message $_.Exception.Message
+    throw
 }

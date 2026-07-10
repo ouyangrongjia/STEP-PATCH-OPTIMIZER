@@ -102,15 +102,21 @@ adjacent-face support collar 只保留为窄辅助上下文
       --candidate-over-cover-smooth-strip
       --geomagic-no-sharpen-contours
     - JSON/CSV 新增 generated/emitted/disabled ring count、emitted sample count、body bridge mode、body bridge triangle count、smooth strip/transition 标记。
-    - candidate_surface_over_cover_diagnostics 新增 overcover_experiment_summary.json/csv。
-    - corner_baseline_probe 新增 probe_artifacts，保存本轮 fitting STL、raw patch STP/IGES、fit_region log 的 run-local copy。
-    - run_boundary_trim_fill_experiments.ps1 会把 candidate_surface_over_cover_diagnostics 复制进 route2_artifacts。
+    - diagnostics/candidate_surface_over_cover 新增 overcover_experiment_summary.json/csv。
+    - corner_baseline_probe 使用 artifacts/ 保存本轮 fitting STL、raw patch STP/IGES、fit_region log 的 run-local copy。
+    - run_boundary_trim_fill_experiments.ps1 会把 over-cover 诊断复制进本轮 diagnostics/。
 14. 2026-07-10 测试耗时去重已落地：
     - Route 2 的 Geomagic 生成阶段只生成并预览补片；单位归一化后只执行一次 Apply。
     - 已有补片的 Apply 不再重复生成 fitting STL 和 over-cover 诊断产物。
     - 单位归一化、坐标对齐输入、Creo ModelCHECK 诊断和 Creo Toolkit sewing 对照路线全部保留。
     - StrictTopologyGate 的 after_stats 复用于指标汇报，不再用 step_stats.exe 二次读取同一 STEP。
     - 默认 spo_tests 只跑单元测试；真实文件与真实 Geomagic 改为显式测试目标。
+15. 2026-07-10 测试与实验运行目录已统一：
+    - 新默认目录为 data/runs/<时间>__<流程>__<模型>__cand-<四位编号>__<变体>。
+    - 每轮固定生成 run.json、RUN.md、artifacts/、diagnostics/、logs/。
+    - test.ps1 保存 build.log / ctest.log；baseline、Route 2、Creo 和 Toolkit runner 记录 Git 状态、源文件 SHA-256、参数和阶段结果。
+    - list_runs.ps1 支持按 workflow/model/candidate/status/latest 查询。
+    - data/crop_* 继续作为可覆盖 staging；旧 data/baseline_runs 只读保留。
 ```
 
 已验证：
@@ -146,7 +152,7 @@ data/baseline_runs/route2_conservative_restored_baseline_20260702_134331/route2_
 data/baseline_runs/route2_candidate_overcover_conservative_rerun_20260628_015653/route2_artifacts/
 ```
 
-后续每次测试都必须保留同类 route2_artifacts 角色文件：
+上述目录是历史基线。后续每次新测试必须写入独立 `data/runs/<run-id>/`，并在 `artifacts/` 中保留同类角色文件：
 
 ```text
 ROUTE2_SUMMARY.md
@@ -271,7 +277,6 @@ wire-ring / direction-field 两次实验可作为失败证据保留在历史 run
   -CandidateOverCoverWidth 0.25 `
   -CandidateOverCoverRings 3 `
   -CandidateOverCoverSamples 64 `
-  -OutputDir data\baseline_runs\route2_candidate_overcover_conservative_<timestamp> `
   -WrapCore "E:\Geomagic Wrap\wrapCore.exe" `
   -CreoRoot "E:\Proe\Creo 11.0.0.0"
 ```
@@ -408,7 +413,18 @@ raw patch UnifySameDomain 不是直接修复：
 6. 只有当 longTriangleCount 和 rejectedCount 收到可解释低值后，再继续定位 failed_patch_face_index=7 / original boundary edge 1585 的 open-wire closure。
 ```
 
-每轮 Route 2 真实样例目录必须收敛到 `route2_artifacts/`：
+每轮新的 Route 2 真实样例必须收敛到统一运行目录：
+
+```text
+data/runs/<timestamp>__boundary-trim-fill__<model>__cand-<id>__route1-route2/
+  run.json
+  RUN.md
+  artifacts/
+  diagnostics/
+  logs/
+```
+
+`artifacts/` 保留：
 
 ```text
 1. Geomagic 输入裁剪 STL：
@@ -419,18 +435,22 @@ raw patch UnifySameDomain 不是直接修复：
    normalized_patch_mm.stp
 4. base_removed_candidate：
    base_removed_candidate.stp
-5. Geomagic 真实运行记录：
-   GEOMAGIC_RUN.md
-   geomagic_fit_region.log
-   geomagic_generation.stdout.txt
-   geomagic_generation.stderr.txt（仅非空时保留）
-6. OCCT strict re-trim / PatchReplacementCommand 尝试合并后的 STEP：
+5. OCCT strict re-trim / PatchReplacementCommand 尝试合并后的 STEP：
    如果未生成，目录表必须标记 exists=false 并记录失败原因。
-7. Creo API import-feature sewing 尝试合并后的 STEP：
+6. Creo API import-feature sewing 尝试合并后的 STEP：
    creo_api_merged.stp
 
 对应说明文件：
   ROUTE2_SUMMARY.md
+
+logs/ 保留：
+  GEOMAGIC_RUN.md
+  geomagic_fit_region.log
+  geomagic_generation.stdout.txt
+  geomagic_generation.stderr.txt（仅非空时保留）
+
+diagnostics/ 保留：
+  candidate_surface_over_cover/
 
 不保留低价值文件：
   run_exit_code.txt

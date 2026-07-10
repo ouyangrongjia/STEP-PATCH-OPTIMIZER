@@ -121,6 +121,8 @@ step-patch-optimizer/
 │   ├── run_creo_toolkit_phase1_repair.ps1
 │   ├── run_geomagic_patch.ps1
 │   ├── run_gui.ps1
+│   ├── run_artifacts.ps1
+│   ├── list_runs.ps1
 │   ├── setup_deps.ps1
 │   ├── test.ps1
 │   └── verify_spo.ps1
@@ -129,6 +131,9 @@ step-patch-optimizer/
 │   └── autosurface_pipeline.py
 │
 ├── log/                         # 运行时 Patch preview root run log，git ignore
+├── data/runs/                   # 新测试/实验的一次运行一个目录，含 run.json / RUN.md / artifacts / diagnostics / logs
+├── data/baseline_runs/          # 旧实验历史，只读保留，不再作为新运行默认目录
+├── data/crop_stl|crop_stp|crop_igs/ # GUI / Geomagic 共享暂存区，可覆盖，不作为历史验收来源
 │
 ├── src/
 │   ├── app/                    # main, MainWindow, AppController, process status, patch preview logging
@@ -215,6 +220,9 @@ Geomagic patch 主线：geomagic_patch_workflow.md
 | `tests/` | 单元测试、命令测试、patch / STL / gate / script contract 回归测试 |
 | `tools/` | 命令行批处理、STEP 统计、Patch Apply probe、baseline probe、StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
 | `scripts/` | Windows 环境初始化、依赖安装、构建运行、验证、Geomagic、Route 2 和 Creo 诊断脚本 |
+| `data/runs/` | 新测试和实验运行归档；目录名包含时间、流程、模型、候选、变体，每轮含统一清单和标准子目录 |
+| `data/baseline_runs/` | 旧运行历史，只读保留；不做批量迁移，不再接收默认新运行 |
+| `data/crop_stl/` / `data/crop_stp/` / `data/crop_igs/` | GUI / Geomagic 兼容 staging；同模型同候选可被覆盖，不能单独证明某轮测试结果 |
 | `docs/` | 架构、进度、运行、目录文档 |
 
 ---

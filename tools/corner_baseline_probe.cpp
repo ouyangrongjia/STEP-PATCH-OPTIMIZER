@@ -22,6 +22,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -107,6 +109,58 @@ std::string path_to_string(const std::filesystem::path& path) {
 QString path_to_qstring(const std::filesystem::path& path) {
     const auto utf8 = path.generic_u8string();
     return QString::fromUtf8(reinterpret_cast<const char*>(utf8.c_str()), static_cast<qsizetype>(utf8.size()));
+}
+
+std::string run_timestamp() {
+    const auto now = std::chrono::system_clock::now();
+    const auto time = std::chrono::system_clock::to_time_t(now);
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &time);
+#else
+    localtime_r(&time, &local);
+#endif
+    const auto milliseconds =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+
+    std::ostringstream stream;
+    stream << std::put_time(&local, "%Y%m%d_%H%M%S")
+           << '_' << std::setw(3) << std::setfill('0') << milliseconds.count();
+    return stream.str();
+}
+
+std::string run_token(std::string value, const char* fallback) {
+    for (auto& ch : value) {
+        const auto byte = static_cast<unsigned char>(ch);
+        if (byte < 32 || ch == '<' || ch == '>' || ch == ':' || ch == '"' ||
+            ch == '/' || ch == '\\' || ch == '|' || ch == '?' || ch == '*' ||
+            std::isspace(byte)) {
+            ch = '_';
+        }
+    }
+    value.erase(std::unique(value.begin(), value.end(), [](char left, char right) {
+        return left == '_' && right == '_';
+    }), value.end());
+    while (!value.empty() && (value.front() == '_' || value.front() == '.')) {
+        value.erase(value.begin());
+    }
+    while (!value.empty() && (value.back() == '_' || value.back() == '.')) {
+        value.pop_back();
+    }
+    return value.empty() ? fallback : value;
+}
+
+std::filesystem::path default_run_output_dir(const Options& options) {
+    const auto model = run_token(path_to_string(options.sourceStep.stem()), "model");
+    std::ostringstream candidate;
+    if (options.autoCandidateId) {
+        candidate << "cand-auto";
+    } else {
+        candidate << "cand-" << std::setw(4) << std::setfill('0') << options.candidateId;
+    }
+    const auto runId = run_timestamp() + "__corner-baseline__" + model + "__" +
+        candidate.str() + "__direct";
+    return repo_root() / "data" / "runs" / runId;
 }
 
 const char* body_bridge_mode_name(spo::CandidateSurfaceOverCoverBodyBridgeMode mode) {
@@ -226,7 +280,7 @@ void print_usage() {
         << "  --patch <patch.stp|patch.igs>             Reuse an existing patch and skip Geomagic.\n"
         << "  --generate-only                           Stop after Geomagic patch import and preview.\n"
         << "  --apply-only                              Reuse --patch without rebuilding fitting STL diagnostics.\n"
-        << "  --output-dir <dir>                       Default: <repo>/data/baseline_runs.\n"
+        << "  --output-dir <dir>                       Default: canonical <repo>/data/runs/<run-id>.\n"
         << "  --report <path>                          Default: <output-dir>/baseline_report.json.\n"
         << "  --wrap-core <path>                       Default: E:/Geomagic Wrap/wrapCore.exe.\n"
         << "  --script <path>                          Default: <repo>/scripts/geomagic_wrap/autosurface_pipeline.py.\n"
@@ -268,7 +322,6 @@ void print_usage() {
 
 bool parse_options(int argc, char* argv[], Options& options) {
     const auto root = repo_root();
-    options.outputDir = root / "data" / "baseline_runs";
     options.scriptPath = root / "scripts" / "geomagic_wrap" / "autosurface_pipeline.py";
 
     for (int index = 1; index < argc; ++index) {
@@ -507,6 +560,9 @@ bool parse_options(int argc, char* argv[], Options& options) {
         }
     }
 
+    if (options.outputDir.empty()) {
+        options.outputDir = default_run_output_dir(options);
+    }
     options.outputDir = std::filesystem::absolute(options.outputDir).lexically_normal();
     if (options.reportPath.empty()) {
         options.reportPath = options.outputDir / "baseline_report.json";
@@ -690,7 +746,8 @@ std::filesystem::path applied_step_path(
     const Options& options,
     const spo::ShapeDocument& document,
     const spo::MergeCandidate& candidate) {
-    return options.outputDir / candidate_patch_filename(document, candidate, "_applied.stp");
+    return options.outputDir / "artifacts" /
+        candidate_patch_filename(document, candidate, "_applied.stp");
 }
 
 std::filesystem::path sidecar_path(const std::filesystem::path& outputStepPath, const char* suffix) {
@@ -885,7 +942,7 @@ QJsonObject fitting_to_json(const spo::StpSampledFittingReport& report) {
 }
 
 std::filesystem::path over_cover_diagnostic_dir(const Options& options) {
-    return options.outputDir / "candidate_surface_over_cover_diagnostics";
+    return options.outputDir / "diagnostics" / "candidate_surface_over_cover";
 }
 
 std::filesystem::path over_cover_rejections_csv_path(const Options& options) {
@@ -921,7 +978,7 @@ std::filesystem::path over_cover_experiment_summary_csv_path(const Options& opti
 }
 
 std::filesystem::path probe_artifacts_dir(const Options& options) {
-    return options.outputDir / "probe_artifacts";
+    return options.outputDir / "artifacts";
 }
 
 std::filesystem::path probe_artifact_path(

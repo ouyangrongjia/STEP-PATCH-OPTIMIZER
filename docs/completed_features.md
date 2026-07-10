@@ -2,7 +2,7 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-06-27
+更新时间：2026-07-10
 
 ---
 
@@ -46,6 +46,18 @@ STEP/STP
 - STEP/STP 导出和导出后二次读取校验。
 - 打开 STEP、导出 STEP、候选预览和 Patch Apply 的后台任务化。
 - Process Status Panel 展示长任务阶段、repair / gate / roundtrip 关键指标。
+
+### 2.1 测试与实验运行归档
+
+已完成：
+
+- 新运行统一进入 `data/runs/<时间>__<流程>__<模型>__cand-<四位编号>__<变体>/`。
+- 每轮固定生成 `run.json`、`RUN.md`、`artifacts/`、`diagnostics/`、`logs/`。
+- `run.json` 记录 Git 快照、源文件哈希、入口参数、阶段结果和关键产物路径。
+- `scripts/test.ps1` 保存 build / ctest 日志，不再只有控制台结论。
+- `scripts/list_runs.ps1` 支持按流程、模型、候选、状态和最近数量查询。
+- baseline、Route 2、Creo ModelCHECK 和 Creo Toolkit runner 已接入统一运行清单。
+- 旧 `data/baseline_runs` 保持历史只读；共享 `data/crop_*` 仍为兼容暂存区，不能作为历史验收来源。
 
 ---
 
@@ -253,7 +265,8 @@ Route 2 真实样例入口：
   -CandidateId 179 `
   -CandidateOverCoverWidth 0.25 `
   -CandidateOverCoverRings 3 `
-  -OutputDir data\baseline_runs\<run-name> `
   -WrapCore "E:\Geomagic Wrap\wrapCore.exe" `
   -CreoRoot "E:\Proe\Creo 11.0.0.0"
 ```
+
+默认输出为新的 `data/runs/<run-id>/`；只在需要外部编排时显式传入一个尚未包含 `run.json` 的独立 `-OutputDir`。

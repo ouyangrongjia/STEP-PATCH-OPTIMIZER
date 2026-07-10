@@ -181,7 +181,8 @@ void test_corner_baseline_probe_exports_candidate_over_cover_rejection_artifacts
     assert(source.find("overcover_worst_points.obj") != std::string::npos);
     assert(source.find("overcover_experiment_summary.json") != std::string::npos);
     assert(source.find("overcover_experiment_summary.csv") != std::string::npos);
-    assert(source.find("probe_artifacts") != std::string::npos);
+    assert(source.find("options.outputDir / \"artifacts\"") != std::string::npos);
+    assert(source.find("options.outputDir / \"diagnostics\" / \"candidate_surface_over_cover\"") != std::string::npos);
     assert(source.find("raw_patch_step") != std::string::npos);
     assert(source.find("fitting_stl") != std::string::npos);
 }
@@ -228,6 +229,9 @@ void test_route2_runner_exports_compact_artifact_directory() {
     const auto script = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
 
     assert(script.find("route2_artifacts") != std::string::npos);
+    assert(script.find("$runContext.directories.artifacts") != std::string::npos);
+    assert(script.find("$runContext.directories.diagnostics") != std::string::npos);
+    assert(script.find("$runContext.directories.logs") != std::string::npos);
     assert(script.find("ROUTE2_SUMMARY.md") != std::string::npos);
     assert(script.find("GEOMAGIC_RUN.md") != std::string::npos);
     assert(script.find("crop_stl_candidate_") != std::string::npos);
@@ -241,6 +245,58 @@ void test_route2_runner_exports_compact_artifact_directory() {
     assert(script.find("geomagic_generation.stdout.txt") != std::string::npos);
     assert(script.find("retained_route2_inputs") == std::string::npos);
     assert(script.find("artifact_inventory.json") == std::string::npos);
+}
+
+void test_run_artifact_layout_and_manifest_contract() {
+    const auto root = source_root();
+    const auto helperPath = root / "scripts" / "run_artifacts.ps1";
+    const auto listPath = root / "scripts" / "list_runs.ps1";
+    assert(std::filesystem::exists(helperPath));
+    assert(std::filesystem::exists(listPath));
+
+    const auto helper = read_text_file(helperPath);
+    const auto list = read_text_file(listPath);
+    const auto testScript = read_text_file(root / "scripts" / "test.ps1");
+    const auto cornerScript = read_text_file(root / "scripts" / "run_corner_baseline_gate.ps1");
+    const auto boundaryScript = read_text_file(root / "scripts" / "run_boundary_trim_fill_experiments.ps1");
+    const auto creoDiagnostic = read_text_file(root / "scripts" / "run_creo_step_diagnostic.ps1");
+    const auto creoBaseline = read_text_file(root / "scripts" / "run_creo_toolkit_baseline_probe.ps1");
+    const auto creoPhase1 = read_text_file(root / "scripts" / "run_creo_toolkit_phase1_repair.ps1");
+    const auto probe = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
+
+    assert(helper.find("data\\runs\\$runId") != std::string::npos);
+    assert(helper.find("yyyyMMdd_HHmmss_fff") != std::string::npos);
+    assert(helper.find("cand-{0:D4}") != std::string::npos);
+    assert(helper.find("resolved_candidate_token") != std::string::npos);
+    assert(helper.find("run.json") != std::string::npos);
+    assert(helper.find("RUN.md") != std::string::npos);
+    assert(helper.find("artifacts") != std::string::npos);
+    assert(helper.find("diagnostics") != std::string::npos);
+    assert(helper.find("logs") != std::string::npos);
+    assert(helper.find("rev-parse HEAD") != std::string::npos);
+    assert(helper.find("status --porcelain") != std::string::npos);
+    assert(helper.find("System.Security.Cryptography.SHA256") != std::string::npos);
+
+    assert(list.find("run.json") != std::string::npos);
+    assert(list.find("CandidateId") != std::string::npos);
+    assert(list.find("Workflow") != std::string::npos);
+    assert(list.find("Status") != std::string::npos);
+    assert(list.find("Latest") != std::string::npos);
+    assert(list.find("resolved_candidate_token") != std::string::npos);
+
+    for (const auto* script : {&testScript, &cornerScript, &boundaryScript, &creoDiagnostic, &creoBaseline, &creoPhase1}) {
+        assert(script->find("run_artifacts.ps1") != std::string::npos);
+        assert(script->find("New-SpoRunContext") != std::string::npos);
+        assert(script->find("Complete-SpoRun") != std::string::npos);
+    }
+
+    assert(testScript.find("build.log") != std::string::npos);
+    assert(testScript.find("ctest.log") != std::string::npos);
+    assert(cornerScript.find("data\\baseline_runs\\scripted_") == std::string::npos);
+    assert(boundaryScript.find("data\\baseline_runs\\boundary_trim_fill_experiments") == std::string::npos);
+    assert(probe.find("repo_root() / \"data\" / \"runs\"") != std::string::npos);
+    assert(probe.find("options.outputDir / \"artifacts\"") != std::string::npos);
+    assert(probe.find("options.outputDir / \"diagnostics\"") != std::string::npos);
 }
 
 void test_gui_exposes_candidate_surface_over_cover_switch() {
@@ -335,6 +391,7 @@ void test_creo_modelcheck_parse_only_exports_item_details_and_correlation() {
     assert(exitCode == 0);
 
     const auto json = read_text_file(outputRoot / "creo_step_diagnostic_result.json");
+    const auto runJson = read_text_file(outputRoot / "run.json");
     const auto compactJson = without_ascii_space(json);
     assert(compactJson.find("\"status\":\"CreoModelCheckParseOnly\"") != std::string::npos);
     assert(json.find("\"items\"") != std::string::npos);
@@ -347,6 +404,12 @@ void test_creo_modelcheck_parse_only_exports_item_details_and_correlation() {
     assert(json.find("\"import_validation\"") != std::string::npos);
     assert(compactJson.find("\"modelcheck_spatial_mapping_status\":\"CreoIdsOnlyNoCoordinates\"") != std::string::npos);
     assert(compactJson.find("\"occt_edge_mapping_available\":false") != std::string::npos);
+    assert(std::filesystem::exists(outputRoot / "RUN.md"));
+    assert(std::filesystem::exists(outputRoot / "artifacts"));
+    assert(std::filesystem::exists(outputRoot / "diagnostics"));
+    assert(std::filesystem::exists(outputRoot / "logs"));
+    assert(without_ascii_space(runJson).find("\"workflow\":\"creo-modelcheck\"") != std::string::npos);
+    assert(without_ascii_space(runJson).find("\"status\":\"passed\"") != std::string::npos);
 }
 
 void test_creo_toolkit_baseline_probe_contract_is_optional() {
@@ -396,6 +459,7 @@ void test_creo_modelcheck_parse_only_handles_toolkit_xml_shape() {
     assert(exitCode == 0);
 
     const auto json = read_text_file(outputRoot / "creo_step_diagnostic_result.json");
+    const auto runJson = read_text_file(outputRoot / "run.json");
     const auto compactJson = without_ascii_space(json);
     assert(compactJson.find("\"error_count\":2") != std::string::npos);
     assert(compactJson.find("\"warning_count\":1") != std::string::npos);
@@ -404,6 +468,8 @@ void test_creo_modelcheck_parse_only_handles_toolkit_xml_shape() {
     assert(compactJson.find("\"short_edge_item_count\":2") != std::string::npos);
     assert(compactJson.find("\"PTC_VAL_IMP_PART_STATUS\":\"SOLID_FAILED\"") != std::string::npos);
     assert(compactJson.find("\"PTC_VAL_IMP_SCORE\":\"FAIL\"") != std::string::npos);
+    assert(std::filesystem::exists(outputRoot / "RUN.md"));
+    assert(without_ascii_space(runJson).find("\"status\":\"passed\"") != std::string::npos);
 }
 
 void test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs() {
@@ -462,6 +528,7 @@ void run_scripted_baseline_gate_tests() {
     test_corner_baseline_probe_reports_b2_3_corner_safe_and_sharpen_fields();
     test_route2_runner_uses_candidate_over_cover_as_default_expansion();
     test_route2_runner_exports_compact_artifact_directory();
+    test_run_artifact_layout_and_manifest_contract();
     test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();

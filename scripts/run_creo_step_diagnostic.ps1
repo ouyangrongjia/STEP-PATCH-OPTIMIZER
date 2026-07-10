@@ -16,6 +16,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 function Convert-ToRepoAbsolutePath {
     param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -166,11 +167,14 @@ function Invoke-ProcessWithTimeout {
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [Parameter(Mandatory = $true)][string]$WorkingDirectory,
         [Parameter(Mandatory = $true)][string]$LogPrefix,
-        [Parameter(Mandatory = $true)][int]$Timeout
+        [Parameter(Mandatory = $true)][int]$Timeout,
+        [string]$LogDirectory = ""
     )
 
-    $stdoutPath = Join-Path $WorkingDirectory "$LogPrefix.stdout.txt"
-    $stderrPath = Join-Path $WorkingDirectory "$LogPrefix.stderr.txt"
+    $effectiveLogDirectory = if ($LogDirectory) { $LogDirectory } else { $WorkingDirectory }
+    New-Item -ItemType Directory -Force -Path $effectiveLogDirectory | Out-Null
+    $stdoutPath = Join-Path $effectiveLogDirectory "$LogPrefix.stdout.txt"
+    $stderrPath = Join-Path $effectiveLogDirectory "$LogPrefix.stderr.txt"
     if (Test-Path -LiteralPath $stdoutPath) {
         Remove-Item -LiteralPath $stdoutPath -Force
     }
@@ -676,17 +680,22 @@ if ($ParseModelCheckOnly -and -not $ModelCheckXmlPath) {
     throw "ModelCheckXmlPath is required when -ParseModelCheckOnly is used."
 }
 
-if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot "data\baseline_runs\creo_step_diagnostic"
-} else {
-    $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
-}
+$runSourcePath = if ($stepAbsolute) { $stepAbsolute } else { $ModelCheckXmlPath }
+$runVariant = if ($ParseModelCheckOnly) { "parse-only" } else { "step-import-modelcheck" }
+$runContext = New-SpoRunContext `
+    -RepoRoot $repoRoot `
+    -Workflow "creo-modelcheck" `
+    -SourcePath $runSourcePath `
+    -CandidateId "na" `
+    -Variant $runVariant `
+    -OutputDir $OutputDir `
+    -ScriptPath $PSCommandPath `
+    -Parameters (Get-SpoEffectiveScriptParameters -ParameterNames $MyInvocation.MyCommand.Parameters.Keys)
+$OutputDir = $runContext.output_dir
 
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-
-$stageDir = Join-Path $OutputDir "stage"
-$importOutputDir = Join-Path $OutputDir "step_import"
-$modelCheckOutputDir = Join-Path $OutputDir "modelcheck"
+$stageDir = Join-Path $runContext.directories.artifacts "stage"
+$importOutputDir = Join-Path $runContext.directories.artifacts "step_import"
+$modelCheckOutputDir = Join-Path $runContext.directories.diagnostics "modelcheck"
 New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
 New-Item -ItemType Directory -Force -Path $importOutputDir | Out-Null
 New-Item -ItemType Directory -Force -Path $modelCheckOutputDir | Out-Null
@@ -781,6 +790,15 @@ try {
             $result.notes += "ModelCHECK XML was parsed in parse-only mode, but diagnostic_passed=false. Inspect modelcheck.summary and creo_diagnostic_correlation."
         }
         Write-ResultJson -Result $result -Path $resultPath
+        Complete-SpoRun `
+            -Context $runContext `
+            -Status "passed" `
+            -Message "Existing ModelCHECK XML parsed." `
+            -Artifacts ([ordered]@{
+                result_json = $resultPath
+                modelcheck_xml = $xmlAbsolute
+            }) `
+            -Stages ([ordered]@{ modelcheck_parse = $result.status })
         Write-Host "Creo STEP diagnostic status: $($result.status)"
         Write-Host "Result JSON: $resultPath"
         exit 0
@@ -817,7 +835,8 @@ try {
         -Arguments @("-nographics", "-process", $importDxc) `
         -WorkingDirectory $OutputDir `
         -LogPrefix "step_import" `
-        -Timeout $TimeoutSeconds
+        -Timeout $TimeoutSeconds `
+        -LogDirectory $runContext.directories.logs
 
     $prtCandidates = @(Find-CreoPrtFiles `
         -Roots @($OutputDir, $stageDir, $importOutputDir) `
@@ -855,20 +874,22 @@ try {
             -Arguments @("-nographics", "-process", $modelCheckDxc) `
             -WorkingDirectory $OutputDir `
             -LogPrefix "modelcheck" `
-            -Timeout $TimeoutSeconds
+            -Timeout $TimeoutSeconds `
+            -LogDirectory $runContext.directories.logs
 
         $reportFiles = Find-NewFiles `
             -Roots @($OutputDir, $modelCheckOutputDir) `
             -Since $startedAt `
             -Extensions @(".html", ".htm", ".xml", ".txt", ".csv", ".log")
+        $processLogPaths = @(
+            $result.import.command.stdout_path,
+            $result.import.command.stderr_path,
+            $result.modelcheck.command.stdout_path,
+            $result.modelcheck.command.stderr_path
+        )
         $result.modelcheck.report_files = @(
             $reportFiles |
-                Where-Object {
-                    $_ -ne (Join-Path $OutputDir "step_import.stdout.txt") -and
-                    $_ -ne (Join-Path $OutputDir "step_import.stderr.txt") -and
-                    $_ -ne (Join-Path $OutputDir "modelcheck.stdout.txt") -and
-                    $_ -ne (Join-Path $OutputDir "modelcheck.stderr.txt")
-                }
+                Where-Object { $processLogPaths -notcontains $_ }
         )
 
         if ($result.modelcheck.command.timed_out) {
@@ -897,10 +918,32 @@ try {
     $result.error = $_.Exception.Message
     $result.notes += "The runner failed before completing the configured diagnostic chain."
     Write-ResultJson -Result $result -Path $resultPath
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message $_.Exception.Message `
+        -Artifacts ([ordered]@{ result_json = $resultPath }) `
+        -Stages ([ordered]@{ creo_diagnostic = $result.status })
     throw
 }
 
 Write-ResultJson -Result $result -Path $resultPath
+
+$runStatus = if ($result.success) { "passed" } else { "failed" }
+Complete-SpoRun `
+    -Context $runContext `
+    -Status $runStatus `
+    -Message "Creo diagnostic completed with status $($result.status)." `
+    -Artifacts ([ordered]@{
+        result_json = $resultPath
+        imported_part_directory = $importOutputDir
+        modelcheck_directory = $modelCheckOutputDir
+        logs = $runContext.directories.logs
+    }) `
+    -Stages ([ordered]@{
+        creo_import = $result.import.command
+        modelcheck = $result.modelcheck.command
+    })
 
 Write-Host "Creo STEP diagnostic status: $($result.status)"
 Write-Host "Result JSON: $resultPath"

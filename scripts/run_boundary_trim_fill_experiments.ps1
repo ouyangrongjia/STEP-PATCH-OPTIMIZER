@@ -34,6 +34,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 function Convert-ToRepoAbsolutePath {
     param([Parameter(Mandatory = $true)][string]$PathValue)
@@ -944,12 +945,18 @@ if (-not (Test-Path -LiteralPath $SourceStep)) {
     throw "SourceStep does not exist: $SourceStep"
 }
 
-if (-not $OutputDir) {
-    $OutputDir = Join-Path $repoRoot ("data\baseline_runs\boundary_trim_fill_experiments\" + (Get-Date -Format "yyyyMMdd_HHmmss"))
-} else {
-    $OutputDir = Convert-ToRepoAbsolutePath -PathValue $OutputDir
-}
-New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+$runContext = New-SpoRunContext `
+    -RepoRoot $repoRoot `
+    -Workflow "boundary-trim-fill" `
+    -SourcePath $SourceStep `
+    -CandidateId $CandidateId `
+    -Variant "route1-route2" `
+    -OutputDir $OutputDir `
+    -ScriptPath $PSCommandPath `
+    -Parameters (Get-SpoEffectiveScriptParameters -ParameterNames $MyInvocation.MyCommand.Parameters.Keys)
+$OutputDir = $runContext.output_dir
+
+try {
 
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USERPROFILE "vcpkg" }
 $env:VCPKG_ROOT = $vcpkgRoot
@@ -1395,8 +1402,13 @@ if ($route2BaselineGeneration -and $route2BaselineGeneration.fitting_stl -and $r
     $route2CropStl = [string]$route2BaselineGeneration.fitting_stl.path
 }
 $retainedCandidateId = if ($route2CandidateId) { $route2CandidateId } else { $CandidateId }
-$retainedCandidateId = $retainedCandidateId -replace '[^0-9A-Za-z_-]', '_'
-$route2ArtifactsDir = Join-Path $OutputDir "route2_artifacts"
+$numericRetainedCandidateId = 0
+if ([int]::TryParse([string]$retainedCandidateId, [ref]$numericRetainedCandidateId)) {
+    $retainedCandidateId = "{0:D4}" -f $numericRetainedCandidateId
+} else {
+    $retainedCandidateId = $retainedCandidateId -replace '[^0-9A-Za-z_-]', '_'
+}
+$route2ArtifactsDir = $runContext.directories.artifacts
 $route2CropStlLocal = Copy-RunArtifactIfAvailable `
     -SourcePath $route2CropStl `
     -DestinationPath (Join-Path $route2ArtifactsDir "crop_stl_candidate_$retainedCandidateId.stl")
@@ -1427,7 +1439,7 @@ if ($route2BaselineGeneration -and $route2BaselineGeneration.fit_region_log_path
 }
 $route2FitRegionLogLocal = Copy-RunArtifactIfAvailable `
     -SourcePath $route2FitRegionLog `
-    -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_fit_region.log")
+    -DestinationPath (Join-Path $runContext.directories.logs "geomagic_fit_region.log")
 $route2OverCoverDiagnostics = ""
 if ($route2BaselineGeneration -and
     $route2BaselineGeneration.candidate_surface_over_cover_diagnostic_artifacts -and
@@ -1436,18 +1448,18 @@ if ($route2BaselineGeneration -and
 }
 $route2OverCoverDiagnosticsLocal = Copy-RunDirectoryIfAvailable `
     -SourcePath $route2OverCoverDiagnostics `
-    -DestinationPath (Join-Path $route2ArtifactsDir "candidate_surface_over_cover_diagnostics")
+    -DestinationPath (Join-Path $runContext.directories.diagnostics "candidate_surface_over_cover")
 $route2GeomagicStdoutLocal = ""
 $route2GeomagicStderrLocal = ""
 if ($route2GenRun) {
     $route2GeomagicStdoutLocal = Copy-RunArtifactIfNonEmpty `
         -SourcePath ([string]$route2GenRun.stdout_path) `
-        -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_generation.stdout.txt")
+        -DestinationPath (Join-Path $runContext.directories.logs "geomagic_generation.stdout.txt")
     $route2GeomagicStderrLocal = Copy-RunArtifactIfNonEmpty `
         -SourcePath ([string]$route2GenRun.stderr_path) `
-        -DestinationPath (Join-Path $route2ArtifactsDir "geomagic_generation.stderr.txt")
+        -DestinationPath (Join-Path $runContext.directories.logs "geomagic_generation.stderr.txt")
 }
-$geomagicRunMarkdown = Join-Path $route2ArtifactsDir "GEOMAGIC_RUN.md"
+$geomagicRunMarkdown = Join-Path $runContext.directories.logs "GEOMAGIC_RUN.md"
 $geomagicArguments = ""
 if ($route2GenRun -and $route2GenRun.arguments) {
     $geomagicArguments = Convert-ArgumentsToLine -Arguments ([string[]]$route2GenRun.arguments)
@@ -1556,5 +1568,49 @@ Write-Host "Source STEP: $SourceStep"
 Write-Host "Artifact retention: output directory is preserved even when ModelCHECK or gate validation fails."
 
 if ($result.status -eq "AllRoutesFailed") {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message "All Route 1/Route 2 OCCT and Creo paths failed." `
+        -ResolvedCandidateId ([string]$result.file_provenance.resolved_candidate_id) `
+        -Artifacts ([ordered]@{
+            result_json = $resultPath
+            artifact_summary = $route2SummaryFiles.markdown.path
+            artifacts = $runContext.directories.artifacts
+            diagnostics = $runContext.directories.diagnostics
+            logs = $runContext.directories.logs
+        }) `
+        -Stages ([ordered]@{
+            route1 = $result.routes.route1_g1_boundary_fill.status
+            route2 = $result.routes.route2_expanded_strict_trim.status
+            route1_creo = $result.routes.route1_g1_boundary_fill_creo_sewing.status
+            route2_creo = $result.routes.route2_expanded_strict_trim_creo_sewing.status
+        })
     exit 20
+}
+
+Complete-SpoRun `
+    -Context $runContext `
+    -Status "passed" `
+    -Message "At least one Route 1/Route 2 path passed." `
+    -ResolvedCandidateId ([string]$result.file_provenance.resolved_candidate_id) `
+    -Artifacts ([ordered]@{
+        result_json = $resultPath
+        artifact_summary = $route2SummaryFiles.markdown.path
+        artifacts = $runContext.directories.artifacts
+        diagnostics = $runContext.directories.diagnostics
+        logs = $runContext.directories.logs
+    }) `
+    -Stages ([ordered]@{
+        route1 = $result.routes.route1_g1_boundary_fill.status
+        route2 = $result.routes.route2_expanded_strict_trim.status
+        route1_creo = $result.routes.route1_g1_boundary_fill_creo_sewing.status
+        route2_creo = $result.routes.route2_expanded_strict_trim_creo_sewing.status
+    })
+} catch {
+    Complete-SpoRun `
+        -Context $runContext `
+        -Status "failed" `
+        -Message $_.Exception.Message
+    throw
 }

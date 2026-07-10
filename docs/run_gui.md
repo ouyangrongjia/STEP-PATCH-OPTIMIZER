@@ -64,6 +64,19 @@ cd D:\pyProject\step-patch-optimizer
 .\scripts\test.ps1
 ```
 
+完成后终端会打印本轮独立目录，例如：
+
+```text
+data/runs/20260710_184429_299__unit-tests__repository__cand-na__windows-msvc-debug/
+```
+
+目录内的 `RUN.md` 用于人工查看，`run.json` 用于脚本查询，`logs/build.log` 与 `logs/ctest.log` 保存本轮真实输出。查询入口：
+
+```powershell
+.\scripts\list_runs.ps1 -Latest 10
+.\scripts\list_runs.ps1 -Workflow unit-tests -Status passed -Latest 5
+```
+
 该命令只运行不依赖仓库真实大文件和外部 GUI 程序的默认单元测试。需要显式运行较慢测试时：
 
 ```powershell
@@ -307,8 +320,7 @@ B2.8 是外部 CAD 诊断路由，不是新的 `-Experiment B2.8` fitting input�
 cd D:\pyProject\step-patch-optimizer
 .\scripts\run_creo_step_diagnostic.ps1 `
   -StepPath "<applied STEP>" `
-  -CreoRoot "E:\Proe\Creo 11.0.0.0" `
-  -OutputDir "data\baseline_runs\creo_step_diagnostic"
+  -CreoRoot "E:\Proe\Creo 11.0.0.0"
 ```
 
 该脚本的真实链路是先用 Creo Distributed Batch 无图形模式执行 `step_3d_import.ttd`，把 STEP 导入成 `.prt`；只有 `.prt` 生成后，才继续执行 `modelcheck.ttd`。结果写入 `creo_step_diagnostic_result.json`。当前已确认后台链路能跑通：`.dxc` 使用 `DSQM="_LOCAL"` 后，B2.8 已合并 STEP 可生成 `input.prt.1`，并生成 `input.p.html` / `input.p.xml`。脚本会解析 ModelCHECK XML，输出 `modelcheck.summary` 和 B2.9 的 `creo_diagnostic_correlation`。真实样例结果为 `diagnostic_passed=false`，统计 PASS=26、INFO=33、WARNING=3、ERROR=2；失败项为 `GEOM_CHECKS=1` 与 `SHORT_EDGES=1491`，导入校验为 `PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。因此 GUI/CLI 路由已经能接到 Creo 真实诊断，但当前已合并 STEP 没有通过 Creo 检查。
@@ -319,9 +331,10 @@ cd D:\pyProject\step-patch-optimizer
 .\scripts\run_creo_step_diagnostic.ps1 `
   -ParseModelCheckOnly `
   -ModelCheckXmlPath "<modelcheck xml>" `
-  -BaselineReportPath "<baseline_report.json>" `
-  -OutputDir "data\baseline_runs\creo_modelcheck_parse"
+  -BaselineReportPath "<baseline_report.json>"
 ```
+
+未显式传 `-OutputDir` 时，脚本会创建新的 canonical run 目录并在终端打印路径；不要复用上一轮目录。
 
 该 parse-only 路径会保留 `GEOM_CHECKS` / `SHORT_EDGES` 的 item 明细，输出短边 Creo edge id 摘要和导入 feature id；但当前 ModelCHECK XML 不含空间坐标或 OCCT edge id，所以只能做阶段级关联，不能直接定位到项目内部 edge。
 
@@ -364,7 +377,17 @@ read STEP
 默认输出：
 
 ```text
-D:\pyProject\step-patch-optimizer\data\baseline_runs\baseline_report.json
+D:\pyProject\step-patch-optimizer\data\runs\<timestamp>__corner-baseline__<model>__cand-<id>__<variant>\baseline_report.json
+```
+
+同一运行目录还固定包含：
+
+```text
+run.json
+RUN.md
+artifacts/
+diagnostics/
+logs/
 ```
 
 Geomagic staging 使用与 GUI 一致的路径和文件名：
@@ -374,6 +397,8 @@ data\crop_stl\<model>\<model>_candidate_<id>.stl
 data\crop_stp\<model>\<model>_candidate_<id>.stp
 data\crop_stp\<model>\<model>_candidate_<id>_fit_region.log
 ```
+
+这些 `data/crop_*` 路径是共享暂存区，会被后续同模型、同候选运行覆盖。需要复核某一轮时，只使用该轮 `data/runs/<run-id>/artifacts`、`diagnostics`、`logs` 和 `run.json` 中登记的路径。
 
 GUI 一键 Patch preview 还会为每次点击生成独立 root run log：
 

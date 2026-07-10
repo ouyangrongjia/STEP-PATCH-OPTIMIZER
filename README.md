@@ -116,6 +116,28 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\scripts\test.ps1
 ```
 
+每次执行 `test.ps1` 都会创建独立运行目录，不再只留下终端输出：
+
+```text
+data/runs/<yyyyMMdd_HHmmss_fff>__unit-tests__repository__cand-na__<preset>/
+  run.json
+  RUN.md
+  artifacts/
+  diagnostics/
+  logs/build.log
+  logs/ctest.log
+```
+
+查询最近运行：
+
+```powershell
+.\scripts\list_runs.ps1 -Latest 10
+.\scripts\list_runs.ps1 -Workflow unit-tests -Status passed -Latest 5
+.\scripts\list_runs.ps1 -Workflow boundary-trim-fill -CandidateId 179
+```
+
+`data/crop_stl`、`data/crop_stp`、`data/crop_igs` 仍是 GUI / Geomagic 兼容暂存区，文件会被同模型、同候选的后续运行覆盖；历史验收必须以 `data/runs/<run-id>/` 内的 run-local 产物为准。
+
 ## 这几个脚本做了什么
 
 ```text
@@ -126,6 +148,8 @@ scripts\build_debug.ps1        配置并构建 GUI 和测试
 scripts\run_gui.ps1            启动 GUI，如果 exe 不存在会先构建
 scripts\test.ps1               构建测试并运行 ctest
 scripts\verify_spo.ps1         本地统一验证入口，可按参数覆盖 GUI / Geomagic / step_stats
+scripts\list_runs.ps1          按流程、模型、候选、状态和时间查询运行清单
+scripts\run_artifacts.ps1      统一生成 run id、run.json、RUN.md 和标准产物子目录
 scripts\run_corner_baseline_gate.ps1 运行脚本化 A0 baseline / commercial-CAD-like gate
 scripts\run_boundary_trim_fill_experiments.ps1 运行 Route 2 support collar 真实样例实验
 scripts\run_creo_step_diagnostic.ps1 显式运行后台 Creo STEP import + ModelCHECK 诊断

@@ -642,6 +642,30 @@ manual_correction_count
 }
 ```
 
+### 10.6 运行产物与可追溯性
+
+单元测试、baseline、Route 2 和外部 CAD 诊断统一使用一次运行一个目录：
+
+```text
+data/runs/<时间>__<流程>__<模型>__cand-<四位编号>__<变体>/
+  run.json
+  RUN.md
+  artifacts/
+  diagnostics/
+  logs/
+```
+
+约束：
+
+```text
+1. 默认运行目录必须唯一，不能覆盖上一轮结果。
+2. candidate 数字编号统一补齐四位；自动发现使用 cand-auto，无候选使用 cand-na。
+3. run.json 记录 Git commit、dirty 状态、源文件 SHA-256、有效入口参数、阶段状态和关键产物路径。
+4. RUN.md 是面向人工复核的同内容摘要。
+5. data/crop_stl、data/crop_stp、data/crop_igs 只作为兼容暂存区，不作为历史验收来源。
+6. 旧 data/baseline_runs 只读保留，不迁移、不删除；新运行统一进入 data/runs。
+```
+
 ---
 
 ## 11. 公共模块

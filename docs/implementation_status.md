@@ -60,6 +60,34 @@ STEP 读取
 
 本机验证中，默认 `spo_tests` 从此前约 93.58 秒降至 11.45 秒；真实文件和外部程序测试未删除，只是不再混入日常默认测试。
 
+### 2026-07-10 测试与实验运行产物目录统一
+
+本轮只调整运行产物的命名、归档和查询，不改变几何算法、Geomagic staging、Apply、repair 或 Gate 语义：
+
+```text
+1. 新增 scripts/run_artifacts.ps1：
+   - 默认 run id：<yyyyMMdd_HHmmss_fff>__<workflow>__<model>__cand-<id>__<variant>。
+   - 数字 candidate 统一四位补零；支持 cand-auto / cand-na。
+   - 每轮创建 run.json、RUN.md、artifacts/、diagnostics/、logs/。
+   - run.json 记录 Git commit/branch/dirty、源文件 SHA-256、入口参数、阶段状态和关键产物。
+2. 新增 scripts/list_runs.ps1：按 workflow、model、candidate、status 和 Latest 查询 data/runs。
+3. scripts/test.ps1 每次运行生成独立 unit-tests run，并保存 build.log / ctest.log。
+4. run_corner_baseline_gate.ps1、run_boundary_trim_fill_experiments.ps1、run_creo_step_diagnostic.ps1、run_creo_toolkit_baseline_probe.ps1、run_creo_toolkit_phase1_repair.ps1 已接入统一 run context。
+5. corner_baseline_probe 的 run-local 产物进入 artifacts/，over-cover 诊断进入 diagnostics/candidate_surface_over_cover/，applied STEP 进入 artifacts/。
+6. Route 2 紧凑产物进入 artifacts/，Geomagic 日志进入 logs/，over-cover 诊断进入 diagnostics/；结果 JSON 中既有 route2_artifacts 字段保持兼容。
+7. data/crop_stl / crop_stp / crop_igs 继续作为共享 staging，不作为历史验证来源。
+8. 旧 data/baseline_runs 保持只读历史，不批量迁移或删除；新默认运行写入 data/runs。
+```
+
+验收：
+
+```powershell
+.\scripts\test.ps1
+.\scripts\list_runs.ps1 -Workflow unit-tests -Status passed -Latest 3
+```
+
+自动测试覆盖统一目录/清单静态契约，以及 Creo ModelCHECK parse-only 对 `run.json`、`RUN.md` 和标准子目录的动态落盘。
+
 ### 1.0 2026-06-26 Route 2 candidate/source-face parallel over-cover 落地
 
 本轮按 2026-06-25 Route 2 失败截图和指标调整扩宽主路线：
