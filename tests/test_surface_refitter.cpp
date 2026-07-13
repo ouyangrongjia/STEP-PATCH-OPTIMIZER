@@ -1,4 +1,5 @@
 #include "brep/ShapeDocument.h"
+#include "merge/SurfaceRefitDiagnostics.h"
 #include "merge/SurfaceRefitter.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -14,8 +15,14 @@
 #include <TopoDS.hxx>
 #include <gp_Pnt.hxx>
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <string>
 
 namespace {
 
@@ -182,6 +189,18 @@ spo::SurfaceRefitOptions synthetic_options() {
     return options;
 }
 
+bool has_failed_gate(
+    const spo::SurfaceRefitReport& report,
+    const spo::SurfaceRefitFailureReason reason) {
+    return std::find(report.failed_gates.begin(), report.failed_gates.end(), reason) !=
+        report.failed_gates.end();
+}
+
+std::string read_text_file(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
 void test_surface_refitter_fits_smooth_freeform_surface() {
     const auto fixture = make_split_freeform_fixture();
     const auto options = synthetic_options();
@@ -195,8 +214,14 @@ void test_surface_refitter_fits_smooth_freeform_surface() {
     assert(result.report.training_sample_count == options.training_sample_count);
     assert(result.report.validation_sample_count == options.validation_sample_count);
     assert(result.report.training_validation_overlap_count == 0);
+    assert(result.report.failed_gates.empty());
     assert(result.report.interior_error.sample_count == options.validation_sample_count);
     assert(result.report.normal_error.sample_count == options.validation_sample_count);
+    assert(result.report.surface_error_samples.size() ==
+        static_cast<std::size_t>(
+            result.report.boundary_error.sample_count +
+            result.report.corner_error.sample_count +
+            result.report.interior_error.sample_count));
     assert(result.report.jacobian.sample_count > 0);
     assert(result.report.jacobian.near_singular_count == 0);
     assert(result.report.jacobian.flipped_pair_count == 0);
@@ -242,7 +267,87 @@ void test_surface_refitter_rejects_hole() {
 
     assert(!result.success());
     assert(result.report.failure_reason == spo::SurfaceRefitFailureReason::BoundaryInvalid);
+    assert(has_failed_gate(result.report, spo::SurfaceRefitFailureReason::BoundaryInvalid));
     assert(!result.report.boundary_valid);
+}
+
+void test_surface_refitter_reports_all_failed_quality_gates() {
+    const auto fixture = make_split_freeform_fixture();
+    auto options = synthetic_options();
+    options.tolerance3d = 5.0e-6;
+    options.training_sample_count = 4;
+    options.validation_sample_count = 48;
+
+    const auto result = spo::SurfaceRefitter().fitSingleFace(
+        fixture.document,
+        fixture.candidate,
+        options);
+
+    assert(!result.success());
+    assert(result.report.failure_reason == spo::SurfaceRefitFailureReason::BoundaryErrorExceeded);
+    assert(has_failed_gate(result.report, spo::SurfaceRefitFailureReason::BoundaryErrorExceeded));
+    assert(has_failed_gate(result.report, spo::SurfaceRefitFailureReason::InteriorErrorExceeded));
+}
+
+void test_surface_refit_diagnostic_file_contract() {
+    spo::SurfaceRefitReport report;
+    spo::SurfaceRefitSampleDiagnostic boundary;
+    boundary.category = spo::SurfaceRefitSampleCategory::Boundary;
+    boundary.source_point = gp_Pnt(1.0, 2.0, 3.0);
+    boundary.projected_point = gp_Pnt(1.1, 2.0, 3.0);
+    boundary.distance = 0.1;
+    boundary.projection_success = true;
+    boundary.over_tolerance = true;
+    boundary.edge_id = 9;
+    report.surface_error_samples.push_back(boundary);
+
+    spo::SurfaceRefitSampleDiagnostic interior;
+    interior.category = spo::SurfaceRefitSampleCategory::Interior;
+    interior.source_point = gp_Pnt(4.0, 5.0, 6.0);
+    interior.projected_point = gp_Pnt(4.0, 5.0, 6.01);
+    interior.distance = 0.01;
+    interior.projection_success = true;
+    interior.over_tolerance = false;
+    interior.face_id = 7;
+    report.surface_error_samples.push_back(interior);
+
+    spo::SurfaceRefitSampleDiagnostic corner;
+    corner.category = spo::SurfaceRefitSampleCategory::Corner;
+    corner.source_point = gp_Pnt(7.0, 8.0, 9.0);
+    corner.projection_success = false;
+    corner.over_tolerance = true;
+    corner.edge_id = 11;
+    report.surface_error_samples.push_back(corner);
+
+    const auto directory =
+        std::filesystem::temp_directory_path() / "spo_surface_refit_diagnostic_contract";
+    std::error_code error;
+    std::filesystem::remove_all(directory, error);
+    const auto artifacts = spo::writeSurfaceRefitDiagnosticArtifacts(report, directory);
+
+    assert(artifacts.success());
+    assert(std::filesystem::exists(artifacts.csv_path));
+    assert(std::filesystem::exists(artifacts.obj_path));
+
+    const auto csv = read_text_file(artifacts.csv_path);
+    assert(csv.find(
+        "category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+        "distance,projection_success,over_tolerance,face_id,edge_id") != std::string::npos);
+    assert(csv.find("boundary,1,2,3,1.1000000000000001,2,3,0.10000000000000001,true,true,,9") !=
+        std::string::npos);
+    assert(csv.find("interior,4,5,6,4,5,6.0099999999999998,0.01,true,false,7,") !=
+        std::string::npos);
+    assert(csv.find("corner,7,8,9,,,,,false,true,,11") != std::string::npos);
+
+    const auto obj = read_text_file(artifacts.obj_path);
+    assert(obj.find("# category=boundary") != std::string::npos);
+    assert(obj.find("# category=interior") == std::string::npos);
+    assert(obj.find("# category=corner") == std::string::npos);
+    assert(obj.find("v 1 2 3") != std::string::npos);
+    assert(obj.find("v 1.1000000000000001 2 3") != std::string::npos);
+    assert(obj.find("l 1 2") != std::string::npos);
+
+    std::filesystem::remove_all(directory, error);
 }
 
 void test_surface_refitter_rejects_open_boundary() {
@@ -276,4 +381,6 @@ void run_surface_refitter_tests() {
     test_surface_refitter_rejects_hole();
     test_surface_refitter_rejects_open_boundary();
     test_surface_refitter_rejects_non_manifold_boundary();
+    test_surface_refitter_reports_all_failed_quality_gates();
+    test_surface_refit_diagnostic_file_contract();
 }

@@ -91,8 +91,14 @@ void fail(
     const SurfaceRefitFailureReason reason,
     std::string message) {
     report.success = false;
-    report.failure_reason = reason;
-    report.message = std::move(message);
+    if (report.failure_reason == SurfaceRefitFailureReason::None) {
+        report.failure_reason = reason;
+        report.message = std::move(message);
+    }
+    if (reason != SurfaceRefitFailureReason::None &&
+        std::find(report.failed_gates.begin(), report.failed_gates.end(), reason) == report.failed_gates.end()) {
+        report.failed_gates.push_back(reason);
+    }
 }
 
 bool valid_options(const SurfaceRefitOptions& options) {
@@ -449,7 +455,9 @@ SurfaceRefitErrorStatistics evaluate_distances(
     const std::vector<DistanceSample>& samples,
     const SurfaceDomain& domain,
     const SurfaceRefitOptions& options,
-    const bool require_inside_face) {
+    const bool require_inside_face,
+    const SurfaceRefitSampleCategory category,
+    std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
     SurfaceRefitErrorStatistics statistics;
     statistics.sample_count = static_cast<int>(samples.size());
     std::vector<double> distances;
@@ -458,11 +466,22 @@ SurfaceRefitErrorStatistics evaluate_distances(
 
     for (const auto& sample : samples) {
         const auto projection = project_to_surface(domain, sample.point, options, require_inside_face);
+        SurfaceRefitSampleDiagnostic diagnostic;
+        diagnostic.category = category;
+        diagnostic.source_point = sample.point;
+        diagnostic.projection_success = projection.success;
+        diagnostic.over_tolerance = !projection.success || projection.distance > options.tolerance3d;
+        diagnostic.face_id = sample.face_id;
+        diagnostic.edge_id = sample.edge_id;
         if (!projection.success) {
             ++statistics.projection_failure_count;
             ++statistics.over_tolerance_count;
+            diagnostics.push_back(diagnostic);
             continue;
         }
+        diagnostic.projected_point = projection.point;
+        diagnostic.distance = projection.distance;
+        diagnostics.push_back(diagnostic);
         distances.push_back(projection.distance);
         squared_sum += projection.distance * projection.distance;
         if (projection.distance > options.tolerance3d) {
@@ -486,13 +505,20 @@ SurfaceRefitErrorStatistics evaluate_distances(
 SurfaceRefitErrorStatistics evaluate_interior_distances(
     const std::vector<SourceSample>& samples,
     const SurfaceDomain& domain,
-    const SurfaceRefitOptions& options) {
+    const SurfaceRefitOptions& options,
+    std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
     std::vector<DistanceSample> distance_samples;
     distance_samples.reserve(samples.size());
     for (const auto& sample : samples) {
         distance_samples.push_back(DistanceSample {sample.point, sample.face_id, kInvalidEdgeId});
     }
-    return evaluate_distances(distance_samples, domain, options, true);
+    return evaluate_distances(
+        distance_samples,
+        domain,
+        options,
+        true,
+        SurfaceRefitSampleCategory::Interior,
+        diagnostics);
 }
 
 SurfaceRefitNormalStatistics evaluate_normals(
@@ -758,6 +784,15 @@ const char* surfaceRefitFailureReasonToString(const SurfaceRefitFailureReason re
     return "Unknown";
 }
 
+const char* surfaceRefitSampleCategoryToString(const SurfaceRefitSampleCategory category) {
+    switch (category) {
+    case SurfaceRefitSampleCategory::Boundary: return "boundary";
+    case SurfaceRefitSampleCategory::Corner: return "corner";
+    case SurfaceRefitSampleCategory::Interior: return "interior";
+    }
+    return "unknown";
+}
+
 SurfaceRefitResult SurfaceRefitter::fitSingleFace(
     const ShapeDocument& document,
     const MergeCandidate& candidate,
@@ -888,50 +923,63 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         document,
         boundary.ordered_boundary_edges,
         options.sample_deduplication_tolerance);
-    report.boundary_error = evaluate_distances(boundary_samples, domain, options, false);
-    report.corner_error = evaluate_distances(corner_samples, domain, options, false);
-    report.interior_error = evaluate_interior_distances(validation, domain, options);
+    report.surface_error_samples.reserve(
+        boundary_samples.size() + corner_samples.size() + validation.size());
+    report.boundary_error = evaluate_distances(
+        boundary_samples,
+        domain,
+        options,
+        false,
+        SurfaceRefitSampleCategory::Boundary,
+        report.surface_error_samples);
+    report.corner_error = evaluate_distances(
+        corner_samples,
+        domain,
+        options,
+        false,
+        SurfaceRefitSampleCategory::Corner,
+        report.surface_error_samples);
+    report.interior_error = evaluate_interior_distances(
+        validation,
+        domain,
+        options,
+        report.surface_error_samples);
     report.normal_error = evaluate_normals(validation, domain, options);
     report.jacobian = inspect_jacobian(result.face, domain, options);
     report.complexity = inspect_complexity(domain.surface);
 
     if (report.missing_pcurve_count > 0 || report.same_parameter_failure_count > 0) {
         fail(report, SurfaceRefitFailureReason::BoundaryRepresentationInvalid, "Fitted face has missing pcurves or non-SameParameter boundary edges.");
-        return result;
     }
     if (!report.brep_check_valid) {
         fail(report, SurfaceRefitFailureReason::BRepCheckFailed, "Fitted face failed BRepCheck.");
-        return result;
     }
     if (report.g0_error > options.tolerance3d ||
         report.boundary_error.projection_failure_count > 0 ||
         report.boundary_error.over_tolerance_count > 0) {
         fail(report, SurfaceRefitFailureReason::BoundaryErrorExceeded, "Fitted face exceeds the original-boundary G0 tolerance.");
-        return result;
     }
     if (report.corner_error.projection_failure_count > 0 ||
         report.corner_error.over_tolerance_count > 0) {
         fail(report, SurfaceRefitFailureReason::CornerErrorExceeded, "Fitted face exceeds the original corner tolerance.");
-        return result;
     }
     if (report.interior_error.projection_failure_count > 0 ||
         report.interior_error.over_tolerance_count > 0) {
         fail(report, SurfaceRefitFailureReason::InteriorErrorExceeded, "Fitted face exceeds the independent interior validation tolerance.");
-        return result;
     }
     if (report.normal_error.undefined_count > 0 ||
         report.normal_error.over_tolerance_count > 0) {
         fail(report, SurfaceRefitFailureReason::NormalErrorExceeded, "Fitted face exceeds the independent normal validation tolerance.");
-        return result;
     }
     if (report.jacobian.sample_count == 0 ||
         report.jacobian.near_singular_count > 0 ||
         report.jacobian.flipped_pair_count > 0) {
         fail(report, SurfaceRefitFailureReason::JacobianInvalid, "Fitted face has a near-singular or locally flipped Jacobian sample.");
-        return result;
     }
     if (complexity_exceeded(report.complexity, options)) {
         fail(report, SurfaceRefitFailureReason::ComplexityExceeded, "Fitted surface complexity exceeds the configured NSR-1 limits.");
+    }
+    if (!report.failed_gates.empty()) {
         return result;
     }
 

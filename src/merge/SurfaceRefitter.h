@@ -31,6 +31,25 @@ enum class SurfaceRefitFailureReason {
 
 const char* surfaceRefitFailureReasonToString(SurfaceRefitFailureReason reason);
 
+enum class SurfaceRefitSampleCategory {
+    Boundary,
+    Corner,
+    Interior
+};
+
+const char* surfaceRefitSampleCategoryToString(SurfaceRefitSampleCategory category);
+
+struct SurfaceRefitSampleDiagnostic {
+    SurfaceRefitSampleCategory category = SurfaceRefitSampleCategory::Boundary;
+    gp_Pnt source_point;
+    gp_Pnt projected_point;
+    double distance = 0.0;
+    bool projection_success = false;
+    bool over_tolerance = false;
+    FaceId face_id = -1;
+    EdgeId edge_id = -1;
+};
+
 struct SurfaceRefitErrorStatistics {
     int sample_count = 0;
     int projection_failure_count = 0;
@@ -107,6 +126,7 @@ struct SurfaceRefitOptions {
 struct SurfaceRefitReport {
     bool success = false;
     SurfaceRefitFailureReason failure_reason = SurfaceRefitFailureReason::None;
+    std::vector<SurfaceRefitFailureReason> failed_gates;
     std::string message;
     int candidate_id = -1;
     int candidate_face_count = 0;
@@ -132,6 +152,7 @@ struct SurfaceRefitReport {
     SurfaceRefitNormalStatistics normal_error;
     SurfaceRefitJacobianReport jacobian;
     SurfaceRefitComplexityReport complexity;
+    std::vector<SurfaceRefitSampleDiagnostic> surface_error_samples;
 };
 
 struct SurfaceRefitResult {

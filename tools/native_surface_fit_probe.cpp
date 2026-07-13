@@ -3,6 +3,7 @@
 #include "io/StepWriter.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
+#include "merge/SurfaceRefitDiagnostics.h"
 #include "merge/SurfaceRefitter.h"
 
 #include <algorithm>
@@ -271,6 +272,12 @@ bool write_report(
     const bool patch_written,
     const bool overall_success,
     const std::string& stage) {
+    const auto diagnostic_directory =
+        options.report.parent_path() / "diagnostics" / "native_surface_fit";
+    const auto diagnostic_artifacts =
+        spo::writeSurfaceRefitDiagnosticArtifacts(report, diagnostic_directory);
+    const bool diagnostic_patch = patch_written && !report.success;
+
     std::error_code error;
     const auto parent = options.report.parent_path();
     if (!parent.empty()) {
@@ -282,7 +289,7 @@ bool write_report(
     if (!output.good()) return false;
     output << std::setprecision(17);
     output << "{\n";
-    output << "  \"schema_version\": 1,\n";
+    output << "  \"schema_version\": 2,\n";
     output << "  \"tool\": \"native_surface_fit_probe\",\n";
     output << "  \"stage\": " << quote_json(stage) << ",\n";
     output << "  \"source_step\": " << quote_json(path_to_utf8(options.source_step)) << ",\n";
@@ -294,23 +301,53 @@ bool write_report(
            << (candidate != nullptr ? std::to_string(candidate->candidate_id) : "null") << ",\n";
     output << "  \"selected_candidate_type\": "
            << (candidate != nullptr ? quote_json(spo::toString(candidate->candidate_type)) : "null") << ",\n";
+    output << "  \"candidate_face_count\": " << report.candidate_face_count << ",\n";
+    output << "  \"boundary_valid\": " << bool_json(report.boundary_valid) << ",\n";
     output << "  \"success\": " << bool_json(overall_success) << ",\n";
     output << "  \"fit_success\": " << bool_json(report.success) << ",\n";
     output << "  \"patch_written\": " << bool_json(patch_written) << ",\n";
+    output << "  \"diagnostic_patch\": " << bool_json(diagnostic_patch) << ",\n";
+    output << "  \"patch_acceptable\": " << bool_json(overall_success && patch_written) << ",\n";
+    output << "  \"patch_role\": " << quote_json(
+        diagnostic_patch ? "failed_fit_diagnostic_only" :
+        (overall_success && patch_written ? "accepted_native_surface_fit" : "not_written")) << ",\n";
     output << "  \"failure_reason\": " << quote_json(spo::surfaceRefitFailureReasonToString(report.failure_reason)) << ",\n";
+    output << "  \"failed_gates\": [";
+    if (report.failed_gates.empty() && report.failure_reason != spo::SurfaceRefitFailureReason::None) {
+        output << quote_json(spo::surfaceRefitFailureReasonToString(report.failure_reason));
+    } else {
+        for (std::size_t index = 0; index < report.failed_gates.size(); ++index) {
+            if (index > 0) output << ", ";
+            output << quote_json(spo::surfaceRefitFailureReasonToString(report.failed_gates[index]));
+        }
+    }
+    output << "],\n";
     output << "  \"message\": " << quote_json(report.message) << ",\n";
     output << "  \"configuration\": {\n";
     output << "    \"feature_angle_degrees\": " << options.feature_angle_degrees << ",\n";
     output << "    \"min_edge_length\": " << options.min_edge_length << ",\n";
     output << "    \"tolerance2d\": " << options.refit.tolerance2d << ",\n";
     output << "    \"tolerance3d\": " << options.refit.tolerance3d << ",\n";
+    output << "    \"tolerance_angle\": " << options.refit.tolerance_angle << ",\n";
+    output << "    \"tolerance_curvature\": " << options.refit.tolerance_curvature << ",\n";
     output << "    \"normal_tolerance_degrees\": " << options.refit.normal_tolerance_degrees << ",\n";
     output << "    \"mesh_deflection\": " << options.refit.mesh_deflection << ",\n";
     output << "    \"mesh_angular_deflection\": " << options.refit.mesh_angular_deflection << ",\n";
+    output << "    \"sample_deduplication_tolerance\": " << options.refit.sample_deduplication_tolerance << ",\n";
+    output << "    \"minimum_normalized_jacobian\": " << options.refit.minimum_normalized_jacobian << ",\n";
+    output << "    \"plate_degree\": " << options.refit.plate_degree << ",\n";
+    output << "    \"points_on_curve\": " << options.refit.points_on_curve << ",\n";
+    output << "    \"iterations\": " << options.refit.iterations << ",\n";
+    output << "    \"max_degree\": " << options.refit.max_degree << ",\n";
+    output << "    \"max_segments\": " << options.refit.max_segments << ",\n";
     output << "    \"training_sample_count\": " << options.refit.training_sample_count << ",\n";
     output << "    \"validation_sample_count\": " << options.refit.validation_sample_count << ",\n";
     output << "    \"boundary_samples_per_edge\": " << options.refit.boundary_samples_per_edge << ",\n";
-    output << "    \"jacobian_grid_size\": " << options.refit.jacobian_grid_size << "\n";
+    output << "    \"jacobian_grid_size\": " << options.refit.jacobian_grid_size << ",\n";
+    output << "    \"max_surface_degree\": " << options.refit.max_surface_degree << ",\n";
+    output << "    \"max_surface_pole_count\": " << options.refit.max_surface_pole_count << ",\n";
+    output << "    \"max_surface_knot_count\": " << options.refit.max_surface_knot_count << ",\n";
+    output << "    \"max_surface_segment_count\": " << options.refit.max_surface_segment_count << "\n";
     output << "  },\n";
     output << "  \"constraints\": {\n";
     output << "    \"boundary_order\": \"G0\",\n";
@@ -356,6 +393,45 @@ bool write_report(
     output << ",\n    \"worst_face_id\": ";
     write_id(output, report.normal_error.worst_face_id);
     output << "\n  },\n";
+    output << "  \"surface_error_samples\": [\n";
+    for (std::size_t index = 0; index < report.surface_error_samples.size(); ++index) {
+        const auto& sample = report.surface_error_samples[index];
+        output << "    {\n";
+        output << "      \"category\": "
+               << quote_json(spo::surfaceRefitSampleCategoryToString(sample.category)) << ",\n";
+        output << "      \"source_point\": ";
+        write_point(output, sample.source_point);
+        output << ",\n      \"projected_point\": ";
+        if (sample.projection_success) {
+            write_point(output, sample.projected_point);
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"distance\": ";
+        if (sample.projection_success) {
+            output << sample.distance;
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"projection_success\": " << bool_json(sample.projection_success) << ",\n";
+        output << "      \"over_tolerance\": " << bool_json(sample.over_tolerance) << ",\n";
+        output << "      \"face_id\": ";
+        write_id(output, sample.face_id);
+        output << ",\n      \"edge_id\": ";
+        write_edge_id(output, sample.edge_id);
+        output << "\n    }" << (index + 1 < report.surface_error_samples.size() ? "," : "") << "\n";
+    }
+    output << "  ],\n";
+    output << "  \"diagnostics\": {\n";
+    output << "    \"directory\": " << quote_json(path_to_utf8(diagnostic_directory)) << ",\n";
+    output << "    \"surface_error_samples_csv\": "
+           << quote_json(path_to_utf8(diagnostic_artifacts.csv_path)) << ",\n";
+    output << "    \"surface_error_vectors_obj\": "
+           << quote_json(path_to_utf8(diagnostic_artifacts.obj_path)) << ",\n";
+    output << "    \"csv_written\": " << bool_json(diagnostic_artifacts.csv_written) << ",\n";
+    output << "    \"obj_written\": " << bool_json(diagnostic_artifacts.obj_written) << ",\n";
+    output << "    \"message\": " << quote_json(diagnostic_artifacts.message) << "\n";
+    output << "  },\n";
     output << "  \"jacobian\": {\n";
     output << "    \"sample_count\": " << report.jacobian.sample_count << ",\n";
     output << "    \"near_singular_count\": " << report.jacobian.near_singular_count << ",\n";
@@ -446,13 +522,13 @@ int main(int argc, char* argv[]) {
     std::string patch_write_error;
     std::error_code directory_error;
     const auto output_parent = options.output_patch.parent_path();
-    if (!result.face.IsNull() && result.report.filling_done && result.report.brep_check_valid &&
-        !output_parent.empty()) {
+    const bool diagnostic_face_available = !result.face.IsNull() && result.report.filling_done;
+    if (diagnostic_face_available && !output_parent.empty()) {
         std::filesystem::create_directories(output_parent, directory_error);
     }
     if (directory_error) {
         patch_write_error = "Could not create patch output directory: " + directory_error.message();
-    } else if (!result.face.IsNull() && result.report.filling_done && result.report.brep_check_valid) {
+    } else if (diagnostic_face_available) {
         const spo::ShapeDocument patch_document(result.face, options.output_patch);
         const auto write = spo::StepWriter().write(patch_document, options.output_patch);
         if (write.success()) {

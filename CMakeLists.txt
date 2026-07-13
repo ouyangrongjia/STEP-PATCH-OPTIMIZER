@@ -65,6 +65,7 @@ add_library(spo_core STATIC
     src/stl/StlRegionExtractor.cpp
     src/stl/StpSampledFittingMeshBuilder.cpp
     src/stl/StlCutChainCutter.cpp
+    src/merge/SurfaceRefitDiagnostics.cpp
     src/merge/SurfaceRefitter.cpp
     src/patch/PatchImportService.cpp
     src/patch/PatchArtifactLocator.cpp

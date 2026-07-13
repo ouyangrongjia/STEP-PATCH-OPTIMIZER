@@ -299,6 +299,21 @@ void test_run_artifact_layout_and_manifest_contract() {
     assert(probe.find("options.outputDir / \"diagnostics\"") != std::string::npos);
 }
 
+void test_native_surface_fit_tier_runner_cleans_incomplete_invocation_runs() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_native_surface_fit_tiers.ps1");
+
+    assert(script.find("$createdRunDirectories = @()") != std::string::npos);
+    assert(script.find("$createdRunDirectories += $runContext.output_dir") != std::string::npos);
+    assert(script.find("$createdRunDirectories += $comparisonContext.output_dir") != std::string::npos);
+    assert(script.find("[System.StringComparison]::OrdinalIgnoreCase") != std::string::npos);
+    assert(script.find("Refusing to remove an incomplete run outside data/runs") != std::string::npos);
+    assert(script.find("Remove-Item -LiteralPath $resolvedRunDirectory -Recurse -Force") !=
+        std::string::npos);
+    assert(script.find("cand-0179") == std::string::npos);
+    assert(script.find("03_配件") == std::string::npos);
+}
+
 void test_gui_exposes_candidate_surface_over_cover_switch() {
     const auto root = source_root();
     const auto header = read_text_file(root / "src" / "app" / "MainWindow.h");
@@ -529,6 +544,7 @@ void run_scripted_baseline_gate_tests() {
     test_route2_runner_uses_candidate_over_cover_as_default_expansion();
     test_route2_runner_exports_compact_artifact_directory();
     test_run_artifact_layout_and_manifest_contract();
+    test_native_surface_fit_tier_runner_cleans_incomplete_invocation_runs();
     test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
