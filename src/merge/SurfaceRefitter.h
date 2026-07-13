@@ -5,6 +5,7 @@
 
 #include <TopoDS_Face.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 
 #include <string>
 #include <vector>
@@ -17,10 +18,12 @@ enum class SurfaceRefitFailureReason {
     UnsupportedCandidateType,
     BoundaryInvalid,
     SampleGenerationFailed,
+    SamplingConfigurationUnsupported,
     FillingFailed,
     NullFace,
     BoundaryRepresentationInvalid,
     BRepCheckFailed,
+    StepRoundtripInvalid,
     BoundaryErrorExceeded,
     CornerErrorExceeded,
     InteriorErrorExceeded,
@@ -39,6 +42,13 @@ enum class SurfaceRefitSampleCategory {
 
 const char* surfaceRefitSampleCategoryToString(SurfaceRefitSampleCategory category);
 
+enum class SurfaceRefitSamplingStrategy {
+    AreaWeighted,
+    FaceStratifiedAreaWeighted
+};
+
+const char* surfaceRefitSamplingStrategyToString(SurfaceRefitSamplingStrategy strategy);
+
 struct SurfaceRefitSampleDiagnostic {
     SurfaceRefitSampleCategory category = SurfaceRefitSampleCategory::Boundary;
     gp_Pnt source_point;
@@ -48,6 +58,72 @@ struct SurfaceRefitSampleDiagnostic {
     bool over_tolerance = false;
     FaceId face_id = -1;
     EdgeId edge_id = -1;
+    bool nearest_training_distance_defined = false;
+    double nearest_training_distance = 0.0;
+};
+
+struct SurfaceRefitNormalSampleDiagnostic {
+    gp_Pnt source_point;
+    gp_Pnt projected_point;
+    gp_Vec source_normal;
+    gp_Vec fitted_normal;
+    double angle_degrees = 0.0;
+    double u = 0.0;
+    double v = 0.0;
+    FaceId face_id = -1;
+    bool projection_success = false;
+    bool fitted_normal_defined = false;
+    bool over_tolerance = false;
+};
+
+struct SurfaceRefitFaceSamplingStatistics {
+    FaceId face_id = -1;
+    int training_count = 0;
+    int validation_count = 0;
+    int validation_over_tolerance_count = 0;
+};
+
+struct SurfaceRefitBRepContextStatus {
+    std::string shape_type;
+    int shape_index = -1;
+    std::vector<std::string> statuses;
+};
+
+struct SurfaceRefitBRepSubshapeStatus {
+    std::string shape_type;
+    int shape_index = -1;
+    int output_edge_index = -1;
+    std::vector<std::string> statuses;
+    std::vector<SurfaceRefitBRepContextStatus> contextual_statuses;
+};
+
+struct SurfaceRefitOutputEdgeDiagnostic {
+    int edge_index = -1;
+    EdgeId source_boundary_edge_id = -1;
+    double tolerance = 0.0;
+    bool degenerated = false;
+    bool same_range = false;
+    bool same_parameter = false;
+    bool has_curve3d = false;
+    double curve3d_first = 0.0;
+    double curve3d_last = 0.0;
+    bool has_pcurve = false;
+    double pcurve_first = 0.0;
+    double pcurve_last = 0.0;
+    bool curve_on_surface_deviation_computed = false;
+    bool deviation_used_normalized_parameter_mapping = false;
+    double curve_on_surface_max_deviation = 0.0;
+};
+
+struct SurfaceRefitBRepStageDiagnostic {
+    bool performed = false;
+    bool valid = false;
+    int face_count = 0;
+    int wire_count = 0;
+    int edge_count = 0;
+    int vertex_count = 0;
+    std::vector<SurfaceRefitBRepSubshapeStatus> subshape_statuses;
+    std::vector<SurfaceRefitOutputEdgeDiagnostic> edges;
 };
 
 struct SurfaceRefitErrorStatistics {
@@ -99,6 +175,7 @@ struct SurfaceRefitComplexityReport {
 };
 
 struct SurfaceRefitOptions {
+    SurfaceRefitSamplingStrategy sampling_strategy = SurfaceRefitSamplingStrategy::AreaWeighted;
     double tolerance2d = 1.0e-5;
     double tolerance3d = 0.03;
     double tolerance_angle = 0.01;
@@ -128,11 +205,20 @@ struct SurfaceRefitReport {
     SurfaceRefitFailureReason failure_reason = SurfaceRefitFailureReason::None;
     std::vector<SurfaceRefitFailureReason> failed_gates;
     std::string message;
+    SurfaceRefitSamplingStrategy sampling_strategy = SurfaceRefitSamplingStrategy::AreaWeighted;
     int candidate_id = -1;
     int candidate_face_count = 0;
     bool boundary_valid = false;
     bool filling_done = false;
     bool brep_check_valid = false;
+    bool filling_face_brep_check_valid = false;
+    bool oriented_face_brep_check_valid = false;
+    bool step_roundtrip_brep_check_performed = false;
+    bool step_roundtrip_brep_check_valid = false;
+    bool step_roundtrip_read_success = false;
+    int step_roundtrip_face_count = 0;
+    int step_roundtrip_edge_count = 0;
+    std::string step_roundtrip_message;
     bool output_orientation_reversed = false;
     int output_edge_count = 0;
     int missing_pcurve_count = 0;
@@ -152,7 +238,11 @@ struct SurfaceRefitReport {
     SurfaceRefitNormalStatistics normal_error;
     SurfaceRefitJacobianReport jacobian;
     SurfaceRefitComplexityReport complexity;
+    SurfaceRefitBRepStageDiagnostic filling_face_brep;
+    SurfaceRefitBRepStageDiagnostic oriented_face_brep;
+    std::vector<SurfaceRefitFaceSamplingStatistics> face_sampling;
     std::vector<SurfaceRefitSampleDiagnostic> surface_error_samples;
+    std::vector<SurfaceRefitNormalSampleDiagnostic> normal_error_samples;
 };
 
 struct SurfaceRefitResult {

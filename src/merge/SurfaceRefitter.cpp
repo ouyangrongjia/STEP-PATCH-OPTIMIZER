@@ -4,6 +4,9 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepCheck_ListIteratorOfListOfStatus.hxx>
+#include <BRepCheck_Result.hxx>
+#include <BRepCheck_Status.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepFill_Filling.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -13,7 +16,9 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <GeomAdaptor_Surface.hxx>
+#include <Geom2d_Curve.hxx>
 #include <Geom_BSplineSurface.hxx>
+#include <Geom_Curve.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
 #include <Standard_Failure.hxx>
@@ -21,6 +26,7 @@
 #include <TopAbs_State.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Vertex.hxx>
@@ -300,6 +306,55 @@ std::vector<SourceSample> generate_samples(
     return samples;
 }
 
+std::vector<SourceSample> generate_face_stratified_training_samples(
+    const std::vector<SourceTriangle>& triangles,
+    const std::vector<FaceId>& candidate_face_ids,
+    const int requested_count,
+    const SurfaceRefitOptions& options) {
+    std::vector<FaceId> face_ids = candidate_face_ids;
+    std::sort(face_ids.begin(), face_ids.end());
+    face_ids.erase(std::unique(face_ids.begin(), face_ids.end()), face_ids.end());
+    if (face_ids.size() > static_cast<std::size_t>(requested_count)) {
+        return {};
+    }
+
+    std::vector<SourceSample> samples;
+    samples.reserve(static_cast<std::size_t>(requested_count));
+    for (std::size_t face_index = 0; face_index < face_ids.size(); ++face_index) {
+        std::vector<SourceTriangle> face_triangles;
+        for (const auto& triangle : triangles) {
+            if (triangle.face_id == face_ids[face_index]) {
+                face_triangles.push_back(triangle);
+            }
+        }
+        if (face_triangles.empty()) {
+            return {};
+        }
+        const auto face_sample = generate_samples(
+            face_triangles,
+            1,
+            13007 + static_cast<std::uint64_t>(face_index) * 257,
+            samples,
+            options);
+        if (face_sample.size() != 1) {
+            return {};
+        }
+        samples.push_back(face_sample.front());
+    }
+
+    const auto remaining_count = requested_count - static_cast<int>(samples.size());
+    if (remaining_count > 0) {
+        auto remaining = generate_samples(
+            triangles,
+            remaining_count,
+            0,
+            samples,
+            options);
+        samples.insert(samples.end(), remaining.begin(), remaining.end());
+    }
+    return samples;
+}
+
 std::vector<DistanceSample> sample_boundary(
     const ShapeDocument& document,
     const std::vector<EdgeId>& ordered_edges,
@@ -504,6 +559,7 @@ SurfaceRefitErrorStatistics evaluate_distances(
 
 SurfaceRefitErrorStatistics evaluate_interior_distances(
     const std::vector<SourceSample>& samples,
+    const std::vector<SourceSample>& training,
     const SurfaceDomain& domain,
     const SurfaceRefitOptions& options,
     std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
@@ -512,35 +568,71 @@ SurfaceRefitErrorStatistics evaluate_interior_distances(
     for (const auto& sample : samples) {
         distance_samples.push_back(DistanceSample {sample.point, sample.face_id, kInvalidEdgeId});
     }
-    return evaluate_distances(
+    const auto diagnostic_start = diagnostics.size();
+    auto statistics = evaluate_distances(
         distance_samples,
         domain,
         options,
         true,
         SurfaceRefitSampleCategory::Interior,
         diagnostics);
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        auto& diagnostic = diagnostics[diagnostic_start + index];
+        double nearest_distance = std::numeric_limits<double>::infinity();
+        for (const auto& training_sample : training) {
+            nearest_distance = std::min(
+                nearest_distance,
+                samples[index].point.Distance(training_sample.point));
+        }
+        if (std::isfinite(nearest_distance)) {
+            diagnostic.nearest_training_distance_defined = true;
+            diagnostic.nearest_training_distance = nearest_distance;
+        }
+    }
+    return statistics;
 }
 
 SurfaceRefitNormalStatistics evaluate_normals(
     const std::vector<SourceSample>& samples,
     const SurfaceDomain& domain,
-    const SurfaceRefitOptions& options) {
+    const SurfaceRefitOptions& options,
+    std::vector<SurfaceRefitNormalSampleDiagnostic>& diagnostics) {
     SurfaceRefitNormalStatistics statistics;
     statistics.sample_count = static_cast<int>(samples.size());
+    diagnostics.reserve(diagnostics.size() + samples.size());
     std::vector<double> angles;
     angles.reserve(samples.size());
     double squared_sum = 0.0;
 
     for (const auto& sample : samples) {
         const auto projection = project_to_surface(domain, sample.point, options, true);
+        SurfaceRefitNormalSampleDiagnostic diagnostic;
+        diagnostic.source_point = sample.point;
+        diagnostic.source_normal = sample.normal;
+        diagnostic.face_id = sample.face_id;
+        diagnostic.projection_success = projection.success;
+        diagnostic.fitted_normal_defined = projection.normal_defined;
+        diagnostic.over_tolerance = true;
+        if (projection.success) {
+            diagnostic.projected_point = projection.point;
+            diagnostic.u = projection.u;
+            diagnostic.v = projection.v;
+        }
+        if (projection.normal_defined) {
+            diagnostic.fitted_normal = projection.normal;
+        }
         if (!projection.success || !projection.normal_defined ||
             sample.normal.SquareMagnitude() <= Precision::SquareConfusion()) {
             ++statistics.undefined_count;
             ++statistics.over_tolerance_count;
+            diagnostics.push_back(diagnostic);
             continue;
         }
         const auto cosine = std::clamp(sample.normal.Dot(projection.normal), -1.0, 1.0);
         const auto angle = std::acos(cosine) * kRadiansToDegrees;
+        diagnostic.angle_degrees = angle;
+        diagnostic.over_tolerance = angle > options.normal_tolerance_degrees;
+        diagnostics.push_back(diagnostic);
         angles.push_back(angle);
         squared_sum += angle * angle;
         if (angle > options.normal_tolerance_degrees) {
@@ -721,20 +813,266 @@ SurfaceRefitComplexityReport inspect_complexity(const Handle(Geom_Surface)& surf
     return report;
 }
 
-void inspect_boundary_representation(const TopoDS_Face& face, SurfaceRefitReport& report) {
-    for (TopExp_Explorer explorer(face, TopAbs_EDGE); explorer.More(); explorer.Next()) {
-        const auto edge = TopoDS::Edge(explorer.Current());
-        ++report.output_edge_count;
-        double first = 0.0;
-        double last = 0.0;
-        const auto pcurve = BRep_Tool::CurveOnSurface(edge, face, first, last);
-        if (pcurve.IsNull()) {
-            ++report.missing_pcurve_count;
-        }
-        if (!BRep_Tool::SameParameter(edge)) {
-            ++report.same_parameter_failure_count;
-        }
+const char* brep_check_status_name(const BRepCheck_Status status) {
+    switch (status) {
+    case BRepCheck_NoError: return "NoError";
+    case BRepCheck_InvalidPointOnCurve: return "InvalidPointOnCurve";
+    case BRepCheck_InvalidPointOnCurveOnSurface: return "InvalidPointOnCurveOnSurface";
+    case BRepCheck_InvalidPointOnSurface: return "InvalidPointOnSurface";
+    case BRepCheck_No3DCurve: return "No3DCurve";
+    case BRepCheck_Multiple3DCurve: return "Multiple3DCurve";
+    case BRepCheck_Invalid3DCurve: return "Invalid3DCurve";
+    case BRepCheck_NoCurveOnSurface: return "NoCurveOnSurface";
+    case BRepCheck_InvalidCurveOnSurface: return "InvalidCurveOnSurface";
+    case BRepCheck_InvalidCurveOnClosedSurface: return "InvalidCurveOnClosedSurface";
+    case BRepCheck_InvalidSameRangeFlag: return "InvalidSameRangeFlag";
+    case BRepCheck_InvalidSameParameterFlag: return "InvalidSameParameterFlag";
+    case BRepCheck_InvalidDegeneratedFlag: return "InvalidDegeneratedFlag";
+    case BRepCheck_FreeEdge: return "FreeEdge";
+    case BRepCheck_InvalidMultiConnexity: return "InvalidMultiConnexity";
+    case BRepCheck_InvalidRange: return "InvalidRange";
+    case BRepCheck_EmptyWire: return "EmptyWire";
+    case BRepCheck_RedundantEdge: return "RedundantEdge";
+    case BRepCheck_SelfIntersectingWire: return "SelfIntersectingWire";
+    case BRepCheck_NoSurface: return "NoSurface";
+    case BRepCheck_InvalidWire: return "InvalidWire";
+    case BRepCheck_RedundantWire: return "RedundantWire";
+    case BRepCheck_IntersectingWires: return "IntersectingWires";
+    case BRepCheck_InvalidImbricationOfWires: return "InvalidImbricationOfWires";
+    case BRepCheck_EmptyShell: return "EmptyShell";
+    case BRepCheck_RedundantFace: return "RedundantFace";
+    case BRepCheck_InvalidImbricationOfShells: return "InvalidImbricationOfShells";
+    case BRepCheck_UnorientableShape: return "UnorientableShape";
+    case BRepCheck_NotClosed: return "NotClosed";
+    case BRepCheck_NotConnected: return "NotConnected";
+    case BRepCheck_SubshapeNotInShape: return "SubshapeNotInShape";
+    case BRepCheck_BadOrientation: return "BadOrientation";
+    case BRepCheck_BadOrientationOfSubshape: return "BadOrientationOfSubshape";
+    case BRepCheck_InvalidPolygonOnTriangulation: return "InvalidPolygonOnTriangulation";
+    case BRepCheck_InvalidToleranceValue: return "InvalidToleranceValue";
+    case BRepCheck_EnclosedRegion: return "EnclosedRegion";
+    case BRepCheck_CheckFail: return "CheckFail";
     }
+    return "Unknown";
+}
+
+std::vector<std::string> brep_status_names(const BRepCheck_ListOfStatus& statuses) {
+    std::vector<std::string> names;
+    for (BRepCheck_ListIteratorOfListOfStatus iterator(statuses); iterator.More(); iterator.Next()) {
+        names.emplace_back(brep_check_status_name(iterator.Value()));
+    }
+    return names;
+}
+
+const char* brep_shape_type_name(const TopAbs_ShapeEnum type) {
+    switch (type) {
+    case TopAbs_FACE: return "face";
+    case TopAbs_WIRE: return "wire";
+    case TopAbs_EDGE: return "edge";
+    case TopAbs_VERTEX: return "vertex";
+    default: return "other";
+    }
+}
+
+int shape_index(
+    const TopoDS_Shape& shape,
+    const TopTools_IndexedMapOfShape& faces,
+    const TopTools_IndexedMapOfShape& wires,
+    const TopTools_IndexedMapOfShape& edges,
+    const TopTools_IndexedMapOfShape& vertices) {
+    const TopTools_IndexedMapOfShape* map = nullptr;
+    switch (shape.ShapeType()) {
+    case TopAbs_FACE: map = &faces; break;
+    case TopAbs_WIRE: map = &wires; break;
+    case TopAbs_EDGE: map = &edges; break;
+    case TopAbs_VERTEX: map = &vertices; break;
+    default: return -1;
+    }
+    const auto index = map->FindIndex(shape);
+    return index > 0 ? index - 1 : -1;
+}
+
+double normalized_edge_curve_deviation(
+    const TopoDS_Edge& first_edge,
+    const TopoDS_Edge& second_edge,
+    const bool reverse_second) {
+    try {
+        BRepAdaptor_Curve first(first_edge);
+        BRepAdaptor_Curve second(second_edge);
+        const auto first_start = first.FirstParameter();
+        const auto first_end = first.LastParameter();
+        const auto second_start = second.FirstParameter();
+        const auto second_end = second.LastParameter();
+        if (!std::isfinite(first_start) || !std::isfinite(first_end) ||
+            !std::isfinite(second_start) || !std::isfinite(second_end)) {
+            return std::numeric_limits<double>::infinity();
+        }
+
+        double maximum = 0.0;
+        constexpr int kMappingSampleCount = 9;
+        for (int sample_index = 0; sample_index < kMappingSampleCount; ++sample_index) {
+            const auto ratio = static_cast<double>(sample_index) /
+                static_cast<double>(kMappingSampleCount - 1);
+            const auto second_ratio = reverse_second ? 1.0 - ratio : ratio;
+            const auto first_parameter = first_start + (first_end - first_start) * ratio;
+            const auto second_parameter = second_start + (second_end - second_start) * second_ratio;
+            maximum = std::max(
+                maximum,
+                first.Value(first_parameter).Distance(second.Value(second_parameter)));
+        }
+        return maximum;
+    } catch (const Standard_Failure&) {
+        return std::numeric_limits<double>::infinity();
+    }
+}
+
+SurfaceRefitBRepStageDiagnostic inspect_boundary_representation(
+    const TopoDS_Face& face,
+    const ShapeDocument& source_document,
+    const std::vector<EdgeId>& source_boundary_edges) {
+    SurfaceRefitBRepStageDiagnostic report;
+    if (face.IsNull()) {
+        return report;
+    }
+
+    BRepCheck_Analyzer analyzer(face);
+    report.performed = true;
+    report.valid = analyzer.IsValid();
+
+    TopTools_IndexedMapOfShape faces;
+    TopTools_IndexedMapOfShape wires;
+    TopTools_IndexedMapOfShape edges;
+    TopTools_IndexedMapOfShape vertices;
+    TopExp::MapShapes(face, TopAbs_FACE, faces);
+    TopExp::MapShapes(face, TopAbs_WIRE, wires);
+    TopExp::MapShapes(face, TopAbs_EDGE, edges);
+    TopExp::MapShapes(face, TopAbs_VERTEX, vertices);
+    report.face_count = faces.Extent();
+    report.wire_count = wires.Extent();
+    report.edge_count = edges.Extent();
+    report.vertex_count = vertices.Extent();
+
+    auto append_statuses = [&](const TopTools_IndexedMapOfShape& map, const char* type_name) {
+        for (int map_index = 1; map_index <= map.Extent(); ++map_index) {
+            const auto& shape = map(map_index);
+            SurfaceRefitBRepSubshapeStatus diagnostic;
+            diagnostic.shape_type = type_name;
+            diagnostic.shape_index = map_index - 1;
+            if (shape.ShapeType() == TopAbs_EDGE) {
+                diagnostic.output_edge_index = map_index - 1;
+            }
+
+            const Handle(BRepCheck_Result) check_result = analyzer.Result(shape);
+            if (!check_result.IsNull()) {
+                diagnostic.statuses = brep_status_names(check_result->Status());
+                check_result->InitContextIterator();
+                while (check_result->MoreShapeInContext()) {
+                    SurfaceRefitBRepContextStatus context;
+                    const auto& context_shape = check_result->ContextualShape();
+                    context.shape_type = brep_shape_type_name(context_shape.ShapeType());
+                    context.shape_index = shape_index(
+                        context_shape,
+                        faces,
+                        wires,
+                        edges,
+                        vertices);
+                    context.statuses = brep_status_names(check_result->StatusOnShape());
+                    diagnostic.contextual_statuses.push_back(std::move(context));
+                    check_result->NextShapeInContext();
+                }
+            }
+            report.subshape_statuses.push_back(std::move(diagnostic));
+        }
+    };
+    append_statuses(faces, "face");
+    append_statuses(wires, "wire");
+    append_statuses(edges, "edge");
+    append_statuses(vertices, "vertex");
+
+    const auto surface = BRep_Tool::Surface(face);
+    const auto& topology = source_document.topology();
+    report.edges.reserve(static_cast<std::size_t>(edges.Extent()));
+    for (int map_index = 1; map_index <= edges.Extent(); ++map_index) {
+        const auto edge = TopoDS::Edge(edges(map_index));
+        SurfaceRefitOutputEdgeDiagnostic diagnostic;
+        diagnostic.edge_index = map_index - 1;
+        diagnostic.tolerance = BRep_Tool::Tolerance(edge);
+        diagnostic.degenerated = BRep_Tool::Degenerated(edge);
+        diagnostic.same_range = BRep_Tool::SameRange(edge);
+        diagnostic.same_parameter = BRep_Tool::SameParameter(edge);
+
+        double best_mapping_deviation = std::numeric_limits<double>::infinity();
+        double best_mapping_tolerance = 0.0;
+        EdgeId best_mapping_id = kInvalidEdgeId;
+        for (const auto source_edge_id : source_boundary_edges) {
+            if (source_edge_id >= topology.edgeCount()) {
+                continue;
+            }
+            const auto& source_edge = topology.edge(source_edge_id);
+            if (edge.IsSame(source_edge)) {
+                best_mapping_id = source_edge_id;
+                best_mapping_deviation = 0.0;
+                best_mapping_tolerance = BRep_Tool::Tolerance(source_edge);
+                break;
+            }
+            const auto deviation = std::min(
+                normalized_edge_curve_deviation(edge, source_edge, false),
+                normalized_edge_curve_deviation(edge, source_edge, true));
+            if (deviation < best_mapping_deviation) {
+                best_mapping_id = source_edge_id;
+                best_mapping_deviation = deviation;
+                best_mapping_tolerance = BRep_Tool::Tolerance(source_edge);
+            }
+        }
+        const auto mapping_tolerance = std::max(
+            10.0 * Precision::Confusion(),
+            2.0 * (diagnostic.tolerance + best_mapping_tolerance));
+        if (best_mapping_id != kInvalidEdgeId && best_mapping_deviation <= mapping_tolerance) {
+            diagnostic.source_boundary_edge_id = best_mapping_id;
+        }
+
+        const auto curve3d = BRep_Tool::Curve(
+            edge,
+            diagnostic.curve3d_first,
+            diagnostic.curve3d_last);
+        diagnostic.has_curve3d = !curve3d.IsNull();
+        const auto pcurve = BRep_Tool::CurveOnSurface(
+            edge,
+            face,
+            diagnostic.pcurve_first,
+            diagnostic.pcurve_last);
+        diagnostic.has_pcurve = !pcurve.IsNull();
+        diagnostic.deviation_used_normalized_parameter_mapping = !diagnostic.same_range;
+
+        if (diagnostic.has_curve3d && diagnostic.has_pcurve && !surface.IsNull() &&
+            std::isfinite(diagnostic.curve3d_first) && std::isfinite(diagnostic.curve3d_last) &&
+            std::isfinite(diagnostic.pcurve_first) && std::isfinite(diagnostic.pcurve_last)) {
+            int evaluated_count = 0;
+            try {
+                constexpr int kDeviationSampleCount = 17;
+                for (int sample_index = 0; sample_index < kDeviationSampleCount; ++sample_index) {
+                    const auto ratio = static_cast<double>(sample_index) /
+                        static_cast<double>(kDeviationSampleCount - 1);
+                    const auto curve_parameter = diagnostic.curve3d_first +
+                        (diagnostic.curve3d_last - diagnostic.curve3d_first) * ratio;
+                    const auto pcurve_parameter = diagnostic.pcurve_first +
+                        (diagnostic.pcurve_last - diagnostic.pcurve_first) * ratio;
+                    const auto uv = pcurve->Value(pcurve_parameter);
+                    const auto deviation = curve3d->Value(curve_parameter).Distance(
+                        surface->Value(uv.X(), uv.Y()));
+                    diagnostic.curve_on_surface_max_deviation = std::max(
+                        diagnostic.curve_on_surface_max_deviation,
+                        deviation);
+                    ++evaluated_count;
+                }
+            } catch (const Standard_Failure&) {
+                evaluated_count = 0;
+            }
+            diagnostic.curve_on_surface_deviation_computed = evaluated_count > 0;
+        }
+        report.edges.push_back(std::move(diagnostic));
+    }
+    return report;
 }
 
 bool complexity_exceeded(
@@ -761,6 +1099,49 @@ int overlap_count(
     return count;
 }
 
+std::vector<SurfaceRefitFaceSamplingStatistics> summarize_face_sampling(
+    const std::vector<FaceId>& face_ids,
+    const std::vector<SourceSample>& training,
+    const std::vector<SourceSample>& validation,
+    const std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
+    std::vector<SurfaceRefitFaceSamplingStatistics> statistics;
+    statistics.reserve(face_ids.size());
+    for (const auto face_id : face_ids) {
+        const auto duplicate = std::any_of(statistics.begin(), statistics.end(), [&](const auto& item) {
+            return item.face_id == face_id;
+        });
+        if (!duplicate) {
+            statistics.push_back(SurfaceRefitFaceSamplingStatistics {face_id});
+        }
+    }
+
+    auto find_face = [&](const FaceId face_id) -> SurfaceRefitFaceSamplingStatistics* {
+        const auto found = std::find_if(statistics.begin(), statistics.end(), [&](const auto& item) {
+            return item.face_id == face_id;
+        });
+        return found != statistics.end() ? &*found : nullptr;
+    };
+    for (const auto& sample : training) {
+        if (auto* item = find_face(sample.face_id)) {
+            ++item->training_count;
+        }
+    }
+    for (const auto& sample : validation) {
+        if (auto* item = find_face(sample.face_id)) {
+            ++item->validation_count;
+        }
+    }
+    for (const auto& diagnostic : diagnostics) {
+        if (diagnostic.category != SurfaceRefitSampleCategory::Interior || !diagnostic.over_tolerance) {
+            continue;
+        }
+        if (auto* item = find_face(diagnostic.face_id)) {
+            ++item->validation_over_tolerance_count;
+        }
+    }
+    return statistics;
+}
+
 } // namespace
 
 const char* surfaceRefitFailureReasonToString(const SurfaceRefitFailureReason reason) {
@@ -770,10 +1151,12 @@ const char* surfaceRefitFailureReasonToString(const SurfaceRefitFailureReason re
     case SurfaceRefitFailureReason::UnsupportedCandidateType: return "UnsupportedCandidateType";
     case SurfaceRefitFailureReason::BoundaryInvalid: return "BoundaryInvalid";
     case SurfaceRefitFailureReason::SampleGenerationFailed: return "SampleGenerationFailed";
+    case SurfaceRefitFailureReason::SamplingConfigurationUnsupported: return "SamplingConfigurationUnsupported";
     case SurfaceRefitFailureReason::FillingFailed: return "FillingFailed";
     case SurfaceRefitFailureReason::NullFace: return "NullFace";
     case SurfaceRefitFailureReason::BoundaryRepresentationInvalid: return "BoundaryRepresentationInvalid";
     case SurfaceRefitFailureReason::BRepCheckFailed: return "BRepCheckFailed";
+    case SurfaceRefitFailureReason::StepRoundtripInvalid: return "StepRoundtripInvalid";
     case SurfaceRefitFailureReason::BoundaryErrorExceeded: return "BoundaryErrorExceeded";
     case SurfaceRefitFailureReason::CornerErrorExceeded: return "CornerErrorExceeded";
     case SurfaceRefitFailureReason::InteriorErrorExceeded: return "InteriorErrorExceeded";
@@ -793,6 +1176,15 @@ const char* surfaceRefitSampleCategoryToString(const SurfaceRefitSampleCategory 
     return "unknown";
 }
 
+const char* surfaceRefitSamplingStrategyToString(const SurfaceRefitSamplingStrategy strategy) {
+    switch (strategy) {
+    case SurfaceRefitSamplingStrategy::AreaWeighted: return "area_weighted";
+    case SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted:
+        return "face_stratified_area_weighted";
+    }
+    return "unknown";
+}
+
 SurfaceRefitResult SurfaceRefitter::fitSingleFace(
     const ShapeDocument& document,
     const MergeCandidate& candidate,
@@ -801,11 +1193,17 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
     auto& report = result.report;
     report.candidate_id = candidate.candidate_id;
     report.candidate_face_count = static_cast<int>(candidate.faces.size());
+    report.sampling_strategy = options.sampling_strategy;
     report.requested_training_sample_count = options.training_sample_count;
     report.requested_validation_sample_count = options.validation_sample_count;
 
     if (!document.hasShape() || candidate.faces.empty() || !valid_options(options)) {
         fail(report, SurfaceRefitFailureReason::InvalidInput, "Single-face refit requires a loaded shape, source faces, and valid options.");
+        return result;
+    }
+    if (options.sampling_strategy != SurfaceRefitSamplingStrategy::AreaWeighted &&
+        options.sampling_strategy != SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted) {
+        fail(report, SurfaceRefitFailureReason::InvalidInput, "Single-face refit received an unknown sampling strategy.");
         return result;
     }
     if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
@@ -823,6 +1221,19 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         return result;
     }
 
+    if (options.sampling_strategy == SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted) {
+        auto unique_face_ids = candidate.faces;
+        std::sort(unique_face_ids.begin(), unique_face_ids.end());
+        unique_face_ids.erase(std::unique(unique_face_ids.begin(), unique_face_ids.end()), unique_face_ids.end());
+        if (unique_face_ids.size() > static_cast<std::size_t>(options.training_sample_count)) {
+            fail(
+                report,
+                SurfaceRefitFailureReason::SamplingConfigurationUnsupported,
+                "Face-stratified sampling requires at least one training point per source face, but the face count exceeds the fixed training budget.");
+            return result;
+        }
+    }
+
     std::string sample_message;
     const auto triangles = build_source_triangles(document, candidate, options, sample_message);
     if (triangles.empty()) {
@@ -830,7 +1241,13 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         return result;
     }
 
-    const auto training = generate_samples(triangles, options.training_sample_count, 0, {}, options);
+    const auto training = options.sampling_strategy == SurfaceRefitSamplingStrategy::AreaWeighted
+        ? generate_samples(triangles, options.training_sample_count, 0, {}, options)
+        : generate_face_stratified_training_samples(
+            triangles,
+            candidate.faces,
+            options.training_sample_count,
+            options);
     const auto validation = generate_samples(triangles, options.validation_sample_count, 104729, training, options);
     report.training_sample_count = static_cast<int>(training.size());
     report.validation_sample_count = static_cast<int>(validation.size());
@@ -844,7 +1261,7 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         fail(
             report,
             SurfaceRefitFailureReason::SampleGenerationFailed,
-            "Could not build complete, disjoint area-weighted training and validation sample sets.");
+            "Could not build complete, deterministic, spatially deduplicated, disjoint training and validation sample sets.");
         return result;
     }
 
@@ -902,8 +1319,11 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         return result;
     }
 
-    inspect_boundary_representation(result.face, report);
-    report.brep_check_valid = BRepCheck_Analyzer(result.face).IsValid();
+    report.filling_face_brep = inspect_boundary_representation(
+        result.face,
+        document,
+        boundary.ordered_boundary_edges);
+    report.filling_face_brep_check_valid = report.filling_face_brep.valid;
     auto domain = surface_domain(result.face);
     if (!domain.valid) {
         fail(report, SurfaceRefitFailureReason::NullFace, "Fitted face has no finite surface domain.");
@@ -913,6 +1333,21 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         result.face.Reverse();
         report.output_orientation_reversed = true;
         domain = surface_domain(result.face);
+    }
+    report.oriented_face_brep = inspect_boundary_representation(
+        result.face,
+        document,
+        boundary.ordered_boundary_edges);
+    report.oriented_face_brep_check_valid = report.oriented_face_brep.valid;
+    report.brep_check_valid = report.oriented_face_brep_check_valid;
+    report.output_edge_count = report.oriented_face_brep.edge_count;
+    for (const auto& edge : report.oriented_face_brep.edges) {
+        if (!edge.has_pcurve) {
+            ++report.missing_pcurve_count;
+        }
+        if (!edge.same_parameter) {
+            ++report.same_parameter_failure_count;
+        }
     }
 
     const auto boundary_samples = sample_boundary(
@@ -941,10 +1376,20 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         report.surface_error_samples);
     report.interior_error = evaluate_interior_distances(
         validation,
+        training,
         domain,
         options,
         report.surface_error_samples);
-    report.normal_error = evaluate_normals(validation, domain, options);
+    report.normal_error = evaluate_normals(
+        validation,
+        domain,
+        options,
+        report.normal_error_samples);
+    report.face_sampling = summarize_face_sampling(
+        candidate.faces,
+        training,
+        validation,
+        report.surface_error_samples);
     report.jacobian = inspect_jacobian(result.face, domain, options);
     report.complexity = inspect_complexity(domain.surface);
 
@@ -952,7 +1397,7 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         fail(report, SurfaceRefitFailureReason::BoundaryRepresentationInvalid, "Fitted face has missing pcurves or non-SameParameter boundary edges.");
     }
     if (!report.brep_check_valid) {
-        fail(report, SurfaceRefitFailureReason::BRepCheckFailed, "Fitted face failed BRepCheck.");
+        fail(report, SurfaceRefitFailureReason::BRepCheckFailed, "Oriented fitted face failed BRepCheck.");
     }
     if (report.g0_error > options.tolerance3d ||
         report.boundary_error.projection_failure_count > 0 ||

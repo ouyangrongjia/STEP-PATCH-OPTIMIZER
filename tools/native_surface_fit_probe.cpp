@@ -6,6 +6,8 @@
 #include "merge/SurfaceRefitDiagnostics.h"
 #include "merge/SurfaceRefitter.h"
 
+#include <BRepCheck_Analyzer.hxx>
+
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -74,7 +76,8 @@ void print_usage() {
         << "Usage: native_surface_fit_probe --source-step <model.stp> "
         << "--candidate-id <id|auto> --output-patch <patch.stp> --report <report.json> "
         << "[--tolerance3d <value>] [--normal-tolerance-degrees <value>] "
-        << "[--training-samples <count>] [--validation-samples <count>]\n";
+        << "[--training-samples <count>] [--validation-samples <count>] "
+        << "[--sampling-strategy <area_weighted|face_stratified_area_weighted>]\n";
 }
 
 bool parse_int(const char* text, int& value) {
@@ -103,6 +106,21 @@ bool parse_double(const char* text, double& value) {
     } catch (...) {
         return false;
     }
+}
+
+bool parse_sampling_strategy(
+    const char* text,
+    spo::SurfaceRefitSamplingStrategy& strategy) {
+    const std::string value = text;
+    if (value == "area_weighted") {
+        strategy = spo::SurfaceRefitSamplingStrategy::AreaWeighted;
+        return true;
+    }
+    if (value == "face_stratified_area_weighted") {
+        strategy = spo::SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted;
+        return true;
+    }
+    return false;
 }
 
 bool parse_options(int argc, char* argv[], Options& options) {
@@ -156,6 +174,12 @@ bool parse_options(int argc, char* argv[], Options& options) {
         } else if (argument == "--validation-samples") {
             const auto* value = require_value("--validation-samples");
             if (value == nullptr || !parse_int(value, options.refit.validation_sample_count)) return false;
+        } else if (argument == "--sampling-strategy") {
+            const auto* value = require_value("--sampling-strategy");
+            if (value == nullptr || !parse_sampling_strategy(value, options.refit.sampling_strategy)) {
+                std::cerr << "Invalid sampling strategy: " << (value != nullptr ? value : "") << "\n";
+                return false;
+            }
         } else if (argument == "--boundary-samples-per-edge") {
             const auto* value = require_value("--boundary-samples-per-edge");
             if (value == nullptr || !parse_int(value, options.refit.boundary_samples_per_edge)) return false;
@@ -230,6 +254,10 @@ void write_point(std::ostream& output, const gp_Pnt& point) {
     output << "[" << point.X() << ", " << point.Y() << ", " << point.Z() << "]";
 }
 
+void write_vector(std::ostream& output, const gp_Vec& vector) {
+    output << "[" << vector.X() << ", " << vector.Y() << ", " << vector.Z() << "]";
+}
+
 void write_id(std::ostream& output, const spo::FaceId id) {
     if (id == std::numeric_limits<spo::FaceId>::max()) {
         output << "null";
@@ -265,10 +293,100 @@ void write_distance_statistics(
     output << "\n";
 }
 
+void write_string_array(std::ostream& output, const std::vector<std::string>& values) {
+    output << "[";
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index > 0) output << ", ";
+        output << quote_json(values[index]);
+    }
+    output << "]";
+}
+
+void write_brep_stage(
+    std::ostream& output,
+    const spo::SurfaceRefitBRepStageDiagnostic& stage,
+    const char* indent) {
+    output << indent << "{\n";
+    output << indent << "  \"performed\": " << bool_json(stage.performed) << ",\n";
+    output << indent << "  \"valid\": " << bool_json(stage.valid) << ",\n";
+    output << indent << "  \"face_count\": " << stage.face_count << ",\n";
+    output << indent << "  \"wire_count\": " << stage.wire_count << ",\n";
+    output << indent << "  \"edge_count\": " << stage.edge_count << ",\n";
+    output << indent << "  \"vertex_count\": " << stage.vertex_count << ",\n";
+    output << indent << "  \"subshape_statuses\": [\n";
+    for (std::size_t index = 0; index < stage.subshape_statuses.size(); ++index) {
+        const auto& status = stage.subshape_statuses[index];
+        output << indent << "    {\n";
+        output << indent << "      \"shape_type\": " << quote_json(status.shape_type) << ",\n";
+        output << indent << "      \"shape_index\": " << status.shape_index << ",\n";
+        output << indent << "      \"output_edge_index\": ";
+        if (status.output_edge_index >= 0) {
+            output << status.output_edge_index;
+        } else {
+            output << "null";
+        }
+        output << ",\n" << indent << "      \"statuses\": ";
+        write_string_array(output, status.statuses);
+        output << ",\n" << indent << "      \"contextual_statuses\": [\n";
+        for (std::size_t context_index = 0;
+             context_index < status.contextual_statuses.size();
+             ++context_index) {
+            const auto& context = status.contextual_statuses[context_index];
+            output << indent << "        {\"shape_type\": " << quote_json(context.shape_type)
+                   << ", \"shape_index\": " << context.shape_index << ", \"statuses\": ";
+            write_string_array(output, context.statuses);
+            output << "}" << (context_index + 1 < status.contextual_statuses.size() ? "," : "") << "\n";
+        }
+        output << indent << "      ]\n";
+        output << indent << "    }" << (index + 1 < stage.subshape_statuses.size() ? "," : "") << "\n";
+    }
+    output << indent << "  ],\n";
+    output << indent << "  \"edges\": [\n";
+    for (std::size_t index = 0; index < stage.edges.size(); ++index) {
+        const auto& edge = stage.edges[index];
+        output << indent << "    {\n";
+        output << indent << "      \"edge_index\": " << edge.edge_index << ",\n";
+        output << indent << "      \"source_boundary_edge_id\": ";
+        write_edge_id(output, edge.source_boundary_edge_id);
+        output << ",\n" << indent << "      \"tolerance\": " << edge.tolerance << ",\n";
+        output << indent << "      \"degenerated\": " << bool_json(edge.degenerated) << ",\n";
+        output << indent << "      \"same_range\": " << bool_json(edge.same_range) << ",\n";
+        output << indent << "      \"same_parameter\": " << bool_json(edge.same_parameter) << ",\n";
+        output << indent << "      \"has_curve3d\": " << bool_json(edge.has_curve3d) << ",\n";
+        output << indent << "      \"curve3d_range\": ";
+        if (edge.has_curve3d) {
+            output << "[" << edge.curve3d_first << ", " << edge.curve3d_last << "]";
+        } else {
+            output << "null";
+        }
+        output << ",\n" << indent << "      \"has_pcurve\": " << bool_json(edge.has_pcurve) << ",\n";
+        output << indent << "      \"pcurve_range\": ";
+        if (edge.has_pcurve) {
+            output << "[" << edge.pcurve_first << ", " << edge.pcurve_last << "]";
+        } else {
+            output << "null";
+        }
+        output << ",\n" << indent << "      \"curve_on_surface_deviation_computed\": "
+               << bool_json(edge.curve_on_surface_deviation_computed) << ",\n";
+        output << indent << "      \"deviation_used_normalized_parameter_mapping\": "
+               << bool_json(edge.deviation_used_normalized_parameter_mapping) << ",\n";
+        output << indent << "      \"curve_on_surface_max_deviation\": ";
+        if (edge.curve_on_surface_deviation_computed) {
+            output << edge.curve_on_surface_max_deviation;
+        } else {
+            output << "null";
+        }
+        output << "\n" << indent << "    }" << (index + 1 < stage.edges.size() ? "," : "") << "\n";
+    }
+    output << indent << "  ]\n";
+    output << indent << "}";
+}
+
 bool write_report(
     const Options& options,
     const spo::MergeCandidate* candidate,
     const spo::SurfaceRefitReport& report,
+    const bool fit_success,
     const bool patch_written,
     const bool overall_success,
     const std::string& stage) {
@@ -276,7 +394,7 @@ bool write_report(
         options.report.parent_path() / "diagnostics" / "native_surface_fit";
     const auto diagnostic_artifacts =
         spo::writeSurfaceRefitDiagnosticArtifacts(report, diagnostic_directory);
-    const bool diagnostic_patch = patch_written && !report.success;
+    const bool diagnostic_patch = patch_written && !overall_success;
 
     std::error_code error;
     const auto parent = options.report.parent_path();
@@ -289,7 +407,7 @@ bool write_report(
     if (!output.good()) return false;
     output << std::setprecision(17);
     output << "{\n";
-    output << "  \"schema_version\": 2,\n";
+    output << "  \"schema_version\": 3,\n";
     output << "  \"tool\": \"native_surface_fit_probe\",\n";
     output << "  \"stage\": " << quote_json(stage) << ",\n";
     output << "  \"source_step\": " << quote_json(path_to_utf8(options.source_step)) << ",\n";
@@ -304,7 +422,7 @@ bool write_report(
     output << "  \"candidate_face_count\": " << report.candidate_face_count << ",\n";
     output << "  \"boundary_valid\": " << bool_json(report.boundary_valid) << ",\n";
     output << "  \"success\": " << bool_json(overall_success) << ",\n";
-    output << "  \"fit_success\": " << bool_json(report.success) << ",\n";
+    output << "  \"fit_success\": " << bool_json(fit_success) << ",\n";
     output << "  \"patch_written\": " << bool_json(patch_written) << ",\n";
     output << "  \"diagnostic_patch\": " << bool_json(diagnostic_patch) << ",\n";
     output << "  \"patch_acceptable\": " << bool_json(overall_success && patch_written) << ",\n";
@@ -324,6 +442,8 @@ bool write_report(
     output << "],\n";
     output << "  \"message\": " << quote_json(report.message) << ",\n";
     output << "  \"configuration\": {\n";
+    output << "    \"sampling_strategy\": "
+           << quote_json(spo::surfaceRefitSamplingStrategyToString(options.refit.sampling_strategy)) << ",\n";
     output << "    \"feature_angle_degrees\": " << options.feature_angle_degrees << ",\n";
     output << "    \"min_edge_length\": " << options.min_edge_length << ",\n";
     output << "    \"tolerance2d\": " << options.refit.tolerance2d << ",\n";
@@ -360,11 +480,25 @@ bool write_report(
     }
     output << "]\n  },\n";
     output << "  \"sampling\": {\n";
+    output << "    \"strategy\": "
+           << quote_json(spo::surfaceRefitSamplingStrategyToString(report.sampling_strategy)) << ",\n";
     output << "    \"requested_training_count\": " << report.requested_training_sample_count << ",\n";
     output << "    \"requested_validation_count\": " << report.requested_validation_sample_count << ",\n";
     output << "    \"training_count\": " << report.training_sample_count << ",\n";
     output << "    \"validation_count\": " << report.validation_sample_count << ",\n";
-    output << "    \"training_validation_overlap_count\": " << report.training_validation_overlap_count << "\n";
+    output << "    \"training_validation_overlap_count\": " << report.training_validation_overlap_count << ",\n";
+    output << "    \"per_face\": [\n";
+    for (std::size_t index = 0; index < report.face_sampling.size(); ++index) {
+        const auto& face = report.face_sampling[index];
+        output << "      {\"face_id\": ";
+        write_id(output, face.face_id);
+        output << ", \"training_count\": " << face.training_count
+               << ", \"validation_count\": " << face.validation_count
+               << ", \"validation_over_tolerance_count\": "
+               << face.validation_over_tolerance_count << "}"
+               << (index + 1 < report.face_sampling.size() ? "," : "") << "\n";
+    }
+    output << "    ]\n";
     output << "  },\n";
     output << "  \"filling\": {\n";
     output << "    \"done\": " << bool_json(report.filling_done) << ",\n";
@@ -419,7 +553,53 @@ bool write_report(
         write_id(output, sample.face_id);
         output << ",\n      \"edge_id\": ";
         write_edge_id(output, sample.edge_id);
+        output << ",\n      \"nearest_training_distance\": ";
+        if (sample.nearest_training_distance_defined) {
+            output << sample.nearest_training_distance;
+        } else {
+            output << "null";
+        }
         output << "\n    }" << (index + 1 < report.surface_error_samples.size() ? "," : "") << "\n";
+    }
+    output << "  ],\n";
+    output << "  \"normal_error_samples\": [\n";
+    for (std::size_t index = 0; index < report.normal_error_samples.size(); ++index) {
+        const auto& sample = report.normal_error_samples[index];
+        output << "    {\n";
+        output << "      \"source_point\": ";
+        write_point(output, sample.source_point);
+        output << ",\n      \"projected_point\": ";
+        if (sample.projection_success) {
+            write_point(output, sample.projected_point);
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"source_normal\": ";
+        write_vector(output, sample.source_normal);
+        output << ",\n      \"fitted_normal\": ";
+        if (sample.fitted_normal_defined) {
+            write_vector(output, sample.fitted_normal);
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"angle_degrees\": ";
+        if (sample.fitted_normal_defined) {
+            output << sample.angle_degrees;
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"uv\": ";
+        if (sample.projection_success) {
+            output << "[" << sample.u << ", " << sample.v << "]";
+        } else {
+            output << "null";
+        }
+        output << ",\n      \"face_id\": ";
+        write_id(output, sample.face_id);
+        output << ",\n      \"projection_success\": " << bool_json(sample.projection_success) << ",\n";
+        output << "      \"fitted_normal_defined\": " << bool_json(sample.fitted_normal_defined) << ",\n";
+        output << "      \"over_tolerance\": " << bool_json(sample.over_tolerance) << "\n";
+        output << "    }" << (index + 1 < report.normal_error_samples.size() ? "," : "") << "\n";
     }
     output << "  ],\n";
     output << "  \"diagnostics\": {\n";
@@ -428,8 +608,11 @@ bool write_report(
            << quote_json(path_to_utf8(diagnostic_artifacts.csv_path)) << ",\n";
     output << "    \"surface_error_vectors_obj\": "
            << quote_json(path_to_utf8(diagnostic_artifacts.obj_path)) << ",\n";
+    output << "    \"surface_normal_error_samples_csv\": "
+           << quote_json(path_to_utf8(diagnostic_artifacts.normal_csv_path)) << ",\n";
     output << "    \"csv_written\": " << bool_json(diagnostic_artifacts.csv_written) << ",\n";
     output << "    \"obj_written\": " << bool_json(diagnostic_artifacts.obj_written) << ",\n";
+    output << "    \"normal_csv_written\": " << bool_json(diagnostic_artifacts.normal_csv_written) << ",\n";
     output << "    \"message\": " << quote_json(diagnostic_artifacts.message) << "\n";
     output << "  },\n";
     output << "  \"jacobian\": {\n";
@@ -456,11 +639,24 @@ bool write_report(
     output << "  },\n";
     output << "  \"brep\": {\n";
     output << "    \"brep_check_valid\": " << bool_json(report.brep_check_valid) << ",\n";
+    output << "    \"filling_face_brep_check_valid\": " << bool_json(report.filling_face_brep_check_valid) << ",\n";
+    output << "    \"oriented_face_brep_check_valid\": " << bool_json(report.oriented_face_brep_check_valid) << ",\n";
+    output << "    \"step_roundtrip_read_success\": " << bool_json(report.step_roundtrip_read_success) << ",\n";
+    output << "    \"step_roundtrip_brep_check_performed\": " << bool_json(report.step_roundtrip_brep_check_performed) << ",\n";
+    output << "    \"step_roundtrip_brep_check_valid\": " << bool_json(report.step_roundtrip_brep_check_valid) << ",\n";
+    output << "    \"step_roundtrip_face_count\": " << report.step_roundtrip_face_count << ",\n";
+    output << "    \"step_roundtrip_edge_count\": " << report.step_roundtrip_edge_count << ",\n";
+    output << "    \"step_roundtrip_message\": " << quote_json(report.step_roundtrip_message) << ",\n";
     output << "    \"output_orientation_reversed\": " << bool_json(report.output_orientation_reversed) << ",\n";
     output << "    \"output_face_count\": " << (report.filling_done ? 1 : 0) << ",\n";
     output << "    \"output_edge_count\": " << report.output_edge_count << ",\n";
     output << "    \"missing_pcurve_count\": " << report.missing_pcurve_count << ",\n";
-    output << "    \"same_parameter_failure_count\": " << report.same_parameter_failure_count << "\n";
+    output << "    \"same_parameter_failure_count\": " << report.same_parameter_failure_count << ",\n";
+    output << "    \"filling_face\": ";
+    write_brep_stage(output, report.filling_face_brep, "    ");
+    output << ",\n    \"oriented_face\": ";
+    write_brep_stage(output, report.oriented_face_brep, "    ");
+    output << "\n";
     output << "  }\n";
     output << "}\n";
     return output.good();
@@ -475,8 +671,26 @@ spo::SurfaceRefitReport failure_report(
     report.requested_training_sample_count = options.refit.training_sample_count;
     report.requested_validation_sample_count = options.refit.validation_sample_count;
     report.failure_reason = reason;
+    report.failed_gates.push_back(reason);
     report.message = std::move(message);
     return report;
+}
+
+void add_probe_failure(
+    spo::SurfaceRefitReport& report,
+    const spo::SurfaceRefitFailureReason reason,
+    const std::string& message) {
+    report.success = false;
+    if (report.failure_reason == spo::SurfaceRefitFailureReason::None) {
+        report.failure_reason = reason;
+        report.message = message;
+    } else if (!message.empty()) {
+        report.message += " " + message;
+    }
+    if (std::find(report.failed_gates.begin(), report.failed_gates.end(), reason) ==
+        report.failed_gates.end()) {
+        report.failed_gates.push_back(reason);
+    }
 }
 
 } // namespace
@@ -490,7 +704,7 @@ int main(int argc, char* argv[]) {
 
     if (!std::filesystem::exists(options.source_step)) {
         const auto report = failure_report(options, spo::SurfaceRefitFailureReason::InvalidInput, "Source STEP does not exist.");
-        write_report(options, nullptr, report, false, false, "input");
+        write_report(options, nullptr, report, false, false, false, "input");
         std::cerr << report.message << "\n";
         return 1;
     }
@@ -498,7 +712,7 @@ int main(int argc, char* argv[]) {
     const auto read = spo::StepReader().read(options.source_step);
     if (!read.status.success()) {
         const auto report = failure_report(options, spo::SurfaceRefitFailureReason::InvalidInput, read.status.message());
-        write_report(options, nullptr, report, false, false, "read_step");
+        write_report(options, nullptr, report, false, false, false, "read_step");
         std::cerr << report.message << "\n";
         return 1;
     }
@@ -512,12 +726,13 @@ int main(int argc, char* argv[]) {
     const auto* candidate = select_candidate(read.document, plan.candidates, options, selection_message);
     if (candidate == nullptr) {
         const auto report = failure_report(options, spo::SurfaceRefitFailureReason::InvalidInput, selection_message);
-        write_report(options, nullptr, report, false, false, "select_candidate");
+        write_report(options, nullptr, report, false, false, false, "select_candidate");
         std::cerr << report.message << "\n";
         return 1;
     }
 
     auto result = spo::SurfaceRefitter().fitSingleFace(read.document, *candidate, options.refit);
+    const bool fit_success = result.success();
     bool patch_written = false;
     std::string patch_write_error;
     std::error_code directory_error;
@@ -538,11 +753,35 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (!result.success()) {
+    bool roundtrip_acceptable = false;
+    if (patch_written) {
+        const auto roundtrip = spo::StepReader().read(options.output_patch);
+        result.report.step_roundtrip_read_success = roundtrip.status.success();
+        if (roundtrip.status.success()) {
+            result.report.step_roundtrip_face_count = static_cast<int>(roundtrip.document.topology().faceCount());
+            result.report.step_roundtrip_edge_count = static_cast<int>(roundtrip.document.topology().edgeCount());
+            result.report.step_roundtrip_brep_check_performed = true;
+            result.report.step_roundtrip_brep_check_valid =
+                BRepCheck_Analyzer(roundtrip.document.shape()).IsValid();
+            result.report.step_roundtrip_message = "STEP roundtrip read and BRepCheck completed.";
+            roundtrip_acceptable = result.report.step_roundtrip_face_count == 1 &&
+                result.report.step_roundtrip_brep_check_valid;
+        } else {
+            result.report.step_roundtrip_message = roundtrip.status.message();
+        }
+        if (!roundtrip_acceptable) {
+            add_probe_failure(
+                result.report,
+                spo::SurfaceRefitFailureReason::StepRoundtripInvalid,
+                "Diagnostic patch failed STEP roundtrip read, one-face, or BRepCheck validation.");
+        }
+    }
+
+    if (!fit_success) {
         if (!patch_write_error.empty()) {
             result.report.message += " Diagnostic patch export also failed: " + patch_write_error;
         }
-        write_report(options, candidate, result.report, patch_written, false, "fit_single_face");
+        write_report(options, candidate, result.report, false, patch_written, false, "fit_single_face");
         std::cerr << result.report.message << "\n";
         return 1;
     }
@@ -550,11 +789,16 @@ int main(int argc, char* argv[]) {
         result.report.message = patch_write_error.empty()
             ? "Fitted face was not eligible for STEP export."
             : patch_write_error;
-        write_report(options, candidate, result.report, false, false, "write_patch");
+        write_report(options, candidate, result.report, true, false, false, "write_patch");
         std::cerr << result.report.message << "\n";
         return 1;
     }
-    if (!write_report(options, candidate, result.report, patch_written, true, "complete")) {
+    if (!roundtrip_acceptable) {
+        write_report(options, candidate, result.report, true, true, false, "step_roundtrip");
+        std::cerr << result.report.message << "\n";
+        return 1;
+    }
+    if (!write_report(options, candidate, result.report, true, true, true, "complete")) {
         std::cerr << "Could not write JSON report: " << path_to_utf8(options.report) << "\n";
         return 1;
     }

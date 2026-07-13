@@ -310,8 +310,57 @@ void test_native_surface_fit_tier_runner_cleans_incomplete_invocation_runs() {
     assert(script.find("Refusing to remove an incomplete run outside data/runs") != std::string::npos);
     assert(script.find("Remove-Item -LiteralPath $resolvedRunDirectory -Recurse -Force") !=
         std::string::npos);
-    assert(script.find("cand-0179") == std::string::npos);
-    assert(script.find("03_配件") == std::string::npos);
+    assert(script.find("[Parameter(Mandatory = $true)][string]$SourceStep") != std::string::npos);
+    assert(script.find("[int]$CandidateId") != std::string::npos);
+}
+
+void test_native_surface_fit_probe_reports_nsr_1_2_diagnostics_contract() {
+    const auto root = source_root();
+    const auto source = read_text_file(root / "tools" / "native_surface_fit_probe.cpp");
+
+    for (const auto* required : {
+             "filling_face_brep_check_valid",
+             "oriented_face_brep_check_valid",
+             "step_roundtrip_brep_check_valid",
+             "subshape_statuses",
+             "contextual_statuses",
+             "curve_on_surface_max_deviation",
+             "nearest_training_distance",
+             "normal_error_samples",
+             "surface_normal_error_samples_csv"}) {
+        assert(source.find(required) != std::string::npos);
+    }
+    assert(source.find("ShapeFix") == std::string::npos);
+    assert(source.find("BRepBuilderAPI_Sewing") == std::string::npos);
+    assert(source.find("--source-step <model.stp>") != std::string::npos);
+    assert(source.find("--candidate-id <id|auto>") != std::string::npos);
+}
+
+void test_native_surface_fit_sampling_ab_runner_has_fixed_dynamic_contract() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_native_surface_fit_sampling_ab.ps1");
+
+    for (const auto* required : {
+             "area_weighted",
+             "face_stratified_area_weighted",
+             "$trainingSamples = 96",
+             "$validationSamples = 192",
+             "$boundarySamplesPerEdge = 32",
+             "$jacobianGridSize = 16",
+             "$tolerance3d = 0.03",
+             "$normalToleranceDegrees = 15.0",
+             "surface_normal_error_samples.csv",
+             "per_face_training_zero_count",
+             "filling_face_brep_check_valid",
+             "oriented_face_brep_check_valid",
+             "step_roundtrip_brep_check_valid",
+             "native_surface_fit_sampling_ab.csv",
+             "$createdRunDirectories = @()",
+             "Refusing to remove an incomplete run outside data/runs"}) {
+        assert(script.find(required) != std::string::npos);
+    }
+    assert(script.find("[Parameter(Mandatory = $true)][string]$SourceStep") != std::string::npos);
+    assert(script.find("[int]$CandidateId") != std::string::npos);
 }
 
 void test_gui_exposes_candidate_surface_over_cover_switch() {
@@ -545,6 +594,8 @@ void run_scripted_baseline_gate_tests() {
     test_route2_runner_exports_compact_artifact_directory();
     test_run_artifact_layout_and_manifest_contract();
     test_native_surface_fit_tier_runner_cleans_incomplete_invocation_runs();
+    test_native_surface_fit_probe_reports_nsr_1_2_diagnostics_contract();
+    test_native_surface_fit_sampling_ab_runner_has_fixed_dynamic_contract();
     test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();

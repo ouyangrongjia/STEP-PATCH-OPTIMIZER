@@ -24,6 +24,7 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
     SurfaceRefitDiagnosticArtifacts artifacts;
     artifacts.csv_path = output_directory / "surface_error_samples.csv";
     artifacts.obj_path = output_directory / "surface_error_vectors.obj";
+    artifacts.normal_csv_path = output_directory / "surface_normal_error_samples.csv";
 
     std::error_code error;
     std::filesystem::create_directories(output_directory, error);
@@ -39,7 +40,7 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
     }
     csv << std::setprecision(17);
     csv << "category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
-           "distance,projection_success,over_tolerance,face_id,edge_id\n";
+           "distance,projection_success,over_tolerance,face_id,edge_id,nearest_training_distance\n";
     for (const auto& sample : report.surface_error_samples) {
         csv << surfaceRefitSampleCategoryToString(sample.category) << ','
             << sample.source_point.X() << ','
@@ -58,6 +59,10 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         write_optional_id(csv, sample.face_id);
         csv << ',';
         write_optional_id(csv, sample.edge_id);
+        csv << ',';
+        if (sample.nearest_training_distance_defined) {
+            csv << sample.nearest_training_distance;
+        }
         csv << '\n';
     }
     csv.flush();
@@ -102,7 +107,58 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         return artifacts;
     }
 
-    artifacts.message = "Wrote numeric CSV diagnostics and over-tolerance OBJ vectors.";
+    std::ofstream normal_csv(artifacts.normal_csv_path, std::ios::binary);
+    if (!normal_csv.good()) {
+        artifacts.message = "Could not open surface_normal_error_samples.csv for writing.";
+        return artifacts;
+    }
+    normal_csv << std::setprecision(17);
+    normal_csv << "source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+                  "source_normal_x,source_normal_y,source_normal_z,"
+                  "fitted_normal_x,fitted_normal_y,fitted_normal_z,"
+                  "angle_degrees,u,v,face_id,projection_success,fitted_normal_defined,over_tolerance\n";
+    for (const auto& sample : report.normal_error_samples) {
+        if (!sample.over_tolerance) {
+            continue;
+        }
+        normal_csv << sample.source_point.X() << ','
+                   << sample.source_point.Y() << ','
+                   << sample.source_point.Z() << ',';
+        if (sample.projection_success) {
+            normal_csv << sample.projected_point.X() << ','
+                       << sample.projected_point.Y() << ','
+                       << sample.projected_point.Z();
+        } else {
+            normal_csv << ",,";
+        }
+        normal_csv << ',' << sample.source_normal.X()
+                   << ',' << sample.source_normal.Y()
+                   << ',' << sample.source_normal.Z() << ',';
+        if (sample.fitted_normal_defined) {
+            normal_csv << sample.fitted_normal.X() << ','
+                       << sample.fitted_normal.Y() << ','
+                       << sample.fitted_normal.Z() << ','
+                       << sample.angle_degrees << ','
+                       << sample.u << ','
+                       << sample.v;
+        } else {
+            normal_csv << ",,,,,";
+        }
+        normal_csv << ',';
+        write_optional_id(normal_csv, sample.face_id);
+        normal_csv << ',' << (sample.projection_success ? "true" : "false")
+                   << ',' << (sample.fitted_normal_defined ? "true" : "false")
+                   << ',' << (sample.over_tolerance ? "true" : "false")
+                   << '\n';
+    }
+    normal_csv.flush();
+    artifacts.normal_csv_written = normal_csv.good();
+    if (!artifacts.normal_csv_written) {
+        artifacts.message = "Could not finish writing surface_normal_error_samples.csv.";
+        return artifacts;
+    }
+
+    artifacts.message = "Wrote distance CSV/OBJ diagnostics and over-tolerance normal CSV diagnostics.";
     return artifacts;
 }
 
