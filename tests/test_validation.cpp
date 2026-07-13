@@ -36,6 +36,7 @@ void run_patch_replacement_command_tests();
 void run_patch_trim_diagnostics_tests();
 void run_stp_sampled_fitting_mesh_tests();
 void run_stl_cut_chain_cutter_tests();
+void run_surface_refitter_tests();
 
 #include "brep/ShapeDocument.h"
 #include "validate/ShapeValidator.h"
@@ -155,6 +156,7 @@ void run_unit_tests() {
     run_patch_trim_diagnostics_tests();
     run_stp_sampled_fitting_mesh_tests();
     run_stl_cut_chain_cutter_tests();
+    run_surface_refitter_tests();
     run_validation_tests();
 }
 

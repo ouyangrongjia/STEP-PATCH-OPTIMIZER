@@ -164,6 +164,9 @@ if(SPO_BUILD_TOOLS)
     add_executable(g1_boundary_fill_patch_exporter tools/g1_boundary_fill_patch_exporter.cpp)
     target_link_libraries(g1_boundary_fill_patch_exporter PRIVATE spo_core)
 
+    add_executable(native_surface_fit_probe tools/native_surface_fit_probe.cpp)
+    target_link_libraries(native_surface_fit_probe PRIVATE spo_core)
+
     add_executable(strict_topology_gate_probe tools/strict_topology_gate_probe.cpp)
     target_link_libraries(strict_topology_gate_probe PRIVATE spo_core)
 endif()
@@ -206,6 +209,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_replacement_repair.cpp
         tests/test_patch_replacement_command.cpp
         tests/test_patch_trim_diagnostics.cpp
+        tests/test_surface_refitter.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
