@@ -22,15 +22,16 @@ STEP 读取
 → STEP 导出
 ```
 
-当前开发分支为 `native-surface-refit`。该分支独立于 `feature-bounded-refit` 的 Geomagic 稳定基线，当前重点已经转向：
+当前开发分支为 `native-surface-refit`。该分支独立于 `feature-bounded-refit` 的 Geomagic 稳定基线，NSR-1.1 已完成，当前重点已经转向：
 
 ```text
-1. NSR-1.1 原生单曲面失败诊断与固定三档实验。
+1. NSR-1.2 dense 结构诊断与受控采样实验。
    - 原始有序边界作为 G0 约束。
    - 原始 STEP 候选面内部点作为拟合约束。
    - 训练样本与独立验证样本分离。
    - 第一版继续使用 OCCT BRepFill_Filling，不自研通用 B-spline 求解器。
-   - NSR-1 工程探针已经完成；当前补充全部失败门、样本级诊断和固定三档证据。
+   - NSR-1 / NSR-1.1 工程探针、全部失败门、样本级诊断和固定三档证据已经完成。
+   - 当前补充 BRepCheck 子形状状态、方向反转前后检查、STEP roundtrip 对照和每张源面的样本覆盖。
 2. 当前只支持单外轮廓、无孔、连通 FeatureBoundedRefit 候选区域。
 3. 当前只输出一张拟合面、STEP patch 和 JSON 报告，不改 GUI，不做多曲面布局。
 4. 原生结果通过自身误差和曲面有效性检查后，再复用现有 Apply / repair / StrictTopologyGate / STEP roundtrip。
@@ -1148,7 +1149,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | `CylinderRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；CylinderLike 候选检测 / 显示通道已在 Cleanup-6 删除 |
 | `ConeRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；ConeLike 候选检测 / 显示通道已在 Cleanup-6 删除 |
 | `TorusRegionMerger` | 已删除 | Cleanup-1 删除 stub-only 后端；TorusLike 候选显示通道已在 Cleanup-6 删除 |
-| `SurfaceRefitter` | 已完成 NSR-1 探针，进入 NSR-1.1 | 已实现原始边界 G0 + 内部 STEP 点的单曲面拟合、独立验证和质量报告；当前补充全部失败门与样本级诊断，未接 Apply 或 GUI |
+| `SurfaceRefitter` | 已完成 NSR-1.1 诊断与三档实验 | 已实现原始边界 G0 + 内部 STEP 点拟合、全部失败门、样本级 JSON/CSV/OBJ 和固定三档对照；所有真实档位仍为失败诊断结果，未接 Apply 或 GUI |
 
 ### 3.8 验证模块
 
@@ -1227,6 +1228,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | B2.8 External CAD Diagnostic Routing | 已完成最小路由版，真实样例验证已跑 | 诊断编排任务，不是修复任务：`external_cad_diagnostics` 输出原始补片预诊断角色、最终已合并 STEP 诊断资格、输入路径、执行状态和跳过原因。真实样例 `StrictTopologyGate` 与已合并 STEP 导出/二次读取通过，最终外部 CAD 诊断 eligible=true，但 `CommercialCadLikeQualityGate` 仍失败；默认测试不调用外部 CAD API |
 | B2.8 后台 Creo 检查入口 | 已完成显式脚本入口，真实后台诊断已跑通但模型未通过 Creo 检查 | `scripts\run_creo_step_diagnostic.ps1` 通过 Creo Distributed Batch 无图形模式先导入 STEP 到 `.prt`，再运行 ModelCHECK，并把 XML 摘要写入 JSON。真实样例已生成 `input.prt.1`、`input.p.html`、`input.p.xml`；`diagnostic_passed=false`，ModelCHECK 统计 PASS=26、INFO=33、WARNING=3、ERROR=2，失败项为 `GEOM_CHECKS=1` 与 `SHORT_EDGES=1491`，导入校验为 `SOLID_FAILED` / `FAIL` |
 | B2.9 Creo ModelCHECK 诊断关联 | 已完成最小解析/关联版，真实 XML 辅助验证已跑 | `run_creo_step_diagnostic.ps1` 展开 ModelCHECK `item` 明细，输出 `creo_diagnostic_correlation`、短边 item 摘要、导入 feature id、import validation、报告路径和可选 baseline `trim_diagnostics` 阶段关联；默认测试只跑 XML fixture / parse-only，不启动 Creo。真实 XML 只含 Creo id，无空间坐标，暂不能直接映射 OCCT edge |
+| NSR-1.1 失败诊断与固定三档实验 | 已完成 | 覆盖兼容首失败项与全部 `failed_gates`、1050 条 boundary/corner/interior 样本 JSON/CSV、超限向量 OBJ、失败诊断 patch 语义，以及 synthetic 多失败门和文件字段合同；candidate 179 三档只改变 training=24/48/96 |
 | AppController 打开新文档清历史测试 | 已完成 |
 | GUI 自动化测试 | 部分完成 | GUI 同源核心 pipeline 已有脚本 gate；窗口点击级 Qt/系统事件自动化仍未完成 |
 | GUI 手动验证 | 已完成 | 当前主流程手动验证通过 |
@@ -1377,20 +1379,16 @@ protectedEdges = 自动检测特征边 + 用户锁定边
 
 ## 6. 待办清单
 
-## P0：NSR-1.1 失败诊断与固定三档实验
+## P0：NSR-1.2 dense 结构诊断与受控采样
 
 | 任务 | 状态 | 验收方式 |
 |---|---:|---|
-| 实现 `SurfaceRefitter::fitSingleFace` | 已完成 | 原始有序边界 G0 + 原始 STEP 内部点生成一张可写出的拟合面 |
-| 新增 `native_surface_fit_probe` | 已完成 | 独立输出 patch STEP 和 JSON，不改 GUI、不执行候选区域替换 |
-| 增加独立几何验收 | 已完成 | 报告边界、角点、内部、法向、Jacobian、复杂度和 BRepCheck |
-| 增加合成样例测试 | 已完成 | 覆盖共面裁剪、人工切分光顺自由曲面、尖角 trim、孔洞、开放和非流形拒绝 |
-| candidate 179 手动真实样例 | 已完成，质量门失败 | 中等档生成一张 BRepCheck 有效 patch 和完整报告；因边界 max=0.0381795、内部 max=0.0933887 超过 tolerance3d=0.03，返回 `BoundaryErrorExceeded`；默认测试未硬编码真实路径或候选序号 |
-| 报告全部失败质量门 | 待做 | 保留兼容的首个 `failure_reason`，新增 `failed_gates`，不得让 `BoundaryErrorExceeded` 掩盖角点和内部同时失败 |
-| 输出样本级诊断产物 | 待做 | `diagnostics/native_surface_fit/` 下生成 CSV 和超限误差向量 OBJ，记录原始点、投影点、距离和来源 face/edge |
-| 补齐报告元数据 | 待做 | 输出 candidate face 数、boundary valid、完整 solver 配置和 diagnostic patch 语义 |
-| candidate 179 固定三档实验 | 待做 | training=24/48/96；validation=192、boundary samples=32、Jacobian grid=16 和其他参数固定，每档进入独立 run 目录 |
-| 三档趋势判读 | 待做 | 区分内部误差随密度收敛、Plate 能力不足和独立边界约束问题；本阶段不启动 NSR-2 / NSR-4 |
+| BRepCheck 阶段化诊断 | 待做 | 分别报告 Filling 输出、方向反转后、STEP 二次读取后的结果和具体子形状状态 |
+| 边界表达诊断 | 待做 | 报告 edge tolerance、pcurve、SameRange、SameParameter 和 3D / curve-on-surface 偏差 |
+| 每张源面样本覆盖 | 待做 | 报告 training / validation 数量和离群点到最近训练点距离，不凭平均样本数推断 |
+| 法向样本级诊断 | 待做 | 输出源法向、拟合法向、角度、UV、face id 和投影点，定位 face 1705 离群原因 |
+| 固定 96 点采样分配 A/B | 待做 | 纯面积加权对比每张源面至少一点 + 剩余点面积加权；其他配置逐字段一致 |
+| NSR-1 通过判定 | 待做 | 至少一个受控策略同时通过全部几何、Jacobian、复杂度和 BRep 门，才进入 NSR-2 |
 
 ## P1：合并候选规划
 
@@ -1462,7 +1460,7 @@ ctest --preset windows-msvc-debug --output-on-failure --timeout 30
 
 ---
 
-## 8. 近期推荐开发顺序（2026-07-13 修订）
+## 8. 近期推荐开发顺序（2026-07-14 修订）
 
 当前默认路线：
 
@@ -1488,15 +1486,34 @@ NSR-1 本轮实际完成：
 8. [ ] NSR-2 未启动；本轮未改 GUI、未执行候选区域替换、未实现多曲面布局。
 ```
 
-NSR-1.1 当前下一步：
+NSR-1.1 实际完成：
 
 ```text
-1. [ ] 把首个 failure_reason 与全部 failed_gates 分开表达。
-2. [ ] 输出 surface_error_samples.csv 和 surface_error_vectors.obj。
-3. [ ] 固定 tolerance3d=0.03、normal tolerance=15° 和 solver 参数，只比较 training=24/48/96。
-4. [ ] 三档统一 validation=192、boundary samples per edge=32、Jacobian grid=16。
-5. [ ] 每档写入独立 data/runs 目录并形成比较表。
-6. [ ] 根据内部误差趋势决定继续 OCCT Filling、另立边界约束实验，或只为 NSR-4 记录不足证据。
+1. [x] 把首个 failure_reason 与全部 failed_gates 分开表达。
+2. [x] 输出 surface_error_samples.csv 和 surface_error_vectors.obj。
+3. [x] 固定 tolerance3d=0.03、normal tolerance=15° 和 solver 参数，只比较 training=24/48/96。
+4. [x] 三档统一 validation=192、boundary samples per edge=32、Jacobian grid=16。
+5. [x] 每档写入独立 data/runs 目录并形成比较表。
+6. [x] interior max/p95 从 0.154917/0.114527 降到 0.041323/0.025610，决定继续 OCCT Filling；不启动 NSR-4。
+```
+
+三档比较：
+
+| tier | failed_gates | boundary max/p95/RMS/over | corner max/p95/RMS/over | interior max/p95/RMS/over | normal max/p95 | degree/poles/segments | Jacobian | BRepCheck |
+|---|---|---|---|---|---|---|---:|---:|
+| sparse | InteriorErrorExceeded, NormalErrorExceeded | 0.014135/0.008378/0.003548/0 | 0.012527/0.011608/0.004509/0 | 0.154917/0.114527/0.053045/89 | 58.4834°/14.7188° | 8x8/529/9 | true | true |
+| medium | BoundaryErrorExceeded, CornerErrorExceeded, InteriorErrorExceeded, NormalErrorExceeded | 0.038180/0.025657/0.011631/24 | 0.038180/0.034959/0.014290/2 | 0.093389/0.042576/0.019742/18 | 47.9057°/9.3050° | 8x8/256/4 | true | true |
+| dense | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.015591/0.009086/0.004321/0 | 0.015591/0.013647/0.005295/0 | 0.041323/0.025610/0.010416/4 | 45.4750°/9.7698° | 8x8/529/9 | true | false |
+
+三档非 training 配置逐字段一致。normal 超限数从 8 降到 4 再降到 1；dense 的边界和角点已通过，但面本身 BRepCheck 失败。下一独立任务应继续 Filling 路线并定位 dense BRepCheck 失败与残余法向离群点；edge 1540 在 medium 为最差边界且超限，在 dense 仍为最差边界但已低于 0.03，因此暂不启动边界约束参数实验。
+
+NSR-1.2 推荐顺序：
+
+```text
+1. 先补 BRepCheck 分阶段 / 子形状状态，不修改求解器或调用 repair。
+2. 再补每张源面的训练覆盖和法向样本级诊断。
+3. 固定总训练点 96，只比较纯面积加权与分层面积加权。
+4. 若受控策略通过全部原生质量门，再进入 NSR-2；否则根据局部证据决定切平面约束或 NSR-4，不无限增加样本。
 ```
 
 冻结范围：
@@ -1548,7 +1565,7 @@ d1c00e4 Improve boundary constrained Geomagic patch flow：因真实样例缝合
 Sharp Contours 实验：无收益，暂不进入当前主线
 NSR-0：已确认 fitting STL 角点完整而 raw Geomagic 底层曲面圆角化，并建立原生拟合指导文档
 NSR-1：探针实现已完成；candidate 179 中等档同时存在边界、角点和内部超限，`BoundaryErrorExceeded` 只是首个失败项
-NSR-1.1：当前 P0，补充全部失败门、样本级诊断和固定三档实验
+NSR-1.1：已完成全部失败门、样本级诊断和固定三档实验；结果支持继续 OCCT Filling，但尚无可接受 patch
 NSR-2：冻结，NSR-1 通过后复用现有 Apply / repair / StrictTopologyGate / STEP roundtrip
 ```
 
@@ -1581,11 +1598,12 @@ Freeform B-spline / Plate Refit：已解冻，当前 NSR-1 主线
 当前项目已在 native-surface-refit 独立分支进入原生局部自由曲面拟合阶段。
 feature-bounded-refit 继续保留 Geomagic patch preview / Apply 稳定基线，不在该分支直接改写。
 
-当前 P0 只有 NSR-1.1：
-1. 保留当前原生拟合算法，先把全部失败门和样本级位置输出完整。
-2. 固定验证密度和 solver 参数，只比较三档训练样本数量。
-3. 用误差趋势区分欠采样、边界局部约束问题和 OCCT Plate 能力不足。
-4. 继续只输出诊断 patch 和报告，不改 GUI，不做 Apply 或多曲面。
+NSR-1.1 已完成；NSR-1.2 已确定为当前任务：
+1. 已保留当前原生拟合算法，并输出全部失败门和样本级位置。
+2. 已固定验证密度和 solver 参数，只比较三档训练样本数量。
+3. 误差趋势显示训练密度有效；当前不是“内部误差基本不变”的 Plate 不足分支。
+4. 当前只做 Filling 的 dense BRepCheck、样本覆盖、法向离群诊断和固定 96 点采样分配 A/B；不改 GUI，不做 Apply、多曲面、NSR-2 或 NSR-4。
+5. “一步到位”指用户一次操作内运行有限确定性策略并自动过 Gate，不承诺单一求解参数覆盖任意曲面。
 
 Geomagic 只在原生路线明确不支持或受控拟合失败后作为后备，并必须先通过底层曲面覆盖 Gate。
 ```

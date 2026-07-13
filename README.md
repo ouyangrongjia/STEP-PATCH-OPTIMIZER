@@ -396,14 +396,14 @@ tools         批处理和 STEP 统计工具
 
 ## 当前开发阶段
 
-当前项目已经完成 MVP 基础闭环、候选区域基础框架、Geomagic patch preview / Apply 核心接入和 NSR-1 原生单曲面工程探针。当前工作位于独立 `native-surface-refit` 分支，主线是 NSR-1.1 失败诊断与固定三档实验；`feature-bounded-refit` 保留 Geomagic 稳定基线：
+当前项目已经完成 MVP 基础闭环、候选区域基础框架、Geomagic patch preview / Apply 核心接入，以及 NSR-1 / NSR-1.1 原生单曲面探针和固定三档实验。当前工作位于独立 `native-surface-refit` 分支，主线进入 NSR-1.2；`feature-bounded-refit` 保留 Geomagic 稳定基线：
 
 ```text
-1. 当前 P0：保留现有 SurfaceRefitter 算法，补充全部失败门和样本级误差定位。
-2. candidate 179 首轮中等档同时存在边界、角点和内部超限；BoundaryErrorExceeded 只是首个失败项。
-3. 固定验证密度和 solver 参数，只比较 training=24/48/96 三档训练样本。
-4. 继续通过独立 native_surface_fit_probe 输出单张诊断 patch、JSON、CSV 和 OBJ，不改 GUI，不做多曲面或 Apply。
-5. 根据三档误差趋势决定继续 OCCT Filling、另立边界约束实验，或只为 NSR-4 记录不足证据。
+1. 当前 P0：定位 dense 档内存态 BRepCheck 失败、STEP roundtrip 边界重建和残余法向 / 内部离群点。
+2. candidate 179 dense 档的边界与角点已经通过；内部仅 4 / 192 超限，法向仅 1 / 192 超限，但 patch 仍不可接受。
+3. 在不改变 Filling solver 参数的前提下，对比纯面积加权与“每张源面至少一个训练点 + 剩余点面积加权”的固定 96 点采样。
+4. 继续通过独立 native_surface_fit_probe 输出诊断 patch 和报告，不改 GUI，不做多曲面或 Apply。
+5. 产品目标允许用户一次操作内执行有限、确定性的拟合尝试并由质量门自动择优；不要求一组固定参数覆盖所有自由曲面。
 6. Geomagic 仅作为后备；底层曲面覆盖 Gate 失败时不得进入 Apply 或通过 Sewing 掩盖欠覆盖。
 ```
 

@@ -2,7 +2,7 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-07-13
+更新时间：2026-07-14
 
 ---
 
@@ -10,14 +10,16 @@
 
 当前开发分支为 `native-surface-refit`。原生自由曲面拟合作为独立分支推进，`feature-bounded-refit` 保留现有 Geomagic patch preview / Apply 稳定基线。
 
-当前主线是 `NSR-1.1`：
+`NSR-1.1` 的失败诊断与固定三档实验已完成；当前任务为 `NSR-1.2` dense 结构诊断与受控采样：
 
 ```text
 STP
 → 选取 FeatureBoundedRefit 候选区域
 → 提取原始 B-rep 外边界与候选面内部样本
 → BRepFill_Filling 原生单曲面拟合
-→ 独立边界 / 角点 / 内部 / 法向误差验证
+→ 内存态 / 方向反转后 / STEP roundtrip BRep 状态诊断
+→ 独立边界 / 角点 / 内部 / 法向误差与样本覆盖验证
+→ 固定总点数的采样分配 A/B
 → 输出单张 patch STEP、JSON 和样本级诊断产物
 → 通过后再复用现有 Apply / repair / StrictTopologyGate / STEP roundtrip
 ```
@@ -35,7 +37,7 @@ STP
 因此当前决策为：
 
 ```text
-先完成原生单曲面拟合探针的失败诊断与固定三档实验。
+保留原生单曲面拟合路线；NSR-1.2 先定位 dense 档 BRepCheck 失败、STEP roundtrip 边界重建和残余法向 / 内部离群点，再做固定 96 点的采样分配 A/B。
 Geomagic 保留为独立后备路线，不再是 native-surface-refit 分支的默认拟合入口。
 完整方案以 docs/native_surface_refitting_guide.md 为准。
 ```
@@ -361,7 +363,7 @@ raw patch UnifySameDomain 可把 Geomagic patch 从 68 面降到 59 面、326 �
 
 ---
 
-## 4. NSR-1 原生单曲面拟合探针
+## 4. NSR-1 / NSR-1.1 已完成与 NSR-1.2 当前任务
 
 本轮已完成 `docs/native_surface_refitting_guide.md` 定义的 NSR-1 探针范围：
 
@@ -386,25 +388,49 @@ normal：max=14.1263°，未超过 15°
 Jacobian / BRepCheck：通过
 ```
 
-`BoundaryErrorExceeded` 只是质量门检查顺序中的首个失败项。当前下一步是 `NSR-1.1`，仍属于 NSR-1，不启动 NSR-2：
+`BoundaryErrorExceeded` 只是质量门检查顺序中的首个失败项。`NSR-1.1` 已完成以下失败诊断与固定三档实验，仍属于 NSR-1，未启动 NSR-2：
 
 ```text
-1. [ ] 保留现有 failure_reason，并新增 failed_gates，报告全部失败质量门。
-2. [ ] 报告 candidate_face_count、boundary_valid、solver 配置和 diagnostic patch 语义。
-3. [ ] 输出 diagnostics/native_surface_fit/surface_error_samples.csv。
-4. [ ] 输出 diagnostics/native_surface_fit/surface_error_vectors.obj，只标记超限原始点、投影点和误差向量。
-5. [ ] 增加合成测试，覆盖“边界先失败但内部也失败”的多失败门报告和诊断文件字段合同。
-6. [ ] 对 candidate 179 完成固定三档受控实验：training=24/48/96；validation=192、boundary samples=32、Jacobian grid=16 固定。
-7. [ ] 三档保持 tolerance3d=0.03、normal tolerance=15° 和全部 solver 参数不变。
-8. [ ] 输出三档比较表并按误差趋势决定下一任务；本轮不混调边界参数，不实现 NSR-4。
+1. [x] 保留现有 failure_reason，并新增 failed_gates，报告全部失败质量门。
+2. [x] 报告 candidate_face_count、boundary_valid、完整 solver 配置和 diagnostic patch 语义。
+3. [x] 输出 diagnostics/native_surface_fit/surface_error_samples.csv。
+4. [x] 输出 diagnostics/native_surface_fit/surface_error_vectors.obj，只标记超限原始点、投影点和误差向量。
+5. [x] 增加合成测试，覆盖“边界先失败但内部也失败”的多失败门报告和诊断文件字段合同。
+6. [x] 对 candidate 179 完成固定三档受控实验：training=24/48/96；validation=192、boundary samples=32、Jacobian grid=16 固定。
+7. [x] 三档保持 tolerance3d=0.03、normal tolerance=15° 和全部 solver 参数不变。
+8. [x] 输出三档比较表并按误差趋势完成判读；本轮未混调边界参数，未实现 NSR-4。
 ```
+
+固定三档结果：
+
+| 档位 | failed_gates | boundary max / p95 / RMS / 超限 | corner max / p95 / RMS / 超限 | interior max / p95 / RMS / 超限 | normal max / p95 | degree / poles / segments | Jacobian / BRepCheck |
+|---|---|---|---|---|---|---|---|
+| sparse | InteriorErrorExceeded, NormalErrorExceeded | 0.014135 / 0.008378 / 0.003548 / 0 | 0.012527 / 0.011608 / 0.004509 / 0 | 0.154917 / 0.114527 / 0.053045 / 89 | 58.4834° / 14.7188° | 8x8 / 529 / 9 | 通过 / 通过 |
+| medium | BoundaryErrorExceeded, CornerErrorExceeded, InteriorErrorExceeded, NormalErrorExceeded | 0.038180 / 0.025657 / 0.011631 / 24 | 0.038180 / 0.034959 / 0.014290 / 2 | 0.093389 / 0.042576 / 0.019742 / 18 | 47.9057° / 9.3050° | 8x8 / 256 / 4 | 通过 / 通过 |
+| dense | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.015591 / 0.009086 / 0.004321 / 0 | 0.015591 / 0.013647 / 0.005295 / 0 | 0.041323 / 0.025610 / 0.010416 / 4 | 45.4750° / 9.7698° | 8x8 / 529 / 9 | 通过 / 失败 |
+
+判读：内部 max / p95 从 sparse 的 `0.154917 / 0.114527` 降至 dense 的 `0.041323 / 0.025610`，说明增加训练样本有明显收益，不能据此判定 Plate 路线能力不足。下一独立任务继续 OCCT Filling，优先定位 dense 档 BRepCheck 失败和仅剩 1 个法向超限样本；medium 的 edge 1540 边界超限未在 dense 档持续超限，暂不启动边界约束混调。三档 patch 均为 `diagnostic_patch=true`、`patch_acceptable=false`，不得进入 NSR-2。
+
+`NSR-1.2` 当前待办：
+
+```text
+1. [ ] 记录 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck。
+2. [ ] 输出 face / wire / edge / vertex 的具体 BRepCheck_Status，并定位失败子形状。
+3. [ ] 输出 edge tolerance、pcurve / SameRange / SameParameter、3D curve 与 curve-on-surface 最大偏差。
+4. [ ] 为每张源面记录 training / validation 样本数和最近训练点距离。
+5. [ ] 为法向样本记录源法向、拟合法向、角度、UV、face id 和投影点。
+6. [ ] 固定 training=96、validation=192 和全部 solver 参数，对比纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
+7. [ ] 只有某一受控策略同时通过边界、角点、内部、法向、Jacobian、复杂度和 BRepCheck，才允许结束 NSR-1 并进入 NSR-2。
+```
+
+一步到位的边界：用户可以只触发一次“原生重拟合”，但内部允许执行少量固定策略并由质量门选择结果；不把“单次操作”误解为“一组固定 Filling 参数保证任意自由曲面成功”。
 
 NSR-1.1 验收：
 
 ```text
 1. JSON 能同时表达 boundary / corner / interior 等全部失败门。
 2. CSV/OBJ 能定位 edge 1540 和 face 1709 附近的超限样本，不依赖截图猜测。
-3. 三档只改变训练样本数量，每档都有独立 run.json、RUN.md、patch、JSON、CSV、OBJ 和日志。
+3. 三档只改变训练样本数量，每档都有独立 run.json、RUN.md、patch、JSON、CSV、OBJ 和日志；已验证每档 JSON/CSV 均有 1050 条样本，OBJ 只含超限误差向量。
 4. 若内部误差随训练密度明显下降，继续 OCCT Filling；若基本不变且 degree 持续达到 8，只记录 NSR-4 证据；若只剩边界超限，另立边界约束实验。
 ```
 

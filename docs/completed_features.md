@@ -69,6 +69,10 @@ STEP/STP
 - `native_surface_fit_probe` 可独立输出诊断 patch STEP 和 JSON，不修改 GUI 或主 `ShapeDocument`。
 - 合成测试覆盖共面裁剪、人工切分自由曲面、尖角裁剪，以及孔洞、开放、非流形边界拒绝。
 - candidate 179 中等档真实探针已写入独立 `data/runs` 目录；生成的一张面通过 BRepCheck 和 STEP 二次读取，但没有通过 0.03 几何容差。
+- NSR-1.1 保留兼容的首个 `failure_reason`，新增有序 `failed_gates`，可同时表达 boundary、corner、interior、normal、Jacobian、复杂度和 BRep 失败。
+- 报告新增 candidate face 数、boundary valid、完整 solver 配置、`diagnostic_patch`、`patch_acceptable`、`patch_role` 和 boundary/corner/interior 样本级诊断。
+- 每轮在 `diagnostics/native_surface_fit/` 写出完整数值 CSV 和只含超限源点—投影点连线的 OBJ；合成测试覆盖多失败门与文件字段合同。
+- 新增参数化 `scripts/run_native_surface_fit_tiers.ps1`，固定 validation=192、boundary samples=32、Jacobian grid=16、tolerance3d=0.03、normal tolerance=15°，只改变 training=24/48/96，并生成独立 run 与比较表。
 
 固定事实：
 
@@ -83,7 +87,22 @@ BRepCheck: true
 STEP readback: 一张面
 ```
 
-该 STEP 是失败诊断产物，`patch_written=true` 不表示拟合验收通过。下一阶段 `NSR-1.1` 属于当前待办，不在本归档中标记完成。
+该 STEP 是失败诊断产物，`patch_written=true` 不表示拟合验收通过。
+
+NSR-1.1 固定三档已完成：
+
+```text
+sparse: InteriorErrorExceeded, NormalErrorExceeded
+  interior max/p95=0.154917/0.114527, degree=8x8, poles=529, BRepCheck=true
+medium: BoundaryErrorExceeded, CornerErrorExceeded, InteriorErrorExceeded, NormalErrorExceeded
+  interior max/p95=0.093389/0.042576, degree=8x8, poles=256, BRepCheck=true
+dense: BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded
+  interior max/p95=0.041323/0.025610, degree=8x8, poles=529, BRepCheck=false
+```
+
+内部误差随训练密度显著下降，normal 超限样本数从 8 降到 1，因此当前证据支持继续 OCCT Filling，而不是只为 NSR-4 记录 Plate 能力不足。三档均为 `diagnostic_patch=true`、`patch_acceptable=false`；dense 需另立 BRepCheck 与法向离群诊断，尚未进入 NSR-2。
+
+补充 STEP 二次读取事实：sparse / medium / dense 的诊断 patch 二次读取均为一张 face 且 `BRepCheck=true`，但 edge 数分别为 44 / 46 / 50，而内存态报告均遍历到 26 条边。该结果只能证明 STEP translator 重建后的表示可读，不能把 roundtrip 当作原生 patch 的隐式修复或绕过内存态 BRepCheck。
 
 ---
 

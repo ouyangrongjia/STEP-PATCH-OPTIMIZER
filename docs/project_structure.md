@@ -40,14 +40,14 @@ STEP/STP 读取
 → STEP/STP 导出、二次读取校验和可选外部 CAD 诊断
 ```
 
-当前阶段已经完成 NSR-1 原生单曲面工程探针，并转入 NSR-1.1 失败诊断与固定三档实验。当前重点是：
+当前阶段已经完成 NSR-1 原生单曲面工程探针和 NSR-1.1 失败诊断 / 固定三档实验，并转入 NSR-1.2。当前重点是：
 
 ```text
-1. 当前 P0：补充 SurfaceRefitter 全部失败门和样本级误差定位。
-2. 保持 OCCT BRepFill_Filling 与 solver 参数不变，固定验证密度，只比较三档训练样本。
-3. 独立 native_surface_fit_probe 输出诊断 patch、JSON、CSV 和 OBJ，不先改 AppController 或 GUI。
-4. 根据误差趋势区分欠采样、边界局部约束问题和 Plate 能力不足。
-5. NSR-1 通过后再复用 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip。
+1. 当前 P0：补齐 dense 档 BRepCheck 具体状态、方向反转前后检查和 STEP roundtrip 对照。
+2. 输出每张源面的训练 / 验证覆盖，以及法向离群样本的源法向、拟合法向、角度和 UV。
+3. 保持 OCCT BRepFill_Filling solver 参数和总训练点 96 不变，只比较训练点分配策略。
+4. 独立 native_surface_fit_probe 继续输出诊断 patch、JSON、CSV 和 OBJ，不先改 AppController 或 GUI。
+5. 原生单曲面通过自身质量门后，再复用 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip。
 6. Geomagic 流程保留为后备和对照，不是本分支默认拟合入口。
 ```
 
@@ -336,17 +336,17 @@ ExportStepCommand
 
 ## 7. 当前后续增强边界
 
-### 7.1 P0：NSR-1.1 失败诊断与固定三档实验
+### 7.1 P0：NSR-1.2 dense 结构诊断与受控采样
 
 当前最优先的增强方向：
 
 ```text
-1. 保留已完成的 SurfaceRefitter::fitSingleFace 和 BRepFill_Filling 算法。
-2. 把首个 failure_reason 与全部 failed_gates 分开表达。
-3. 输出样本级 CSV 和超限误差向量 OBJ。
-4. 固定 validation、边界采样、Jacobian 网格和 solver 参数，只比较 training=24/48/96。
-5. 对 candidate 179 运行三档手动探针并保留独立 run artifact。
-6. 根据误差趋势决定继续 Filling、另立边界约束实验，或只为 NSR-4 记录不足证据。
+1. 保留已完成的 SurfaceRefitter::fitSingleFace、全部失败门和样本级诊断合同。
+2. 记录 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck 及具体子形状状态。
+3. 记录每张源面的训练 / 验证样本数量，以及残余内部 / 法向离群点的完整局部信息。
+4. 固定总训练点 96、验证点 192 和全部 solver 参数，对比纯面积加权与分层面积加权。
+5. 只有原生 patch 自身全部质量门通过后才允许进入 NSR-2。
+6. 将“一步到位”定义为一次用户操作内部的有限策略组合与自动质量择优，不承诺单一参数覆盖任意拓扑曲面。
 ```
 
 注意：P0 不改 GUI，不做多曲面，不自动回退 Geomagic，不给全部边界施加 G1，也不放宽 `StrictTopologyGate`。
