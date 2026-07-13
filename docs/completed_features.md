@@ -2,13 +2,13 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-07-10
+更新时间：2026-07-13
 
 ---
 
-## 1. 当前主线能力
+## 1. Geomagic 稳定基线能力
 
-项目当前主线是 Geomagic AutoSurface patch preview / Apply：
+以下能力已经在 `feature-bounded-refit` 形成 Geomagic AutoSurface patch preview / Apply 稳定基线，并作为 `native-surface-refit` 分支的后备和对照路线：
 
 ```text
 STEP/STP
@@ -58,6 +58,32 @@ STEP/STP
 - `scripts/list_runs.ps1` 支持按流程、模型、候选、状态和最近数量查询。
 - baseline、Route 2、Creo ModelCHECK 和 Creo Toolkit runner 已接入统一运行清单。
 - 旧 `data/baseline_runs` 保持历史只读；共享 `data/crop_*` 仍为兼容暂存区，不能作为历史验收来源。
+
+### 2.2 NSR-1 原生单曲面探针工程闭环
+
+已完成：
+
+- `SurfaceRefitter::fitSingleFace` 使用原始有序边界 G0 约束和原始 STEP 内部点生成一张拟合面。
+- 训练样本与独立验证样本分离。
+- 报告边界、角点、内部距离、法向、Jacobian、曲面复杂度和 BRepCheck。
+- `native_surface_fit_probe` 可独立输出诊断 patch STEP 和 JSON，不修改 GUI 或主 `ShapeDocument`。
+- 合成测试覆盖共面裁剪、人工切分自由曲面、尖角裁剪，以及孔洞、开放、非流形边界拒绝。
+- candidate 179 中等档真实探针已写入独立 `data/runs` 目录；生成的一张面通过 BRepCheck 和 STEP 二次读取，但没有通过 0.03 几何容差。
+
+固定事实：
+
+```text
+run: data/runs/20260713_200400_711__native-surface-fit__03_配件_Clay__cand-0179__nsr-1-medium
+boundary max: 0.0381795，12 / 416 超限，worst edge=1540
+corner max: 0.0381795，2 / 26 超限
+interior max/p95: 0.0933887 / 0.0356314，6 / 96 超限，worst face=1709
+normal max: 14.1263°，未超过 15°
+Jacobian: 无翻转、无近奇异
+BRepCheck: true
+STEP readback: 一张面
+```
+
+该 STEP 是失败诊断产物，`patch_written=true` 不表示拟合验收通过。下一阶段 `NSR-1.1` 属于当前待办，不在本归档中标记完成。
 
 ---
 

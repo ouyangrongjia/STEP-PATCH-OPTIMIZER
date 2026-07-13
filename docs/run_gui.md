@@ -502,7 +502,7 @@ protectedEdges 传入 SameDomainUnifier
 OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 ```
 
-注意：当前合并算法偏保守。same-domain 合并只处理同一底层几何域上的碎片面；Geomagic patch 主线通过 MergePlanner / FeatureBoundedRegionBuilder 生成 FeatureBoundedRefit 候选，再进入 patch preview / Apply。旧 MergeRegionGrower / analytic candidate 路线已删除。
+注意：当前合并算法偏保守。same-domain 合并只处理同一底层几何域上的碎片面；现有 Geomagic 后备基线通过 MergePlanner / FeatureBoundedRegionBuilder 生成 FeatureBoundedRefit 候选，再进入 patch preview / Apply。`native-surface-refit` 分支当前只开发独立拟合探针，尚未接入本 GUI。旧 MergeRegionGrower / analytic candidate 路线已删除。
 
 ### 5.5 合法性检查
 

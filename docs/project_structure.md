@@ -22,7 +22,7 @@ Feature-aware STEP Patch Optimization
 
 ## 1. 当前项目状态
 
-当前项目已经完成 MVP 基础闭环、FeatureBoundedRefit 候选区域框架，以及 Geomagic patch preview / Apply 主线的核心接入。当前可运行流程是：
+当前项目已经完成 MVP 基础闭环、FeatureBoundedRefit 候选区域框架，以及 Geomagic patch preview / Apply 核心接入。当前工作位于独立 `native-surface-refit` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线。当前已具备的既有流程是：
 
 ```text
 STEP/STP 读取
@@ -40,15 +40,15 @@ STEP/STP 读取
 → STEP/STP 导出、二次读取校验和可选外部 CAD 诊断
 ```
 
-当前阶段已经从“搭建项目结构 / 候选生成”转入 Route 2 support collar 后的 Apply 收口诊断。当前重点是：
+当前阶段已经完成 NSR-1 原生单曲面工程探针，并转入 NSR-1.1 失败诊断与固定三档实验。当前重点是：
 
 ```text
-1. 默认 fitting input：STP Sampled Candidate Surface。
-2. 当前唯一保留的 STL 扩宽机制：adjacent-face support collar。
-3. Apply 阶段继续以原 STP candidate outer boundary wire 作为最终 CAD boundary。
-4. 当前 P0：定位 72-face Geomagic patch 下 strict multi-surface boundary shell open-wire closure。
-5. 继续保留 PatchReplacementRepair、StrictTopologyGate、CommercialCadLikeQualityGate 和 external CAD diagnostic routing。
-6. ProjectSerializer、完整 ReportGenerator、高级特征线和 SurfaceRefitter 仍是后续增强，不是当前 P0。
+1. 当前 P0：补充 SurfaceRefitter 全部失败门和样本级误差定位。
+2. 保持 OCCT BRepFill_Filling 与 solver 参数不变，固定验证密度，只比较三档训练样本。
+3. 独立 native_surface_fit_probe 输出诊断 patch、JSON、CSV 和 OBJ，不先改 AppController 或 GUI。
+4. 根据误差趋势区分欠采样、边界局部约束问题和 Plate 能力不足。
+5. NSR-1 通过后再复用 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip。
+6. Geomagic 流程保留为后备和对照，不是本分支默认拟合入口。
 ```
 
 ---
@@ -80,7 +80,7 @@ spdlog        用于日志
 GoogleTest    用于单元测试；当前测试仍采用项目内轻量测试方式
 ```
 
-第一阶段仍不建议引入过多复杂依赖。当前最应该推进的是在现有 OCCT + B-rep 拓扑基础上补齐合并候选规划。
+第一阶段不引入新的拟合依赖。当前只使用现有 OCCT + B-rep 拓扑完成 NSR-1 原生单曲面可行性验证。
 
 ---
 
@@ -105,6 +105,7 @@ step-patch-optimizer/
 │   ├── implementation_status.md
 │   ├── completed_features.md
 │   ├── TODO.md
+│   ├── native_surface_refitting_guide.md
 │   ├── geomagic_patch_workflow.md
 │   ├── geomagic_patch_cleanup_plan.md
 │   ├── project_structure.md
@@ -153,6 +154,7 @@ step-patch-optimizer/
 │   ├── fixtures/
 │   ├── test_patch_replacement_command.cpp
 │   ├── test_patch_replacement_repair.cpp
+│   ├── test_surface_refitter.cpp
 │   ├── test_strict_topology_gate.cpp
 │   ├── test_commercial_cad_quality_gate.cpp
 │   ├── test_stp_sampled_fitting_mesh.cpp
@@ -163,6 +165,7 @@ step-patch-optimizer/
 └── tools/
     ├── batch_optimize.cpp
     ├── step_stats.cpp
+    ├── native_surface_fit_probe.cpp
     ├── patch_apply_probe.cpp
     ├── corner_baseline_probe.cpp
     ├── strict_topology_gate_probe.cpp
@@ -182,7 +185,8 @@ step-patch-optimizer/
 | `docs/implementation_status.md` | 当前实现进度：已完成、待办、验收方式、近期开发顺序 |
 | `docs/completed_features.md` | 已完成、已验证或已退役的功能事实，承接旧 TODO 中的历史计划 |
 | `docs/TODO.md` | 当前执行 TODO：阶段任务、冻结范围、验收要求 |
-| `docs/geomagic_patch_workflow.md` | Geomagic patch preview / Apply 主线流程 |
+| `docs/native_surface_refitting_guide.md` | `native-surface-refit` 独立分支的原生自由曲面拟合主线、Geomagic 后备路线、阶段和验收边界 |
+| `docs/geomagic_patch_workflow.md` | Geomagic patch preview / Apply 稳定基线和后备流程 |
 | `docs/geomagic_patch_cleanup_plan.md` | 旧 analytic region merge 路线清理计划和删除检查表 |
 | `docs/run_gui.md` | GUI 使用文档：启动方式、操作方式、快捷键、手动验证流程 |
 | `docs/project_structure.md` | 目录结构文档：当前文件树、目录职责、开发边界 |
@@ -195,7 +199,8 @@ step-patch-optimizer/
 已完成和已退役事实：completed_features.md
 构建运行：README.md / run_gui.md
 目录职责：project_structure.md
-Geomagic patch 主线：geomagic_patch_workflow.md
+原生自由曲面拟合：native_surface_refitting_guide.md
+Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
 旧代码清理：geomagic_patch_cleanup_plan.md
 ```
 
@@ -211,7 +216,7 @@ Geomagic patch 主线：geomagic_patch_workflow.md
 | `src/io/` | STEP/STP 读写、STL 二进制读写、导出后二次读取校验、项目文件保存恢复接口 |
 | `src/brep/` | ShapeDocument、Face/Edge 索引、TopologyGraph、BoundaryWireBuilder、拓扑查询、基础统计 |
 | `src/feature/` | 基础特征边检测、曲率估计接口、边界分类接口、用户约束接口 |
-| `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、Face Inspect、曲面重拟合接口 |
+| `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
 | `src/stl/` | STP sampled fitting mesh、legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
 | `src/patch/` | Patch import / artifact lookup / preview report / Apply state / original-boundary constrained replacement / repair / trim diagnostics |
 | `src/external/geomagic/` | Geomagic AutoSurface 配置、backend、result 和输出路径解析 |
@@ -264,6 +269,7 @@ Geomagic patch 主线：geomagic_patch_workflow.md
 12. StrictTopologyGate 执行 BRepCheck、free/multiple edge、solid/watertight、STEP export/readback gate。
 13. CommercialCadLikeQualityGate 输出 boundary / corner / feature drift 和 seam continuity。
 14. StepWriter 导出 STEP，外部 CAD 诊断路由只指向 Apply 成功后的已合并 STEP。
+15. SurfaceRefitter 使用原始边界和内部 STEP 点输出一张原生拟合面，并执行独立误差与有效性检查。
 ```
 
 ### 6.3 Command 与 undo/redo
@@ -301,7 +307,7 @@ ValidateShapeCommand
 ExportStepCommand
 ```
 
-### 6.4 Patch preview / Apply 主线
+### 6.4 Geomagic patch preview / Apply 后备基线
 
 ```text
 1. 默认 fitting input mode 是 STP Sampled Candidate Surface。
@@ -314,14 +320,14 @@ ExportStepCommand
 8. redo 只复用缓存 afterDocument，不重新运行 Geomagic、STL generation、crop、import、repair 或 external CAD。
 ```
 
-### 6.5 当前真实样例诊断事实
+### 6.5 Geomagic 后备基线真实样例诊断事实
 
 ```text
 1. Route 2 support collar 输入 STL 已验证为干净：components=1、boundaryCycles=1、effective width=0.25。
 2. normalized patch 单位已正确归一到 millimeter。
 3. patch 侧 CommercialCadLikeQualityGate 已明显改善。
-4. 当前 blocker 不是 support collar 断开、adaptive width 被压小或单位错误。
-5. 当前 blocker 是 72-face Geomagic patch 下 strict multi-surface boundary shell open-wire closure。
+4. Geomagic 后备 blocker 不是 support collar 断开、adaptive width 被压小或单位错误。
+5. Geomagic 后备 blocker 是 72-face patch 下 strict multi-surface boundary shell open-wire closure。
 6. 已知失败点集中在 failed_patch_face_index=2、original-boundary edge ids 1540/1543/1546 和 endpoint gap 0.879063。
 7. Creo Toolkit sewing 当前不能把失败样例救回水密实体；ModelCHECK runner 成功不等于模型验收成功。
 ```
@@ -330,19 +336,20 @@ ExportStepCommand
 
 ## 7. 当前后续增强边界
 
-### 7.1 P0：Route 2 open-wire closure 定位
+### 7.1 P0：NSR-1.1 失败诊断与固定三档实验
 
 当前最优先的增强方向：
 
 ```text
-1. 定位 failed_patch_face_index=2 的 face edges 来源。
-2. 关联 original-boundary edge 1540 / 1543 / 1546 的 split segment 参数区间和 owner face。
-3. 判断 endpoint gap 0.879063 来自 patch internal seam 缺失、segment ordering 错误、owner split 错误，还是 fitted surface 局部覆盖断裂。
-4. 解释为什么 pcurve rebuild 成功且 max projection distance 约 0.0108314，仍无法形成 closed wire。
-5. 判断 72-face Geomagic patch 是否已经过碎，是否需要 patch 输出拒绝 / 约束或 seam selection 诊断。
+1. 保留已完成的 SurfaceRefitter::fitSingleFace 和 BRepFill_Filling 算法。
+2. 把首个 failure_reason 与全部 failed_gates 分开表达。
+3. 输出样本级 CSV 和超限误差向量 OBJ。
+4. 固定 validation、边界采样、Jacobian 网格和 solver 参数，只比较 training=24/48/96。
+5. 对 candidate 179 运行三档手动探针并保留独立 run artifact。
+6. 根据误差趋势决定继续 Filling、另立边界约束实验，或只为 NSR-4 记录不足证据。
 ```
 
-注意：P0 不应恢复旧 guard-band / over-cover 可执行入口，不应放宽 `StrictTopologyGate`，也不应把 patch outer boundary 或 STL boundary 改成最终 CAD boundary。
+注意：P0 不改 GUI，不做多曲面，不自动回退 Geomagic，不给全部边界施加 G1，也不放宽 `StrictTopologyGate`。
 
 ### 7.2 P1：支撑带输入质量判定
 
@@ -364,14 +371,14 @@ ExportStepCommand
 5. 输出 face/edge 变化、free/multiple edge、BRepCheck、导出校验、patch apply、gate 和 external CAD routing 结果。
 ```
 
-### 7.4 P3：高级特征线与重拟合
+### 7.4 NSR 后续：高级特征线、自定义拟合与多曲面
 
 ```text
 1. CurvatureEstimator 实用化。
 2. BoundaryClassifier 识别圆角起止线、凸起边界、凹陷边界。
 3. ridge / valley / weak feature 检测。
-4. SurfaceRefitter 局部 B-spline / plate surface 重拟合。
-5. 局部 patch layout 重构。
+4. OCCT Plate 路线被证据证明不足后，再评估自定义 B-spline 约束最小二乘。
+5. 单曲面路线完成后，再评估局部 patch layout 重构。
 ```
 
 ---

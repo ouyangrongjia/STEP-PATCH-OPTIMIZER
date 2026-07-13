@@ -472,11 +472,12 @@ class SurfaceRefitter;
 
 | 类型 | 说明 | 阶段定位 |
 |---|---|---|
-| FeatureBoundedRefit | 被特征边 / 锁边围定的候选区域，用于 Geomagic patch preview / Apply 主线 | 当前主线 |
+| FeatureBoundedRefit | 被特征边 / 锁边围定的候选区域；在 `native-surface-refit` 分支进入原生局部重拟合，Geomagic 保留为后备 | 当前候选类型 |
 | SameDomain | 同一底层几何域上的 trimmed faces 合并 | 保留能力 |
 | Unknown | 兼容和统计兜底，不作为主动生成的主候选类型 | 兜底 |
 | 局部 patch layout 重构 | 重构局部曲面片布局 | 研究增强 |
-| 近似 G1 连续区域重拟合 | 重新拟合新 B-spline surface | 后续增强 |
+| 单外轮廓、无孔区域单曲面重拟合 | 以原始 STEP 边界和内部点生成一张自由曲面 | 当前 NSR-1 |
+| 近似 G1 连续区域重拟合 | 重新拟合新 B-spline surface | NSR-4 后续增强 |
 
 ### 9.4 MergePlanner 职责
 
@@ -549,14 +550,23 @@ for each unvisited face:
 
 ### 9.7 SurfaceRefitter 职责
 
-`SurfaceRefitter` 用于后续增强，不作为第一阶段核心实现。
+`SurfaceRefitter` 是 `native-surface-refit` 独立分支的当前核心实现入口。NSR-1 只解决单外轮廓、无孔、连通候选区域的一张自由曲面拟合，不在本阶段扩展为通用多后端框架。
 
-后续用于：
+当前职责：
 
 ```text
-1. 多个近似共面 B-spline patch 合并。
-2. 多个近似 G1 连续 patch 重拟合。
-3. 光顺区域碎片化严重的局部重建。
+1. 接收 FeatureBoundedRefit 候选、原始有序边界和原始 STEP 内部样本。
+2. 使用原始边界 G0 约束和内部点约束生成一张 OCCT 自由曲面。
+3. 返回可独立写出的 patch face 及拟合诊断数据。
+4. 将孔洞、非流形、多外轮廓或曲面有效性失败显式路由为 unsupported / failed。
+```
+
+不属于 NSR-1 的后续增强：
+
+```text
+1. 自研通用 B-spline 优化求解器。
+2. G1 / G2 边界约束。
+3. 多曲面 patch layout 重构。
 ```
 
 ---
@@ -783,7 +793,7 @@ OCCT
 1. CurvatureEstimator 实用化。
 2. BoundaryClassifier 圆角起止线、凸起边界识别。
 3. ridge / valley / weak feature 检测。
-4. SurfaceRefitter 局部 B-spline 重拟合。
+4. SurfaceRefitter 自定义 B-spline 求解与 G1 / G2 约束。
 5. 局部 patch layout 重构。
 6. 学习辅助候选区域推荐。
 ```

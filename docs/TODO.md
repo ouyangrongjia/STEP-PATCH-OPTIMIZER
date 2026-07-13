@@ -2,57 +2,47 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-07-10
+更新时间：2026-07-13
 
 ---
 
 ## 1. 当前判断
 
-当前主线仍是 Route 2：
+当前开发分支为 `native-surface-refit`。原生自由曲面拟合作为独立分支推进，`feature-bounded-refit` 保留现有 Geomagic patch preview / Apply 稳定基线。
+
+当前主线是 `NSR-1.1`：
 
 ```text
 STP
 → 选取 FeatureBoundedRefit 候选区域
-→ STP sampled fitting input
-→ Geomagic AutoSurface
-→ normalized patch mm
-→ strict original-boundary constrained trim / Apply
-→ OCCT diagnostics / StrictTopologyGate
-→ Creo diagnostics / ModelCHECK
+→ 提取原始 B-rep 外边界与候选面内部样本
+→ BRepFill_Filling 原生单曲面拟合
+→ 独立边界 / 角点 / 内部 / 法向误差验证
+→ 输出单张 patch STEP、JSON 和样本级诊断产物
+→ 通过后再复用现有 Apply / repair / StrictTopologyGate / STEP roundtrip
 ```
 
-2026-06-25 的真实样例结果已经排除两个旧怀疑：
+切换依据：
 
 ```text
-1. support collar 输入 STL 不是脏的：
-   components=1
-   boundaryCycles=1
-   nonManifoldEdges=0
-   nonManifoldVertices=0
-   degenerateTriangles=0
-
-2. adaptive support collar width 没有把显式宽度压小：
-   effective width min/mean/max = 0.25/0.25/0.25
+1. 最新 crop STL 与拆除候选区域后的 STEP 叠加完整，角点没有缺口。
+2. raw Geomagic STEP 的底层曲面在相同角点已经圆角化并发生欠覆盖。
+3. normalized patch 保留相同缺口，问题不是单位归一化、pcurve 或 Sewing 单独造成。
+4. 最新样例的 multi-surface max projection distance 与 corner max distance 都约为 0.105。
+5. 提高 Sewing 容差可以让拓扑 Gate 通过，但不能让商业 CAD 类质量门通过。
 ```
 
-但截图和结果同时说明：
+因此当前决策为：
 
 ```text
-强 adjacent-face support collar 会把 Geomagic 输入曲面拉向相邻面 / 侧壁方向。
-问题已经不是单纯“宽度不够”，而是主扩宽方向错误。
-```
-
-因此当前路线已经改为：
-
-```text
-Candidate / Source Face Parallel Over-Cover 主导扩宽
-adjacent-face support collar 只保留为窄辅助上下文
-最终仍由原 STP boundary strict re-trim 裁回
+先完成原生单曲面拟合探针的失败诊断与固定三档实验。
+Geomagic 保留为独立后备路线，不再是 native-surface-refit 分支的默认拟合入口。
+完整方案以 docs/native_surface_refitting_guide.md 为准。
 ```
 
 ---
 
-## 2. 本轮已落地能力
+## 2. Geomagic 后备路线已落地能力
 
 已完成并归档到 `docs/completed_features.md`：
 
@@ -130,7 +120,7 @@ cmake --build --preset windows-msvc-debug --target spo_real_geomagic_tests -- /m
 
 ---
 
-## 3. 最新真实样例结果
+## 3. Geomagic 后备基线最新真实样例结果
 
 必须用同一个真实样例做对比：
 
@@ -363,19 +353,73 @@ wire-ring / direction-field 两次实验可作为失败证据保留在历史 run
 
 ```text
 这轮修复证明 reverseEdge 不再出现方向翻转（direction_flip_count=0），但 normal leakage 很大，且长三角保护拒绝过多。
-当前 blocker 已不是“STL 拓扑脏”，而是 over-cover 采样点对应/桥接策略过保守或错配，导致写入的有效外扩带不足，Geomagic 输出又碎化。
+该轮 Geomagic 基线的 blocker 已不是“STL 拓扑脏”，而是 over-cover 采样点对应/桥接策略过保守或错配，导致写入的有效外扩带不足，输出又碎化。
 raw patch UnifySameDomain 可把 Geomagic patch 从 68 面降到 59 面、326 边降到 306 边，但 free_edges 仍为 26；内存态 BRepCheck 还会变为 false，写出 STEP 再读回才恢复 true。
-因此 UnifySameDomain 不能作为当前 Apply 的直接修复步骤，只能作为“Geomagic 输出确实存在同域碎片”的诊断证据。
-下一步仍应先降低 longTriangle rejection 的误伤，或改为局部 bevel/重采样补洞，而不是进入 Apply / sewing 调参。
+因此 UnifySameDomain 不能作为该轮 Apply 的直接修复步骤，只能作为“Geomagic 输出确实存在同域碎片”的诊断证据。
+该轮后续应先降低 longTriangle rejection 的误伤，或改为局部 bevel/重采样补洞，而不是进入 Apply / sewing 调参。
 ```
 
 ---
 
-## 4. 当前 P0：降低 Geomagic raw patch 碎化 / 修正 over-cover 有效外扩带不足
+## 4. NSR-1 原生单曲面拟合探针
 
-下一步不是继续调 candidate over-cover 宽度，也不是恢复 adjacent collar。
+本轮已完成 `docs/native_surface_refitting_guide.md` 定义的 NSR-1 探针范围：
 
-本轮保守修复后的真实样例已经证明：
+```text
+1. [x] 实现 SurfaceRefitter::fitSingleFace。
+2. [x] 使用原始有序边界作为 G0 约束，不给全部边界施加 G1。
+3. [x] 使用原始 STEP 候选面内部点作为拟合约束。
+4. [x] 将训练样本与独立验证样本分开。
+5. [x] 报告边界、角点、内部距离误差、法向误差、Jacobian/近奇异、曲面复杂度和 BRepCheck。
+6. [x] 新增 native_surface_fit_probe，输出单张 patch STEP 和 JSON 报告。
+7. [x] 增加合成单元测试，覆盖共面裁剪、人工切分自由曲面、尖角裁剪、孔洞、开放和非流形边界；默认测试不硬编码真实路径或候选序号。
+8. [x] 使用 candidate 179 完成中等档手动探针，产物位于 data/runs/20260713_200400_711__native-surface-fit__03_配件_Clay__cand-0179__nsr-1-medium；拟合面和报告成功写出，但因 BoundaryErrorExceeded 未通过 0.03 几何容差门。
+```
+
+candidate 179 当前不能只归类为边界失败：
+
+```text
+boundary：12 / 416 超限，max=0.0381795，worst edge=1540
+corner：2 / 26 超限，max=0.0381795
+interior：6 / 96 超限，max=0.0933887，p95=0.0356314，worst face=1709
+normal：max=14.1263°，未超过 15°
+Jacobian / BRepCheck：通过
+```
+
+`BoundaryErrorExceeded` 只是质量门检查顺序中的首个失败项。当前下一步是 `NSR-1.1`，仍属于 NSR-1，不启动 NSR-2：
+
+```text
+1. [ ] 保留现有 failure_reason，并新增 failed_gates，报告全部失败质量门。
+2. [ ] 报告 candidate_face_count、boundary_valid、solver 配置和 diagnostic patch 语义。
+3. [ ] 输出 diagnostics/native_surface_fit/surface_error_samples.csv。
+4. [ ] 输出 diagnostics/native_surface_fit/surface_error_vectors.obj，只标记超限原始点、投影点和误差向量。
+5. [ ] 增加合成测试，覆盖“边界先失败但内部也失败”的多失败门报告和诊断文件字段合同。
+6. [ ] 对 candidate 179 完成固定三档受控实验：training=24/48/96；validation=192、boundary samples=32、Jacobian grid=16 固定。
+7. [ ] 三档保持 tolerance3d=0.03、normal tolerance=15° 和全部 solver 参数不变。
+8. [ ] 输出三档比较表并按误差趋势决定下一任务；本轮不混调边界参数，不实现 NSR-4。
+```
+
+NSR-1.1 验收：
+
+```text
+1. JSON 能同时表达 boundary / corner / interior 等全部失败门。
+2. CSV/OBJ 能定位 edge 1540 和 face 1709 附近的超限样本，不依赖截图猜测。
+3. 三档只改变训练样本数量，每档都有独立 run.json、RUN.md、patch、JSON、CSV、OBJ 和日志。
+4. 若内部误差随训练密度明显下降，继续 OCCT Filling；若基本不变且 degree 持续达到 8，只记录 NSR-4 证据；若只剩边界超限，另立边界约束实验。
+```
+
+NSR-1 暂不做：
+
+```text
+- 不改 GUI。
+- 不做原生多曲面布局。
+- 不接自动 Geomagic 回退。
+- 不自研通用 B-spline 求解器。
+- 不放宽 StrictTopologyGate、Sewing 或商业 CAD 类质量门。
+- 不在 NSR-1.1 同时调整训练密度和 Plate / curve / iteration / degree / segment 参数。
+```
+
+Geomagic 旧基线保留为后备诊断证据：
 
 ```text
 direction_flip_count=0
@@ -397,7 +441,7 @@ raw patch UnifySameDomain 不是直接修复：
   unified STEP roundtrip BRepCheck=true
 ```
 
-继续检查：
+只有原生路线明确失败并进入 Geomagic 后备时，才继续检查：
 
 ```text
 1. 用新的 over-cover artifacts 复跑完整 Route 2 真实样例，确认 rejected 分桶是否仍近似：
@@ -413,7 +457,7 @@ raw patch UnifySameDomain 不是直接修复：
 6. 只有当 longTriangleCount 和 rejectedCount 收到可解释低值后，再继续定位 failed_patch_face_index=7 / original boundary edge 1585 的 open-wire closure。
 ```
 
-每轮新的 Route 2 真实样例必须收敛到统一运行目录：
+每轮新的 Geomagic 后备真实样例必须收敛到统一运行目录：
 
 ```text
 data/runs/<timestamp>__boundary-trim-fill__<model>__cand-<id>__route1-route2/
@@ -466,42 +510,38 @@ diagnostics/ 保留：
 最低通过标准：
 
 ```text
-1. fitting STL 是单连通输入：
-   components = 1
-   boundaryCycles 合理
-   nonManifoldEdges = 0
-   nonManifoldVertices = 0
-
-2. candidate over-cover 覆盖完整：
-   boundary_coverage 接近 1
-   rejected_count = 0 或有明确可解释原因
-
-3. 视觉上方向正确：
-   不再沿相邻面 / 侧壁向下翻
-   角点不被圆角化或抹掉
-
-4. Apply 不接受伪成功：
-   OCCT strict 通过只是必要条件
-   Creo 打开必须是灰色水密实体
+1. native_surface_fit_probe 输出一张 TopoDS_Face 和完整 JSON 报告。
+2. 原始边界 G0 误差、角点误差和内部独立验证误差满足配置容差。
+3. 角点不被圆角化或抹掉。
+4. BRepCheck 有效，无 Jacobian 翻转或近奇异区域。
+5. degree / poles / knots / segments 没有达到不合理规模。
+6. 合成单元测试通过，真实样例成功或失败都有可定位报告。
+7. 进入 Apply 后仍必须通过 repair、StrictTopologyGate、STEP roundtrip 和商业 CAD 类质量门。
 ```
 
 如果仍失败，按下面分流：
 
 ```text
-STL 输入仍向下翻：
-  修 candidate over-cover 外侧方向判定，不进入 Apply 调参。
+边界 Wire 无法构造：
+  修边界顺序、方向或输入分析，不进入拟合调参。
 
-STL 输入正确，但 Geomagic 仍圆角化或输出过碎：
-  优先看 Geomagic 参数和角点 miter 采样，不先改 sewing。
+G0 边界误差超限：
+  检查边约束和曲线兼容性，不提高 Sewing 容差。
 
-Geomagic patch 覆盖原边界，但 strict re-trim 失败：
-  定位 pcurve 投影、SameParameter、surface coverage。
+边界合格但内部误差大：
+  只比较固定三档样本/复杂度，禁止无限调参。
 
-strict re-trim 成功，但 open-wire closure 失败：
-  回到 failed_patch_face_index / owner split / internal seam network 诊断。
+距离合格但法向误差大：
+  记录为后续切平面约束需求，NSR-1 返回失败。
 
-OCCT 水密但 Creo 失败：
-  获取 Creo 失败区域空间定位，不把 OCCT strict 当最终成功。
+Jacobian 翻转、近奇异或曲面复杂度失控：
+  拒绝单曲面结果。
+
+OCCT Plate 路线在受控参数内失败：
+  记录失败证据，再决定启动自定义 B-spline 求解或 Geomagic 后备。
+
+Geomagic 后备仍圆角化或底层曲面欠覆盖：
+  覆盖 Gate 失败并拒绝，不进入 Apply / Sewing。
 ```
 
 ---
@@ -515,7 +555,9 @@ OCCT 水密但 Creo 失败：
 - 不把 Geomagic patch outer boundary、STL crop boundary、support collar 外环当最终 CAD boundary。
 - 不放宽 `StrictTopologyGate`。
 - 不通过继续加大 adjacent-face support collar 主宽度来掩盖方向错误。
-- 不直接进入 OCCT 全曲面重建；只有局部反复无法覆盖时才考虑局部 filling / refit。
+- 不把局部原生单曲面拟合扩张为整个潮玩件的全曲面重建。
+- NSR-1 不做多曲面布局、GUI 接入、自动 Geomagic 回退或通用 B-spline 求解器。
+- NSR-1 原始边界只做 G0，不恢复“全部边界 G1”的失败实验。
 - 不删除或绕过 `PatchReplacementRepair`。
 - 不提交 pre-repair、diagnostic best sewing 或 raw Geomagic patch 作为最终结果。
 - 不在默认测试中硬编码 `03_配件_Clay.stp` 或 candidate `179`。

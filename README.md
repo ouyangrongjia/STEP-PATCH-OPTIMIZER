@@ -1,6 +1,6 @@
 # STEP 曲面片优化器
 
-Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，执行 Geomagic patch preview / original-boundary constrained Apply，并通过拓扑与外部 CAD 诊断验证后导出 STEP。
+Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，并对目标区域执行原生自由曲面重建或 Geomagic 后备拟合；结果通过原始边界约束、拓扑与外部 CAD 诊断验证后导出 STEP。
 
 ## 当前核心能力
 
@@ -17,6 +17,7 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 - original STP boundary constrained Patch Apply
 - PatchReplacementRepair、StrictTopologyGate 和 CommercialCadLikeQualityGate
 - applied STEP 外部 CAD 诊断路由和 Creo ModelCHECK 脚本入口
+- 原生单曲面拟合探针、独立误差验证和诊断 patch 输出
 - 命令级 undo/redo
 - 合法性检查
 - 导出 STEP 并二次读取校验
@@ -44,8 +45,11 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 6. docs/TODO.md
    当前执行 TODO、阶段边界和验收要求。
 
-7. docs/geomagic_patch_workflow.md
-   Geomagic patch preview / Apply 主线流程。
+7. docs/native_surface_refitting_guide.md
+   native-surface-refit 独立分支的原生自由曲面拟合主线、Geomagic 后备路线和验收边界。
+
+8. docs/geomagic_patch_workflow.md
+   Geomagic patch preview / Apply 稳定基线和后备流程。
 ```
 
 如果文档之间出现冲突，按以下规则处理：
@@ -56,7 +60,8 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 已完成和已退役功能事实以 docs/completed_features.md 为准。
 构建、运行、测试命令以 README.md 和 docs/run_gui.md 为准。
 目录结构以真实仓库和 CMakeLists.txt 为准，再同步更新 docs/project_structure.md。
-Geomagic patch preview / Apply 主线以 docs/TODO.md 和 docs/geomagic_patch_workflow.md 为准。
+Geomagic patch preview / Apply 后备基线以 docs/geomagic_patch_workflow.md 为准。
+native-surface-refit 分支的原生拟合任务以 docs/native_surface_refitting_guide.md、docs/TODO.md 和 docs/implementation_status.md 为准。
 ```
 
 ## 从 0 开始一键配置
@@ -391,27 +396,15 @@ tools         批处理和 STEP 统计工具
 
 ## 当前开发阶段
 
-当前项目已经完成 MVP 基础闭环、候选区域基础框架和 Geomagic patch preview / Apply 主线的核心接入。当前主线是 Route 2 support collar 后的 strict original-boundary multi-surface shell closure 诊断：
+当前项目已经完成 MVP 基础闭环、候选区域基础框架、Geomagic patch preview / Apply 核心接入和 NSR-1 原生单曲面工程探针。当前工作位于独立 `native-surface-refit` 分支，主线是 NSR-1.1 失败诊断与固定三档实验；`feature-bounded-refit` 保留 Geomagic 稳定基线：
 
 ```text
-1. 默认 Geomagic fitting input mode：STP Sampled Candidate Surface。
-   - 直接从当前 STP candidate faces / boundary 采样生成 fitting STL。
-   - 不要求先加载原始 STL。
-   - 当前唯一保留的 STL 扩宽机制是 adjacent-face support collar。
-2. 备用 / 诊断路线：原始 STL crop。
-   - Legacy centroid-only crop 和 conservative boundary-band crop 保留为对照路线。
-   - Global Cut Chain crop 是独立 STL 全局切链裁剪器，不是默认 one-click fitting input。
-3. Apply 仍以原 STP candidate outer boundary wire 作为最终 CAD boundary。
-   - STP sampled fitting STL、support collar、STL crop boundary、Geomagic patch outer boundary 都只是拟合输入或诊断证据。
-   - 最终提交仍必须通过 PatchReplacementRepair、StrictTopologyGate、STEP roundtrip。
-4. 当前 P0 是定位 Route 2 open-wire closure。
-   - 最新真实样例输入 STL 干净、normalized patch 单位正确、patch 质量门控已有改善。
-   - blocker 在 72-face Geomagic patch 下 strict multi-surface boundary shell open-wire closure。
-   - 下一步应定位 failed patch face 的 original-boundary segments / internal seams / owner split / segment ordering，而不是恢复 guard-band / over-cover 或放宽 Gate。
-5. 外部 CAD 诊断只允许读取 Apply 成功后导出的已合并 STEP。
-   - 原始 Geomagic patch STEP 只能做 PatchPreflightOnly。
-   - Creo runner 成功、ModelCHECK 报告存在、STEP 文件存在，都不是验收成功。
-   - 验收仍看水密 B-rep 实体、StrictTopologyGate、STEP roundtrip 和 Creo 灰色实体显示。
+1. 当前 P0：保留现有 SurfaceRefitter 算法，补充全部失败门和样本级误差定位。
+2. candidate 179 首轮中等档同时存在边界、角点和内部超限；BoundaryErrorExceeded 只是首个失败项。
+3. 固定验证密度和 solver 参数，只比较 training=24/48/96 三档训练样本。
+4. 继续通过独立 native_surface_fit_probe 输出单张诊断 patch、JSON、CSV 和 OBJ，不改 GUI，不做多曲面或 Apply。
+5. 根据三档误差趋势决定继续 OCCT Filling、另立边界约束实验，或只为 NSR-4 记录不足证据。
+6. Geomagic 仅作为后备；底层曲面覆盖 Gate 失败时不得进入 Apply 或通过 Sewing 掩盖欠覆盖。
 ```
 
 后续开发时，Codex 或人工修改应优先遵循：
@@ -419,5 +412,6 @@ tools         批处理和 STEP 统计工具
 ```text
 架构边界：docs/module_design.md
 任务顺序与验收：docs/implementation_status.md / docs/TODO.md
-Geomagic patch 主线流程：docs/geomagic_patch_workflow.md
+原生自由曲面拟合：docs/native_surface_refitting_guide.md
+Geomagic 后备流程：docs/geomagic_patch_workflow.md
 ```
