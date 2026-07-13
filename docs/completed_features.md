@@ -2,7 +2,7 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-07-13
+更新时间：2026-07-14
 
 ---
 
@@ -103,6 +103,36 @@ dense: BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded
 内部误差随训练密度显著下降，normal 超限样本数从 8 降到 1，因此当前证据支持继续 OCCT Filling，而不是只为 NSR-4 记录 Plate 能力不足。三档均为 `diagnostic_patch=true`、`patch_acceptable=false`；dense 需另立 BRepCheck 与法向离群诊断，尚未进入 NSR-2。
 
 补充 STEP 二次读取事实：sparse / medium / dense 的诊断 patch 二次读取均为一张 face 且 `BRepCheck=true`，但 edge 数分别为 44 / 46 / 50，而内存态报告均遍历到 26 条边。该结果只能证明 STEP translator 重建后的表示可读，不能把 roundtrip 当作原生 patch 的隐式修复或绕过内存态 BRepCheck。
+
+NSR-1.2 dense 结构诊断与固定 96 点采样分配 A/B 已完成：
+
+- `SurfaceRefitReport` 分开记录 Filling 输出、方向反转后和 probe STEP roundtrip 的 BRepCheck。
+- face / wire / edge / vertex 的直接与上下文 `BRepCheck_Status` 可序列化到 JSON。
+- 每条输出边记录原始 boundary edge 映射、tolerance、degenerated、SameRange、SameParameter、pcurve / 3D curve 参数范围和 3D-COS 最大偏差。
+- 每张候选源面记录 training / validation / validation-over-tolerance 数量；内部验证样本记录最近训练点距离。
+- 法向样本记录源点、投影点、源法向、拟合法向、角度、UV、face id 和状态，并输出 `surface_normal_error_samples.csv`。
+- 新增 `area_weighted` 与 `face_stratified_area_weighted` 两种确定性策略；分层策略在源面数超过训练预算时明确拒绝。
+- 新增 `scripts/run_native_surface_fit_sampling_ab.ps1`，一次成功调用只保留两个策略 run 和一个 comparison run；异常时只清理本次调用在 `data/runs` 下创建的目录。
+
+固定事实：
+
+```text
+area_weighted:
+  failed_gates=BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded
+  per-face training min/max/zero=0/4/2
+  Filling/oriented/roundtrip BRep=false/false/true
+  interior max/p95/over=0.041323/0.025610/4
+  normal max/over=45.4750°/1
+
+face_stratified_area_weighted:
+  failed_gates=InteriorErrorExceeded, NormalErrorExceeded
+  per-face training min/max/zero=1/3/0
+  Filling/oriented/roundtrip BRep=true/true/true
+  interior max/p95/over=0.068507/0.024468/8
+  normal max/over=40.7441°/1
+```
+
+纯面积加权的具体结构失败是 face `UnorientableShape` 和 wire `SelfIntersectingWire`，方向反转前后相同；分层策略消除了该失败，但没有通过 interior / normal 门。两种策略均为失败诊断 patch，`patch_acceptable=false`，因此 NSR-2 未启动；下一独立任务是局部切平面约束证据，NSR-4 继续冻结。
 
 ---
 

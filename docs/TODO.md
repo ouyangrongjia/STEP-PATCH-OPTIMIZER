@@ -10,7 +10,7 @@
 
 当前开发分支为 `native-surface-refit`。原生自由曲面拟合作为独立分支推进，`feature-bounded-refit` 保留现有 Geomagic patch preview / Apply 稳定基线。
 
-`NSR-1.1` 的失败诊断与固定三档实验已完成；当前任务为 `NSR-1.2` dense 结构诊断与受控采样：
+`NSR-1.2` dense 结构诊断与固定 96 点采样分配 A/B 已完成，但两种策略都没有通过全部质量门，NSR-1 尚未结束：
 
 ```text
 STP
@@ -37,7 +37,8 @@ STP
 因此当前决策为：
 
 ```text
-保留原生单曲面拟合路线；NSR-1.2 先定位 dense 档 BRepCheck 失败、STEP roundtrip 边界重建和残余法向 / 内部离群点，再做固定 96 点的采样分配 A/B。
+保留原生单曲面拟合路线；NSR-1.2 已确认纯面积加权的内存态失败为 face `UnorientableShape` + wire `SelfIntersectingWire`，分层面积加权可消除该 BRep 失败和零训练源面，但内部与法向门仍失败。
+下一独立任务只建立局部切平面约束证据；NSR-2 和 NSR-4 继续冻结。
 Geomagic 保留为独立后备路线，不再是 native-surface-refit 分支的默认拟合入口。
 完整方案以 docs/native_surface_refitting_guide.md 为准。
 ```
@@ -363,7 +364,7 @@ raw patch UnifySameDomain 可把 Geomagic patch 从 68 面降到 59 面、326 �
 
 ---
 
-## 4. NSR-1 / NSR-1.1 已完成与 NSR-1.2 当前任务
+## 4. NSR-1 / NSR-1.1 / NSR-1.2 已完成证据与当前待办
 
 本轮已完成 `docs/native_surface_refitting_guide.md` 定义的 NSR-1 探针范围：
 
@@ -409,18 +410,44 @@ Jacobian / BRepCheck：通过
 | medium | BoundaryErrorExceeded, CornerErrorExceeded, InteriorErrorExceeded, NormalErrorExceeded | 0.038180 / 0.025657 / 0.011631 / 24 | 0.038180 / 0.034959 / 0.014290 / 2 | 0.093389 / 0.042576 / 0.019742 / 18 | 47.9057° / 9.3050° | 8x8 / 256 / 4 | 通过 / 通过 |
 | dense | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.015591 / 0.009086 / 0.004321 / 0 | 0.015591 / 0.013647 / 0.005295 / 0 | 0.041323 / 0.025610 / 0.010416 / 4 | 45.4750° / 9.7698° | 8x8 / 529 / 9 | 通过 / 失败 |
 
-判读：内部 max / p95 从 sparse 的 `0.154917 / 0.114527` 降至 dense 的 `0.041323 / 0.025610`，说明增加训练样本有明显收益，不能据此判定 Plate 路线能力不足。下一独立任务继续 OCCT Filling，优先定位 dense 档 BRepCheck 失败和仅剩 1 个法向超限样本；medium 的 edge 1540 边界超限未在 dense 档持续超限，暂不启动边界约束混调。三档 patch 均为 `diagnostic_patch=true`、`patch_acceptable=false`，不得进入 NSR-2。
+判读：内部 max / p95 从 sparse 的 `0.154917 / 0.114527` 降至 dense 的 `0.041323 / 0.025610`，说明增加训练样本有明显收益，不能据此判定 Plate 路线能力不足。该结论已进入 NSR-1.2 的结构诊断和固定 96 点分配 A/B；medium 的 edge 1540 边界超限未在 dense 档持续超限，因此没有启动边界约束混调。三档 patch 均为 `diagnostic_patch=true`、`patch_acceptable=false`。
 
-`NSR-1.2` 当前待办：
+`NSR-1.2` 已完成：
 
 ```text
-1. [ ] 记录 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck。
-2. [ ] 输出 face / wire / edge / vertex 的具体 BRepCheck_Status，并定位失败子形状。
-3. [ ] 输出 edge tolerance、pcurve / SameRange / SameParameter、3D curve 与 curve-on-surface 最大偏差。
-4. [ ] 为每张源面记录 training / validation 样本数和最近训练点距离。
-5. [ ] 为法向样本记录源法向、拟合法向、角度、UV、face id 和投影点。
-6. [ ] 固定 training=96、validation=192 和全部 solver 参数，对比纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
+1. [x] 记录 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck。
+2. [x] 输出 face / wire / edge / vertex 的具体 BRepCheck_Status，并定位失败子形状。
+3. [x] 输出 edge tolerance、pcurve / SameRange / SameParameter、3D curve 与 curve-on-surface 最大偏差。
+4. [x] 为每张源面记录 training / validation 样本数和验证离群点最近训练距离。
+5. [x] 为法向样本记录源法向、拟合法向、角度、UV、face id 和投影点，并输出独立 CSV。
+6. [x] 固定 training=96、validation=192 和全部 solver 参数，对比纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
 7. [ ] 只有某一受控策略同时通过边界、角点、内部、法向、Jacobian、复杂度和 BRepCheck，才允许结束 NSR-1 并进入 NSR-2。
+```
+
+固定 96 点 A/B 结果：
+
+| 策略 | failed_gates | interior max / p95 / RMS / 超限 | normal max / p95 / RMS / 超限 | 每面 training min / max / zero | BRep Filling / oriented / roundtrip | roundtrip face / edge |
+|---|---|---|---|---|---|---|
+| area_weighted | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.041323 / 0.025610 / 0.010416 / 4 | 45.4750° / 9.7698° / 5.3601° / 1 | 0 / 4 / 2 | false / false / true | 1 / 50 |
+| face_stratified_area_weighted | InteriorErrorExceeded, NormalErrorExceeded | 0.068507 / 0.024468 / 0.012112 / 8 | 40.7441° / 8.2060° / 4.7287° / 1 | 1 / 3 / 0 | true / true / true | 1 / 43 |
+
+正式运行：
+
+```text
+area_weighted:
+  data/runs/20260714_014513_419__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-area-weighted
+face_stratified_area_weighted:
+  data/runs/20260714_014616_181__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-face-stratified-area-weighted
+comparison:
+  data/runs/20260714_014717_549__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.2-sampling-ab
+```
+
+当前待办：
+
+```text
+1. [ ] 建立局部切平面约束的独立证据，重点验证 face 1705 法向离群能否在不放宽距离门和不增加总训练点的条件下收敛。
+2. [ ] 同时观察局部切平面约束是否避免分层策略在 face 1709 一带产生新的内部误差簇。
+3. [ ] 证据形成前不进入 NSR-2，不解冻 NSR-4，不实现 residual-adaptive 第三轮。
 ```
 
 一步到位的边界：用户可以只触发一次“原生重拟合”，但内部允许执行少量固定策略并由质量门选择结果；不把“单次操作”误解为“一组固定 Filling 参数保证任意自由曲面成功”。

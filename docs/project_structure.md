@@ -40,12 +40,12 @@ STEP/STP 读取
 → STEP/STP 导出、二次读取校验和可选外部 CAD 诊断
 ```
 
-当前阶段已经完成 NSR-1 原生单曲面工程探针和 NSR-1.1 失败诊断 / 固定三档实验，并转入 NSR-1.2。当前重点是：
+当前阶段已经完成 NSR-1 原生单曲面工程探针、NSR-1.1 失败诊断 / 固定三档实验和 NSR-1.2 结构诊断 / 固定 96 点采样分配实验。当前重点是：
 
 ```text
-1. 当前 P0：补齐 dense 档 BRepCheck 具体状态、方向反转前后检查和 STEP roundtrip 对照。
-2. 输出每张源面的训练 / 验证覆盖，以及法向离群样本的源法向、拟合法向、角度和 UV。
-3. 保持 OCCT BRepFill_Filling solver 参数和总训练点 96 不变，只比较训练点分配策略。
+1. 当前 P0：在 NSR-1 内建立局部切平面约束证据，验证位置与局部法向能否同时收敛。
+2. 已完成 Filling 输出、方向反转后和 STEP roundtrip 的 BRepCheck 对照，以及每张源面的训练 / 验证覆盖和法向样本级诊断。
+3. 固定 96 点分层面积加权已消除内存态结构失败和零训练源面，但内部与法向质量门仍未通过。
 4. 独立 native_surface_fit_probe 继续输出诊断 patch、JSON、CSV 和 OBJ，不先改 AppController 或 GUI。
 5. 原生单曲面通过自身质量门后，再复用 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip。
 6. Geomagic 流程保留为后备和对照，不是本分支默认拟合入口。
@@ -121,6 +121,8 @@ step-patch-optimizer/
 │   ├── run_creo_toolkit_baseline_probe.ps1
 │   ├── run_creo_toolkit_phase1_repair.ps1
 │   ├── run_geomagic_patch.ps1
+│   ├── run_native_surface_fit_tiers.ps1
+│   ├── run_native_surface_fit_sampling_ab.ps1
 │   ├── run_gui.ps1
 │   ├── run_artifacts.ps1
 │   ├── list_runs.ps1
@@ -336,16 +338,16 @@ ExportStepCommand
 
 ## 7. 当前后续增强边界
 
-### 7.1 P0：NSR-1.2 dense 结构诊断与受控采样
+### 7.1 P0：NSR-1 局部切平面约束证据
 
 当前最优先的增强方向：
 
 ```text
-1. 保留已完成的 SurfaceRefitter::fitSingleFace、全部失败门和样本级诊断合同。
-2. 记录 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck 及具体子形状状态。
-3. 记录每张源面的训练 / 验证样本数量，以及残余内部 / 法向离群点的完整局部信息。
-4. 固定总训练点 96、验证点 192 和全部 solver 参数，对比纯面积加权与分层面积加权。
-5. 只有原生 patch 自身全部质量门通过后才允许进入 NSR-2。
+1. 保留已完成的 SurfaceRefitter::fitSingleFace、全部失败门、三阶段 BRepCheck 和样本级诊断合同。
+2. 以分层面积加权已经通过内存态结构检查为基础，建立少量、局部、可诊断的切平面约束实验。
+3. 不增加总训练点，不放宽 0.03 距离容差或 15° 法向阈值，不重新混调已经通过的边界约束。
+4. 验证残余内部误差与 face 1705 法向离群能否同时下降；真实 face id 只作为本轮证据，不写入生产逻辑或默认测试。
+5. 只有原生 patch 自身全部质量门通过后才允许进入 NSR-2；失败时再为 NSR-4 记录能力不足证据。
 6. 将“一步到位”定义为一次用户操作内部的有限策略组合与自动质量择优，不承诺单一参数覆盖任意拓扑曲面。
 ```
 

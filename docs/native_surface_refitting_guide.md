@@ -2,7 +2,7 @@
 
 > 文档定位：指导 FeatureBoundedRefit 局部区域的原生自由曲面拟合开发，并定义 Geomagic 后备路线、失败分流和验收边界。
 >
-> 当前状态：`NSR-1.1` 已完成；当前任务为 `NSR-1.2` dense 结构诊断与固定 96 点采样分配实验，NSR-2 / NSR-4 继续冻结。
+> 当前状态：`NSR-1.2` dense 结构诊断与固定 96 点采样分配实验已完成，但尚无 `patch_acceptable=true`；下一独立任务为局部切平面约束证据，NSR-2 / NSR-4 继续冻结。
 >
 > 开发分支：`native-surface-refit`。该路线作为独立分支推进，不直接改写 `feature-bounded-refit` 上的 Geomagic 稳定主线。
 > 更新时间：2026-07-14
@@ -253,7 +253,9 @@ filling.Add(edge, GeomAbs_C0, Standard_True);
 
 三档实验只改变训练样本数量。`tolerance3d=0.03`、法向阈值、Plate 次数、曲线采样、迭代次数、最大次数和最大分段必须保持一致，避免把多种变量混在一次实验中。
 
-2026-07-13 的 candidate 179 三档实测确认除 training 外配置逐字段一致。interior max/p95 从 sparse 的 `0.154917/0.114527`，经 medium 的 `0.093389/0.042576`，降到 dense 的 `0.041323/0.025610`；说明增加训练样本有明显收益。dense 边界和角点通过，但出现 `BRepCheckFailed`，并仍有 1 个法向超限样本，因此下一独立任务继续 Filling 路线并定位结构失败与法向离群点，不在本轮混调边界参数。
+2026-07-13 的 candidate 179 三档实测确认除 training 外配置逐字段一致。interior max/p95 从 sparse 的 `0.154917/0.114527`，经 medium 的 `0.093389/0.042576`，降到 dense 的 `0.041323/0.025610`；说明增加训练样本有明显收益。dense 边界和角点通过，但出现 `BRepCheckFailed`，并仍有 1 个法向超限样本，因此该结果进入 NSR-1.2 的结构失败与法向离群诊断，没有混调边界参数。
+
+2026-07-14 的 NSR-1.2 固定 96 点 A/B 保持全部 solver / validation 配置一致，只改变训练点分配。纯面积加权每面 training min/max/zero=`0/4/2`，Filling / oriented / roundtrip BRep=`false/false/true`；分层面积加权为 `1/3/0` 和 `true/true/true`。分层策略证明每面最低覆盖能改变 BRep 结构，但 interior max/over 从 `0.041323/4` 变为 `0.068507/8`，normal max 只从 `45.4750°` 降至 `40.7441°`，因此不能作为可接受结果。
 
 ### 4.5 构建流程
 
@@ -439,7 +441,31 @@ NSR-1.1 已补齐全部失败门和样本级定位产物，并完成固定三档
 
 结论：虽然三档 degree 都达到 8，但内部 max/p95 和法向超限数随训练密度明显改善，不能把当前结果归类为“Plate 能力基本不变”。medium 的最差边界仍是 edge 1540，dense 中该边仍最差但误差已低于 0.03，因此暂不进入边界约束实验。当前继续 OCCT Filling，先另立 dense BRepCheck / 法向离群诊断；所有 patch 都是失败诊断产物，不进入 NSR-2。
 
-补充诊断：三档 patch 写出 STEP 后重新读取均为一张 face 且 `BRepCheck=true`，但 sparse / medium / dense 的 edge 数分别为 44 / 46 / 50，而内存态 face 均遍历到 26 条边。当前实现又是在输出方向反转前记录 `brep_check_valid`。因此 dense 的 `BRepCheckFailed` 尚不能直接归类为底层曲面失效，也不能用 STEP roundtrip 自动接受；NSR-1.2 必须区分 Filling 输出、方向反转后和 translator 重建后的具体失败状态。
+NSR-1.1 补充诊断：三档 patch 写出 STEP 后重新读取均为一张 face 且 `BRepCheck=true`，但 sparse / medium / dense 的 edge 数分别为 44 / 46 / 50，而内存态 face 均遍历到 26 条边。当时实现只在输出方向反转前记录 `brep_check_valid`，因此该结果成为 NSR-1.2 分阶段诊断的输入证据，不能用 STEP roundtrip 自动接受。
+
+NSR-1.2 已给出明确结果：
+
+```text
+area_weighted:
+  Filling face[0] = UnorientableShape
+  Filling wire[0] = SelfIntersectingWire
+  oriented face[0] = UnorientableShape
+  oriented wire[0] = SelfIntersectingWire
+  output orientation reversed = true
+  memory edges = 26
+  roundtrip face/edges/BRep = 1/50/true
+
+face_stratified_area_weighted:
+  Filling BRep = true
+  oriented BRep = true
+  output orientation reversed = true
+  memory edges = 26
+  roundtrip face/edges/BRep = 1/43/true
+```
+
+两策略的 26 条内存态输出边都能一一映射到 26 条原始 boundary edge；没有 missing pcurve、SameRange 或 SameParameter 失败。纯面积加权最差边表示为 output edge 5 / source edge 1540，3D curve 与 curve-on-surface 最大偏差 `0.0178773`，仍小于该 edge tolerance `0.0189194`。因此该轮 BRep 失败定位在 wire 自交 / face 不可定向，而不是单条输出边缺失 pcurve。
+
+纯面积加权的 4 个内部超限点来自 face 1719/1717/1710/1750，每面 training=`3/3/3/2`，最近训练距离=`0.378863/0.313861/0.287934/0.426819`；两个零训练面 1735/1738 没有产生超限点。分层策略让这四个同一验证点全部通过，但在 face 1709/1717/1718 形成新的 `5/2/1` 个超限点。该证据说明“每面至少一点”解决了零覆盖和本轮 BRep 结构问题，但点数统计本身不能保证局部误差收敛。
 
 ---
 
@@ -528,13 +554,22 @@ Geomagic 只提供候选拟合曲面，不拥有最终 CAD 拓扑决定权：
 
 ### NSR-1.2：dense 结构诊断与受控采样
 
-状态：当前任务。
+状态：已完成诊断与 A/B，未通过 NSR-1 验收。
 
-- 补齐 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck 与具体子形状状态。
-- 补齐每张源面的训练 / 验证样本覆盖，以及法向样本级诊断。
-- 固定 training=96、validation=192 和全部 solver 参数，只比较纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
-- 不调用 repair 掩盖原生 patch 问题，不把 STEP roundtrip 后 BRepCheck 通过直接当成拟合通过。
-- 只有至少一个受控策略通过全部原生质量门，才结束 NSR-1 并进入 NSR-2。
+- 已补齐 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck 与具体子形状状态。
+- 已补齐每张源面的训练 / 验证样本覆盖、离群点最近训练距离，以及法向样本级诊断。
+- 已固定 training=96、validation=192 和全部 solver 参数，只比较纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
+- 全程未调用 repair，没有把 STEP roundtrip 后 BRepCheck 通过直接当成拟合通过。
+- 分层策略通过 Filling / oriented BRepCheck，但 interior 和 normal 仍失败；两策略均 `patch_acceptable=false`。
+- NSR-1 尚未结束，下一独立任务只建立局部切平面约束证据；NSR-2 / NSR-4 不启动。
+
+正式运行：
+
+```text
+data/runs/20260714_014513_419__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-area-weighted
+data/runs/20260714_014616_181__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-face-stratified-area-weighted
+data/runs/20260714_014717_549__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.2-sampling-ab
+```
 
 ### NSR-2：复用现有 Apply 验证
 
@@ -575,6 +610,7 @@ cd D:\pyProject\step-patch-optimizer
 .\scripts\build_debug.ps1
 .\scripts\test.ps1
 .\scripts\run_native_surface_fit_tiers.ps1 -SourceStep "<source-step>" -CandidateId <id>
+.\scripts\run_native_surface_fit_sampling_ab.ps1 -SourceStep "<source-step>" -CandidateId <id>
 ```
 
 底层验证：
@@ -585,7 +621,7 @@ cmake --build --preset windows-msvc-debug
 ctest --preset windows-msvc-debug --output-on-failure
 ```
 
-真实样例不得进入默认测试。探针运行必须写入唯一的 `data/runs/<run-id>/` 目录并保留参数、报告和产物清单。三档运行器成功时固定保留 sparse、medium、dense 和 comparison 四个正式目录；中途异常时只清理本次调用已创建且确认位于 `data/runs/` 下的目录，不删除历史 run。
+真实样例不得进入默认测试。探针运行必须写入唯一的 `data/runs/<run-id>/` 目录并保留参数、报告和产物清单。三档运行器成功时固定保留 sparse、medium、dense 和 comparison 四个正式目录；NSR-1.2 A/B 运行器成功时固定保留两个策略 run 和一个 comparison run。中途异常时只清理本次调用已创建且确认位于 `data/runs/` 下的目录，不删除历史 run。
 
 ---
 
@@ -686,7 +722,7 @@ ctest --preset windows-msvc-debug --output-on-failure
 
 ---
 
-## 12. 下一步开发 Prompt：NSR-1.2
+## 12. NSR-1.2 已执行任务模板（归档）
 
 ```text
 请在真实仓库 D:\pyProject\step-patch-optimizer 中完成 NSR-1.2：dense 结构诊断与固定 96 点采样分配实验。
