@@ -10,7 +10,7 @@
 
 当前开发分支为 `native-surface-refit`。原生自由曲面拟合作为独立分支推进，`feature-bounded-refit` 保留现有 Geomagic patch preview / Apply 稳定基线。
 
-`NSR-1.2` dense 结构诊断与固定 96 点采样分配 A/B 已完成，但两种策略都没有通过全部质量门，NSR-1 尚未结束：
+`NSR-1.3` 局部切平面约束 0 / 1 / 4 / 8 有限周期已经完成，四档均未通过全部质量门，NSR-1 尚未结束：
 
 ```text
 STP
@@ -37,8 +37,8 @@ STP
 因此当前决策为：
 
 ```text
-保留原生单曲面拟合路线；NSR-1.2 已确认纯面积加权的内存态失败为 face `UnorientableShape` + wire `SelfIntersectingWire`，分层面积加权可消除该 BRep 失败和零训练源面，但内部与法向门仍失败。
-下一独立任务只建立局部切平面约束证据；NSR-2 和 NSR-4 继续冻结。
+保留原生单曲面拟合路线；NSR-1.3 已确认 4 / 8 个局部 G1 能降低内部距离，但法向仍超限，并重新引入 face `UnorientableShape` + wire `SelfIntersectingWire`。
+停止继续增加局部 G1 或混调 Filling 参数；下一证据任务是在至少三个受支持真实候选上复核同类失败。NSR-2、NSR-1.4 和 NSR-4 继续冻结。
 Geomagic 保留为独立后备路线，不再是 native-surface-refit 分支的默认拟合入口。
 完整方案以 docs/native_surface_refitting_guide.md 为准。
 ```
@@ -364,7 +364,7 @@ raw patch UnifySameDomain 可把 Geomagic patch 从 68 面降到 59 面、326 �
 
 ---
 
-## 4. NSR-1 / NSR-1.1 / NSR-1.2 已完成证据与当前待办
+## 4. NSR-1 / NSR-1.1 / NSR-1.2 / NSR-1.3 已完成证据与当前待办
 
 本轮已完成 `docs/native_surface_refitting_guide.md` 定义的 NSR-1 探针范围：
 
@@ -442,12 +442,65 @@ comparison:
   data/runs/20260714_014717_549__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.2-sampling-ab
 ```
 
-当前待办：
+`NSR-1.3` 已完成：
 
 ```text
-1. [ ] 建立局部切平面约束的独立证据，重点验证 face 1705 法向离群能否在不放宽距离门和不增加总训练点的条件下收敛。
-2. [ ] 同时观察局部切平面约束是否避免分层策略在 face 1709 一带产生新的内部误差簇。
-3. [ ] 证据形成前不进入 NSR-2，不解冻 NSR-4，不实现 residual-adaptive 第三轮。
+1. [x] 0 个 G1 完整数值复现 face_stratified_area_weighted 基线；原选择集的 boundary / corner / interior / normal、Filling 误差、复杂度和 BRep 状态均一致。
+2. [x] 内部训练样本在采样时保留稳定支撑面、源 face id 和 UV；96 个真实样本的支撑面重算点最大偏差为 1.59e-14。
+3. [x] 训练约束总数始终为 96；0 / 1 / 4 / 8 档实际 G1 分别为 0 / 1 / 4 / 8，其余为 G0，原始边界仍只施加 G0。
+4. [x] 选择集按 max(distance / 0.03, normal_angle / 15°) 排序并执行确定性空间非极大值抑制，再映射到不同训练样本；1 ⊂ 4 ⊂ 8。
+5. [x] 新增独立 192 点终验集；training-selection、training-holdout、selection-holdout 交集四档均为 0，最终质量门只读取 holdout。
+6. [x] 完成 0 / 1 / 4 / 8 四档受控运行；除 G1 数量外，训练点、选择集、终验集、边界和全部 solver 参数逐字段一致。
+7. [x] 每档均保留 run.json、RUN.md、patch STEP、JSON、CSV、OBJ、日志和 step_stats；比较目录同时输出 CSV / Markdown。
+8. [x] 四档均为 patch_acceptable=false；按停止规则不再增加 G1 或混调 Filling 参数，不进入 NSR-2。
+```
+
+| G1 | failed_gates | selection interior max/p95/RMS/over | selection normal max/p95/RMS/over | holdout interior max/p95/RMS/over | holdout normal max/p95/RMS/over | BRep Filling/oriented/roundtrip | Jacobian near/flip | degree/poles/segments |
+|---:|---|---|---|---|---|---|---|---|
+| 0 | InteriorErrorExceeded, NormalErrorExceeded | 0.068507/0.024468/0.012112/8 | 40.7441°/8.2060°/4.7287°/1 | 0.054879/0.026982/0.010159/8 | 23.5646°/7.2512°/3.9602°/2 | true/true/true | 0/0 | 8x8/529/9 |
+| 1 | InteriorErrorExceeded, NormalErrorExceeded | 0.068275/0.024458/0.012137/8 | 38.9583°/8.2059°/4.6291°/1 | 0.054914/0.026859/0.010164/8 | 23.1334°/7.2574°/3.9184°/2 | true/true/true | 0/0 | 8x8/529/9 |
+| 4 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.044250/0.022206/0.009061/4 | 38.7154°/7.6144°/4.3457°/1 | 0.038039/0.017075/0.007938/2 | 22.9609°/7.2526°/3.5619°/1 | false/false/true | 0/0 | 8x8/529/9 |
+| 8 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.044311/0.022247/0.008834/4 | 38.6458°/6.4799°/4.2270°/1 | 0.038155/0.017076/0.007676/2 | 22.8859°/6.7965°/3.4800°/1 | false/false/true | 0/0 | 8x8/529/9 |
+
+4 / 8 个 G1 将 holdout interior 超限数从 8 降到 2，但 normal max 仍为约 23°，且内存态 face=`UnorientableShape`、wire=`SelfIntersectingWire`；STEP roundtrip 虽为一张有效面，也不能绕过内存态失败。candidate 179 单例只形成能力边界证据，不满足 NSR-4 解冻条件。
+
+正式运行：
+
+```text
+data/runs/20260714_142505_621__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-0
+data/runs/20260714_142629_618__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-1
+data/runs/20260714_142756_421__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-4
+data/runs/20260714_142922_182__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-8
+data/runs/20260714_143049_479__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.3-local-g1-tiers
+```
+
+当前待办：在至少三个满足单外轮廓、无孔、连通、光顺支持范围的真实候选上复核同类失败；完成前不解冻 NSR-4，也不启动 NSR-1.4 或 NSR-2。
+
+`NSR-4` 解冻条件：
+
+```text
+以下条件必须同时满足：
+1. candidate 179 的 1 / 4 / 8 个局部 G1 周期均无法同时通过 0.03 距离门、15° 法向门和内存态 BRepCheck。
+2. 同一失败模式在至少三个满足“单外轮廓、无孔、连通、光顺”支持范围的真实候选中重复出现。
+3. 多个候选均表现为距离与法向之间搬移误差、重新引入 wire 自交 / Jacobian 问题，或者指标已无稳定改善趋势。
+
+仅 candidate 179 单例失败时，不足以直接启动自研求解器；它也可能只是单曲面路线的困难样例，应保留 Geomagic 后备分流。
+
+NSR-4 不是重写完整 NURBS 内核。第一版只实现受限 B-spline 控制点求解：固定参数化和节点布局，组合边界位置、内部位置、局部切平面和公平性正则项，结果仍交给 OCCT Geom_BSplineSurface / B-rep / STEP 导出。
+```
+
+`NSR-1.4` 后续冻结计划：
+
+```text
+目标：把固定 96 点从实验常量改为按区域几何复杂度计算的训练预算，但不在 NSR-1.3 中实现。
+
+1. [ ] 训练预算主要由连续目标区域的面积、边界长度、角点复杂度、曲率 / 法向变化和目标容差决定，不由原始 STEP 面片数量决定。
+2. [ ] 以 N_base ≈ area / target_spacing² 形成基础预算，再按曲率和法向变化提高局部密度，并设置明确的最小值、最大值与复杂度上限。
+3. [ ] 在目标区域的三角化表示上使用确定性的空间均匀采样，并向高曲率区域加权；源面 id 只用于回查支撑面与 UV，不作为“一面一个点”的生产分配依据。
+4. [ ] 局部 G1 数量随自适应训练预算按比例形成有限档位，不继续固定为 1 / 4 / 8。
+5. [ ] 若估算预算超过单曲面复杂度上限，或区域内存在单张光顺曲面无法表达的多个曲率分区，应明确返回 unsupported，转入多曲面或 Geomagic 后备，而不是无限增加控制点。
+
+解冻条件：NSR-1.3 完成并形成局部 G1 的有效性证据之后，再单独设计、实现和验证；不得与本轮局部 G1 实验混在一起。
 ```
 
 一步到位的边界：用户可以只触发一次“原生重拟合”，但内部允许执行少量固定策略并由质量门选择结果；不把“单次操作”误解为“一组固定 Filling 参数保证任意自由曲面成功”。
@@ -467,7 +520,7 @@ NSR-1 暂不做：
 - 不改 GUI。
 - 不做原生多曲面布局。
 - 不接自动 Geomagic 回退。
-- 不自研通用 B-spline 求解器。
+- NSR-1.3 证据形成前不解冻 NSR-4；即使解冻，也不自研通用 NURBS 内核。
 - 不放宽 StrictTopologyGate、Sewing 或商业 CAD 类质量门。
 - 不在 NSR-1.1 同时调整训练密度和 Plate / curve / iteration / degree / segment 参数。
 ```

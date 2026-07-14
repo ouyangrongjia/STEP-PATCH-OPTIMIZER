@@ -18,7 +18,9 @@ enum class SurfaceRefitFailureReason {
     UnsupportedCandidateType,
     BoundaryInvalid,
     SampleGenerationFailed,
+    SampleSetOverlap,
     SamplingConfigurationUnsupported,
+    LocalG1ConstraintInvalid,
     FillingFailed,
     NullFace,
     BoundaryRepresentationInvalid,
@@ -42,6 +44,15 @@ enum class SurfaceRefitSampleCategory {
 
 const char* surfaceRefitSampleCategoryToString(SurfaceRefitSampleCategory category);
 
+enum class SurfaceRefitSampleSet {
+    Boundary,
+    Corner,
+    Selection,
+    Holdout
+};
+
+const char* surfaceRefitSampleSetToString(SurfaceRefitSampleSet sample_set);
+
 enum class SurfaceRefitSamplingStrategy {
     AreaWeighted,
     FaceStratifiedAreaWeighted
@@ -51,6 +62,7 @@ const char* surfaceRefitSamplingStrategyToString(SurfaceRefitSamplingStrategy st
 
 struct SurfaceRefitSampleDiagnostic {
     SurfaceRefitSampleCategory category = SurfaceRefitSampleCategory::Boundary;
+    SurfaceRefitSampleSet sample_set = SurfaceRefitSampleSet::Boundary;
     gp_Pnt source_point;
     gp_Pnt projected_point;
     double distance = 0.0;
@@ -63,6 +75,7 @@ struct SurfaceRefitSampleDiagnostic {
 };
 
 struct SurfaceRefitNormalSampleDiagnostic {
+    SurfaceRefitSampleSet sample_set = SurfaceRefitSampleSet::Holdout;
     gp_Pnt source_point;
     gp_Pnt projected_point;
     gp_Vec source_normal;
@@ -81,6 +94,45 @@ struct SurfaceRefitFaceSamplingStatistics {
     int training_count = 0;
     int validation_count = 0;
     int validation_over_tolerance_count = 0;
+    int selection_count = 0;
+    int selection_over_tolerance_count = 0;
+    int holdout_count = 0;
+    int holdout_over_tolerance_count = 0;
+};
+
+struct SurfaceRefitTrainingSampleDiagnostic {
+    int training_index = -1;
+    gp_Pnt source_point;
+    gp_Vec source_normal;
+    FaceId face_id = -1;
+    double source_u = 0.0;
+    double source_v = 0.0;
+    bool support_face_available = false;
+    bool support_uv_valid = false;
+    gp_Pnt support_point;
+    double support_point_distance = 0.0;
+    std::string constraint_type = "G0";
+};
+
+struct SurfaceRefitLocalG1ConstraintDiagnostic {
+    int rank = 0;
+    int selection_sample_index = -1;
+    double score = 0.0;
+    double selection_distance = 0.0;
+    double selection_normal_angle_degrees = 0.0;
+    FaceId selection_face_id = -1;
+    double selection_u = 0.0;
+    double selection_v = 0.0;
+    gp_Pnt selection_source_point;
+    gp_Vec selection_source_normal;
+    int training_index = -1;
+    FaceId training_face_id = -1;
+    double training_u = 0.0;
+    double training_v = 0.0;
+    gp_Pnt training_source_point;
+    gp_Vec training_source_normal;
+    double mapping_distance = 0.0;
+    std::string constraint_type = "G1";
 };
 
 struct SurfaceRefitBRepContextStatus {
@@ -192,6 +244,8 @@ struct SurfaceRefitOptions {
     int max_segments = 12;
     int training_sample_count = 48;
     int validation_sample_count = 96;
+    int holdout_sample_count = 96;
+    int local_g1_count = 0;
     int boundary_samples_per_edge = 16;
     int jacobian_grid_size = 12;
     int max_surface_degree = 8;
@@ -225,9 +279,22 @@ struct SurfaceRefitReport {
     int same_parameter_failure_count = 0;
     int requested_training_sample_count = 0;
     int requested_validation_sample_count = 0;
+    int requested_selection_sample_count = 0;
+    int requested_holdout_sample_count = 0;
     int training_sample_count = 0;
     int validation_sample_count = 0;
+    int selection_sample_count = 0;
+    int holdout_sample_count = 0;
     int training_validation_overlap_count = 0;
+    int training_selection_overlap_count = 0;
+    int training_holdout_overlap_count = 0;
+    int selection_holdout_overlap_count = 0;
+    bool sample_sets_disjoint = false;
+    int configured_local_g1_count = 0;
+    int actual_local_g1_count = 0;
+    int g0_training_constraint_count = 0;
+    int total_training_constraint_count = 0;
+    double local_g1_nms_radius = 0.0;
     double g0_error = 0.0;
     double g1_error = 0.0;
     double g2_error = 0.0;
@@ -236,13 +303,21 @@ struct SurfaceRefitReport {
     SurfaceRefitErrorStatistics corner_error;
     SurfaceRefitErrorStatistics interior_error;
     SurfaceRefitNormalStatistics normal_error;
+    SurfaceRefitErrorStatistics selection_interior_error;
+    SurfaceRefitNormalStatistics selection_normal_error;
+    SurfaceRefitErrorStatistics holdout_interior_error;
+    SurfaceRefitNormalStatistics holdout_normal_error;
     SurfaceRefitJacobianReport jacobian;
     SurfaceRefitComplexityReport complexity;
     SurfaceRefitBRepStageDiagnostic filling_face_brep;
     SurfaceRefitBRepStageDiagnostic oriented_face_brep;
     std::vector<SurfaceRefitFaceSamplingStatistics> face_sampling;
+    std::vector<SurfaceRefitTrainingSampleDiagnostic> training_samples;
+    std::vector<SurfaceRefitLocalG1ConstraintDiagnostic> local_g1_constraints;
     std::vector<SurfaceRefitSampleDiagnostic> surface_error_samples;
+    std::vector<SurfaceRefitSampleDiagnostic> selection_error_samples;
     std::vector<SurfaceRefitNormalSampleDiagnostic> normal_error_samples;
+    std::vector<SurfaceRefitNormalSampleDiagnostic> selection_normal_error_samples;
 };
 
 struct SurfaceRefitResult {

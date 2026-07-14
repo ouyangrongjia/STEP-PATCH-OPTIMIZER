@@ -76,7 +76,8 @@ void print_usage() {
         << "Usage: native_surface_fit_probe --source-step <model.stp> "
         << "--candidate-id <id|auto> --output-patch <patch.stp> --report <report.json> "
         << "[--tolerance3d <value>] [--normal-tolerance-degrees <value>] "
-        << "[--training-samples <count>] [--validation-samples <count>] "
+        << "[--training-samples <count>] [--selection-samples <count>] "
+        << "[--holdout-samples <count>] [--local-g1-count <0|1|4|8>] "
         << "[--sampling-strategy <area_weighted|face_stratified_area_weighted>]\n";
 }
 
@@ -171,9 +172,15 @@ bool parse_options(int argc, char* argv[], Options& options) {
         } else if (argument == "--training-samples") {
             const auto* value = require_value("--training-samples");
             if (value == nullptr || !parse_int(value, options.refit.training_sample_count)) return false;
-        } else if (argument == "--validation-samples") {
-            const auto* value = require_value("--validation-samples");
+        } else if (argument == "--selection-samples" || argument == "--validation-samples") {
+            const auto* value = require_value(argument.c_str());
             if (value == nullptr || !parse_int(value, options.refit.validation_sample_count)) return false;
+        } else if (argument == "--holdout-samples") {
+            const auto* value = require_value("--holdout-samples");
+            if (value == nullptr || !parse_int(value, options.refit.holdout_sample_count)) return false;
+        } else if (argument == "--local-g1-count") {
+            const auto* value = require_value("--local-g1-count");
+            if (value == nullptr || !parse_int(value, options.refit.local_g1_count)) return false;
         } else if (argument == "--sampling-strategy") {
             const auto* value = require_value("--sampling-strategy");
             if (value == nullptr || !parse_sampling_strategy(value, options.refit.sampling_strategy)) {
@@ -293,6 +300,23 @@ void write_distance_statistics(
     output << "\n";
 }
 
+void write_normal_statistics(
+    std::ostream& output,
+    const spo::SurfaceRefitNormalStatistics& statistics,
+    const char* indent) {
+    output << indent << "\"sample_count\": " << statistics.sample_count << ",\n";
+    output << indent << "\"undefined_count\": " << statistics.undefined_count << ",\n";
+    output << indent << "\"over_tolerance_count\": " << statistics.over_tolerance_count << ",\n";
+    output << indent << "\"max_angle_degrees\": " << statistics.max_angle_degrees << ",\n";
+    output << indent << "\"p95_angle_degrees\": " << statistics.p95_angle_degrees << ",\n";
+    output << indent << "\"rms_angle_degrees\": " << statistics.rms_angle_degrees << ",\n";
+    output << indent << "\"worst_point\": ";
+    write_point(output, statistics.worst_point);
+    output << ",\n" << indent << "\"worst_face_id\": ";
+    write_id(output, statistics.worst_face_id);
+    output << "\n";
+}
+
 void write_string_array(std::ostream& output, const std::vector<std::string>& values) {
     output << "[";
     for (std::size_t index = 0; index < values.size(); ++index) {
@@ -407,7 +431,7 @@ bool write_report(
     if (!output.good()) return false;
     output << std::setprecision(17);
     output << "{\n";
-    output << "  \"schema_version\": 3,\n";
+    output << "  \"schema_version\": 4,\n";
     output << "  \"tool\": \"native_surface_fit_probe\",\n";
     output << "  \"stage\": " << quote_json(stage) << ",\n";
     output << "  \"source_step\": " << quote_json(path_to_utf8(options.source_step)) << ",\n";
@@ -461,7 +485,11 @@ bool write_report(
     output << "    \"max_degree\": " << options.refit.max_degree << ",\n";
     output << "    \"max_segments\": " << options.refit.max_segments << ",\n";
     output << "    \"training_sample_count\": " << options.refit.training_sample_count << ",\n";
+    output << "    \"selection_sample_count\": " << options.refit.validation_sample_count << ",\n";
+    output << "    \"holdout_sample_count\": " << options.refit.holdout_sample_count << ",\n";
+    output << "    \"configured_local_g1_count\": " << options.refit.local_g1_count << ",\n";
     output << "    \"validation_sample_count\": " << options.refit.validation_sample_count << ",\n";
+    output << "    \"validation_sample_count_role\": \"legacy_alias_for_selection\",\n";
     output << "    \"boundary_samples_per_edge\": " << options.refit.boundary_samples_per_edge << ",\n";
     output << "    \"jacobian_grid_size\": " << options.refit.jacobian_grid_size << ",\n";
     output << "    \"max_surface_degree\": " << options.refit.max_surface_degree << ",\n";
@@ -478,25 +506,102 @@ bool write_report(
         if (index > 0) output << ", ";
         output << report.ordered_boundary_edges[index];
     }
-    output << "]\n  },\n";
+    output << "],\n";
+    output << "    \"configured_g1_count\": " << report.configured_local_g1_count << ",\n";
+    output << "    \"actual_g1_count\": " << report.actual_local_g1_count << ",\n";
+    output << "    \"g0_training_constraint_count\": " << report.g0_training_constraint_count << ",\n";
+    output << "    \"total_training_constraint_count\": " << report.total_training_constraint_count << ",\n";
+    output << "    \"local_g1_nms_radius\": " << report.local_g1_nms_radius << ",\n";
+    output << "    \"local_g1_constraints\": [\n";
+    for (std::size_t index = 0; index < report.local_g1_constraints.size(); ++index) {
+        const auto& constraint = report.local_g1_constraints[index];
+        output << "      {\n";
+        output << "        \"rank\": " << constraint.rank << ",\n";
+        output << "        \"score\": " << constraint.score << ",\n";
+        output << "        \"selection_sample_index\": " << constraint.selection_sample_index << ",\n";
+        output << "        \"selection_distance\": " << constraint.selection_distance << ",\n";
+        output << "        \"selection_normal_angle_degrees\": "
+               << constraint.selection_normal_angle_degrees << ",\n";
+        output << "        \"selection_face_id\": ";
+        write_id(output, constraint.selection_face_id);
+        output << ",\n        \"selection_uv\": [" << constraint.selection_u << ", "
+               << constraint.selection_v << "],\n";
+        output << "        \"selection_source_point\": ";
+        write_point(output, constraint.selection_source_point);
+        output << ",\n        \"selection_source_normal\": ";
+        write_vector(output, constraint.selection_source_normal);
+        output << ",\n        \"training_index\": " << constraint.training_index << ",\n";
+        output << "        \"training_face_id\": ";
+        write_id(output, constraint.training_face_id);
+        output << ",\n        \"training_uv\": [" << constraint.training_u << ", "
+               << constraint.training_v << "],\n";
+        output << "        \"training_source_point\": ";
+        write_point(output, constraint.training_source_point);
+        output << ",\n        \"training_source_normal\": ";
+        write_vector(output, constraint.training_source_normal);
+        output << ",\n        \"mapping_distance\": " << constraint.mapping_distance << ",\n";
+        output << "        \"constraint_type\": " << quote_json(constraint.constraint_type) << "\n";
+        output << "      }" << (index + 1 < report.local_g1_constraints.size() ? "," : "") << "\n";
+    }
+    output << "    ]\n  },\n";
     output << "  \"sampling\": {\n";
     output << "    \"strategy\": "
            << quote_json(spo::surfaceRefitSamplingStrategyToString(report.sampling_strategy)) << ",\n";
     output << "    \"requested_training_count\": " << report.requested_training_sample_count << ",\n";
+    output << "    \"requested_selection_count\": " << report.requested_selection_sample_count << ",\n";
+    output << "    \"requested_holdout_count\": " << report.requested_holdout_sample_count << ",\n";
     output << "    \"requested_validation_count\": " << report.requested_validation_sample_count << ",\n";
+    output << "    \"requested_validation_count_role\": \"legacy_alias_for_selection\",\n";
     output << "    \"training_count\": " << report.training_sample_count << ",\n";
+    output << "    \"selection_count\": " << report.selection_sample_count << ",\n";
+    output << "    \"holdout_count\": " << report.holdout_sample_count << ",\n";
+    output << "    \"training_selection_overlap_count\": " << report.training_selection_overlap_count << ",\n";
+    output << "    \"training_holdout_overlap_count\": " << report.training_holdout_overlap_count << ",\n";
+    output << "    \"selection_holdout_overlap_count\": " << report.selection_holdout_overlap_count << ",\n";
+    output << "    \"sample_sets_disjoint\": " << bool_json(report.sample_sets_disjoint) << ",\n";
     output << "    \"validation_count\": " << report.validation_sample_count << ",\n";
+    output << "    \"validation_count_role\": \"legacy_alias_for_selection\",\n";
     output << "    \"training_validation_overlap_count\": " << report.training_validation_overlap_count << ",\n";
+    output << "    \"training_validation_overlap_role\": \"legacy_alias_for_training_selection\",\n";
     output << "    \"per_face\": [\n";
     for (std::size_t index = 0; index < report.face_sampling.size(); ++index) {
         const auto& face = report.face_sampling[index];
         output << "      {\"face_id\": ";
         write_id(output, face.face_id);
         output << ", \"training_count\": " << face.training_count
-               << ", \"validation_count\": " << face.validation_count
-               << ", \"validation_over_tolerance_count\": "
-               << face.validation_over_tolerance_count << "}"
+               << ", \"selection_count\": " << face.selection_count
+               << ", \"selection_over_tolerance_count\": " << face.selection_over_tolerance_count
+               << ", \"holdout_count\": " << face.holdout_count
+               << ", \"holdout_over_tolerance_count\": " << face.holdout_over_tolerance_count
+               << "}"
                << (index + 1 < report.face_sampling.size() ? "," : "") << "\n";
+    }
+    output << "    ],\n";
+    output << "    \"training_samples\": [\n";
+    for (std::size_t index = 0; index < report.training_samples.size(); ++index) {
+        const auto& sample = report.training_samples[index];
+        output << "      {\"training_index\": " << sample.training_index << ", \"face_id\": ";
+        write_id(output, sample.face_id);
+        output << ", \"source_uv\": [" << sample.source_u << ", " << sample.source_v << "], \"source_point\": ";
+        write_point(output, sample.source_point);
+        output << ", \"source_normal\": ";
+        write_vector(output, sample.source_normal);
+        output << ", \"support_face_available\": " << bool_json(sample.support_face_available)
+               << ", \"support_uv_valid\": " << bool_json(sample.support_uv_valid)
+               << ", \"support_point\": ";
+        if (sample.support_uv_valid) {
+            write_point(output, sample.support_point);
+        } else {
+            output << "null";
+        }
+        output << ", \"support_point_distance\": ";
+        if (sample.support_uv_valid) {
+            output << sample.support_point_distance;
+        } else {
+            output << "null";
+        }
+        output << ", \"constraint_type\": " << quote_json(sample.constraint_type) << "}"
+               << (index + 1 < report.training_samples.size() ? "," : "") << "\n";
     }
     output << "    ]\n";
     output << "  },\n";
@@ -512,25 +617,39 @@ bool write_report(
     output << "  \"corner_error\": {\n";
     write_distance_statistics(output, report.corner_error, "    ");
     output << "  },\n";
+    output << "  \"interior_selection_error\": {\n";
+    write_distance_statistics(output, report.selection_interior_error, "    ");
+    output << "  },\n";
+    output << "  \"normal_selection_error\": {\n";
+    write_normal_statistics(output, report.selection_normal_error, "    ");
+    output << "  },\n";
+    output << "  \"interior_holdout_error\": {\n";
+    write_distance_statistics(output, report.holdout_interior_error, "    ");
+    output << "  },\n";
+    output << "  \"normal_holdout_error\": {\n";
+    write_normal_statistics(output, report.holdout_normal_error, "    ");
+    output << "  },\n";
     output << "  \"interior_validation_error\": {\n";
-    write_distance_statistics(output, report.interior_error, "    ");
+    write_distance_statistics(output, report.selection_interior_error, "    ");
     output << "  },\n";
     output << "  \"normal_validation_error\": {\n";
-    output << "    \"sample_count\": " << report.normal_error.sample_count << ",\n";
-    output << "    \"undefined_count\": " << report.normal_error.undefined_count << ",\n";
-    output << "    \"over_tolerance_count\": " << report.normal_error.over_tolerance_count << ",\n";
-    output << "    \"max_angle_degrees\": " << report.normal_error.max_angle_degrees << ",\n";
-    output << "    \"p95_angle_degrees\": " << report.normal_error.p95_angle_degrees << ",\n";
-    output << "    \"rms_angle_degrees\": " << report.normal_error.rms_angle_degrees << ",\n";
-    output << "    \"worst_point\": ";
-    write_point(output, report.normal_error.worst_point);
-    output << ",\n    \"worst_face_id\": ";
-    write_id(output, report.normal_error.worst_face_id);
+    write_normal_statistics(output, report.selection_normal_error, "    ");
     output << "\n  },\n";
+    std::vector<const spo::SurfaceRefitSampleDiagnostic*> all_surface_error_samples;
+    all_surface_error_samples.reserve(
+        report.surface_error_samples.size() + report.selection_error_samples.size());
+    for (const auto& sample : report.surface_error_samples) {
+        all_surface_error_samples.push_back(&sample);
+    }
+    for (const auto& sample : report.selection_error_samples) {
+        all_surface_error_samples.push_back(&sample);
+    }
     output << "  \"surface_error_samples\": [\n";
-    for (std::size_t index = 0; index < report.surface_error_samples.size(); ++index) {
-        const auto& sample = report.surface_error_samples[index];
+    for (std::size_t index = 0; index < all_surface_error_samples.size(); ++index) {
+        const auto& sample = *all_surface_error_samples[index];
         output << "    {\n";
+        output << "      \"sample_set\": "
+               << quote_json(spo::surfaceRefitSampleSetToString(sample.sample_set)) << ",\n";
         output << "      \"category\": "
                << quote_json(spo::surfaceRefitSampleCategoryToString(sample.category)) << ",\n";
         output << "      \"source_point\": ";
@@ -559,13 +678,24 @@ bool write_report(
         } else {
             output << "null";
         }
-        output << "\n    }" << (index + 1 < report.surface_error_samples.size() ? "," : "") << "\n";
+        output << "\n    }" << (index + 1 < all_surface_error_samples.size() ? "," : "") << "\n";
     }
     output << "  ],\n";
+    std::vector<const spo::SurfaceRefitNormalSampleDiagnostic*> all_normal_error_samples;
+    all_normal_error_samples.reserve(
+        report.normal_error_samples.size() + report.selection_normal_error_samples.size());
+    for (const auto& sample : report.normal_error_samples) {
+        all_normal_error_samples.push_back(&sample);
+    }
+    for (const auto& sample : report.selection_normal_error_samples) {
+        all_normal_error_samples.push_back(&sample);
+    }
     output << "  \"normal_error_samples\": [\n";
-    for (std::size_t index = 0; index < report.normal_error_samples.size(); ++index) {
-        const auto& sample = report.normal_error_samples[index];
+    for (std::size_t index = 0; index < all_normal_error_samples.size(); ++index) {
+        const auto& sample = *all_normal_error_samples[index];
         output << "    {\n";
+        output << "      \"sample_set\": "
+               << quote_json(spo::surfaceRefitSampleSetToString(sample.sample_set)) << ",\n";
         output << "      \"source_point\": ";
         write_point(output, sample.source_point);
         output << ",\n      \"projected_point\": ";
@@ -599,7 +729,7 @@ bool write_report(
         output << ",\n      \"projection_success\": " << bool_json(sample.projection_success) << ",\n";
         output << "      \"fitted_normal_defined\": " << bool_json(sample.fitted_normal_defined) << ",\n";
         output << "      \"over_tolerance\": " << bool_json(sample.over_tolerance) << "\n";
-        output << "    }" << (index + 1 < report.normal_error_samples.size() ? "," : "") << "\n";
+        output << "    }" << (index + 1 < all_normal_error_samples.size() ? "," : "") << "\n";
     }
     output << "  ],\n";
     output << "  \"diagnostics\": {\n";
@@ -670,6 +800,9 @@ spo::SurfaceRefitReport failure_report(
     report.candidate_id = options.candidate_id;
     report.requested_training_sample_count = options.refit.training_sample_count;
     report.requested_validation_sample_count = options.refit.validation_sample_count;
+    report.requested_selection_sample_count = options.refit.validation_sample_count;
+    report.requested_holdout_sample_count = options.refit.holdout_sample_count;
+    report.configured_local_g1_count = options.refit.local_g1_count;
     report.failure_reason = reason;
     report.failed_gates.push_back(reason);
     report.message = std::move(message);
@@ -806,7 +939,9 @@ int main(int argc, char* argv[]) {
     std::cout << "Native surface patch: " << path_to_utf8(options.output_patch) << "\n";
     std::cout << "JSON report: " << path_to_utf8(options.report) << "\n";
     std::cout << "candidate_id: " << candidate->candidate_id << "\n";
-    std::cout << "validation_max_distance: " << result.report.interior_error.max << "\n";
-    std::cout << "validation_max_normal_degrees: " << result.report.normal_error.max_angle_degrees << "\n";
+    std::cout << "selection_max_distance: " << result.report.selection_interior_error.max << "\n";
+    std::cout << "selection_max_normal_degrees: " << result.report.selection_normal_error.max_angle_degrees << "\n";
+    std::cout << "holdout_max_distance: " << result.report.holdout_interior_error.max << "\n";
+    std::cout << "holdout_max_normal_degrees: " << result.report.holdout_normal_error.max_angle_degrees << "\n";
     return 0;
 }

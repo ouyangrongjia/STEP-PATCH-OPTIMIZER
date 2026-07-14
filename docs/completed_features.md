@@ -132,7 +132,34 @@ face_stratified_area_weighted:
   normal max/over=40.7441°/1
 ```
 
-纯面积加权的具体结构失败是 face `UnorientableShape` 和 wire `SelfIntersectingWire`，方向反转前后相同；分层策略消除了该失败，但没有通过 interior / normal 门。两种策略均为失败诊断 patch，`patch_acceptable=false`，因此 NSR-2 未启动；下一独立任务是局部切平面约束证据，NSR-4 继续冻结。
+纯面积加权的具体结构失败是 face `UnorientableShape` 和 wire `SelfIntersectingWire`，方向反转前后相同；分层策略消除了该失败，但没有通过 interior / normal 门。两种策略均为失败诊断 patch，`patch_acceptable=false`，因此 NSR-2 未启动；该阶段留下的局部切平面约束任务随后由 NSR-1.3 完成，NSR-4 继续冻结。
+
+NSR-1.3 局部切平面约束有限周期实验已完成：
+
+- `SourceSample` 在采样时保留源 face、稳定 `TopoDS_Face` 支撑面和 UV；不通过 face id 反查或猜测支撑面。
+- 保留原确定性 192 点作为 selection，新增独立 192 点 holdout；training / selection / holdout 三组空间交集四档均为 0。
+- selection 残差按 `max(distance / 0.03, normal / 15°)` 排序，并使用确定性空间 NMS；误差簇映射到不同现有训练样本，形成 1 ⊂ 4 ⊂ 8。
+- 选中训练样本改用 `BRepFill_Filling::Add(U, V, Support, GeomAbs_G1)`，其余训练点仍为 G0；总训练约束固定 96，实际 G1 与 0 / 1 / 4 / 8 配置一致。
+- `native_surface_fit_probe` schema 4 明确拆分 selection / holdout 指标，记录全部 G1 选择依据、训练支撑面合同、三组交集和约束计数；CSV / OBJ 也带 sample set。
+- 新增 `scripts/run_native_surface_fit_local_g1_tiers.ps1`；成功调用固定生成四个 tier run 和一个 comparison run。单档基础设施异常不会删除已完成 run，仍生成失败汇总后返回错误。
+- 自动测试覆盖支撑面 UV 一致性、G1=0 数值回归、嵌套确定性选择、96 点替换计数、三集合互斥、holdout 接受门、报告字段和脚本部分失败合同。
+
+candidate 179 固定事实：
+
+| G1 | failed_gates | holdout interior max/p95/RMS/over | holdout normal max/p95/RMS/over | BRep filling/oriented/roundtrip | Jacobian near/flip | degree/poles/segments |
+|---:|---|---|---|---|---|---|
+| 0 | InteriorErrorExceeded, NormalErrorExceeded | 0.054879/0.026982/0.010159/8 | 23.5646°/7.2512°/3.9602°/2 | true/true/true | 0/0 | 8x8/529/9 |
+| 1 | InteriorErrorExceeded, NormalErrorExceeded | 0.054914/0.026859/0.010164/8 | 23.1334°/7.2574°/3.9184°/2 | true/true/true | 0/0 | 8x8/529/9 |
+| 4 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.038039/0.017075/0.007938/2 | 22.9609°/7.2526°/3.5619°/1 | false/false/true | 0/0 | 8x8/529/9 |
+| 8 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.038155/0.017076/0.007676/2 | 22.8859°/6.7965°/3.4800°/1 | false/false/true | 0/0 | 8x8/529/9 |
+
+G1=0 的 selection、边界、角点、Filling 误差、复杂度和 BRep 状态与 NSR-1.2 分层基线逐值一致。4 / 8 个 G1 明显改善内部距离，但法向仍超过 15°，并重新引入 face `UnorientableShape` 与 wire `SelfIntersectingWire`。四档均为诊断 patch、`patch_acceptable=false`；按停止规则不继续增加 G1 或混调 Filling 参数，也不进入 NSR-2。candidate 179 单例不足以解冻 NSR-4，下一证据任务是至少三个受支持真实候选的同类失败复核。
+
+正式 comparison：
+
+```text
+data/runs/20260714_143049_479__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.3-local-g1-tiers
+```
 
 ---
 

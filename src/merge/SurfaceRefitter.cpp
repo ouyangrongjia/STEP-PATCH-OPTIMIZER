@@ -64,6 +64,10 @@ struct SourceSample {
     gp_Pnt point;
     gp_Vec normal;
     FaceId face_id = -1;
+    TopoDS_Face support_face;
+    double u = 0.0;
+    double v = 0.0;
+    bool support_valid = false;
 };
 
 struct DistanceSample {
@@ -126,6 +130,11 @@ bool valid_options(const SurfaceRefitOptions& options) {
         options.training_sample_count <= kMaxTrainingSampleCount &&
         options.validation_sample_count > 0 &&
         options.validation_sample_count <= kMaxValidationSampleCount &&
+        options.holdout_sample_count > 0 &&
+        options.holdout_sample_count <= kMaxValidationSampleCount &&
+        (options.local_g1_count == 0 || options.local_g1_count == 1 ||
+            options.local_g1_count == 4 || options.local_g1_count == 8) &&
+        options.local_g1_count <= options.training_sample_count &&
         options.boundary_samples_per_edge >= 2 &&
         options.jacobian_grid_size >= 2 &&
         options.max_surface_degree > 0 &&
@@ -301,7 +310,14 @@ std::vector<SourceSample> generate_samples(
             contains_point(excluded, point, tolerance_squared)) {
             continue;
         }
-        samples.push_back(SourceSample {point, normal, triangle.face_id});
+        samples.push_back(SourceSample {
+            point,
+            normal,
+            triangle.face_id,
+            triangle.face,
+            uv.X(),
+            uv.Y(),
+            !triangle.face.IsNull() && std::isfinite(uv.X()) && std::isfinite(uv.Y())});
     }
     return samples;
 }
@@ -512,6 +528,7 @@ SurfaceRefitErrorStatistics evaluate_distances(
     const SurfaceRefitOptions& options,
     const bool require_inside_face,
     const SurfaceRefitSampleCategory category,
+    const SurfaceRefitSampleSet sample_set,
     std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
     SurfaceRefitErrorStatistics statistics;
     statistics.sample_count = static_cast<int>(samples.size());
@@ -523,6 +540,7 @@ SurfaceRefitErrorStatistics evaluate_distances(
         const auto projection = project_to_surface(domain, sample.point, options, require_inside_face);
         SurfaceRefitSampleDiagnostic diagnostic;
         diagnostic.category = category;
+        diagnostic.sample_set = sample_set;
         diagnostic.source_point = sample.point;
         diagnostic.projection_success = projection.success;
         diagnostic.over_tolerance = !projection.success || projection.distance > options.tolerance3d;
@@ -562,6 +580,7 @@ SurfaceRefitErrorStatistics evaluate_interior_distances(
     const std::vector<SourceSample>& training,
     const SurfaceDomain& domain,
     const SurfaceRefitOptions& options,
+    const SurfaceRefitSampleSet sample_set,
     std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
     std::vector<DistanceSample> distance_samples;
     distance_samples.reserve(samples.size());
@@ -575,6 +594,7 @@ SurfaceRefitErrorStatistics evaluate_interior_distances(
         options,
         true,
         SurfaceRefitSampleCategory::Interior,
+        sample_set,
         diagnostics);
     for (std::size_t index = 0; index < samples.size(); ++index) {
         auto& diagnostic = diagnostics[diagnostic_start + index];
@@ -596,6 +616,7 @@ SurfaceRefitNormalStatistics evaluate_normals(
     const std::vector<SourceSample>& samples,
     const SurfaceDomain& domain,
     const SurfaceRefitOptions& options,
+    const SurfaceRefitSampleSet sample_set,
     std::vector<SurfaceRefitNormalSampleDiagnostic>& diagnostics) {
     SurfaceRefitNormalStatistics statistics;
     statistics.sample_count = static_cast<int>(samples.size());
@@ -607,6 +628,7 @@ SurfaceRefitNormalStatistics evaluate_normals(
     for (const auto& sample : samples) {
         const auto projection = project_to_surface(domain, sample.point, options, true);
         SurfaceRefitNormalSampleDiagnostic diagnostic;
+        diagnostic.sample_set = sample_set;
         diagnostic.source_point = sample.point;
         diagnostic.source_normal = sample.normal;
         diagnostic.face_id = sample.face_id;
@@ -650,6 +672,276 @@ SurfaceRefitNormalStatistics evaluate_normals(
         statistics.rms_angle_degrees = std::sqrt(squared_sum / static_cast<double>(angles.size()));
     }
     return statistics;
+}
+
+double local_g1_nms_radius(const std::vector<SourceSample>& training) {
+    if (training.size() < 2) {
+        return 0.0;
+    }
+    std::vector<double> nearest_distances;
+    nearest_distances.reserve(training.size());
+    for (std::size_t index = 0; index < training.size(); ++index) {
+        double nearest = std::numeric_limits<double>::infinity();
+        for (std::size_t other = 0; other < training.size(); ++other) {
+            if (index == other) {
+                continue;
+            }
+            nearest = std::min(nearest, training[index].point.Distance(training[other].point));
+        }
+        if (std::isfinite(nearest)) {
+            nearest_distances.push_back(nearest);
+        }
+    }
+    if (nearest_distances.empty()) {
+        return 0.0;
+    }
+    std::sort(nearest_distances.begin(), nearest_distances.end());
+    const auto middle = nearest_distances.size() / 2;
+    const auto median = nearest_distances.size() % 2 == 0
+        ? 0.5 * (nearest_distances[middle - 1] + nearest_distances[middle])
+        : nearest_distances[middle];
+    return 0.25 * median;
+}
+
+std::vector<SurfaceRefitLocalG1ConstraintDiagnostic> select_local_g1_constraints(
+    const std::vector<SourceSample>& selection,
+    const std::vector<SourceSample>& training,
+    const std::vector<SurfaceRefitSampleDiagnostic>& distance_diagnostics,
+    const std::vector<SurfaceRefitNormalSampleDiagnostic>& normal_diagnostics,
+    const int requested_count,
+    const SurfaceRefitOptions& options,
+    double& nms_radius) {
+    struct RankedSample {
+        std::size_t selection_index = 0;
+        double score = 0.0;
+    };
+
+    nms_radius = local_g1_nms_radius(training);
+    std::vector<RankedSample> ranked;
+    const auto usable_count = std::min(
+        selection.size(),
+        std::min(distance_diagnostics.size(), normal_diagnostics.size()));
+    ranked.reserve(usable_count);
+    for (std::size_t index = 0; index < usable_count; ++index) {
+        const auto& distance = distance_diagnostics[index];
+        const auto& normal = normal_diagnostics[index];
+        if (!distance.projection_success || !normal.projection_success ||
+            !normal.fitted_normal_defined || !std::isfinite(distance.distance) ||
+            !std::isfinite(normal.angle_degrees)) {
+            continue;
+        }
+        ranked.push_back(RankedSample {
+            index,
+            std::max(
+                distance.distance / options.tolerance3d,
+                normal.angle_degrees / options.normal_tolerance_degrees)});
+    }
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto& left, const auto& right) {
+        if (left.score != right.score) {
+            return left.score > right.score;
+        }
+        return left.selection_index < right.selection_index;
+    });
+
+    std::vector<SurfaceRefitLocalG1ConstraintDiagnostic> selected;
+    selected.reserve(static_cast<std::size_t>(requested_count));
+    for (const auto& candidate : ranked) {
+        const auto& source = selection[candidate.selection_index];
+        const auto spatial_duplicate = std::any_of(selected.begin(), selected.end(), [&](const auto& existing) {
+            return existing.selection_source_point.Distance(source.point) < nms_radius;
+        });
+        if (spatial_duplicate) {
+            continue;
+        }
+
+        int nearest_training_index = -1;
+        double nearest_training_distance = std::numeric_limits<double>::infinity();
+        for (std::size_t training_index = 0; training_index < training.size(); ++training_index) {
+            const auto distance = source.point.Distance(training[training_index].point);
+            if (distance < nearest_training_distance) {
+                nearest_training_distance = distance;
+                nearest_training_index = static_cast<int>(training_index);
+            }
+        }
+        if (nearest_training_index < 0 ||
+            std::any_of(selected.begin(), selected.end(), [&](const auto& existing) {
+                return existing.training_index == nearest_training_index;
+            })) {
+            continue;
+        }
+
+        const auto& mapped = training[static_cast<std::size_t>(nearest_training_index)];
+        const auto& distance = distance_diagnostics[candidate.selection_index];
+        const auto& normal = normal_diagnostics[candidate.selection_index];
+        SurfaceRefitLocalG1ConstraintDiagnostic diagnostic;
+        diagnostic.rank = static_cast<int>(selected.size()) + 1;
+        diagnostic.selection_sample_index = static_cast<int>(candidate.selection_index);
+        diagnostic.score = candidate.score;
+        diagnostic.selection_distance = distance.distance;
+        diagnostic.selection_normal_angle_degrees = normal.angle_degrees;
+        diagnostic.selection_face_id = source.face_id;
+        diagnostic.selection_u = source.u;
+        diagnostic.selection_v = source.v;
+        diagnostic.selection_source_point = source.point;
+        diagnostic.selection_source_normal = source.normal;
+        diagnostic.training_index = nearest_training_index;
+        diagnostic.training_face_id = mapped.face_id;
+        diagnostic.training_u = mapped.u;
+        diagnostic.training_v = mapped.v;
+        diagnostic.training_source_point = mapped.point;
+        diagnostic.training_source_normal = mapped.normal;
+        diagnostic.mapping_distance = nearest_training_distance;
+        selected.push_back(std::move(diagnostic));
+        if (static_cast<int>(selected.size()) == requested_count) {
+            break;
+        }
+    }
+    return selected;
+}
+
+std::vector<int> selected_training_indices(
+    const std::vector<SurfaceRefitLocalG1ConstraintDiagnostic>& constraints) {
+    std::vector<int> indices;
+    indices.reserve(constraints.size());
+    for (const auto& constraint : constraints) {
+        indices.push_back(constraint.training_index);
+    }
+    return indices;
+}
+
+std::vector<SurfaceRefitTrainingSampleDiagnostic> describe_training_samples(
+    const std::vector<SourceSample>& training,
+    const std::vector<int>& local_g1_training_indices) {
+    std::vector<SurfaceRefitTrainingSampleDiagnostic> diagnostics;
+    diagnostics.reserve(training.size());
+    for (std::size_t index = 0; index < training.size(); ++index) {
+        const auto& sample = training[index];
+        SurfaceRefitTrainingSampleDiagnostic diagnostic;
+        diagnostic.training_index = static_cast<int>(index);
+        diagnostic.source_point = sample.point;
+        diagnostic.source_normal = sample.normal;
+        diagnostic.face_id = sample.face_id;
+        diagnostic.source_u = sample.u;
+        diagnostic.source_v = sample.v;
+        diagnostic.support_face_available = sample.support_valid && !sample.support_face.IsNull();
+        diagnostic.constraint_type = std::find(
+            local_g1_training_indices.begin(),
+            local_g1_training_indices.end(),
+            static_cast<int>(index)) != local_g1_training_indices.end()
+            ? "G1"
+            : "G0";
+        if (diagnostic.support_face_available) {
+            try {
+                const auto surface = BRep_Tool::Surface(sample.support_face);
+                if (!surface.IsNull()) {
+                    diagnostic.support_point = surface->Value(sample.u, sample.v);
+                    diagnostic.support_point_distance = diagnostic.support_point.Distance(sample.point);
+                    diagnostic.support_uv_valid = std::isfinite(diagnostic.support_point_distance);
+                }
+            } catch (const Standard_Failure&) {
+                diagnostic.support_uv_valid = false;
+            }
+        }
+        diagnostics.push_back(std::move(diagnostic));
+    }
+    return diagnostics;
+}
+
+struct FillingBuildResult {
+    TopoDS_Face face;
+    bool constraints_valid = true;
+    bool done = false;
+    int g0_training_constraint_count = 0;
+    int actual_local_g1_count = 0;
+    int total_training_constraint_count = 0;
+    double g0_error = 0.0;
+    double g1_error = 0.0;
+    double g2_error = 0.0;
+    std::string message;
+};
+
+FillingBuildResult build_filling_face(
+    const ShapeDocument& document,
+    const std::vector<EdgeId>& ordered_boundary_edges,
+    const std::vector<SourceSample>& training,
+    const std::vector<int>& local_g1_training_indices,
+    const SurfaceRefitOptions& options) {
+    FillingBuildResult result;
+    for (const auto training_index : local_g1_training_indices) {
+        if (training_index < 0 || static_cast<std::size_t>(training_index) >= training.size()) {
+            result.constraints_valid = false;
+            result.message = "A selected local G1 constraint references a missing training sample.";
+            return result;
+        }
+        const auto& sample = training[static_cast<std::size_t>(training_index)];
+        if (!sample.support_valid || sample.support_face.IsNull() ||
+            !std::isfinite(sample.u) || !std::isfinite(sample.v)) {
+            result.constraints_valid = false;
+            result.message = "A selected local G1 training sample has no stable support face or UV.";
+            return result;
+        }
+    }
+
+    BRepFill_Filling filling(
+        options.plate_degree,
+        options.points_on_curve,
+        options.iterations,
+        Standard_False,
+        options.tolerance2d,
+        options.tolerance3d,
+        options.tolerance_angle,
+        options.tolerance_curvature,
+        options.max_degree,
+        options.max_segments);
+    filling.SetConstrParam(
+        options.tolerance2d,
+        options.tolerance3d,
+        options.tolerance_angle,
+        options.tolerance_curvature);
+
+    const auto& topology = document.topology();
+    try {
+        for (const auto edge_id : ordered_boundary_edges) {
+            if (edge_id < 0 || static_cast<std::size_t>(edge_id) >= topology.edgeCount()) {
+                result.constraints_valid = false;
+                result.message = "Ordered boundary references a missing edge.";
+                return result;
+            }
+            filling.Add(topology.edge(edge_id), GeomAbs_C0, Standard_True);
+        }
+        for (std::size_t index = 0; index < training.size(); ++index) {
+            const auto& sample = training[index];
+            const auto use_local_g1 = std::find(
+                local_g1_training_indices.begin(),
+                local_g1_training_indices.end(),
+                static_cast<int>(index)) != local_g1_training_indices.end();
+            if (use_local_g1) {
+                filling.Add(sample.u, sample.v, sample.support_face, GeomAbs_G1);
+                ++result.actual_local_g1_count;
+            } else {
+                filling.Add(sample.point);
+                ++result.g0_training_constraint_count;
+            }
+            ++result.total_training_constraint_count;
+        }
+        filling.Build();
+    } catch (const Standard_Failure& error) {
+        const auto* text = error.GetMessageString();
+        result.message = std::string("BRepFill_Filling threw: ") +
+            (text != nullptr ? text : "unknown OCCT error");
+        return result;
+    }
+
+    result.done = filling.IsDone();
+    if (!result.done) {
+        result.message = "BRepFill_Filling did not finish.";
+        return result;
+    }
+    result.g0_error = filling.G0Error();
+    result.g1_error = filling.G1Error();
+    result.g2_error = filling.G2Error();
+    result.face = filling.Face();
+    return result;
 }
 
 bool should_reverse_output_orientation(
@@ -1102,8 +1394,10 @@ int overlap_count(
 std::vector<SurfaceRefitFaceSamplingStatistics> summarize_face_sampling(
     const std::vector<FaceId>& face_ids,
     const std::vector<SourceSample>& training,
-    const std::vector<SourceSample>& validation,
-    const std::vector<SurfaceRefitSampleDiagnostic>& diagnostics) {
+    const std::vector<SourceSample>& selection,
+    const std::vector<SourceSample>& holdout,
+    const std::vector<SurfaceRefitSampleDiagnostic>& selection_diagnostics,
+    const std::vector<SurfaceRefitSampleDiagnostic>& holdout_diagnostics) {
     std::vector<SurfaceRefitFaceSamplingStatistics> statistics;
     statistics.reserve(face_ids.size());
     for (const auto face_id : face_ids) {
@@ -1126,17 +1420,32 @@ std::vector<SurfaceRefitFaceSamplingStatistics> summarize_face_sampling(
             ++item->training_count;
         }
     }
-    for (const auto& sample : validation) {
+    for (const auto& sample : selection) {
         if (auto* item = find_face(sample.face_id)) {
             ++item->validation_count;
+            ++item->selection_count;
         }
     }
-    for (const auto& diagnostic : diagnostics) {
+    for (const auto& sample : holdout) {
+        if (auto* item = find_face(sample.face_id)) {
+            ++item->holdout_count;
+        }
+    }
+    for (const auto& diagnostic : selection_diagnostics) {
         if (diagnostic.category != SurfaceRefitSampleCategory::Interior || !diagnostic.over_tolerance) {
             continue;
         }
         if (auto* item = find_face(diagnostic.face_id)) {
             ++item->validation_over_tolerance_count;
+            ++item->selection_over_tolerance_count;
+        }
+    }
+    for (const auto& diagnostic : holdout_diagnostics) {
+        if (diagnostic.category != SurfaceRefitSampleCategory::Interior || !diagnostic.over_tolerance) {
+            continue;
+        }
+        if (auto* item = find_face(diagnostic.face_id)) {
+            ++item->holdout_over_tolerance_count;
         }
     }
     return statistics;
@@ -1151,7 +1460,9 @@ const char* surfaceRefitFailureReasonToString(const SurfaceRefitFailureReason re
     case SurfaceRefitFailureReason::UnsupportedCandidateType: return "UnsupportedCandidateType";
     case SurfaceRefitFailureReason::BoundaryInvalid: return "BoundaryInvalid";
     case SurfaceRefitFailureReason::SampleGenerationFailed: return "SampleGenerationFailed";
+    case SurfaceRefitFailureReason::SampleSetOverlap: return "SampleSetOverlap";
     case SurfaceRefitFailureReason::SamplingConfigurationUnsupported: return "SamplingConfigurationUnsupported";
+    case SurfaceRefitFailureReason::LocalG1ConstraintInvalid: return "LocalG1ConstraintInvalid";
     case SurfaceRefitFailureReason::FillingFailed: return "FillingFailed";
     case SurfaceRefitFailureReason::NullFace: return "NullFace";
     case SurfaceRefitFailureReason::BoundaryRepresentationInvalid: return "BoundaryRepresentationInvalid";
@@ -1176,6 +1487,16 @@ const char* surfaceRefitSampleCategoryToString(const SurfaceRefitSampleCategory 
     return "unknown";
 }
 
+const char* surfaceRefitSampleSetToString(const SurfaceRefitSampleSet sample_set) {
+    switch (sample_set) {
+    case SurfaceRefitSampleSet::Boundary: return "boundary";
+    case SurfaceRefitSampleSet::Corner: return "corner";
+    case SurfaceRefitSampleSet::Selection: return "selection";
+    case SurfaceRefitSampleSet::Holdout: return "holdout";
+    }
+    return "unknown";
+}
+
 const char* surfaceRefitSamplingStrategyToString(const SurfaceRefitSamplingStrategy strategy) {
     switch (strategy) {
     case SurfaceRefitSamplingStrategy::AreaWeighted: return "area_weighted";
@@ -1196,6 +1517,9 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
     report.sampling_strategy = options.sampling_strategy;
     report.requested_training_sample_count = options.training_sample_count;
     report.requested_validation_sample_count = options.validation_sample_count;
+    report.requested_selection_sample_count = options.validation_sample_count;
+    report.requested_holdout_sample_count = options.holdout_sample_count;
+    report.configured_local_g1_count = options.local_g1_count;
 
     if (!document.hasShape() || candidate.faces.empty() || !valid_options(options)) {
         fail(report, SurfaceRefitFailureReason::InvalidInput, "Single-face refit requires a loaded shape, source faces, and valid options.");
@@ -1204,6 +1528,14 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
     if (options.sampling_strategy != SurfaceRefitSamplingStrategy::AreaWeighted &&
         options.sampling_strategy != SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted) {
         fail(report, SurfaceRefitFailureReason::InvalidInput, "Single-face refit received an unknown sampling strategy.");
+        return result;
+    }
+    if (options.local_g1_count > 0 &&
+        options.sampling_strategy != SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted) {
+        fail(
+            report,
+            SurfaceRefitFailureReason::SamplingConfigurationUnsupported,
+            "Local G1 tiers require face-stratified area-weighted training samples.");
         return result;
     }
     if (candidate.candidate_type != MergeCandidateType::FeatureBoundedRefit) {
@@ -1248,72 +1580,159 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
             candidate.faces,
             options.training_sample_count,
             options);
-    const auto validation = generate_samples(triangles, options.validation_sample_count, 104729, training, options);
+    const auto selection = generate_samples(
+        triangles,
+        options.validation_sample_count,
+        104729,
+        training,
+        options);
+    auto holdout_excluded = training;
+    holdout_excluded.insert(holdout_excluded.end(), selection.begin(), selection.end());
+    const auto holdout = generate_samples(
+        triangles,
+        options.holdout_sample_count,
+        209759,
+        holdout_excluded,
+        options);
     report.training_sample_count = static_cast<int>(training.size());
-    report.validation_sample_count = static_cast<int>(validation.size());
+    report.validation_sample_count = static_cast<int>(selection.size());
+    report.selection_sample_count = static_cast<int>(selection.size());
+    report.holdout_sample_count = static_cast<int>(holdout.size());
     report.training_validation_overlap_count = overlap_count(
         training,
-        validation,
+        selection,
         options.sample_deduplication_tolerance);
+    report.training_selection_overlap_count = report.training_validation_overlap_count;
+    report.training_holdout_overlap_count = overlap_count(
+        training,
+        holdout,
+        options.sample_deduplication_tolerance);
+    report.selection_holdout_overlap_count = overlap_count(
+        selection,
+        holdout,
+        options.sample_deduplication_tolerance);
+    report.sample_sets_disjoint = report.training_selection_overlap_count == 0 &&
+        report.training_holdout_overlap_count == 0 &&
+        report.selection_holdout_overlap_count == 0;
     if (report.training_sample_count != options.training_sample_count ||
-        report.validation_sample_count != options.validation_sample_count ||
-        report.training_validation_overlap_count != 0) {
+        report.selection_sample_count != options.validation_sample_count ||
+        report.holdout_sample_count != options.holdout_sample_count) {
         fail(
             report,
             SurfaceRefitFailureReason::SampleGenerationFailed,
-            "Could not build complete, deterministic, spatially deduplicated, disjoint training and validation sample sets.");
+            "Could not build complete deterministic training, selection, and holdout sample sets.");
         return result;
     }
-
-    BRepFill_Filling filling(
-        options.plate_degree,
-        options.points_on_curve,
-        options.iterations,
-        Standard_False,
-        options.tolerance2d,
-        options.tolerance3d,
-        options.tolerance_angle,
-        options.tolerance_curvature,
-        options.max_degree,
-        options.max_segments);
-    filling.SetConstrParam(
-        options.tolerance2d,
-        options.tolerance3d,
-        options.tolerance_angle,
-        options.tolerance_curvature);
-
-    const auto& topology = document.topology();
-    try {
-        for (const auto edge_id : boundary.ordered_boundary_edges) {
-            if (edge_id < 0 || static_cast<std::size_t>(edge_id) >= topology.edgeCount()) {
-                fail(report, SurfaceRefitFailureReason::BoundaryInvalid, "Ordered boundary references a missing edge.");
-                return result;
-            }
-            filling.Add(topology.edge(edge_id), GeomAbs_C0, Standard_True);
-        }
-        for (const auto& sample : training) {
-            filling.Add(sample.point);
-        }
-        filling.Build();
-    } catch (const Standard_Failure& error) {
-        const auto* text = error.GetMessageString();
+    if (!report.sample_sets_disjoint) {
         fail(
             report,
-            SurfaceRefitFailureReason::FillingFailed,
-            std::string("BRepFill_Filling threw: ") + (text != nullptr ? text : "unknown OCCT error"));
+            SurfaceRefitFailureReason::SampleSetOverlap,
+            "Training, selection, and holdout sample sets must be spatially disjoint.");
         return result;
     }
 
-    report.filling_done = filling.IsDone();
+    auto baseline_build = build_filling_face(
+        document,
+        boundary.ordered_boundary_edges,
+        training,
+        {},
+        options);
+    if (!baseline_build.constraints_valid) {
+        fail(report, SurfaceRefitFailureReason::BoundaryInvalid, baseline_build.message);
+        return result;
+    }
+    if (!baseline_build.done) {
+        fail(report, SurfaceRefitFailureReason::FillingFailed, baseline_build.message);
+        return result;
+    }
+    if (baseline_build.face.IsNull()) {
+        fail(report, SurfaceRefitFailureReason::NullFace, "BRepFill_Filling produced a null face.");
+        return result;
+    }
+
+    report.local_g1_nms_radius = local_g1_nms_radius(training);
+    std::vector<int> local_g1_training_indices;
+    if (options.local_g1_count > 0) {
+        auto baseline_oriented_face = baseline_build.face;
+        auto baseline_domain = surface_domain(baseline_oriented_face);
+        if (!baseline_domain.valid) {
+            fail(report, SurfaceRefitFailureReason::NullFace, "Baseline fitted face has no finite surface domain.");
+            return result;
+        }
+        if (should_reverse_output_orientation(training, baseline_domain, options)) {
+            baseline_oriented_face.Reverse();
+            baseline_domain = surface_domain(baseline_oriented_face);
+        }
+
+        std::vector<SurfaceRefitSampleDiagnostic> baseline_distance_diagnostics;
+        std::vector<SurfaceRefitNormalSampleDiagnostic> baseline_normal_diagnostics;
+        evaluate_interior_distances(
+            selection,
+            training,
+            baseline_domain,
+            options,
+            SurfaceRefitSampleSet::Selection,
+            baseline_distance_diagnostics);
+        evaluate_normals(
+            selection,
+            baseline_domain,
+            options,
+            SurfaceRefitSampleSet::Selection,
+            baseline_normal_diagnostics);
+        report.local_g1_constraints = select_local_g1_constraints(
+            selection,
+            training,
+            baseline_distance_diagnostics,
+            baseline_normal_diagnostics,
+            options.local_g1_count,
+            options,
+            report.local_g1_nms_radius);
+        local_g1_training_indices = selected_training_indices(report.local_g1_constraints);
+        if (static_cast<int>(report.local_g1_constraints.size()) != options.local_g1_count) {
+            report.training_samples = describe_training_samples(training, local_g1_training_indices);
+            fail(
+                report,
+                SurfaceRefitFailureReason::LocalG1ConstraintInvalid,
+                "Deterministic residual clustering could not select the configured number of distinct local G1 training constraints.");
+            return result;
+        }
+    }
+
+    report.training_samples = describe_training_samples(training, local_g1_training_indices);
+    auto final_build = options.local_g1_count == 0
+        ? baseline_build
+        : build_filling_face(
+            document,
+            boundary.ordered_boundary_edges,
+            training,
+            local_g1_training_indices,
+            options);
+    report.actual_local_g1_count = final_build.actual_local_g1_count;
+    report.g0_training_constraint_count = final_build.g0_training_constraint_count;
+    report.total_training_constraint_count = final_build.total_training_constraint_count;
+    report.filling_done = final_build.done;
+    if (!final_build.constraints_valid) {
+        fail(report, SurfaceRefitFailureReason::LocalG1ConstraintInvalid, final_build.message);
+        return result;
+    }
+    if (report.actual_local_g1_count != report.configured_local_g1_count ||
+        report.total_training_constraint_count != report.training_sample_count ||
+        report.g0_training_constraint_count + report.actual_local_g1_count !=
+            report.total_training_constraint_count) {
+        fail(
+            report,
+            SurfaceRefitFailureReason::LocalG1ConstraintInvalid,
+            "Configured and actual local G1/G0 training constraint counts do not match.");
+        return result;
+    }
     if (!report.filling_done) {
-        fail(report, SurfaceRefitFailureReason::FillingFailed, "BRepFill_Filling did not finish.");
+        fail(report, SurfaceRefitFailureReason::FillingFailed, final_build.message);
         return result;
     }
-    report.g0_error = filling.G0Error();
-    report.g1_error = filling.G1Error();
-    report.g2_error = filling.G2Error();
-
-    result.face = filling.Face();
+    report.g0_error = final_build.g0_error;
+    report.g1_error = final_build.g1_error;
+    report.g2_error = final_build.g2_error;
+    result.face = final_build.face;
     if (result.face.IsNull()) {
         fail(report, SurfaceRefitFailureReason::NullFace, "BRepFill_Filling produced a null face.");
         return result;
@@ -1329,7 +1748,7 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         fail(report, SurfaceRefitFailureReason::NullFace, "Fitted face has no finite surface domain.");
         return result;
     }
-    if (should_reverse_output_orientation(validation, domain, options)) {
+    if (should_reverse_output_orientation(training, domain, options)) {
         result.face.Reverse();
         report.output_orientation_reversed = true;
         domain = surface_domain(result.face);
@@ -1359,13 +1778,15 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         boundary.ordered_boundary_edges,
         options.sample_deduplication_tolerance);
     report.surface_error_samples.reserve(
-        boundary_samples.size() + corner_samples.size() + validation.size());
+        boundary_samples.size() + corner_samples.size() + holdout.size());
+    report.selection_error_samples.reserve(selection.size());
     report.boundary_error = evaluate_distances(
         boundary_samples,
         domain,
         options,
         false,
         SurfaceRefitSampleCategory::Boundary,
+        SurfaceRefitSampleSet::Boundary,
         report.surface_error_samples);
     report.corner_error = evaluate_distances(
         corner_samples,
@@ -1373,22 +1794,42 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         options,
         false,
         SurfaceRefitSampleCategory::Corner,
+        SurfaceRefitSampleSet::Corner,
         report.surface_error_samples);
-    report.interior_error = evaluate_interior_distances(
-        validation,
+    report.selection_interior_error = evaluate_interior_distances(
+        selection,
         training,
         domain,
         options,
-        report.surface_error_samples);
-    report.normal_error = evaluate_normals(
-        validation,
+        SurfaceRefitSampleSet::Selection,
+        report.selection_error_samples);
+    report.selection_normal_error = evaluate_normals(
+        selection,
         domain,
         options,
+        SurfaceRefitSampleSet::Selection,
+        report.selection_normal_error_samples);
+    report.holdout_interior_error = evaluate_interior_distances(
+        holdout,
+        training,
+        domain,
+        options,
+        SurfaceRefitSampleSet::Holdout,
+        report.surface_error_samples);
+    report.holdout_normal_error = evaluate_normals(
+        holdout,
+        domain,
+        options,
+        SurfaceRefitSampleSet::Holdout,
         report.normal_error_samples);
+    report.interior_error = report.holdout_interior_error;
+    report.normal_error = report.holdout_normal_error;
     report.face_sampling = summarize_face_sampling(
         candidate.faces,
         training,
-        validation,
+        selection,
+        holdout,
+        report.selection_error_samples,
         report.surface_error_samples);
     report.jacobian = inspect_jacobian(result.face, domain, options);
     report.complexity = inspect_complexity(domain.surface);
@@ -1408,13 +1849,13 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
         report.corner_error.over_tolerance_count > 0) {
         fail(report, SurfaceRefitFailureReason::CornerErrorExceeded, "Fitted face exceeds the original corner tolerance.");
     }
-    if (report.interior_error.projection_failure_count > 0 ||
-        report.interior_error.over_tolerance_count > 0) {
-        fail(report, SurfaceRefitFailureReason::InteriorErrorExceeded, "Fitted face exceeds the independent interior validation tolerance.");
+    if (report.holdout_interior_error.projection_failure_count > 0 ||
+        report.holdout_interior_error.over_tolerance_count > 0) {
+        fail(report, SurfaceRefitFailureReason::InteriorErrorExceeded, "Fitted face exceeds the independent interior holdout tolerance.");
     }
-    if (report.normal_error.undefined_count > 0 ||
-        report.normal_error.over_tolerance_count > 0) {
-        fail(report, SurfaceRefitFailureReason::NormalErrorExceeded, "Fitted face exceeds the independent normal validation tolerance.");
+    if (report.holdout_normal_error.undefined_count > 0 ||
+        report.holdout_normal_error.over_tolerance_count > 0) {
+        fail(report, SurfaceRefitFailureReason::NormalErrorExceeded, "Fitted face exceeds the independent normal holdout tolerance.");
     }
     if (report.jacobian.sample_count == 0 ||
         report.jacobian.near_singular_count > 0 ||
@@ -1430,7 +1871,7 @@ SurfaceRefitResult SurfaceRefitter::fitSingleFace(
 
     report.success = true;
     report.failure_reason = SurfaceRefitFailureReason::None;
-    report.message = "Built one G0 original-boundary filling face with disjoint STEP-derived training and validation samples.";
+    report.message = "Built one original-boundary filling face with disjoint STEP-derived training, selection, and holdout samples.";
     return result;
 }
 

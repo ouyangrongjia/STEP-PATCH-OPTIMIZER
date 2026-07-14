@@ -39,10 +39,11 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         return artifacts;
     }
     csv << std::setprecision(17);
-    csv << "category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+    csv << "sample_set,category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
            "distance,projection_success,over_tolerance,face_id,edge_id,nearest_training_distance\n";
-    for (const auto& sample : report.surface_error_samples) {
-        csv << surfaceRefitSampleCategoryToString(sample.category) << ','
+    auto write_distance_sample = [&](const SurfaceRefitSampleDiagnostic& sample) {
+        csv << surfaceRefitSampleSetToString(sample.sample_set) << ','
+            << surfaceRefitSampleCategoryToString(sample.category) << ','
             << sample.source_point.X() << ','
             << sample.source_point.Y() << ','
             << sample.source_point.Z() << ',';
@@ -64,6 +65,12 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
             csv << sample.nearest_training_distance;
         }
         csv << '\n';
+    };
+    for (const auto& sample : report.surface_error_samples) {
+        write_distance_sample(sample);
+    }
+    for (const auto& sample : report.selection_error_samples) {
+        write_distance_sample(sample);
     }
     csv.flush();
     artifacts.csv_written = csv.good();
@@ -79,13 +86,14 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         return artifacts;
     }
     obj << std::setprecision(17);
-    obj << "# NSR-1.1 over-tolerance source-to-projection error vectors\n";
+    obj << "# NSR-1.3 over-tolerance source-to-projection error vectors\n";
     int vertex_index = 1;
-    for (const auto& sample : report.surface_error_samples) {
+    auto write_distance_vector = [&](const SurfaceRefitSampleDiagnostic& sample) {
         if (!sample.over_tolerance || !sample.projection_success) {
-            continue;
+            return;
         }
-        obj << "# category=" << surfaceRefitSampleCategoryToString(sample.category)
+        obj << "# sample_set=" << surfaceRefitSampleSetToString(sample.sample_set)
+            << " category=" << surfaceRefitSampleCategoryToString(sample.category)
             << " distance=" << sample.distance << " face_id=";
         write_optional_id(obj, sample.face_id);
         obj << " edge_id=";
@@ -99,6 +107,12 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
             << sample.projected_point.Z() << '\n';
         obj << "l " << vertex_index << ' ' << vertex_index + 1 << '\n';
         vertex_index += 2;
+    };
+    for (const auto& sample : report.surface_error_samples) {
+        write_distance_vector(sample);
+    }
+    for (const auto& sample : report.selection_error_samples) {
+        write_distance_vector(sample);
     }
     obj.flush();
     artifacts.obj_written = obj.good();
@@ -113,15 +127,16 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         return artifacts;
     }
     normal_csv << std::setprecision(17);
-    normal_csv << "source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+    normal_csv << "sample_set,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
                   "source_normal_x,source_normal_y,source_normal_z,"
                   "fitted_normal_x,fitted_normal_y,fitted_normal_z,"
                   "angle_degrees,u,v,face_id,projection_success,fitted_normal_defined,over_tolerance\n";
-    for (const auto& sample : report.normal_error_samples) {
+    auto write_normal_sample = [&](const SurfaceRefitNormalSampleDiagnostic& sample) {
         if (!sample.over_tolerance) {
-            continue;
+            return;
         }
-        normal_csv << sample.source_point.X() << ','
+        normal_csv << surfaceRefitSampleSetToString(sample.sample_set) << ','
+                   << sample.source_point.X() << ','
                    << sample.source_point.Y() << ','
                    << sample.source_point.Z() << ',';
         if (sample.projection_success) {
@@ -150,6 +165,12 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
                    << ',' << (sample.fitted_normal_defined ? "true" : "false")
                    << ',' << (sample.over_tolerance ? "true" : "false")
                    << '\n';
+    };
+    for (const auto& sample : report.normal_error_samples) {
+        write_normal_sample(sample);
+    }
+    for (const auto& sample : report.selection_normal_error_samples) {
+        write_normal_sample(sample);
     }
     normal_csv.flush();
     artifacts.normal_csv_written = normal_csv.good();
@@ -158,7 +179,7 @@ SurfaceRefitDiagnosticArtifacts writeSurfaceRefitDiagnosticArtifacts(
         return artifacts;
     }
 
-    artifacts.message = "Wrote distance CSV/OBJ diagnostics and over-tolerance normal CSV diagnostics.";
+    artifacts.message = "Wrote selection/holdout distance CSV/OBJ diagnostics and over-tolerance normal CSV diagnostics.";
     return artifacts;
 }
 

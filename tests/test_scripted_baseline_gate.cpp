@@ -363,6 +363,80 @@ void test_native_surface_fit_sampling_ab_runner_has_fixed_dynamic_contract() {
     assert(script.find("[int]$CandidateId") != std::string::npos);
 }
 
+void test_native_surface_fit_local_g1_runner_and_probe_contract() {
+    const auto root = source_root();
+    const auto script = read_text_file(
+        root / "scripts" / "run_native_surface_fit_local_g1_tiers.ps1");
+    const auto probe = read_text_file(root / "tools" / "native_surface_fit_probe.cpp");
+    const auto refitter = read_text_file(root / "src" / "merge" / "SurfaceRefitter.cpp");
+    const auto tests = read_text_file(root / "tests" / "test_surface_refitter.cpp");
+
+    for (const auto* required : {
+             "$trainingSamples = 96",
+             "$selectionSamples = 192",
+             "$holdoutSamples = 192",
+             "$g1Tiers = @(0, 1, 4, 8)",
+             "$boundarySamplesPerEdge = 32",
+             "$jacobianGridSize = 16",
+             "$tolerance3d = 0.03",
+             "$normalToleranceDegrees = 15.0",
+             "--local-g1-count",
+             "configured_g1_count",
+             "actual_g1_count",
+             "training_selection_overlap_count",
+             "training_holdout_overlap_count",
+             "selection_holdout_overlap_count",
+             "interior_selection_error",
+             "interior_holdout_error",
+             "normal_selection_error",
+             "normal_holdout_error",
+             "native_surface_fit_local_g1_tiers.csv",
+             "native_surface_fit_local_g1_tiers.md",
+             "$runnerFailures +=",
+             "New-FailureComparisonRow",
+             "artifacts and comparison were retained"}) {
+        assert(script.find(required) != std::string::npos);
+    }
+    assert(script.find("[Parameter(Mandatory = $true)][string]$SourceStep") != std::string::npos);
+    assert(script.find("[int]$CandidateId") != std::string::npos);
+    assert(script.find("Remove-Item") == std::string::npos);
+
+    for (const auto* required : {
+             "selection_sample_count",
+             "holdout_sample_count",
+             "configured_g1_count",
+             "actual_g1_count",
+             "local_g1_constraints",
+             "sample_sets_disjoint",
+             "support_face_available",
+             "support_point_distance",
+             "interior_selection_error",
+             "interior_holdout_error",
+             "normal_selection_error",
+             "normal_holdout_error",
+             "legacy_alias_for_selection"}) {
+        assert(probe.find(required) != std::string::npos);
+    }
+    assert(refitter.find("report.holdout_interior_error.projection_failure_count") != std::string::npos);
+    assert(refitter.find("report.holdout_normal_error.undefined_count") != std::string::npos);
+    assert(refitter.find("filling.Add(sample.u, sample.v, sample.support_face, GeomAbs_G1)") !=
+        std::string::npos);
+
+    const auto real_candidate = std::string("17") + "9";
+    const auto first_real_face = std::string("170") + "5";
+    const auto second_real_face = std::string("170") + "9";
+    for (const auto& forbidden : {
+             std::string("candidate ") + real_candidate,
+             std::string("candidate_") + real_candidate,
+             std::string("face ") + first_real_face,
+             std::string("face ") + second_real_face}) {
+        assert(script.find(forbidden) == std::string::npos);
+        assert(probe.find(forbidden) == std::string::npos);
+        assert(refitter.find(forbidden) == std::string::npos);
+        assert(tests.find(forbidden) == std::string::npos);
+    }
+}
+
 void test_gui_exposes_candidate_surface_over_cover_switch() {
     const auto root = source_root();
     const auto header = read_text_file(root / "src" / "app" / "MainWindow.h");
@@ -596,6 +670,7 @@ void run_scripted_baseline_gate_tests() {
     test_native_surface_fit_tier_runner_cleans_incomplete_invocation_runs();
     test_native_surface_fit_probe_reports_nsr_1_2_diagnostics_contract();
     test_native_surface_fit_sampling_ab_runner_has_fixed_dynamic_contract();
+    test_native_surface_fit_local_g1_runner_and_probe_contract();
     test_gui_exposes_candidate_surface_over_cover_switch();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();

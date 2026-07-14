@@ -181,6 +181,7 @@ spo::SurfaceRefitOptions synthetic_options() {
     options.mesh_deflection = 0.15;
     options.training_sample_count = 16;
     options.validation_sample_count = 24;
+    options.holdout_sample_count = 24;
     options.boundary_samples_per_edge = 8;
     options.jacobian_grid_size = 8;
     options.max_surface_pole_count = 4096;
@@ -245,21 +246,36 @@ void test_surface_refitter_fits_smooth_freeform_surface() {
     }
     assert(result.report.training_sample_count == options.training_sample_count);
     assert(result.report.validation_sample_count == options.validation_sample_count);
+    assert(result.report.selection_sample_count == options.validation_sample_count);
+    assert(result.report.holdout_sample_count == options.holdout_sample_count);
     assert(result.report.training_validation_overlap_count == 0);
+    assert(result.report.training_selection_overlap_count == 0);
+    assert(result.report.training_holdout_overlap_count == 0);
+    assert(result.report.selection_holdout_overlap_count == 0);
+    assert(result.report.sample_sets_disjoint);
+    assert(result.report.configured_local_g1_count == 0);
+    assert(result.report.actual_local_g1_count == 0);
+    assert(result.report.g0_training_constraint_count == options.training_sample_count);
+    assert(result.report.total_training_constraint_count == options.training_sample_count);
     assert(result.report.failed_gates.empty());
-    assert(result.report.interior_error.sample_count == options.validation_sample_count);
-    assert(result.report.normal_error.sample_count == options.validation_sample_count);
+    assert(result.report.selection_interior_error.sample_count == options.validation_sample_count);
+    assert(result.report.selection_normal_error.sample_count == options.validation_sample_count);
+    assert(result.report.interior_error.sample_count == options.holdout_sample_count);
+    assert(result.report.normal_error.sample_count == options.holdout_sample_count);
     assert(result.report.normal_error_samples.size() ==
         static_cast<std::size_t>(options.validation_sample_count));
     assert(result.report.face_sampling.size() == fixture.candidate.faces.size());
     int per_face_training_total = 0;
     int per_face_validation_total = 0;
+    int per_face_holdout_total = 0;
     for (const auto& face : result.report.face_sampling) {
         per_face_training_total += face.training_count;
         per_face_validation_total += face.validation_count;
+        per_face_holdout_total += face.holdout_count;
     }
     assert(per_face_training_total == options.training_sample_count);
     assert(per_face_validation_total == options.validation_sample_count);
+    assert(per_face_holdout_total == options.holdout_sample_count);
     assert(result.report.surface_error_samples.size() ==
         static_cast<std::size_t>(
             result.report.boundary_error.sample_count +
@@ -276,12 +292,21 @@ void test_surface_refitter_fits_smooth_freeform_surface() {
         }
     }
     for (const auto& sample : result.report.normal_error_samples) {
+        assert(sample.sample_set == spo::SurfaceRefitSampleSet::Holdout);
         assert(sample.source_normal.SquareMagnitude() > 0.0);
         assert(sample.projection_success);
         assert(sample.fitted_normal_defined);
         assert(std::isfinite(sample.angle_degrees));
         assert(std::isfinite(sample.u));
         assert(std::isfinite(sample.v));
+    }
+    assert(result.report.training_samples.size() ==
+        static_cast<std::size_t>(options.training_sample_count));
+    for (const auto& sample : result.report.training_samples) {
+        assert(sample.support_face_available);
+        assert(sample.support_uv_valid);
+        assert(sample.support_point_distance < 1.0e-9);
+        assert(sample.constraint_type == "G0");
     }
     assert(BRepCheck_Analyzer(result.face).IsValid());
 
@@ -362,7 +387,9 @@ void test_face_stratified_sampling_is_deterministic_and_covers_every_source_face
 
     assert(first.report.training_sample_count == options.training_sample_count);
     assert(first.report.validation_sample_count == options.validation_sample_count);
+    assert(first.report.holdout_sample_count == options.holdout_sample_count);
     assert(first.report.training_validation_overlap_count == 0);
+    assert(first.report.sample_sets_disjoint);
     assert(first.report.face_sampling.size() == fixture.candidate.faces.size());
     assert(first.report.face_sampling.size() == second.report.face_sampling.size());
     for (std::size_t index = 0; index < first.report.face_sampling.size(); ++index) {
@@ -376,6 +403,21 @@ void test_face_stratified_sampling_is_deterministic_and_covers_every_source_face
     assert(std::abs(first.report.interior_error.max - second.report.interior_error.max) < 1.0e-12);
     assert(std::abs(first.report.normal_error.max_angle_degrees -
         second.report.normal_error.max_angle_degrees) < 1.0e-12);
+    assert(std::abs(first.report.selection_interior_error.max -
+        second.report.selection_interior_error.max) < 1.0e-12);
+    assert(std::abs(first.report.selection_normal_error.max_angle_degrees -
+        second.report.selection_normal_error.max_angle_degrees) < 1.0e-12);
+    assert(first.report.filling_face_brep_check_valid == second.report.filling_face_brep_check_valid);
+    assert(first.report.oriented_face_brep_check_valid == second.report.oriented_face_brep_check_valid);
+    assert(first.report.training_samples.size() == second.report.training_samples.size());
+    for (std::size_t index = 0; index < first.report.training_samples.size(); ++index) {
+        const auto& first_sample = first.report.training_samples[index];
+        const auto& second_sample = second.report.training_samples[index];
+        assert(first_sample.face_id == second_sample.face_id);
+        assert(first_sample.source_point.Distance(second_sample.source_point) < 1.0e-12);
+        assert(std::abs(first_sample.source_u - second_sample.source_u) < 1.0e-12);
+        assert(std::abs(first_sample.source_v - second_sample.source_v) < 1.0e-12);
+    }
 }
 
 void test_face_stratified_sampling_rejects_face_count_above_fixed_budget() {
@@ -398,10 +440,90 @@ void test_face_stratified_sampling_rejects_face_count_above_fixed_budget() {
     assert(result.report.training_sample_count == 0);
 }
 
+void test_local_g1_tiers_are_nested_deterministic_and_replace_g0_constraints() {
+    const auto fixture = make_two_face_planar_fixture();
+    auto options = synthetic_options();
+    options.sampling_strategy = spo::SurfaceRefitSamplingStrategy::FaceStratifiedAreaWeighted;
+    options.training_sample_count = 96;
+    options.validation_sample_count = 32;
+    options.holdout_sample_count = 32;
+
+    std::vector<spo::SurfaceRefitReport> reports;
+    for (const int configured_g1_count : {0, 1, 4, 8}) {
+        options.local_g1_count = configured_g1_count;
+        const auto result = spo::SurfaceRefitter().fitSingleFace(
+            fixture.document,
+            fixture.candidate,
+            options);
+        assert(result.report.filling_done);
+        assert(result.report.configured_local_g1_count == configured_g1_count);
+        assert(result.report.actual_local_g1_count == configured_g1_count);
+        assert(result.report.g0_training_constraint_count == 96 - configured_g1_count);
+        assert(result.report.total_training_constraint_count == 96);
+        assert(result.report.local_g1_constraints.size() ==
+            static_cast<std::size_t>(configured_g1_count));
+        assert(result.report.sample_sets_disjoint);
+        assert(result.report.training_selection_overlap_count == 0);
+        assert(result.report.training_holdout_overlap_count == 0);
+        assert(result.report.selection_holdout_overlap_count == 0);
+
+        int reported_g1_count = 0;
+        for (const auto& sample : result.report.training_samples) {
+            assert(sample.support_face_available);
+            assert(sample.support_uv_valid);
+            assert(sample.support_point_distance < 1.0e-9);
+            if (sample.constraint_type == "G1") {
+                ++reported_g1_count;
+            }
+        }
+        assert(reported_g1_count == configured_g1_count);
+
+        for (std::size_t first = 0; first < result.report.local_g1_constraints.size(); ++first) {
+            const auto& constraint = result.report.local_g1_constraints[first];
+            assert(constraint.rank == static_cast<int>(first) + 1);
+            assert(constraint.constraint_type == "G1");
+            assert(std::isfinite(constraint.score));
+            for (std::size_t second = first + 1;
+                 second < result.report.local_g1_constraints.size();
+                 ++second) {
+                assert(constraint.training_index !=
+                    result.report.local_g1_constraints[second].training_index);
+                assert(constraint.selection_source_point.Distance(
+                    result.report.local_g1_constraints[second].selection_source_point) + 1.0e-12 >=
+                    result.report.local_g1_nms_radius);
+            }
+        }
+        reports.push_back(result.report);
+    }
+
+    for (std::size_t index = 0; index < reports[1].local_g1_constraints.size(); ++index) {
+        assert(reports[1].local_g1_constraints[index].training_index ==
+            reports[2].local_g1_constraints[index].training_index);
+    }
+    for (std::size_t index = 0; index < reports[2].local_g1_constraints.size(); ++index) {
+        assert(reports[2].local_g1_constraints[index].training_index ==
+            reports[3].local_g1_constraints[index].training_index);
+        assert(std::abs(reports[2].local_g1_constraints[index].score -
+            reports[3].local_g1_constraints[index].score) < 1.0e-12);
+    }
+
+    options.training_sample_count = 4;
+    options.local_g1_count = 8;
+    const auto mismatch = spo::SurfaceRefitter().fitSingleFace(
+        fixture.document,
+        fixture.candidate,
+        options);
+    assert(!mismatch.success());
+    assert(mismatch.report.configured_local_g1_count == 8);
+    assert(mismatch.report.actual_local_g1_count == 0);
+    assert(mismatch.report.failure_reason == spo::SurfaceRefitFailureReason::InvalidInput);
+}
+
 void test_surface_refit_diagnostic_file_contract() {
     spo::SurfaceRefitReport report;
     spo::SurfaceRefitSampleDiagnostic boundary;
     boundary.category = spo::SurfaceRefitSampleCategory::Boundary;
+    boundary.sample_set = spo::SurfaceRefitSampleSet::Boundary;
     boundary.source_point = gp_Pnt(1.0, 2.0, 3.0);
     boundary.projected_point = gp_Pnt(1.1, 2.0, 3.0);
     boundary.distance = 0.1;
@@ -412,6 +534,7 @@ void test_surface_refit_diagnostic_file_contract() {
 
     spo::SurfaceRefitSampleDiagnostic interior;
     interior.category = spo::SurfaceRefitSampleCategory::Interior;
+    interior.sample_set = spo::SurfaceRefitSampleSet::Holdout;
     interior.source_point = gp_Pnt(4.0, 5.0, 6.0);
     interior.projected_point = gp_Pnt(4.0, 5.0, 6.01);
     interior.distance = 0.01;
@@ -424,13 +547,24 @@ void test_surface_refit_diagnostic_file_contract() {
 
     spo::SurfaceRefitSampleDiagnostic corner;
     corner.category = spo::SurfaceRefitSampleCategory::Corner;
+    corner.sample_set = spo::SurfaceRefitSampleSet::Corner;
     corner.source_point = gp_Pnt(7.0, 8.0, 9.0);
     corner.projection_success = false;
     corner.over_tolerance = true;
     corner.edge_id = 11;
     report.surface_error_samples.push_back(corner);
 
+    auto selection = interior;
+    selection.sample_set = spo::SurfaceRefitSampleSet::Selection;
+    selection.source_point = gp_Pnt(14.0, 15.0, 16.0);
+    selection.projected_point = gp_Pnt(14.0, 15.0, 16.2);
+    selection.distance = 0.2;
+    selection.over_tolerance = true;
+    selection.face_id = 15;
+    report.selection_error_samples.push_back(selection);
+
     spo::SurfaceRefitNormalSampleDiagnostic normal;
+    normal.sample_set = spo::SurfaceRefitSampleSet::Holdout;
     normal.source_point = gp_Pnt(10.0, 11.0, 12.0);
     normal.projected_point = gp_Pnt(10.0, 11.0, 12.02);
     normal.source_normal = gp_Vec(0.0, 0.0, 1.0);
@@ -443,6 +577,10 @@ void test_surface_refit_diagnostic_file_contract() {
     normal.fitted_normal_defined = true;
     normal.over_tolerance = true;
     report.normal_error_samples.push_back(normal);
+    auto selection_normal = normal;
+    selection_normal.sample_set = spo::SurfaceRefitSampleSet::Selection;
+    selection_normal.face_id = 14;
+    report.selection_normal_error_samples.push_back(selection_normal);
 
     const auto directory =
         std::filesystem::temp_directory_path() / "spo_surface_refit_diagnostic_contract";
@@ -457,30 +595,33 @@ void test_surface_refit_diagnostic_file_contract() {
 
     const auto csv = read_text_file(artifacts.csv_path);
     assert(csv.find(
-        "category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+        "sample_set,category,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
         "distance,projection_success,over_tolerance,face_id,edge_id,nearest_training_distance") != std::string::npos);
-    assert(csv.find("boundary,1,2,3,1.1000000000000001,2,3,0.10000000000000001,true,true,,9,") !=
+    assert(csv.find("boundary,boundary,1,2,3,1.1000000000000001,2,3,0.10000000000000001,true,true,,9,") !=
         std::string::npos);
-    assert(csv.find("interior,4,5,6,4,5,6.0099999999999998,0.01,true,false,7,,0.25") !=
+    assert(csv.find("holdout,interior,4,5,6,4,5,6.0099999999999998,0.01,true,false,7,,0.25") !=
         std::string::npos);
-    assert(csv.find("corner,7,8,9,,,,,false,true,,11,") != std::string::npos);
+    assert(csv.find("corner,corner,7,8,9,,,,,false,true,,11,") != std::string::npos);
+    assert(csv.find("selection,interior,14,15,16,14,15,16.199999999999999") != std::string::npos);
 
     const auto obj = read_text_file(artifacts.obj_path);
-    assert(obj.find("# category=boundary") != std::string::npos);
-    assert(obj.find("# category=interior") == std::string::npos);
-    assert(obj.find("# category=corner") == std::string::npos);
+    assert(obj.find("# sample_set=boundary category=boundary") != std::string::npos);
+    assert(obj.find("# sample_set=selection category=interior") != std::string::npos);
+    assert(obj.find("# sample_set=holdout category=interior") == std::string::npos);
+    assert(obj.find("# sample_set=corner category=corner") == std::string::npos);
     assert(obj.find("v 1 2 3") != std::string::npos);
     assert(obj.find("v 1.1000000000000001 2 3") != std::string::npos);
     assert(obj.find("l 1 2") != std::string::npos);
 
     const auto normal_csv = read_text_file(artifacts.normal_csv_path);
     assert(normal_csv.find(
-        "source_x,source_y,source_z,projected_x,projected_y,projected_z,"
+        "sample_set,source_x,source_y,source_z,projected_x,projected_y,projected_z,"
         "source_normal_x,source_normal_y,source_normal_z,"
         "fitted_normal_x,fitted_normal_y,fitted_normal_z,"
         "angle_degrees,u,v,face_id,projection_success,fitted_normal_defined,over_tolerance") !=
         std::string::npos);
-    assert(normal_csv.find("10,11,12,10,11,12.02,0,0,1,0,0.5") != std::string::npos);
+    assert(normal_csv.find("holdout,10,11,12,10,11,12.02,0,0,1,0,0.5") != std::string::npos);
+    assert(normal_csv.find("selection,10,11,12,10,11,12.02,0,0,1,0,0.5") != std::string::npos);
     assert(normal_csv.find(",30,0.20000000000000001,0.69999999999999996,13,true,true,true") !=
         std::string::npos);
 
@@ -521,5 +662,6 @@ void run_surface_refitter_tests() {
     test_surface_refitter_reports_all_failed_quality_gates();
     test_face_stratified_sampling_is_deterministic_and_covers_every_source_face();
     test_face_stratified_sampling_rejects_face_count_above_fixed_budget();
+    test_local_g1_tiers_are_nested_deterministic_and_replace_g0_constraints();
     test_surface_refit_diagnostic_file_contract();
 }
