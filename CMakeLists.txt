@@ -15,6 +15,7 @@ option(SPO_BUILD_TOOLS "Build command-line tools" ON)
 option(SPO_BUILD_TESTS "Build tests" ON)
 
 find_package(OpenCASCADE CONFIG REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Widgets OpenGLWidgets Concurrent)
 
 set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -67,6 +68,9 @@ add_library(spo_core STATIC
     src/stl/StlCutChainCutter.cpp
     src/merge/SurfaceRefitDiagnostics.cpp
     src/merge/SurfaceRefitter.cpp
+    src/reduction/StlHybridParameterization.cpp
+    src/reduction/RestrictedBSplinePatchFitter.cpp
+    src/reduction/SurfaceReductionEngine.cpp
     src/patch/PatchImportService.cpp
     src/patch/PatchArtifactLocator.cpp
     src/patch/PatchPreviewReport.cpp
@@ -91,6 +95,7 @@ target_include_directories(spo_core PUBLIC "${SPO_INCLUDE_DIR}")
 target_link_libraries(spo_core
     PUBLIC
         Qt6::Core
+        Eigen3::Eigen
         TKDESTEP
         TKDEIGES
         TKXSBase

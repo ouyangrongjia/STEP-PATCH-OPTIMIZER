@@ -2,6 +2,7 @@
   "name": "step-patch-optimizer",
   "version-string": "0.1.0",
   "dependencies": [
+    "eigen3",
     "opencascade",
     "qtbase"
   ]
