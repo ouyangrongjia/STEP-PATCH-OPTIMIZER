@@ -176,6 +176,12 @@ if(SPO_BUILD_TOOLS)
 
     add_executable(strict_topology_gate_probe tools/strict_topology_gate_probe.cpp)
     target_link_libraries(strict_topology_gate_probe PRIVATE spo_core)
+
+    add_executable(surface_reduction_probe tools/surface_reduction_probe.cpp)
+    target_link_libraries(surface_reduction_probe PRIVATE spo_core)
+
+    add_executable(surface_reduction_benchmark tools/surface_reduction_benchmark.cpp)
+    target_link_libraries(surface_reduction_benchmark PRIVATE spo_core)
 endif()
 
 if(SPO_BUILD_TESTS)
