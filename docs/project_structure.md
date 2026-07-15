@@ -22,13 +22,16 @@ Feature-aware STEP Patch Optimization
 
 ## 1. 当前项目状态
 
-当前项目已经完成 MVP 基础闭环、FeatureBoundedRefit 候选区域框架，以及 Geomagic patch preview / Apply 核心接入。当前工作位于独立 `native-surface-refit` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线。当前已具备的既有流程是：
+当前项目已经完成 MVP 基础闭环、FeatureBoundedRefit / Geomagic 稳定路径，并在独立 `native-surface-reduction` 分支加入任意选区减面第一版。`native-surface-refit` 和 `native-autosurface` 只保留为实验基线。当前已具备的产品流程是：
 
 ```text
 STEP/STP 读取
 → B-rep 拓扑索引构建
 → OCCT Viewer 显示
 → face / edge 选择与多选
+→ 原始 B-rep 邻接驱动的选区动态分组
+→ 受限 B-spline 曲面拟合和独立样本终验
+→ 原始边界重裁剪、全局质量门和事务 Apply
 → 基础特征边检测
 → 用户锁边 / 解锁边
 → FeatureBoundedRefit 候选区域生成和预览
@@ -67,6 +70,7 @@ C++20 + OCCT + Qt6 + CMake + vcpkg
 ```text
 OpenCASCADE / OCCT   STEP 读写、B-rep 拓扑、几何算法、Viewer
 Qt6                  GUI、窗口、菜单、面板、交互
+Eigen3                稀疏最小二乘控制点求解
 CMake                构建系统
 vcpkg                依赖管理
 ```
@@ -75,7 +79,6 @@ vcpkg                依赖管理
 
 ```text
 CGAL          用于 mesh 层 sharp edge / region segmentation 辅助
-Eigen         用于线性代数、拟合、PCA 等计算
 nlohmann/json 用于项目文件与参数保存
 spdlog        用于日志
 GoogleTest    用于单元测试；当前测试仍采用项目内轻量测试方式
@@ -169,6 +172,8 @@ step-patch-optimizer/
     ├── batch_optimize.cpp
     ├── step_stats.cpp
     ├── native_surface_fit_probe.cpp
+    ├── surface_reduction_probe.cpp
+    ├── surface_reduction_benchmark.cpp
     ├── patch_apply_probe.cpp
     ├── corner_baseline_probe.cpp
     ├── strict_topology_gate_probe.cpp
@@ -188,7 +193,9 @@ step-patch-optimizer/
 | `docs/implementation_status.md` | 当前实现进度：已完成、待办、验收方式、近期开发顺序 |
 | `docs/completed_features.md` | 已完成、已验证或已退役的功能事实，承接旧 TODO 中的历史计划 |
 | `docs/TODO.md` | 当前执行 TODO：阶段任务、冻结范围、验收要求 |
-| `docs/native_surface_refitting_guide.md` | `native-surface-refit` 独立分支的原生自由曲面拟合主线、Geomagic 后备路线、阶段和验收边界 |
+| `docs/surface_reduction_guide.md` | `native-surface-reduction` 产品主线的动态分组、受限 B-spline 拟合、质量门和已验证基线 |
+| `docs/native_surface_refitting_guide.md` | `native-surface-refit` 原生单曲面实验基线、Geomagic 后备路线和验收边界 |
+| `docs/native_autosurface_guide.md` | 已冻结的 `native-autosurface` 四边布局实验及停止原因 |
 | `docs/geomagic_patch_workflow.md` | Geomagic patch preview / Apply 稳定基线和后备流程 |
 | `docs/geomagic_patch_cleanup_plan.md` | 旧 analytic region merge 路线清理计划和删除检查表 |
 | `docs/run_gui.md` | GUI 使用文档：启动方式、操作方式、快捷键、手动验证流程 |
@@ -220,13 +227,14 @@ Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
 | `src/brep/` | ShapeDocument、Face/Edge 索引、TopologyGraph、BoundaryWireBuilder、拓扑查询、基础统计 |
 | `src/feature/` | 基础特征边检测、曲率估计接口、边界分类接口、用户约束接口 |
 | `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
+| `src/reduction/` | `SurfaceReductionEngine` 动态分组和全局验证、`RestrictedBSplinePatchFitter` 受限曲面求解 |
 | `src/stl/` | STP sampled fitting mesh、legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
 | `src/patch/` | Patch import / artifact lookup / preview report / Apply state / original-boundary constrained replacement / repair / trim diagnostics |
 | `src/external/geomagic/` | Geomagic AutoSurface 配置、backend、result 和输出路径解析 |
 | `src/validate/` | ShapeValidator、BRepCheck/free/multiple edge 检查、StrictTopologyGate、CommercialCadLikeQualityGate、误差评估接口、报告生成接口 |
 | `src/common/` | 公共类型、配置、容差、Result 返回结构 |
 | `tests/` | 单元测试、命令测试、patch / STL / gate / script contract 回归测试 |
-| `tools/` | 命令行批处理、STEP 统计、Patch Apply probe、baseline probe、StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
+| `tools/` | 命令行批处理、STEP 统计、Surface Reduction / Patch Apply / baseline / StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
 | `scripts/` | Windows 环境初始化、依赖安装、构建运行、验证、Geomagic、Route 2 和 Creo 诊断脚本 |
 | `data/runs/` | 新测试和实验运行归档；目录名包含时间、流程、模型、候选、变体，每轮含统一清单和标准子目录 |
 | `data/baseline_runs/` | 旧运行历史，只读保留；不做批量迁移，不再接收默认新运行 |
@@ -314,7 +322,7 @@ ExportStepCommand
 
 ```text
 1. 默认 fitting input mode 是 STP Sampled Candidate Surface。
-2. 当前唯一保留的 STL 扩宽机制是 adjacent-face support collar。
+2. 生产默认使用 candidate surface over-cover；adjacent-face support collar 只提供有限辅助扩宽。
 3. Legacy centroid-only crop、conservative boundary-band crop 和 Global Cut Chain 保留为诊断 / 对照路线。
 4. Geomagic patch outer boundary、STP sampled mesh boundary、support collar 外环和 STL crop boundary 都不能作为最终 CAD boundary。
 5. Apply 使用原 STP candidate outer boundary wire / pcurve 构造 replacement。
@@ -337,11 +345,11 @@ ExportStepCommand
 
 ---
 
-## 7. 当前后续增强边界
+## 7. 原生单曲面实验历史边界
 
-### 7.1 P0：NSR-1 局部切平面约束证据
+### 7.1 已冻结：NSR-1 局部切平面约束证据
 
-当前最优先的增强方向：
+以下内容保留为 `native-surface-refit` 分支的历史实验边界，不代表当前产品主线：
 
 ```text
 1. 保留已完成的 SurfaceRefitter::fitSingleFace、全部失败门、三阶段 BRepCheck 和样本级诊断合同。

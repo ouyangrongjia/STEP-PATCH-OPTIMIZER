@@ -1,5 +1,7 @@
 # 原生自由曲面重拟合开发指南
 
+> 2026-07-15 路线说明：本指南对应的 `native-surface-refit` 已冻结为单曲面实验基线。当前产品主线是 `native-surface-reduction`，请先阅读 `docs/surface_reduction_guide.md`。本文件后续只维护实验事实，不再作为 GUI 多面减面的实现入口。
+
 > 文档定位：指导 FeatureBoundedRefit 局部区域的原生自由曲面拟合开发，并定义 Geomagic 后备路线、失败分流和验收边界。
 >
 > 当前状态：`NSR-1.3` 局部切平面约束 0 / 1 / 4 / 8 有限周期已完成，但尚无 `patch_acceptable=true`；下一证据任务为至少三个受支持真实候选的同类失败复核，NSR-2 / NSR-1.4 / NSR-4 继续冻结。

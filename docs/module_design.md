@@ -4,6 +4,19 @@
 > 当前实现进度、已完成任务、待办事项、测试状态不放在本文件中，统一记录在 `implementation_status.md`。  
 > 目标是让本文件保持稳定，作为后续开发、重构和汇报时的模块边界参考。
 
+## 当前产品主线补充：Surface Reduction
+
+`native-surface-reduction` 不依赖全局三角布局。新增模块边界如下：
+
+| 模块 | 职责 | 禁止承担 |
+|---|---|---|
+| `SurfaceReductionEngine` | 选区校验、原始 B-rep 邻接、保护边、确定性动态分组、全局事务验证 | 不直接修改当前文档，不缓存上一次拟合曲面作为新真值 |
+| `RestrictedBSplinePatchFitter` | 单个原始 FaceId 分组的参数初始化、稀疏控制点求解、UV 更新、节点插入和独立质量门 | 不决定 GUI 状态，不跨锁边或尖锐边 |
+| `ReduceSelectedFacesCommand` | 提交已经验证的缓存结果并提供撤销/重做 | 不重新求解，不复用 `PatchReplacementCommand` 的 Geomagic 状态机 |
+| `AppController` / `MainWindow` | 后台预览、报告、Apply 可用性和视图刷新 | 不自动回退到 Geomagic 或 AS |
+
+`SurfaceRefitter` 保留单曲面实验行为；`native-autosurface` 的全局三角网格、QuadriFlow 和多图参数化不进入上述依赖图。
+
 ---
 
 ## 1. 总体架构

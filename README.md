@@ -1,6 +1,8 @@
 # STEP 曲面片优化器
 
-Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，并对目标区域执行原生自由曲面重建或 Geomagic 后备拟合；结果通过原始边界约束、拓扑与外部 CAD 诊断验证后导出 STEP。
+Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，并对目标区域执行原生自由曲面重建或 Geomagic 后备拟合；结果通过原始边界、拓扑与外部 CAD 诊断验证后导出 STEP。
+
+当前产品开发主线是 `native-surface-reduction`：用户通过 GUI 任意多选一个连通区域，系统直接基于原始 STEP 的 B-rep 邻接和精确曲面求值尝试减面。`native-surface-refit` 保留为单曲面实验基线，`native-autosurface` 冻结为四边布局实验参考，不进入当前运行路径。
 
 ## 当前核心能力
 
@@ -18,6 +20,7 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 - PatchReplacementRepair、StrictTopologyGate 和 CommercialCadLikeQualityGate
 - applied STEP 外部 CAD 诊断路由和 Creo ModelCHECK 脚本入口
 - 原生单曲面拟合探针、独立误差验证和诊断 patch 输出
+- 任意连通选区的自适应 B-spline 减面预览、质量报告、Apply、撤销和重做
 - 命令级 undo/redo
 - 合法性检查
 - 导出 STEP 并二次读取校验
@@ -45,10 +48,16 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 6. docs/TODO.md
    当前执行 TODO、阶段边界和验收要求。
 
-7. docs/native_surface_refitting_guide.md
-   native-surface-refit 独立分支的原生自由曲面拟合主线、Geomagic 后备路线和验收边界。
+7. docs/surface_reduction_guide.md
+   native-surface-reduction 产品主线、动态分组、受限 B-spline 拟合和质量门。
 
-8. docs/geomagic_patch_workflow.md
+8. docs/native_surface_refitting_guide.md
+   native-surface-refit 单曲面实验基线和验收边界。
+
+9. docs/native_autosurface_guide.md
+   已冻结的 native-autosurface 四边布局实验及停止原因。
+
+10. docs/geomagic_patch_workflow.md
    Geomagic patch preview / Apply 稳定基线和后备流程。
 ```
 
@@ -62,6 +71,7 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 目录结构以真实仓库和 CMakeLists.txt 为准，再同步更新 docs/project_structure.md。
 Geomagic patch preview / Apply 后备基线以 docs/geomagic_patch_workflow.md 为准。
 native-surface-refit 分支的原生拟合任务以 docs/native_surface_refitting_guide.md、docs/TODO.md 和 docs/implementation_status.md 为准。
+native-surface-reduction 分支的产品实现以 docs/surface_reduction_guide.md、docs/TODO.md 和 docs/implementation_status.md 为准。
 ```
 
 ## 从 0 开始一键配置
@@ -398,16 +408,15 @@ tools         批处理和 STEP 统计工具
 
 ## 当前开发阶段
 
-当前项目已经完成 MVP 基础闭环、候选区域基础框架、Geomagic patch preview / Apply 核心接入，以及 NSR-1 / NSR-1.1 原生单曲面探针、固定三档实验和 NSR-1.2 结构诊断 / 固定 96 点采样分配实验。当前工作位于独立 `native-surface-refit` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线：
+当前工作位于独立 `native-surface-reduction` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线，`native-surface-refit` 和 `native-autosurface` 保留为实验参考。当前 Surface Reduction 第一版已经具备：
 
 ```text
-1. 当前 P0：执行 NSR-1.3 局部切平面约束有限周期实验，最多比较 1 / 4 / 8 个局部 G1 约束，不无限调参。
-2. candidate 179 的固定 96 点实验已经完成：纯面积加权存在内存态 wire 自交 / face 不可定向；分层面积加权消除了该结构失败和零训练源面。
-3. 分层面积加权仍有内部 8 / 192、法向 1 / 192 超限，没有可接受 patch；只有有限周期失败且问题在多个受支持候选上重复出现，才解冻 NSR-4 的受限 B-spline 求解器。
-4. 继续通过独立 native_surface_fit_probe 输出诊断 patch 和报告，不改 GUI，不做多曲面或 Apply。
-5. 产品目标允许用户一次操作内执行有限、确定性的拟合尝试并由质量门自动择优；不要求一组固定参数覆盖所有自由曲面。
-6. Geomagic 仅作为后备；底层曲面覆盖 Gate 失败时不得进入 Apply 或通过 Sewing 掩盖欠覆盖。
-7. NSR-1.3 固定 96 个训练约束只是受控实验基线；面向不同面积和曲率区域的自适应训练预算归入后续 NSR-1.4，本轮不实现。
+1. GUI 任意选择一个连通、可定向的多面区域，输出面数和目标面数动态计算。
+2. 原始 STEP 的 B-rep 邻接负责分组；同域组合先精确合并，其余组合尝试受限三次 B-spline 重拟合。
+3. 原始边界在拟合阶段是加权软约束；`0.03 mm` 由重裁剪和独立边界、内部终验作为硬质量门执行。
+4. STEP/STL 混合路径当前会用局部 PCA 覆盖调和参数图 UV，每个节点布局只求解一次；缓存的 candidate 179 STL 来自 STEP 采样，不是独立扫描真值。
+5. 预览不修改文档；通过全部质量门的结果才可 Apply，撤销和重做复用缓存文档，不重新拟合。
+6. STEP 导出是预览或 Apply 后的独立操作，不是 Apply 事务的一部分。
 ```
 
 后续开发时，Codex 或人工修改应优先遵循：
@@ -415,6 +424,7 @@ tools         批处理和 STEP 统计工具
 ```text
 架构边界：docs/module_design.md
 任务顺序与验收：docs/implementation_status.md / docs/TODO.md
-原生自由曲面拟合：docs/native_surface_refitting_guide.md
+Surface Reduction：docs/surface_reduction_guide.md
+原生单曲面实验基线：docs/native_surface_refitting_guide.md
 Geomagic 后备流程：docs/geomagic_patch_workflow.md
 ```

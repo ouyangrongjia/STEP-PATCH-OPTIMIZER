@@ -2,7 +2,27 @@
 
 > 文档定位：记录已经完成、已经验证或已经退役的功能事实。当前待办只放在 `docs/TODO.md`。
 
-更新时间：2026-07-14
+更新时间：2026-07-15
+
+---
+
+## 0. Surface Reduction 第一版
+
+`native-surface-reduction` 已完成 SR-0～SR-4 第一版实现：
+
+```text
+GUI 任意连通多面选区
+→ 原始 B-rep 邻接和保护边
+→ 动态确定性分组
+→ 受限三次 B-spline 拟合
+→ 原始边界裁剪和参数曲线重建
+→ 全局 B-rep / STEP 回读质量门
+→ 预览、Apply、缓存式撤销和重做
+```
+
+默认测试不包含真实文件路径或固定候选编号。SR-5 最终真实基准已完成：`data/runs/20260715_surface_reduction_benchmark_final12b/` 保存 12 个属性发现选区的 CSV，3 个选区由 2 面减为 1 面并写出 STEP，且参数化、BRepCheck、STEP 回读和商业 CAD 类边界门均通过；9 个选区明确返回 `NoAcceptableReduction`。
+
+SR-6 STEP/STL 混合路径的当前边界已经确认：调和参数图只提供参考，最终拟合 UV 被局部 PCA 覆盖，每个节点布局只执行一次求解；STL 以弱位置项参与，原 STEP 边界在拟合阶段是软约束，`0.03 mm` 由重裁剪和独立终验作为硬拒绝门执行。candidate 179 的动态原始扫描 STL 运行得到 `49→48`；缓存 STEP 派生 STL 运行得到 `49→46`。缓存 STL 来自 STEP 采样流程，不是 NSR-1 产物，也不能作为独立几何真值。
 
 ---
 

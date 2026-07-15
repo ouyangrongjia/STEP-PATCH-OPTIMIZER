@@ -2,11 +2,30 @@
 
 > 文档定位：只记录当前待办、下一步实验和验收边界。已完成或已退役的历史计划放在 `docs/completed_features.md`。
 
-更新时间：2026-07-14
+更新时间：2026-07-15
 
 ---
 
 ## 1. 当前判断
+
+当前开发分支为 `native-surface-reduction`。SR-0～SR-6 的第一版代码和验证均已落地；提交前仍必须完成变更范围检查。GUI 已通过启动冒烟，预览不改文档、Apply、撤销和重做的缓存语义由命令测试覆盖。
+
+当前待办：
+
+```text
+1. [x] 最终代码的属性发现工具在四个真实 STEP 上运行 12 个选区；报告位于 `data/runs/20260715_surface_reduction_benchmark_final12b/`。
+2. [x] 其中 3 个真实选区由 2 面减为 1 面并达到 50% 目标，参数化、BRepCheck、STEP 回读和商业 CAD 类边界门均通过；另 9 个选区无合法减少。
+3. [x] 合成测试覆盖“达到目标”“部分减少”“无合法减少”三种结果。
+4. [x] 合成测试覆盖孔洞、高曲率 B-spline、锁边和尖锐边；candidate 179 未进入生产逻辑或默认测试。
+5. [x] GUI 通过隐藏启动冒烟；预览不改文档，Apply、撤销和重做不重新拟合由 `ReduceSelectedFacesCommand` 测试验证。
+6. [x] SR-6 STEP/STL 混合拟合完成第一版：STEP 修剪面域限定 STL 裁剪并建立单图调和参数化，但当前拟合 UV 随后被局部 PCA 覆盖，混合路径每个节点布局只求解一次；STL 以弱位置项参与，原 STEP 边界在拟合阶段是软约束，拟合后的重裁剪、独立边界终验和全部质量门执行硬拒绝。
+```
+
+candidate 179 的 SR-6 手动长期回归位于 `data/runs/20260715_surface_reduction_candidate_0179_hybrid/`：选区仍为 FaceId 1702～1750，共 49 面。动态裁剪原始扫描 STL、目标比例 `0.98` 的独立运行得到 `49→48`；当前目录保留的 `49→46` 使用缓存 STEP 派生 STL，默认 50% 目标下尝试 212 次并接受 3 次。后者最大距离 `0.0286183 mm`、最大法向差 `0.699484°`，BRepCheck、STEP 回读、零自由边和零多重边全部通过，已生成可 Apply STEP。50% 目标仍未达到，因此结果为 `Reduced` 而非 `TargetAchieved`。
+
+缓存 `candidate_0179_reference_crop.stl` 不是 NSR-1 输出；它来自 `20260713_155502_505__boundary-trim-fill` 的 STEP 采样网格，与共享 staging STL 的 SHA-256 同为 `7D094762B7B7FFE31244B65B7066DD5176B6DB85B21A8A1E360C01DF60EF516C`。该 STL 与 STEP 同源，不能作为独立几何真值。candidate 编号只存在于手动运行记录和文档，不进入生产选择逻辑或默认测试。
+
+完整合同见 `docs/surface_reduction_guide.md`。以下 NSR 内容是冻结实验记录，不再代表当前产品主线。
 
 当前开发分支为 `native-surface-refit`。原生自由曲面拟合作为独立分支推进，`feature-bounded-refit` 保留现有 Geomagic patch preview / Apply 稳定基线。
 
