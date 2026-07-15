@@ -38,6 +38,7 @@ add_library(spo_core STATIC
     src/command/LockEdgeCommand.cpp
     src/command/MergePatchCommand.cpp
     src/command/PatchReplacementCommand.cpp
+    src/command/ReduceSelectedFacesCommand.cpp
     src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
     src/feature/BoundaryClassifier.cpp
@@ -216,6 +217,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_replacement_command.cpp
         tests/test_patch_trim_diagnostics.cpp
         tests/test_surface_refitter.cpp
+        tests/test_surface_reduction.cpp
         tests/test_topology_graph.cpp
         tests/test_validation.cpp
     )
