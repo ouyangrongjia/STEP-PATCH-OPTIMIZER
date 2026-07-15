@@ -7,6 +7,7 @@
 #include "command/LockEdgeCommand.h"
 #include "command/MergePatchCommand.h"
 #include "command/PatchReplacementCommand.h"
+#include "command/ReduceSelectedFacesCommand.h"
 #include "command/UnlockEdgeCommand.h"
 #include "command/ValidateShapeCommand.h"
 #include "external/geomagic/GeomagicAutoSurfaceBackend.h"
@@ -151,6 +152,7 @@ Result AppController::undo() {
     const auto result = history_.undo(context_);
     if (result.success()) {
         clearCurrentPatchOverlay();
+        clearCurrentSurfaceReductionPreview();
         processStatus_ = makeProcessStatus(
             ProcessStage::CachedUndo,
             "cached undo applied; Geomagic / STL crop / patch import / repair were not rerun.");
@@ -162,6 +164,7 @@ Result AppController::redo() {
     const auto result = history_.redo(context_);
     if (result.success()) {
         clearCurrentPatchOverlay();
+        clearCurrentSurfaceReductionPreview();
         processStatus_ = makeProcessStatus(
             ProcessStage::CachedRedo,
             "cached redo applied; Geomagic / STL crop / patch import / repair were not rerun.");
@@ -185,6 +188,7 @@ Result AppController::openStepFile(const std::filesystem::path& path) {
         sourceStlMesh_.clear();
         sourceStlPath_.clear();
         clearCurrentPatchOverlay();
+        clearCurrentSurfaceReductionPreview();
         processStatus_ = makeProcessStatus(ProcessStage::Idle, "STEP/STP loaded; patch preview cleared.");
     }
     return result;
@@ -403,6 +407,40 @@ void publish_patch_preview_progress(
     status.patchPreviewRunLogPath = paths.patchPreviewRunLogPath;
     status.latestWarning = std::move(warning);
     progress(std::move(status));
+}
+
+SurfaceReductionResult AppController::reduceSelectedFacesData(
+    const ShapeDocument& document,
+    const SurfaceReductionRequest& request) {
+    return SurfaceReductionEngine().reduce(document, request);
+}
+
+void AppController::setCurrentSurfaceReductionPreview(SurfaceReductionResult result) {
+    currentSurfaceReductionResult_ = std::move(result);
+}
+
+void AppController::clearCurrentSurfaceReductionPreview() {
+    currentSurfaceReductionResult_ = {};
+}
+
+bool AppController::surfaceReductionPreviewReady() const {
+    return currentSurfaceReductionResult_.canApply();
+}
+
+const SurfaceReductionResult& AppController::currentSurfaceReductionResult() const {
+    return currentSurfaceReductionResult_;
+}
+
+Result AppController::applyCurrentSurfaceReduction() {
+    if (!surfaceReductionPreviewReady()) {
+        return Result::error("当前曲面减面预览未通过全部质量门。");
+    }
+    const auto result = execute(std::make_unique<ReduceSelectedFacesCommand>(currentSurfaceReductionResult_));
+    if (result.success()) {
+        clearCurrentSurfaceReductionPreview();
+        clearCurrentPatchOverlay();
+    }
+    return result;
 }
 
 PatchPreviewPipelineResult AppController::cropAndRunGeomagicForCandidateData(
@@ -729,6 +767,7 @@ SameDomainUnifyResult AppController::unifySameDomain(
     const auto result = commandPtr->result();
     if (result.document.hasShape()) {
         clearCurrentPatchOverlay();
+        clearCurrentSurfaceReductionPreview();
     }
     return result;
 }
@@ -1101,6 +1140,7 @@ Result AppController::applyCurrentPatchToCurrentCandidate(
     patchPreviewReady_ = false;
     currentPatchStatus_ = RegionPatchStatus::Applied;
     currentPatchStatusMessage_ = "Patch Apply completed and committed after StrictTopologyGate passed.";
+    clearCurrentSurfaceReductionPreview();
     return Result::ok();
 }
 
@@ -1161,11 +1201,19 @@ ShapeValidationReport AppController::validateShape() {
 }
 
 Result AppController::lockEdges(const std::vector<EdgeId>& edgeIds) {
-    return execute(std::make_unique<LockEdgeCommand>(edgeIds));
+    const auto result = execute(std::make_unique<LockEdgeCommand>(edgeIds));
+    if (result.success()) {
+        clearCurrentSurfaceReductionPreview();
+    }
+    return result;
 }
 
 Result AppController::unlockEdges(const std::vector<EdgeId>& edgeIds) {
-    return execute(std::make_unique<UnlockEdgeCommand>(edgeIds));
+    const auto result = execute(std::make_unique<UnlockEdgeCommand>(edgeIds));
+    if (result.success()) {
+        clearCurrentSurfaceReductionPreview();
+    }
+    return result;
 }
 
 std::set<EdgeId> AppController::lockedEdges() const {

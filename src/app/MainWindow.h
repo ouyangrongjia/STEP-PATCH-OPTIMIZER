@@ -51,6 +51,9 @@ private:
     void importPatchFromFile();
     void applyCurrentPatchPreview();
     void clearPatchOverlay();
+    void previewSurfaceReduction();
+    void applySurfaceReduction();
+    void clearSurfaceReductionPreview();
     void detectFeatureEdges();
     void previewMergeCandidates();
     void showAllMergeCandidates();
@@ -140,6 +143,9 @@ private:
     QAction* importPatchFromFileAction_ = nullptr;
     QAction* applyCurrentPatchAction_ = nullptr;
     QAction* clearPatchOverlayAction_ = nullptr;
+    QAction* previewSurfaceReductionAction_ = nullptr;
+    QAction* applySurfaceReductionAction_ = nullptr;
+    QAction* clearSurfaceReductionAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* selectFaceAction_ = nullptr;
     QAction* selectEdgeAction_ = nullptr;

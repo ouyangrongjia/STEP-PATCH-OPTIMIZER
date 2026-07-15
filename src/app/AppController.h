@@ -22,6 +22,7 @@
 #include "stl/StlRegionExtractor.h"
 #include "stl/StpSampledFittingMeshBuilder.h"
 #include "validate/ShapeValidator.h"
+#include "reduction/SurfaceReductionEngine.h"
 
 #include <filesystem>
 #include <functional>
@@ -129,6 +130,14 @@ public:
         const MergeCandidate& candidate,
         PatchReplacementReport* outReport = nullptr,
         PatchPreviewProgressCallback progress = {});
+    static SurfaceReductionResult reduceSelectedFacesData(
+        const ShapeDocument& document,
+        const SurfaceReductionRequest& request);
+    void setCurrentSurfaceReductionPreview(SurfaceReductionResult result);
+    void clearCurrentSurfaceReductionPreview();
+    bool surfaceReductionPreviewReady() const;
+    const SurfaceReductionResult& currentSurfaceReductionResult() const;
+    Result applyCurrentSurfaceReduction();
     CropBoundaryDiagnosticsReport diagnoseCropBoundaryForCurrentPatch(
         const MergeCandidate& candidate,
         const StlMesh* localStlMesh = nullptr,
@@ -161,6 +170,7 @@ private:
     RegionPatchStatus currentPatchStatus_ = RegionPatchStatus::NotGenerated;
     std::string currentPatchStatusMessage_;
     ProcessStatusSnapshot processStatus_ = makeProcessStatus(ProcessStage::Idle, "Idle.");
+    SurfaceReductionResult currentSurfaceReductionResult_;
 
     void updateCurrentPatchApplyState();
     void publishProcessStatusForCandidate(

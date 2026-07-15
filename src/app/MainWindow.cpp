@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <utility>
 
 namespace spo {
@@ -506,6 +507,10 @@ void MainWindow::createActions() {
     applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
     applyCurrentPatchAction_->setEnabled(false);
     clearPatchOverlayAction_ = new QAction("清除 Patch Overlay", this);
+    previewSurfaceReductionAction_ = new QAction("减少选区面数", this);
+    applySurfaceReductionAction_ = new QAction("应用曲面减面结果", this);
+    applySurfaceReductionAction_->setEnabled(false);
+    clearSurfaceReductionAction_ = new QAction("清除曲面减面预览", this);
 
     exitAction_ = new QAction("退出", this);
     exitAction_->setShortcut(QKeySequence::Quit);
@@ -643,6 +648,11 @@ void MainWindow::createMenus() {
     mergeMenu->addAction(undoAction_);
     mergeMenu->addAction(redoAction_);
 
+    auto* reductionMenu = advancedMenu->addMenu("曲面减面");
+    reductionMenu->addAction(previewSurfaceReductionAction_);
+    reductionMenu->addAction(applySurfaceReductionAction_);
+    reductionMenu->addAction(clearSurfaceReductionAction_);
+
     auto* helpMenu = menuBar()->addMenu("帮助");
     helpMenu->addAction("关于", this, [this]() {
         QMessageBox::about(this, "关于", "STEP 曲面片优化器\n特征感知的 STEP 曲面片合并与边界优化系统");
@@ -711,6 +721,7 @@ void MainWindow::createToolBars() {
     toolBar->addSeparator();
     addMenuButton("选择", selectionMenu);
     toolBar->addAction(detectAction_);
+    toolBar->addAction(previewSurfaceReductionAction_);
     addMenuButton("候选区域", candidateToolMenu);
     addMenuButton("Patch", patchToolMenu);
     toolBar->addAction(toggleFeaturesAction_);
@@ -805,6 +816,9 @@ void MainWindow::connectActions() {
     connect(importPatchFromFileAction_, &QAction::triggered, this, [this]() { importPatchFromFile(); });
     connect(applyCurrentPatchAction_, &QAction::triggered, this, [this]() { applyCurrentPatchPreview(); });
     connect(clearPatchOverlayAction_, &QAction::triggered, this, [this]() { clearPatchOverlay(); });
+    connect(previewSurfaceReductionAction_, &QAction::triggered, this, [this]() { previewSurfaceReduction(); });
+    connect(applySurfaceReductionAction_, &QAction::triggered, this, [this]() { applySurfaceReduction(); });
+    connect(clearSurfaceReductionAction_, &QAction::triggered, this, [this]() { clearSurfaceReductionPreview(); });
     connect(showSourceStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setSourceStlVisible);
     connect(showCroppedStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setCroppedStlVisible);
     connect(showStlCropBoxAction_, &QAction::toggled, viewer_, &OccViewWidget::setStlCropBoxVisible);
@@ -1690,6 +1704,141 @@ void MainWindow::clearPatchOverlay() {
     refreshProcessStatusPanel();
 }
 
+void MainWindow::previewSurfaceReduction() {
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        setStatus("未加载模型");
+        return;
+    }
+    if (stlCropInProgress_ || patchApplyInProgress_) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
+    const auto selectedFaces = viewer_->selectedFaceIds();
+    if (selectedFaces.size() < 2) {
+        inspectPanel_->showReport("请在选择面模式下至少选择两个相邻面。");
+        setStatus("选区没有可减少的面数");
+        return;
+    }
+
+    SurfaceReductionRequest request;
+    request.selectedFaces = selectedFaces;
+    request.lockedEdges = controller_.lockedEdges();
+    if (controller_.hasSourceStl()) {
+        request.referenceStl = std::make_shared<StlMesh>(controller_.sourceStlMesh());
+    }
+    const auto documentSnapshot = controller_.document();
+    controller_.clearCurrentSurfaceReductionPreview();
+    applySurfaceReductionAction_->setEnabled(false);
+    setStlCropInProgress(true);
+    setStatus("正在后台拟合曲面减面预览");
+    inspectPanel_->showReport(QString("曲面减面计算中\n输入面数：%1\n目标：50% 及以下").arg(selectedFaces.size()));
+    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+
+    auto* watcher = new QFutureWatcher<SurfaceReductionResult>(this);
+    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher]() {
+        auto output = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+        controller_.setCurrentSurfaceReductionPreview(output);
+
+        const auto& report = output.report;
+        QStringList lines;
+        lines << "曲面减面预览结果";
+        lines << QString("状态：%1").arg(QString::fromLatin1(toString(report.outcome)));
+        lines << QString("输入面数：%1").arg(report.inputFaceCount);
+        lines << QString("输出面数：%1").arg(report.outputFaceCount);
+        lines << QString("减少比例：%1%").arg(QString::number(report.reductionRatio * 100.0, 'f', 2));
+        lines << QString("达到 50% 目标：%1").arg(report.targetAchieved ? "是" : "否");
+        lines << QString("最大距离：%1 mm").arg(QString::number(report.maxDistance, 'g', 8));
+        lines << QString("最大法向差：%1°").arg(QString::number(report.maxNormalAngleDegrees, 'g', 8));
+        lines << QString("最大保留光顺接缝夹角：%1°").arg(QString::number(report.maxSmoothSeamAngleDegrees, 'g', 8));
+        lines << QString("参数化有效：%1").arg(report.parameterizationValid ? "是" : "否");
+        lines << QString("BRepCheck：%1").arg(report.topologyReport.afterBRepCheckValid ? "通过" : "未通过");
+        lines << QString("STEP 回读：%1").arg(report.topologyReport.stepRoundtripOk ? "通过" : "未通过");
+        lines << QString("商业 CAD 类边界门：%1").arg(
+            report.commercialCadReports.empty()
+                ? "未执行"
+                : (std::all_of(
+                    report.commercialCadReports.begin(),
+                    report.commercialCadReports.end(),
+                    [](const auto& gate) { return gate.passed; }) ? "通过" : "未通过"));
+        lines << QString("尝试合并：%1，接受：%2").arg(report.attemptedMergeCount).arg(report.acceptedMergeCount);
+        lines << QString("STEP/STL 混合参数化：%1").arg(report.hybridParameterizationUsed ? "已使用" : "未使用");
+        if (report.hybridParameterizationUsed) {
+            lines << QString("裁剪 STL：%1 个三角形，参数顶点 %2 个")
+                .arg(report.hybridParameterization.croppedTriangleCount)
+                .arg(report.hybridParameterization.vertexCount);
+            lines << QString("STEP 到 STL 最大参考距离：%1 mm")
+                .arg(QString::number(report.maxStepToStlDistance, 'g', 8));
+        }
+        lines << QString("质量门：%1").arg(report.allQualityGatesPassed ? "全部通过" : "未通过");
+        lines << QString("说明：%1").arg(QString::fromStdString(report.message));
+        if (!report.rejectedGroups.empty()) {
+            lines << "" << "被拒绝的分组";
+            for (const auto& rejected : report.rejectedGroups) {
+                QStringList ids;
+                for (const auto face : rejected.faces) {
+                    ids << QString::number(face);
+                }
+                lines << QString("面 [%1]：%2").arg(ids.join(", "), QString::fromStdString(rejected.reason));
+            }
+        }
+        inspectPanel_->showReport(lines.join('\n'));
+        bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+
+        if (!output.previewShape.IsNull()) {
+            viewer_->clearPatchOverlay();
+            viewer_->showPatchOverlay(output.previewShape);
+        }
+        applySurfaceReductionAction_->setEnabled(output.canApply());
+        if (output.canApply()) {
+            logPanel_->appendInfo(QString("曲面减面预览可应用：面 %1 -> %2。")
+                .arg(report.inputFaceCount)
+                .arg(report.outputFaceCount));
+            setStatus("曲面减面预览完成，可应用");
+        } else {
+            logPanel_->appendWarning(QString::fromStdString(report.message));
+            setStatus("曲面减面未生成可应用结果");
+        }
+        refreshUndoRedoActions();
+    });
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, request]() {
+        return AppController::reduceSelectedFacesData(documentSnapshot, request);
+    }));
+}
+
+void MainWindow::applySurfaceReduction() {
+    if (!controller_.surfaceReductionPreviewReady()) {
+        inspectPanel_->showReport("当前曲面减面预览未通过全部质量门，不能应用。");
+        setStatus("曲面减面结果不可应用");
+        return;
+    }
+    const auto result = controller_.applyCurrentSurfaceReduction();
+    if (!result.success()) {
+        inspectPanel_->showReport(QString::fromStdString(result.message()));
+        logPanel_->appendError(QString::fromStdString(result.message()));
+        setStatus("曲面减面应用失败");
+        return;
+    }
+    viewer_->clearPatchOverlay();
+    applySurfaceReductionAction_->setEnabled(false);
+    refreshDocumentViews(false);
+    inspectPanel_->showReport("曲面减面事务已提交。\n撤销和重做使用缓存结果，不会重新拟合。");
+    logPanel_->appendInfo("曲面减面事务已提交。");
+    setStatus("曲面减面已应用");
+    refreshUndoRedoActions();
+}
+
+void MainWindow::clearSurfaceReductionPreview() {
+    viewer_->clearPatchOverlay();
+    controller_.clearCurrentSurfaceReductionPreview();
+    applySurfaceReductionAction_->setEnabled(false);
+    inspectPanel_->showReport("曲面减面预览已清除。\n主模型未修改。");
+    setStatus("曲面减面预览已清除");
+}
+
 void MainWindow::showPatchPreviewReport(
     const PatchPreviewReport& report,
     bool visualCutoutPreview,
@@ -2231,6 +2380,7 @@ void MainWindow::undo() {
     }
 
     refreshDocumentViews(false);
+    applySurfaceReductionAction_->setEnabled(false);
     logPanel_->appendInfo("已撤销上一条编辑命令。");
     setStatus("已撤销");
     refreshUndoRedoActions();
@@ -2246,6 +2396,7 @@ void MainWindow::redo() {
     }
 
     refreshDocumentViews(false);
+    applySurfaceReductionAction_->setEnabled(false);
     logPanel_->appendInfo("已重做上一条编辑命令。");
     setStatus("已重做");
     refreshUndoRedoActions();
@@ -2750,6 +2901,8 @@ void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
         return;
     }
 
+    viewer_->clearPatchOverlay();
+    applySurfaceReductionAction_->setEnabled(false);
     logPanel_->appendInfo(QString("已锁定 %1 条边。").arg(edgeIds.size()));
     setStatus(QString("已锁定 %1 条边").arg(edgeIds.size()));
     syncLockedEdges();
@@ -2770,6 +2923,8 @@ void MainWindow::unlockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
         return;
     }
 
+    viewer_->clearPatchOverlay();
+    applySurfaceReductionAction_->setEnabled(false);
     logPanel_->appendInfo(QString("已解锁 %1 条边。").arg(edgeIds.size()));
     setStatus(QString("已解锁 %1 条边").arg(edgeIds.size()));
     syncLockedEdges();
