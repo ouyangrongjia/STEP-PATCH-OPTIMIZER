@@ -79,6 +79,8 @@ add_library(spo_core STATIC
     src/patch/BoundaryConstrainedSurfaceRetrim.cpp
     src/patch/CropBoundaryDiagnostics.cpp
     src/patch/PatchTrimDiagnostics.cpp
+    src/patch/PatchClosureDiagnostics.cpp
+    src/patch/PatchReplacementAssembler.cpp
     src/patch/PatchReplacementRepair.cpp
     src/validate/ShapeValidator.cpp
     src/validate/CommercialCadQualityGate.cpp

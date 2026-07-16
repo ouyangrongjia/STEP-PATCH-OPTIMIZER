@@ -17,7 +17,7 @@
 2. [x] 集中工具层 JSON/UTF-8 路径辅助、FeatureBoundedRefit 候选确定性选择和 Geomagic JSON 文件写入。
 3. [x] 补强具名结构回归测试，覆盖候选确定性排序、报告字段映射和质量门解耦前输入合同。
 4. [x] 通过共享 repair metrics、直接 gate 输入和 BoundaryWireBuilder 模块移动解除反向依赖。
-5. [ ] 拆分 PatchReplacementCommand。
+5. [x] 拆分 PatchReplacementCommand，将补片组装与闭合诊断从命令编排中分离。
 6. [ ] 拆分 StpSampledFittingMeshBuilder。
 7. [ ] 拆分 AppController 与 MainWindow 工作流。
 8. [ ] 拆分 RestrictedBSplinePatchFitter。

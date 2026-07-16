@@ -19,6 +19,10 @@
 
 阶段 3 已提取共享 `PatchReplacementRepairMetrics`，repair report 与最终 replacement report 通过同一基类保留原字段访问和输出合同，命令侧不再逐字段复制修复指标。`StrictTopologyGateInput` 改为直接接收 `replacementFaceCount`，验证模块不再包含或前置声明补片报告。`BoundaryWireBuilder` 从 B-rep 目录移动到 merge 目录，消除底层拓扑模块对区域分析类型的反向依赖；类名、方法和行为不变。
 
+### 2026-07-16 结构优化阶段 4
+
+阶段 4 已从 `PatchReplacementCommand` 提取 `PatchReplacementAssembler` 和 `PatchClosureDiagnostics`：前者负责原面移除、补片面重建与 replacement shape 组装，后者负责修复前后闭合统计及自由边诊断。命令类只保留输入校验、执行顺序、repair、质量门和报告汇总；公开接口、失败顺序、报告字段、Apply、undo/redo 语义保持不变。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。
