@@ -11,6 +11,10 @@
 
 当前开发分支为 `refactor/structure-hardening`，基线为 `native-surface-reduction` 的 `dc76425`。阶段 1 已删除无引用空占位类型、空编译单元和无功能的 `batch_optimize` 目标；工具层共用 JSON/UTF-8 路径辅助与确定性 FeatureBoundedRefit 候选选择已集中，Geomagic 配置和结果 JSON 写入共用同一文件辅助实现。算法、报告字段、CLI 和 GUI 行为保持不变。
 
+### 2026-07-16 结构优化阶段 2
+
+阶段 2 已增加 FeatureBoundedRefit 候选查找、过滤、排序和未设置统计字段回退的具名测试；`PatchReplacementCommand` 的 repair、closure、trim、external CAD 与 gate 报告断言已按合同分组；`StrictTopologyGate` 增加“只从补片报告读取 replacement face count”的解耦前基线。默认测试不包含真实 candidate 或固定 FaceId。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。

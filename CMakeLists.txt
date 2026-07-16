@@ -181,6 +181,7 @@ if(SPO_BUILD_TESTS)
     add_executable(spo_tests
         tests/test_feature_edges.cpp
         tests/test_feature_bounded_region_builder.cpp
+        tests/test_feature_bounded_candidate_selector.cpp
         tests/test_face_inspect.cpp
         tests/test_boundary_wire_builder.cpp
         tests/test_candidate_type_statistics.cpp

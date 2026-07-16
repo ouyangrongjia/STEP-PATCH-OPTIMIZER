@@ -130,6 +130,21 @@ void test_multi_face_replacement_can_be_disallowed() {
     assert(report.failureReason == spo::StrictTopologyFailureReason::ReplacementStatsInvalid);
 }
 
+void test_replacement_face_count_is_the_only_patch_report_gate_input() {
+    const spo::ShapeDocument before(make_box(), {});
+    const spo::ShapeDocument after(make_box(), {});
+    spo::PatchReplacementReport replacement;
+    replacement.success = false;
+    replacement.patchFaceCount = -100;
+    replacement.replacementFaceCount = 3;
+
+    const auto report = evaluate(before, after, &replacement);
+
+    assert(report.passed);
+    assert(report.replacementFaceCount == 3);
+    assert(report.multiFaceReplacement);
+}
+
 void test_face_count_not_reduced_warns_without_failing() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_box(), {});
@@ -194,6 +209,7 @@ void run_strict_topology_gate_tests() {
     test_free_edge_increase_fails();
     test_multi_face_replacement_is_accepted();
     test_multi_face_replacement_can_be_disallowed();
+    test_replacement_face_count_is_the_only_patch_report_gate_input();
     test_face_count_not_reduced_warns_without_failing();
     test_step_export_and_roundtrip_use_requested_path();
     test_watertight_solid_gate_records_roundtrip_stats();

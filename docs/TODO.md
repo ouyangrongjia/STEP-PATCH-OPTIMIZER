@@ -15,7 +15,7 @@
 ```text
 1. [x] 删除无引用空占位类型、空编译单元和无功能的 batch_optimize 目标。
 2. [x] 集中工具层 JSON/UTF-8 路径辅助、FeatureBoundedRefit 候选确定性选择和 Geomagic JSON 文件写入。
-3. [ ] 补强具名结构回归测试。
+3. [x] 补强具名结构回归测试，覆盖候选确定性排序、报告字段映射和质量门解耦前输入合同。
 4. [ ] 解除报告、验证与合并模块反向依赖。
 5. [ ] 拆分 PatchReplacementCommand。
 6. [ ] 拆分 StpSampledFittingMeshBuilder。

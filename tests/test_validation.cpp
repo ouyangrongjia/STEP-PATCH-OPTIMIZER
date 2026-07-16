@@ -8,6 +8,7 @@ void run_region_boundary_analyzer_tests();
 void run_face_inspect_tests();
 void run_candidate_type_statistics_tests();
 void run_feature_bounded_region_builder_tests();
+void run_feature_bounded_candidate_selector_tests();
 void run_boundary_wire_builder_tests();
 void run_stl_io_tests();
 void run_stl_io_real_file_tests();
@@ -133,6 +134,7 @@ void run_unit_tests() {
     run_face_inspect_tests();
     run_candidate_type_statistics_tests();
     run_feature_bounded_region_builder_tests();
+    run_feature_bounded_candidate_selector_tests();
     run_boundary_wire_builder_tests();
     run_stl_io_tests();
     run_stl_mesh_tests();

@@ -190,6 +190,81 @@ std::string read_text_file(const std::filesystem::path& path) {
     return buffer.str();
 }
 
+void assert_repair_report_mapping(const spo::PatchReplacementReport& report) {
+    assert(report.repairApplied);
+    assert(report.sameParameterApplied);
+    assert(report.shapeFixApplied);
+    assert(report.shapeFixFaceApplied);
+    assert(report.shapeFixWireApplied);
+    assert(report.sewingApplied);
+    assert(report.repairRunCount == 1);
+    assert(report.shapeFixShapeApplied);
+    assert(report.unifySameDomainApplied);
+    assert(report.sewingAttemptCount > 1);
+    assert(report.selectedSewingTolerance > 0.0);
+    assert(report.bestSewingFaceCount > 0);
+    assert(report.bestSewingEdgeCount > 0);
+    assert(report.bestSewingSolidCount > 0);
+    assert(report.faceCountBeforeRepair > 0);
+    assert(report.faceCountAfterRepair > 0);
+}
+
+void assert_closure_report_mapping(const spo::PatchReplacementReport& report) {
+    assert(report.preRepairClosureCaptured);
+    assert(report.preRepairFaceCount > 0);
+    assert(report.preRepairEdgeCount > 0);
+    assert(report.preRepairShellCount > 0);
+    assert(report.preRepairSolidCount > 0);
+    assert(report.preRepairBRepCheckValid);
+    assert(report.preRepairFreeEdgeCount == report.freeEdgesBeforeRepair);
+    assert(report.preRepairMultipleEdgeCount == report.multipleEdgesBeforeRepair);
+    assert(report.postRepairClosureCaptured);
+    assert(report.postRepairFaceCount > 0);
+    assert(report.postRepairEdgeCount > 0);
+    assert(report.postRepairShellCount > 0);
+    assert(report.postRepairSolidCount > 0);
+    assert(report.postRepairBRepCheckValid);
+    assert(report.postRepairFreeEdgeCount == report.freeEdgesAfterRepair);
+    assert(report.postRepairMultipleEdgeCount == report.multipleEdgesAfterRepair);
+    assert(report.freeEdgeDiagnostics.empty());
+}
+
+void assert_trim_report_mapping(const spo::PatchReplacementReport& report) {
+    assert(report.trimDiagnostics.captured);
+    assert(report.trimDiagnostics.replacementFaceCount > 0);
+    assert(report.trimDiagnostics.overCoverSampleCount == 0);
+    assert(report.trimDiagnostics.underCoverSampleCount == 0);
+    assert(report.trimDiagnostics.boundaryGapMax <= 1.0e-6);
+}
+
+void assert_external_cad_report_mapping(const spo::PatchReplacementReport& report) {
+    assert(report.externalCadDiagnostics.captured);
+    assert(report.externalCadDiagnostics.rawPatchPreflightAvailable);
+    assert(report.externalCadDiagnostics.rawPatchPreflightRole == "PatchPreflightOnly");
+    assert(!report.externalCadDiagnostics.rawPatchPreflightInputPath.empty());
+    assert(!report.externalCadDiagnostics.rawPatchPreflightExecuted);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible);
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticExecuted);
+    assert(report.externalCadDiagnostics.finalAppliedStepDiagnosticStage == "AppliedStepAfterSuccessfulApply");
+    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason.empty());
+}
+
+void assert_gate_report_mapping(
+    const spo::PatchReplacementReport& report,
+    const spo::ShapeStats& beforeStats) {
+    assert(report.gateEvaluated);
+    assert(report.gatePassed);
+    assert(report.gateFailureReason == "None");
+    assert(report.gateBeforeSolidCount == beforeStats.solids);
+    assert(report.gateAfterSolidCount == beforeStats.solids);
+    assert(report.gateRoundtripSolidCount == beforeStats.solids);
+    assert(report.gateBeforeBRepCheckValid);
+    assert(report.gateAfterBRepCheckValid);
+    assert(report.gateStepExportOk);
+    assert(report.gateStepRoundtripOk);
+    assert(report.gateRoundtripBRepCheckValid);
+}
+
 void test_invalid_input_fails_and_does_not_mutate_document() {
     {
         CommandFixture fixture(make_box(10.0));
@@ -288,64 +363,11 @@ void test_repair_pipeline_invoked_on_successful_minimal_path() {
     assert(report.usedOriginalBoundarySurfaceRetrim);
     assert(report.retrimBoundarySampleCount > 0);
     assert(report.retrimFailedProjectionCount == 0);
-    assert(report.repairApplied);
-    assert(report.sameParameterApplied);
-    assert(report.shapeFixApplied);
-    assert(report.shapeFixFaceApplied);
-    assert(report.shapeFixWireApplied);
-    assert(report.sewingApplied);
-    assert(report.repairRunCount == 1);
-    assert(report.shapeFixShapeApplied);
-    assert(report.unifySameDomainApplied);
-    assert(report.sewingAttemptCount > 1);
-    assert(report.selectedSewingTolerance > 0.0);
-    assert(report.bestSewingFaceCount > 0);
-    assert(report.bestSewingEdgeCount > 0);
-    assert(report.bestSewingSolidCount > 0);
-    assert(report.preRepairClosureCaptured);
-    assert(report.preRepairFaceCount > 0);
-    assert(report.preRepairEdgeCount > 0);
-    assert(report.preRepairShellCount > 0);
-    assert(report.preRepairSolidCount > 0);
-    assert(report.preRepairBRepCheckValid);
-    assert(report.preRepairFreeEdgeCount == report.freeEdgesBeforeRepair);
-    assert(report.preRepairMultipleEdgeCount == report.multipleEdgesBeforeRepair);
-    assert(report.postRepairClosureCaptured);
-    assert(report.postRepairFaceCount > 0);
-    assert(report.postRepairEdgeCount > 0);
-    assert(report.postRepairShellCount > 0);
-    assert(report.postRepairSolidCount > 0);
-    assert(report.postRepairBRepCheckValid);
-    assert(report.postRepairFreeEdgeCount == report.freeEdgesAfterRepair);
-    assert(report.postRepairMultipleEdgeCount == report.multipleEdgesAfterRepair);
-    assert(report.freeEdgeDiagnostics.empty());
-    assert(report.trimDiagnostics.captured);
-    assert(report.trimDiagnostics.replacementFaceCount > 0);
-    assert(report.trimDiagnostics.overCoverSampleCount == 0);
-    assert(report.trimDiagnostics.underCoverSampleCount == 0);
-    assert(report.trimDiagnostics.boundaryGapMax <= 1.0e-6);
-    assert(report.externalCadDiagnostics.captured);
-    assert(report.externalCadDiagnostics.rawPatchPreflightAvailable);
-    assert(report.externalCadDiagnostics.rawPatchPreflightRole == "PatchPreflightOnly");
-    assert(!report.externalCadDiagnostics.rawPatchPreflightInputPath.empty());
-    assert(!report.externalCadDiagnostics.rawPatchPreflightExecuted);
-    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticEligible);
-    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticExecuted);
-    assert(report.externalCadDiagnostics.finalAppliedStepDiagnosticStage == "AppliedStepAfterSuccessfulApply");
-    assert(!report.externalCadDiagnostics.finalAppliedStepDiagnosticSkippedReason.empty());
-    assert(report.faceCountBeforeRepair > 0);
-    assert(report.faceCountAfterRepair > 0);
-    assert(report.gateEvaluated);
-    assert(report.gatePassed);
-    assert(report.gateFailureReason == "None");
-    assert(report.gateBeforeSolidCount == beforeStats.solids);
-    assert(report.gateAfterSolidCount == beforeStats.solids);
-    assert(report.gateRoundtripSolidCount == beforeStats.solids);
-    assert(report.gateBeforeBRepCheckValid);
-    assert(report.gateAfterBRepCheckValid);
-    assert(report.gateStepExportOk);
-    assert(report.gateStepRoundtripOk);
-    assert(report.gateRoundtripBRepCheckValid);
+    assert_repair_report_mapping(report);
+    assert_closure_report_mapping(report);
+    assert_trim_report_mapping(report);
+    assert_external_cad_report_mapping(report);
+    assert_gate_report_mapping(report, beforeStats);
     assert(same_stats(fixture.context.document.stats(), beforeStats));
 
     const auto undoResult = command.undo(fixture.context);
