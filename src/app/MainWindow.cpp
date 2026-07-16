@@ -1,4 +1,5 @@
 #include "app/MainWindow.h"
+#include "app/PatchWorkflowText.h"
 
 #include "gui/InspectPanel.h"
 #include "gui/LogPanel.h"
@@ -49,13 +50,6 @@ std::filesystem::path pathFromQString(const QString& path) {
 
 QString pathToQString(const std::filesystem::path& path) {
     return QString::fromStdWString(path.wstring());
-}
-
-QString elapsedText(qint64 milliseconds) {
-    const auto seconds = milliseconds / 1000;
-    return QString("%1:%2")
-        .arg(seconds / 60)
-        .arg(seconds % 60, 2, 10, QLatin1Char('0'));
 }
 
 QString candidateTypeText(MergeCandidateType type) {
@@ -392,7 +386,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 }
 
 bool MainWindow::event(QEvent* event) {
-    if (event->type() == QEvent::Close && (patchApplyInProgress_ || stlCropInProgress_)) {
+    if (event->type() == QEvent::Close && (workflowState_.patchApplyInProgress || workflowState_.stlCropInProgress)) {
         event->ignore();
         QMessageBox::information(this, "后台任务", "当前后台任务正在运行，请等待任务结束。");
         return true;
@@ -859,7 +853,7 @@ void MainWindow::connectActions() {
 }
 
 void MainWindow::openStepFile() {
-    if (stlCropInProgress_ || patchApplyInProgress_) {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
         setStatus("后台任务运行中");
         return;
@@ -910,7 +904,7 @@ void MainWindow::openStepFile() {
         const auto& document = controller_.document();
         const auto& stats = document.stats();
         clearMergeCandidateState();
-        hasFeatureEdgeResult_ = false;
+        workflowState_.hasFeatureEdgeResult = false;
         refreshModelTree();
         const auto displayStatus = viewer_->displayDocument(document);
         if (!displayStatus.success()) {
@@ -967,7 +961,7 @@ void MainWindow::saveProject() {
 }
 
 void MainWindow::exportStepFile() {
-    if (stlCropInProgress_ || patchApplyInProgress_) {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
         setStatus("后台任务运行中");
         return;
@@ -1107,7 +1101,7 @@ void MainWindow::openSourceStlFile() {
 }
 
 void MainWindow::cropCurrentCandidateStl() {
-    if (stlCropInProgress_) {
+    if (workflowState_.stlCropInProgress) {
         inspectPanel_->showReport("STL 裁剪正在后台运行，请等待当前任务完成。");
         setStatus("STL 裁剪进行中");
         return;
@@ -1258,7 +1252,7 @@ void MainWindow::cropCurrentCandidateStl() {
 }
 
 void MainWindow::generateAndPreviewCurrentPatch() {
-    if (stlCropInProgress_) {
+    if (workflowState_.stlCropInProgress) {
         inspectPanel_->showReport("STL 裁剪或 Patch 生成正在后台运行，请等待当前任务完成。");
         setStatus("Patch 预览生成中");
         return;
@@ -1596,7 +1590,7 @@ void MainWindow::importPatchFromFile() {
 }
 
 void MainWindow::applyCurrentPatchPreview() {
-    if (patchApplyInProgress_) {
+    if (workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("Patch Apply 正在后台运行，请等待当前任务结束。");
         bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
         setStatus("Patch Apply 正在运行");
@@ -1626,7 +1620,7 @@ void MainWindow::applyCurrentPatchPreview() {
     controller_.updateProcessStatus(applyingStatus);
     refreshProcessStatusPanel();
 
-    patchApplyInProgress_ = true;
+    workflowState_.patchApplyInProgress = true;
     setStlCropInProgress(true);
     startPatchPreviewProgressReport(
         applyingStatus,
@@ -1654,7 +1648,7 @@ void MainWindow::applyCurrentPatchPreview() {
         const auto output = watcher->result();
         watcher->deleteLater();
 
-        patchApplyInProgress_ = false;
+        workflowState_.patchApplyInProgress = false;
         setStlCropInProgress(false);
         appendPatchPreviewProgress(controller_.currentProcessStatus());
         stopPatchPreviewProgressReport();
@@ -1710,7 +1704,7 @@ void MainWindow::previewSurfaceReduction() {
         setStatus("未加载模型");
         return;
     }
-    if (stlCropInProgress_ || patchApplyInProgress_) {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
         setStatus("后台任务运行中");
         return;
@@ -1882,7 +1876,7 @@ void MainWindow::detectFeatureEdges() {
 
     const auto params = parameterPanel_->parameters();
     const auto result = controller_.detectFeatureEdges(params.angular_threshold_degrees, params.min_edge_length);
-    hasFeatureEdgeResult_ = true;
+    workflowState_.hasFeatureEdgeResult = true;
     viewer_->showFeatureEdges(result);
     viewer_->setFeatureLinesVisible(true);
     toggleFeaturesAction_->setChecked(true);
@@ -1897,7 +1891,7 @@ void MainWindow::detectFeatureEdges() {
 }
 
 void MainWindow::previewMergeCandidates() {
-    if (stlCropInProgress_ || patchApplyInProgress_) {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
         setStatus("后台任务运行中");
         return;
@@ -1938,20 +1932,20 @@ void MainWindow::previewMergeCandidates() {
         stopPatchPreviewProgressReport();
 
         clearMergeCandidateState();
-        lastMergeCandidates_ = std::move(output.result.candidates);
-        hasFeatureEdgeResult_ = true;
+        workflowState_.candidates = std::move(output.result.candidates);
+        workflowState_.hasFeatureEdgeResult = true;
 
         int maxFaceCount = 0;
         int totalCandidateFaces = 0;
-        for (const auto& candidate : lastMergeCandidates_) {
+        for (const auto& candidate : workflowState_.candidates) {
             maxFaceCount = std::max(maxFaceCount, candidate.face_count);
             totalCandidateFaces += candidate.face_count;
         }
-        const auto statusCounts = countCandidateStatuses(lastMergeCandidates_);
-        const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
+        const auto statusCounts = countCandidateStatuses(workflowState_.candidates);
+        const auto typeCounts = countCandidateTypes(workflowState_.candidates);
 
         QString report = QString("合并候选区域预览完成\n候选区域数量：%1\nFeatureBoundedRefit：%2\nUnknown：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n保护边数量：%8\n访问 face 数量：%9\n拒绝区域数量：%10\n最大候选区域 face 数：%11\n总候选 face 数：%12\n预览前 face/edge：%13/%14\n预览后 face/edge：%15/%16")
-            .arg(lastMergeCandidates_.size())
+            .arg(workflowState_.candidates.size())
             .arg(typeCounts.feature_bounded_refit)
             .arg(typeCounts.unknown)
             .arg(statusCounts.pending)
@@ -1968,9 +1962,9 @@ void MainWindow::previewMergeCandidates() {
             .arg(output.afterStats.faces)
             .arg(output.afterStats.edges);
 
-        const auto previewCount = std::min<std::size_t>(10, lastMergeCandidates_.size());
+        const auto previewCount = std::min<std::size_t>(10, workflowState_.candidates.size());
         for (std::size_t index = 0; index < previewCount; ++index) {
-            const auto& candidate = lastMergeCandidates_[index];
+            const auto& candidate = workflowState_.candidates[index];
             report += QString("\n\n候选 %1\n状态：%2\n类型：%3\nface 数：%4\n总面积：%5\n最大法向夹角：%6 度\n最大距离：%7\n边界边数：%8\n内部边数：%9\nfit_error：%10\n风险：%11")
                 .arg(candidate.candidate_id)
                 .arg(candidateStatusText(candidate.status))
@@ -1985,17 +1979,17 @@ void MainWindow::previewMergeCandidates() {
                 .arg(riskLevelText(candidate.risk_level));
         }
 
-        if (lastMergeCandidates_.empty()) {
+        if (workflowState_.candidates.empty()) {
             viewer_->clearMergeCandidates();
-            visibleMergeCandidateCount_ = 0;
-            visibleMergeCandidateIds_.clear();
+            workflowState_.visibleCandidateCount = 0;
+            workflowState_.visibleCandidateIds.clear();
             report += "\n\n没有可预览候选区域。";
         } else {
-            viewer_->showMergeCandidates(lastMergeCandidates_, 10, false);
-            visibleMergeCandidateCount_ = static_cast<int>(std::min<std::size_t>(10, lastMergeCandidates_.size()));
-            visibleMergeCandidateIds_.clear();
-            for (std::size_t index = 0; index < static_cast<std::size_t>(visibleMergeCandidateCount_); ++index) {
-                addVisibleCandidateId(visibleMergeCandidateIds_, lastMergeCandidates_[index]);
+            viewer_->showMergeCandidates(workflowState_.candidates, 10, false);
+            workflowState_.visibleCandidateCount = static_cast<int>(std::min<std::size_t>(10, workflowState_.candidates.size()));
+            workflowState_.visibleCandidateIds.clear();
+            for (std::size_t index = 0; index < static_cast<std::size_t>(workflowState_.visibleCandidateCount); ++index) {
+                addVisibleCandidateId(workflowState_.visibleCandidateIds, workflowState_.candidates[index]);
             }
         }
         viewer_->showFeatureEdges(controller_.featureEdges());
@@ -2004,7 +1998,7 @@ void MainWindow::previewMergeCandidates() {
         refreshModelTree();
         inspectPanel_->showReport(report);
         logPanel_->appendInfo(QString("合并候选区域预览完成：候选 %1 个，FeatureBoundedRefit %2 个，保护边 %3，访问 face %4，拒绝 %5")
-            .arg(lastMergeCandidates_.size())
+            .arg(workflowState_.candidates.size())
             .arg(typeCounts.feature_bounded_refit)
             .arg(output.result.protected_edge_count)
             .arg(output.result.visited_faces)
@@ -2025,7 +2019,7 @@ void MainWindow::previewMergeCandidates() {
 }
 
 void MainWindow::showAllMergeCandidates() {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
@@ -2035,22 +2029,22 @@ void MainWindow::showAllMergeCandidates() {
 }
 
 void MainWindow::showNonHiddenMergeCandidates() {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
     }
 
-    const auto visibleCandidates = filterNonHiddenCandidates(lastMergeCandidates_);
+    const auto visibleCandidates = filterNonHiddenCandidates(workflowState_.candidates);
 
     viewer_->showMergeCandidates(visibleCandidates, 10, true);
-    if (hasFeatureEdgeResult_) {
+    if (workflowState_.hasFeatureEdgeResult) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = static_cast<int>(visibleCandidates.size());
-    visibleMergeCandidateIds_.clear();
+    workflowState_.visibleCandidateCount = static_cast<int>(visibleCandidates.size());
+    workflowState_.visibleCandidateIds.clear();
     for (const auto& candidate : visibleCandidates) {
-        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
+        addVisibleCandidateId(workflowState_.visibleCandidateIds, candidate);
     }
     refreshModelTree();
     showCandidateStatusReport("已显示全部非隐藏候选区域");
@@ -2058,7 +2052,7 @@ void MainWindow::showNonHiddenMergeCandidates() {
 }
 
 void MainWindow::showMergeCandidatesByTypeDialog() {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
@@ -2084,17 +2078,17 @@ void MainWindow::showMergeCandidatesByTypeDialog() {
 }
 
 void MainWindow::showMergeCandidatesByType(MergeCandidateType type) {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
     }
 
-    const auto filteredCandidates = filterCandidatesByType(lastMergeCandidates_, type);
+    const auto filteredCandidates = filterCandidatesByType(workflowState_.candidates, type);
     if (filteredCandidates.empty()) {
         viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
+        workflowState_.visibleCandidateCount = 0;
+        workflowState_.visibleCandidateIds.clear();
         refreshModelTree();
         const auto message = QString("当前没有 %1 类型候选。").arg(candidateTypeText(type));
         inspectPanel_->showReport(message);
@@ -2104,13 +2098,13 @@ void MainWindow::showMergeCandidatesByType(MergeCandidateType type) {
     }
 
     viewer_->showMergeCandidates(filteredCandidates, 10, true);
-    if (hasFeatureEdgeResult_) {
+    if (workflowState_.hasFeatureEdgeResult) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = static_cast<int>(filteredCandidates.size());
-    visibleMergeCandidateIds_.clear();
+    workflowState_.visibleCandidateCount = static_cast<int>(filteredCandidates.size());
+    workflowState_.visibleCandidateIds.clear();
     for (const auto& candidate : filteredCandidates) {
-        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
+        addVisibleCandidateId(workflowState_.visibleCandidateIds, candidate);
     }
     refreshModelTree();
     showCandidateStatusReport(QString("已显示全部 %1 候选").arg(candidateTypeText(type)));
@@ -2118,7 +2112,7 @@ void MainWindow::showMergeCandidatesByType(MergeCandidateType type) {
 }
 
 void MainWindow::highlightMergeCandidateById() {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
@@ -2138,23 +2132,23 @@ void MainWindow::highlightMergeCandidateById() {
         return;
     }
 
-    auto it = std::find_if(lastMergeCandidates_.begin(), lastMergeCandidates_.end(), [candidateId](const auto& candidate) {
+    auto it = std::find_if(workflowState_.candidates.begin(), workflowState_.candidates.end(), [candidateId](const auto& candidate) {
         return candidate.candidate_id == candidateId;
     });
-    if (it == lastMergeCandidates_.end()) {
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
+    if (it == workflowState_.candidates.end()) {
+        workflowState_.visibleCandidateCount = 0;
+        workflowState_.visibleCandidateIds.clear();
         refreshModelTree();
         logPanel_->appendWarning(QString("未找到候选 ID：%1").arg(candidateId));
         setStatus("未找到候选区域");
         return;
     }
 
-    currentMergeCandidateId_ = candidateId;
+    workflowState_.currentCandidateId = candidateId;
     if (it->status == MergeCandidateStatus::Hidden) {
         viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
+        workflowState_.visibleCandidateCount = 0;
+        workflowState_.visibleCandidateIds.clear();
         refreshModelTree();
         showCandidateStatusReport(QString("候选 %1 当前为 Hidden，未显示").arg(candidateId));
         setStatus("候选已隐藏");
@@ -2162,12 +2156,12 @@ void MainWindow::highlightMergeCandidateById() {
     }
 
     viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*it}, candidateId);
-    if (hasFeatureEdgeResult_) {
+    if (workflowState_.hasFeatureEdgeResult) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = 1;
-    visibleMergeCandidateIds_.clear();
-    visibleMergeCandidateIds_.insert(candidateId);
+    workflowState_.visibleCandidateCount = 1;
+    workflowState_.visibleCandidateIds.clear();
+    workflowState_.visibleCandidateIds.insert(candidateId);
     refreshModelTree();
     showCandidateStatusReport(QString("已高亮候选 ID：%1").arg(candidateId));
     setStatus(QString("已高亮候选 %1").arg(candidateId));
@@ -2183,14 +2177,14 @@ void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
     const auto info = inspectFace(
         controller_.document(),
         faceId,
-        lastMergeCandidates_,
-        visibleMergeCandidateIds_,
-        hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr,
+        workflowState_.candidates,
+        workflowState_.visibleCandidateIds,
+        workflowState_.hasFeatureEdgeResult ? &controller_.featureEdges() : nullptr,
         controller_.lockedEdges());
 
     MergeCandidate* matchedCandidate = nullptr;
     MergeCandidate* hiddenCandidate = nullptr;
-    for (auto& candidate : lastMergeCandidates_) {
+    for (auto& candidate : workflowState_.candidates) {
         if (std::find(candidate.faces.begin(), candidate.faces.end(), faceId) == candidate.faces.end()) {
             continue;
         }
@@ -2205,48 +2199,48 @@ void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
     }
 
     if (matchedCandidate == nullptr) {
-        visibleMergeCandidateCount_ = 0;
-        visibleMergeCandidateIds_.clear();
+        workflowState_.visibleCandidateCount = 0;
+        workflowState_.visibleCandidateIds.clear();
         refreshModelTree();
         if (hiddenCandidate != nullptr) {
-            currentMergeCandidateId_ = hiddenCandidate->candidate_id;
+            workflowState_.currentCandidateId = hiddenCandidate->candidate_id;
             viewer_->clearMergeCandidates();
-            showFaceInspectReport(info, !lastMergeCandidates_.empty());
-            logPanel_->appendInfo(QString("Face %1 属于隐藏候选 %2，未显示").arg(faceId).arg(currentMergeCandidateId_));
+            showFaceInspectReport(info, !workflowState_.candidates.empty());
+            logPanel_->appendInfo(QString("Face %1 属于隐藏候选 %2，未显示").arg(faceId).arg(workflowState_.currentCandidateId));
             setStatus("候选已隐藏");
         } else {
-            showFaceInspectReport(info, !lastMergeCandidates_.empty());
+            showFaceInspectReport(info, !workflowState_.candidates.empty());
             logPanel_->appendWarning(QString("Face %1 不属于当前候选区域。").arg(faceId));
-            setStatus(lastMergeCandidates_.empty() ? "未生成候选区域" : "未命中候选区域");
+            setStatus(workflowState_.candidates.empty() ? "未生成候选区域" : "未命中候选区域");
         }
         return;
     }
 
-    currentMergeCandidateId_ = matchedCandidate->candidate_id;
+    workflowState_.currentCandidateId = matchedCandidate->candidate_id;
     viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*matchedCandidate}, matchedCandidate->candidate_id);
-    if (hasFeatureEdgeResult_) {
+    if (workflowState_.hasFeatureEdgeResult) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = 1;
-    visibleMergeCandidateIds_.clear();
-    visibleMergeCandidateIds_.insert(currentMergeCandidateId_);
+    workflowState_.visibleCandidateCount = 1;
+    workflowState_.visibleCandidateIds.clear();
+    workflowState_.visibleCandidateIds.insert(workflowState_.currentCandidateId);
     refreshModelTree();
     const auto selectedInfo = inspectFace(
         controller_.document(),
         faceId,
-        lastMergeCandidates_,
-        visibleMergeCandidateIds_,
-        hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr,
+        workflowState_.candidates,
+        workflowState_.visibleCandidateIds,
+        workflowState_.hasFeatureEdgeResult ? &controller_.featureEdges() : nullptr,
         controller_.lockedEdges());
     showFaceInspectReport(selectedInfo, true);
-    logPanel_->appendInfo(QString("已选择候选 ID：%1").arg(currentMergeCandidateId_));
-    setStatus(QString("已选择候选 %1").arg(currentMergeCandidateId_));
+    logPanel_->appendInfo(QString("已选择候选 ID：%1").arg(workflowState_.currentCandidateId));
+    setStatus(QString("已选择候选 %1").arg(workflowState_.currentCandidateId));
 }
 
 void MainWindow::clearMergeCandidatePreview() {
     viewer_->clearMergeCandidates();
-    visibleMergeCandidateCount_ = 0;
-    visibleMergeCandidateIds_.clear();
+    workflowState_.visibleCandidateCount = 0;
+    workflowState_.visibleCandidateIds.clear();
     refreshModelTree();
     logPanel_->appendInfo("已清除候选区域高亮。");
     setStatus("候选高亮已清除");
@@ -2254,7 +2248,7 @@ void MainWindow::clearMergeCandidatePreview() {
 
 void MainWindow::acceptCurrentMergeCandidate() {
     if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Accepted)) {
-        showCandidateStatusReport(QString("已接受候选 ID：%1").arg(currentMergeCandidateId_));
+        showCandidateStatusReport(QString("已接受候选 ID：%1").arg(workflowState_.currentCandidateId));
         setStatus("候选已接受");
     }
 }
@@ -2262,9 +2256,9 @@ void MainWindow::acceptCurrentMergeCandidate() {
 void MainWindow::rejectCurrentMergeCandidate() {
     if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Rejected)) {
         viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
+        workflowState_.visibleCandidateCount = 0;
         refreshModelTree();
-        showCandidateStatusReport(QString("已拒绝候选 ID：%1").arg(currentMergeCandidateId_));
+        showCandidateStatusReport(QString("已拒绝候选 ID：%1").arg(workflowState_.currentCandidateId));
         setStatus("候选已拒绝");
     }
 }
@@ -2272,16 +2266,16 @@ void MainWindow::rejectCurrentMergeCandidate() {
 void MainWindow::hideCurrentMergeCandidate() {
     if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Hidden)) {
         viewer_->clearMergeCandidates();
-        visibleMergeCandidateCount_ = 0;
+        workflowState_.visibleCandidateCount = 0;
         refreshModelTree();
-        showCandidateStatusReport(QString("已隐藏候选 ID：%1").arg(currentMergeCandidateId_));
+        showCandidateStatusReport(QString("已隐藏候选 ID：%1").arg(workflowState_.currentCandidateId));
         setStatus("候选已隐藏");
     }
 }
 
 void MainWindow::restoreCurrentMergeCandidate() {
     if (setCurrentMergeCandidateStatus(MergeCandidateStatus::Pending)) {
-        showCandidateStatusReport(QString("已恢复候选 ID：%1").arg(currentMergeCandidateId_));
+        showCandidateStatusReport(QString("已恢复候选 ID：%1").arg(workflowState_.currentCandidateId));
         setStatus("候选已恢复为待处理");
     }
 }
@@ -2310,7 +2304,7 @@ void MainWindow::applyMerge() {
 
     const auto& document = controller_.document();
     clearMergeCandidateState();
-    hasFeatureEdgeResult_ = false;
+    workflowState_.hasFeatureEdgeResult = false;
     refreshModelTree();
     const auto displayStatus = viewer_->displayDocument(document);
     if (!displayStatus.success()) {
@@ -2407,7 +2401,7 @@ void MainWindow::redo() {
 }
 
 void MainWindow::refreshUndoRedoActions() {
-    const bool idle = !stlCropInProgress_ && !patchApplyInProgress_;
+    const bool idle = !workflowState_.stlCropInProgress && !workflowState_.patchApplyInProgress;
     undoAction_->setEnabled(idle && controller_.canUndo());
     redoAction_->setEnabled(idle && controller_.canRedo());
 }
@@ -2423,7 +2417,7 @@ void MainWindow::refreshPatchApplyAction() {
         ? QString::fromStdString(decision.message)
         : QString::fromStdString(decision.reason);
 
-    applyCurrentPatchAction_->setEnabled(decision.canRequestApply && !stlCropInProgress_ && !patchApplyInProgress_);
+    applyCurrentPatchAction_->setEnabled(decision.canRequestApply && !workflowState_.stlCropInProgress && !workflowState_.patchApplyInProgress);
     applyCurrentPatchAction_->setToolTip(QString("Patch status：%1\n%2").arg(statusText, detail));
 }
 
@@ -2434,23 +2428,23 @@ void MainWindow::refreshProcessStatusPanel() {
 }
 
 void MainWindow::startPatchPreviewProgressReport(const ProcessStatusSnapshot& initialStatus, const QString& header) {
-    patchPreviewProgressActive_ = true;
-    patchPreviewProgressHeader_ = header;
-    patchPreviewProgressLines_.clear();
-    patchPreviewLastProgress_ = initialStatus;
-    patchPreviewProgressClock_.restart();
+    workflowState_.progressActive = true;
+    workflowState_.progressHeader = header;
+    workflowState_.progressLines.clear();
+    workflowState_.lastProgress = initialStatus;
+    workflowState_.progressClock.restart();
 
-    if (patchPreviewProgressTimer_ == nullptr) {
-        patchPreviewProgressTimer_ = new QTimer(this);
-        patchPreviewProgressTimer_->setInterval(2000);
-        connect(patchPreviewProgressTimer_, &QTimer::timeout, this, &MainWindow::refreshPatchPreviewProgressReport);
+    if (workflowState_.progressTimer == nullptr) {
+        workflowState_.progressTimer = new QTimer(this);
+        workflowState_.progressTimer->setInterval(2000);
+        connect(workflowState_.progressTimer, &QTimer::timeout, this, &MainWindow::refreshPatchPreviewProgressReport);
     }
-    patchPreviewProgressTimer_->start();
+    workflowState_.progressTimer->start();
 
     appendPatchPreviewProgress(initialStatus);
     if (bottomTabs_ != nullptr &&
         processStatusPanel_ != nullptr &&
-        patchPreviewProgressHeader_.startsWith("Patch Apply")) {
+        workflowState_.progressHeader.startsWith("Patch Apply")) {
         bottomTabs_->setCurrentWidget(processStatusPanel_);
     } else if (bottomTabs_ != nullptr && inspectPanel_ != nullptr) {
         bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
@@ -2458,22 +2452,22 @@ void MainWindow::startPatchPreviewProgressReport(const ProcessStatusSnapshot& in
 }
 
 void MainWindow::appendPatchPreviewProgress(ProcessStatusSnapshot status, bool syncController) {
-    if (!patchPreviewProgressActive_) {
+    if (!workflowState_.progressActive) {
         return;
     }
 
-    patchPreviewLastProgress_ = std::move(status);
+    workflowState_.lastProgress = std::move(status);
     if (syncController) {
-        controller_.updateProcessStatus(patchPreviewLastProgress_);
+        controller_.updateProcessStatus(workflowState_.lastProgress);
         refreshProcessStatusPanel();
     } else if (processStatusPanel_ != nullptr) {
-        processStatusPanel_->showStatus(patchPreviewLastProgress_);
+        processStatusPanel_->showStatus(workflowState_.lastProgress);
     }
 
-    patchPreviewProgressLines_ << patchPreviewProgressLine(patchPreviewLastProgress_);
+    workflowState_.progressLines << patchPreviewProgressLine(workflowState_.lastProgress);
     constexpr int maxProgressLineCount = 80;
-    while (patchPreviewProgressLines_.size() > maxProgressLineCount) {
-        patchPreviewProgressLines_.removeFirst();
+    while (workflowState_.progressLines.size() > maxProgressLineCount) {
+        workflowState_.progressLines.removeFirst();
     }
 
     refreshPatchPreviewProgressReport();
@@ -2481,7 +2475,7 @@ void MainWindow::appendPatchPreviewProgress(ProcessStatusSnapshot status, bool s
 }
 
 void MainWindow::refreshPatchPreviewProgressReport() {
-    if (!patchPreviewProgressActive_ || inspectPanel_ == nullptr) {
+    if (!workflowState_.progressActive || inspectPanel_ == nullptr) {
         return;
     }
     inspectPanel_->showReport(patchPreviewProgressReportText());
@@ -2489,95 +2483,31 @@ void MainWindow::refreshPatchPreviewProgressReport() {
 }
 
 void MainWindow::stopPatchPreviewProgressReport() {
-    patchPreviewProgressActive_ = false;
-    if (patchPreviewProgressTimer_ != nullptr) {
-        patchPreviewProgressTimer_->stop();
+    workflowState_.progressActive = false;
+    if (workflowState_.progressTimer != nullptr) {
+        workflowState_.progressTimer->stop();
     }
 }
 
 QString MainWindow::patchPreviewProgressReportText() const {
-    QStringList lines;
-    if (!patchPreviewProgressHeader_.isEmpty()) {
-        lines << patchPreviewProgressHeader_;
-    }
-
-    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
-    lines << QString("心跳：running  |  elapsed %1  |  last stage %2")
-        .arg(elapsedText(elapsed))
-        .arg(QString::fromLatin1(toString(patchPreviewLastProgress_.stage)));
-    if (!patchPreviewLastProgress_.latestMessage.empty()) {
-        lines << QString("最近消息：%1").arg(QString::fromStdString(patchPreviewLastProgress_.latestMessage));
-    }
-    if (!patchPreviewLastProgress_.latestWarning.empty()) {
-        lines << QString("最近警告：%1").arg(QString::fromStdString(patchPreviewLastProgress_.latestWarning));
-    }
-
-    lines << "";
-    lines << "阶段事件";
-    lines << patchPreviewProgressLines_;
-    return lines.join('\n');
+    return patch_workflow_text::progressReport(
+        workflowState_.progressHeader,
+        workflowState_.lastProgress,
+        workflowState_.progressLines,
+        workflowState_.elapsedMilliseconds());
 }
 
 QString MainWindow::patchPreviewProgressLine(const ProcessStatusSnapshot& status) const {
-    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
-    QStringList fields;
-    fields << QString("[%1]").arg(elapsedText(elapsed));
-    fields << QString::fromLatin1(toString(status.stage));
-    if (status.candidateId >= 0) {
-        fields << QString("candidate=%1").arg(status.candidateId);
-    }
-    if (status.sourceFaceCount > 0) {
-        fields << QString("faces=%1").arg(status.sourceFaceCount);
-    }
-    if (status.boundaryEdgeCount > 0) {
-        fields << QString("boundary_edges=%1").arg(status.boundaryEdgeCount);
-    }
-    if (!status.localStlPath.empty()) {
-        fields << QString("local STL=%1").arg(pathToQString(status.localStlPath));
-    }
-    if (!status.patchStepPath.empty()) {
-        fields << QString("patch STEP=%1").arg(pathToQString(status.patchStepPath));
-    }
-    if (!status.fitRegionLogPath.empty()) {
-        fields << QString("fit_region log=%1").arg(pathToQString(status.fitRegionLogPath));
-    }
-    if (!status.patchPreviewRunLogPath.empty()) {
-        fields << QString("run log=%1").arg(pathToQString(status.patchPreviewRunLogPath));
-    }
-    if (!status.latestMessage.empty()) {
-        fields << QString("message=%1").arg(QString::fromStdString(status.latestMessage));
-    }
-    if (!status.latestWarning.empty()) {
-        fields << QString("warning=%1").arg(QString::fromStdString(status.latestWarning));
-    }
-    return fields.join("  |  ");
+    return patch_workflow_text::progressLine(
+        status,
+        workflowState_.elapsedMilliseconds());
 }
 
 QString MainWindow::patchProgressStatusText() const {
-    QString statusPrefix = "Patch 预览";
-    if (patchPreviewProgressHeader_.startsWith("Patch Apply")) {
-        statusPrefix = "Patch Apply";
-    } else if (patchPreviewProgressHeader_.startsWith("STEP/STP") ||
-               patchPreviewProgressHeader_.startsWith("STEP ")) {
-        statusPrefix = "STEP/STP";
-    } else if (patchPreviewProgressHeader_.startsWith("合并候选")) {
-        statusPrefix = "合并候选";
-    }
-
-    QStringList fields;
-    fields << statusPrefix;
-    fields << QString::fromLatin1(toString(patchPreviewLastProgress_.stage));
-    const auto elapsed = patchPreviewProgressClock_.isValid() ? patchPreviewProgressClock_.elapsed() : 0;
-    fields << QString("elapsed %1").arg(elapsedText(elapsed));
-    if (patchPreviewLastProgress_.candidateId >= 0) {
-        fields << QString("candidate %1").arg(patchPreviewLastProgress_.candidateId);
-    }
-    if (!patchPreviewLastProgress_.latestMessage.empty()) {
-        fields << QString::fromStdString(patchPreviewLastProgress_.latestMessage);
-    } else if (!patchPreviewLastProgress_.latestWarning.empty()) {
-        fields << QString("warning: %1").arg(QString::fromStdString(patchPreviewLastProgress_.latestWarning));
-    }
-    return fields.join(" | ");
+    return patch_workflow_text::statusText(
+        workflowState_.progressHeader,
+        workflowState_.lastProgress,
+        workflowState_.elapsedMilliseconds());
 }
 
 void MainWindow::publishCropBoundaryDiagnosticsStatus(const CropBoundaryDiagnosticsReport& diagnostics) {
@@ -2612,7 +2542,7 @@ void MainWindow::refreshDocumentViews(bool clearPatchState) {
 
     const auto& document = controller_.document();
     clearMergeCandidateState();
-    hasFeatureEdgeResult_ = false;
+    workflowState_.hasFeatureEdgeResult = false;
     refreshModelTree();
     const auto displayStatus = viewer_->displayDocument(document);
     if (!displayStatus.success()) {
@@ -2637,28 +2567,25 @@ void MainWindow::refreshModelTree() {
         return;
     }
 
-    const auto counts = countCandidateStatuses(lastMergeCandidates_);
-    const auto typeCounts = countCandidateTypes(lastMergeCandidates_);
+    const auto counts = countCandidateStatuses(workflowState_.candidates);
+    const auto typeCounts = countCandidateTypes(workflowState_.candidates);
     modelTree_->showDocument(
         controller_.document(),
         static_cast<int>(controller_.lockedEdges().size()),
-        static_cast<int>(lastMergeCandidates_.size()),
-        visibleMergeCandidateCount_,
+        static_cast<int>(workflowState_.candidates.size()),
+        workflowState_.visibleCandidateCount,
         counts.pending,
         counts.accepted,
         counts.rejected,
         counts.hidden,
-        currentMergeCandidateId_,
+        workflowState_.currentCandidateId,
         currentMergeCandidate(),
         &typeCounts,
-        hasFeatureEdgeResult_ ? &controller_.featureEdges() : nullptr);
+        workflowState_.hasFeatureEdgeResult ? &controller_.featureEdges() : nullptr);
 }
 
 void MainWindow::clearMergeCandidateState() {
-    lastMergeCandidates_.clear();
-    visibleMergeCandidateIds_.clear();
-    visibleMergeCandidateCount_ = 0;
-    currentMergeCandidateId_ = -1;
+    workflowState_.clearCandidates();
     if (viewer_ != nullptr) {
         viewer_->clearMergeCandidates();
     }
@@ -2717,14 +2644,14 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
 }
 
 MergeCandidate* MainWindow::currentMergeCandidate() {
-    if (currentMergeCandidateId_ < 0) {
+    if (workflowState_.currentCandidateId < 0) {
         return nullptr;
     }
 
-    const auto it = std::find_if(lastMergeCandidates_.begin(), lastMergeCandidates_.end(), [this](const auto& candidate) {
-        return candidate.candidate_id == currentMergeCandidateId_;
+    const auto it = std::find_if(workflowState_.candidates.begin(), workflowState_.candidates.end(), [this](const auto& candidate) {
+        return candidate.candidate_id == workflowState_.currentCandidateId;
     });
-    if (it == lastMergeCandidates_.end()) {
+    if (it == workflowState_.candidates.end()) {
         return nullptr;
     }
     return &(*it);
@@ -2741,41 +2668,41 @@ bool MainWindow::setCurrentMergeCandidateStatus(MergeCandidateStatus status) {
     candidate->status = status;
     if (status == MergeCandidateStatus::Accepted || status == MergeCandidateStatus::Pending) {
         viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*candidate}, candidate->candidate_id);
-        visibleMergeCandidateCount_ = 1;
-        visibleMergeCandidateIds_.clear();
-        visibleMergeCandidateIds_.insert(candidate->candidate_id);
-        if (hasFeatureEdgeResult_) {
+        workflowState_.visibleCandidateCount = 1;
+        workflowState_.visibleCandidateIds.clear();
+        workflowState_.visibleCandidateIds.insert(candidate->candidate_id);
+        if (workflowState_.hasFeatureEdgeResult) {
             viewer_->showFeatureEdges(controller_.featureEdges());
         }
     } else {
-        visibleMergeCandidateIds_.clear();
+        workflowState_.visibleCandidateIds.clear();
     }
     refreshModelTree();
     return true;
 }
 
 void MainWindow::showFilteredMergeCandidates(MergeCandidateStatus status) {
-    if (lastMergeCandidates_.empty()) {
+    if (workflowState_.candidates.empty()) {
         logPanel_->appendWarning("当前没有候选区域，请先点击“预览合并”。");
         setStatus("没有候选区域");
         return;
     }
 
     std::vector<MergeCandidate> filteredCandidates;
-    for (const auto& candidate : lastMergeCandidates_) {
+    for (const auto& candidate : workflowState_.candidates) {
         if (candidate.status == status) {
             filteredCandidates.push_back(candidate);
         }
     }
 
     viewer_->showMergeCandidates(filteredCandidates, 10, true);
-    if (hasFeatureEdgeResult_) {
+    if (workflowState_.hasFeatureEdgeResult) {
         viewer_->showFeatureEdges(controller_.featureEdges());
     }
-    visibleMergeCandidateCount_ = static_cast<int>(filteredCandidates.size());
-    visibleMergeCandidateIds_.clear();
+    workflowState_.visibleCandidateCount = static_cast<int>(filteredCandidates.size());
+    workflowState_.visibleCandidateIds.clear();
     for (const auto& candidate : filteredCandidates) {
-        addVisibleCandidateId(visibleMergeCandidateIds_, candidate);
+        addVisibleCandidateId(workflowState_.visibleCandidateIds, candidate);
     }
     refreshModelTree();
     showCandidateStatusReport(QString("已显示 %1 候选区域").arg(candidateStatusText(status)));
@@ -2783,7 +2710,7 @@ void MainWindow::showFilteredMergeCandidates(MergeCandidateStatus status) {
 }
 
 void MainWindow::showCandidateStatusReport(const QString& title) {
-    const auto counts = countCandidateStatuses(lastMergeCandidates_);
+    const auto counts = countCandidateStatuses(workflowState_.candidates);
     const auto* candidate = currentMergeCandidate();
     QString currentStatus = "无";
     if (candidate != nullptr) {
@@ -2792,13 +2719,13 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
 
     QString report = QString("%1\n当前候选 ID：%2\n当前候选状态：%3\nPending：%4\nAccepted：%5\nRejected：%6\nHidden：%7\n当前显示候选数量：%8")
         .arg(title)
-        .arg(currentMergeCandidateId_ >= 0 ? QString::number(currentMergeCandidateId_) : "无")
+        .arg(workflowState_.currentCandidateId >= 0 ? QString::number(workflowState_.currentCandidateId) : "无")
         .arg(currentStatus)
         .arg(counts.pending)
         .arg(counts.accepted)
         .arg(counts.rejected)
         .arg(counts.hidden)
-        .arg(visibleMergeCandidateCount_);
+        .arg(workflowState_.visibleCandidateCount);
     if (candidate != nullptr) {
         report += QString("\n当前候选类型：%1\nface count：%2\nboundary edge count：%3\nrisk level：%4")
             .arg(candidateTypeText(candidate->candidate_type))
@@ -2814,7 +2741,7 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
         .arg(counts.accepted)
         .arg(counts.rejected)
         .arg(counts.hidden)
-        .arg(visibleMergeCandidateCount_);
+        .arg(workflowState_.visibleCandidateCount);
     if (candidate != nullptr) {
         logMessage += QString("，当前候选 ID %1，类型 %2，face %3，boundary edge %4，risk %5，status %6")
             .arg(candidate->candidate_id)
@@ -2828,7 +2755,7 @@ void MainWindow::showCandidateStatusReport(const QString& title) {
 }
 
 void MainWindow::setStlCropInProgress(bool inProgress) {
-    stlCropInProgress_ = inProgress;
+    workflowState_.stlCropInProgress = inProgress;
     openStepAction_->setEnabled(!inProgress);
     exportStepAction_->setEnabled(!inProgress);
     openSourceStlAction_->setEnabled(!inProgress);
@@ -2868,7 +2795,7 @@ StlRegionExtractorOptions MainWindow::currentStlCropOptions() const {
 }
 
 void MainWindow::setGeomagicFittingInputMode(GeomagicFittingInputMode mode) {
-    fittingInputMode_ = mode;
+    workflowState_.fittingInputMode = mode;
     updateFittingInputModeActions();
 }
 
@@ -2884,11 +2811,11 @@ GeomagicFittingInputMode MainWindow::currentFittingInputMode() const {
 
 void MainWindow::updateFittingInputModeActions() {
     fittingModeLegacyStlCropAction_->setChecked(
-        fittingInputMode_ == GeomagicFittingInputMode::LegacyStlCrop);
+        workflowState_.fittingInputMode == GeomagicFittingInputMode::LegacyStlCrop);
     fittingModeConservativeBandAction_->setChecked(
-        fittingInputMode_ == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop);
+        workflowState_.fittingInputMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop);
     fittingModeStpSampledAction_->setChecked(
-        fittingInputMode_ == GeomagicFittingInputMode::StpSampledCandidateSurface);
+        workflowState_.fittingInputMode == GeomagicFittingInputMode::StpSampledCandidateSurface);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {

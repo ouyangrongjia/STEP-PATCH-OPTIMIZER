@@ -27,6 +27,10 @@
 
 阶段 5 已将 `StpSampledFittingMeshBuilder::build` 整理为基础面采样、candidate surface over-cover、adjacent-face support collar、角点采样诊断和最终网格验证五个内部阶段。稳定入口、over-cover 先于 support collar 的追加顺序、基础三角形快照、默认参数、三角形方向、警告顺序与报告字段映射保持不变。`verify_spo.ps1 -RealGeomagic` 已分别在本阶段代码和 `c2d9477` 对照基线上运行：两者都因默认 candidate 29 的 Geomagic 补片含 45 个 B-rep 面而在既有高风险预览门退出；两次 fitting STL 均为 480084 字节且 SHA-256 同为 `E060E6E883D8B17D92F574711F305CF51D14CF9423F6CE6CD3EECCE2AAA75B4A`，三角形数 9600、边界样本数 180、内部样本数 5292 完全一致，因此该非零退出不是本次结构拆分引入的回归。
 
+### 2026-07-16 结构优化阶段 6
+
+阶段 6 已增加非 `QObject` 的 `PatchPreviewWorkflow`，承接 STL crop、STP sampled fitting 与 Geomagic 调用，`AppController` 的公开静态入口保留并只做委托；补片 artifact/import/preview/apply/process 状态集中到 `AppPatchWorkflowState`。主窗口候选、动作忙碌标记、进度和 fitting mode 集中到 `MainWindowWorkflowState`，进度报告与状态栏文本由纯 `PatchWorkflowText` 格式化。既有信号槽、按钮刷新方法、进度回调顺序和候选清理入口未改名；新增结构测试固定清理默认值和进度文本字段顺序。GUI 可执行文件已通过启动后持续存活 5 秒的进程级冒烟；由于当前会话没有 Windows 交互执行工具，打开、预览、Apply、undo、redo 和导出的人工点击复核未自动执行，保留为提交后的人工检查项。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。

@@ -26,6 +26,7 @@ void run_patch_artifact_locator_tests();
 void run_patch_preview_report_tests();
 void run_patch_preview_run_logger_tests();
 void run_patch_apply_state_tests();
+void run_patch_workflow_structure_tests();
 void run_multiface_patch_analyzer_tests();
 void run_strict_topology_gate_tests();
 void run_commercial_cad_quality_gate_tests();
@@ -148,6 +149,7 @@ void run_unit_tests() {
     run_patch_preview_report_tests();
     run_patch_preview_run_logger_tests();
     run_patch_apply_state_tests();
+    run_patch_workflow_structure_tests();
     run_multiface_patch_analyzer_tests();
     run_strict_topology_gate_tests();
     run_commercial_cad_quality_gate_tests();

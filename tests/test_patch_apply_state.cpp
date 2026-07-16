@@ -550,14 +550,21 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     const auto sourceRoot = std::filesystem::path(SPO_SOURCE_DIR);
     const auto appControllerHeader = read_text_file(sourceRoot / "src" / "app" / "AppController.h");
     const auto appControllerSource = read_text_file(sourceRoot / "src" / "app" / "AppController.cpp");
+    const auto patchPreviewWorkflowSource = read_text_file(sourceRoot / "src" / "app" / "PatchPreviewWorkflow.cpp");
     const auto mainWindowHeader = read_text_file(sourceRoot / "src" / "app" / "MainWindow.h");
     const auto mainWindowSource = read_text_file(sourceRoot / "src" / "app" / "MainWindow.cpp");
+    const auto mainWindowWorkflowStateHeader =
+        read_text_file(sourceRoot / "src" / "app" / "MainWindowWorkflowState.h");
+    const auto patchWorkflowTextSource =
+        read_text_file(sourceRoot / "src" / "app" / "PatchWorkflowText.cpp");
     const auto processStatusHeader = read_text_file(sourceRoot / "src" / "app" / "ProcessStatus.h");
     const auto processStatusPanelSource = read_text_file(sourceRoot / "src" / "gui" / "ProcessStatusPanel.cpp");
     const auto commandHeader = read_text_file(sourceRoot / "src" / "command" / "PatchReplacementCommand.h");
     const auto commandSource = read_text_file(sourceRoot / "src" / "command" / "PatchReplacementCommand.cpp");
     const auto allText =
-        appControllerHeader + appControllerSource + mainWindowHeader + mainWindowSource +
+        appControllerHeader + appControllerSource + patchPreviewWorkflowSource +
+        mainWindowHeader + mainWindowSource + mainWindowWorkflowStateHeader +
+        patchWorkflowTextSource +
         processStatusHeader + processStatusPanelSource + commandHeader + commandSource;
     const auto bannedLocalCandidate = std::string("local_candidate_") + "0179";
     const auto bannedMechanical = std::string("local_candidate_") + "0179_" + "mechanical.stp";
@@ -588,7 +595,8 @@ void test_no_hard_coded_real_sample_path_in_apply_sources() {
     assert(mainWindowSource.find("ProcessStage::ExportingStep") != std::string::npos);
     assert(mainWindowSource.find("QFutureWatcher<MergePreviewUiResult>") != std::string::npos);
     assert(mainWindowSource.find("合并候选区域预览正在后台运行") != std::string::npos);
-    assert(mainWindowHeader.find("patchApplyInProgress_") != std::string::npos);
+    assert(mainWindowHeader.find("MainWindowWorkflowState workflowState_") != std::string::npos);
+    assert(mainWindowWorkflowStateHeader.find("patchApplyInProgress") != std::string::npos);
     assert(appControllerHeader.find("PatchPreviewProgressCallback progress") != std::string::npos);
     assert(processStatusHeader.find("gateAfterMultipleEdges") != std::string::npos);
     assert(processStatusHeader.find("gateRoundtripMultipleEdges") != std::string::npos);

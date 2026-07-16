@@ -19,7 +19,7 @@
 4. [x] 通过共享 repair metrics、直接 gate 输入和 BoundaryWireBuilder 模块移动解除反向依赖。
 5. [x] 拆分 PatchReplacementCommand，将补片组装与闭合诊断从命令编排中分离。
 6. [x] 拆分 StpSampledFittingMeshBuilder 的基础采样、区外覆盖带、邻接面支撑带和网格诊断阶段。
-7. [ ] 拆分 AppController 与 MainWindow 工作流。
+7. [x] 拆分 AppController 与 MainWindow 的补片预览、状态和进度文本职责。
 8. [ ] 拆分 RestrictedBSplinePatchFitter。
 9. [ ] 拆分 SurfaceReductionEngine 搜索与终验。
 ```

@@ -21,8 +21,11 @@ find_package(Qt6 CONFIG REQUIRED COMPONENTS Core Widgets OpenGLWidgets Concurren
 set(SPO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 add_library(spo_core STATIC
+    src/app/AppPatchWorkflowState.cpp
     src/app/AppController.cpp
     src/app/PatchPreviewRunLogger.cpp
+    src/app/PatchPreviewWorkflow.cpp
+    src/app/PatchWorkflowText.cpp
     src/app/ProcessStatus.cpp
     src/brep/EdgeIndex.cpp
     src/brep/FaceIndex.cpp
@@ -207,6 +210,7 @@ if(SPO_BUILD_TESTS)
         tests/test_patch_preview_report.cpp
         tests/test_patch_preview_run_logger.cpp
         tests/test_patch_apply_state.cpp
+        tests/test_patch_workflow_structure.cpp
         tests/test_multiface_patch_analyzer.cpp
         tests/test_strict_topology_gate.cpp
         tests/test_commercial_cad_quality_gate.cpp

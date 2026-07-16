@@ -12,6 +12,8 @@
 #include "external/geomagic/GeomagicAutoSurfaceConfig.h"
 #include "external/geomagic/GeomagicAutoSurfaceResult.h"
 #include "app/PatchPreviewRunLogger.h"
+#include "app/PatchPreviewWorkflow.h"
+#include "app/AppPatchWorkflowState.h"
 #include "app/ProcessStatus.h"
 #include "patch/ImportedPatchInfo.h"
 #include "patch/CropBoundaryDiagnostics.h"
@@ -31,25 +33,6 @@
 #include <vector>
 
 namespace spo {
-
-struct StlCandidateCropResult {
-    bool success = false;
-    StlRegionExtractResult extract;
-    std::filesystem::path outputPath;
-    std::string message;
-};
-
-struct PatchPreviewPipelineResult {
-    bool success = false;
-    StlCandidateCropResult crop;
-    GeomagicAutoSurfaceResult geomagic;
-    GeomagicFittingInputMode fittingInputMode = GeomagicFittingInputMode::LegacyStlCrop;
-    StpSampledFittingReport stpSampledReport;
-    std::filesystem::path patchPreviewRunLogPath;
-    std::string message;
-};
-
-using PatchPreviewProgressCallback = std::function<void(ProcessStatusSnapshot)>;
 
 class AppController {
 public:
@@ -163,13 +146,7 @@ private:
     CommandHistory history_;
     StlMesh sourceStlMesh_;
     std::filesystem::path sourceStlPath_;
-    PatchArtifactPaths currentPatchArtifactPaths_;
-    ImportedPatchInfo currentImportedPatchInfo_;
-    PatchPreviewReport currentPatchPreviewReport_;
-    bool patchPreviewReady_ = false;
-    RegionPatchStatus currentPatchStatus_ = RegionPatchStatus::NotGenerated;
-    std::string currentPatchStatusMessage_;
-    ProcessStatusSnapshot processStatus_ = makeProcessStatus(ProcessStage::Idle, "Idle.");
+    AppPatchWorkflowState patchWorkflow_;
     SurfaceReductionResult currentSurfaceReductionResult_;
 
     void updateCurrentPatchApplyState();

@@ -219,7 +219,7 @@ Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
 
 | 目录 | 当前职责 |
 |---|---|
-| `src/app/` | 程序入口、主窗口、应用级控制器；连接 GUI、Command 和几何模块 |
+| `src/app/` | 程序入口、主窗口、应用级控制器、补片预览工作流、GUI 内部状态与进度文本；连接 GUI、Command 和几何模块 |
 | `src/gui/` | Qt/OCCT GUI、三维视图、模型树、参数面板、日志/检查/验证/报告面板 |
 | `src/command/` | 命令系统、CommandContext、CommandHistory、undo/redo、锁边命令、same-domain 合并命令、PatchReplacementCommand、导入导出命令 |
 | `src/io/` | STEP/STP 读写、STL 二进制读写、导出后二次读取校验 |

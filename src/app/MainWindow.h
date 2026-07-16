@@ -1,14 +1,11 @@
 #pragma once
 
 #include "app/AppController.h"
+#include "app/MainWindowWorkflowState.h"
 #include "merge/FaceInspectInfo.h"
 #include "stl/StlRegionExtractor.h"
 
 #include <QMainWindow>
-#include <QElapsedTimer>
-#include <QStringList>
-
-#include <set>
 #include <vector>
 
 class QAction;
@@ -169,20 +166,7 @@ private:
     QAction* toggleFeaturesAction_ = nullptr;
     QAction* undoAction_ = nullptr;
     QAction* redoAction_ = nullptr;
-    std::vector<MergeCandidate> lastMergeCandidates_;
-    std::set<int> visibleMergeCandidateIds_;
-    int visibleMergeCandidateCount_ = 0;
-    int currentMergeCandidateId_ = -1;
-    bool hasFeatureEdgeResult_ = false;
-    bool stlCropInProgress_ = false;
-    bool patchApplyInProgress_ = false;
-    QTimer* patchPreviewProgressTimer_ = nullptr;
-    QString patchPreviewProgressHeader_;
-    QStringList patchPreviewProgressLines_;
-    ProcessStatusSnapshot patchPreviewLastProgress_;
-    QElapsedTimer patchPreviewProgressClock_;
-    bool patchPreviewProgressActive_ = false;
-    GeomagicFittingInputMode fittingInputMode_ = GeomagicFittingInputMode::StpSampledCandidateSurface;
+    MainWindowWorkflowState workflowState_;
 };
 
 }
