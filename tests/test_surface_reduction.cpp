@@ -154,6 +154,27 @@ spo::StlMesh makeCurvedReferencePatch() {
     return mesh;
 }
 
+spo::StlMesh makeSplitBSplineScanPatch() {
+    spo::StlMesh mesh;
+    constexpr int segments = 6;
+    auto point = [](int x, int y) {
+        const double px = 3.0 * static_cast<double>(x) / static_cast<double>(segments);
+        const double py = 3.0 * static_cast<double>(y) / static_cast<double>(segments);
+        return spo::StlVec3 {px, py, 0.08 * px * py};
+    };
+    for (int x = 0; x < segments; ++x) {
+        for (int y = 0; y < segments; ++y) {
+            const auto first = point(x, y);
+            const auto second = point(x + 1, y);
+            const auto third = point(x + 1, y + 1);
+            const auto fourth = point(x, y + 1);
+            mesh.addTriangle({{}, first, second, third});
+            mesh.addTriangle({{}, first, third, fourth});
+        }
+    }
+    return mesh;
+}
+
 spo::StlMesh makeEarTriangulatedReferencePatch() {
     constexpr int boundaryCount = 12;
     constexpr double pi = 3.14159265358979323846;
@@ -213,14 +234,91 @@ void run_surface_reduction_tests() {
     {
         const auto document = makePlanarStrip(2);
         const auto fit = spo::RestrictedBSplinePatchFitter().fit(document, allFaces(document));
+        if (!fit.success()) {
+            std::cerr << "direct restricted fit failed: " << fit.report.message
+                      << ", constraints=" << fit.report.boundaryConstraintCount
+                      << ", residual=" << fit.report.maxBoundaryConstraintResidual
+                      << ", parameterization=" << spo::toString(fit.report.parameterizationSource)
+                      << ", min_jacobian=" << fit.report.minimumNormalizedJacobian
+                      << '\n';
+        }
         assert(fit.success());
         assert(fit.report.selectionPassed);
         assert(fit.report.holdoutPassed);
-        assert(fit.report.boundaryHoldoutSampleCount > 0);
+        assert(fit.report.boundaryHoldoutSampleCount >= 97);
         assert(fit.report.maxBoundaryDistance <= 0.03);
         assert(fit.report.maxHoldoutDistance <= 0.03);
         assert(fit.report.maxHoldoutNormalAngleDegrees <= 15.0);
         assert(fit.report.parameterizationValid);
+        assert(fit.report.supportSurfaceExtentRatio <= 2.0);
+        assert(fit.report.supportSurfaceMaxPoleOverflowRatio <= 0.5);
+    }
+
+    {
+        const auto document = makeSplitBSpline(2);
+        spo::StlHybridParameterizationReport chartReport;
+        const auto chart = spo::StlHybridParameterization::buildFromStepSelection(
+            document,
+            allFaces(document),
+            0.03,
+            chartReport);
+        assert(chart);
+        assert(chartReport.success);
+        assert(chartReport.source == spo::SurfaceParameterizationSource::StepHarmonic);
+        const auto fit = spo::RestrictedBSplinePatchFitter().fit(document, allFaces(document));
+        if (!fit.success()) {
+            std::cerr << "curved hard-boundary fit failed: " << fit.report.message
+                      << ", constraints=" << fit.report.boundaryConstraintCount
+                      << ", controls=" << fit.report.controlPointCount
+                      << ", residual=" << fit.report.maxBoundaryConstraintResidual
+                      << ", boundary=" << fit.report.maxBoundaryDistance
+                      << '\n';
+        }
+        assert(fit.success());
+        assert(fit.report.parameterizationSource ==
+            spo::SurfaceParameterizationSource::SupportSurfaceProjection);
+        assert(fit.report.boundaryConstraintCount > 0);
+        assert(fit.report.maxBoundaryConstraintResidual <= 3.0e-8);
+        assert(fit.report.maxBoundaryUvShift == 0.0);
+        assert(fit.report.maxBoundaryDistance <= 0.03);
+        assert(!fit.report.uvIterations.empty());
+        assert(fit.report.iterationCount <= 5);
+        assert(fit.report.supportSurfaceExtentRatio <= 2.0);
+        assert(fit.report.supportSurfaceMaxPoleOverflowRatio <= 0.5);
+    }
+
+    {
+        const auto document = makeSplitBSpline(2);
+        const auto scan = makeSplitBSplineScanPatch();
+        spo::RestrictedBSplinePatchFitOptions options;
+        options.scanReference = &scan;
+        options.scanReferenceCoverage = spo::ScanReferenceCoverage::SelectionCrop;
+        const auto fit = spo::RestrictedBSplinePatchFitter().fit(
+            document,
+            allFaces(document),
+            options);
+        if (!fit.success()) {
+            std::cerr << "curved scan-reference fit failed: " << fit.report.message
+                      << ", constraints=" << fit.report.boundaryConstraintCount
+                      << ", residual=" << fit.report.maxBoundaryConstraintResidual
+                      << ", boundary=" << fit.report.maxBoundaryDistance
+                      << ", scan=" << fit.report.scanReferenceSampleCount
+                      << '\n';
+        }
+        assert(fit.success());
+        assert(fit.report.scanReferenceCoverage == spo::ScanReferenceCoverage::SelectionCrop);
+        assert(fit.report.scanReferenceSampleCount > 0);
+        assert(fit.report.maxStepToScanDistance <= options.maximumScanReferenceDistance);
+    }
+
+    {
+        const auto document = makePlanarStrip(2);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.scanReferenceStl = std::make_shared<spo::StlMesh>(makeCurvedReferencePatch());
+        const auto result = spo::SurfaceReductionEngine().reduce(document, request);
+        assert(result.report.outcome == spo::SurfaceReductionOutcome::InvalidSelection);
+        assert(!result.canApply());
     }
 
     {
@@ -276,6 +374,9 @@ void run_surface_reduction_tests() {
         assert(result.report.topologyReport.afterBRepCheckValid);
         assert(result.report.topologyReport.stepRoundtripOk);
         assert(result.canApply());
+        const spo::ShapeDocument preview(result.previewShape, {});
+        assert(preview.topology().faceCount() ==
+            static_cast<std::size_t>(result.report.outputFaceCount));
 
         spo::CommandContext staleContext;
         staleContext.document = makePlanarStrip(2);
@@ -306,6 +407,23 @@ void run_surface_reduction_tests() {
         assert(result.report.outputFaceCount <= 3);
         assert(result.report.targetAchieved);
         assert(result.canApply());
+    }
+
+    {
+        const auto document = makePlanarStrip(5);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.options.targetOutputRatio = 0.4;
+        const auto first = spo::SurfaceReductionEngine().reduce(document, request);
+        const auto second = spo::SurfaceReductionEngine().reduce(document, request);
+        assert(first.canApply());
+        assert(second.canApply());
+        assert(first.report.outputGroups == second.report.outputGroups);
+        assert(first.report.outputFaceCount == second.report.outputFaceCount);
+        assert(first.report.expandedStateCount == second.report.expandedStateCount);
+        assert(first.report.generatedStateCount == second.report.generatedStateCount);
+        assert(first.report.generatedStateCount > first.report.acceptedMergeCount);
+        assert(!first.report.searchBudgetExhausted);
     }
 
     {
@@ -361,5 +479,7 @@ void run_surface_reduction_tests() {
         assert(result.report.outcome == spo::SurfaceReductionOutcome::Reduced);
         assert(!result.report.targetAchieved);
         assert(result.canApply());
+        const spo::ShapeDocument preview(result.previewShape, {});
+        assert(preview.topology().faceCount() == 2);
     }
 }

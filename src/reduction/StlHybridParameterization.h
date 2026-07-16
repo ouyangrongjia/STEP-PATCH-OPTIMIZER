@@ -14,6 +14,22 @@
 
 namespace spo {
 
+enum class SurfaceParameterizationSource {
+    None,
+    StepHarmonic,
+    SupportSurfaceProjection
+};
+
+const char* toString(SurfaceParameterizationSource source);
+
+enum class ScanReferenceCoverage {
+    None,
+    WholeModel,
+    SelectionCrop
+};
+
+const char* toString(ScanReferenceCoverage coverage);
+
 struct StlHybridProjection {
     bool valid = false;
     double u = 0.0;
@@ -25,6 +41,7 @@ struct StlHybridProjection {
 
 struct StlHybridParameterizationReport {
     bool success = false;
+    SurfaceParameterizationSource source = SurfaceParameterizationSource::None;
     std::string message;
     int sourceTriangleCount = 0;
     int coarseTriangleCount = 0;
@@ -37,10 +54,9 @@ struct StlHybridParameterizationReport {
 
 class StlHybridParameterization {
 public:
-    static std::shared_ptr<const StlHybridParameterization> buildForSelection(
+    static std::shared_ptr<const StlHybridParameterization> buildFromStepSelection(
         const ShapeDocument& document,
         const std::vector<FaceId>& selectedFaces,
-        const StlMesh& sourceMesh,
         double tolerance3d,
         StlHybridParameterizationReport& report);
 
@@ -49,6 +65,7 @@ public:
         StlHybridParameterizationReport& report);
 
     StlHybridProjection project(const gp_Pnt& point) const;
+    bool contains(double u, double v, double tolerance = 1.0e-10) const;
 
 private:
     struct Triangle;

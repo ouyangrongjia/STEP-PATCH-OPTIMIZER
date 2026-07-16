@@ -16,6 +16,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "用法：surface_reduction_probe <输入.step> <输出.step> "
                      "[--source-stl <原始.stl> | --cropped-stl <选区裁剪.stl>] "
                      "[--target-ratio <0到1>] "
+                     "[--selection-output <独立选区.step>] "
                      "(<面编号> <面编号> [...] | --candidate-id <候选编号>)\n";
         return 2;
     }
@@ -30,6 +31,7 @@ int main(int argc, char* argv[]) {
     spo::SurfaceReductionRequest request;
     int candidateId = -1;
     std::filesystem::path sourceStl;
+    std::filesystem::path selectionOutput;
     bool sourceStlIsSelectionCrop = false;
     double targetRatio = -1.0;
     try {
@@ -54,6 +56,12 @@ int main(int argc, char* argv[]) {
                     return 2;
                 }
                 candidateId = std::stoi(argv[index]);
+            } else if (argument == "--selection-output") {
+                if (++index >= argc || !selectionOutput.empty()) {
+                    std::cerr << "--selection-output 必须且只能指定一个输出路径。\n";
+                    return 2;
+                }
+                selectionOutput = argv[index];
             } else {
                 request.selectedFaces.push_back(static_cast<spo::FaceId>(std::stoull(argument)));
             }
@@ -98,8 +106,10 @@ int main(int argc, char* argv[]) {
             std::cerr << stlRead.message << '\n';
             return 1;
         }
-        request.referenceStl = std::make_shared<spo::StlMesh>(std::move(stlRead.mesh));
-        request.referenceStlIsSelectionCrop = sourceStlIsSelectionCrop;
+        request.scanReferenceStl = std::make_shared<spo::StlMesh>(std::move(stlRead.mesh));
+        request.scanReferenceCoverage = sourceStlIsSelectionCrop
+            ? spo::ScanReferenceCoverage::SelectionCrop
+            : spo::ScanReferenceCoverage::WholeModel;
     }
 
     std::cout << "candidate_id=" << candidateId << '\n'
@@ -127,16 +137,16 @@ int main(int argc, char* argv[]) {
               << "commercial_cad_gate_count=" << result.report.commercialCadReports.size() << '\n'
               << "attempted_merges=" << result.report.attemptedMergeCount << '\n'
               << "accepted_merges=" << result.report.acceptedMergeCount << '\n'
-              << "hybrid_parameterization_used=" << result.report.hybridParameterizationUsed << '\n'
-              << "hybrid_source_triangles=" << result.report.hybridParameterization.sourceTriangleCount << '\n'
-              << "hybrid_coarse_triangles=" << result.report.hybridParameterization.coarseTriangleCount << '\n'
-              << "hybrid_cropped_triangles=" << result.report.hybridParameterization.croppedTriangleCount << '\n'
-              << "hybrid_parameter_vertices=" << result.report.hybridParameterization.vertexCount << '\n'
-              << "hybrid_boundary_vertices=" << result.report.hybridParameterization.boundaryVertexCount << '\n'
-              << "hybrid_min_jacobian=" << result.report.hybridParameterization.minimumNormalizedJacobian << '\n'
-              << "stl_reference_samples=" << result.report.stlReferenceSampleCount << '\n'
-              << "max_step_to_stl_distance=" << result.report.maxStepToStlDistance << '\n'
-              << "hybrid_message=" << result.report.hybridParameterization.message << '\n'
+              << "expanded_states=" << result.report.expandedStateCount << '\n'
+              << "generated_states=" << result.report.generatedStateCount << '\n'
+              << "deduplicated_states=" << result.report.deduplicatedStateCount << '\n'
+              << "fit_cache_hits=" << result.report.fitCacheHitCount << '\n'
+              << "fit_cache_misses=" << result.report.fitCacheMissCount << '\n'
+              << "search_budget_exhausted=" << result.report.searchBudgetExhausted << '\n'
+              << "step_parameterization_used=" << result.report.stepParameterizationUsed << '\n'
+              << "scan_reference_coverage=" << spo::toString(result.report.scanReferenceCoverage) << '\n'
+              << "scan_reference_samples=" << result.report.scanReferenceSampleCount << '\n'
+              << "max_step_to_scan_distance=" << result.report.maxStepToScanDistance << '\n'
               << "rejected_groups=" << result.report.rejectedGroups.size() << '\n'
               << "message=" << result.report.message << '\n';
     std::cout << "topology_failure_reason=" << spo::toString(result.report.topologyReport.failureReason) << '\n'
@@ -155,6 +165,33 @@ int main(int argc, char* argv[]) {
         }
         std::cout << '\n';
     }
+    for (std::size_t index = 0; index < result.report.groupReports.size(); ++index) {
+        const auto& group = result.report.groupReports[index];
+        std::cout << "group_" << index << "_method=" << spo::toString(group.method) << '\n'
+                  << "group_" << index << "_parameterization="
+                  << spo::toString(group.fit.parameterizationSource) << '\n'
+                  << "group_" << index << "_boundary_constraints="
+                  << group.fit.boundaryConstraintCount << '\n'
+                  << "group_" << index << "_boundary_refinements="
+                  << group.fit.boundaryConstraintRefinementCount << '\n'
+                  << "group_" << index << "_exterior_guards="
+                  << group.fit.exteriorGuardSampleCount << '\n'
+                  << "group_" << index << "_max_constraint_residual="
+                  << group.fit.maxBoundaryConstraintResidual << '\n'
+                  << "group_" << index << "_surface_extent_ratio="
+                  << group.fit.supportSurfaceExtentRatio << '\n'
+                  << "group_" << index << "_surface_pole_overflow_ratio="
+                  << group.fit.supportSurfaceMaxPoleOverflowRatio << '\n'
+                  << "group_" << index << "_scan_samples="
+                  << group.fit.scanReferenceSampleCount << '\n';
+        for (std::size_t iteration = 0; iteration < group.fit.uvIterations.size(); ++iteration) {
+            const auto& uv = group.fit.uvIterations[iteration];
+            std::cout << "group_" << index << "_uv_" << iteration << "="
+                      << uv.objectiveBefore << ';' << uv.objectiveAfter << ';'
+                      << uv.maximumShift << ';' << uv.backtrackingSteps << ';'
+                      << uv.accepted << ';' << uv.reason << '\n';
+        }
+    }
     for (std::size_t index = 0; index < result.report.rejectedGroups.size(); ++index) {
         const auto& rejected = result.report.rejectedGroups[index];
         std::cout << "rejection_" << index << "_faces=";
@@ -162,7 +199,41 @@ int main(int argc, char* argv[]) {
             std::cout << (faceIndex == 0 ? "" : ";") << rejected.faces[faceIndex];
         }
         std::cout << '\n'
-                  << "rejection_" << index << "_reason=" << rejected.reason << '\n';
+                  << "rejection_" << index << "_stage=" << spo::toString(rejected.stage) << '\n'
+                  << "rejection_" << index << "_reason=" << rejected.reason << '\n'
+                  << "rejection_" << index << "_parameterization="
+                  << spo::toString(rejected.fit.parameterizationSource) << '\n'
+                  << "rejection_" << index << "_parameterization_message="
+                  << rejected.fit.parameterization.message << '\n'
+                  << "rejection_" << index << "_controls="
+                  << rejected.fit.uControlPointCount << 'x'
+                  << rejected.fit.vControlPointCount << '\n'
+                  << "rejection_" << index << "_boundary_constraints="
+                  << rejected.fit.boundaryConstraintCount << '\n'
+                  << "rejection_" << index << "_boundary_refinements="
+                  << rejected.fit.boundaryConstraintRefinementCount << '\n'
+                  << "rejection_" << index << "_exterior_guards="
+                  << rejected.fit.exteriorGuardSampleCount << '\n'
+                  << "rejection_" << index << "_constraint_residual="
+                  << rejected.fit.maxBoundaryConstraintResidual << '\n'
+                  << "rejection_" << index << "_surface_extent_ratio="
+                  << rejected.fit.supportSurfaceExtentRatio << '\n'
+                  << "rejection_" << index << "_surface_pole_overflow_ratio="
+                  << rejected.fit.supportSurfaceMaxPoleOverflowRatio << '\n'
+                  << "rejection_" << index << "_boundary_distance="
+                  << rejected.fit.maxBoundaryDistance << '\n'
+                  << "rejection_" << index << "_selection_distance="
+                  << rejected.fit.maxSelectionDistance << '\n'
+                  << "rejection_" << index << "_selection_normal="
+                  << rejected.fit.maxSelectionNormalAngleDegrees << '\n'
+                  << "rejection_" << index << "_holdout_distance="
+                  << rejected.fit.maxHoldoutDistance << '\n'
+                  << "rejection_" << index << "_holdout_normal="
+                  << rejected.fit.maxHoldoutNormalAngleDegrees << '\n'
+                  << "rejection_" << index << "_min_jacobian="
+                  << rejected.fit.minimumNormalizedJacobian << '\n'
+                  << "rejection_" << index << "_scan_samples="
+                  << rejected.fit.scanReferenceSampleCount << '\n';
     }
     if (!result.canApply()) {
         return 1;
@@ -172,6 +243,23 @@ int main(int argc, char* argv[]) {
     if (!write.success()) {
         std::cerr << write.message() << '\n';
         return 1;
+    }
+    if (!selectionOutput.empty()) {
+        if (result.previewShape.IsNull()) {
+            std::cerr << "减面结果没有可导出的独立选区形状。\n";
+            return 1;
+        }
+        const spo::ShapeDocument selection(result.previewShape, input);
+        if (selection.topology().faceCount() !=
+            static_cast<std::size_t>(result.report.outputFaceCount)) {
+            std::cerr << "独立选区面数与减面报告不一致。\n";
+            return 1;
+        }
+        const auto selectionWrite = spo::StepWriter().write(selection, selectionOutput);
+        if (!selectionWrite.success()) {
+            std::cerr << selectionWrite.message() << '\n';
+            return 1;
+        }
     }
     return 0;
 }

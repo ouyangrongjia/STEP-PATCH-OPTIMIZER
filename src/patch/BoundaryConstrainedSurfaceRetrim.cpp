@@ -12,6 +12,7 @@
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <Geom2d_BSplineCurve.hxx>
 #include <Geom2d_Curve.hxx>
 #include <Geom_Curve.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
@@ -22,6 +23,9 @@
 #include <ShapeConstruct_ProjectCurveOnSurface.hxx>
 #include <ShapeFix_Face.hxx>
 #include <Standard_Failure.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt2d.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
@@ -137,15 +141,6 @@ TopoDS_Edge make_projected_boundary_edge(
     }
 
     ++result.boundaryEdgePcurveRebuildAttemptCount;
-    BRepBuilderAPI_MakeEdge edgeBuilder(curve, firstParameter, lastParameter);
-    if (!edgeBuilder.IsDone()) {
-        append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
-        ++result.boundaryEdgePcurveRebuildFailureCount;
-        return {};
-    }
-    auto edge = edgeBuilder.Edge();
-    edge.Orientation(sourceEdge.Orientation());
-
     Handle(Geom_Curve) projectedCurve = curve;
     if (!surfaceLocation.IsIdentity()) {
         projectedCurve = Handle(Geom_Curve)::DownCast(
@@ -157,7 +152,124 @@ TopoDS_Edge make_projected_boundary_edge(
         return {};
     }
 
-    Handle(Geom2d_Curve) pcurve;
+    auto edgeForPcurve = [&](const Handle(Geom2d_Curve)& candidatePcurve,
+                             TopoDS_Edge& candidateEdge,
+                             double& deviation) {
+        if (candidatePcurve.IsNull()) {
+            return false;
+        }
+        BRepBuilderAPI_MakeEdge edgeBuilder(curve, firstParameter, lastParameter);
+        if (!edgeBuilder.IsDone()) {
+            return false;
+        }
+        candidateEdge = edgeBuilder.Edge();
+        candidateEdge.Orientation(sourceEdge.Orientation());
+        BRep_Builder builder;
+        const gp_Pnt2d firstUv = candidatePcurve->Value(firstParameter);
+        const gp_Pnt2d lastUv = candidatePcurve->Value(lastParameter);
+        builder.UpdateEdge(
+            candidateEdge,
+            candidatePcurve,
+            surface,
+            surfaceLocation,
+            projectionTolerance,
+            firstUv,
+            lastUv);
+        builder.Range(candidateEdge, firstParameter, lastParameter, Standard_False);
+        builder.Range(candidateEdge, surface, surfaceLocation, firstParameter, lastParameter);
+        builder.SameRange(candidateEdge, Standard_False);
+        builder.UpdateEdge(candidateEdge, projectionTolerance);
+        builder.SameParameter(candidateEdge, Standard_False);
+        try {
+            BRepLib::SameRange(candidateEdge, projectionTolerance);
+            Standard_Real updatedTolerance = projectionTolerance;
+            candidateEdge = BRepLib::SameParameter(
+                candidateEdge,
+                projectionTolerance,
+                updatedTolerance,
+                Standard_False);
+            candidateEdge.Orientation(sourceEdge.Orientation());
+        } catch (const Standard_Failure&) {
+            return false;
+        }
+
+        ++result.boundaryEdgeSameParameterCheckCount;
+        Standard_Real measuredDeviation = 0.0;
+        ShapeAnalysis_Edge edgeAnalyzer;
+        edgeAnalyzer.CheckSameParameter(candidateEdge, targetFace, measuredDeviation, 97);
+        deviation = std::isfinite(measuredDeviation)
+            ? static_cast<double>(measuredDeviation)
+            : std::numeric_limits<double>::infinity();
+        if (deviation > projectionTolerance) {
+            return false;
+        }
+        builder.SameParameter(candidateEdge, Standard_True);
+        return true;
+    };
+
+    auto sampledSameParameterPcurve = [&]() -> Handle(Geom2d_Curve) {
+        constexpr int sampleCount = 129;
+        TColgp_Array1OfPnt2d poles(1, sampleCount);
+        TColStd_Array1OfReal knots(1, sampleCount);
+        TColStd_Array1OfInteger multiplicities(1, sampleCount);
+        gp_Pnt2d previousUv;
+        bool hasPreviousUv = false;
+        for (int index = 0; index < sampleCount; ++index) {
+            const double fraction = static_cast<double>(index) /
+                static_cast<double>(sampleCount - 1);
+            const double parameter = firstParameter +
+                (lastParameter - firstParameter) * fraction;
+            gp_Pnt point = curve->Value(parameter);
+            if (!surfaceLocation.IsIdentity()) {
+                point.Transform(surfaceLocation.Transformation().Inverted());
+            }
+            GeomAPI_ProjectPointOnSurf projector(point, surface);
+            if (projector.NbPoints() < 1) {
+                return {};
+            }
+            double u = 0.0;
+            double v = 0.0;
+            double bestScore = std::numeric_limits<double>::infinity();
+            bool found = false;
+            for (int projectionIndex = 1;
+                 projectionIndex <= projector.NbPoints();
+                 ++projectionIndex) {
+                if (projector.Distance(projectionIndex) > projectionTolerance) {
+                    continue;
+                }
+                double candidateU = 0.0;
+                double candidateV = 0.0;
+                projector.Parameters(projectionIndex, candidateU, candidateV);
+                const double score = hasPreviousUv
+                    ? previousUv.SquareDistance(gp_Pnt2d(candidateU, candidateV))
+                    : projector.Distance(projectionIndex);
+                if (score < bestScore) {
+                    bestScore = score;
+                    u = candidateU;
+                    v = candidateV;
+                    found = true;
+                }
+            }
+            if (!found) {
+                return {};
+            }
+            previousUv.SetCoord(u, v);
+            hasPreviousUv = true;
+            poles.SetValue(index + 1, gp_Pnt2d(u, v));
+            knots.SetValue(index + 1, parameter);
+            multiplicities.SetValue(
+                index + 1,
+                index == 0 || index + 1 == sampleCount ? 2 : 1);
+        }
+        return new Geom2d_BSplineCurve(
+            poles,
+            knots,
+            multiplicities,
+            1,
+            Standard_False);
+    };
+
+    Handle(Geom2d_Curve) projectedPcurve;
     bool projected = false;
     try {
         Handle(ShapeConstruct_ProjectCurveOnSurface) projector =
@@ -167,46 +279,42 @@ TopoDS_Edge make_projected_boundary_edge(
             projectedCurve,
             firstParameter,
             lastParameter,
-            pcurve,
+            projectedPcurve,
             projectionTolerance,
             projectionTolerance);
     } catch (const Standard_Failure&) {
         projected = false;
+        projectedPcurve.Nullify();
     }
 
-    if (!projected || pcurve.IsNull()) {
+    TopoDS_Edge edge;
+    double projectedDeviation = std::numeric_limits<double>::infinity();
+    bool sameParameter = projected && !projectedPcurve.IsNull() &&
+        edgeForPcurve(projectedPcurve, edge, projectedDeviation);
+    if (!sameParameter) {
+        const auto fallbackPcurve = sampledSameParameterPcurve();
+        double fallbackDeviation = std::numeric_limits<double>::infinity();
+        TopoDS_Edge fallbackEdge;
+        if (!fallbackPcurve.IsNull() &&
+            edgeForPcurve(fallbackPcurve, fallbackEdge, fallbackDeviation)) {
+            edge = fallbackEdge;
+            projectedDeviation = fallbackDeviation;
+            sameParameter = true;
+        } else {
+            projectedDeviation = std::min(projectedDeviation, fallbackDeviation);
+        }
+    }
+    result.boundaryEdgeMaxSameParameterDeviation = std::max(
+        result.boundaryEdgeMaxSameParameterDeviation,
+        projectedDeviation);
+    if (!sameParameter) {
         append_unique_edge(result.boundaryEdgePcurveRebuildFailedEdgeIds, edgeId);
         ++result.boundaryEdgePcurveRebuildFailureCount;
-        return {};
-    }
-
-    BRep_Builder builder;
-    const gp_Pnt2d firstUv = pcurve->Value(firstParameter);
-    const gp_Pnt2d lastUv = pcurve->Value(lastParameter);
-    builder.UpdateEdge(edge, pcurve, surface, surfaceLocation, projectionTolerance, firstUv, lastUv);
-    builder.Range(edge, firstParameter, lastParameter, Standard_False);
-    builder.Range(edge, surface, surfaceLocation, firstParameter, lastParameter);
-    builder.SameRange(edge, Standard_True);
-    builder.UpdateEdge(edge, projectionTolerance);
-
-    ++result.boundaryEdgePcurveRebuildSuccessCount;
-    ++result.boundaryEdgeSameParameterCheckCount;
-    Standard_Real maxDeviation = 0.0;
-    ShapeAnalysis_Edge edgeAnalyzer;
-    edgeAnalyzer.CheckSameParameter(edge, targetFace, maxDeviation, 23);
-    if (std::isfinite(maxDeviation)) {
-        result.boundaryEdgeMaxSameParameterDeviation =
-            std::max(result.boundaryEdgeMaxSameParameterDeviation, static_cast<double>(maxDeviation));
-    } else {
-        maxDeviation = std::numeric_limits<Standard_Real>::infinity();
-        result.boundaryEdgeMaxSameParameterDeviation = std::numeric_limits<double>::infinity();
-    }
-    if (!std::isfinite(maxDeviation) || maxDeviation > projectionTolerance) {
         append_unique_edge(result.boundaryEdgeSameParameterFailedEdgeIds, edgeId);
         ++result.boundaryEdgeSameParameterFailureCount;
         return {};
     }
-    builder.SameParameter(edge, Standard_True);
+    ++result.boundaryEdgePcurveRebuildSuccessCount;
     return edge;
 }
 
@@ -478,9 +586,10 @@ BoundaryConstrainedSurfaceRetrimResult BoundaryConstrainedSurfaceRetrim::retrim(
             result,
             strictWireMessage);
         if (boundaryWire.IsNull()) {
-            return fail(strictWireMessage.empty()
+            result.message = strictWireMessage.empty()
                 ? "Strict original-boundary re-trim failed to build a projected boundary wire."
-                : strictWireMessage);
+                : strictWireMessage;
+            return result;
         }
     } else {
         boundaryWire = wire.wire;

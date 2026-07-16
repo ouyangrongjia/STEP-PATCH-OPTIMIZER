@@ -1726,7 +1726,8 @@ void MainWindow::previewSurfaceReduction() {
     request.selectedFaces = selectedFaces;
     request.lockedEdges = controller_.lockedEdges();
     if (controller_.hasSourceStl()) {
-        request.referenceStl = std::make_shared<StlMesh>(controller_.sourceStlMesh());
+        request.scanReferenceStl = std::make_shared<StlMesh>(controller_.sourceStlMesh());
+        request.scanReferenceCoverage = ScanReferenceCoverage::WholeModel;
     }
     const auto documentSnapshot = controller_.document();
     controller_.clearCurrentSurfaceReductionPreview();
@@ -1765,13 +1766,16 @@ void MainWindow::previewSurfaceReduction() {
                     report.commercialCadReports.end(),
                     [](const auto& gate) { return gate.passed; }) ? "通过" : "未通过"));
         lines << QString("尝试合并：%1，接受：%2").arg(report.attemptedMergeCount).arg(report.acceptedMergeCount);
-        lines << QString("STEP/STL 混合参数化：%1").arg(report.hybridParameterizationUsed ? "已使用" : "未使用");
-        if (report.hybridParameterizationUsed) {
-            lines << QString("裁剪 STL：%1 个三角形，参数顶点 %2 个")
-                .arg(report.hybridParameterization.croppedTriangleCount)
-                .arg(report.hybridParameterization.vertexCount);
-            lines << QString("STEP 到 STL 最大参考距离：%1 mm")
-                .arg(QString::number(report.maxStepToStlDistance, 'g', 8));
+        lines << QString("STEP 调和参数图：%1").arg(report.stepParameterizationUsed ? "已使用" : "未使用");
+        lines << QString("束搜索状态：展开 %1，生成 %2，缓存命中 %3")
+            .arg(report.expandedStateCount)
+            .arg(report.generatedStateCount)
+            .arg(report.fitCacheHitCount);
+        if (report.scanReferenceCoverage != ScanReferenceCoverage::None) {
+            lines << QString("独立扫描：%1，样本 %2，最大 STEP 距离 %3 mm")
+                .arg(QString::fromLatin1(toString(report.scanReferenceCoverage)))
+                .arg(report.scanReferenceSampleCount)
+                .arg(QString::number(report.maxStepToScanDistance, 'g', 8));
         }
         lines << QString("质量门：%1").arg(report.allQualityGatesPassed ? "全部通过" : "未通过");
         lines << QString("说明：%1").arg(QString::fromStdString(report.message));

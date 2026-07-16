@@ -1,11 +1,13 @@
 #include "reduction/StlHybridParameterization.h"
 
-#include "merge/MergeCandidate.h"
-#include "merge/RegionBoundaryAnalyzer.h"
 #include "stl/StlCutChainCutter.h"
-#include "stl/StlRegionExtractor.h"
 
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <BRep_Tool.hxx>
+#include <Poly_Triangulation.hxx>
 #include <Precision.hxx>
+#include <TopAbs_Orientation.hxx>
+#include <TopLoc_Location.hxx>
 
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
@@ -31,39 +33,6 @@ using Edge = std::pair<std::size_t, std::size_t>;
 
 Edge orderedEdge(std::size_t first, std::size_t second) {
     return first < second ? Edge {first, second} : Edge {second, first};
-}
-
-MergeCandidate makeCandidate(
-    const ShapeDocument& document,
-    const std::vector<FaceId>& faces) {
-    MergeCandidate candidate;
-    candidate.candidate_type = MergeCandidateType::FeatureBoundedRefit;
-    candidate.faces = faces;
-    candidate.face_count = static_cast<int>(faces.size());
-    const std::set<FaceId> selected(faces.begin(), faces.end());
-    std::set<EdgeId> edges;
-    for (const auto faceId : faces) {
-        for (const auto edgeId : document.topology().edgesForFace(faceId)) {
-            edges.insert(edgeId);
-        }
-    }
-    for (const auto edgeId : edges) {
-        const auto* adjacency = document.topology().adjacencyForEdge(edgeId);
-        int inside = 0;
-        if (adjacency != nullptr) {
-            for (const auto faceId : adjacency->faces) {
-                inside += selected.contains(faceId) ? 1 : 0;
-            }
-        }
-        if (inside >= 2) {
-            candidate.internal_edges.push_back(edgeId);
-        } else if (inside == 1) {
-            candidate.boundary_edges.push_back(edgeId);
-        }
-    }
-    candidate.internal_edge_count = static_cast<int>(candidate.internal_edges.size());
-    candidate.boundary_edge_count = static_cast<int>(candidate.boundary_edges.size());
-    return candidate;
 }
 
 std::array<double, 2> circularBoundaryParameter(double fraction) {
@@ -190,40 +159,103 @@ double normalizedJacobian(
 
 }
 
-std::shared_ptr<const StlHybridParameterization> StlHybridParameterization::buildForSelection(
+const char* toString(SurfaceParameterizationSource source) {
+    switch (source) {
+    case SurfaceParameterizationSource::None:
+        return "None";
+    case SurfaceParameterizationSource::StepHarmonic:
+        return "StepHarmonic";
+    case SurfaceParameterizationSource::SupportSurfaceProjection:
+        return "SupportSurfaceProjection";
+    }
+    return "None";
+}
+
+const char* toString(ScanReferenceCoverage coverage) {
+    switch (coverage) {
+    case ScanReferenceCoverage::None:
+        return "None";
+    case ScanReferenceCoverage::WholeModel:
+        return "WholeModel";
+    case ScanReferenceCoverage::SelectionCrop:
+        return "SelectionCrop";
+    }
+    return "None";
+}
+
+std::shared_ptr<const StlHybridParameterization> StlHybridParameterization::buildFromStepSelection(
     const ShapeDocument& document,
     const std::vector<FaceId>& selectedFaces,
-    const StlMesh& sourceMesh,
     double tolerance3d,
     StlHybridParameterizationReport& report) {
     report = {};
-    report.sourceTriangleCount = static_cast<int>(sourceMesh.triangleCount());
-    if (!document.hasShape() || selectedFaces.size() < 2 || sourceMesh.empty()) {
-        report.message = "混合参数化需要有效 STEP 选区和原始 STL。";
+    if (!document.hasShape() || selectedFaces.size() < 2) {
+        report.message = "STEP 参数图需要至少两个有效原始面。";
+        return {};
+    }
+    if (std::any_of(selectedFaces.begin(), selectedFaces.end(), [&](FaceId faceId) {
+            return faceId >= document.topology().faceCount();
+        })) {
+        report.message = "STEP 参数图引用了不存在的面。";
         return {};
     }
 
-    const auto candidate = makeCandidate(document, selectedFaces);
-    const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
-    if (!boundary.valid) {
-        report.message = "STEP 选区边界不适合裁剪 STL：" + boundary.message;
+    StlMesh stepMesh;
+    try {
+        const double deflection = std::max(tolerance3d * 2.0, 0.01);
+        for (const auto faceId : selectedFaces) {
+            const auto& face = document.topology().face(faceId);
+            BRepMesh_IncrementalMesh mesh(
+                face,
+                deflection,
+                Standard_False,
+                0.2,
+                Standard_True);
+            TopLoc_Location location;
+            const auto triangulation = BRep_Tool::Triangulation(face, location);
+            if (triangulation.IsNull()) {
+                continue;
+            }
+            for (int triangleIndex = 1; triangleIndex <= triangulation->NbTriangles(); ++triangleIndex) {
+                int first = 0;
+                int second = 0;
+                int third = 0;
+                triangulation->Triangle(triangleIndex).Get(first, second, third);
+                if (face.Orientation() == TopAbs_REVERSED) {
+                    std::swap(second, third);
+                }
+                const gp_Pnt points[3] = {
+                    triangulation->Node(first).Transformed(location.Transformation()),
+                    triangulation->Node(second).Transformed(location.Transformation()),
+                    triangulation->Node(third).Transformed(location.Transformation())};
+                gp_Vec normal(points[0], points[1]);
+                normal.Cross(gp_Vec(points[0], points[2]));
+                if (normal.SquareMagnitude() <= Precision::SquareConfusion()) {
+                    continue;
+                }
+                normal.Normalize();
+                stepMesh.addTriangle({
+                    {normal.X(), normal.Y(), normal.Z()},
+                    {points[0].X(), points[0].Y(), points[0].Z()},
+                    {points[1].X(), points[1].Y(), points[1].Z()},
+                    {points[2].X(), points[2].Y(), points[2].Z()}});
+            }
+        }
+    } catch (...) {
+        report.message = "从 STEP 选区建立参数三角网格失败。";
         return {};
     }
-    StlRegionExtractorOptions options;
-    options.mode = StlCropMode::ConservativeBoundaryBand;
-    options.minMargin = std::max(0.1, tolerance3d * 4.0);
-    options.boundaryLoopCoverageTolerance = std::max(0.1, tolerance3d * 4.0);
-    const auto crop = StlRegionExtractor().extract(document, candidate, sourceMesh, options);
-    if (!crop.success || crop.localMesh.empty()) {
-        report.message = "按 STEP 修剪面域裁剪原始 STL 失败：" + crop.report.message;
+    if (stepMesh.empty()) {
+        report.message = "STEP 选区没有可用于参数化的三角网格。";
         return {};
     }
 
-    report.coarseTriangleCount = crop.report.output_triangle_count;
-    auto parameterization = buildFromPatchMesh(crop.localMesh, report);
-    report.sourceTriangleCount = static_cast<int>(sourceMesh.triangleCount());
+    report.sourceTriangleCount = static_cast<int>(stepMesh.triangleCount());
+    report.coarseTriangleCount = report.sourceTriangleCount;
+    auto parameterization = buildFromPatchMesh(stepMesh, report);
     if (parameterization) {
-        report.message = "STEP 边界裁剪 STL 的单图调和参数化已建立。";
+        report.source = SurfaceParameterizationSource::StepHarmonic;
+        report.message = "STEP 选区单图调和参数化已建立。";
     }
     return parameterization;
 }
@@ -528,6 +560,32 @@ StlHybridProjection StlHybridParameterization::project(const gp_Pnt& point) cons
     }
     result.distance = result.valid ? std::sqrt(bestSquaredDistance) : 0.0;
     return result;
+}
+
+bool StlHybridParameterization::contains(double u, double v, double tolerance) const {
+    for (const auto& triangle : triangles_) {
+        const auto& first = parameters_[triangle.vertices[0]];
+        const auto& second = parameters_[triangle.vertices[1]];
+        const auto& third = parameters_[triangle.vertices[2]];
+        const double denominator =
+            (second[1] - third[1]) * (first[0] - third[0]) +
+            (third[0] - second[0]) * (first[1] - third[1]);
+        if (std::abs(denominator) <= 1.0e-20) {
+            continue;
+        }
+        const double firstWeight =
+            ((second[1] - third[1]) * (u - third[0]) +
+             (third[0] - second[0]) * (v - third[1])) / denominator;
+        const double secondWeight =
+            ((third[1] - first[1]) * (u - third[0]) +
+             (first[0] - third[0]) * (v - third[1])) / denominator;
+        const double thirdWeight = 1.0 - firstWeight - secondWeight;
+        if (firstWeight >= -tolerance && secondWeight >= -tolerance &&
+            thirdWeight >= -tolerance) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }

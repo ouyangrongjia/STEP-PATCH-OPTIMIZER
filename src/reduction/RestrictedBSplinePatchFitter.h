@@ -2,6 +2,8 @@
 
 #include "brep/ShapeDocument.h"
 #include "common/GeometryTypes.h"
+#include "reduction/StlHybridParameterization.h"
+#include "stl/StlMesh.h"
 
 #include <Geom_BSplineSurface.hxx>
 #include <TopoDS_Face.hxx>
@@ -11,7 +13,30 @@
 
 namespace spo {
 
-class StlHybridParameterization;
+enum class RestrictedBSplinePatchFitFailureStage {
+    None,
+    Parameterization,
+    BoundaryConstraints,
+    UvIteration,
+    ModelSelection,
+    Holdout,
+    Jacobian,
+    Retrim,
+    BoundaryHoldout,
+    BrepCheck
+};
+
+const char* toString(RestrictedBSplinePatchFitFailureStage stage);
+
+struct UvIterationReport {
+    int iteration = 0;
+    double objectiveBefore = 0.0;
+    double objectiveAfter = 0.0;
+    double maximumShift = 0.0;
+    int backtrackingSteps = 0;
+    bool accepted = false;
+    std::string reason;
+};
 
 struct RestrictedBSplinePatchFitOptions {
     double tolerance3d = 0.03;
@@ -19,14 +44,20 @@ struct RestrictedBSplinePatchFitOptions {
     double minimumNormalizedJacobian = 1.0e-5;
     double fairnessWeight = 0.01;
     int maximumControlPoints = 1024;
-    int maximumIterations = 5;
-    const StlHybridParameterization* hybridParameterization = nullptr;
-    double stlReferenceWeight = 0.25;
-    double maximumStlReferenceDistance = 0.2;
+    int maximumBoundaryConstraintRefinements = 8;
+    int maximumUvIterations = 5;
+    int maximumUvBacktrackingSteps = 8;
+    double uvConvergenceTolerance = 1.0e-8;
+    const StlMesh* scanReference = nullptr;
+    ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
+    double scanReferenceWeight = 0.25;
+    double maximumScanReferenceDistance = 0.2;
 };
 
 struct RestrictedBSplinePatchFitReport {
     bool success = false;
+    RestrictedBSplinePatchFitFailureStage failureStage =
+        RestrictedBSplinePatchFitFailureStage::None;
     std::string message;
     int trainingSampleCount = 0;
     int selectionSampleCount = 0;
@@ -37,7 +68,14 @@ struct RestrictedBSplinePatchFitReport {
     int vControlPointCount = 0;
     int iterationCount = 0;
     int knotInsertionCount = 0;
+    int boundaryConstraintCount = 0;
+    int boundaryConstraintRefinementCount = 0;
+    int exteriorGuardSampleCount = 0;
+    double maxBoundaryConstraintResidual = 0.0;
+    double maxBoundaryUvShift = 0.0;
     double maxBoundaryDistance = 0.0;
+    double supportSurfaceExtentRatio = 0.0;
+    double supportSurfaceMaxPoleOverflowRatio = 0.0;
     double maxSelectionDistance = 0.0;
     double maxSelectionNormalAngleDegrees = 0.0;
     double maxHoldoutDistance = 0.0;
@@ -47,9 +85,12 @@ struct RestrictedBSplinePatchFitReport {
     bool selectionPassed = false;
     bool holdoutPassed = false;
     bool brepCheckValid = false;
-    bool hybridParameterizationUsed = false;
-    int stlReferenceSampleCount = 0;
-    double maxStepToStlDistance = 0.0;
+    SurfaceParameterizationSource parameterizationSource = SurfaceParameterizationSource::None;
+    StlHybridParameterizationReport parameterization;
+    ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
+    int scanReferenceSampleCount = 0;
+    double maxStepToScanDistance = 0.0;
+    std::vector<UvIterationReport> uvIterations;
 };
 
 struct RestrictedBSplinePatchFitResult {

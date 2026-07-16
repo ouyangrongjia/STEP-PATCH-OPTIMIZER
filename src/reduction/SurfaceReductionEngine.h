@@ -2,6 +2,7 @@
 
 #include "brep/ShapeDocument.h"
 #include "common/GeometryTypes.h"
+#include "reduction/RestrictedBSplinePatchFitter.h"
 #include "reduction/StlHybridParameterization.h"
 #include "stl/StlMesh.h"
 #include "validate/CommercialCadQualityGate.h"
@@ -26,27 +27,69 @@ enum class SurfaceReductionOutcome {
 
 const char* toString(SurfaceReductionOutcome outcome);
 
+enum class SurfaceReductionMergeMethod {
+    OriginalFace,
+    ExactSameDomain,
+    RestrictedBSpline
+};
+
+const char* toString(SurfaceReductionMergeMethod method);
+
+enum class SurfaceReductionFailureStage {
+    None,
+    Parameterization,
+    BoundaryConstraints,
+    UvIteration,
+    ModelSelection,
+    Holdout,
+    Jacobian,
+    Retrim,
+    BoundaryHoldout,
+    BrepCheck,
+    Seam,
+    CommercialCad,
+    Topology,
+    StepRoundtrip
+};
+
+const char* toString(SurfaceReductionFailureStage stage);
+
 struct SurfaceReductionOptions {
     double tolerance3d = 0.03;
     double normalToleranceDegrees = 15.0;
     double smoothSeamToleranceDegrees = 5.0;
     double targetOutputRatio = 0.5;
     int maximumControlPoints = 1024;
-    double stlReferenceWeight = 0.25;
-    double maximumStlReferenceDistance = 0.2;
+    int maximumBoundaryConstraintRefinements = 8;
+    int maximumUvIterations = 5;
+    int maximumUvBacktrackingSteps = 8;
+    double uvConvergenceTolerance = 1.0e-8;
+    int beamWidth = 8;
+    int maximumPairExpansionsPerState = 16;
+    int maximumRestrictedFitEvaluations = 512;
+    double scanReferenceWeight = 0.25;
+    double maximumScanReferenceDistance = 0.2;
 };
 
 struct SurfaceReductionRequest {
     std::vector<FaceId> selectedFaces;
     std::set<EdgeId> lockedEdges;
     SurfaceReductionOptions options;
-    std::shared_ptr<const StlMesh> referenceStl;
-    bool referenceStlIsSelectionCrop = false;
+    std::shared_ptr<const StlMesh> scanReferenceStl;
+    ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
 };
 
 struct SurfaceReductionRejectedGroup {
     std::vector<FaceId> faces;
+    SurfaceReductionFailureStage stage = SurfaceReductionFailureStage::None;
     std::string reason;
+    RestrictedBSplinePatchFitReport fit;
+};
+
+struct SurfaceReductionGroupReport {
+    std::vector<FaceId> faces;
+    SurfaceReductionMergeMethod method = SurfaceReductionMergeMethod::OriginalFace;
+    RestrictedBSplinePatchFitReport fit;
 };
 
 struct SurfaceReductionReport {
@@ -63,11 +106,18 @@ struct SurfaceReductionReport {
     double maxSmoothSeamAngleDegrees = 0.0;
     int attemptedMergeCount = 0;
     int acceptedMergeCount = 0;
-    bool hybridParameterizationUsed = false;
-    int stlReferenceSampleCount = 0;
-    double maxStepToStlDistance = 0.0;
-    StlHybridParameterizationReport hybridParameterization;
+    int expandedStateCount = 0;
+    int generatedStateCount = 0;
+    int deduplicatedStateCount = 0;
+    int fitCacheHitCount = 0;
+    int fitCacheMissCount = 0;
+    bool searchBudgetExhausted = false;
+    bool stepParameterizationUsed = false;
+    ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
+    int scanReferenceSampleCount = 0;
+    double maxStepToScanDistance = 0.0;
     std::vector<std::vector<FaceId>> outputGroups;
+    std::vector<SurfaceReductionGroupReport> groupReports;
     std::vector<SurfaceReductionRejectedGroup> rejectedGroups;
     std::vector<CommercialCadQualityGateReport> commercialCadReports;
     StrictTopologyGateReport topologyReport;
