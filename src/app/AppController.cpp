@@ -18,7 +18,7 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/CropBoundaryDiagnostics.h"
 #include "patch/PatchImportService.h"
-#include "brep/BoundaryWireBuilder.h"
+#include "merge/BoundaryWireBuilder.h"
 #include "stl/StlCutChainCutter.h"
 
 #include <BRep_Tool.hxx>

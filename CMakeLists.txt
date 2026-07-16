@@ -24,7 +24,6 @@ add_library(spo_core STATIC
     src/app/AppController.cpp
     src/app/PatchPreviewRunLogger.cpp
     src/app/ProcessStatus.cpp
-    src/brep/BoundaryWireBuilder.cpp
     src/brep/EdgeIndex.cpp
     src/brep/FaceIndex.cpp
     src/brep/ShapeDocument.cpp
@@ -53,6 +52,7 @@ add_library(spo_core STATIC
     src/io/StlWriter.cpp
     src/merge/FaceInspectInfo.cpp
     src/merge/FaceInspector.cpp
+    src/merge/BoundaryWireBuilder.cpp
     src/merge/FeatureBoundedCandidateSelector.cpp
     src/merge/FeatureBoundedRegionBuilder.cpp
     src/merge/CandidateFilters.cpp

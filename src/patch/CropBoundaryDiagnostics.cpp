@@ -1,6 +1,6 @@
 #include "patch/CropBoundaryDiagnostics.h"
 
-#include "brep/BoundaryWireBuilder.h"
+#include "merge/BoundaryWireBuilder.h"
 #include "brep/ShapeDocument.h"
 #include "brep/TopologyGraph.h"
 #include "merge/RegionBoundaryAnalyzer.h"

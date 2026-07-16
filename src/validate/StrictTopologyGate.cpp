@@ -2,7 +2,6 @@
 
 #include "io/StepReader.h"
 #include "io/StepWriter.h"
-#include "patch/PatchReplacementReport.h"
 #include "validate/ShapeValidator.h"
 
 #include <BRepBndLib.hxx>
@@ -178,11 +177,8 @@ StrictTopologyGateReport StrictTopologyGate::evaluate(const StrictTopologyGateIn
     StrictTopologyGateReport report;
     report.watertightSolidRequired = input.requireWatertightSolid;
     report.roundtripWatertightRequired = input.requireRoundtripWatertight;
-
-    if (input.replacementReport != nullptr) {
-        report.replacementFaceCount = input.replacementReport->replacementFaceCount;
-        report.multiFaceReplacement = report.replacementFaceCount > 1;
-    }
+    report.replacementFaceCount = input.replacementFaceCount;
+    report.multiFaceReplacement = report.replacementFaceCount > 1;
 
     if (input.beforeDocument == nullptr || !input.beforeDocument->hasShape()) {
         return fail(report, StrictTopologyFailureReason::MissingBeforeShape, "Strict topology gate requires a before document with a shape.");
@@ -236,16 +232,14 @@ StrictTopologyGateReport StrictTopologyGate::evaluate(const StrictTopologyGateIn
         return fail(report, StrictTopologyFailureReason::BBoxDeviationTooLarge, "After document bounding box deviates too much from before document.");
     }
 
-    if (input.replacementReport != nullptr) {
-        if (report.replacementFaceCount < 0) {
-            return fail(report, StrictTopologyFailureReason::ReplacementStatsInvalid, "Replacement face count is invalid.");
+    if (report.replacementFaceCount < 0) {
+        return fail(report, StrictTopologyFailureReason::ReplacementStatsInvalid, "Replacement face count is invalid.");
+    }
+    if (report.multiFaceReplacement) {
+        if (!input.allowMultiFaceReplacement) {
+            return fail(report, StrictTopologyFailureReason::ReplacementStatsInvalid, "Multi-face replacement is not allowed by this gate input.");
         }
-        if (report.multiFaceReplacement) {
-            if (!input.allowMultiFaceReplacement) {
-                return fail(report, StrictTopologyFailureReason::ReplacementStatsInvalid, "Multi-face replacement is not allowed by this gate input.");
-            }
-            append_warning(report, "Accepted multi-face replacement fragment.");
-        }
+        append_warning(report, "Accepted multi-face replacement fragment.");
     }
 
     if (!input.allowFaceCountIncrease && report.afterStats.faces > report.beforeStats.faces) {

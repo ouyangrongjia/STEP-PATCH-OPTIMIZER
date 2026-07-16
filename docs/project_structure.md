@@ -222,18 +222,18 @@ Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
 | `src/app/` | 程序入口、主窗口、应用级控制器；连接 GUI、Command 和几何模块 |
 | `src/gui/` | Qt/OCCT GUI、三维视图、模型树、参数面板、日志/检查/验证/报告面板 |
 | `src/command/` | 命令系统、CommandContext、CommandHistory、undo/redo、锁边命令、same-domain 合并命令、PatchReplacementCommand、导入导出命令 |
-| `src/io/` | STEP/STP 读写、STL 二进制读写、导出后二次读取校验、项目文件保存恢复接口 |
-| `src/brep/` | ShapeDocument、Face/Edge 索引、TopologyGraph、BoundaryWireBuilder、拓扑查询、基础统计 |
-| `src/feature/` | 基础特征边检测、曲率估计接口、边界分类接口、用户约束接口 |
-| `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
+| `src/io/` | STEP/STP 读写、STL 二进制读写、导出后二次读取校验 |
+| `src/brep/` | ShapeDocument、Face/Edge 索引、TopologyGraph、拓扑查询、基础统计 |
+| `src/feature/` | 基础特征边检测 |
+| `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、BoundaryWireBuilder、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
 | `src/reduction/` | `SurfaceReductionEngine` 动态分组和全局验证、`RestrictedBSplinePatchFitter` 受限曲面求解 |
 | `src/stl/` | STP sampled fitting mesh、legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
 | `src/patch/` | Patch import / artifact lookup / preview report / Apply state / original-boundary constrained replacement / repair / trim diagnostics |
 | `src/external/geomagic/` | Geomagic AutoSurface 配置、backend、result 和输出路径解析 |
-| `src/validate/` | ShapeValidator、BRepCheck/free/multiple edge 检查、StrictTopologyGate、CommercialCadLikeQualityGate、误差评估接口、报告生成接口 |
+| `src/validate/` | ShapeValidator、BRepCheck/free/multiple edge 检查、StrictTopologyGate、CommercialCadLikeQualityGate |
 | `src/common/` | 公共类型、配置、容差、Result 返回结构 |
 | `tests/` | 单元测试、命令测试、patch / STL / gate / script contract 回归测试 |
-| `tools/` | 命令行批处理、STEP 统计、Surface Reduction / Patch Apply / baseline / StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
+| `tools/` | STEP 统计、Surface Reduction / Patch Apply / baseline / StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
 | `scripts/` | Windows 环境初始化、依赖安装、构建运行、验证、Geomagic、Route 2 和 Creo 诊断脚本 |
 | `data/runs/` | 新测试和实验运行归档；目录名包含时间、流程、模型、候选、变体，每轮含统一清单和标准子目录 |
 | `data/baseline_runs/` | 旧运行历史，只读保留；不做批量迁移，不再接收默认新运行 |

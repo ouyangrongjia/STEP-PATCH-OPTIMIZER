@@ -7,8 +7,6 @@
 
 namespace spo {
 
-struct PatchReplacementReport;
-
 enum class StrictTopologyFailureReason {
     None,
     MissingBeforeShape,
@@ -30,7 +28,7 @@ const char* toString(StrictTopologyFailureReason reason);
 struct StrictTopologyGateInput {
     const ShapeDocument* beforeDocument = nullptr;
     const ShapeDocument* afterDocument = nullptr;
-    const PatchReplacementReport* replacementReport = nullptr;
+    int replacementFaceCount = 0;
 
     bool requireStepRoundtrip = true;
     bool allowMultiFaceReplacement = true;

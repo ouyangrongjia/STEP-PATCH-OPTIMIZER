@@ -1,5 +1,4 @@
 #include "brep/ShapeDocument.h"
-#include "patch/PatchReplacementReport.h"
 #include "validate/StrictTopologyGate.h"
 
 #include <BRep_Builder.hxx>
@@ -42,13 +41,13 @@ std::filesystem::path temp_step_path(const char* name) {
 spo::StrictTopologyGateReport evaluate(
     const spo::ShapeDocument& before,
     const spo::ShapeDocument& after,
-    const spo::PatchReplacementReport* replacementReport = nullptr,
+    const int replacementFaceCount = 0,
     const std::filesystem::path& stepPath = {},
     bool strictWatertight = false) {
     spo::StrictTopologyGateInput input;
     input.beforeDocument = &before;
     input.afterDocument = &after;
-    input.replacementReport = replacementReport;
+    input.replacementFaceCount = replacementFaceCount;
     input.temporaryStepPath = stepPath;
     input.requireWatertightSolid = strictWatertight;
     input.requireZeroFreeEdges = strictWatertight;
@@ -99,11 +98,7 @@ void test_free_edge_increase_fails() {
 void test_multi_face_replacement_is_accepted() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_box(), {});
-    spo::PatchReplacementReport replacement;
-    replacement.success = true;
-    replacement.replacementFaceCount = 12;
-
-    const auto report = evaluate(before, after, &replacement);
+    const auto report = evaluate(before, after, 12);
 
     assert(report.passed);
     assert(report.multiFaceReplacement);
@@ -114,14 +109,10 @@ void test_multi_face_replacement_is_accepted() {
 void test_multi_face_replacement_can_be_disallowed() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_box(), {});
-    spo::PatchReplacementReport replacement;
-    replacement.success = true;
-    replacement.replacementFaceCount = 12;
-
     spo::StrictTopologyGateInput input;
     input.beforeDocument = &before;
     input.afterDocument = &after;
-    input.replacementReport = &replacement;
+    input.replacementFaceCount = 12;
     input.allowMultiFaceReplacement = false;
 
     const auto report = spo::StrictTopologyGate().evaluate(input);
@@ -130,15 +121,11 @@ void test_multi_face_replacement_can_be_disallowed() {
     assert(report.failureReason == spo::StrictTopologyFailureReason::ReplacementStatsInvalid);
 }
 
-void test_replacement_face_count_is_the_only_patch_report_gate_input() {
+void test_replacement_face_count_is_a_direct_gate_input() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_box(), {});
-    spo::PatchReplacementReport replacement;
-    replacement.success = false;
-    replacement.patchFaceCount = -100;
-    replacement.replacementFaceCount = 3;
 
-    const auto report = evaluate(before, after, &replacement);
+    const auto report = evaluate(before, after, 3);
 
     assert(report.passed);
     assert(report.replacementFaceCount == 3);
@@ -162,7 +149,7 @@ void test_step_export_and_roundtrip_use_requested_path() {
     const auto path = temp_step_path("spo_strict_topology_gate_roundtrip.stp");
     std::filesystem::remove(path);
 
-    const auto report = evaluate(before, after, nullptr, path);
+    const auto report = evaluate(before, after, 0, path);
 
     assert(report.passed);
     assert(report.stepExportOk);
@@ -176,7 +163,7 @@ void test_watertight_solid_gate_records_roundtrip_stats() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_box(), {});
 
-    const auto report = evaluate(before, after, nullptr, {}, true);
+    const auto report = evaluate(before, after, 0, {}, true);
 
     assert(report.passed);
     assert(report.watertightSolidRequired);
@@ -194,7 +181,7 @@ void test_watertight_solid_gate_rejects_shell_only_after() {
     const spo::ShapeDocument before(make_box(), {});
     const spo::ShapeDocument after(make_open_face(), {});
 
-    const auto report = evaluate(before, after, nullptr, {}, true);
+    const auto report = evaluate(before, after, 0, {}, true);
 
     assert(!report.passed);
     assert(report.failureReason == spo::StrictTopologyFailureReason::FreeEdgeIncreased ||
@@ -209,7 +196,7 @@ void run_strict_topology_gate_tests() {
     test_free_edge_increase_fails();
     test_multi_face_replacement_is_accepted();
     test_multi_face_replacement_can_be_disallowed();
-    test_replacement_face_count_is_the_only_patch_report_gate_input();
+    test_replacement_face_count_is_a_direct_gate_input();
     test_face_count_not_reduced_warns_without_failing();
     test_step_export_and_roundtrip_use_requested_path();
     test_watertight_solid_gate_records_roundtrip_stats();

@@ -1,6 +1,6 @@
 #include "command/PatchReplacementCommand.h"
 
-#include "brep/BoundaryWireBuilder.h"
+#include "merge/BoundaryWireBuilder.h"
 #include "brep/SurfaceTypeProbe.h"
 #include "command/CommandContext.h"
 #include "patch/BoundaryConstrainedPatchBuilder.h"
@@ -1070,45 +1070,10 @@ ReplacementAssemblyResult assemble_replacement_shape(
 void copy_repair_report(
     PatchReplacementReport& report,
     const PatchReplacementRepairReport& repairReport) {
+    static_cast<PatchReplacementRepairMetrics&>(report) = repairReport;
     report.repairApplied = true;
-    report.sameParameterApplied = repairReport.sameParameterApplied;
-    report.shapeFixShapeApplied = repairReport.shapeFixShapeApplied;
-    report.shapeFixFaceApplied = repairReport.shapeFixFaceApplied;
-    report.shapeFixWireApplied = repairReport.shapeFixWireApplied;
     report.shapeFixApplied = report.shapeFixShapeApplied || report.shapeFixFaceApplied || report.shapeFixWireApplied;
-    report.unifySameDomainApplied = repairReport.unifySameDomainApplied;
-    report.sewingApplied = repairReport.sewingApplied;
-    report.adaptiveSewingApplied = repairReport.adaptiveSewingApplied;
-    report.shellToSolidApplied = repairReport.shellToSolidApplied;
     report.repairRunCount += 1;
-
-    report.faceCountBeforeRepair = repairReport.faceCountBeforeRepair;
-    report.edgeCountBeforeRepair = repairReport.edgeCountBeforeRepair;
-    report.shellCountBeforeRepair = repairReport.shellCountBeforeRepair;
-    report.solidCountBeforeRepair = repairReport.solidCountBeforeRepair;
-    report.faceCountAfterRepair = repairReport.faceCountAfterRepair;
-    report.edgeCountAfterRepair = repairReport.edgeCountAfterRepair;
-    report.shellCountAfterRepair = repairReport.shellCountAfterRepair;
-    report.solidCountAfterRepair = repairReport.solidCountAfterRepair;
-
-    report.freeEdgesBeforeRepair = repairReport.freeEdgesBeforeRepair;
-    report.freeEdgesAfterRepair = repairReport.freeEdgesAfterRepair;
-    report.multipleEdgesBeforeRepair = repairReport.multipleEdgesBeforeRepair;
-    report.multipleEdgesAfterRepair = repairReport.multipleEdgesAfterRepair;
-    report.degeneratedFreeEdgesBeforeRepair = repairReport.degeneratedFreeEdgesBeforeRepair;
-    report.degeneratedFreeEdgesAfterRepair = repairReport.degeneratedFreeEdgesAfterRepair;
-
-    report.selectedSewingTolerance = repairReport.selectedSewingTolerance;
-    report.sewingAttemptCount = repairReport.sewingAttemptCount;
-    report.bestSewingFreeEdges = repairReport.bestSewingFreeEdges;
-    report.bestSewingMultipleEdges = repairReport.bestSewingMultipleEdges;
-    report.bestSewingDegeneratedFreeEdgeCount = repairReport.bestSewingDegeneratedFreeEdgeCount;
-    report.bestSewingFaceCount = repairReport.bestSewingFaceCount;
-    report.bestSewingEdgeCount = repairReport.bestSewingEdgeCount;
-    report.bestSewingShellCount = repairReport.bestSewingShellCount;
-    report.bestSewingSolidCount = repairReport.bestSewingSolidCount;
-    report.bestSewingBRepCheckValid = repairReport.bestSewingBRepCheckValid;
-    report.bestSewingCollapsed = repairReport.bestSewingCollapsed;
 
     report.repairWarningMessage = repairReport.warningMessage;
     append_warning(report, repairReport.warningMessage);
@@ -1407,7 +1372,7 @@ Result PatchReplacementCommand::execute(CommandContext& context) {
     StrictTopologyGateInput gateInput;
     gateInput.beforeDocument = &beforeDocument_;
     gateInput.afterDocument = &afterDocument_;
-    gateInput.replacementReport = &report_;
+    gateInput.replacementFaceCount = report_.replacementFaceCount;
     gateInput.allowMultiFaceReplacement = true;
     gateInput.allowFaceCountIncrease = true;
     gateInput.requireStepRoundtrip = true;

@@ -15,6 +15,10 @@
 
 阶段 2 已增加 FeatureBoundedRefit 候选查找、过滤、排序和未设置统计字段回退的具名测试；`PatchReplacementCommand` 的 repair、closure、trim、external CAD 与 gate 报告断言已按合同分组；`StrictTopologyGate` 增加“只从补片报告读取 replacement face count”的解耦前基线。默认测试不包含真实 candidate 或固定 FaceId。
 
+### 2026-07-16 结构优化阶段 3
+
+阶段 3 已提取共享 `PatchReplacementRepairMetrics`，repair report 与最终 replacement report 通过同一基类保留原字段访问和输出合同，命令侧不再逐字段复制修复指标。`StrictTopologyGateInput` 改为直接接收 `replacementFaceCount`，验证模块不再包含或前置声明补片报告。`BoundaryWireBuilder` 从 B-rep 目录移动到 merge 目录，消除底层拓扑模块对区域分析类型的反向依赖；类名、方法和行为不变。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。
