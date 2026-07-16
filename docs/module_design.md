@@ -292,12 +292,11 @@ class CommandHistory;
 
 IO 模块负责 STEP/STP 文件读写，以及项目文件保存与恢复。
 
-### 6.2 核心类规划
+### 6.2 当前核心类型
 
 ```cpp
 class StepReader;
 class StepWriter;
-class ProjectSerializer;
 ```
 
 ### 6.3 StepReader 职责
@@ -318,7 +317,7 @@ class ProjectSerializer;
 3. 写出后可重新读取验证。
 ```
 
-### 6.5 ProjectSerializer 职责
+### 6.5 后续项目序列化职责
 
 项目文件建议使用：
 
@@ -422,14 +421,13 @@ enum class FeatureEdgeType {
 | `TopologicalFeature` | free edge、multiple edge、non-manifold edge | 不允许 |
 | `UserLocked` | 用户手动冻结边 | 不允许 |
 
-### 8.3 核心类规划
+### 8.3 当前核心类型与后续能力
 
 ```cpp
 class FeatureEdgeDetector;
-class CurvatureEstimator;
-class BoundaryClassifier;
-class UserConstraintSet;
 ```
+
+曲率估计、边界分类和约束持久化仍是后续能力，不为未实现功能保留空占位类。
 
 ### 8.4 检测依据
 
@@ -601,14 +599,15 @@ for each unvisited face:
 6. 导出的 STEP 是否能重新读取。
 ```
 
-### 10.2 核心类规划
+### 10.2 当前核心类型
 
 ```cpp
 class ShapeValidator;
-class SewingChecker;
-class ErrorMetric;
-class ReportGenerator;
+class StrictTopologyGate;
+class CommercialCadQualityGate;
 ```
+
+缝合诊断、误差评估和报告输出由当前 repair、gate 与具体工作流报告承担，不保留空占位类。
 
 ### 10.3 基础检查内容
 
@@ -792,9 +791,9 @@ OCCT
 2. FeatureBoundedRegionBuilder 区域构建。
 3. 合并候选 GUI 预览。
 4. 手动合并组编辑。
-5. ProjectSerializer 保存项目。
-6. ErrorMetric 几何误差评估。
-7. ReportGenerator 实验报告。
+5. 项目状态序列化。
+6. 几何误差评估。
+7. 实验报告汇总。
 8. 更完整的锁边状态持久化。
 ```
 
@@ -803,8 +802,8 @@ OCCT
 目标：面向潮玩件复杂曲面和论文方向拓展。
 
 ```text
-1. CurvatureEstimator 实用化。
-2. BoundaryClassifier 圆角起止线、凸起边界识别。
+1. 曲率估计能力。
+2. 圆角起止线和凸起边界分类能力。
 3. ridge / valley / weak feature 检测。
 4. SurfaceRefitter 自定义 B-spline 求解与 G1 / G2 约束。
 5. 局部 patch layout 重构。

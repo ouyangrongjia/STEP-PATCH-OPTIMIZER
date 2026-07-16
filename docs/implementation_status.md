@@ -7,6 +7,10 @@
 
 ## 1. 当前版本概览
 
+### 2026-07-16 结构优化阶段 1
+
+当前开发分支为 `refactor/structure-hardening`，基线为 `native-surface-reduction` 的 `dc76425`。阶段 1 已删除无引用空占位类型、空编译单元和无功能的 `batch_optimize` 目标；工具层共用 JSON/UTF-8 路径辅助与确定性 FeatureBoundedRefit 候选选择已集中，Geomagic 配置和结果 JSON 写入共用同一文件辅助实现。算法、报告字段、CLI 和 GUI 行为保持不变。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。
@@ -1117,7 +1121,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | STEP 读取 | 已完成 | 支持读取 `.step` / `.stp` |
 | STEP 写出 | 已完成 | 支持导出 STEP；GUI 导出路径在后台执行 |
 | STEP 二次读取验证 | 已完成 | 导出后可重新读取验证；GUI 导出后的二次读取校验在同一后台任务执行 |
-| 项目文件保存 | 未完成 | `ProjectSerializer` 仍待实现 |
+| 项目文件保存 | 未完成 | 能力待实现；不保留空占位类型 |
 | 项目文件恢复 | 未完成 | 需要保存锁边、参数、操作日志等 |
 
 ### 3.5 B-rep 拓扑模块
@@ -1143,7 +1147,7 @@ Organic detail/tolerance 调参：face count 仍≈273
 | 用户锁边 | 已完成 | 通过 `CommandContext.lockedEdges` 维护 |
 | 用户锁边参与合并保护 | 已完成 | 合并时加入 protectedEdges，并已有测试覆盖 |
 | 曲率特征线 | 未完成 | ridge / valley / weak feature 仍待实现 |
-| 圆角起止线识别 | 未完成 | 后续由 BoundaryClassifier 增强 |
+| 圆角起止线识别 | 未完成 | 边界分类能力待实现；不保留空占位类型 |
 | 曲面类型变化识别 | 未完成 | 后续可结合 B-rep surface type |
 
 ### 3.7 合并模块
@@ -1441,19 +1445,19 @@ protectedEdges = 自动检测特征边 + 用户锁定边
 
 | 任务 | 状态 | 验收方式 |
 |---|---:|---|
-| 实现 ProjectSerializer | 待做 | 保存 `.spo.json` |
+| 实现项目状态序列化 | 待做 | 保存 `.spo.json` |
 | 保存用户锁边状态 | 待做 | 重开项目后锁边可恢复 |
 | 保存参数配置 | 待做 | 重开项目后参数可恢复 |
 | 保存操作日志 | 待做 | 项目文件中记录核心操作 |
-| 实现 ReportGenerator 基础报告 | 待做 | 输出 face/edge 变化、free/multiple edge、BRepCheck |
+| 实现统一基础报告 | 待做 | 输出 face/edge 变化、free/multiple edge、BRepCheck |
 | 实现导出批量实验报告 | 待做 | 可用于论文/组会实验记录 |
 
 ## P3：高级特征线与重拟合
 
 | 任务 | 状态 | 验收方式 |
 |---|---:|---|
-| CurvatureEstimator 实用化 | 待做 | 能估计局部曲率变化 |
-| BoundaryClassifier 实用化 | 待做 | 能识别圆角起止线、凸凹分界 |
+| 曲率估计能力 | 待做 | 能估计局部曲率变化 |
+| 边界分类能力 | 待做 | 能识别圆角起止线、凸凹分界 |
 | ridge / valley 检测 | 待做 | 能在潮玩件凸起/凹陷处生成候选特征线 |
 | SurfaceRefitter 自定义求解、G1 / G2 增强 | 冻结 / NSR-4 | 只有 OCCT 原生单曲面路线被定量证据证明不足时才评估 |
 | 原生单曲面 Apply 验证 | NSR-1 通过后 / NSR-2 | 复用现有 probe、repair、StrictTopologyGate 和 STEP roundtrip，不先改 GUI |

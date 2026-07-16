@@ -8,7 +8,23 @@
 
 ## 1. 当前判断
 
-当前开发分支为 `native-surface-reduction`。SR-0～SR-11.1 已完成；candidate 179 首轮 `49→46` 被 Creo 发现超大支撑面和裂缝后，已补齐调和域外守卫、支撑面包络、连续参数投影分支和稠密 `SameParameter` 门并重新回归。新结果仍为 `49→46`，已通过自动门且由 Creo 手动确认为无超大面片、无可见裂缝的灰色水密实体。GUI 已通过启动冒烟，预览不改文档、Apply、撤销和重做的缓存语义由命令测试覆盖。
+当前开发分支为 `refactor/structure-hardening`，基线为 `native-surface-reduction` 的 `dc76425`。SR-0～SR-11.1 的算法与验证基线保持不变；本分支只按低风险到高风险拆分代码结构。
+
+结构优化进度：
+
+```text
+1. [x] 删除无引用空占位类型、空编译单元和无功能的 batch_optimize 目标。
+2. [x] 集中工具层 JSON/UTF-8 路径辅助、FeatureBoundedRefit 候选确定性选择和 Geomagic JSON 文件写入。
+3. [ ] 补强具名结构回归测试。
+4. [ ] 解除报告、验证与合并模块反向依赖。
+5. [ ] 拆分 PatchReplacementCommand。
+6. [ ] 拆分 StpSampledFittingMeshBuilder。
+7. [ ] 拆分 AppController 与 MainWindow 工作流。
+8. [ ] 拆分 RestrictedBSplinePatchFitter。
+9. [ ] 拆分 SurfaceReductionEngine 搜索与终验。
+```
+
+candidate 179 混合回归仅保留手动复现命令，本轮不运行，也不作为结构优化提交阻塞项。
 
 当前待办：
 

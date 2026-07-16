@@ -1,7 +1,9 @@
 #include "brep/ShapeDocument.h"
+#include "common/JsonText.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
 #include "io/StepWriter.h"
+#include "merge/FeatureBoundedCandidateSelector.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 
@@ -25,6 +27,9 @@
 #include <vector>
 
 namespace {
+
+using spo::json_text::path_to_utf8;
+using spo::json_text::quote_json;
 
 struct Options {
     std::filesystem::path sourceStep;
@@ -64,41 +69,6 @@ struct FillResult {
     TopoDS_Face face;
     std::string message;
 };
-
-std::string path_to_utf8(const std::filesystem::path& path) {
-    const auto utf8 = path.generic_u8string();
-    return {reinterpret_cast<const char*>(utf8.c_str()), utf8.size()};
-}
-
-std::string json_escape(const std::string& value) {
-    std::ostringstream out;
-    for (const char c : value) {
-        switch (c) {
-        case '\\': out << "\\\\"; break;
-        case '"': out << "\\\""; break;
-        case '\b': out << "\\b"; break;
-        case '\f': out << "\\f"; break;
-        case '\n': out << "\\n"; break;
-        case '\r': out << "\\r"; break;
-        case '\t': out << "\\t"; break;
-        default:
-            if (static_cast<unsigned char>(c) < 0x20) {
-                out << "\\u00";
-                const char* digits = "0123456789ABCDEF";
-                out << digits[(static_cast<unsigned char>(c) >> 4) & 0xF];
-                out << digits[static_cast<unsigned char>(c) & 0xF];
-            } else {
-                out << c;
-            }
-            break;
-        }
-    }
-    return out.str();
-}
-
-std::string quote_json(const std::string& value) {
-    return "\"" + json_escape(value) + "\"";
-}
 
 std::string bool_json(const bool value) {
     return value ? "true" : "false";
@@ -234,12 +204,7 @@ CandidateSelection select_candidate(
     const Options& options) {
     CandidateSelection selection;
     if (!options.autoCandidateId) {
-        for (const auto& candidate : candidates) {
-            if (candidate.candidate_id == options.candidateId) {
-                selection.candidate = &candidate;
-                break;
-            }
-        }
+        selection.candidate = spo::findCandidateById(candidates, options.candidateId);
         if (selection.candidate == nullptr) {
             selection.message = "Requested candidate id was not found.";
             return selection;
@@ -252,47 +217,17 @@ CandidateSelection select_candidate(
         return selection;
     }
 
-    std::vector<const spo::MergeCandidate*> ranked;
-    ranked.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        if (candidate.valid &&
-            candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit &&
-            candidate.status != spo::MergeCandidateStatus::Rejected &&
-            candidate.status != spo::MergeCandidateStatus::Hidden) {
-            ranked.push_back(&candidate);
-        }
-    }
-    std::stable_sort(ranked.begin(), ranked.end(), [](const auto* lhs, const auto* rhs) {
-        const auto lhsFaces = candidate_face_count(*lhs);
-        const auto rhsFaces = candidate_face_count(*rhs);
-        if (lhsFaces != rhsFaces) {
-            return lhsFaces > rhsFaces;
-        }
-        const auto lhsBoundary = candidate_boundary_edge_count(*lhs);
-        const auto rhsBoundary = candidate_boundary_edge_count(*rhs);
-        if (lhsBoundary != rhsBoundary) {
-            return lhsBoundary > rhsBoundary;
-        }
-        return lhs->candidate_id < rhs->candidate_id;
-    });
-
-    std::string firstFailure;
-    for (const auto* candidate : ranked) {
-        auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
-        if (boundary.valid) {
-            selection.candidate = candidate;
-            selection.boundary = std::move(boundary);
-            selection.message = "Auto-selected largest valid FeatureBoundedRefit candidate.";
-            return selection;
-        }
-        if (firstFailure.empty()) {
-            firstFailure = boundary.message;
-        }
+    auto autoSelection = spo::selectLargestValidFeatureBoundedCandidate(document, candidates);
+    if (autoSelection.candidate != nullptr) {
+        selection.candidate = autoSelection.candidate;
+        selection.boundary = std::move(autoSelection.boundary);
+        selection.message = "Auto-selected largest valid FeatureBoundedRefit candidate.";
+        return selection;
     }
 
     selection.message = "Auto candidate selection found no valid boundary candidate.";
-    if (!firstFailure.empty()) {
-        selection.message += " First boundary failure: " + firstFailure;
+    if (!autoSelection.firstBoundaryFailure.empty()) {
+        selection.message += " First boundary failure: " + autoSelection.firstBoundaryFailure;
     }
     return selection;
 }

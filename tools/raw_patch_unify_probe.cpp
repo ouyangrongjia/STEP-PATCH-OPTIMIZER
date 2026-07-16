@@ -1,4 +1,5 @@
 #include "brep/ShapeDocument.h"
+#include "common/JsonText.h"
 #include "io/StepWriter.h"
 #include "merge/SameDomainUnifier.h"
 #include "patch/PatchImportService.h"
@@ -13,6 +14,9 @@
 
 namespace {
 
+using spo::json_text::path_to_utf8;
+using spo::json_text::quote_json;
+
 struct Options {
     std::filesystem::path inputStep;
     std::filesystem::path unifiedStep;
@@ -25,41 +29,6 @@ struct Snapshot {
     int multipleEdges = 0;
     bool brepCheckValid = false;
 };
-
-std::string path_to_utf8(const std::filesystem::path& path) {
-    const auto utf8 = path.generic_u8string();
-    return {reinterpret_cast<const char*>(utf8.c_str()), utf8.size()};
-}
-
-std::string json_escape(const std::string& value) {
-    std::ostringstream out;
-    for (const char c : value) {
-        switch (c) {
-        case '\\': out << "\\\\"; break;
-        case '"': out << "\\\""; break;
-        case '\b': out << "\\b"; break;
-        case '\f': out << "\\f"; break;
-        case '\n': out << "\\n"; break;
-        case '\r': out << "\\r"; break;
-        case '\t': out << "\\t"; break;
-        default:
-            if (static_cast<unsigned char>(c) < 0x20) {
-                out << "\\u00";
-                const char* digits = "0123456789ABCDEF";
-                out << digits[(static_cast<unsigned char>(c) >> 4) & 0xF];
-                out << digits[static_cast<unsigned char>(c) & 0xF];
-            } else {
-                out << c;
-            }
-            break;
-        }
-    }
-    return out.str();
-}
-
-std::string quote_json(const std::string& value) {
-    return "\"" + json_escape(value) + "\"";
-}
 
 std::string bool_json(bool value) {
     return value ? "true" : "false";

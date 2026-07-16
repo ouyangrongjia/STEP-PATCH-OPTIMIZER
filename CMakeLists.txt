@@ -41,28 +41,25 @@ add_library(spo_core STATIC
     src/command/ReduceSelectedFacesCommand.cpp
     src/command/UnlockEdgeCommand.cpp
     src/command/ValidateShapeCommand.cpp
-    src/feature/BoundaryClassifier.cpp
-    src/feature/CurvatureEstimator.cpp
     src/feature/FeatureEdgeDetector.cpp
-    src/feature/UserConstraintSet.cpp
+    src/external/geomagic/GeomagicJsonFile.cpp
     src/external/geomagic/GeomagicOutputPathResolver.cpp
     src/external/geomagic/GeomagicAutoSurfaceConfig.cpp
     src/external/geomagic/GeomagicAutoSurfaceResult.cpp
     src/external/geomagic/GeomagicAutoSurfaceBackend.cpp
-    src/io/ProjectSerializer.cpp
     src/io/StepReader.cpp
     src/io/StepWriter.cpp
     src/io/StlReader.cpp
     src/io/StlWriter.cpp
     src/merge/FaceInspectInfo.cpp
     src/merge/FaceInspector.cpp
+    src/merge/FeatureBoundedCandidateSelector.cpp
     src/merge/FeatureBoundedRegionBuilder.cpp
     src/merge/CandidateFilters.cpp
     src/merge/MergeCandidate.cpp
     src/merge/MergePlanner.cpp
     src/merge/RegionBoundaryAnalyzer.cpp
     src/merge/SameDomainUnifier.cpp
-    src/stl/StlCropReport.cpp
     src/stl/StlMesh.cpp
     src/stl/StlRegionExtractor.cpp
     src/stl/StpSampledFittingMeshBuilder.cpp
@@ -83,9 +80,6 @@ add_library(spo_core STATIC
     src/patch/CropBoundaryDiagnostics.cpp
     src/patch/PatchTrimDiagnostics.cpp
     src/patch/PatchReplacementRepair.cpp
-    src/validate/ErrorMetric.cpp
-    src/validate/ReportGenerator.cpp
-    src/validate/SewingChecker.cpp
     src/validate/ShapeValidator.cpp
     src/validate/CommercialCadQualityGate.cpp
     src/validate/StrictTopologyGate.cpp
@@ -146,9 +140,6 @@ if(SPO_BUILD_APP)
 endif()
 
 if(SPO_BUILD_TOOLS)
-    add_executable(batch_optimize tools/batch_optimize.cpp)
-    target_link_libraries(batch_optimize PRIVATE spo_core)
-
     add_executable(step_stats tools/step_stats.cpp)
     target_link_libraries(step_stats PRIVATE spo_core)
 

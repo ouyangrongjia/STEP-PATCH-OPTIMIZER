@@ -813,7 +813,7 @@ Preview FeatureBoundedRegion Candidates
 
 ```text
 FeatureEdgeDetector
-+ UserConstraintSet
++ CommandContext.lockedEdges
 + model boundary / topological boundary
 → protectedEdges
 

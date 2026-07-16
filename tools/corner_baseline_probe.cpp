@@ -7,6 +7,7 @@
 #include "io/StepReader.h"
 #include "io/StepWriter.h"
 #include "io/StlWriter.h"
+#include "merge/FeatureBoundedCandidateSelector.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/PatchArtifactLocator.h"
@@ -592,31 +593,6 @@ struct CandidateSelection {
     std::string message;
 };
 
-const spo::MergeCandidate* find_candidate_by_id(
-    const std::vector<spo::MergeCandidate>& candidates,
-    int candidateId) {
-    for (const auto& candidate : candidates) {
-        if (candidate.candidate_id == candidateId) {
-            return &candidate;
-        }
-    }
-    return nullptr;
-}
-
-int candidate_face_count(const spo::MergeCandidate& candidate) {
-    if (candidate.face_count > 0) {
-        return candidate.face_count;
-    }
-    return static_cast<int>(candidate.faces.size());
-}
-
-int candidate_boundary_edge_count(const spo::MergeCandidate& candidate) {
-    if (candidate.boundary_edge_count > 0) {
-        return candidate.boundary_edge_count;
-    }
-    return static_cast<int>(candidate.boundary_edges.size());
-}
-
 CandidateSelection select_candidate_for_baseline(
     const spo::ShapeDocument& document,
     const std::vector<spo::MergeCandidate>& candidates,
@@ -628,7 +604,7 @@ CandidateSelection select_candidate_for_baseline(
     }
 
     if (!options.autoCandidateId) {
-        const auto* candidate = find_candidate_by_id(candidates, options.candidateId);
+        const auto* candidate = spo::findCandidateById(candidates, options.candidateId);
         if (candidate == nullptr) {
             selection.message =
                 "Candidate id not found. generated candidates: " + std::to_string(candidates.size());
@@ -646,48 +622,17 @@ CandidateSelection select_candidate_for_baseline(
         return selection;
     }
 
-    std::vector<const spo::MergeCandidate*> ranked;
-    ranked.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        if (candidate.valid &&
-            candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit &&
-            candidate.status != spo::MergeCandidateStatus::Rejected &&
-            candidate.status != spo::MergeCandidateStatus::Hidden) {
-            ranked.push_back(&candidate);
-        }
-    }
-
-    std::stable_sort(ranked.begin(), ranked.end(), [](const auto* lhs, const auto* rhs) {
-        const auto lhsFaces = candidate_face_count(*lhs);
-        const auto rhsFaces = candidate_face_count(*rhs);
-        if (lhsFaces != rhsFaces) {
-            return lhsFaces > rhsFaces;
-        }
-        const auto lhsBoundary = candidate_boundary_edge_count(*lhs);
-        const auto rhsBoundary = candidate_boundary_edge_count(*rhs);
-        if (lhsBoundary != rhsBoundary) {
-            return lhsBoundary > rhsBoundary;
-        }
-        return lhs->candidate_id < rhs->candidate_id;
-    });
-
-    std::string firstFailure;
-    for (const auto* candidate : ranked) {
-        auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
-        if (boundary.valid) {
-            selection.candidate = candidate;
-            selection.boundary = std::move(boundary);
-            selection.message = "Auto-selected largest valid FeatureBoundedRefit candidate.";
-            return selection;
-        }
-        if (firstFailure.empty()) {
-            firstFailure = boundary.message;
-        }
+    auto autoSelection = spo::selectLargestValidFeatureBoundedCandidate(document, candidates);
+    if (autoSelection.candidate != nullptr) {
+        selection.candidate = autoSelection.candidate;
+        selection.boundary = std::move(autoSelection.boundary);
+        selection.message = "Auto-selected largest valid FeatureBoundedRefit candidate.";
+        return selection;
     }
 
     selection.message = "Auto candidate selection found no valid boundary candidate.";
-    if (!firstFailure.empty()) {
-        selection.message += " First boundary failure: " + firstFailure;
+    if (!autoSelection.firstBoundaryFailure.empty()) {
+        selection.message += " First boundary failure: " + autoSelection.firstBoundaryFailure;
     }
     return selection;
 }

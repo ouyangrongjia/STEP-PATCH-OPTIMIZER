@@ -2,6 +2,7 @@
 #include "command/PatchReplacementCommand.h"
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
+#include "merge/FeatureBoundedCandidateSelector.h"
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/PatchArtifactLocator.h"
@@ -91,77 +92,21 @@ bool parse_options(int argc, char* argv[], Options& options) {
         (options.autoCandidateId || options.candidateId >= 0);
 }
 
-const spo::MergeCandidate* find_candidate(
-    const std::vector<spo::MergeCandidate>& candidates,
-    int candidateId) {
-    for (const auto& candidate : candidates) {
-        if (candidate.candidate_id == candidateId) {
-            return &candidate;
-        }
-    }
-    return nullptr;
-}
-
-int candidate_face_count(const spo::MergeCandidate& candidate) {
-    if (candidate.face_count > 0) {
-        return candidate.face_count;
-    }
-    return static_cast<int>(candidate.faces.size());
-}
-
-int candidate_boundary_edge_count(const spo::MergeCandidate& candidate) {
-    if (candidate.boundary_edge_count > 0) {
-        return candidate.boundary_edge_count;
-    }
-    return static_cast<int>(candidate.boundary_edges.size());
-}
-
 const spo::MergeCandidate* select_auto_candidate(
     const spo::ShapeDocument& document,
     const std::vector<spo::MergeCandidate>& candidates,
     spo::RegionBoundaryAnalysis& outBoundary,
     std::string& outMessage) {
-    std::vector<const spo::MergeCandidate*> ranked;
-    ranked.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        if (candidate.valid &&
-            candidate.candidate_type == spo::MergeCandidateType::FeatureBoundedRefit &&
-            candidate.status != spo::MergeCandidateStatus::Rejected &&
-            candidate.status != spo::MergeCandidateStatus::Hidden) {
-            ranked.push_back(&candidate);
-        }
-    }
-
-    std::stable_sort(ranked.begin(), ranked.end(), [](const auto* lhs, const auto* rhs) {
-        const auto lhsFaces = candidate_face_count(*lhs);
-        const auto rhsFaces = candidate_face_count(*rhs);
-        if (lhsFaces != rhsFaces) {
-            return lhsFaces > rhsFaces;
-        }
-        const auto lhsBoundary = candidate_boundary_edge_count(*lhs);
-        const auto rhsBoundary = candidate_boundary_edge_count(*rhs);
-        if (lhsBoundary != rhsBoundary) {
-            return lhsBoundary > rhsBoundary;
-        }
-        return lhs->candidate_id < rhs->candidate_id;
-    });
-
-    std::string firstFailure;
-    for (const auto* candidate : ranked) {
-        auto boundary = spo::RegionBoundaryAnalyzer().analyze(document, *candidate);
-        if (boundary.valid) {
-            outBoundary = std::move(boundary);
-            outMessage = "Auto-selected largest valid FeatureBoundedRefit candidate.";
-            return candidate;
-        }
-        if (firstFailure.empty()) {
-            firstFailure = boundary.message;
-        }
+    auto selection = spo::selectLargestValidFeatureBoundedCandidate(document, candidates);
+    if (selection.candidate != nullptr) {
+        outBoundary = std::move(selection.boundary);
+        outMessage = "Auto-selected largest valid FeatureBoundedRefit candidate.";
+        return selection.candidate;
     }
 
     outMessage = "Auto candidate selection found no valid boundary candidate.";
-    if (!firstFailure.empty()) {
-        outMessage += " First boundary failure: " + firstFailure;
+    if (!selection.firstBoundaryFailure.empty()) {
+        outMessage += " First boundary failure: " + selection.firstBoundaryFailure;
     }
     return nullptr;
 }
@@ -435,7 +380,7 @@ int main(int argc, char* argv[]) {
     std::string selectionMessage;
     const auto* candidate = options.autoCandidateId
         ? select_auto_candidate(document, planner.candidates, boundary, selectionMessage)
-        : find_candidate(planner.candidates, options.candidateId);
+        : spo::findCandidateById(planner.candidates, options.candidateId);
     if (candidate == nullptr) {
         std::cerr << (selectionMessage.empty()
                 ? "Candidate id not found."

@@ -1,21 +1,15 @@
 #include "external/geomagic/GeomagicAutoSurfaceConfig.h"
+#include "external/geomagic/GeomagicJsonFile.h"
 
-#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
-#include <system_error>
 #include <utility>
 
 namespace spo {
 
 namespace {
-
-QString path_to_json_string(const std::filesystem::path& path) {
-    const auto utf8 = path.generic_u8string();
-    return QString::fromUtf8(reinterpret_cast<const char*>(utf8.c_str()), static_cast<qsizetype>(utf8.size()));
-}
 
 QJsonArray int_array_to_json(const std::vector<int>& values) {
     QJsonArray array;
@@ -25,63 +19,19 @@ QJsonArray int_array_to_json(const std::vector<int>& values) {
     return array;
 }
 
-void set_error(std::string* errorMessage, const std::string& message) {
-    if (errorMessage != nullptr) {
-        *errorMessage = message;
-    }
-}
-
-bool ensure_parent_directory(const std::filesystem::path& path, std::string* errorMessage) {
-    const auto parent = path.parent_path();
-    if (parent.empty()) {
-        return true;
-    }
-
-    std::error_code error;
-    std::filesystem::create_directories(parent, error);
-    if (error) {
-        set_error(errorMessage, "Could not create JSON output directory: " + error.message());
-        return false;
-    }
-    return true;
-}
-
-bool write_json_document(
-    const QJsonDocument& document,
-    const std::filesystem::path& path,
-    std::string* errorMessage) {
-    if (!ensure_parent_directory(path, errorMessage)) {
-        return false;
-    }
-
-    QFile file(path_to_json_string(path));
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        set_error(errorMessage, "Could not open JSON file for writing.");
-        return false;
-    }
-
-    if (file.write(document.toJson(QJsonDocument::Indented)) < 0) {
-        set_error(errorMessage, "Could not write JSON file.");
-        return false;
-    }
-
-    set_error(errorMessage, {});
-    return true;
-}
-
 QJsonObject config_to_json(const GeomagicAutoSurfaceConfig& config) {
     QJsonObject object;
-    object.insert("wrap_core_path", path_to_json_string(config.wrapCorePath));
-    object.insert("script_path", path_to_json_string(config.scriptPath));
-    object.insert("input_stl_path", path_to_json_string(config.inputStlPath));
-    object.insert("output_iges_path", path_to_json_string(config.outputIgesPath));
-    object.insert("output_step_path", path_to_json_string(config.outputStepPath));
-    object.insert("work_dir", path_to_json_string(config.workDir));
-    object.insert("config_json_path", path_to_json_string(config.configJsonPath));
-    object.insert("result_json_path", path_to_json_string(config.resultJsonPath));
-    object.insert("stdout_log_path", path_to_json_string(config.stdoutLogPath));
-    object.insert("stderr_log_path", path_to_json_string(config.stderrLogPath));
-    object.insert("fit_region_log_path", path_to_json_string(config.fitRegionLogPath));
+    object.insert("wrap_core_path", geomagic_json::pathToQString(config.wrapCorePath));
+    object.insert("script_path", geomagic_json::pathToQString(config.scriptPath));
+    object.insert("input_stl_path", geomagic_json::pathToQString(config.inputStlPath));
+    object.insert("output_iges_path", geomagic_json::pathToQString(config.outputIgesPath));
+    object.insert("output_step_path", geomagic_json::pathToQString(config.outputStepPath));
+    object.insert("work_dir", geomagic_json::pathToQString(config.workDir));
+    object.insert("config_json_path", geomagic_json::pathToQString(config.configJsonPath));
+    object.insert("result_json_path", geomagic_json::pathToQString(config.resultJsonPath));
+    object.insert("stdout_log_path", geomagic_json::pathToQString(config.stdoutLogPath));
+    object.insert("stderr_log_path", geomagic_json::pathToQString(config.stderrLogPath));
+    object.insert("fit_region_log_path", geomagic_json::pathToQString(config.fitRegionLogPath));
 
     object.insert("keep_temp", config.keepTemp);
     object.insert("skip_remesh", config.skipRemesh);
@@ -162,7 +112,10 @@ bool writeGeomagicAutoSurfaceConfigJson(
     const GeomagicAutoSurfaceConfig& config,
     const std::filesystem::path& path,
     std::string* errorMessage) {
-    return write_json_document(QJsonDocument(config_to_json(config)), path, errorMessage);
+    return geomagic_json::writeDocument(
+        QJsonDocument(config_to_json(config)),
+        path,
+        errorMessage);
 }
 
 }

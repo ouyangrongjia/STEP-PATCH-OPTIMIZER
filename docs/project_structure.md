@@ -169,7 +169,6 @@ step-patch-optimizer/
 │   └── ...                    # 其余 command / IO / topology / patch / STL 回归测试
 │
 └── tools/
-    ├── batch_optimize.cpp
     ├── step_stats.cpp
     ├── native_surface_fit_probe.cpp
     ├── surface_reduction_probe.cpp
@@ -376,18 +375,18 @@ ExportStepCommand
 ### 7.3 P2：项目保存与报告
 
 ```text
-1. 实现 ProjectSerializer。
+1. 实现项目状态序列化。
 2. 保存 .spo.json。
 3. 保存源文件路径、参数、锁边、操作日志、验证报告。
-4. 实现 ReportGenerator 基础报告。
+4. 实现统一基础报告。
 5. 输出 face/edge 变化、free/multiple edge、BRepCheck、导出校验、patch apply、gate 和 external CAD routing 结果。
 ```
 
 ### 7.4 NSR 后续：高级特征线、自定义拟合与多曲面
 
 ```text
-1. CurvatureEstimator 实用化。
-2. BoundaryClassifier 识别圆角起止线、凸起边界、凹陷边界。
+1. 实现曲率估计能力。
+2. 实现圆角起止线、凸起边界和凹陷边界分类能力。
 3. ridge / valley / weak feature 检测。
 4. OCCT Plate 路线被证据证明不足后，再评估自定义 B-spline 约束最小二乘。
 5. 单曲面路线完成后，再评估局部 patch layout 重构。
@@ -419,7 +418,7 @@ ExportStepCommand
 
 ## 9. 项目文件格式建议
 
-后续实现 `ProjectSerializer` 时，建议保存一个项目状态文件：
+后续实现项目状态序列化时，建议保存一个项目状态文件：
 
 ```text
 case_001.spo.json
