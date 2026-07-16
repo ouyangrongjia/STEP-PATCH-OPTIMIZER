@@ -227,7 +227,7 @@ Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
 | `src/feature/` | 基础特征边检测 |
 | `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、BoundaryWireBuilder、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
 | `src/reduction/` | `SurfaceReductionEngine` 动态分组和全局验证、`RestrictedBSplinePatchFitter` 受限曲面求解 |
-| `src/stl/` | STP sampled fitting mesh、legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
+| `src/stl/` | STP sampled fitting mesh 的基础采样、支撑带、区外覆盖带与网格诊断，以及 legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
 | `src/patch/` | Patch import / artifact lookup / preview report / Apply state / replacement 组装 / repair / closure 与 trim diagnostics |
 | `src/external/geomagic/` | Geomagic AutoSurface 配置、backend、result 和输出路径解析 |
 | `src/validate/` | ShapeValidator、BRepCheck/free/multiple edge 检查、StrictTopologyGate、CommercialCadLikeQualityGate |

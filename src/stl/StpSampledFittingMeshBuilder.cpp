@@ -2666,13 +2666,9 @@ StpSampledFittingReport fail_report(
     return report;
 }
 
-}
-
-StpSampledFittingReport StpSampledFittingMeshBuilder::build(
-    const ShapeDocument& document,
+StpSampledFittingReport initialize_sampled_fitting_report(
     const MergeCandidate& candidate,
-    const StpSampledFittingOptions& options,
-    StlMesh& outMesh) const {
+    const StpSampledFittingOptions& options) {
     StpSampledFittingReport report;
     report.candidateId = candidate.candidate_id;
     report.sourceFaceCount = static_cast<int>(candidate.faces.size());
@@ -2712,55 +2708,77 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
             options.candidateSurfaceOverCoverBodyBridgeMode ==
             CandidateSurfaceOverCoverBodyBridgeMode::Smooth;
     }
+    return report;
+}
 
-    // Validate inputs
+struct BaseSampledFittingMeshBuildResult {
+    bool success = false;
+    std::string message;
+    RegionBoundaryAnalysis boundary;
+    StlBoundingBox candidateBBox;
+    std::vector<StlTriangle> baseTriangles;
+    std::vector<StlTriangle> allTriangles;
+    int totalInteriorSamples = 0;
+};
+
+BaseSampledFittingMeshBuildResult build_base_sampled_fitting_mesh(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const StpSampledFittingOptions& options,
+    StpSampledFittingReport& report) {
+    BaseSampledFittingMeshBuildResult result;
     if (!document.hasShape()) {
-        return fail_report(report, "No shape document loaded.");
+        result.message = "No shape document loaded.";
+        return result;
     }
     if (candidate.faces.empty()) {
-        return fail_report(report, "Candidate has no source faces.");
+        result.message = "Candidate has no source faces.";
+        return result;
     }
 
-    // Extract face surface info
     const auto& topology = document.topology();
     std::vector<FaceSurfaceInfo> faceInfos;
     faceInfos.reserve(candidate.faces.size());
     for (const auto faceId : candidate.faces) {
         if (faceId >= topology.faceCount()) {
-            return fail_report(report, "Candidate references a missing face.");
+            result.message = "Candidate references a missing face.";
+            return result;
         }
         const auto& face = topology.face(faceId);
         auto info = extract_face_info(face);
         if (!info.valid) {
-            return fail_report(report, "Candidate face has invalid surface bounds.");
+            result.message = "Candidate face has invalid surface bounds.";
+            return result;
         }
         faceInfos.push_back(std::move(info));
     }
 
-    // Analyze boundary (for reporting and validation only)
-    auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
-    if (!boundary.valid || boundary.ordered_boundary_edges.empty()) {
-        return fail_report(report, "Candidate boundary analysis failed; outer boundary is not a closed loop.");
+    result.boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+    if (!result.boundary.valid || result.boundary.ordered_boundary_edges.empty()) {
+        result.message =
+            "Candidate boundary analysis failed; outer boundary is not a closed loop.";
+        return result;
     }
-    if (!boundary.boundary_closed) {
-        return fail_report(report, "Candidate boundary is not closed; cannot generate fitting STL.");
+    if (!result.boundary.boundary_closed) {
+        result.message = "Candidate boundary is not closed; cannot generate fitting STL.";
+        return result;
     }
+    report.boundaryEdgeCount =
+        static_cast<int>(result.boundary.ordered_boundary_edges.size());
 
-    report.boundaryEdgeCount = static_cast<int>(boundary.ordered_boundary_edges.size());
-
-    // Compute adaptive grid spacing
-    StlBoundingBox candidateBBox;
-    candidateBBox.valid = true;
+    result.candidateBBox.valid = true;
     for (const auto& info : faceInfos) {
-        include_vertex(candidateBBox, info.bbox.min);
-        include_vertex(candidateBBox, info.bbox.max);
+        include_vertex(result.candidateBBox, info.bbox.min);
+        include_vertex(result.candidateBBox, info.bbox.max);
     }
-    report.bbox = candidateBBox;
+    report.bbox = result.candidateBBox;
 
-    const auto diagonal = bbox_diagonal(candidateBBox);
-    // Base spacing from max divisions, but also cap by max total samples
-    const auto maxSamplesPerFace = std::max(100, options.maxTotalSamples / std::max(static_cast<int>(faceInfos.size()), 1));
-    const auto targetDivs = std::max(8, static_cast<int>(std::sqrt(static_cast<double>(maxSamplesPerFace))));
+    const auto diagonal = bbox_diagonal(result.candidateBBox);
+    const auto maxSamplesPerFace = std::max(
+        100,
+        options.maxTotalSamples / std::max(static_cast<int>(faceInfos.size()), 1));
+    const auto targetDivs =
+        std::max(8, static_cast<int>(std::sqrt(static_cast<double>(maxSamplesPerFace))));
     auto divisionsPerFace = std::min(targetDivs, options.maxInteriorDivisions);
     divisionsPerFace = std::clamp(divisionsPerFace, 8, options.maxInteriorDivisions);
     if (options.enableCornerFeatureDenseSampling) {
@@ -2777,190 +2795,228 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     report.samplingSpacing = diagonal / static_cast<double>(divisionsPerFace);
     report.boundarySpacing = report.samplingSpacing * 0.5;
 
-    // Sample boundary edges for report statistics only
     std::vector<int> edgeSampleCounts;
-    auto boundarySamples = sample_boundary_edges(
+    const auto boundarySamples = sample_boundary_edges(
         document,
-        boundary.ordered_boundary_edges,
+        result.boundary.ordered_boundary_edges,
         options.minBoundarySamplesPerEdge,
         options.boundarySamplesPerEdge,
         options.chordError,
         edgeSampleCounts);
     report.boundarySampleCount = static_cast<int>(boundarySamples.size());
 
-    // Sample each face interior on uniform UV grid
-    int totalInteriorSamples = 0;
     std::vector<std::vector<GridSample>> allFaceGrids;
     allFaceGrids.reserve(faceInfos.size());
-
     for (const auto& info : faceInfos) {
         auto grid = sample_face_grid(info, divisionsPerFace, divisionsPerFace);
-        totalInteriorSamples += static_cast<int>(grid.size());
+        result.totalInteriorSamples += static_cast<int>(grid.size());
         allFaceGrids.push_back(std::move(grid));
     }
-    report.interiorSampleCount = totalInteriorSamples;
+    report.interiorSampleCount = result.totalInteriorSamples;
 
-    // Triangulate each face uniformly — no boundary band, no bridge triangles
-    std::vector<StlTriangle> allTriangles;
-    for (std::size_t fi = 0; fi < allFaceGrids.size(); ++fi) {
-        int faceTriCount = 0;
+    for (std::size_t faceIndex = 0; faceIndex < allFaceGrids.size(); ++faceIndex) {
+        int faceTriangleCount = 0;
         triangulate_face_grid(
-            allFaceGrids[fi],
+            allFaceGrids[faceIndex],
             divisionsPerFace,
             divisionsPerFace,
-            allTriangles,
-            faceTriCount);
+            result.allTriangles,
+            faceTriangleCount);
+    }
+    result.baseTriangles = result.allTriangles;
+    result.success = true;
+    return result;
+}
+
+void append_candidate_surface_over_cover_stage(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const RegionBoundaryAnalysis& boundary,
+    const StpSampledFittingOptions& options,
+    const StlBoundingBox& candidateBBox,
+    const std::vector<StlTriangle>& baseTriangles,
+    std::vector<StlTriangle>& allTriangles,
+    StpSampledFittingReport& report) {
+    if (!options.enableCandidateSurfaceOverCover) {
+        return;
     }
 
-    const auto baseTriangles = allTriangles;
-    if (options.enableCandidateSurfaceOverCover) {
-        const auto overCover = append_candidate_surface_over_cover(
-            document,
-            candidate,
-            boundary,
-            options,
-            candidateBBox,
-            baseTriangles,
-            allTriangles);
-        report.candidateSurfaceOverCoverEdgeCount = overCover.boundaryEdgeCount;
-        report.candidateSurfaceOverCoverSampleCount = overCover.sampleCount;
-        report.candidateSurfaceOverCoverTriangleCount = overCover.triangleCount;
-        report.candidateSurfaceOverCoverFallbackCount = overCover.fallbackCount;
-        report.candidateSurfaceOverCoverRejectedCount = overCover.rejectedCount;
-        report.candidateSurfaceOverCoverBoundaryCoverage = overCover.boundaryCoverage;
-        report.candidateSurfaceOverCoverCornerMiterCount = overCover.cornerMiterCount;
-        report.candidateSurfaceOverCoverMaxOffset = overCover.maxOffset;
-        report.candidateSurfaceOverCoverNormalLeakageMax = overCover.normalLeakageMax;
-        report.candidateSurfaceOverCoverDirectionFallbackCount = overCover.directionFallbackCount;
-        report.candidateSurfaceOverCoverLongTriangleCount = overCover.longTriangleCount;
-        report.candidateSurfaceOverCoverMaxTriangleEdgeLength = overCover.maxTriangleEdgeLength;
-        report.candidateSurfaceOverCoverSourceFaceCount = overCover.sourceFaceCount;
-        report.candidateSurfaceOverCoverDirectionFlipCount = overCover.directionFlipCount;
-        report.candidateSurfaceOverCoverGeneratedRingCount = overCover.generatedRingCount;
-        report.candidateSurfaceOverCoverEmittedRingCount = overCover.emittedRingCount;
-        report.candidateSurfaceOverCoverDisabledOuterRingCount =
-            overCover.disabledOuterRingCount;
-        report.candidateSurfaceOverCoverEmittedSampleCount = overCover.emittedSampleCount;
-        report.candidateSurfaceOverCoverBodyBridgeMode =
-            candidate_surface_over_cover_body_bridge_mode_name(overCover.bodyBridgeMode);
-        report.candidateSurfaceOverCoverSmoothStripEnabled = overCover.smoothStripEnabled;
-        report.candidateSurfaceOverCoverSmoothTransitionEnabled =
-            overCover.smoothTransitionEnabled;
-        report.candidateSurfaceOverCoverSmoothingPointCount = overCover.smoothingPointCount;
-        report.candidateSurfaceOverCoverSmoothingMaxDisplacement =
-            overCover.smoothingMaxDisplacement;
-        report.candidateSurfaceOverCoverBodyBridgeTriangleCount =
-            overCover.bodyBridgeTriangleCount;
-        report.candidateSurfaceOverCoverBodyBridgeRejectedCount = overCover.bodyBridgeRejectedCount;
-        report.candidateSurfaceOverCoverBoundaryToRingRejectedCount =
-            overCover.boundaryToRingRejectedCount;
-        report.candidateSurfaceOverCoverRingToRingRejectedCount =
-            overCover.ringToRingRejectedCount;
-        report.candidateSurfaceOverCoverEdgeBuildRejectedCount =
-            overCover.edgeBuildRejectedCount;
-        report.candidateSurfaceOverCoverProblemEdgeCount =
-            static_cast<int>(overCover.problemEdges.size());
-        report.candidateSurfaceOverCoverRingPointCount = overCover.ringPointCount;
-        report.candidateSurfaceOverCoverRingClosureMaxGap = overCover.ringClosureMaxGap;
-        report.candidateSurfaceOverCoverRingClosureMaxRatio = overCover.ringClosureMaxRatio;
-        report.candidateSurfaceOverCoverIndexMismatchCount = overCover.indexMismatchCount;
-        report.candidateSurfaceOverCoverSourceFaceTransitionCount =
-            overCover.sourceFaceTransitionCount;
-        report.candidateSurfaceOverCoverEdgeSourceDistributionCount =
-            static_cast<int>(overCover.edgeSourceDistribution.size());
-        report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId =
-            overCover.maxNormalLeakageEdgeId;
-        report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId =
-            overCover.maxNormalLeakageSourceFaceId;
-        report.candidateSurfaceOverCoverRejections = overCover.rejections;
-        report.candidateSurfaceOverCoverProblemEdges = overCover.problemEdges;
-        report.candidateSurfaceOverCoverEdgeSourceDistribution = overCover.edgeSourceDistribution;
-        report.candidateSurfaceOverCoverLeakagePoints = overCover.leakagePoints;
-        if (overCover.triangleCount == 0) {
-            report.warningMessage = append_warning(
-                report.warningMessage,
-                "Candidate surface over-cover was enabled but no over-cover triangles were generated.");
-        }
+    const auto overCover = append_candidate_surface_over_cover(
+        document,
+        candidate,
+        boundary,
+        options,
+        candidateBBox,
+        baseTriangles,
+        allTriangles);
+    report.candidateSurfaceOverCoverEdgeCount = overCover.boundaryEdgeCount;
+    report.candidateSurfaceOverCoverSampleCount = overCover.sampleCount;
+    report.candidateSurfaceOverCoverTriangleCount = overCover.triangleCount;
+    report.candidateSurfaceOverCoverFallbackCount = overCover.fallbackCount;
+    report.candidateSurfaceOverCoverRejectedCount = overCover.rejectedCount;
+    report.candidateSurfaceOverCoverBoundaryCoverage = overCover.boundaryCoverage;
+    report.candidateSurfaceOverCoverCornerMiterCount = overCover.cornerMiterCount;
+    report.candidateSurfaceOverCoverMaxOffset = overCover.maxOffset;
+    report.candidateSurfaceOverCoverNormalLeakageMax = overCover.normalLeakageMax;
+    report.candidateSurfaceOverCoverDirectionFallbackCount = overCover.directionFallbackCount;
+    report.candidateSurfaceOverCoverLongTriangleCount = overCover.longTriangleCount;
+    report.candidateSurfaceOverCoverMaxTriangleEdgeLength = overCover.maxTriangleEdgeLength;
+    report.candidateSurfaceOverCoverSourceFaceCount = overCover.sourceFaceCount;
+    report.candidateSurfaceOverCoverDirectionFlipCount = overCover.directionFlipCount;
+    report.candidateSurfaceOverCoverGeneratedRingCount = overCover.generatedRingCount;
+    report.candidateSurfaceOverCoverEmittedRingCount = overCover.emittedRingCount;
+    report.candidateSurfaceOverCoverDisabledOuterRingCount =
+        overCover.disabledOuterRingCount;
+    report.candidateSurfaceOverCoverEmittedSampleCount = overCover.emittedSampleCount;
+    report.candidateSurfaceOverCoverBodyBridgeMode =
+        candidate_surface_over_cover_body_bridge_mode_name(overCover.bodyBridgeMode);
+    report.candidateSurfaceOverCoverSmoothStripEnabled = overCover.smoothStripEnabled;
+    report.candidateSurfaceOverCoverSmoothTransitionEnabled =
+        overCover.smoothTransitionEnabled;
+    report.candidateSurfaceOverCoverSmoothingPointCount = overCover.smoothingPointCount;
+    report.candidateSurfaceOverCoverSmoothingMaxDisplacement =
+        overCover.smoothingMaxDisplacement;
+    report.candidateSurfaceOverCoverBodyBridgeTriangleCount =
+        overCover.bodyBridgeTriangleCount;
+    report.candidateSurfaceOverCoverBodyBridgeRejectedCount =
+        overCover.bodyBridgeRejectedCount;
+    report.candidateSurfaceOverCoverBoundaryToRingRejectedCount =
+        overCover.boundaryToRingRejectedCount;
+    report.candidateSurfaceOverCoverRingToRingRejectedCount =
+        overCover.ringToRingRejectedCount;
+    report.candidateSurfaceOverCoverEdgeBuildRejectedCount =
+        overCover.edgeBuildRejectedCount;
+    report.candidateSurfaceOverCoverProblemEdgeCount =
+        static_cast<int>(overCover.problemEdges.size());
+    report.candidateSurfaceOverCoverRingPointCount = overCover.ringPointCount;
+    report.candidateSurfaceOverCoverRingClosureMaxGap = overCover.ringClosureMaxGap;
+    report.candidateSurfaceOverCoverRingClosureMaxRatio = overCover.ringClosureMaxRatio;
+    report.candidateSurfaceOverCoverIndexMismatchCount = overCover.indexMismatchCount;
+    report.candidateSurfaceOverCoverSourceFaceTransitionCount =
+        overCover.sourceFaceTransitionCount;
+    report.candidateSurfaceOverCoverEdgeSourceDistributionCount =
+        static_cast<int>(overCover.edgeSourceDistribution.size());
+    report.candidateSurfaceOverCoverMaxNormalLeakageEdgeId =
+        overCover.maxNormalLeakageEdgeId;
+    report.candidateSurfaceOverCoverMaxNormalLeakageSourceFaceId =
+        overCover.maxNormalLeakageSourceFaceId;
+    report.candidateSurfaceOverCoverRejections = overCover.rejections;
+    report.candidateSurfaceOverCoverProblemEdges = overCover.problemEdges;
+    report.candidateSurfaceOverCoverEdgeSourceDistribution =
+        overCover.edgeSourceDistribution;
+    report.candidateSurfaceOverCoverLeakagePoints = overCover.leakagePoints;
+    if (overCover.triangleCount == 0) {
+        report.warningMessage = append_warning(
+            report.warningMessage,
+            "Candidate surface over-cover was enabled but no over-cover triangles were generated.");
+    }
+}
+
+void append_adjacent_face_support_collar_stage(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const RegionBoundaryAnalysis& boundary,
+    const StpSampledFittingOptions& options,
+    const StlBoundingBox& candidateBBox,
+    const std::vector<StlTriangle>& baseTriangles,
+    std::vector<StlTriangle>& allTriangles,
+    StpSampledFittingReport& report) {
+    if (!options.enableAdjacentFaceSupportCollar) {
+        return;
     }
 
-    if (options.enableAdjacentFaceSupportCollar) {
-        const auto supportCollar = append_adjacent_face_support_collar(
-            document,
-            candidate,
-            boundary,
-            options,
-            candidateBBox,
-            baseTriangles,
-            allTriangles);
-        report.adjacentFaceSupportCollarEdgeCount = supportCollar.boundaryEdgeCount;
-        report.adjacentFaceSupportCollarSampleCount = supportCollar.sampleCount;
-        report.adjacentFaceSupportCollarTriangleCount = supportCollar.triangleCount;
-        report.adjacentFaceSupportCollarAdjacentFaceSampleCount = supportCollar.adjacentFaceSampleCount;
-        report.adjacentFaceSupportCollarFallbackCount = supportCollar.fallbackCount;
-        report.adjacentFaceSupportCollarRejectedCount = supportCollar.rejectedCount;
-        report.adjacentFaceSupportCollarBoundaryCoverage = supportCollar.boundaryCoverage;
-        report.adjacentFaceSupportCollarBoundaryH95 = supportCollar.boundaryH95;
-        report.adjacentFaceSupportCollarEffectiveWidthMin = supportCollar.effectiveWidthMin;
-        report.adjacentFaceSupportCollarEffectiveWidthMean = supportCollar.effectiveWidthMean;
-        report.adjacentFaceSupportCollarEffectiveWidthMax = supportCollar.effectiveWidthMax;
-        report.adjacentFaceSupportCollarAnchorCount = supportCollar.anchorCount;
-        report.adjacentFaceSupportCollarBodyBridgeSampleCount = supportCollar.bodyBridgeSampleCount;
-        report.adjacentFaceSupportCollarBodyBridgeTriangleCount = supportCollar.bodyBridgeTriangleCount;
-        report.adjacentFaceSupportCollarBodyBridgeRejectedCount = supportCollar.bodyBridgeRejectedCount;
-        report.adjacentFaceSupportCollarBodyBridgeComponentCount = supportCollar.bodyBridgeComponentCount;
-        report.adjacentFaceSupportCollarBodyBridgeMaxGap = supportCollar.bodyBridgeMaxGap;
-        report.adjacentFaceSupportCollarCornerClampCount = supportCollar.cornerClampCount;
-        report.adjacentFaceSupportCollarMaxOffset = supportCollar.maxOffset;
-        if (supportCollar.triangleCount == 0) {
-            report.warningMessage = append_warning(
-                report.warningMessage,
-                "B2.2 adjacent-face support collar was enabled but no collar triangles were generated.");
-        }
+    const auto supportCollar = append_adjacent_face_support_collar(
+        document,
+        candidate,
+        boundary,
+        options,
+        candidateBBox,
+        baseTriangles,
+        allTriangles);
+    report.adjacentFaceSupportCollarEdgeCount = supportCollar.boundaryEdgeCount;
+    report.adjacentFaceSupportCollarSampleCount = supportCollar.sampleCount;
+    report.adjacentFaceSupportCollarTriangleCount = supportCollar.triangleCount;
+    report.adjacentFaceSupportCollarAdjacentFaceSampleCount =
+        supportCollar.adjacentFaceSampleCount;
+    report.adjacentFaceSupportCollarFallbackCount = supportCollar.fallbackCount;
+    report.adjacentFaceSupportCollarRejectedCount = supportCollar.rejectedCount;
+    report.adjacentFaceSupportCollarBoundaryCoverage = supportCollar.boundaryCoverage;
+    report.adjacentFaceSupportCollarBoundaryH95 = supportCollar.boundaryH95;
+    report.adjacentFaceSupportCollarEffectiveWidthMin = supportCollar.effectiveWidthMin;
+    report.adjacentFaceSupportCollarEffectiveWidthMean = supportCollar.effectiveWidthMean;
+    report.adjacentFaceSupportCollarEffectiveWidthMax = supportCollar.effectiveWidthMax;
+    report.adjacentFaceSupportCollarAnchorCount = supportCollar.anchorCount;
+    report.adjacentFaceSupportCollarBodyBridgeSampleCount =
+        supportCollar.bodyBridgeSampleCount;
+    report.adjacentFaceSupportCollarBodyBridgeTriangleCount =
+        supportCollar.bodyBridgeTriangleCount;
+    report.adjacentFaceSupportCollarBodyBridgeRejectedCount =
+        supportCollar.bodyBridgeRejectedCount;
+    report.adjacentFaceSupportCollarBodyBridgeComponentCount =
+        supportCollar.bodyBridgeComponentCount;
+    report.adjacentFaceSupportCollarBodyBridgeMaxGap = supportCollar.bodyBridgeMaxGap;
+    report.adjacentFaceSupportCollarCornerClampCount = supportCollar.cornerClampCount;
+    report.adjacentFaceSupportCollarMaxOffset = supportCollar.maxOffset;
+    if (supportCollar.triangleCount == 0) {
+        report.warningMessage = append_warning(
+            report.warningMessage,
+            "B2.2 adjacent-face support collar was enabled but no collar triangles were generated.");
+    }
+}
+
+void collect_corner_feature_sampling_diagnostics(
+    const ShapeDocument& document,
+    const RegionBoundaryAnalysis& boundary,
+    const StpSampledFittingOptions& options,
+    StpSampledFittingReport& report) {
+    if (!options.enableCornerFeatureDenseSampling) {
+        return;
     }
 
-    if (options.enableCornerFeatureDenseSampling) {
-        std::vector<int> denseEdgeSampleCounts;
-        const auto denseSamplesPerEdge = std::max(
-            options.cornerFeatureSamplesPerEdge,
-            options.minBoundarySamplesPerEdge);
-        const auto denseSamples = sample_boundary_edges(
-            document,
-            boundary.ordered_boundary_edges,
-            denseSamplesPerEdge,
-            denseSamplesPerEdge,
-            options.chordError,
-            denseEdgeSampleCounts);
-        std::vector<gp_Pnt> densePoints;
-        densePoints.reserve(denseSamples.size());
-        for (const auto& sample : denseSamples) {
-            densePoints.push_back(sample.point);
-        }
-
-        const auto cornerAnchors = collect_unique_edge_endpoints(
-            document,
-            boundary.ordered_boundary_edges,
-            1.0e-7);
-
-        report.featureEdgeDenseSampleCount = static_cast<int>(densePoints.size());
-        report.cornerAnchorSampleCount = static_cast<int>(cornerAnchors.size());
-
-        if (densePoints.empty() && cornerAnchors.empty()) {
-            report.warningMessage = append_warning(
-                report.warningMessage,
-                "B1 corner/feature dense sampling was enabled but no anchors were generated.");
-        }
+    std::vector<int> denseEdgeSampleCounts;
+    const auto denseSamplesPerEdge = std::max(
+        options.cornerFeatureSamplesPerEdge,
+        options.minBoundarySamplesPerEdge);
+    const auto denseSamples = sample_boundary_edges(
+        document,
+        boundary.ordered_boundary_edges,
+        denseSamplesPerEdge,
+        denseSamplesPerEdge,
+        options.chordError,
+        denseEdgeSampleCounts);
+    std::vector<gp_Pnt> densePoints;
+    densePoints.reserve(denseSamples.size());
+    for (const auto& sample : denseSamples) {
+        densePoints.push_back(sample.point);
     }
 
-    // Build output mesh
+    const auto cornerAnchors = collect_unique_edge_endpoints(
+        document,
+        boundary.ordered_boundary_edges,
+        1.0e-7);
+    report.featureEdgeDenseSampleCount = static_cast<int>(densePoints.size());
+    report.cornerAnchorSampleCount = static_cast<int>(cornerAnchors.size());
+
+    if (densePoints.empty() && cornerAnchors.empty()) {
+        report.warningMessage = append_warning(
+            report.warningMessage,
+            "B1 corner/feature dense sampling was enabled but no anchors were generated.");
+    }
+}
+
+StpSampledFittingReport finalize_sampled_fitting_mesh(
+    const std::vector<StlTriangle>& allTriangles,
+    const int totalInteriorSamples,
+    const StpSampledFittingOptions& options,
+    StlMesh& outMesh,
+    StpSampledFittingReport report) {
     outMesh.clear();
-    for (const auto& tri : allTriangles) {
-        if (!is_degenerate(tri, 1.0e-18)) {
-            outMesh.addTriangle(tri);
+    for (const auto& triangle : allTriangles) {
+        if (!is_degenerate(triangle, 1.0e-18)) {
+            outMesh.addTriangle(triangle);
         }
     }
-
     report.outputTriangleCount = static_cast<int>(outMesh.triangleCount());
-
     if (outMesh.empty()) {
         return fail_report(report, "STP-sampled fitting mesh has no valid triangles.");
     }
@@ -2969,7 +3025,6 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     if (!finite_bbox(report.output_bbox)) {
         return fail_report(report, "Output mesh bounding box is invalid.");
     }
-
     if (totalInteriorSamples > options.maxTotalSamples) {
         report.warningMessage = "Interior sample count exceeds recommended maximum.";
     }
@@ -2977,6 +3032,51 @@ StpSampledFittingReport StpSampledFittingMeshBuilder::build(
     report.success = true;
     report.message = "STP-sampled fitting mesh generated.";
     return report;
+}
+
+}
+
+StpSampledFittingReport StpSampledFittingMeshBuilder::build(
+    const ShapeDocument& document,
+    const MergeCandidate& candidate,
+    const StpSampledFittingOptions& options,
+    StlMesh& outMesh) const {
+    auto report = initialize_sampled_fitting_report(candidate, options);
+    auto base = build_base_sampled_fitting_mesh(document, candidate, options, report);
+    if (!base.success) {
+        return fail_report(report, base.message);
+    }
+
+    auto allTriangles = std::move(base.allTriangles);
+    append_candidate_surface_over_cover_stage(
+        document,
+        candidate,
+        base.boundary,
+        options,
+        base.candidateBBox,
+        base.baseTriangles,
+        allTriangles,
+        report);
+    append_adjacent_face_support_collar_stage(
+        document,
+        candidate,
+        base.boundary,
+        options,
+        base.candidateBBox,
+        base.baseTriangles,
+        allTriangles,
+        report);
+    collect_corner_feature_sampling_diagnostics(
+        document,
+        base.boundary,
+        options,
+        report);
+    return finalize_sampled_fitting_mesh(
+        allTriangles,
+        base.totalInteriorSamples,
+        options,
+        outMesh,
+        std::move(report));
 }
 
 }

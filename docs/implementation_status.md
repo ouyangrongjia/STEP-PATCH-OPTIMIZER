@@ -23,6 +23,10 @@
 
 阶段 4 已从 `PatchReplacementCommand` 提取 `PatchReplacementAssembler` 和 `PatchClosureDiagnostics`：前者负责原面移除、补片面重建与 replacement shape 组装，后者负责修复前后闭合统计及自由边诊断。命令类只保留输入校验、执行顺序、repair、质量门和报告汇总；公开接口、失败顺序、报告字段、Apply、undo/redo 语义保持不变。
 
+### 2026-07-16 结构优化阶段 5
+
+阶段 5 已将 `StpSampledFittingMeshBuilder::build` 整理为基础面采样、candidate surface over-cover、adjacent-face support collar、角点采样诊断和最终网格验证五个内部阶段。稳定入口、over-cover 先于 support collar 的追加顺序、基础三角形快照、默认参数、三角形方向、警告顺序与报告字段映射保持不变。`verify_spo.ps1 -RealGeomagic` 已分别在本阶段代码和 `c2d9477` 对照基线上运行：两者都因默认 candidate 29 的 Geomagic 补片含 45 个 B-rep 面而在既有高风险预览门退出；两次 fitting STL 均为 480084 字节且 SHA-256 同为 `E060E6E883D8B17D92F574711F305CF51D14CF9423F6CE6CD3EECCE2AAA75B4A`，三角形数 9600、边界样本数 180、内部样本数 5292 完全一致，因此该非零退出不是本次结构拆分引入的回归。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。
