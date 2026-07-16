@@ -35,6 +35,10 @@
 
 阶段 7 已将 `RestrictedBSplinePatchFitter::fit` 整理为数据准备、模型求解和结果验证三个文件内阶段，公开入口仍负责输入预检、阶段编排和既有异常映射。采样与参数化顺序、边界约束细化、KKT 求解、UV 回溯、模型选择、拒绝顺序、容差和报告字段保持不变。全量单元测试耗时 113.43 秒；12 选区真实基准为 3 个 `TargetAchieved`、9 个 `NoAcceptableReduction`，选区、输入输出面数、结果类型、距离、法向、接缝、BRepCheck 和 STEP 回读字段与 `20260715_surface_reduction_benchmark_final12b` 逐项一致。
 
+### 2026-07-16 结构优化阶段 8
+
+阶段 8 已从 `SurfaceReductionEngine::reduce` 提取文件内的确定性减面搜索和最终候选质量验证：公开入口保留输入预检、边界分类、阶段调用及结果报告汇总；搜索阶段独占状态扩展、精确合并与拟合缓存、预算、去重和束排序，终验阶段依次执行接缝、Commercial CAD、全局 B-rep 与 STEP 回读质量门。公开接口、状态签名、缓存键、扩展与拒绝顺序、预算和报告字段保持不变。全量单元测试耗时 106.43 秒；阶段 7 与阶段 8 的 12 选区 CSV 全部 19 个字段一致，并继续得到 3 个 `TargetAchieved`、9 个 `NoAcceptableReduction`，计划验收字段与 `20260715_surface_reduction_benchmark_final12b` 逐项一致。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。

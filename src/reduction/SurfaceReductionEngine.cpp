@@ -84,6 +84,18 @@ struct FinalValidationResult {
     std::string message;
 };
 
+struct DeterministicSearchResult {
+    std::vector<SearchState> finalCandidates;
+    std::map<std::vector<FaceId>, SurfaceReductionRejectedGroup> rejectedGroups;
+};
+
+struct FinalCandidateSelection {
+    bool accepted = false;
+    SearchState state;
+    FinalValidationResult validation;
+    std::string bestFailure;
+};
+
 std::vector<FaceId> normalizedFaces(const std::vector<FaceId>& input) {
     auto faces = input;
     std::sort(faces.begin(), faces.end());
@@ -748,6 +760,367 @@ FinalValidationResult validateFinalState(
     return result;
 }
 
+DeterministicSearchResult runDeterministicReductionSearch(
+    const ShapeDocument& document,
+    const SurfaceReductionRequest& request,
+    const std::vector<FaceId>& faces,
+    int targetCount,
+    const SearchState& initialState,
+    const std::set<EdgeId>& mergeBlockedEdges,
+    const std::set<EdgeId>& nonSmoothSeamEdges,
+    const RestrictedBSplinePatchFitOptions& fitOptions,
+    SurfaceReductionReport& report) {
+    DeterministicSearchResult search;
+    const bool hasScanReference = request.scanReferenceStl != nullptr;
+    std::vector<SearchState> frontier {initialState};
+    std::map<std::string, SearchState> archivedStates;
+    std::map<std::vector<FaceId>, CachedFit> fitCache;
+    std::map<std::vector<FaceId>, CachedFit> stepOnlyFitCache;
+    std::map<std::vector<FaceId>, TopoDS_Face> exactCache;
+    auto stepOnlyFallback = [&](const std::vector<FaceId>& groupedFaces) -> const CachedFit* {
+        const auto existing = stepOnlyFitCache.find(groupedFaces);
+        if (existing != stepOnlyFitCache.end()) {
+            ++report.fitCacheHitCount;
+            return &existing->second;
+        }
+        if (report.fitCacheMissCount >=
+            request.options.maximumRestrictedFitEvaluations) {
+            report.searchBudgetExhausted = true;
+            return nullptr;
+        }
+        auto options = fitOptions;
+        options.scanReference = nullptr;
+        options.scanReferenceCoverage = ScanReferenceCoverage::None;
+        const auto fit = RestrictedBSplinePatchFitter().fit(
+            document,
+            groupedFaces,
+            options);
+        ++report.fitCacheMissCount;
+        CachedFit cached;
+        cached.success = fit.success();
+        cached.face = fit.face;
+        cached.surface = fit.surface;
+        cached.report = fit.report;
+        cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+        return &stepOnlyFitCache.emplace(groupedFaces, std::move(cached)).first->second;
+    };
+    bool stopSearch = false;
+    while (!frontier.empty() &&
+           static_cast<int>(frontier.front().clusters.size()) > targetCount &&
+           !stopSearch) {
+        report.expandedStateCount += static_cast<int>(frontier.size());
+        std::vector<SearchState> children;
+        for (const auto& state : frontier) {
+            const auto queue = buildPairQueue(
+                document,
+                state.clusters,
+                mergeBlockedEdges,
+                std::max(1, std::min(8, request.options.maximumPairExpansionsPerState / 2)));
+            std::vector<bool> exact(queue.size(), false);
+            for (std::size_t pairIndex = 0; pairIndex < queue.size(); ++pairIndex) {
+                const auto& pair = queue[pairIndex];
+                const auto groupedFaces = mergedFaces(
+                    state.clusters[static_cast<std::size_t>(pair.first)],
+                    state.clusters[static_cast<std::size_t>(pair.second)]);
+                const auto cachedFit = fitCache.find(groupedFaces);
+                if (cachedFit != fitCache.end()) {
+                    exact[pairIndex] = cachedFit->second.success &&
+                        cachedFit->second.method == SurfaceReductionMergeMethod::ExactSameDomain;
+                    continue;
+                }
+                auto exactResult = exactCache.find(groupedFaces);
+                if (exactResult == exactCache.end()) {
+                    exactResult = exactCache.emplace(
+                        groupedFaces,
+                        tryExactSameDomainGroup(document, groupedFaces)).first;
+                }
+                exact[pairIndex] = !exactResult->second.IsNull();
+            }
+
+            std::vector<std::size_t> pairOrder;
+            pairOrder.reserve(queue.size());
+            for (std::size_t index = 0; index < queue.size(); ++index) {
+                if (exact[index]) pairOrder.push_back(index);
+            }
+            for (std::size_t index = 0; index < queue.size(); ++index) {
+                if (!exact[index]) pairOrder.push_back(index);
+            }
+
+            const int completedMergeCount =
+                static_cast<int>(faces.size() - state.clusters.size());
+            const int validExpansionQuota = completedMergeCount == 0
+                ? std::min(3, request.options.maximumPairExpansionsPerState)
+                : 1;
+            const int transitionalExpansionQuota =
+                request.options.maximumPairExpansionsPerState - validExpansionQuota;
+            std::vector<SearchState> validStateChildren;
+            std::vector<SearchState> transitionalStateChildren;
+            for (const auto pairIndex : pairOrder) {
+                if (static_cast<int>(validStateChildren.size()) >= validExpansionQuota &&
+                    static_cast<int>(validStateChildren.size() + transitionalStateChildren.size()) >=
+                        request.options.maximumPairExpansionsPerState) {
+                    break;
+                }
+                ++report.attemptedMergeCount;
+                const auto& pair = queue[pairIndex];
+                const auto groupedFaces = mergedFaces(
+                    state.clusters[static_cast<std::size_t>(pair.first)],
+                    state.clusters[static_cast<std::size_t>(pair.second)]);
+
+                CachedFit cached;
+                const auto cachedIterator = fitCache.find(groupedFaces);
+                if (cachedIterator != fitCache.end()) {
+                    cached = cachedIterator->second;
+                    ++report.fitCacheHitCount;
+                } else if (exact[pairIndex]) {
+                    cached.face = exactCache[groupedFaces];
+                    cached.surface = BRep_Tool::Surface(cached.face);
+                    cached.success = !cached.face.IsNull() && !cached.surface.IsNull();
+                    cached.method = SurfaceReductionMergeMethod::ExactSameDomain;
+                    cached.report.success = cached.success;
+                    cached.report.parameterizationValid = cached.success;
+                    cached.report.selectionPassed = cached.success;
+                    cached.report.holdoutPassed = cached.success;
+                    cached.report.brepCheckValid = cached.success;
+                    cached.report.message = "同域面已执行无损精确合并。";
+                    fitCache.emplace(groupedFaces, cached);
+                } else {
+                    if (report.fitCacheMissCount >=
+                        request.options.maximumRestrictedFitEvaluations) {
+                        report.searchBudgetExhausted = true;
+                        stopSearch = true;
+                        break;
+                    }
+                    const auto fit = RestrictedBSplinePatchFitter().fit(
+                        document,
+                        groupedFaces,
+                        fitOptions);
+                    ++report.fitCacheMissCount;
+                    cached.success = fit.success();
+                    cached.face = fit.face;
+                    cached.surface = fit.surface;
+                    cached.report = fit.report;
+                    cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+                    fitCache.emplace(groupedFaces, cached);
+                }
+
+                if ((!cached.success || cached.face.IsNull() || cached.surface.IsNull()) &&
+                    hasScanReference &&
+                    cached.method == SurfaceReductionMergeMethod::RestrictedBSpline) {
+                    const auto* fallback = stepOnlyFallback(groupedFaces);
+                    if (fallback != nullptr && fallback->success &&
+                        !fallback->face.IsNull() && !fallback->surface.IsNull()) {
+                        cached = *fallback;
+                    }
+                }
+                if (!cached.success || cached.face.IsNull() || cached.surface.IsNull()) {
+                    search.rejectedGroups.try_emplace(
+                        groupedFaces,
+                        SurfaceReductionRejectedGroup {
+                            groupedFaces,
+                            mapFailureStage(cached.report.failureStage),
+                            cached.report.message,
+                            cached.report});
+                    continue;
+                }
+
+                auto candidateClusters = state.clusters;
+                candidateClusters[static_cast<std::size_t>(pair.first)] = Cluster {
+                    groupedFaces,
+                    cached.face,
+                    cached.surface,
+                    cached.report,
+                    cached.method};
+                candidateClusters.erase(candidateClusters.begin() + pair.second);
+                auto seam = validateAllClusterSeams(
+                    document,
+                    candidateClusters,
+                    nonSmoothSeamEdges,
+                    request.options.smoothSeamToleranceDegrees);
+                if (!seam.valid && hasScanReference &&
+                    cached.method == SurfaceReductionMergeMethod::RestrictedBSpline &&
+                    cached.report.scanReferenceSampleCount > 0) {
+                    const auto* fallback = stepOnlyFallback(groupedFaces);
+                    if (fallback != nullptr && fallback->success &&
+                        !fallback->face.IsNull() && !fallback->surface.IsNull()) {
+                        auto fallbackClusters = state.clusters;
+                        fallbackClusters[static_cast<std::size_t>(pair.first)] = Cluster {
+                            groupedFaces,
+                            fallback->face,
+                            fallback->surface,
+                            fallback->report,
+                            fallback->method};
+                        fallbackClusters.erase(fallbackClusters.begin() + pair.second);
+                        const auto fallbackSeam = validateAllClusterSeams(
+                            document,
+                            fallbackClusters,
+                            nonSmoothSeamEdges,
+                            request.options.smoothSeamToleranceDegrees);
+                        if ((fallbackSeam.valid && !seam.valid) ||
+                            fallbackSeam.maximumAngle < seam.maximumAngle) {
+                            cached = *fallback;
+                            candidateClusters = std::move(fallbackClusters);
+                            seam = fallbackSeam;
+                        }
+                    }
+                }
+                SearchState child;
+                child.clusters = std::move(candidateClusters);
+                child.maximumSeamAngle = seam.maximumAngle;
+                if (seam.valid) {
+                    validStateChildren.push_back(std::move(child));
+                } else {
+                    transitionalStateChildren.push_back(std::move(child));
+                }
+            }
+            if (stopSearch) {
+                break;
+            }
+            const auto rankChildren = [](std::vector<SearchState>& states) {
+                std::sort(states.begin(), states.end(), [](const auto& first, const auto& second) {
+                    return stateRank(first) < stateRank(second);
+                });
+            };
+            rankChildren(validStateChildren);
+            rankChildren(transitionalStateChildren);
+            const int maximumExpansions = request.options.maximumPairExpansionsPerState;
+            const int initialValidCount = std::min(
+                validExpansionQuota,
+                static_cast<int>(validStateChildren.size()));
+            const int initialTransitionalCount = std::min(
+                transitionalExpansionQuota,
+                static_cast<int>(transitionalStateChildren.size()));
+            const auto childStart = children.size();
+            for (int index = 0; index < initialValidCount; ++index) {
+                children.push_back(std::move(validStateChildren[static_cast<std::size_t>(index)]));
+            }
+            for (int index = 0; index < initialTransitionalCount; ++index) {
+                children.push_back(std::move(transitionalStateChildren[static_cast<std::size_t>(index)]));
+            }
+            int validIndex = initialValidCount;
+            int transitionalIndex = initialTransitionalCount;
+            while (static_cast<int>(children.size() - childStart) < maximumExpansions) {
+                if (validIndex < static_cast<int>(validStateChildren.size())) {
+                    children.push_back(std::move(
+                        validStateChildren[static_cast<std::size_t>(validIndex++)]));
+                } else if (transitionalIndex < static_cast<int>(transitionalStateChildren.size())) {
+                    children.push_back(std::move(
+                        transitionalStateChildren[static_cast<std::size_t>(transitionalIndex++)]));
+                } else {
+                    break;
+                }
+            }
+            report.generatedStateCount +=
+                static_cast<int>(children.size() - childStart);
+        }
+        if (children.empty()) {
+            break;
+        }
+
+        std::map<std::string, SearchState> uniqueChildren;
+        for (auto& child : children) {
+            const auto signature = stateSignature(child);
+            const auto existing = uniqueChildren.find(signature);
+            if (existing == uniqueChildren.end() || stateRank(child) < stateRank(existing->second)) {
+                uniqueChildren[signature] = std::move(child);
+            }
+        }
+        report.deduplicatedStateCount +=
+            static_cast<int>(children.size() - uniqueChildren.size());
+        frontier.clear();
+        for (auto& [signature, state] : uniqueChildren) {
+            frontier.push_back(std::move(state));
+        }
+        std::sort(frontier.begin(), frontier.end(), [](const auto& first, const auto& second) {
+            return stateRank(first) < stateRank(second);
+        });
+        for (const auto& state : frontier) {
+            archivedStates.try_emplace(stateSignature(state), state);
+        }
+        if (static_cast<int>(frontier.size()) > request.options.beamWidth) {
+            frontier.resize(static_cast<std::size_t>(request.options.beamWidth));
+        }
+    }
+
+    search.finalCandidates.reserve(archivedStates.size());
+    for (const auto& [signature, state] : archivedStates) {
+        if (state.clusters.size() < faces.size()) {
+            search.finalCandidates.push_back(state);
+        }
+    }
+    std::sort(
+        search.finalCandidates.begin(),
+        search.finalCandidates.end(),
+        [](const auto& first, const auto& second) {
+            return stateRank(first) < stateRank(second);
+        });
+    return search;
+}
+
+FinalCandidateSelection validateReductionSearchCandidates(
+    const ShapeDocument& document,
+    const std::vector<FaceId>& faces,
+    const std::vector<SearchState>& candidates,
+    const std::set<EdgeId>& nonSmoothSeamEdges,
+    const SurfaceReductionOptions& options,
+    SurfaceReductionReport& report,
+    std::map<std::vector<FaceId>, SurfaceReductionRejectedGroup>& rejectedGroups) {
+    FinalCandidateSelection selection;
+    for (const auto& candidateState : candidates) {
+        const auto seam = validateAllClusterSeams(
+            document,
+            candidateState.clusters,
+            nonSmoothSeamEdges,
+            options.smoothSeamToleranceDegrees);
+        if (!seam.valid) {
+            std::vector<FaceId> mergedStateFaces;
+            for (const auto& cluster : candidateState.clusters) {
+                if (cluster.faces.size() >= 2) {
+                    mergedStateFaces.insert(
+                        mergedStateFaces.end(),
+                        cluster.faces.begin(),
+                        cluster.faces.end());
+                }
+            }
+            mergedStateFaces = normalizedFaces(mergedStateFaces);
+            rejectedGroups.try_emplace(
+                mergedStateFaces,
+                SurfaceReductionRejectedGroup {
+                    mergedStateFaces,
+                    SurfaceReductionFailureStage::Seam,
+                    "组合状态中保留的光顺接缝超过配置阈值。"});
+            continue;
+        }
+        auto validation = validateFinalState(
+            document,
+            faces,
+            candidateState.clusters,
+            options);
+        if (!validation.passed) {
+            if (selection.bestFailure.empty()) {
+                selection.bestFailure = validation.message;
+                report.commercialCadReports = validation.commercialCadReports;
+                report.topologyReport = validation.topologyReport;
+            }
+            const auto rejectedFaces = validation.failedFaces.empty()
+                ? faces
+                : validation.failedFaces;
+            rejectedGroups.try_emplace(
+                rejectedFaces,
+                SurfaceReductionRejectedGroup {
+                    rejectedFaces,
+                    validation.failureStage,
+                    validation.message});
+            continue;
+        }
+        selection.accepted = true;
+        selection.state = candidateState;
+        selection.validation = std::move(validation);
+        break;
+    }
+    return selection;
+}
+
 } // namespace
 
 const char* toString(SurfaceReductionOutcome outcome) {
@@ -908,356 +1281,38 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
     fitOptions.scanReferenceWeight = request.options.scanReferenceWeight;
     fitOptions.maximumScanReferenceDistance = request.options.maximumScanReferenceDistance;
 
-    std::vector<SearchState> frontier {initialState};
-    std::map<std::string, SearchState> archivedStates;
-    std::map<std::vector<FaceId>, CachedFit> fitCache;
-    std::map<std::vector<FaceId>, CachedFit> stepOnlyFitCache;
-    std::map<std::vector<FaceId>, TopoDS_Face> exactCache;
-    std::map<std::vector<FaceId>, SurfaceReductionRejectedGroup> rejectedGroups;
-    auto stepOnlyFallback = [&](const std::vector<FaceId>& groupedFaces) -> const CachedFit* {
-        const auto existing = stepOnlyFitCache.find(groupedFaces);
-        if (existing != stepOnlyFitCache.end()) {
-            ++result.report.fitCacheHitCount;
-            return &existing->second;
-        }
-        if (result.report.fitCacheMissCount >=
-            request.options.maximumRestrictedFitEvaluations) {
-            result.report.searchBudgetExhausted = true;
-            return nullptr;
-        }
-        auto options = fitOptions;
-        options.scanReference = nullptr;
-        options.scanReferenceCoverage = ScanReferenceCoverage::None;
-        const auto fit = RestrictedBSplinePatchFitter().fit(
-            document,
-            groupedFaces,
-            options);
-        ++result.report.fitCacheMissCount;
-        CachedFit cached;
-        cached.success = fit.success();
-        cached.face = fit.face;
-        cached.surface = fit.surface;
-        cached.report = fit.report;
-        cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
-        return &stepOnlyFitCache.emplace(groupedFaces, std::move(cached)).first->second;
-    };
-    bool stopSearch = false;
-    while (!frontier.empty() &&
-           static_cast<int>(frontier.front().clusters.size()) > targetCount &&
-           !stopSearch) {
-        result.report.expandedStateCount += static_cast<int>(frontier.size());
-        std::vector<SearchState> children;
-        for (const auto& state : frontier) {
-            const auto queue = buildPairQueue(
-                document,
-                state.clusters,
-                mergeBlockedEdges,
-                std::max(1, std::min(8, request.options.maximumPairExpansionsPerState / 2)));
-            std::vector<bool> exact(queue.size(), false);
-            for (std::size_t pairIndex = 0; pairIndex < queue.size(); ++pairIndex) {
-                const auto& pair = queue[pairIndex];
-                const auto groupedFaces = mergedFaces(
-                    state.clusters[static_cast<std::size_t>(pair.first)],
-                    state.clusters[static_cast<std::size_t>(pair.second)]);
-                const auto cachedFit = fitCache.find(groupedFaces);
-                if (cachedFit != fitCache.end()) {
-                    exact[pairIndex] = cachedFit->second.success &&
-                        cachedFit->second.method == SurfaceReductionMergeMethod::ExactSameDomain;
-                    continue;
-                }
-                auto exactResult = exactCache.find(groupedFaces);
-                if (exactResult == exactCache.end()) {
-                    exactResult = exactCache.emplace(
-                        groupedFaces,
-                        tryExactSameDomainGroup(document, groupedFaces)).first;
-                }
-                exact[pairIndex] = !exactResult->second.IsNull();
-            }
+    auto search = runDeterministicReductionSearch(
+        document,
+        request,
+        faces,
+        targetCount,
+        initialState,
+        mergeBlockedEdges,
+        nonSmoothSeamEdges,
+        fitOptions,
+        result.report);
+    auto selection = validateReductionSearchCandidates(
+        document,
+        faces,
+        search.finalCandidates,
+        nonSmoothSeamEdges,
+        request.options,
+        result.report,
+        search.rejectedGroups);
 
-            std::vector<std::size_t> pairOrder;
-            pairOrder.reserve(queue.size());
-            for (std::size_t index = 0; index < queue.size(); ++index) {
-                if (exact[index]) pairOrder.push_back(index);
-            }
-            for (std::size_t index = 0; index < queue.size(); ++index) {
-                if (!exact[index]) pairOrder.push_back(index);
-            }
-
-            const int completedMergeCount =
-                static_cast<int>(faces.size() - state.clusters.size());
-            const int validExpansionQuota = completedMergeCount == 0
-                ? std::min(3, request.options.maximumPairExpansionsPerState)
-                : 1;
-            const int transitionalExpansionQuota =
-                request.options.maximumPairExpansionsPerState - validExpansionQuota;
-            std::vector<SearchState> validStateChildren;
-            std::vector<SearchState> transitionalStateChildren;
-            for (const auto pairIndex : pairOrder) {
-                if (static_cast<int>(validStateChildren.size()) >= validExpansionQuota &&
-                    static_cast<int>(validStateChildren.size() + transitionalStateChildren.size()) >=
-                        request.options.maximumPairExpansionsPerState) {
-                    break;
-                }
-                ++result.report.attemptedMergeCount;
-                const auto& pair = queue[pairIndex];
-                const auto groupedFaces = mergedFaces(
-                    state.clusters[static_cast<std::size_t>(pair.first)],
-                    state.clusters[static_cast<std::size_t>(pair.second)]);
-
-                CachedFit cached;
-                const auto cachedIterator = fitCache.find(groupedFaces);
-                if (cachedIterator != fitCache.end()) {
-                    cached = cachedIterator->second;
-                    ++result.report.fitCacheHitCount;
-                } else if (exact[pairIndex]) {
-                    cached.face = exactCache[groupedFaces];
-                    cached.surface = BRep_Tool::Surface(cached.face);
-                    cached.success = !cached.face.IsNull() && !cached.surface.IsNull();
-                    cached.method = SurfaceReductionMergeMethod::ExactSameDomain;
-                    cached.report.success = cached.success;
-                    cached.report.parameterizationValid = cached.success;
-                    cached.report.selectionPassed = cached.success;
-                    cached.report.holdoutPassed = cached.success;
-                    cached.report.brepCheckValid = cached.success;
-                    cached.report.message = "同域面已执行无损精确合并。";
-                    fitCache.emplace(groupedFaces, cached);
-                } else {
-                    if (result.report.fitCacheMissCount >=
-                        request.options.maximumRestrictedFitEvaluations) {
-                        result.report.searchBudgetExhausted = true;
-                        stopSearch = true;
-                        break;
-                    }
-                    const auto fit = RestrictedBSplinePatchFitter().fit(
-                        document,
-                        groupedFaces,
-                        fitOptions);
-                    ++result.report.fitCacheMissCount;
-                    cached.success = fit.success();
-                    cached.face = fit.face;
-                    cached.surface = fit.surface;
-                    cached.report = fit.report;
-                    cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
-                    fitCache.emplace(groupedFaces, cached);
-                }
-
-                if ((!cached.success || cached.face.IsNull() || cached.surface.IsNull()) &&
-                    hasScanReference &&
-                    cached.method == SurfaceReductionMergeMethod::RestrictedBSpline) {
-                    const auto* fallback = stepOnlyFallback(groupedFaces);
-                    if (fallback != nullptr && fallback->success &&
-                        !fallback->face.IsNull() && !fallback->surface.IsNull()) {
-                        cached = *fallback;
-                    }
-                }
-                if (!cached.success || cached.face.IsNull() || cached.surface.IsNull()) {
-                    rejectedGroups.try_emplace(
-                        groupedFaces,
-                        SurfaceReductionRejectedGroup {
-                            groupedFaces,
-                            mapFailureStage(cached.report.failureStage),
-                            cached.report.message,
-                            cached.report});
-                    continue;
-                }
-
-                auto candidateClusters = state.clusters;
-                candidateClusters[static_cast<std::size_t>(pair.first)] = Cluster {
-                    groupedFaces,
-                    cached.face,
-                    cached.surface,
-                    cached.report,
-                    cached.method};
-                candidateClusters.erase(candidateClusters.begin() + pair.second);
-                auto seam = validateAllClusterSeams(
-                    document,
-                    candidateClusters,
-                    nonSmoothSeamEdges,
-                    request.options.smoothSeamToleranceDegrees);
-                if (!seam.valid && hasScanReference &&
-                    cached.method == SurfaceReductionMergeMethod::RestrictedBSpline &&
-                    cached.report.scanReferenceSampleCount > 0) {
-                    const auto* fallback = stepOnlyFallback(groupedFaces);
-                    if (fallback != nullptr && fallback->success &&
-                        !fallback->face.IsNull() && !fallback->surface.IsNull()) {
-                        auto fallbackClusters = state.clusters;
-                        fallbackClusters[static_cast<std::size_t>(pair.first)] = Cluster {
-                            groupedFaces,
-                            fallback->face,
-                            fallback->surface,
-                            fallback->report,
-                            fallback->method};
-                        fallbackClusters.erase(fallbackClusters.begin() + pair.second);
-                        const auto fallbackSeam = validateAllClusterSeams(
-                            document,
-                            fallbackClusters,
-                            nonSmoothSeamEdges,
-                            request.options.smoothSeamToleranceDegrees);
-                        if ((fallbackSeam.valid && !seam.valid) ||
-                            fallbackSeam.maximumAngle < seam.maximumAngle) {
-                            cached = *fallback;
-                            candidateClusters = std::move(fallbackClusters);
-                            seam = fallbackSeam;
-                        }
-                    }
-                }
-                SearchState child;
-                child.clusters = std::move(candidateClusters);
-                child.maximumSeamAngle = seam.maximumAngle;
-                if (seam.valid) {
-                    validStateChildren.push_back(std::move(child));
-                } else {
-                    transitionalStateChildren.push_back(std::move(child));
-                }
-            }
-            if (stopSearch) {
-                break;
-            }
-            const auto rankChildren = [](std::vector<SearchState>& states) {
-                std::sort(states.begin(), states.end(), [](const auto& first, const auto& second) {
-                    return stateRank(first) < stateRank(second);
-                });
-            };
-            rankChildren(validStateChildren);
-            rankChildren(transitionalStateChildren);
-            const int maximumExpansions = request.options.maximumPairExpansionsPerState;
-            const int initialValidCount = std::min(
-                validExpansionQuota,
-                static_cast<int>(validStateChildren.size()));
-            const int initialTransitionalCount = std::min(
-                transitionalExpansionQuota,
-                static_cast<int>(transitionalStateChildren.size()));
-            const auto childStart = children.size();
-            for (int index = 0; index < initialValidCount; ++index) {
-                children.push_back(std::move(validStateChildren[static_cast<std::size_t>(index)]));
-            }
-            for (int index = 0; index < initialTransitionalCount; ++index) {
-                children.push_back(std::move(transitionalStateChildren[static_cast<std::size_t>(index)]));
-            }
-            int validIndex = initialValidCount;
-            int transitionalIndex = initialTransitionalCount;
-            while (static_cast<int>(children.size() - childStart) < maximumExpansions) {
-                if (validIndex < static_cast<int>(validStateChildren.size())) {
-                    children.push_back(std::move(
-                        validStateChildren[static_cast<std::size_t>(validIndex++)]));
-                } else if (transitionalIndex < static_cast<int>(transitionalStateChildren.size())) {
-                    children.push_back(std::move(
-                        transitionalStateChildren[static_cast<std::size_t>(transitionalIndex++)]));
-                } else {
-                    break;
-                }
-            }
-            result.report.generatedStateCount +=
-                static_cast<int>(children.size() - childStart);
-        }
-        if (children.empty()) {
-            break;
-        }
-
-        std::map<std::string, SearchState> uniqueChildren;
-        for (auto& child : children) {
-            const auto signature = stateSignature(child);
-            const auto existing = uniqueChildren.find(signature);
-            if (existing == uniqueChildren.end() || stateRank(child) < stateRank(existing->second)) {
-                uniqueChildren[signature] = std::move(child);
-            }
-        }
-        result.report.deduplicatedStateCount +=
-            static_cast<int>(children.size() - uniqueChildren.size());
-        frontier.clear();
-        for (auto& [signature, state] : uniqueChildren) {
-            frontier.push_back(std::move(state));
-        }
-        std::sort(frontier.begin(), frontier.end(), [](const auto& first, const auto& second) {
-            return stateRank(first) < stateRank(second);
-        });
-        for (const auto& state : frontier) {
-            archivedStates.try_emplace(stateSignature(state), state);
-        }
-        if (static_cast<int>(frontier.size()) > request.options.beamWidth) {
-            frontier.resize(static_cast<std::size_t>(request.options.beamWidth));
-        }
-    }
-
-    std::vector<SearchState> finalCandidates;
-    finalCandidates.reserve(archivedStates.size());
-    for (const auto& [signature, state] : archivedStates) {
-        if (state.clusters.size() < faces.size()) {
-            finalCandidates.push_back(state);
-        }
-    }
-    std::sort(finalCandidates.begin(), finalCandidates.end(), [](const auto& first, const auto& second) {
-        return stateRank(first) < stateRank(second);
-    });
-
-    bool accepted = false;
-    SearchState acceptedState;
-    FinalValidationResult acceptedValidation;
-    std::string bestFinalFailure;
-    for (const auto& candidateState : finalCandidates) {
-        const auto seam = validateAllClusterSeams(
-            document,
-            candidateState.clusters,
-            nonSmoothSeamEdges,
-            request.options.smoothSeamToleranceDegrees);
-        if (!seam.valid) {
-            std::vector<FaceId> mergedStateFaces;
-            for (const auto& cluster : candidateState.clusters) {
-                if (cluster.faces.size() >= 2) {
-                    mergedStateFaces.insert(
-                        mergedStateFaces.end(),
-                        cluster.faces.begin(),
-                        cluster.faces.end());
-                }
-            }
-            mergedStateFaces = normalizedFaces(mergedStateFaces);
-            rejectedGroups.try_emplace(
-                mergedStateFaces,
-                SurfaceReductionRejectedGroup {
-                    mergedStateFaces,
-                    SurfaceReductionFailureStage::Seam,
-                    "组合状态中保留的光顺接缝超过配置阈值。"});
-            continue;
-        }
-        auto validation = validateFinalState(
-            document,
-            faces,
-            candidateState.clusters,
-            request.options);
-        if (!validation.passed) {
-            if (bestFinalFailure.empty()) {
-                bestFinalFailure = validation.message;
-                result.report.commercialCadReports = validation.commercialCadReports;
-                result.report.topologyReport = validation.topologyReport;
-            }
-            const auto rejectedFaces = validation.failedFaces.empty()
-                ? faces
-                : validation.failedFaces;
-            rejectedGroups.try_emplace(
-                rejectedFaces,
-                SurfaceReductionRejectedGroup {
-                    rejectedFaces,
-                    validation.failureStage,
-                    validation.message});
-            continue;
-        }
-        accepted = true;
-        acceptedState = candidateState;
-        acceptedValidation = std::move(validation);
-        break;
-    }
-
-    for (const auto& [facesKey, rejected] : rejectedGroups) {
+    for (const auto& [facesKey, rejected] : search.rejectedGroups) {
         result.report.rejectedGroups.push_back(rejected);
     }
-    if (!accepted) {
+    if (!selection.accepted) {
         result.report.outcome = SurfaceReductionOutcome::NoAcceptableReduction;
-        result.report.message = bestFinalFailure.empty()
+        result.report.message = selection.bestFailure.empty()
             ? "无法在当前容差和搜索预算内减少选区面数。"
-            : "所有局部减面状态均未通过全局质量门：" + bestFinalFailure;
+            : "所有局部减面状态均未通过全局质量门：" + selection.bestFailure;
         return result;
     }
 
+    const auto& acceptedState = selection.state;
+    auto& acceptedValidation = selection.validation;
     result.report.outputFaceCount = static_cast<int>(acceptedState.clusters.size());
     result.report.reductionRatio = 1.0 -
         static_cast<double>(acceptedState.clusters.size()) / static_cast<double>(faces.size());

@@ -21,7 +21,7 @@
 6. [x] 拆分 StpSampledFittingMeshBuilder 的基础采样、区外覆盖带、邻接面支撑带和网格诊断阶段。
 7. [x] 拆分 AppController 与 MainWindow 的补片预览、状态和进度文本职责。
 8. [x] 拆分 RestrictedBSplinePatchFitter，将数据准备、模型求解和结果验证整理为内部阶段。
-9. [ ] 拆分 SurfaceReductionEngine 搜索与终验。
+9. [x] 拆分 SurfaceReductionEngine 的确定性搜索与最终质量验证。
 ```
 
 candidate 179 混合回归仅保留手动复现命令，本轮不运行，也不作为结构优化提交阻塞项。
