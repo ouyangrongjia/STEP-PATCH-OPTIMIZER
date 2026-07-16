@@ -1286,6 +1286,666 @@ const char* toString(RestrictedBSplinePatchFitFailureStage stage) {
     return "None";
 }
 
+namespace {
+
+struct RestrictedBSplineFitPreparedData {
+    MergeCandidate candidate;
+    RegionBoundaryAnalysis boundary;
+    FaceId supportFaceId = 0;
+    double tolerance = 0.0;
+    double boundaryTolerance = 0.0;
+    double retrimTolerance = 0.0;
+    std::vector<SourceSample> training;
+    std::vector<SourceSample> selection;
+    std::vector<SourceSample> holdout;
+    std::vector<SourceSample> boundaryConstraints;
+    std::vector<SourceSample> fittingSamples;
+    Handle(Geom_Surface) supportSurface;
+    std::shared_ptr<const StlHybridParameterization> parameterization;
+    double minU = 0.0;
+    double minV = 0.0;
+    double maxU = 0.0;
+    double maxV = 0.0;
+    int controlPointLimit = 0;
+};
+
+struct RestrictedBSplineFitModelResult {
+    Handle(Geom_BSplineSurface) acceptedSurface;
+};
+
+bool prepareRestrictedBSplineFitData(
+    const ShapeDocument& document,
+    const std::vector<FaceId>& faces,
+    const RestrictedBSplinePatchFitOptions& options,
+    RestrictedBSplinePatchFitResult& result,
+    RestrictedBSplineFitPreparedData& prepared) {
+    const auto candidate = makeCandidate(document, faces);
+    const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
+    if (!boundary.valid) {
+        result.report.message = "分组边界不支持单张曲面参数化：" + boundary.message;
+        return false;
+    }
+
+    FaceId supportFaceId = faces.front();
+    double supportArea = -1.0;
+    double totalFaceArea = 0.0;
+    for (const auto faceId : faces) {
+        const double area = faceArea(document.topology().face(faceId));
+        totalFaceArea += area;
+        if (area > supportArea) {
+            supportArea = area;
+            supportFaceId = faceId;
+        }
+    }
+    double totalBoundaryLength = 0.0;
+    for (const auto edgeId : candidate.boundary_edges) {
+        totalBoundaryLength += edgeLength(document.topology().edge(edgeId));
+    }
+    const double tolerance = std::max(options.tolerance3d, 1.0e-6);
+    const double boundaryTolerance = std::min(tolerance, 2.5e-3);
+    const double retrimTolerance = boundaryTolerance;
+    std::vector<SourceTriangle> triangles;
+    double triangleArea = 0.0;
+    if (!collectTriangles(document, faces, std::max(tolerance * 2.0, 0.01), triangles, triangleArea)) {
+        result.report.message = "无法从原始面的局部 UV 三角细分生成精确采样。";
+        return false;
+    }
+    const auto [normalVariationDegrees, curvatureIndicator] = estimateShapeVariation(triangles);
+    const int totalSampleBudget = std::clamp(
+        static_cast<int>(std::ceil(
+            std::sqrt(std::max(totalFaceArea, tolerance * tolerance)) / tolerance * 0.35 +
+            totalBoundaryLength / tolerance * 0.15 +
+            normalVariationDegrees * 0.5 +
+            curvatureIndicator * std::sqrt(std::max(totalFaceArea, tolerance * tolerance)) * 12.0)),
+        96,
+        480);
+    const int trainingInteriorCount = std::max(48, totalSampleBudget / 2);
+    const int selectionCount = std::max(24, totalSampleBudget / 4);
+    const int holdoutCount = std::max(24, totalSampleBudget - trainingInteriorCount - selectionCount);
+    auto training = sampleTriangles(triangles, triangleArea, trainingInteriorCount, 17);
+    auto selection = sampleTriangles(triangles, triangleArea, selectionCount, 10007, training);
+    auto holdout = sampleTriangles(triangles, triangleArea, holdoutCount, 20011, training, selection);
+    appendBoundarySamples(document, faces, candidate.boundary_edges, tolerance, training);
+    if (static_cast<int>(training.size()) < 32 ||
+        static_cast<int>(selection.size()) < selectionCount ||
+        static_cast<int>(holdout.size()) < holdoutCount) {
+        result.report.message = "训练、模型选择和独立终验样本不足或无法保持空间互斥。";
+        return false;
+    }
+    result.report.trainingSampleCount = static_cast<int>(training.size());
+    result.report.selectionSampleCount = static_cast<int>(selection.size());
+    result.report.holdoutSampleCount = static_cast<int>(holdout.size());
+
+    const auto supportSurface = BRep_Tool::Surface(document.topology().face(supportFaceId));
+    std::string parameterError;
+    int orientationSign = 0;
+    double minU = std::numeric_limits<double>::infinity();
+    double minV = std::numeric_limits<double>::infinity();
+    double maxU = -std::numeric_limits<double>::infinity();
+    double maxV = -std::numeric_limits<double>::infinity();
+    std::shared_ptr<const StlHybridParameterization> parameterization;
+    const auto originalTraining = training;
+    const auto originalSelection = selection;
+    const auto originalHoldout = holdout;
+    bool parametersInitialized = !supportSurface.IsNull() &&
+        projectInitialParameters(
+            training, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError) &&
+        projectInitialParameters(
+            selection, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError) &&
+        projectInitialParameters(
+            holdout, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError);
+    if (parametersInitialized &&
+        maxU - minU > Precision::PConfusion() &&
+        maxV - minV > Precision::PConfusion()) {
+        normalizeParameters(training, minU, minV, maxU, maxV);
+        normalizeParameters(selection, minU, minV, maxU, maxV);
+        normalizeParameters(holdout, minU, minV, maxU, maxV);
+        parametersInitialized = !parametersOverlap(training, selection, holdout, tolerance);
+        if (!parametersInitialized) {
+            parameterError = "主 STEP 支撑面投影参数化出现重叠映射。";
+        }
+    } else if (parametersInitialized) {
+        parametersInitialized = false;
+        parameterError = "主 STEP 支撑面投影参数区间退化。";
+    }
+    if (parametersInitialized) {
+        result.report.parameterization.success = true;
+        result.report.parameterization.source =
+            SurfaceParameterizationSource::SupportSurfaceProjection;
+        result.report.parameterization.message =
+            "主 STEP 支撑面投影保持单值，已作为拟合参数域。";
+        result.report.parameterizationSource =
+            SurfaceParameterizationSource::SupportSurfaceProjection;
+    } else {
+        const std::string supportProjectionFailure = parameterError;
+        training = originalTraining;
+        selection = originalSelection;
+        holdout = originalHoldout;
+        parameterError.clear();
+        parameterization = StlHybridParameterization::buildFromStepSelection(
+            document,
+            faces,
+            tolerance,
+            result.report.parameterization);
+        parametersInitialized = parameterization &&
+            projectStepParameters(training, *parameterization, parameterError) &&
+            projectStepParameters(selection, *parameterization, parameterError) &&
+            projectStepParameters(holdout, *parameterization, parameterError);
+        if (parametersInitialized &&
+            !parametersOverlap(training, selection, holdout, tolerance)) {
+            minU = 0.0;
+            minV = 0.0;
+            maxU = 1.0;
+            maxV = 1.0;
+            result.report.parameterizationSource = SurfaceParameterizationSource::StepHarmonic;
+            if (!supportProjectionFailure.empty()) {
+                result.report.parameterization.message +=
+                    "；主 STEP 支撑面投影未采用：" + supportProjectionFailure;
+            }
+        } else {
+            parametersInitialized = false;
+            if (parameterError.empty()) {
+                parameterError = result.report.parameterization.message.empty()
+                    ? "STEP 调和参数化出现重叠映射。"
+                    : result.report.parameterization.message;
+            }
+            if (!supportProjectionFailure.empty()) {
+                parameterError = supportProjectionFailure + "；" + parameterError;
+            }
+            parameterization.reset();
+        }
+    }
+    if (!parametersInitialized) {
+        result.report.message = parameterError.empty() ? "参数初始化失败。" : parameterError;
+        return false;
+    }
+
+    std::vector<SourceSample> boundaryConstraints;
+    std::vector<SourceSample> fittingSamples;
+    boundaryConstraints.reserve(training.size());
+    fittingSamples.reserve(training.size());
+    for (const auto& sample : training) {
+        (sample.boundary ? boundaryConstraints : fittingSamples).push_back(sample);
+    }
+    if (boundaryConstraints.empty() || fittingSamples.empty()) {
+        result.report.message = "参数化未生成内部软样本或外边界硬约束。";
+        return false;
+    }
+    result.report.boundaryConstraintCount = static_cast<int>(boundaryConstraints.size());
+
+    if (parameterization != nullptr) {
+        const auto sampleCountBeforeGuards = fittingSamples.size();
+        appendExteriorGuardSamples(
+            *parameterization,
+            boundaryConstraints,
+            fittingSamples);
+        result.report.exteriorGuardSampleCount = static_cast<int>(
+            fittingSamples.size() - sampleCountBeforeGuards);
+    }
+
+    if (options.scanReference != nullptr && options.scanReferenceWeight > 0.0) {
+        const auto scanPatch = scanPatchForCandidate(document, candidate, options);
+        auto scanSamples = sampleScanReference(
+            scanPatch,
+            std::min(128, trainingInteriorCount),
+            parameterization.get(),
+            supportSurface,
+            minU,
+            minV,
+            maxU,
+            maxV,
+            options,
+            result.report.maxStepToScanDistance);
+        result.report.scanReferenceSampleCount = static_cast<int>(scanSamples.size());
+        fittingSamples.insert(fittingSamples.end(), scanSamples.begin(), scanSamples.end());
+    }
+
+    const int requestedControlPointLimit = std::max(0, options.maximumControlPoints);
+    if (requestedControlPointLimit < 16) {
+        result.report.message = "控制点上限小于三次 4×4 起始控制网。";
+        return false;
+    }
+    const int minimumConstraintControlPoints =
+        static_cast<int>(boundaryConstraints.size()) +
+        options.maximumBoundaryConstraintRefinements + 16;
+    const int evidenceSupportedControlPoints =
+        static_cast<int>(fittingSamples.size() + selection.size() + boundaryConstraints.size());
+    const int controlPointLimit = std::min(
+        requestedControlPointLimit,
+        std::max(minimumConstraintControlPoints, evidenceSupportedControlPoints));
+
+    prepared.candidate = candidate;
+    prepared.boundary = boundary;
+    prepared.supportFaceId = supportFaceId;
+    prepared.tolerance = tolerance;
+    prepared.boundaryTolerance = boundaryTolerance;
+    prepared.retrimTolerance = retrimTolerance;
+    prepared.training = std::move(training);
+    prepared.selection = std::move(selection);
+    prepared.holdout = std::move(holdout);
+    prepared.boundaryConstraints = std::move(boundaryConstraints);
+    prepared.fittingSamples = std::move(fittingSamples);
+    prepared.supportSurface = supportSurface;
+    prepared.parameterization = std::move(parameterization);
+    prepared.minU = minU;
+    prepared.minV = minV;
+    prepared.maxU = maxU;
+    prepared.maxV = maxV;
+    prepared.controlPointLimit = controlPointLimit;
+    return true;
+}
+
+bool solveRestrictedBSplineFitModel(
+    const ShapeDocument& document,
+    const RestrictedBSplinePatchFitOptions& options,
+    RestrictedBSplineFitPreparedData& prepared,
+    RestrictedBSplinePatchFitResult& result,
+    RestrictedBSplineFitModelResult& model) {
+    const auto& candidate = prepared.candidate;
+    const auto& selection = prepared.selection;
+    auto& boundaryConstraints = prepared.boundaryConstraints;
+    const auto& fittingSamples = prepared.fittingSamples;
+    const auto& supportSurface = prepared.supportSurface;
+    const auto& parameterization = prepared.parameterization;
+    const double minU = prepared.minU;
+    const double minV = prepared.minV;
+    const double maxU = prepared.maxU;
+    const double maxV = prepared.maxV;
+    const double tolerance = prepared.tolerance;
+    const double boundaryTolerance = prepared.boundaryTolerance;
+    const int controlPointLimit = prepared.controlPointLimit;
+
+    std::vector<double> uInnerKnots;
+    std::vector<double> vInnerKnots;
+    const int initialControlPointTarget = std::min(
+        controlPointLimit,
+        static_cast<int>(boundaryConstraints.size()) +
+            options.maximumBoundaryConstraintRefinements + 16);
+    while ((degree + 1 + static_cast<int>(uInnerKnots.size())) *
+               (degree + 1 + static_cast<int>(vInnerKnots.size())) <
+           initialControlPointTarget) {
+        auto nextU = uInnerKnots;
+        auto nextV = vInnerKnots;
+        if (nextU.size() <= nextV.size()) {
+            insertLargestIntervalKnot(nextU);
+        } else {
+            insertLargestIntervalKnot(nextV);
+        }
+        const int nextCount = (degree + 1 + static_cast<int>(nextU.size())) *
+            (degree + 1 + static_cast<int>(nextV.size()));
+        if (nextCount > controlPointLimit) {
+            result.report.failureStage =
+                RestrictedBSplinePatchFitFailureStage::BoundaryConstraints;
+            result.report.message =
+                "控制点上限不足以承载原始边界等式约束。";
+            return false;
+        }
+        uInnerKnots.swap(nextU);
+        vInnerKnots.swap(nextV);
+        ++result.report.knotInsertionCount;
+    }
+    Handle(Geom_BSplineSurface) acceptedSurface;
+    ModelQuality selectionQuality;
+    bool modelJacobianValid = false;
+    auto solveWithBoundaryRefinement = [&](
+        const std::vector<SourceSample>& softSamples,
+        std::vector<SourceSample>& constraints,
+        const std::vector<double>& currentUKnots,
+        const std::vector<double>& currentVKnots) {
+        SurfaceSolveResult solved;
+        while (true) {
+            solved = solveSurface(
+                softSamples,
+                constraints,
+                currentUKnots,
+                currentVKnots,
+                options);
+            result.report.maxBoundaryConstraintResidual = std::max(
+                result.report.maxBoundaryConstraintResidual,
+                solved.maximumConstraintResidual);
+            if (solved.surface.IsNull()) {
+                result.report.failureStage =
+                    RestrictedBSplinePatchFitFailureStage::BoundaryConstraints;
+                return solved;
+            }
+            const auto boundaryQuality = evaluateBoundaryHoldout(
+                document,
+                candidate.boundary_edges,
+                solved.surface);
+            result.report.boundaryHoldoutSampleCount = boundaryQuality.sampleCount;
+            result.report.maxBoundaryDistance = std::max(
+                result.report.maxBoundaryDistance,
+                boundaryQuality.maximumDistance);
+            if (!boundaryQuality.valid) {
+                solved.surface.Nullify();
+                result.report.failureStage =
+                    RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
+                return solved;
+            }
+            if (boundaryQuality.maximumDistance <= boundaryTolerance) {
+                return solved;
+            }
+            if (result.report.boundaryConstraintRefinementCount >=
+                options.maximumBoundaryConstraintRefinements) {
+                solved.surface.Nullify();
+                result.report.failureStage =
+                    RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
+                return solved;
+            }
+            SourceSample addedConstraint;
+            if (!parameterizePoint(
+                    boundaryQuality.worstPoint,
+                    parameterization.get(),
+                    supportSurface,
+                    minU,
+                    minV,
+                    maxU,
+                    maxV,
+                    addedConstraint) ||
+                !isSpatiallyDistinct(addedConstraint, constraints)) {
+                solved.surface.Nullify();
+                result.report.failureStage =
+                    RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
+                return solved;
+            }
+            constraints.push_back(addedConstraint);
+            ++result.report.boundaryConstraintRefinementCount;
+            result.report.boundaryConstraintCount = static_cast<int>(constraints.size());
+        }
+    };
+    while ((degree + 1 + static_cast<int>(uInnerKnots.size())) *
+               (degree + 1 + static_cast<int>(vInnerKnots.size())) <= controlPointLimit) {
+        Handle(Geom_BSplineSurface) surface;
+        auto currentSamples = fittingSamples;
+        std::vector<UvIterationReport> iterationReports;
+        bool surfaceNeedsBoundaryRefinement = false;
+        for (int iteration = 0; iteration < options.maximumUvIterations; ++iteration) {
+            const auto solved = solveWithBoundaryRefinement(
+                currentSamples,
+                boundaryConstraints,
+                uInnerKnots,
+                vInnerKnots);
+            if (solved.surface.IsNull()) {
+                result.report.message =
+                    result.report.failureStage ==
+                        RestrictedBSplinePatchFitFailureStage::BoundaryHoldout
+                    ? "边界硬约束细化耗尽后稠密边界仍未通过质量门。"
+                    : "稀疏 KKT 未能满足原始边界等式约束。";
+                return false;
+            }
+            surface = solved.surface;
+            surfaceNeedsBoundaryRefinement = false;
+            UvIterationReport iterationReport;
+            iterationReport.iteration = iteration + 1;
+            iterationReport.objectiveBefore = solved.objective;
+            std::vector<std::array<double, 2>> projectedParameters;
+            if (!reprojectTrainingSamples(
+                    currentSamples,
+                    surface,
+                    projectedParameters,
+                    iterationReport.maximumShift)) {
+                result.report.failureStage =
+                    RestrictedBSplinePatchFitFailureStage::UvIteration;
+                result.report.message = "更新曲面后内部样本重新投影失败。";
+                return false;
+            }
+            if (iterationReport.maximumShift < options.uvConvergenceTolerance) {
+                iterationReport.objectiveAfter = solved.objective;
+                iterationReport.reason = "Converged";
+                iterationReports.push_back(iterationReport);
+                break;
+            }
+
+            bool acceptedStep = false;
+            for (int backtrack = 0;
+                 backtrack < options.maximumUvBacktrackingSteps;
+                 ++backtrack) {
+                const double step = std::ldexp(1.0, -backtrack);
+                auto trialSamples = currentSamples;
+                if (!applyProjectedParameters(
+                        trialSamples,
+                        projectedParameters,
+                        step,
+                        parameterization.get()) ||
+                    parametersOverlap(trialSamples, {}, {}, tolerance)) {
+                    continue;
+                }
+                const auto trial = solveSurface(
+                    trialSamples,
+                    boundaryConstraints,
+                    uInnerKnots,
+                    vInnerKnots,
+                    options);
+                double observedJacobian = 0.0;
+                if (trial.surface.IsNull() ||
+                    !(trial.objective + 1.0e-14 < solved.objective) ||
+                    !evaluateJacobian(
+                        trial.surface,
+                        parameterization.get(),
+                        options.minimumNormalizedJacobian,
+                        observedJacobian)) {
+                    continue;
+                }
+                currentSamples.swap(trialSamples);
+                surface = trial.surface;
+                surfaceNeedsBoundaryRefinement = true;
+                iterationReport.objectiveAfter = trial.objective;
+                iterationReport.backtrackingSteps = backtrack;
+                iterationReport.accepted = true;
+                iterationReport.reason = "Accepted";
+                acceptedStep = true;
+                break;
+            }
+            if (!acceptedStep) {
+                iterationReport.objectiveAfter = solved.objective;
+                iterationReport.reason = "NoImprovingStep";
+                iterationReports.push_back(iterationReport);
+                break;
+            }
+            iterationReports.push_back(iterationReport);
+        }
+        if (surfaceNeedsBoundaryRefinement) {
+            const auto solved = solveWithBoundaryRefinement(
+                currentSamples,
+                boundaryConstraints,
+                uInnerKnots,
+                vInnerKnots);
+            if (solved.surface.IsNull()) {
+                result.report.message =
+                    result.report.failureStage ==
+                        RestrictedBSplinePatchFitFailureStage::BoundaryHoldout
+                    ? "UV 迭代结束后的边界硬约束细化未通过质量门。"
+                    : "UV 迭代结束后无法重新满足原始边界等式约束。";
+                return false;
+            }
+            surface = solved.surface;
+        }
+        result.report.uvIterations = iterationReports;
+        result.report.iterationCount = static_cast<int>(iterationReports.size());
+        result.report.uControlPointCount = surface->NbUPoles();
+        result.report.vControlPointCount = surface->NbVPoles();
+        result.report.controlPointCount = surface->NbUPoles() * surface->NbVPoles();
+        selectionQuality = evaluateModel(selection, surface, options);
+        if (selectionQuality.passed) {
+            double observedJacobian = 0.0;
+            modelJacobianValid = evaluateJacobian(
+                surface,
+                parameterization.get(),
+                options.minimumNormalizedJacobian,
+                observedJacobian);
+            result.report.minimumNormalizedJacobian = observedJacobian;
+            if (modelJacobianValid) {
+                acceptedSurface = surface;
+                break;
+            }
+        }
+        auto nextU = uInnerKnots;
+        auto nextV = vInnerKnots;
+        if (selectionQuality.passed) {
+            if (nextU.size() <= nextV.size()) {
+                insertLargestIntervalKnot(nextU);
+            } else {
+                insertLargestIntervalKnot(nextV);
+            }
+        } else {
+            const double uWidth = containingIntervalWidth(uInnerKnots, selectionQuality.worstU);
+            const double vWidth = containingIntervalWidth(vInnerKnots, selectionQuality.worstV);
+            if (uWidth >= vWidth) {
+                insertWorstIntervalKnot(nextU, selectionQuality.worstU);
+            } else {
+                insertWorstIntervalKnot(nextV, selectionQuality.worstV);
+            }
+        }
+        const int nextCount = (degree + 1 + static_cast<int>(nextU.size())) *
+            (degree + 1 + static_cast<int>(nextV.size()));
+        if (nextCount > controlPointLimit) {
+            break;
+        }
+        uInnerKnots.swap(nextU);
+        vInnerKnots.swap(nextV);
+        ++result.report.knotInsertionCount;
+    }
+
+    result.report.maxSelectionDistance = selectionQuality.maxDistance;
+    result.report.maxSelectionNormalAngleDegrees = selectionQuality.maxNormalAngle;
+    result.report.selectionPassed = selectionQuality.passed;
+    if (acceptedSurface.IsNull()) {
+        result.report.failureStage = selectionQuality.passed
+            ? RestrictedBSplinePatchFitFailureStage::Jacobian
+            : RestrictedBSplinePatchFitFailureStage::ModelSelection;
+        result.report.message = selectionQuality.passed
+            ? "达到数据支持的控制点上限后参数化仍发生翻转或近奇异。"
+            : "达到数据支持的控制点上限后模型选择样本仍未通过质量门。";
+        return false;
+    }
+
+    model.acceptedSurface = acceptedSurface;
+    return true;
+}
+
+bool validateRestrictedBSplineFitResult(
+    const ShapeDocument& document,
+    const RestrictedBSplinePatchFitOptions& options,
+    const RestrictedBSplineFitPreparedData& prepared,
+    const RestrictedBSplineFitModelResult& model,
+    RestrictedBSplinePatchFitResult& result) {
+    const auto& candidate = prepared.candidate;
+    const auto& boundary = prepared.boundary;
+    const auto& training = prepared.training;
+    const auto& selection = prepared.selection;
+    const auto& holdout = prepared.holdout;
+    const auto& parameterization = prepared.parameterization;
+    const auto& acceptedSurface = model.acceptedSurface;
+    const FaceId supportFaceId = prepared.supportFaceId;
+    const double boundaryTolerance = prepared.boundaryTolerance;
+    const double retrimTolerance = prepared.retrimTolerance;
+
+    const auto extentQuality = evaluateSupportSurfaceExtent(
+        training,
+        selection,
+        holdout,
+        acceptedSurface);
+    result.report.supportSurfaceExtentRatio = extentQuality.extentRatio;
+    result.report.supportSurfaceMaxPoleOverflowRatio =
+        extentQuality.maximumPoleOverflowRatio;
+    if (!extentQuality.valid ||
+        extentQuality.extentRatio > 2.0 ||
+        extentQuality.maximumPoleOverflowRatio > 0.5) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::ModelSelection;
+        result.report.message =
+            "拟合支撑曲面控制网超出原始选区包络，拒绝可能在商业 CAD 中展开为超大面片的结果。";
+        return false;
+    }
+
+    const auto holdoutQuality = evaluateModel(holdout, acceptedSurface, options);
+    result.report.maxHoldoutDistance = holdoutQuality.maxDistance;
+    result.report.maxHoldoutNormalAngleDegrees = holdoutQuality.maxNormalAngle;
+    result.report.holdoutPassed = holdoutQuality.passed;
+    if (!holdoutQuality.passed) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Holdout;
+        result.report.message = "独立终验样本未通过距离或法向质量门。";
+        return false;
+    }
+
+    result.report.parameterizationValid = evaluateJacobian(
+        acceptedSurface,
+        parameterization.get(),
+        options.minimumNormalizedJacobian,
+        result.report.minimumNormalizedJacobian);
+    if (!result.report.parameterizationValid) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Jacobian;
+        result.report.message = "拟合曲面参数化发生翻转或近奇异。";
+        return false;
+    }
+
+    BRepBuilderAPI_MakeFace supportFaceBuilder(acceptedSurface, Precision::Confusion());
+    if (!supportFaceBuilder.IsDone()) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Retrim;
+        result.report.message = "无法从拟合支撑曲面创建基础面。";
+        return false;
+    }
+    BoundaryConstrainedSurfaceRetrimOptions retrimOptions;
+    retrimOptions.samplesPerEdge = 16;
+    retrimOptions.projectionTolerance = retrimTolerance;
+    retrimOptions.rebuildBoundaryPcurves = true;
+    const auto retrim = BoundaryConstrainedSurfaceRetrim().retrim(
+        document,
+        boundary,
+        {supportFaceBuilder.Face()},
+        document.topology().face(supportFaceId),
+        retrimOptions);
+    if (!retrim.success || retrim.replacementFace.IsNull()) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Retrim;
+        result.report.message = "原始边界无法可靠裁剪到拟合支撑曲面：" + retrim.message +
+            "；pcurve 尝试/成功/失败=" +
+            std::to_string(retrim.boundaryEdgePcurveRebuildAttemptCount) + "/" +
+            std::to_string(retrim.boundaryEdgePcurveRebuildSuccessCount) + "/" +
+            std::to_string(retrim.boundaryEdgePcurveRebuildFailureCount) +
+            "，SameParameter 检查/失败=" +
+            std::to_string(retrim.boundaryEdgeSameParameterCheckCount) + "/" +
+            std::to_string(retrim.boundaryEdgeSameParameterFailureCount) +
+            "，最大偏差=" +
+            std::to_string(retrim.boundaryEdgeMaxSameParameterDeviation);
+        return false;
+    }
+    result.report.maxBoundaryDistance = std::max(
+        retrim.maxProjectionDistance,
+        retrim.surfaceCoverageMaxProjectionDistance);
+    const auto boundaryHoldout = evaluateBoundaryHoldout(
+        document,
+        candidate.boundary_edges,
+        acceptedSurface);
+    result.report.boundaryHoldoutSampleCount = boundaryHoldout.sampleCount;
+    if (!boundaryHoldout.valid || boundaryHoldout.maximumDistance > boundaryTolerance) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
+        result.report.message = "独立边界终验样本未通过距离质量门。";
+        return false;
+    }
+    result.report.maxBoundaryDistance = std::max(
+        result.report.maxBoundaryDistance,
+        boundaryHoldout.maximumDistance);
+
+    BRepCheck_Analyzer brepAnalyzer(retrim.replacementFace, Standard_True);
+    result.report.brepCheckValid = brepAnalyzer.IsValid();
+    if (!result.report.brepCheckValid) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BrepCheck;
+        result.report.message = "裁剪后的 B-rep 面未通过 BRepCheck，状态=" +
+            invalidBRepStatuses(retrim.replacementFace, brepAnalyzer) + "。";
+        return false;
+    }
+    result.face = retrim.replacementFace;
+    result.surface = acceptedSurface;
+    result.report.uControlPointCount = acceptedSurface->NbUPoles();
+    result.report.vControlPointCount = acceptedSurface->NbVPoles();
+    result.report.controlPointCount = acceptedSurface->NbUPoles() * acceptedSurface->NbVPoles();
+    result.report.success = true;
+    result.report.failureStage = RestrictedBSplinePatchFitFailureStage::None;
+    result.report.message = "受限 B-spline 分组拟合通过模型选择和独立终验。";
+    return true;
+}
+
+} // namespace
+
 RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
     const ShapeDocument& document,
     const std::vector<FaceId>& sourceFaces,
@@ -1319,565 +1979,32 @@ RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
     }
 
     try {
-        const auto candidate = makeCandidate(document, faces);
-        const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
-        if (!boundary.valid) {
-            result.report.message = "分组边界不支持单张曲面参数化：" + boundary.message;
-            return result;
-        }
-
-        FaceId supportFaceId = faces.front();
-        double supportArea = -1.0;
-        double totalFaceArea = 0.0;
-        for (const auto faceId : faces) {
-            const double area = faceArea(document.topology().face(faceId));
-            totalFaceArea += area;
-            if (area > supportArea) {
-                supportArea = area;
-                supportFaceId = faceId;
-            }
-        }
-        double totalBoundaryLength = 0.0;
-        for (const auto edgeId : candidate.boundary_edges) {
-            totalBoundaryLength += edgeLength(document.topology().edge(edgeId));
-        }
-        const double tolerance = std::max(options.tolerance3d, 1.0e-6);
-        const double boundaryTolerance = std::min(tolerance, 2.5e-3);
-        const double retrimTolerance = boundaryTolerance;
-        std::vector<SourceTriangle> triangles;
-        double triangleArea = 0.0;
-        if (!collectTriangles(document, faces, std::max(tolerance * 2.0, 0.01), triangles, triangleArea)) {
-            result.report.message = "无法从原始面的局部 UV 三角细分生成精确采样。";
-            return result;
-        }
-        const auto [normalVariationDegrees, curvatureIndicator] = estimateShapeVariation(triangles);
-        const int totalSampleBudget = std::clamp(
-            static_cast<int>(std::ceil(
-                std::sqrt(std::max(totalFaceArea, tolerance * tolerance)) / tolerance * 0.35 +
-                totalBoundaryLength / tolerance * 0.15 +
-                normalVariationDegrees * 0.5 +
-                curvatureIndicator * std::sqrt(std::max(totalFaceArea, tolerance * tolerance)) * 12.0)),
-            96,
-            480);
-        const int trainingInteriorCount = std::max(48, totalSampleBudget / 2);
-        const int selectionCount = std::max(24, totalSampleBudget / 4);
-        const int holdoutCount = std::max(24, totalSampleBudget - trainingInteriorCount - selectionCount);
-        auto training = sampleTriangles(triangles, triangleArea, trainingInteriorCount, 17);
-        auto selection = sampleTriangles(triangles, triangleArea, selectionCount, 10007, training);
-        auto holdout = sampleTriangles(triangles, triangleArea, holdoutCount, 20011, training, selection);
-        appendBoundarySamples(document, faces, candidate.boundary_edges, tolerance, training);
-        if (static_cast<int>(training.size()) < 32 ||
-            static_cast<int>(selection.size()) < selectionCount ||
-            static_cast<int>(holdout.size()) < holdoutCount) {
-            result.report.message = "训练、模型选择和独立终验样本不足或无法保持空间互斥。";
-            return result;
-        }
-        result.report.trainingSampleCount = static_cast<int>(training.size());
-        result.report.selectionSampleCount = static_cast<int>(selection.size());
-        result.report.holdoutSampleCount = static_cast<int>(holdout.size());
-
-        const auto supportSurface = BRep_Tool::Surface(document.topology().face(supportFaceId));
-        std::string parameterError;
-        int orientationSign = 0;
-        double minU = std::numeric_limits<double>::infinity();
-        double minV = std::numeric_limits<double>::infinity();
-        double maxU = -std::numeric_limits<double>::infinity();
-        double maxV = -std::numeric_limits<double>::infinity();
-        std::shared_ptr<const StlHybridParameterization> parameterization;
-        const auto originalTraining = training;
-        const auto originalSelection = selection;
-        const auto originalHoldout = holdout;
-        bool parametersInitialized = !supportSurface.IsNull() &&
-            projectInitialParameters(
-                training, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError) &&
-            projectInitialParameters(
-                selection, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError) &&
-            projectInitialParameters(
-                holdout, supportSurface, orientationSign, minU, minV, maxU, maxV, parameterError);
-        if (parametersInitialized &&
-            maxU - minU > Precision::PConfusion() &&
-            maxV - minV > Precision::PConfusion()) {
-            normalizeParameters(training, minU, minV, maxU, maxV);
-            normalizeParameters(selection, minU, minV, maxU, maxV);
-            normalizeParameters(holdout, minU, minV, maxU, maxV);
-            parametersInitialized = !parametersOverlap(training, selection, holdout, tolerance);
-            if (!parametersInitialized) {
-                parameterError = "主 STEP 支撑面投影参数化出现重叠映射。";
-            }
-        } else if (parametersInitialized) {
-            parametersInitialized = false;
-            parameterError = "主 STEP 支撑面投影参数区间退化。";
-        }
-        if (parametersInitialized) {
-            result.report.parameterization.success = true;
-            result.report.parameterization.source =
-                SurfaceParameterizationSource::SupportSurfaceProjection;
-            result.report.parameterization.message =
-                "主 STEP 支撑面投影保持单值，已作为拟合参数域。";
-            result.report.parameterizationSource =
-                SurfaceParameterizationSource::SupportSurfaceProjection;
-        } else {
-            const std::string supportProjectionFailure = parameterError;
-            training = originalTraining;
-            selection = originalSelection;
-            holdout = originalHoldout;
-            parameterError.clear();
-            parameterization = StlHybridParameterization::buildFromStepSelection(
+        RestrictedBSplineFitPreparedData prepared;
+        if (!prepareRestrictedBSplineFitData(
                 document,
                 faces,
-                tolerance,
-                result.report.parameterization);
-            parametersInitialized = parameterization &&
-                projectStepParameters(training, *parameterization, parameterError) &&
-                projectStepParameters(selection, *parameterization, parameterError) &&
-                projectStepParameters(holdout, *parameterization, parameterError);
-            if (parametersInitialized &&
-                !parametersOverlap(training, selection, holdout, tolerance)) {
-                minU = 0.0;
-                minV = 0.0;
-                maxU = 1.0;
-                maxV = 1.0;
-                result.report.parameterizationSource = SurfaceParameterizationSource::StepHarmonic;
-                if (!supportProjectionFailure.empty()) {
-                    result.report.parameterization.message +=
-                        "；主 STEP 支撑面投影未采用：" + supportProjectionFailure;
-                }
-            } else {
-                parametersInitialized = false;
-                if (parameterError.empty()) {
-                    parameterError = result.report.parameterization.message.empty()
-                        ? "STEP 调和参数化出现重叠映射。"
-                        : result.report.parameterization.message;
-                }
-                if (!supportProjectionFailure.empty()) {
-                    parameterError = supportProjectionFailure + "；" + parameterError;
-                }
-                parameterization.reset();
-            }
-        }
-        if (!parametersInitialized) {
-            result.report.message = parameterError.empty() ? "参数初始化失败。" : parameterError;
-            return result;
-        }
-
-        std::vector<SourceSample> boundaryConstraints;
-        std::vector<SourceSample> fittingSamples;
-        boundaryConstraints.reserve(training.size());
-        fittingSamples.reserve(training.size());
-        for (const auto& sample : training) {
-            (sample.boundary ? boundaryConstraints : fittingSamples).push_back(sample);
-        }
-        if (boundaryConstraints.empty() || fittingSamples.empty()) {
-            result.report.message = "参数化未生成内部软样本或外边界硬约束。";
-            return result;
-        }
-        result.report.boundaryConstraintCount = static_cast<int>(boundaryConstraints.size());
-
-        if (parameterization != nullptr) {
-            const auto sampleCountBeforeGuards = fittingSamples.size();
-            appendExteriorGuardSamples(
-                *parameterization,
-                boundaryConstraints,
-                fittingSamples);
-            result.report.exteriorGuardSampleCount = static_cast<int>(
-                fittingSamples.size() - sampleCountBeforeGuards);
-        }
-
-        if (options.scanReference != nullptr && options.scanReferenceWeight > 0.0) {
-            const auto scanPatch = scanPatchForCandidate(document, candidate, options);
-            auto scanSamples = sampleScanReference(
-                scanPatch,
-                std::min(128, trainingInteriorCount),
-                parameterization.get(),
-                supportSurface,
-                minU,
-                minV,
-                maxU,
-                maxV,
                 options,
-                result.report.maxStepToScanDistance);
-            result.report.scanReferenceSampleCount = static_cast<int>(scanSamples.size());
-            fittingSamples.insert(fittingSamples.end(), scanSamples.begin(), scanSamples.end());
-        }
-
-        const int requestedControlPointLimit = std::max(0, options.maximumControlPoints);
-        if (requestedControlPointLimit < 16) {
-            result.report.message = "控制点上限小于三次 4×4 起始控制网。";
-            return result;
-        }
-        const int minimumConstraintControlPoints =
-            static_cast<int>(boundaryConstraints.size()) +
-            options.maximumBoundaryConstraintRefinements + 16;
-        const int evidenceSupportedControlPoints =
-            static_cast<int>(fittingSamples.size() + selection.size() + boundaryConstraints.size());
-        const int controlPointLimit = std::min(
-            requestedControlPointLimit,
-            std::max(minimumConstraintControlPoints, evidenceSupportedControlPoints));
-        std::vector<double> uInnerKnots;
-        std::vector<double> vInnerKnots;
-        const int initialControlPointTarget = std::min(
-            controlPointLimit,
-            static_cast<int>(boundaryConstraints.size()) +
-                options.maximumBoundaryConstraintRefinements + 16);
-        while ((degree + 1 + static_cast<int>(uInnerKnots.size())) *
-                   (degree + 1 + static_cast<int>(vInnerKnots.size())) <
-               initialControlPointTarget) {
-            auto nextU = uInnerKnots;
-            auto nextV = vInnerKnots;
-            if (nextU.size() <= nextV.size()) {
-                insertLargestIntervalKnot(nextU);
-            } else {
-                insertLargestIntervalKnot(nextV);
-            }
-            const int nextCount = (degree + 1 + static_cast<int>(nextU.size())) *
-                (degree + 1 + static_cast<int>(nextV.size()));
-            if (nextCount > controlPointLimit) {
-                result.report.failureStage =
-                    RestrictedBSplinePatchFitFailureStage::BoundaryConstraints;
-                result.report.message =
-                    "控制点上限不足以承载原始边界等式约束。";
-                return result;
-            }
-            uInnerKnots.swap(nextU);
-            vInnerKnots.swap(nextV);
-            ++result.report.knotInsertionCount;
-        }
-        Handle(Geom_BSplineSurface) acceptedSurface;
-        ModelQuality selectionQuality;
-        bool modelJacobianValid = false;
-        auto solveWithBoundaryRefinement = [&](
-            const std::vector<SourceSample>& softSamples,
-            std::vector<SourceSample>& constraints,
-            const std::vector<double>& currentUKnots,
-            const std::vector<double>& currentVKnots) {
-            SurfaceSolveResult solved;
-            while (true) {
-                solved = solveSurface(
-                    softSamples,
-                    constraints,
-                    currentUKnots,
-                    currentVKnots,
-                    options);
-                result.report.maxBoundaryConstraintResidual = std::max(
-                    result.report.maxBoundaryConstraintResidual,
-                    solved.maximumConstraintResidual);
-                if (solved.surface.IsNull()) {
-                    result.report.failureStage =
-                        RestrictedBSplinePatchFitFailureStage::BoundaryConstraints;
-                    return solved;
-                }
-                const auto boundaryQuality = evaluateBoundaryHoldout(
-                    document,
-                    candidate.boundary_edges,
-                    solved.surface);
-                result.report.boundaryHoldoutSampleCount = boundaryQuality.sampleCount;
-                result.report.maxBoundaryDistance = std::max(
-                    result.report.maxBoundaryDistance,
-                    boundaryQuality.maximumDistance);
-                if (!boundaryQuality.valid) {
-                    solved.surface.Nullify();
-                    result.report.failureStage =
-                        RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
-                    return solved;
-                }
-                if (boundaryQuality.maximumDistance <= boundaryTolerance) {
-                    return solved;
-                }
-                if (result.report.boundaryConstraintRefinementCount >=
-                    options.maximumBoundaryConstraintRefinements) {
-                    solved.surface.Nullify();
-                    result.report.failureStage =
-                        RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
-                    return solved;
-                }
-                SourceSample addedConstraint;
-                if (!parameterizePoint(
-                        boundaryQuality.worstPoint,
-                        parameterization.get(),
-                        supportSurface,
-                        minU,
-                        minV,
-                        maxU,
-                        maxV,
-                        addedConstraint) ||
-                    !isSpatiallyDistinct(addedConstraint, constraints)) {
-                    solved.surface.Nullify();
-                    result.report.failureStage =
-                        RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
-                    return solved;
-                }
-                constraints.push_back(addedConstraint);
-                ++result.report.boundaryConstraintRefinementCount;
-                result.report.boundaryConstraintCount = static_cast<int>(constraints.size());
-            }
-        };
-        while ((degree + 1 + static_cast<int>(uInnerKnots.size())) *
-                   (degree + 1 + static_cast<int>(vInnerKnots.size())) <= controlPointLimit) {
-            Handle(Geom_BSplineSurface) surface;
-            auto currentSamples = fittingSamples;
-            std::vector<UvIterationReport> iterationReports;
-            bool surfaceNeedsBoundaryRefinement = false;
-            for (int iteration = 0; iteration < options.maximumUvIterations; ++iteration) {
-                const auto solved = solveWithBoundaryRefinement(
-                    currentSamples,
-                    boundaryConstraints,
-                    uInnerKnots,
-                    vInnerKnots);
-                if (solved.surface.IsNull()) {
-                    result.report.message =
-                        result.report.failureStage ==
-                            RestrictedBSplinePatchFitFailureStage::BoundaryHoldout
-                        ? "边界硬约束细化耗尽后稠密边界仍未通过质量门。"
-                        : "稀疏 KKT 未能满足原始边界等式约束。";
-                    return result;
-                }
-                surface = solved.surface;
-                surfaceNeedsBoundaryRefinement = false;
-                UvIterationReport iterationReport;
-                iterationReport.iteration = iteration + 1;
-                iterationReport.objectiveBefore = solved.objective;
-                std::vector<std::array<double, 2>> projectedParameters;
-                if (!reprojectTrainingSamples(
-                        currentSamples,
-                        surface,
-                        projectedParameters,
-                        iterationReport.maximumShift)) {
-                    result.report.failureStage =
-                        RestrictedBSplinePatchFitFailureStage::UvIteration;
-                    result.report.message = "更新曲面后内部样本重新投影失败。";
-                    return result;
-                }
-                if (iterationReport.maximumShift < options.uvConvergenceTolerance) {
-                    iterationReport.objectiveAfter = solved.objective;
-                    iterationReport.reason = "Converged";
-                    iterationReports.push_back(iterationReport);
-                    break;
-                }
-
-                bool acceptedStep = false;
-                for (int backtrack = 0;
-                     backtrack < options.maximumUvBacktrackingSteps;
-                     ++backtrack) {
-                    const double step = std::ldexp(1.0, -backtrack);
-                    auto trialSamples = currentSamples;
-                    if (!applyProjectedParameters(
-                            trialSamples,
-                            projectedParameters,
-                            step,
-                            parameterization.get()) ||
-                        parametersOverlap(trialSamples, {}, {}, tolerance)) {
-                        continue;
-                    }
-                    const auto trial = solveSurface(
-                        trialSamples,
-                        boundaryConstraints,
-                        uInnerKnots,
-                        vInnerKnots,
-                        options);
-                    double observedJacobian = 0.0;
-                    if (trial.surface.IsNull() ||
-                        !(trial.objective + 1.0e-14 < solved.objective) ||
-                        !evaluateJacobian(
-                            trial.surface,
-                            parameterization.get(),
-                            options.minimumNormalizedJacobian,
-                            observedJacobian)) {
-                        continue;
-                    }
-                    currentSamples.swap(trialSamples);
-                    surface = trial.surface;
-                    surfaceNeedsBoundaryRefinement = true;
-                    iterationReport.objectiveAfter = trial.objective;
-                    iterationReport.backtrackingSteps = backtrack;
-                    iterationReport.accepted = true;
-                    iterationReport.reason = "Accepted";
-                    acceptedStep = true;
-                    break;
-                }
-                if (!acceptedStep) {
-                    iterationReport.objectiveAfter = solved.objective;
-                    iterationReport.reason = "NoImprovingStep";
-                    iterationReports.push_back(iterationReport);
-                    break;
-                }
-                iterationReports.push_back(iterationReport);
-            }
-            if (surfaceNeedsBoundaryRefinement) {
-                const auto solved = solveWithBoundaryRefinement(
-                    currentSamples,
-                    boundaryConstraints,
-                    uInnerKnots,
-                    vInnerKnots);
-                if (solved.surface.IsNull()) {
-                    result.report.message =
-                        result.report.failureStage ==
-                            RestrictedBSplinePatchFitFailureStage::BoundaryHoldout
-                        ? "UV 迭代结束后的边界硬约束细化未通过质量门。"
-                        : "UV 迭代结束后无法重新满足原始边界等式约束。";
-                    return result;
-                }
-                surface = solved.surface;
-            }
-            result.report.uvIterations = iterationReports;
-            result.report.iterationCount = static_cast<int>(iterationReports.size());
-            result.report.uControlPointCount = surface->NbUPoles();
-            result.report.vControlPointCount = surface->NbVPoles();
-            result.report.controlPointCount = surface->NbUPoles() * surface->NbVPoles();
-            selectionQuality = evaluateModel(selection, surface, options);
-            if (selectionQuality.passed) {
-                double observedJacobian = 0.0;
-                modelJacobianValid = evaluateJacobian(
-                    surface,
-                    parameterization.get(),
-                    options.minimumNormalizedJacobian,
-                    observedJacobian);
-                result.report.minimumNormalizedJacobian = observedJacobian;
-                if (modelJacobianValid) {
-                    acceptedSurface = surface;
-                    break;
-                }
-            }
-            auto nextU = uInnerKnots;
-            auto nextV = vInnerKnots;
-            if (selectionQuality.passed) {
-                if (nextU.size() <= nextV.size()) {
-                    insertLargestIntervalKnot(nextU);
-                } else {
-                    insertLargestIntervalKnot(nextV);
-                }
-            } else {
-                const double uWidth = containingIntervalWidth(uInnerKnots, selectionQuality.worstU);
-                const double vWidth = containingIntervalWidth(vInnerKnots, selectionQuality.worstV);
-                if (uWidth >= vWidth) {
-                    insertWorstIntervalKnot(nextU, selectionQuality.worstU);
-                } else {
-                    insertWorstIntervalKnot(nextV, selectionQuality.worstV);
-                }
-            }
-            const int nextCount = (degree + 1 + static_cast<int>(nextU.size())) *
-                (degree + 1 + static_cast<int>(nextV.size()));
-            if (nextCount > controlPointLimit) {
-                break;
-            }
-            uInnerKnots.swap(nextU);
-            vInnerKnots.swap(nextV);
-            ++result.report.knotInsertionCount;
-        }
-
-        result.report.maxSelectionDistance = selectionQuality.maxDistance;
-        result.report.maxSelectionNormalAngleDegrees = selectionQuality.maxNormalAngle;
-        result.report.selectionPassed = selectionQuality.passed;
-        if (acceptedSurface.IsNull()) {
-            result.report.failureStage = selectionQuality.passed
-                ? RestrictedBSplinePatchFitFailureStage::Jacobian
-                : RestrictedBSplinePatchFitFailureStage::ModelSelection;
-            result.report.message = selectionQuality.passed
-                ? "达到数据支持的控制点上限后参数化仍发生翻转或近奇异。"
-                : "达到数据支持的控制点上限后模型选择样本仍未通过质量门。";
+                result,
+                prepared)) {
             return result;
         }
 
-        const auto extentQuality = evaluateSupportSurfaceExtent(
-            training,
-            selection,
-            holdout,
-            acceptedSurface);
-        result.report.supportSurfaceExtentRatio = extentQuality.extentRatio;
-        result.report.supportSurfaceMaxPoleOverflowRatio =
-            extentQuality.maximumPoleOverflowRatio;
-        if (!extentQuality.valid ||
-            extentQuality.extentRatio > 2.0 ||
-            extentQuality.maximumPoleOverflowRatio > 0.5) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::ModelSelection;
-            result.report.message =
-                "拟合支撑曲面控制网超出原始选区包络，拒绝可能在商业 CAD 中展开为超大面片的结果。";
+        RestrictedBSplineFitModelResult model;
+        if (!solveRestrictedBSplineFitModel(
+                document,
+                options,
+                prepared,
+                result,
+                model)) {
             return result;
         }
 
-        const auto holdoutQuality = evaluateModel(holdout, acceptedSurface, options);
-        result.report.maxHoldoutDistance = holdoutQuality.maxDistance;
-        result.report.maxHoldoutNormalAngleDegrees = holdoutQuality.maxNormalAngle;
-        result.report.holdoutPassed = holdoutQuality.passed;
-        if (!holdoutQuality.passed) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Holdout;
-            result.report.message = "独立终验样本未通过距离或法向质量门。";
-            return result;
-        }
-
-        result.report.parameterizationValid = evaluateJacobian(
-            acceptedSurface,
-            parameterization.get(),
-            options.minimumNormalizedJacobian,
-            result.report.minimumNormalizedJacobian);
-        if (!result.report.parameterizationValid) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Jacobian;
-            result.report.message = "拟合曲面参数化发生翻转或近奇异。";
-            return result;
-        }
-
-        BRepBuilderAPI_MakeFace supportFaceBuilder(acceptedSurface, Precision::Confusion());
-        if (!supportFaceBuilder.IsDone()) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Retrim;
-            result.report.message = "无法从拟合支撑曲面创建基础面。";
-            return result;
-        }
-        BoundaryConstrainedSurfaceRetrimOptions retrimOptions;
-        retrimOptions.samplesPerEdge = 16;
-        retrimOptions.projectionTolerance = retrimTolerance;
-        retrimOptions.rebuildBoundaryPcurves = true;
-        const auto retrim = BoundaryConstrainedSurfaceRetrim().retrim(
+        validateRestrictedBSplineFitResult(
             document,
-            boundary,
-            {supportFaceBuilder.Face()},
-            document.topology().face(supportFaceId),
-            retrimOptions);
-        if (!retrim.success || retrim.replacementFace.IsNull()) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Retrim;
-            result.report.message = "原始边界无法可靠裁剪到拟合支撑曲面：" + retrim.message +
-                "；pcurve 尝试/成功/失败=" +
-                std::to_string(retrim.boundaryEdgePcurveRebuildAttemptCount) + "/" +
-                std::to_string(retrim.boundaryEdgePcurveRebuildSuccessCount) + "/" +
-                std::to_string(retrim.boundaryEdgePcurveRebuildFailureCount) +
-                "，SameParameter 检查/失败=" +
-                std::to_string(retrim.boundaryEdgeSameParameterCheckCount) + "/" +
-                std::to_string(retrim.boundaryEdgeSameParameterFailureCount) +
-                "，最大偏差=" +
-                std::to_string(retrim.boundaryEdgeMaxSameParameterDeviation);
-            return result;
-        }
-        result.report.maxBoundaryDistance = std::max(
-            retrim.maxProjectionDistance,
-            retrim.surfaceCoverageMaxProjectionDistance);
-        const auto boundaryHoldout = evaluateBoundaryHoldout(
-            document,
-            candidate.boundary_edges,
-            acceptedSurface);
-        result.report.boundaryHoldoutSampleCount = boundaryHoldout.sampleCount;
-        if (!boundaryHoldout.valid || boundaryHoldout.maximumDistance > boundaryTolerance) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
-            result.report.message = "独立边界终验样本未通过距离质量门。";
-            return result;
-        }
-        result.report.maxBoundaryDistance = std::max(
-            result.report.maxBoundaryDistance,
-            boundaryHoldout.maximumDistance);
-
-        BRepCheck_Analyzer brepAnalyzer(retrim.replacementFace, Standard_True);
-        result.report.brepCheckValid = brepAnalyzer.IsValid();
-        if (!result.report.brepCheckValid) {
-            result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BrepCheck;
-            result.report.message = "裁剪后的 B-rep 面未通过 BRepCheck，状态=" +
-                invalidBRepStatuses(retrim.replacementFace, brepAnalyzer) + "。";
-            return result;
-        }
-        result.face = retrim.replacementFace;
-        result.surface = acceptedSurface;
-        result.report.uControlPointCount = acceptedSurface->NbUPoles();
-        result.report.vControlPointCount = acceptedSurface->NbVPoles();
-        result.report.controlPointCount = acceptedSurface->NbUPoles() * acceptedSurface->NbVPoles();
-        result.report.success = true;
-        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::None;
-        result.report.message = "受限 B-spline 分组拟合通过模型选择和独立终验。";
+            options,
+            prepared,
+            model,
+            result);
         return result;
     } catch (const Standard_Failure& error) {
         const auto* message = error.GetMessageString();

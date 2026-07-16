@@ -31,6 +31,10 @@
 
 阶段 6 已增加非 `QObject` 的 `PatchPreviewWorkflow`，承接 STL crop、STP sampled fitting 与 Geomagic 调用，`AppController` 的公开静态入口保留并只做委托；补片 artifact/import/preview/apply/process 状态集中到 `AppPatchWorkflowState`。主窗口候选、动作忙碌标记、进度和 fitting mode 集中到 `MainWindowWorkflowState`，进度报告与状态栏文本由纯 `PatchWorkflowText` 格式化。既有信号槽、按钮刷新方法、进度回调顺序和候选清理入口未改名；新增结构测试固定清理默认值和进度文本字段顺序。GUI 可执行文件已通过启动后持续存活 5 秒的进程级冒烟；由于当前会话没有 Windows 交互执行工具，打开、预览、Apply、undo、redo 和导出的人工点击复核未自动执行，保留为提交后的人工检查项。
 
+### 2026-07-16 结构优化阶段 7
+
+阶段 7 已将 `RestrictedBSplinePatchFitter::fit` 整理为数据准备、模型求解和结果验证三个文件内阶段，公开入口仍负责输入预检、阶段编排和既有异常映射。采样与参数化顺序、边界约束细化、KKT 求解、UV 回溯、模型选择、拒绝顺序、容差和报告字段保持不变。全量单元测试耗时 113.43 秒；12 选区真实基准为 3 个 `TargetAchieved`、9 个 `NoAcceptableReduction`，选区、输入输出面数、结果类型、距离、法向、接缝、BRepCheck 和 STEP 回读字段与 `20260715_surface_reduction_benchmark_final12b` 逐项一致。
+
 ### 2026-07-16 任意选区自适应曲面减面
 
 当前开发分支切换为 `native-surface-reduction`，基点为 `native-surface-refit` 的 `1076082`。`native-autosurface` 保留三项后续实验提交但不合并；AS-3 原全局三角网络路线取消。

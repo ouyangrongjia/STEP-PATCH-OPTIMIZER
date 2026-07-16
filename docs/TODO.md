@@ -20,7 +20,7 @@
 5. [x] 拆分 PatchReplacementCommand，将补片组装与闭合诊断从命令编排中分离。
 6. [x] 拆分 StpSampledFittingMeshBuilder 的基础采样、区外覆盖带、邻接面支撑带和网格诊断阶段。
 7. [x] 拆分 AppController 与 MainWindow 的补片预览、状态和进度文本职责。
-8. [ ] 拆分 RestrictedBSplinePatchFitter。
+8. [x] 拆分 RestrictedBSplinePatchFitter，将数据准备、模型求解和结果验证整理为内部阶段。
 9. [ ] 拆分 SurfaceReductionEngine 搜索与终验。
 ```
 
