@@ -13,6 +13,8 @@
 
 namespace spo {
 
+class StlRegionIndex;
+
 enum class RestrictedBSplinePatchFitFailureStage {
     None,
     Parameterization,
@@ -49,9 +51,24 @@ struct RestrictedBSplinePatchFitOptions {
     int maximumUvBacktrackingSteps = 8;
     double uvConvergenceTolerance = 1.0e-8;
     const StlMesh* scanReference = nullptr;
+    const StlRegionIndex* scanRegionIndex = nullptr;
     ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
     double scanReferenceWeight = 0.25;
     double maximumScanReferenceDistance = 0.2;
+};
+
+struct RestrictedBSplinePatchFitTiming {
+    double topologyPreparationMs = 0.0;
+    double scanCropMs = 0.0;
+    double samplingMs = 0.0;
+    double parameterizationMs = 0.0;
+    double kktSolveMs = 0.0;
+    double uvProjectionMs = 0.0;
+    double boundaryRefinementMs = 0.0;
+    double validationMs = 0.0;
+    double retrimMs = 0.0;
+    double brepCheckMs = 0.0;
+    double totalMs = 0.0;
 };
 
 struct RestrictedBSplinePatchFitReport {
@@ -90,6 +107,10 @@ struct RestrictedBSplinePatchFitReport {
     ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
     int scanReferenceSampleCount = 0;
     double maxStepToScanDistance = 0.0;
+    int kktSolveCount = 0;
+    int boundaryProjectionCount = 0;
+    int scanIndexCandidateTriangleCount = 0;
+    RestrictedBSplinePatchFitTiming timing;
     std::vector<UvIterationReport> uvIterations;
 };
 

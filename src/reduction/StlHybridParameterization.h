@@ -66,13 +66,25 @@ public:
 
     StlHybridProjection project(const gp_Pnt& point) const;
     bool contains(double u, double v, double tolerance = 1.0e-10) const;
+    StlHybridProjection projectBruteForceForTesting(const gp_Pnt& point) const;
+    bool containsBruteForceForTesting(double u, double v, double tolerance = 1.0e-10) const;
 
 private:
     struct Triangle;
+    struct Bounds3d;
+    struct BvhNode;
+
+    void buildSpatialIndices();
+    std::size_t buildBvhNode(std::size_t begin, std::size_t end);
 
     std::vector<gp_Pnt> vertices_;
     std::vector<std::array<double, 2>> parameters_;
     std::vector<Triangle> triangles_;
+    std::vector<Bounds3d> triangleBounds_;
+    std::vector<std::size_t> bvhOrder_;
+    std::vector<BvhNode> bvhNodes_;
+    int uvGridResolution_ = 64;
+    std::vector<std::vector<std::size_t>> uvGrid_;
 };
 
 }

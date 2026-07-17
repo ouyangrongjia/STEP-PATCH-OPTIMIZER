@@ -5,7 +5,11 @@
 #include "stl/StlCropReport.h"
 #include "stl/StlMesh.h"
 
+#include <cstddef>
+
 namespace spo {
+
+class StlRegionIndex;
 
 enum class StlCropMode {
     CentroidOnly,
@@ -50,7 +54,8 @@ public:
         const ShapeDocument& document,
         const MergeCandidate& candidate,
         const StlMesh& sourceMesh,
-        const StlRegionExtractorOptions& options = {}) const;
+        const StlRegionExtractorOptions& options = {},
+        const StlRegionIndex* index = nullptr) const;
 };
 
 }

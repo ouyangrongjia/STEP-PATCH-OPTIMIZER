@@ -5,6 +5,7 @@
 #include "merge/MergePlanner.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "stl/StlRegionExtractor.h"
+#include "stl/StlRegionIndex.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -211,6 +212,31 @@ void test_extract_keeps_intersecting_triangles_and_excludes_outside() {
     assert(result.localMesh.triangleCount() == 1);
     assert(result.report.output_triangle_count == 1);
     assert(result.localMesh.triangles().front().v0.x == inside.v0.x);
+}
+
+void test_spatial_index_matches_full_scan_exactly() {
+    const auto fixture = make_two_face_fixture();
+    const auto source = make_mesh({
+        make_triangle({0.0, 0.0, 1.0}, {0.1, 0.1, 0.0}, {0.9, 0.1, 0.0}, {0.1, 0.9, 0.0}),
+        make_triangle({0.0, 0.0, 1.0}, {1.1, 0.1, 0.0}, {1.9, 0.1, 0.0}, {1.1, 0.9, 0.0}),
+        make_triangle({0.0, 0.0, 1.0}, {8.0, 8.0, 0.0}, {9.0, 8.0, 0.0}, {8.0, 9.0, 0.0})});
+    spo::StlRegionExtractorOptions options;
+    options.bboxMarginRatio = 0.0;
+    options.minMargin = 0.0;
+    const spo::StlRegionExtractor extractor;
+    const auto full = extractor.extract(fixture.document, fixture.candidate, source, options);
+    const spo::StlRegionIndex index(source);
+    const auto indexed = extractor.extract(fixture.document, fixture.candidate, source, options, &index);
+    assert(full.success == indexed.success);
+    assert(full.localMesh.triangles().size() == indexed.localMesh.triangles().size());
+    for (std::size_t triangle = 0; triangle < full.localMesh.triangles().size(); ++triangle) {
+        assert(full.localMesh.triangles()[triangle].v0.x == indexed.localMesh.triangles()[triangle].v0.x);
+        assert(full.localMesh.triangles()[triangle].v0.y == indexed.localMesh.triangles()[triangle].v0.y);
+    }
+    assert(full.report.output_triangle_count == indexed.report.output_triangle_count);
+    assert(full.report.rejected_outside_bbox_count == indexed.report.rejected_outside_bbox_count);
+    assert(full.report.rejected_outside_candidate_count == indexed.report.rejected_outside_candidate_count);
+    assert(indexed.report.spatial_index_candidate_triangle_count < indexed.report.source_triangle_count);
 }
 
 void test_extract_excludes_triangles_inside_bbox_but_outside_candidate_boundary() {
@@ -632,6 +658,7 @@ void test_stl_region_extractor_real_clay_stp_stl_if_present() {
 
 void run_stl_region_extractor_tests() {
     test_extract_keeps_intersecting_triangles_and_excludes_outside();
+    test_spatial_index_matches_full_scan_exactly();
     test_extract_excludes_triangles_inside_bbox_but_outside_candidate_boundary();
     test_margin_growth_does_not_reduce_triangle_count();
     test_conservative_crop_keeps_triangle_when_centroid_outside_but_vertex_inside();

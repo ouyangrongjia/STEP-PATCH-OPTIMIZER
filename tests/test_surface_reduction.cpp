@@ -3,7 +3,11 @@
 #include "command/ReduceSelectedFacesCommand.h"
 #include "reduction/SurfaceReductionEngine.h"
 #include "reduction/RestrictedBSplinePatchFitter.h"
+#include "reduction/SurfaceReductionFitCache.h"
 #include "reduction/StlHybridParameterization.h"
+
+#include <QFile>
+#include <QTemporaryDir>
 
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
@@ -19,6 +23,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <future>
 #include <set>
 #include <vector>
 
@@ -121,6 +126,19 @@ spo::ShapeDocument makePartiallyReducibleCorner() {
     return spo::ShapeDocument(sewing.SewedShape(), {});
 }
 
+spo::ShapeDocument makeSmoothFold() {
+    constexpr double rise = 0.02;
+    BRepBuilderAPI_Sewing sewing(1.0e-7);
+    sewing.Add(makePolygonFace({
+        gp_Pnt(0.0, 0.0, 0.0), gp_Pnt(1.0, 0.0, 0.0),
+        gp_Pnt(1.0, 1.0, 0.0), gp_Pnt(0.0, 1.0, 0.0)}));
+    sewing.Add(makePolygonFace({
+        gp_Pnt(1.0, 0.0, 0.0), gp_Pnt(2.0, 0.0, rise),
+        gp_Pnt(2.0, 1.0, rise), gp_Pnt(1.0, 1.0, 0.0)}));
+    sewing.Perform();
+    return spo::ShapeDocument(sewing.SewedShape(), {});
+}
+
 std::vector<spo::FaceId> allFaces(const spo::ShapeDocument& document) {
     std::vector<spo::FaceId> faces;
     for (spo::FaceId face = 0; face < document.topology().faceCount(); ++face) {
@@ -209,6 +227,118 @@ void run_surface_reduction_tests() {
         assert(first.distance < 1.0e-12);
         assert(second.distance < 1.0e-12);
         assert(std::hypot(first.u - second.u, first.v - second.v) > 0.25);
+        for (int x = -2; x <= 12; ++x) {
+            for (int y = -2; y <= 12; ++y) {
+                const gp_Pnt point(
+                    static_cast<double>(x) / 10.0,
+                    static_cast<double>(y) / 10.0,
+                    0.1);
+                const auto indexed = parameterization->project(point);
+                const auto brute = parameterization->projectBruteForceForTesting(point);
+                assert(indexed.valid == brute.valid);
+                assert(std::abs(indexed.distance - brute.distance) < 1.0e-12);
+                assert(std::abs(indexed.u - brute.u) < 1.0e-12);
+                assert(std::abs(indexed.v - brute.v) < 1.0e-12);
+                const double u = static_cast<double>(x) / 10.0;
+                const double v = static_cast<double>(y) / 10.0;
+                assert(parameterization->contains(u, v, 1.0e-10) ==
+                    parameterization->containsBruteForceForTesting(u, v, 1.0e-10));
+            }
+        }
+    }
+
+    {
+        QTemporaryDir temporary;
+        assert(temporary.isValid());
+        spo::SurfaceReductionExecutionOptions execution;
+        execution.cacheMode = spo::SurfaceReductionCacheMode::ReadWrite;
+        execution.cacheDirectory = temporary.path().toStdWString();
+        execution.sourceFingerprint = "source-a";
+        execution.scanFingerprint = "none";
+        execution.algorithmFingerprint = "algorithm-a";
+        spo::SurfaceReductionFitCache cache(execution);
+        const auto document = makePlanarStrip(2);
+        const auto fit = spo::RestrictedBSplinePatchFitter().fit(document, allFaces(document));
+        assert(fit.success());
+        spo::RestrictedBSplinePatchFitOptions options;
+        const auto key = cache.key({0, 1}, options);
+        spo::SurfaceReductionFitCacheEntry entry;
+        entry.success = true;
+        entry.face = fit.face;
+        entry.surface = fit.surface;
+        entry.report = fit.report;
+        assert(cache.store(key, entry));
+        const auto loaded = cache.load(key);
+        assert(loaded.has_value());
+        assert(loaded->success);
+        assert(!loaded->face.IsNull());
+        assert(loaded->report.kktSolveCount == fit.report.kktSolveCount);
+
+        options.tolerance3d = 0.031;
+        const auto negativeKey = cache.key({0, 1}, options);
+        spo::SurfaceReductionFitCacheEntry negative;
+        negative.report.failureStage = spo::RestrictedBSplinePatchFitFailureStage::ModelSelection;
+        negative.report.message = "negative";
+        assert(cache.store(negativeKey, negative));
+        const auto loadedNegative = cache.load(negativeKey);
+        assert(loadedNegative.has_value());
+        assert(!loadedNegative->success);
+        assert(loadedNegative->report.message == "negative");
+
+        const auto cacheFile = temporary.path() + "/" +
+            QString::fromStdString(key).left(2) + "/" + QString::fromStdString(key) + ".json";
+        QFile corrupted(cacheFile);
+        assert(corrupted.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        corrupted.write("broken");
+        corrupted.close();
+        assert(!cache.load(key).has_value());
+
+        auto changedExecution = execution;
+        changedExecution.sourceFingerprint = "source-b";
+        const spo::SurfaceReductionFitCache changedCache(changedExecution);
+        assert(changedCache.key({0, 1}, options) != negativeKey);
+
+        std::vector<std::future<bool>> writes;
+        std::vector<std::string> concurrentKeys;
+        for (int index = 0; index < 4; ++index) {
+            auto concurrentOptions = options;
+            concurrentOptions.tolerance3d += static_cast<double>(index + 1) * 0.001;
+            concurrentKeys.push_back(cache.key({0, 1}, concurrentOptions));
+            writes.push_back(std::async(std::launch::async, [&cache, negative, key = concurrentKeys.back()] {
+                return cache.store(key, negative);
+            }));
+        }
+        for (auto& write : writes) assert(write.get());
+        for (const auto& concurrentKey : concurrentKeys) {
+            assert(cache.load(concurrentKey).has_value());
+        }
+    }
+
+    {
+        QTemporaryDir temporary;
+        assert(temporary.isValid());
+        const auto document = makeSmoothFold();
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        spo::SurfaceReductionExecutionOptions replay;
+        replay.cacheMode = spo::SurfaceReductionCacheMode::ReadOnlyRequired;
+        replay.cacheDirectory = temporary.path().toStdWString();
+        replay.sourceFingerprint = "smooth-fold";
+        replay.algorithmFingerprint = "test";
+        const auto missing = spo::SurfaceReductionEngine().reduce(document, request, replay);
+        assert(missing.report.persistentFitCacheRequiredMiss);
+        assert(missing.report.fitCacheMissCount == 0);
+
+        auto refresh = replay;
+        refresh.cacheMode = spo::SurfaceReductionCacheMode::Refresh;
+        const auto cold = spo::SurfaceReductionEngine().reduce(document, request, refresh);
+        assert(cold.report.persistentFitCacheWriteCount > 0);
+        const auto warm = spo::SurfaceReductionEngine().reduce(document, request, replay);
+        assert(!warm.report.persistentFitCacheRequiredMiss);
+        assert(warm.report.persistentFitCacheHitCount > 0);
+        assert(warm.report.fitCacheMissCount == 0);
+        assert(cold.report.outputGroups == warm.report.outputGroups);
+        assert(cold.report.outcome == warm.report.outcome);
     }
 
     {
@@ -416,14 +546,22 @@ void run_surface_reduction_tests() {
         request.options.targetOutputRatio = 0.4;
         const auto first = spo::SurfaceReductionEngine().reduce(document, request);
         const auto second = spo::SurfaceReductionEngine().reduce(document, request);
+        spo::SurfaceReductionExecutionOptions parallelExecution;
+        parallelExecution.fitWorkerCount = 4;
+        const auto parallel = spo::SurfaceReductionEngine().reduce(
+            document, request, parallelExecution);
         assert(first.canApply());
         assert(second.canApply());
+        assert(parallel.canApply());
         assert(first.report.outputGroups == second.report.outputGroups);
+        assert(first.report.outputGroups == parallel.report.outputGroups);
         assert(first.report.outputFaceCount == second.report.outputFaceCount);
+        assert(first.report.outputFaceCount == parallel.report.outputFaceCount);
         assert(first.report.expandedStateCount == second.report.expandedStateCount);
         assert(first.report.generatedStateCount == second.report.generatedStateCount);
         assert(first.report.generatedStateCount > first.report.acceptedMergeCount);
         assert(!first.report.searchBudgetExhausted);
+        assert(parallel.report.fitWorkerCount == 4);
     }
 
     {

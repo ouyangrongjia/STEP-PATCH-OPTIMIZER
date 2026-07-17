@@ -5,11 +5,14 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/PatchReplacementRepair.h"
 #include "reduction/RestrictedBSplinePatchFitter.h"
+#include "reduction/SurfaceReductionFitCache.h"
 #include "reduction/StlHybridParameterization.h"
+#include "stl/StlRegionIndex.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepGProp.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepTools_ReShape.hxx>
 #include <BRep_Builder.hxx>
@@ -25,7 +28,9 @@
 #include <TopExp_Explorer.hxx>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <future>
 #include <limits>
 #include <map>
 #include <queue>
@@ -36,6 +41,47 @@
 namespace spo {
 
 namespace {
+
+class ScopedMilliseconds {
+public:
+    explicit ScopedMilliseconds(double& target)
+        : target_(target), started_(std::chrono::steady_clock::now()) {}
+    ~ScopedMilliseconds() {
+        target_ += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started_).count();
+    }
+private:
+    double& target_;
+    std::chrono::steady_clock::time_point started_;
+};
+
+class SurfaceReductionReportFinalizer {
+public:
+    explicit SurfaceReductionReportFinalizer(SurfaceReductionReport& report)
+        : report_(report), started_(std::chrono::steady_clock::now()) {}
+    ~SurfaceReductionReportFinalizer() {
+        report_.timing.totalMs = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started_).count();
+        std::vector<double> durations;
+        durations.reserve(report_.fitProfiles.size());
+        for (const auto& profile : report_.fitProfiles) {
+            durations.push_back(profile.totalMs);
+        }
+        if (durations.empty()) return;
+        std::sort(durations.begin(), durations.end());
+        const auto percentile = [&](double value) {
+            const auto index = static_cast<std::size_t>(std::ceil(
+                value * static_cast<double>(durations.size()))) - 1;
+            return durations[std::min(index, durations.size() - 1)];
+        };
+        report_.fitDurationP50Ms = percentile(0.50);
+        report_.fitDurationP95Ms = percentile(0.95);
+        report_.fitDurationP99Ms = percentile(0.99);
+    }
+private:
+    SurfaceReductionReport& report_;
+    std::chrono::steady_clock::time_point started_;
+};
 
 struct Cluster {
     std::vector<FaceId> faces;
@@ -54,6 +100,22 @@ struct PairCandidate {
     FaceId stableFace = 0;
 };
 
+struct PreparedSelectionEdge {
+    EdgeId edgeId = 0;
+    FaceId firstFace = 0;
+    FaceId secondFace = 0;
+    double normalJump = 0.0;
+    double curvatureDifference = 0.0;
+    double length = 0.0;
+};
+
+struct SurfaceReductionPreparedContext {
+    std::vector<PreparedSelectionEdge> internalEdges;
+    mutable std::map<
+        std::tuple<EdgeId, std::vector<FaceId>, std::vector<FaceId>>,
+        double> seamAngleCache;
+};
+
 struct SeamQuality {
     bool valid = true;
     double maximumAngle = 0.0;
@@ -61,6 +123,7 @@ struct SeamQuality {
 
 struct SearchState {
     std::vector<Cluster> clusters;
+    std::map<EdgeId, double> seamAngles;
     double maximumSeamAngle = 0.0;
 };
 
@@ -264,22 +327,18 @@ std::map<FaceId, int> clusterMembership(const std::vector<Cluster>& clusters) {
 }
 
 std::vector<PairCandidate> buildPairQueue(
-    const ShapeDocument& document,
+    const SurfaceReductionPreparedContext& prepared,
     const std::vector<Cluster>& clusters,
     const std::set<EdgeId>& protectedEdges,
     int diversityBins) {
     const auto membership = clusterMembership(clusters);
     std::map<std::pair<int, int>, PairCandidate> pairs;
-    for (EdgeId edgeId = 0; edgeId < document.topology().edgeCount(); ++edgeId) {
-        if (protectedEdges.contains(edgeId)) {
+    for (const auto& edge : prepared.internalEdges) {
+        if (protectedEdges.contains(edge.edgeId)) {
             continue;
         }
-        const auto* adjacency = document.topology().adjacencyForEdge(edgeId);
-        if (adjacency == nullptr || adjacency->faces.size() != 2) {
-            continue;
-        }
-        const auto firstMember = membership.find(adjacency->faces[0]);
-        const auto secondMember = membership.find(adjacency->faces[1]);
+        const auto firstMember = membership.find(edge.firstFace);
+        const auto secondMember = membership.find(edge.secondFace);
         if (firstMember == membership.end() || secondMember == membership.end() ||
             firstMember->second == secondMember->second) {
             continue;
@@ -289,11 +348,11 @@ std::vector<PairCandidate> buildPairQueue(
         auto& pair = pairs[{first, second}];
         pair.first = first;
         pair.second = second;
-        pair.normalJump = std::max(pair.normalJump, originalFaceAngleAtEdge(document, edgeId));
+        pair.normalJump = std::max(pair.normalJump, edge.normalJump);
         pair.curvatureDifference = std::max(
             pair.curvatureDifference,
-            originalCurvatureDifferenceAtEdge(document, edgeId));
-        pair.sharedLength += edgeLength(document.topology().edge(edgeId));
+            edge.curvatureDifference);
+        pair.sharedLength += edge.length;
         pair.stableFace = std::min(clusters[static_cast<std::size_t>(first)].faces.front(),
                                    clusters[static_cast<std::size_t>(second)].faces.front());
     }
@@ -443,24 +502,84 @@ SeamQuality validateClusterSeams(
 
 SeamQuality validateAllClusterSeams(
     const ShapeDocument& document,
+    const SurfaceReductionPreparedContext& prepared,
     const std::vector<Cluster>& clusters,
     const std::set<EdgeId>& protectedEdges,
     double toleranceDegrees) {
     SeamQuality quality;
-    for (int index = 0; index < static_cast<int>(clusters.size()); ++index) {
-        if (clusters[static_cast<std::size_t>(index)].faces.size() < 2) {
+    const auto membership = clusterMembership(clusters);
+    for (const auto& edge : prepared.internalEdges) {
+        if (protectedEdges.contains(edge.edgeId)) {
             continue;
         }
-        const auto clusterQuality = validateClusterSeams(
+        const auto first = membership.find(edge.firstFace);
+        const auto second = membership.find(edge.secondFace);
+        if (first == membership.end() || second == membership.end() ||
+            first->second == second->second) {
+            continue;
+        }
+        if (clusters[static_cast<std::size_t>(first->second)].faces.size() < 2 &&
+            clusters[static_cast<std::size_t>(second->second)].faces.size() < 2) {
+            continue;
+        }
+        const double angle = surfaceAngleAtEdge(
             document,
-            clusters,
-            index,
-            protectedEdges,
-            toleranceDegrees);
-        quality.valid = quality.valid && clusterQuality.valid;
-        quality.maximumAngle = std::max(
-            quality.maximumAngle,
-            clusterQuality.maximumAngle);
+            edge.edgeId,
+            clusterSurface(document, clusters[static_cast<std::size_t>(first->second)]),
+            clusterSurface(document, clusters[static_cast<std::size_t>(second->second)]));
+        quality.maximumAngle = std::max(quality.maximumAngle, angle);
+        quality.valid = quality.valid && angle <= toleranceDegrees;
+    }
+    return quality;
+}
+
+SeamQuality updateClusterSeams(
+    const ShapeDocument& document,
+    const SurfaceReductionPreparedContext& prepared,
+    const std::vector<Cluster>& clusters,
+    const std::vector<FaceId>& changedFaces,
+    const std::set<EdgeId>& protectedEdges,
+    double toleranceDegrees,
+    std::map<EdgeId, double>& seamAngles) {
+    const auto membership = clusterMembership(clusters);
+    const std::set<FaceId> changed(changedFaces.begin(), changedFaces.end());
+    for (const auto& edge : prepared.internalEdges) {
+        if (protectedEdges.contains(edge.edgeId)) {
+            seamAngles.erase(edge.edgeId);
+            continue;
+        }
+        const auto first = membership.find(edge.firstFace);
+        const auto second = membership.find(edge.secondFace);
+        if (first == membership.end() || second == membership.end() ||
+            first->second == second->second) {
+            seamAngles.erase(edge.edgeId);
+            continue;
+        }
+        if (!changed.contains(edge.firstFace) && !changed.contains(edge.secondFace)) {
+            continue;
+        }
+        auto firstFaces = clusters[static_cast<std::size_t>(first->second)].faces;
+        auto secondFaces = clusters[static_cast<std::size_t>(second->second)].faces;
+        if (secondFaces < firstFaces) std::swap(firstFaces, secondFaces);
+        const auto key = std::make_tuple(edge.edgeId, firstFaces, secondFaces);
+        const auto cached = prepared.seamAngleCache.find(key);
+        if (cached != prepared.seamAngleCache.end()) {
+            seamAngles[edge.edgeId] = cached->second;
+        } else {
+            const auto angle = surfaceAngleAtEdge(
+                document,
+                edge.edgeId,
+                clusterSurface(document, clusters[static_cast<std::size_t>(first->second)]),
+                clusterSurface(document, clusters[static_cast<std::size_t>(second->second)]));
+            prepared.seamAngleCache.emplace(key, angle);
+            seamAngles[edge.edgeId] = angle;
+        }
+    }
+    SeamQuality quality;
+    for (const auto& [edgeId, angle] : seamAngles) {
+        (void)edgeId;
+        quality.maximumAngle = std::max(quality.maximumAngle, angle);
+        quality.valid = quality.valid && angle <= toleranceDegrees;
     }
     return quality;
 }
@@ -654,8 +773,11 @@ FinalValidationResult validateFinalState(
     const ShapeDocument& document,
     const std::vector<FaceId>& selectedFaces,
     const std::vector<Cluster>& clusters,
-    const SurfaceReductionOptions& options) {
+    const SurfaceReductionOptions& options,
+    SurfaceReductionStageTiming& timing) {
     FinalValidationResult result;
+    auto assemblyTimer = std::make_unique<ScopedMilliseconds>(
+        timing.assemblyAndCommercialCadMs);
     const auto featureEdges = FeatureEdgeDetector().detect(
         document.topology(),
         options.smoothSeamToleranceDegrees,
@@ -736,6 +858,8 @@ FinalValidationResult validateFinalState(
     }
 
     const ShapeDocument reducedDocument(repaired.shape, document.sourcePath());
+    assemblyTimer.reset();
+    ScopedMilliseconds topologyTimer(timing.strictTopologyAndStepRoundtripMs);
     StrictTopologyGateInput gateInput;
     gateInput.beforeDocument = &document;
     gateInput.afterDocument = &reducedDocument;
@@ -763,6 +887,8 @@ FinalValidationResult validateFinalState(
 DeterministicSearchResult runDeterministicReductionSearch(
     const ShapeDocument& document,
     const SurfaceReductionRequest& request,
+    const SurfaceReductionExecutionOptions& execution,
+    const SurfaceReductionPreparedContext& prepared,
     const std::vector<FaceId>& faces,
     int targetCount,
     const SearchState& initialState,
@@ -777,6 +903,61 @@ DeterministicSearchResult runDeterministicReductionSearch(
     std::map<std::vector<FaceId>, CachedFit> fitCache;
     std::map<std::vector<FaceId>, CachedFit> stepOnlyFitCache;
     std::map<std::vector<FaceId>, TopoDS_Face> exactCache;
+    SurfaceReductionFitCache persistentCache(execution);
+    const bool persistentCacheEnabled = execution.cacheMode != SurfaceReductionCacheMode::Disabled;
+    const bool persistentCacheReadable = execution.cacheMode == SurfaceReductionCacheMode::ReadWrite ||
+        execution.cacheMode == SurfaceReductionCacheMode::ReadOnlyRequired;
+    const bool persistentCacheWritable = execution.cacheMode == SurfaceReductionCacheMode::ReadWrite ||
+        execution.cacheMode == SurfaceReductionCacheMode::Refresh;
+    const auto recordFitProfile = [&](const std::vector<FaceId>& groupedFaces,
+                                      const CachedFit& cached,
+                                      bool persistentHit) {
+        report.fitProfiles.push_back({
+            groupedFaces,
+            cached.success,
+            mapFailureStage(cached.report.failureStage),
+            cached.report.timing.totalMs,
+            cached.report.kktSolveCount,
+            cached.report.boundaryProjectionCount,
+            cached.report.scanIndexCandidateTriangleCount,
+            persistentHit});
+        report.scanIndexCandidateTriangleCount += cached.report.scanIndexCandidateTriangleCount;
+    };
+    const auto loadPersistent = [&](const std::vector<FaceId>& groupedFaces,
+                                    const RestrictedBSplinePatchFitOptions& options,
+                                    CachedFit& cached) {
+        if (!persistentCacheEnabled || !persistentCacheReadable) return false;
+        const auto cacheKey = persistentCache.key(groupedFaces, options);
+        const auto entry = persistentCache.load(cacheKey);
+        if (!entry.has_value()) {
+            ++report.persistentFitCacheMissCount;
+            if (execution.cacheMode == SurfaceReductionCacheMode::ReadOnlyRequired) {
+                report.persistentFitCacheRequiredMiss = true;
+            }
+            return false;
+        }
+        ++report.persistentFitCacheHitCount;
+        cached.success = entry->success;
+        cached.face = entry->face;
+        cached.surface = entry->surface;
+        cached.report = entry->report;
+        cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+        recordFitProfile(groupedFaces, cached, true);
+        return true;
+    };
+    const auto storePersistent = [&](const std::vector<FaceId>& groupedFaces,
+                                     const RestrictedBSplinePatchFitOptions& options,
+                                     const CachedFit& cached) {
+        if (!persistentCacheWritable) return;
+        SurfaceReductionFitCacheEntry entry;
+        entry.success = cached.success;
+        entry.face = cached.face;
+        entry.surface = cached.surface;
+        entry.report = cached.report;
+        if (persistentCache.store(persistentCache.key(groupedFaces, options), entry)) {
+            ++report.persistentFitCacheWriteCount;
+        }
+    };
     auto stepOnlyFallback = [&](const std::vector<FaceId>& groupedFaces) -> const CachedFit* {
         const auto existing = stepOnlyFitCache.find(groupedFaces);
         if (existing != stepOnlyFitCache.end()) {
@@ -790,19 +971,78 @@ DeterministicSearchResult runDeterministicReductionSearch(
         }
         auto options = fitOptions;
         options.scanReference = nullptr;
+        options.scanRegionIndex = nullptr;
         options.scanReferenceCoverage = ScanReferenceCoverage::None;
-        const auto fit = RestrictedBSplinePatchFitter().fit(
-            document,
-            groupedFaces,
-            options);
-        ++report.fitCacheMissCount;
         CachedFit cached;
-        cached.success = fit.success();
-        cached.face = fit.face;
-        cached.surface = fit.surface;
-        cached.report = fit.report;
         cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+        if (!loadPersistent(groupedFaces, options, cached)) {
+            if (report.persistentFitCacheRequiredMiss) return nullptr;
+            const auto fit = RestrictedBSplinePatchFitter().fit(document, groupedFaces, options);
+            ++report.fitCacheMissCount;
+            cached.success = fit.success();
+            cached.face = fit.face;
+            cached.surface = fit.surface;
+            cached.report = fit.report;
+            report.timing.restrictedFitMs += fit.report.timing.totalMs;
+            recordFitProfile(groupedFaces, cached, false);
+            storePersistent(groupedFaces, options, cached);
+        }
         return &stepOnlyFitCache.emplace(groupedFaces, std::move(cached)).first->second;
+    };
+    const auto prefetchStepOnlyFits = [&](const std::vector<std::vector<FaceId>>& groupedFacesBatch) {
+        if (!hasScanReference || execution.fitWorkerCount <= 1 ||
+            execution.cacheMode == SurfaceReductionCacheMode::ReadOnlyRequired) {
+            return;
+        }
+        auto options = fitOptions;
+        options.scanReference = nullptr;
+        options.scanRegionIndex = nullptr;
+        options.scanReferenceCoverage = ScanReferenceCoverage::None;
+        std::vector<std::vector<FaceId>> computeGroups;
+        for (const auto& groupedFaces : groupedFacesBatch) {
+            const auto primary = fitCache.find(groupedFaces);
+            if (primary == fitCache.end() || primary->second.success ||
+                stepOnlyFitCache.contains(groupedFaces)) {
+                continue;
+            }
+            CachedFit loaded;
+            loaded.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+            if (loadPersistent(groupedFaces, options, loaded)) {
+                stepOnlyFitCache.emplace(groupedFaces, std::move(loaded));
+            } else if (!report.persistentFitCacheRequiredMiss &&
+                       report.fitCacheMissCount + static_cast<int>(computeGroups.size()) <
+                           request.options.maximumRestrictedFitEvaluations) {
+                computeGroups.push_back(groupedFaces);
+            }
+        }
+        if (computeGroups.empty() || report.persistentFitCacheRequiredMiss) return;
+        std::sort(computeGroups.begin(), computeGroups.end());
+        const auto batchStarted = std::chrono::steady_clock::now();
+        std::vector<std::future<RestrictedBSplinePatchFitResult>> futures;
+        futures.reserve(computeGroups.size());
+        for (const auto& groupedFaces : computeGroups) {
+            futures.push_back(std::async(
+                std::launch::async,
+                [&document, options, groupedFaces] {
+                    return RestrictedBSplinePatchFitter().fit(
+                        document, groupedFaces, options);
+                }));
+        }
+        for (std::size_t index = 0; index < futures.size(); ++index) {
+            const auto fit = futures[index].get();
+            CachedFit cached;
+            cached.success = fit.success();
+            cached.face = fit.face;
+            cached.surface = fit.surface;
+            cached.report = fit.report;
+            cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+            ++report.fitCacheMissCount;
+            recordFitProfile(computeGroups[index], cached, false);
+            storePersistent(computeGroups[index], options, cached);
+            stepOnlyFitCache.emplace(computeGroups[index], std::move(cached));
+        }
+        report.timing.restrictedFitMs += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - batchStarted).count();
     };
     bool stopSearch = false;
     while (!frontier.empty() &&
@@ -811,17 +1051,27 @@ DeterministicSearchResult runDeterministicReductionSearch(
         report.expandedStateCount += static_cast<int>(frontier.size());
         std::vector<SearchState> children;
         for (const auto& state : frontier) {
-            const auto queue = buildPairQueue(
-                document,
-                state.clusters,
-                mergeBlockedEdges,
-                std::max(1, std::min(8, request.options.maximumPairExpansionsPerState / 2)));
+            std::vector<PairCandidate> queue;
+            {
+                ScopedMilliseconds timer(report.timing.pairQueueMs);
+                queue = buildPairQueue(
+                    prepared,
+                    state.clusters,
+                    mergeBlockedEdges,
+                    std::max(1, std::min(8, request.options.maximumPairExpansionsPerState / 2)));
+            }
             std::vector<bool> exact(queue.size(), false);
+            std::vector<bool> eligible(queue.size(), true);
             for (std::size_t pairIndex = 0; pairIndex < queue.size(); ++pairIndex) {
                 const auto& pair = queue[pairIndex];
                 const auto groupedFaces = mergedFaces(
                     state.clusters[static_cast<std::size_t>(pair.first)],
                     state.clusters[static_cast<std::size_t>(pair.second)]);
+                if (execution.maximumProposalGroupSize > 0 &&
+                    static_cast<int>(groupedFaces.size()) > execution.maximumProposalGroupSize) {
+                    eligible[pairIndex] = false;
+                    continue;
+                }
                 const auto cachedFit = fitCache.find(groupedFaces);
                 if (cachedFit != fitCache.end()) {
                     exact[pairIndex] = cachedFit->second.success &&
@@ -830,9 +1080,9 @@ DeterministicSearchResult runDeterministicReductionSearch(
                 }
                 auto exactResult = exactCache.find(groupedFaces);
                 if (exactResult == exactCache.end()) {
+                    ScopedMilliseconds timer(report.timing.exactMergeMs);
                     exactResult = exactCache.emplace(
-                        groupedFaces,
-                        tryExactSameDomainGroup(document, groupedFaces)).first;
+                        groupedFaces, tryExactSameDomainGroup(document, groupedFaces)).first;
                 }
                 exact[pairIndex] = !exactResult->second.IsNull();
             }
@@ -840,10 +1090,10 @@ DeterministicSearchResult runDeterministicReductionSearch(
             std::vector<std::size_t> pairOrder;
             pairOrder.reserve(queue.size());
             for (std::size_t index = 0; index < queue.size(); ++index) {
-                if (exact[index]) pairOrder.push_back(index);
+                if (eligible[index] && exact[index]) pairOrder.push_back(index);
             }
             for (std::size_t index = 0; index < queue.size(); ++index) {
-                if (!exact[index]) pairOrder.push_back(index);
+                if (eligible[index] && !exact[index]) pairOrder.push_back(index);
             }
 
             const int completedMergeCount =
@@ -855,7 +1105,10 @@ DeterministicSearchResult runDeterministicReductionSearch(
                 request.options.maximumPairExpansionsPerState - validExpansionQuota;
             std::vector<SearchState> validStateChildren;
             std::vector<SearchState> transitionalStateChildren;
-            for (const auto pairIndex : pairOrder) {
+            for (std::size_t orderPosition = 0;
+                 orderPosition < pairOrder.size();
+                 ++orderPosition) {
+                const auto pairIndex = pairOrder[orderPosition];
                 if (static_cast<int>(validStateChildren.size()) >= validExpansionQuota &&
                     static_cast<int>(validStateChildren.size() + transitionalStateChildren.size()) >=
                         request.options.maximumPairExpansionsPerState) {
@@ -891,17 +1144,89 @@ DeterministicSearchResult runDeterministicReductionSearch(
                         stopSearch = true;
                         break;
                     }
-                    const auto fit = RestrictedBSplinePatchFitter().fit(
-                        document,
-                        groupedFaces,
-                        fitOptions);
-                    ++report.fitCacheMissCount;
-                    cached.success = fit.success();
-                    cached.face = fit.face;
-                    cached.surface = fit.surface;
-                    cached.report = fit.report;
                     cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
-                    fitCache.emplace(groupedFaces, cached);
+                    if (execution.fitWorkerCount > 1 &&
+                        execution.cacheMode != SurfaceReductionCacheMode::ReadOnlyRequired) {
+                        std::vector<std::vector<FaceId>> batchGroups;
+                        for (std::size_t futurePosition = orderPosition;
+                             futurePosition < pairOrder.size() &&
+                             batchGroups.size() < static_cast<std::size_t>(execution.fitWorkerCount);
+                             ++futurePosition) {
+                            const auto futurePairIndex = pairOrder[futurePosition];
+                            if (exact[futurePairIndex]) continue;
+                            const auto& futurePair = queue[futurePairIndex];
+                            const auto futureFaces = mergedFaces(
+                                state.clusters[static_cast<std::size_t>(futurePair.first)],
+                                state.clusters[static_cast<std::size_t>(futurePair.second)]);
+                            if (fitCache.contains(futureFaces) ||
+                                std::find(batchGroups.begin(), batchGroups.end(), futureFaces) != batchGroups.end()) {
+                                continue;
+                            }
+                            batchGroups.push_back(futureFaces);
+                        }
+                        std::sort(batchGroups.begin(), batchGroups.end());
+                        std::vector<std::vector<FaceId>> computeGroups;
+                        for (const auto& batchFaces : batchGroups) {
+                            CachedFit loaded;
+                            loaded.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+                            if (loadPersistent(batchFaces, fitOptions, loaded)) {
+                                fitCache.emplace(batchFaces, std::move(loaded));
+                            } else if (!report.persistentFitCacheRequiredMiss &&
+                                       report.fitCacheMissCount + static_cast<int>(computeGroups.size()) <
+                                           request.options.maximumRestrictedFitEvaluations) {
+                                computeGroups.push_back(batchFaces);
+                            }
+                        }
+                        if (!report.persistentFitCacheRequiredMiss) {
+                            const auto batchStarted = std::chrono::steady_clock::now();
+                            std::vector<std::future<RestrictedBSplinePatchFitResult>> futures;
+                            futures.reserve(computeGroups.size());
+                            for (const auto& batchFaces : computeGroups) {
+                                futures.push_back(std::async(
+                                    std::launch::async,
+                                    [&document, &fitOptions, batchFaces] {
+                                        return RestrictedBSplinePatchFitter().fit(
+                                            document, batchFaces, fitOptions);
+                                    }));
+                            }
+                            for (std::size_t futureIndex = 0; futureIndex < futures.size(); ++futureIndex) {
+                                const auto fit = futures[futureIndex].get();
+                                CachedFit prefetched;
+                                prefetched.success = fit.success();
+                                prefetched.face = fit.face;
+                                prefetched.surface = fit.surface;
+                                prefetched.report = fit.report;
+                                prefetched.method = SurfaceReductionMergeMethod::RestrictedBSpline;
+                                ++report.fitCacheMissCount;
+                                recordFitProfile(computeGroups[futureIndex], prefetched, false);
+                                storePersistent(computeGroups[futureIndex], fitOptions, prefetched);
+                                fitCache.emplace(computeGroups[futureIndex], std::move(prefetched));
+                            }
+                            report.timing.restrictedFitMs += std::chrono::duration<double, std::milli>(
+                                std::chrono::steady_clock::now() - batchStarted).count();
+                            prefetchStepOnlyFits(batchGroups);
+                        }
+                    }
+                    const auto prefetched = fitCache.find(groupedFaces);
+                    if (prefetched != fitCache.end()) {
+                        cached = prefetched->second;
+                    } else if (!loadPersistent(groupedFaces, fitOptions, cached)) {
+                        if (report.persistentFitCacheRequiredMiss) {
+                            stopSearch = true;
+                            break;
+                        }
+                        const auto fit = RestrictedBSplinePatchFitter().fit(
+                            document, groupedFaces, fitOptions);
+                        ++report.fitCacheMissCount;
+                        cached.success = fit.success();
+                        cached.face = fit.face;
+                        cached.surface = fit.surface;
+                        cached.report = fit.report;
+                        report.timing.restrictedFitMs += fit.report.timing.totalMs;
+                        recordFitProfile(groupedFaces, cached, false);
+                        storePersistent(groupedFaces, fitOptions, cached);
+                    }
+                    fitCache.try_emplace(groupedFaces, cached);
                 }
 
                 if ((!cached.success || cached.face.IsNull() || cached.surface.IsNull()) &&
@@ -932,11 +1257,19 @@ DeterministicSearchResult runDeterministicReductionSearch(
                     cached.report,
                     cached.method};
                 candidateClusters.erase(candidateClusters.begin() + pair.second);
-                auto seam = validateAllClusterSeams(
-                    document,
-                    candidateClusters,
-                    nonSmoothSeamEdges,
-                    request.options.smoothSeamToleranceDegrees);
+                auto candidateSeamAngles = state.seamAngles;
+                SeamQuality seam;
+                {
+                    ScopedMilliseconds timer(report.timing.seamValidationMs);
+                    seam = updateClusterSeams(
+                        document,
+                        prepared,
+                        candidateClusters,
+                        groupedFaces,
+                        nonSmoothSeamEdges,
+                        request.options.smoothSeamToleranceDegrees,
+                        candidateSeamAngles);
+                }
                 if (!seam.valid && hasScanReference &&
                     cached.method == SurfaceReductionMergeMethod::RestrictedBSpline &&
                     cached.report.scanReferenceSampleCount > 0) {
@@ -951,21 +1284,31 @@ DeterministicSearchResult runDeterministicReductionSearch(
                             fallback->report,
                             fallback->method};
                         fallbackClusters.erase(fallbackClusters.begin() + pair.second);
-                        const auto fallbackSeam = validateAllClusterSeams(
-                            document,
-                            fallbackClusters,
-                            nonSmoothSeamEdges,
-                            request.options.smoothSeamToleranceDegrees);
+                        auto fallbackSeamAngles = state.seamAngles;
+                        SeamQuality fallbackSeam;
+                        {
+                            ScopedMilliseconds timer(report.timing.seamValidationMs);
+                            fallbackSeam = updateClusterSeams(
+                                document,
+                                prepared,
+                                fallbackClusters,
+                                groupedFaces,
+                                nonSmoothSeamEdges,
+                                request.options.smoothSeamToleranceDegrees,
+                                fallbackSeamAngles);
+                        }
                         if ((fallbackSeam.valid && !seam.valid) ||
                             fallbackSeam.maximumAngle < seam.maximumAngle) {
                             cached = *fallback;
                             candidateClusters = std::move(fallbackClusters);
+                            candidateSeamAngles = std::move(fallbackSeamAngles);
                             seam = fallbackSeam;
                         }
                     }
                 }
                 SearchState child;
                 child.clusters = std::move(candidateClusters);
+                child.seamAngles = std::move(candidateSeamAngles);
                 child.maximumSeamAngle = seam.maximumAngle;
                 if (seam.valid) {
                     validStateChildren.push_back(std::move(child));
@@ -1059,6 +1402,7 @@ DeterministicSearchResult runDeterministicReductionSearch(
 
 FinalCandidateSelection validateReductionSearchCandidates(
     const ShapeDocument& document,
+    const SurfaceReductionPreparedContext& prepared,
     const std::vector<FaceId>& faces,
     const std::vector<SearchState>& candidates,
     const std::set<EdgeId>& nonSmoothSeamEdges,
@@ -1067,11 +1411,12 @@ FinalCandidateSelection validateReductionSearchCandidates(
     std::map<std::vector<FaceId>, SurfaceReductionRejectedGroup>& rejectedGroups) {
     FinalCandidateSelection selection;
     for (const auto& candidateState : candidates) {
-        const auto seam = validateAllClusterSeams(
-            document,
-            candidateState.clusters,
-            nonSmoothSeamEdges,
-            options.smoothSeamToleranceDegrees);
+        SeamQuality seam;
+        seam.maximumAngle = candidateState.maximumSeamAngle;
+        seam.valid = std::all_of(
+            candidateState.seamAngles.begin(),
+            candidateState.seamAngles.end(),
+            [&](const auto& item) { return item.second <= options.smoothSeamToleranceDegrees; });
         if (!seam.valid) {
             std::vector<FaceId> mergedStateFaces;
             for (const auto& cluster : candidateState.clusters) {
@@ -1095,7 +1440,8 @@ FinalCandidateSelection validateReductionSearchCandidates(
             document,
             faces,
             candidateState.clusters,
-            options);
+            options,
+            report.timing);
         if (!validation.passed) {
             if (selection.bestFailure.empty()) {
                 selection.bestFailure = validation.message;
@@ -1149,6 +1495,16 @@ const char* toString(SurfaceReductionMergeMethod method) {
     return "OriginalFace";
 }
 
+const char* toString(SurfaceReductionCacheMode mode) {
+    switch (mode) {
+    case SurfaceReductionCacheMode::Disabled: return "Disabled";
+    case SurfaceReductionCacheMode::ReadWrite: return "ReadWrite";
+    case SurfaceReductionCacheMode::ReadOnlyRequired: return "ReadOnlyRequired";
+    case SurfaceReductionCacheMode::Refresh: return "Refresh";
+    }
+    return "Disabled";
+}
+
 const char* toString(SurfaceReductionFailureStage stage) {
     switch (stage) {
     case SurfaceReductionFailureStage::None:
@@ -1185,10 +1541,13 @@ const char* toString(SurfaceReductionFailureStage stage) {
 
 SurfaceReductionResult SurfaceReductionEngine::reduce(
     const ShapeDocument& document,
-    const SurfaceReductionRequest& request) const {
+    const SurfaceReductionRequest& request,
+    const SurfaceReductionExecutionOptions& execution) const {
     SurfaceReductionResult result;
+    SurfaceReductionReportFinalizer reportFinalizer(result.report);
     result.sourceShape = document.shape();
     result.report.scanReferenceCoverage = request.scanReferenceCoverage;
+    result.report.fitWorkerCount = std::max(1, execution.fitWorkerCount);
     const auto faces = normalizedFaces(request.selectedFaces);
     result.report.inputFaceCount = static_cast<int>(faces.size());
     result.report.outputFaceCount = static_cast<int>(faces.size());
@@ -1213,6 +1572,21 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         result.report.message = "曲面减面选项无效：容差必须为正，目标比例必须在 0 与 1 之间，控制点上限不得小于 16。";
         return result;
     }
+    if (execution.fitWorkerCount < 1 || execution.fitWorkerCount > 64) {
+        result.report.message = "拟合工作线程数必须在 1 到 64 之间。";
+        return result;
+    }
+    if (execution.maximumProposalGroupSize < 0 || execution.maximumProposalGroupSize == 1) {
+        result.report.message = "渐进提案分组上限必须为 0 或至少为 2。";
+        return result;
+    }
+    if (execution.cacheMode != SurfaceReductionCacheMode::Disabled &&
+        (execution.cacheDirectory.empty() || execution.sourceFingerprint.empty() ||
+         execution.algorithmFingerprint.empty() ||
+         (request.scanReferenceStl != nullptr && execution.scanFingerprint.empty()))) {
+        result.report.message = "启用持久拟合缓存时必须提供缓存目录、源 STEP、扫描 STL 和算法指纹。";
+        return result;
+    }
     const bool hasScanReference = request.scanReferenceStl != nullptr;
     if (hasScanReference != (request.scanReferenceCoverage != ScanReferenceCoverage::None) ||
         (hasScanReference && request.scanReferenceStl->empty())) {
@@ -1233,7 +1607,10 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
 
     std::set<EdgeId> mergeBlockedEdges = request.lockedEdges;
     std::set<EdgeId> nonSmoothSeamEdges = request.lockedEdges;
+    SurfaceReductionPreparedContext prepared;
     const std::set<FaceId> selected(faces.begin(), faces.end());
+    {
+    ScopedMilliseconds timer(result.report.timing.topologyPrecomputationMs);
     for (EdgeId edgeId = 0; edgeId < document.topology().edgeCount(); ++edgeId) {
         const auto* adjacency = document.topology().adjacencyForEdge(edgeId);
         if (adjacency == nullptr) {
@@ -1246,6 +1623,13 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
             nonSmoothSeamEdges.insert(edgeId);
         } else if (selectedAdjacent == 2) {
             const double originalAngle = originalFaceAngleAtEdge(document, edgeId);
+            prepared.internalEdges.push_back({
+                edgeId,
+                adjacency->faces[0],
+                adjacency->faces[1],
+                originalAngle,
+                originalCurvatureDifferenceAtEdge(document, edgeId),
+                edgeLength(document.topology().edge(edgeId))});
             if (originalAngle > request.options.normalToleranceDegrees) {
                 mergeBlockedEdges.insert(edgeId);
                 nonSmoothSeamEdges.insert(edgeId);
@@ -1253,6 +1637,7 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
                 nonSmoothSeamEdges.insert(edgeId);
             }
         }
+    }
     }
 
     SearchState initialState;
@@ -1280,10 +1665,29 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
     fitOptions.scanReferenceCoverage = request.scanReferenceCoverage;
     fitOptions.scanReferenceWeight = request.options.scanReferenceWeight;
     fitOptions.maximumScanReferenceDistance = request.options.maximumScanReferenceDistance;
+    if (execution.fitWorkerCount > 1) {
+        ScopedMilliseconds timer(result.report.timing.topologyPrecomputationMs);
+        BRepMesh_IncrementalMesh mesher(
+            document.shape(),
+            std::max(request.options.tolerance3d * 2.0, 0.01),
+            Standard_False,
+            0.2,
+            Standard_False);
+        mesher.Perform();
+    }
+    std::unique_ptr<StlRegionIndex> scanRegionIndex;
+    if (request.scanReferenceStl != nullptr &&
+        request.scanReferenceCoverage == ScanReferenceCoverage::WholeModel) {
+        ScopedMilliseconds timer(result.report.timing.topologyPrecomputationMs);
+        scanRegionIndex = std::make_unique<StlRegionIndex>(*request.scanReferenceStl);
+        fitOptions.scanRegionIndex = scanRegionIndex.get();
+    }
 
     auto search = runDeterministicReductionSearch(
         document,
         request,
+        execution,
+        prepared,
         faces,
         targetCount,
         initialState,
@@ -1293,12 +1697,19 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         result.report);
     auto selection = validateReductionSearchCandidates(
         document,
+        prepared,
         faces,
         search.finalCandidates,
         nonSmoothSeamEdges,
         request.options,
         result.report,
         search.rejectedGroups);
+
+    if (result.report.persistentFitCacheRequiredMiss) {
+        result.report.outcome = SurfaceReductionOutcome::NoAcceptableReduction;
+        result.report.message = "只读缓存回放缺少或损坏了必需的完整局部拟合项。";
+        return result;
+    }
 
     for (const auto& [facesKey, rejected] : search.rejectedGroups) {
         result.report.rejectedGroups.push_back(rejected);

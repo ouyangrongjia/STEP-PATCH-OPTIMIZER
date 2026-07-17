@@ -1,4 +1,5 @@
 #include "stl/StlRegionExtractor.h"
+#include "stl/StlRegionIndex.h"
 
 #include <BRepBndLib.hxx>
 #include <BRepClass_FaceClassifier.hxx>
@@ -478,9 +479,10 @@ double squared_distance_point_triangle(const gp_Pnt& point, const TriangleDistan
 double distance_to_kept_triangles(
     const gp_Pnt& point,
     const std::vector<TriangleDistanceData>& triangles,
-    const std::vector<unsigned char>& kept) {
+    const std::vector<unsigned char>& kept,
+    const std::vector<std::size_t>& activeIndices) {
     auto bestSquared = std::numeric_limits<double>::infinity();
-    for (std::size_t index = 0; index < triangles.size(); ++index) {
+    for (const auto index : activeIndices) {
         if (kept[index] == 0) {
             continue;
         }
@@ -520,8 +522,9 @@ bool connected_to_kept_triangles(
     std::size_t candidateIndex,
     const std::vector<StlTriangle>& triangles,
     const std::vector<unsigned char>& kept,
+    const std::vector<std::size_t>& activeIndices,
     double tolerance) {
-    for (std::size_t index = 0; index < triangles.size(); ++index) {
+    for (const auto index : activeIndices) {
         if (kept[index] == 0) {
             continue;
         }
@@ -553,6 +556,7 @@ BoundaryCoverageSummary evaluate_boundary_loop_coverage(
     const std::vector<BoundarySample>& samples,
     const std::vector<TriangleDistanceData>& triangles,
     const std::vector<unsigned char>& kept,
+    const std::vector<std::size_t>& activeIndices,
     double tolerance) {
     BoundaryCoverageSummary summary;
     summary.sampleCount = static_cast<int>(samples.size());
@@ -562,7 +566,8 @@ BoundaryCoverageSummary evaluate_boundary_loop_coverage(
 
     double totalDistance = 0.0;
     for (const auto& sample : samples) {
-        const auto distance = distance_to_kept_triangles(sample.point, triangles, kept);
+        const auto distance = distance_to_kept_triangles(
+            sample.point, triangles, kept, activeIndices);
         summary.maxDistance = std::max(summary.maxDistance, distance);
         totalDistance += distance;
         if (distance > tolerance) {
@@ -580,17 +585,19 @@ std::size_t closest_repair_triangle(
     const std::vector<TriangleDistanceData>& triangles,
     const std::vector<unsigned char>& kept,
     const std::vector<unsigned char>& repairEligible,
+    const std::vector<std::size_t>& activeIndices,
     const StlBoundingBox& expandedBbox,
     double maxRepairDistance,
     double connectivityTolerance,
     int& orphanCandidateCount) {
     auto bestIndex = triangles.size();
     auto bestSquared = maxRepairDistance * maxRepairDistance;
-    for (std::size_t index = 0; index < triangles.size(); ++index) {
+    for (const auto index : activeIndices) {
         if (kept[index] != 0 || repairEligible[index] == 0 || !intersects(triangles[index].bbox, expandedBbox)) {
             continue;
         }
-        if (!connected_to_kept_triangles(index, sourceTriangles, kept, connectivityTolerance)) {
+        if (!connected_to_kept_triangles(
+                index, sourceTriangles, kept, activeIndices, connectivityTolerance)) {
             ++orphanCandidateCount;
             continue;
         }
@@ -645,7 +652,8 @@ StlRegionExtractResult StlRegionExtractor::extract(
     const ShapeDocument& document,
     const MergeCandidate& candidate,
     const StlMesh& sourceMesh,
-    const StlRegionExtractorOptions& options) const {
+    const StlRegionExtractorOptions& options,
+    const StlRegionIndex* index) const {
     StlCropReport report;
     report.candidate_id = candidate.candidate_id;
     report.source_triangle_count = static_cast<int>(sourceMesh.triangleCount());
@@ -741,13 +749,24 @@ StlRegionExtractResult StlRegionExtractor::extract(
     }
 
     const auto& sourceTriangles = sourceMesh.triangles();
+    std::vector<std::size_t> activeIndices;
+    if (index != nullptr && index->compatible(sourceMesh)) {
+        activeIndices = index->query(report.expanded_bbox);
+    } else {
+        activeIndices.resize(sourceTriangles.size());
+        for (std::size_t triangleIndex = 0; triangleIndex < sourceTriangles.size(); ++triangleIndex) {
+            activeIndices[triangleIndex] = triangleIndex;
+        }
+    }
+    report.spatial_index_candidate_triangle_count = static_cast<int>(activeIndices.size());
+    report.rejected_outside_bbox_count = static_cast<int>(sourceTriangles.size() - activeIndices.size());
     std::vector<unsigned char> kept(sourceTriangles.size(), 0);
     std::vector<unsigned char> rejectedReason(sourceTriangles.size(), 0);
     std::vector<unsigned char> boundaryRepairEligible(sourceTriangles.size(), 0);
     std::vector<TriangleDistanceData> triangleDistanceData;
-    triangleDistanceData.reserve(sourceTriangles.size());
-    for (const auto& triangle : sourceTriangles) {
-        triangleDistanceData.push_back(make_triangle_distance_data(triangle));
+    triangleDistanceData.resize(sourceTriangles.size());
+    for (const auto triangleIndex : activeIndices) {
+        triangleDistanceData[triangleIndex] = make_triangle_distance_data(sourceTriangles[triangleIndex]);
     }
 
     const auto keepTriangle = [&](std::size_t index, StlMesh& localMesh) {
@@ -758,7 +777,7 @@ StlRegionExtractResult StlRegionExtractor::extract(
     };
 
     StlMesh localMesh;
-    for (std::size_t triangleIndex = 0; triangleIndex < sourceTriangles.size(); ++triangleIndex) {
+    for (const auto triangleIndex : activeIndices) {
         const auto& triangle = sourceTriangles[triangleIndex];
         if (!intersects(triangle_bbox(triangle), report.expanded_bbox)) {
             ++report.rejected_outside_bbox_count;
@@ -827,6 +846,7 @@ StlRegionExtractResult StlRegionExtractor::extract(
             cadBoundarySamples,
             triangleDistanceData,
             kept,
+            activeIndices,
             options.boundaryLoopCoverageTolerance);
         report.boundary_loop_missing_point_count_before = before.missingPointCount;
         report.boundary_loop_max_distance_before = before.maxDistance;
@@ -840,7 +860,8 @@ StlRegionExtractResult StlRegionExtractor::extract(
             if (report.boundary_loop_repair_triangle_count >= options.maxBoundaryLoopRepairTriangles) {
                 break;
             }
-            const auto distance = distance_to_kept_triangles(sample.point, triangleDistanceData, kept);
+            const auto distance = distance_to_kept_triangles(
+                sample.point, triangleDistanceData, kept, activeIndices);
             if (distance <= options.boundaryLoopCoverageTolerance) {
                 continue;
             }
@@ -850,6 +871,7 @@ StlRegionExtractResult StlRegionExtractor::extract(
                 triangleDistanceData,
                 kept,
                 boundaryRepairEligible,
+                activeIndices,
                 report.expanded_bbox,
                 maxRepairDistance,
                 options.boundaryLoopConnectivityTolerance,
@@ -872,6 +894,7 @@ StlRegionExtractResult StlRegionExtractor::extract(
             cadBoundarySamples,
             triangleDistanceData,
             kept,
+            activeIndices,
             options.boundaryLoopCoverageTolerance);
         report.boundary_loop_missing_point_count_after = after.missingPointCount;
         report.boundary_loop_max_distance_after = after.maxDistance;

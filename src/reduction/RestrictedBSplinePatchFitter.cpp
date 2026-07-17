@@ -5,6 +5,7 @@
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/BoundaryConstrainedSurfaceRetrim.h"
 #include "stl/StlRegionExtractor.h"
+#include "stl/StlRegionIndex.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -32,6 +33,7 @@
 #include <Eigen/SparseQR>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -43,6 +45,21 @@
 namespace spo {
 
 namespace {
+
+class ScopedMilliseconds {
+public:
+    explicit ScopedMilliseconds(double& target)
+        : target_(target), started_(std::chrono::steady_clock::now()) {}
+
+    ~ScopedMilliseconds() {
+        target_ += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started_).count();
+    }
+
+private:
+    double& target_;
+    std::chrono::steady_clock::time_point started_;
+};
 
 constexpr int degree = 3;
 
@@ -481,7 +498,8 @@ void appendExteriorGuardSamples(
 StlMesh scanPatchForCandidate(
     const ShapeDocument& document,
     const MergeCandidate& candidate,
-    const RestrictedBSplinePatchFitOptions& options) {
+    const RestrictedBSplinePatchFitOptions& options,
+    RestrictedBSplinePatchFitReport& report) {
     if (options.scanReference == nullptr || options.scanReference->empty()) {
         return {};
     }
@@ -495,11 +513,16 @@ StlMesh scanPatchForCandidate(
     cropOptions.mode = StlCropMode::ConservativeBoundaryBand;
     cropOptions.minMargin = std::max(0.1, options.tolerance3d * 4.0);
     cropOptions.boundaryLoopCoverageTolerance = std::max(0.1, options.tolerance3d * 4.0);
+    const auto started = std::chrono::steady_clock::now();
     const auto crop = StlRegionExtractor().extract(
         document,
         candidate,
         *options.scanReference,
-        cropOptions);
+        cropOptions,
+        options.scanRegionIndex);
+    report.timing.scanCropMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    report.scanIndexCandidateTriangleCount = crop.report.spatial_index_candidate_triangle_count;
     return crop.success ? crop.localMesh : StlMesh {};
 }
 
@@ -739,7 +762,9 @@ SurfaceSolveResult solveSurface(
     const std::vector<SourceSample>& boundaryConstraints,
     const std::vector<double>& uInnerKnots,
     const std::vector<double>& vInnerKnots,
-    const RestrictedBSplinePatchFitOptions& options) {
+    const RestrictedBSplinePatchFitOptions& options,
+    std::map<std::vector<int>, std::unique_ptr<
+        Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>>>& symbolicCache) {
     SurfaceSolveResult result;
     if (samples.empty() || boundaryConstraints.empty()) {
         return result;
@@ -885,13 +910,26 @@ SurfaceSolveResult solveSurface(
 
     Eigen::SparseMatrix<double> system(systemSize, systemSize);
     system.setFromTriplets(systemCoefficients.begin(), systemCoefficients.end());
-    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> solver;
-    solver.compute(system);
-    if (solver.info() != Eigen::Success) {
+    system.makeCompressed();
+    std::vector<int> pattern;
+    pattern.reserve(static_cast<std::size_t>(system.outerSize() + system.nonZeros() + 3));
+    pattern.push_back(system.rows());
+    pattern.push_back(system.cols());
+    pattern.push_back(static_cast<int>(system.nonZeros()));
+    pattern.insert(pattern.end(), system.outerIndexPtr(), system.outerIndexPtr() + system.outerSize() + 1);
+    pattern.insert(pattern.end(), system.innerIndexPtr(), system.innerIndexPtr() + system.nonZeros());
+    auto& solver = symbolicCache[pattern];
+    if (!solver) {
+        solver = std::make_unique<
+            Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>>();
+        solver->analyzePattern(system);
+    }
+    solver->factorize(system);
+    if (solver->info() != Eigen::Success) {
         return result;
     }
-    const Eigen::VectorXd solution = solver.solve(systemRhs);
-    if (solver.info() != Eigen::Success || !solution.allFinite()) {
+    const Eigen::VectorXd solution = solver->solve(systemRhs);
+    if (solver->info() != Eigen::Success || !solution.allFinite()) {
         return result;
     }
 
@@ -1149,13 +1187,13 @@ std::pair<double, double> estimateShapeVariation(const std::vector<SourceTriangl
     return {maximumNormalAngle, maximumCurvatureIndicator};
 }
 
-BoundaryHoldoutQuality evaluateBoundaryHoldout(
+std::vector<gp_Pnt> makeBoundaryHoldoutSamples(
     const ShapeDocument& document,
-    const std::vector<EdgeId>& edges,
-    const Handle(Geom_BSplineSurface)& surface) {
-    BoundaryHoldoutQuality quality;
+    const std::vector<EdgeId>& edges) {
+    std::vector<gp_Pnt> samples;
     constexpr int samplesPerEdge = 97;
     constexpr double phase = 0.3819660112501051;
+    samples.reserve(edges.size() * samplesPerEdge);
     for (const auto edgeId : edges) {
         try {
             BRepAdaptor_Curve curve(document.topology().edge(edgeId));
@@ -1164,19 +1202,28 @@ BoundaryHoldoutQuality evaluateBoundaryHoldout(
             for (int index = 0; index < samplesPerEdge; ++index) {
                 const double fraction = (static_cast<double>(index) + phase) /
                     static_cast<double>(samplesPerEdge);
-                const gp_Pnt point = curve.Value(first + (last - first) * fraction);
-                GeomAPI_ProjectPointOnSurf projector(point, surface);
-                ++quality.sampleCount;
-                if (projector.NbPoints() < 1) {
-                    return quality;
-                }
-                if (projector.LowerDistance() >= quality.maximumDistance) {
-                    quality.maximumDistance = projector.LowerDistance();
-                    quality.worstPoint = point;
-                }
+                samples.push_back(curve.Value(first + (last - first) * fraction));
             }
         } catch (...) {
+            return {};
+        }
+    }
+    return samples;
+}
+
+BoundaryHoldoutQuality evaluateBoundaryHoldout(
+    const std::vector<gp_Pnt>& samples,
+    const Handle(Geom_BSplineSurface)& surface) {
+    BoundaryHoldoutQuality quality;
+    for (const auto& point : samples) {
+        GeomAPI_ProjectPointOnSurf projector(point, surface);
+        ++quality.sampleCount;
+        if (projector.NbPoints() < 1) {
             return quality;
+        }
+        if (projector.LowerDistance() >= quality.maximumDistance) {
+            quality.maximumDistance = projector.LowerDistance();
+            quality.worstPoint = point;
         }
     }
     quality.valid = quality.sampleCount > 0;
@@ -1300,6 +1347,7 @@ struct RestrictedBSplineFitPreparedData {
     std::vector<SourceSample> holdout;
     std::vector<SourceSample> boundaryConstraints;
     std::vector<SourceSample> fittingSamples;
+    std::vector<gp_Pnt> boundaryHoldoutPoints;
     Handle(Geom_Surface) supportSurface;
     std::shared_ptr<const StlHybridParameterization> parameterization;
     double minU = 0.0;
@@ -1319,6 +1367,7 @@ bool prepareRestrictedBSplineFitData(
     const RestrictedBSplinePatchFitOptions& options,
     RestrictedBSplinePatchFitResult& result,
     RestrictedBSplineFitPreparedData& prepared) {
+    const auto topologyStarted = std::chrono::steady_clock::now();
     const auto candidate = makeCandidate(document, faces);
     const auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
     if (!boundary.valid) {
@@ -1350,6 +1399,15 @@ bool prepareRestrictedBSplineFitData(
         result.report.message = "无法从原始面的局部 UV 三角细分生成精确采样。";
         return false;
     }
+    const auto boundaryHoldoutPoints = makeBoundaryHoldoutSamples(
+        document, candidate.boundary_edges);
+    if (boundaryHoldoutPoints.empty()) {
+        result.report.message = "无法生成原始边界终验采样点。";
+        return false;
+    }
+    result.report.timing.topologyPreparationMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - topologyStarted).count();
+    const auto samplingStarted = std::chrono::steady_clock::now();
     const auto [normalVariationDegrees, curvatureIndicator] = estimateShapeVariation(triangles);
     const int totalSampleBudget = std::clamp(
         static_cast<int>(std::ceil(
@@ -1375,7 +1433,10 @@ bool prepareRestrictedBSplineFitData(
     result.report.trainingSampleCount = static_cast<int>(training.size());
     result.report.selectionSampleCount = static_cast<int>(selection.size());
     result.report.holdoutSampleCount = static_cast<int>(holdout.size());
+    result.report.timing.samplingMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - samplingStarted).count();
 
+    const auto parameterizationStarted = std::chrono::steady_clock::now();
     const auto supportSurface = BRep_Tool::Surface(document.topology().face(supportFaceId));
     std::string parameterError;
     int orientationSign = 0;
@@ -1459,6 +1520,8 @@ bool prepareRestrictedBSplineFitData(
         result.report.message = parameterError.empty() ? "参数初始化失败。" : parameterError;
         return false;
     }
+    result.report.timing.parameterizationMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - parameterizationStarted).count();
 
     std::vector<SourceSample> boundaryConstraints;
     std::vector<SourceSample> fittingSamples;
@@ -1484,7 +1547,8 @@ bool prepareRestrictedBSplineFitData(
     }
 
     if (options.scanReference != nullptr && options.scanReferenceWeight > 0.0) {
-        const auto scanPatch = scanPatchForCandidate(document, candidate, options);
+        const auto scanPatch = scanPatchForCandidate(document, candidate, options, result.report);
+        const auto scanSamplingStarted = std::chrono::steady_clock::now();
         auto scanSamples = sampleScanReference(
             scanPatch,
             std::min(128, trainingInteriorCount),
@@ -1496,6 +1560,8 @@ bool prepareRestrictedBSplineFitData(
             maxV,
             options,
             result.report.maxStepToScanDistance);
+        result.report.timing.samplingMs += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - scanSamplingStarted).count();
         result.report.scanReferenceSampleCount = static_cast<int>(scanSamples.size());
         fittingSamples.insert(fittingSamples.end(), scanSamples.begin(), scanSamples.end());
     }
@@ -1525,6 +1591,7 @@ bool prepareRestrictedBSplineFitData(
     prepared.holdout = std::move(holdout);
     prepared.boundaryConstraints = std::move(boundaryConstraints);
     prepared.fittingSamples = std::move(fittingSamples);
+    prepared.boundaryHoldoutPoints = boundaryHoldoutPoints;
     prepared.supportSurface = supportSurface;
     prepared.parameterization = std::move(parameterization);
     prepared.minU = minU;
@@ -1587,6 +1654,16 @@ bool solveRestrictedBSplineFitModel(
     Handle(Geom_BSplineSurface) acceptedSurface;
     ModelQuality selectionQuality;
     bool modelJacobianValid = false;
+    std::map<std::vector<int>, std::unique_ptr<
+        Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>>>> symbolicCache;
+    const auto timedSolve = [&](const std::vector<SourceSample>& samples,
+                                const std::vector<SourceSample>& constraints,
+                                const std::vector<double>& uKnots,
+                                const std::vector<double>& vKnots) {
+        ScopedMilliseconds timer(result.report.timing.kktSolveMs);
+        ++result.report.kktSolveCount;
+        return solveSurface(samples, constraints, uKnots, vKnots, options, symbolicCache);
+    };
     auto solveWithBoundaryRefinement = [&](
         const std::vector<SourceSample>& softSamples,
         std::vector<SourceSample>& constraints,
@@ -1594,12 +1671,7 @@ bool solveRestrictedBSplineFitModel(
         const std::vector<double>& currentVKnots) {
         SurfaceSolveResult solved;
         while (true) {
-            solved = solveSurface(
-                softSamples,
-                constraints,
-                currentUKnots,
-                currentVKnots,
-                options);
+            solved = timedSolve(softSamples, constraints, currentUKnots, currentVKnots);
             result.report.maxBoundaryConstraintResidual = std::max(
                 result.report.maxBoundaryConstraintResidual,
                 solved.maximumConstraintResidual);
@@ -1608,10 +1680,14 @@ bool solveRestrictedBSplineFitModel(
                     RestrictedBSplinePatchFitFailureStage::BoundaryConstraints;
                 return solved;
             }
-            const auto boundaryQuality = evaluateBoundaryHoldout(
-                document,
-                candidate.boundary_edges,
-                solved.surface);
+            BoundaryHoldoutQuality boundaryQuality;
+            {
+                ScopedMilliseconds timer(result.report.timing.boundaryRefinementMs);
+                boundaryQuality = evaluateBoundaryHoldout(
+                    prepared.boundaryHoldoutPoints,
+                    solved.surface);
+            }
+            result.report.boundaryProjectionCount += boundaryQuality.sampleCount;
             result.report.boundaryHoldoutSampleCount = boundaryQuality.sampleCount;
             result.report.maxBoundaryDistance = std::max(
                 result.report.maxBoundaryDistance,
@@ -1679,11 +1755,16 @@ bool solveRestrictedBSplineFitModel(
             iterationReport.iteration = iteration + 1;
             iterationReport.objectiveBefore = solved.objective;
             std::vector<std::array<double, 2>> projectedParameters;
-            if (!reprojectTrainingSamples(
+            bool projectionSucceeded = false;
+            {
+                ScopedMilliseconds timer(result.report.timing.uvProjectionMs);
+                projectionSucceeded = reprojectTrainingSamples(
                     currentSamples,
                     surface,
                     projectedParameters,
-                    iterationReport.maximumShift)) {
+                    iterationReport.maximumShift);
+            }
+            if (!projectionSucceeded) {
                 result.report.failureStage =
                     RestrictedBSplinePatchFitFailureStage::UvIteration;
                 result.report.message = "更新曲面后内部样本重新投影失败。";
@@ -1710,12 +1791,8 @@ bool solveRestrictedBSplineFitModel(
                     parametersOverlap(trialSamples, {}, {}, tolerance)) {
                     continue;
                 }
-                const auto trial = solveSurface(
-                    trialSamples,
-                    boundaryConstraints,
-                    uInnerKnots,
-                    vInnerKnots,
-                    options);
+                const auto trial = timedSolve(
+                    trialSamples, boundaryConstraints, uInnerKnots, vInnerKnots);
                 double observedJacobian = 0.0;
                 if (trial.surface.IsNull() ||
                     !(trial.objective + 1.0e-14 < solved.objective) ||
@@ -1888,12 +1965,16 @@ bool validateRestrictedBSplineFitResult(
     retrimOptions.samplesPerEdge = 16;
     retrimOptions.projectionTolerance = retrimTolerance;
     retrimOptions.rebuildBoundaryPcurves = true;
-    const auto retrim = BoundaryConstrainedSurfaceRetrim().retrim(
-        document,
-        boundary,
-        {supportFaceBuilder.Face()},
-        document.topology().face(supportFaceId),
-        retrimOptions);
+    BoundaryConstrainedSurfaceRetrimResult retrim;
+    {
+        ScopedMilliseconds timer(result.report.timing.retrimMs);
+        retrim = BoundaryConstrainedSurfaceRetrim().retrim(
+            document,
+            boundary,
+            {supportFaceBuilder.Face()},
+            document.topology().face(supportFaceId),
+            retrimOptions);
+    }
     if (!retrim.success || retrim.replacementFace.IsNull()) {
         result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Retrim;
         result.report.message = "原始边界无法可靠裁剪到拟合支撑曲面：" + retrim.message +
@@ -1911,10 +1992,14 @@ bool validateRestrictedBSplineFitResult(
     result.report.maxBoundaryDistance = std::max(
         retrim.maxProjectionDistance,
         retrim.surfaceCoverageMaxProjectionDistance);
-    const auto boundaryHoldout = evaluateBoundaryHoldout(
-        document,
-        candidate.boundary_edges,
-        acceptedSurface);
+    BoundaryHoldoutQuality boundaryHoldout;
+    {
+        ScopedMilliseconds timer(result.report.timing.boundaryRefinementMs);
+        boundaryHoldout = evaluateBoundaryHoldout(
+            prepared.boundaryHoldoutPoints,
+            acceptedSurface);
+    }
+    result.report.boundaryProjectionCount += boundaryHoldout.sampleCount;
     result.report.boundaryHoldoutSampleCount = boundaryHoldout.sampleCount;
     if (!boundaryHoldout.valid || boundaryHoldout.maximumDistance > boundaryTolerance) {
         result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BoundaryHoldout;
@@ -1925,8 +2010,11 @@ bool validateRestrictedBSplineFitResult(
         result.report.maxBoundaryDistance,
         boundaryHoldout.maximumDistance);
 
+    const auto brepStarted = std::chrono::steady_clock::now();
     BRepCheck_Analyzer brepAnalyzer(retrim.replacementFace, Standard_True);
     result.report.brepCheckValid = brepAnalyzer.IsValid();
+    result.report.timing.brepCheckMs += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - brepStarted).count();
     if (!result.report.brepCheckValid) {
         result.report.failureStage = RestrictedBSplinePatchFitFailureStage::BrepCheck;
         result.report.message = "裁剪后的 B-rep 面未通过 BRepCheck，状态=" +
@@ -1951,6 +2039,7 @@ RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
     const std::vector<FaceId>& sourceFaces,
     const RestrictedBSplinePatchFitOptions& options) const {
     RestrictedBSplinePatchFitResult result;
+    ScopedMilliseconds totalTimer(result.report.timing.totalMs);
     result.report.failureStage = RestrictedBSplinePatchFitFailureStage::Parameterization;
     result.report.scanReferenceCoverage = options.scanReferenceCoverage;
     if (!document.hasShape() || sourceFaces.size() < 2) {
@@ -1980,13 +2069,15 @@ RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
 
     try {
         RestrictedBSplineFitPreparedData prepared;
-        if (!prepareRestrictedBSplineFitData(
-                document,
-                faces,
-                options,
-                result,
-                prepared)) {
-            return result;
+        {
+            if (!prepareRestrictedBSplineFitData(
+                    document,
+                    faces,
+                    options,
+                    result,
+                    prepared)) {
+                return result;
+            }
         }
 
         RestrictedBSplineFitModelResult model;
@@ -1999,12 +2090,15 @@ RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
             return result;
         }
 
-        validateRestrictedBSplineFitResult(
-            document,
-            options,
-            prepared,
-            model,
-            result);
+        {
+            ScopedMilliseconds timer(result.report.timing.validationMs);
+            validateRestrictedBSplineFitResult(
+                document,
+                options,
+                prepared,
+                model,
+                result);
+        }
         return result;
     } catch (const Standard_Failure& error) {
         const auto* message = error.GetMessageString();

@@ -12,6 +12,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <set>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,6 +32,26 @@ enum class SurfaceReductionMergeMethod {
     OriginalFace,
     ExactSameDomain,
     RestrictedBSpline
+};
+
+enum class SurfaceReductionCacheMode {
+    Disabled,
+    ReadWrite,
+    ReadOnlyRequired,
+    Refresh
+};
+
+const char* toString(SurfaceReductionCacheMode mode);
+
+struct SurfaceReductionExecutionOptions {
+    SurfaceReductionCacheMode cacheMode = SurfaceReductionCacheMode::Disabled;
+    std::filesystem::path cacheDirectory = "data/cache/surface-reduction/v1";
+    std::string sourceFingerprint;
+    std::string scanFingerprint;
+    std::string algorithmFingerprint;
+    int fitWorkerCount = 1;
+    int maximumProposalGroupSize = 0;
+    bool detailedTiming = false;
 };
 
 const char* toString(SurfaceReductionMergeMethod method);
@@ -92,6 +113,28 @@ struct SurfaceReductionGroupReport {
     RestrictedBSplinePatchFitReport fit;
 };
 
+struct SurfaceReductionStageTiming {
+    double topologyPrecomputationMs = 0.0;
+    double pairQueueMs = 0.0;
+    double exactMergeMs = 0.0;
+    double restrictedFitMs = 0.0;
+    double seamValidationMs = 0.0;
+    double assemblyAndCommercialCadMs = 0.0;
+    double strictTopologyAndStepRoundtripMs = 0.0;
+    double totalMs = 0.0;
+};
+
+struct SurfaceReductionFitProfile {
+    std::vector<FaceId> faces;
+    bool success = false;
+    SurfaceReductionFailureStage failureStage = SurfaceReductionFailureStage::None;
+    double totalMs = 0.0;
+    int solveCount = 0;
+    int boundaryProjectionCount = 0;
+    int scanIndexCandidateTriangleCount = 0;
+    bool persistentCacheHit = false;
+};
+
 struct SurfaceReductionReport {
     SurfaceReductionOutcome outcome = SurfaceReductionOutcome::InvalidSelection;
     int inputFaceCount = 0;
@@ -111,6 +154,16 @@ struct SurfaceReductionReport {
     int deduplicatedStateCount = 0;
     int fitCacheHitCount = 0;
     int fitCacheMissCount = 0;
+    int persistentFitCacheHitCount = 0;
+    int persistentFitCacheMissCount = 0;
+    int persistentFitCacheWriteCount = 0;
+    bool persistentFitCacheRequiredMiss = false;
+    int fitWorkerCount = 1;
+    int scanIndexCandidateTriangleCount = 0;
+    double fitDurationP50Ms = 0.0;
+    double fitDurationP95Ms = 0.0;
+    double fitDurationP99Ms = 0.0;
+    SurfaceReductionStageTiming timing;
     bool searchBudgetExhausted = false;
     bool stepParameterizationUsed = false;
     ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
@@ -120,6 +173,7 @@ struct SurfaceReductionReport {
     std::vector<SurfaceReductionGroupReport> groupReports;
     std::vector<SurfaceReductionRejectedGroup> rejectedGroups;
     std::vector<CommercialCadQualityGateReport> commercialCadReports;
+    std::vector<SurfaceReductionFitProfile> fitProfiles;
     StrictTopologyGateReport topologyReport;
     std::string message;
 };
@@ -147,7 +201,8 @@ class SurfaceReductionEngine {
 public:
     SurfaceReductionResult reduce(
         const ShapeDocument& document,
-        const SurfaceReductionRequest& request) const;
+        const SurfaceReductionRequest& request,
+        const SurfaceReductionExecutionOptions& execution = {}) const;
 };
 
 }

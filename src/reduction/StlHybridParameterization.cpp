@@ -27,6 +27,23 @@ struct StlHybridParameterization::Triangle {
     std::array<std::size_t, 3> vertices {};
 };
 
+struct StlHybridParameterization::Bounds3d {
+    double minX = 0.0;
+    double minY = 0.0;
+    double minZ = 0.0;
+    double maxX = 0.0;
+    double maxY = 0.0;
+    double maxZ = 0.0;
+};
+
+struct StlHybridParameterization::BvhNode {
+    Bounds3d bounds;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::size_t left = std::numeric_limits<std::size_t>::max();
+    std::size_t right = std::numeric_limits<std::size_t>::max();
+};
+
 namespace {
 
 using Edge = std::pair<std::size_t, std::size_t>;
@@ -520,15 +537,17 @@ std::shared_ptr<const StlHybridParameterization> StlHybridParameterization::buil
         return {};
     }
 
+    result->buildSpatialIndices();
     report.success = true;
     report.message = "裁剪 STL 单图调和参数化已建立。";
     return result;
 }
 
-StlHybridProjection StlHybridParameterization::project(const gp_Pnt& point) const {
+StlHybridProjection StlHybridParameterization::projectBruteForceForTesting(const gp_Pnt& point) const {
     StlHybridProjection result;
     double bestSquaredDistance = std::numeric_limits<double>::infinity();
-    for (const auto& triangle : triangles_) {
+    for (std::size_t triangleIndex = 0; triangleIndex < triangles_.size(); ++triangleIndex) {
+        const auto& triangle = triangles_[triangleIndex];
         const auto closest = closestPointOnTriangle(
             point,
             vertices_[triangle.vertices[0]],
@@ -562,7 +581,10 @@ StlHybridProjection StlHybridParameterization::project(const gp_Pnt& point) cons
     return result;
 }
 
-bool StlHybridParameterization::contains(double u, double v, double tolerance) const {
+bool StlHybridParameterization::containsBruteForceForTesting(
+    double u,
+    double v,
+    double tolerance) const {
     for (const auto& triangle : triangles_) {
         const auto& first = parameters_[triangle.vertices[0]];
         const auto& second = parameters_[triangle.vertices[1]];
@@ -582,6 +604,222 @@ bool StlHybridParameterization::contains(double u, double v, double tolerance) c
         const double thirdWeight = 1.0 - firstWeight - secondWeight;
         if (firstWeight >= -tolerance && secondWeight >= -tolerance &&
             thirdWeight >= -tolerance) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void StlHybridParameterization::buildSpatialIndices() {
+    triangleBounds_.clear();
+    triangleBounds_.reserve(triangles_.size());
+    bvhOrder_.resize(triangles_.size());
+    for (std::size_t index = 0; index < triangles_.size(); ++index) {
+        bvhOrder_[index] = index;
+        const auto& triangle = triangles_[index];
+        const auto& first = vertices_[triangle.vertices[0]];
+        const auto& second = vertices_[triangle.vertices[1]];
+        const auto& third = vertices_[triangle.vertices[2]];
+        triangleBounds_.push_back({
+            std::min({first.X(), second.X(), third.X()}),
+            std::min({first.Y(), second.Y(), third.Y()}),
+            std::min({first.Z(), second.Z(), third.Z()}),
+            std::max({first.X(), second.X(), third.X()}),
+            std::max({first.Y(), second.Y(), third.Y()}),
+            std::max({first.Z(), second.Z(), third.Z()})});
+    }
+    bvhNodes_.clear();
+    bvhNodes_.reserve(triangles_.size() * 2);
+    if (!triangles_.empty()) {
+        buildBvhNode(0, triangles_.size());
+    }
+
+    uvGrid_.assign(
+        static_cast<std::size_t>(uvGridResolution_ * uvGridResolution_), {});
+    const auto cell = [&](double value) {
+        return std::clamp(
+            static_cast<int>(std::floor(value * uvGridResolution_)),
+            0,
+            uvGridResolution_ - 1);
+    };
+    for (std::size_t triangleIndex = 0; triangleIndex < triangles_.size(); ++triangleIndex) {
+        const auto& triangle = triangles_[triangleIndex];
+        const auto& first = parameters_[triangle.vertices[0]];
+        const auto& second = parameters_[triangle.vertices[1]];
+        const auto& third = parameters_[triangle.vertices[2]];
+        const int minX = cell(std::min({first[0], second[0], third[0]}));
+        const int maxX = cell(std::max({first[0], second[0], third[0]}));
+        const int minY = cell(std::min({first[1], second[1], third[1]}));
+        const int maxY = cell(std::max({first[1], second[1], third[1]}));
+        for (int y = minY; y <= maxY; ++y) {
+            for (int x = minX; x <= maxX; ++x) {
+                uvGrid_[static_cast<std::size_t>(y * uvGridResolution_ + x)].push_back(triangleIndex);
+            }
+        }
+    }
+}
+
+std::size_t StlHybridParameterization::buildBvhNode(std::size_t begin, std::size_t end) {
+    Bounds3d bounds {
+        std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity()};
+    for (std::size_t offset = begin; offset < end; ++offset) {
+        const auto& item = triangleBounds_[bvhOrder_[offset]];
+        bounds.minX = std::min(bounds.minX, item.minX);
+        bounds.minY = std::min(bounds.minY, item.minY);
+        bounds.minZ = std::min(bounds.minZ, item.minZ);
+        bounds.maxX = std::max(bounds.maxX, item.maxX);
+        bounds.maxY = std::max(bounds.maxY, item.maxY);
+        bounds.maxZ = std::max(bounds.maxZ, item.maxZ);
+    }
+    const std::size_t nodeIndex = bvhNodes_.size();
+    bvhNodes_.push_back({bounds, begin, end});
+    if (end - begin <= 8) {
+        std::sort(bvhOrder_.begin() + static_cast<std::ptrdiff_t>(begin),
+                  bvhOrder_.begin() + static_cast<std::ptrdiff_t>(end));
+        return nodeIndex;
+    }
+    const std::array<double, 3> extents {
+        bounds.maxX - bounds.minX,
+        bounds.maxY - bounds.minY,
+        bounds.maxZ - bounds.minZ};
+    const int axis = static_cast<int>(
+        std::distance(extents.begin(), std::max_element(extents.begin(), extents.end())));
+    const auto center = [&](std::size_t triangleIndex) {
+        const auto& item = triangleBounds_[triangleIndex];
+        if (axis == 0) return item.minX + item.maxX;
+        if (axis == 1) return item.minY + item.maxY;
+        return item.minZ + item.maxZ;
+    };
+    std::stable_sort(
+        bvhOrder_.begin() + static_cast<std::ptrdiff_t>(begin),
+        bvhOrder_.begin() + static_cast<std::ptrdiff_t>(end),
+        [&](std::size_t lhs, std::size_t rhs) {
+            return std::make_pair(center(lhs), lhs) < std::make_pair(center(rhs), rhs);
+        });
+    const auto middle = begin + (end - begin) / 2;
+    const auto left = buildBvhNode(begin, middle);
+    const auto right = buildBvhNode(middle, end);
+    bvhNodes_[nodeIndex].left = left;
+    bvhNodes_[nodeIndex].right = right;
+    return nodeIndex;
+}
+
+StlHybridProjection StlHybridParameterization::project(const gp_Pnt& point) const {
+    if (bvhNodes_.empty()) {
+        return {};
+    }
+    const auto distanceToBounds = [&](const Bounds3d& bounds) {
+        const auto axisDistance = [](double value, double minimum, double maximum) {
+            if (value < minimum) return minimum - value;
+            if (value > maximum) return value - maximum;
+            return 0.0;
+        };
+        const auto dx = axisDistance(point.X(), bounds.minX, bounds.maxX);
+        const auto dy = axisDistance(point.Y(), bounds.minY, bounds.maxY);
+        const auto dz = axisDistance(point.Z(), bounds.minZ, bounds.maxZ);
+        return dx * dx + dy * dy + dz * dz;
+    };
+    using Pending = std::pair<double, std::size_t>;
+    std::priority_queue<Pending, std::vector<Pending>, std::greater<Pending>> pending;
+    pending.push({distanceToBounds(bvhNodes_.front().bounds), 0});
+    StlHybridProjection result;
+    double bestSquaredDistance = std::numeric_limits<double>::infinity();
+    std::size_t bestTriangle = std::numeric_limits<std::size_t>::max();
+    while (!pending.empty()) {
+        const auto [lowerBound, nodeIndex] = pending.top();
+        pending.pop();
+        if (lowerBound > bestSquaredDistance) {
+            break;
+        }
+        const auto& node = bvhNodes_[nodeIndex];
+        if (node.left != std::numeric_limits<std::size_t>::max()) {
+            const auto leftDistance = distanceToBounds(bvhNodes_[node.left].bounds);
+            const auto rightDistance = distanceToBounds(bvhNodes_[node.right].bounds);
+            if (leftDistance <= bestSquaredDistance) pending.push({leftDistance, node.left});
+            if (rightDistance <= bestSquaredDistance) pending.push({rightDistance, node.right});
+            continue;
+        }
+        for (std::size_t offset = node.begin; offset < node.end; ++offset) {
+            const auto triangleIndex = bvhOrder_[offset];
+            const auto& triangle = triangles_[triangleIndex];
+            const auto closest = closestPointOnTriangle(
+                point,
+                vertices_[triangle.vertices[0]],
+                vertices_[triangle.vertices[1]],
+                vertices_[triangle.vertices[2]]);
+            if (!closest.valid || closest.squaredDistance > bestSquaredDistance ||
+                (closest.squaredDistance == bestSquaredDistance && triangleIndex >= bestTriangle)) {
+                continue;
+            }
+            gp_Vec normal(vertices_[triangle.vertices[0]], vertices_[triangle.vertices[1]]);
+            normal.Cross(gp_Vec(vertices_[triangle.vertices[0]], vertices_[triangle.vertices[2]]));
+            if (normal.SquareMagnitude() <= Precision::SquareConfusion()) {
+                continue;
+            }
+            normal.Normalize();
+            const auto& first = parameters_[triangle.vertices[0]];
+            const auto& second = parameters_[triangle.vertices[1]];
+            const auto& third = parameters_[triangle.vertices[2]];
+            result.valid = true;
+            result.u = closest.barycentric[0] * first[0] +
+                closest.barycentric[1] * second[0] + closest.barycentric[2] * third[0];
+            result.v = closest.barycentric[0] * first[1] +
+                closest.barycentric[1] * second[1] + closest.barycentric[2] * third[1];
+            result.referencePoint = closest.point;
+            result.referenceNormal = normal;
+            bestSquaredDistance = closest.squaredDistance;
+            bestTriangle = triangleIndex;
+        }
+    }
+    result.distance = result.valid ? std::sqrt(bestSquaredDistance) : 0.0;
+    return result;
+}
+
+bool StlHybridParameterization::contains(double u, double v, double tolerance) const {
+    if (uvGrid_.empty()) {
+        return false;
+    }
+    const auto cell = [&](double value) {
+        return std::clamp(
+            static_cast<int>(std::floor(value * uvGridResolution_)),
+            0,
+            uvGridResolution_ - 1);
+    };
+    const int minX = cell(u - tolerance);
+    const int maxX = cell(u + tolerance);
+    const int minY = cell(v - tolerance);
+    const int maxY = cell(v + tolerance);
+    std::vector<std::size_t> candidates;
+    for (int y = minY; y <= maxY; ++y) {
+        for (int x = minX; x <= maxX; ++x) {
+            const auto& bucket = uvGrid_[static_cast<std::size_t>(y * uvGridResolution_ + x)];
+            candidates.insert(candidates.end(), bucket.begin(), bucket.end());
+        }
+    }
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    for (const auto triangleIndex : candidates) {
+        const auto& triangle = triangles_[triangleIndex];
+        const auto& first = parameters_[triangle.vertices[0]];
+        const auto& second = parameters_[triangle.vertices[1]];
+        const auto& third = parameters_[triangle.vertices[2]];
+        const double denominator =
+            (second[1] - third[1]) * (first[0] - third[0]) +
+            (third[0] - second[0]) * (first[1] - third[1]);
+        if (std::abs(denominator) <= 1.0e-20) continue;
+        const double firstWeight =
+            ((second[1] - third[1]) * (u - third[0]) +
+             (third[0] - second[0]) * (v - third[1])) / denominator;
+        const double secondWeight =
+            ((third[1] - first[1]) * (u - third[0]) +
+             (first[0] - third[0]) * (v - third[1])) / denominator;
+        const double thirdWeight = 1.0 - firstWeight - secondWeight;
+        if (firstWeight >= -tolerance && secondWeight >= -tolerance && thirdWeight >= -tolerance) {
             return true;
         }
     }

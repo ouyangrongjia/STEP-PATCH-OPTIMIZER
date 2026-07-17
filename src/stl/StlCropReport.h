@@ -14,6 +14,7 @@ struct StlCropReport {
 
     int candidate_id = -1;
     int source_triangle_count = 0;
+    int spatial_index_candidate_triangle_count = 0;
     int output_triangle_count = 0;
     int centroid_keep_triangle_count = 0;
     int vertex_keep_triangle_count = 0;

@@ -64,6 +64,7 @@ add_library(spo_core STATIC
     src/merge/RegionBoundaryAnalyzer.cpp
     src/merge/SameDomainUnifier.cpp
     src/stl/StlMesh.cpp
+    src/stl/StlRegionIndex.cpp
     src/stl/StlRegionExtractor.cpp
     src/stl/StpSampledFittingMeshBuilder.cpp
     src/stl/StlCutChainCutter.cpp
@@ -71,6 +72,7 @@ add_library(spo_core STATIC
     src/merge/SurfaceRefitter.cpp
     src/reduction/StlHybridParameterization.cpp
     src/reduction/RestrictedBSplinePatchFitter.cpp
+    src/reduction/SurfaceReductionFitCache.cpp
     src/reduction/SurfaceReductionEngine.cpp
     src/patch/PatchImportService.cpp
     src/patch/PatchArtifactLocator.cpp
