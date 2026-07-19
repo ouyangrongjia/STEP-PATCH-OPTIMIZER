@@ -190,8 +190,9 @@ StlCandidateCropResult AppController::cropStlForCandidateData(
 
 SurfaceReductionResult AppController::reduceSelectedFacesData(
     const ShapeDocument& document,
-    const SurfaceReductionRequest& request) {
-    return SurfaceReductionEngine().reduce(document, request);
+    const SurfaceReductionRequest& request,
+    const SurfaceReductionExecutionOptions& execution) {
+    return SurfaceReductionEngine().reduce(document, request, execution);
 }
 
 void AppController::setCurrentSurfaceReductionPreview(SurfaceReductionResult result) {

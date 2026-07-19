@@ -450,6 +450,28 @@ void test_gui_exposes_candidate_surface_over_cover_switch() {
     assert(source.find("useStpSupportCollarAction_->isChecked()") != std::string::npos);
 }
 
+void test_gui_uses_native_surface_reduction_as_primary_fitting_workflow() {
+    const auto root = source_root();
+    const auto state = read_text_file(root / "src" / "app" / "MainWindowWorkflowState.h");
+    const auto header = read_text_file(root / "src" / "app" / "MainWindow.h");
+    const auto source = read_text_file(root / "src" / "app" / "MainWindow.cpp");
+
+    assert(state.find("enum class SurfaceReductionInputMode") != std::string::npos);
+    assert(state.find("SurfaceReductionInputMode::StepBrepOnly") != std::string::npos);
+    assert(header.find("surfaceReductionStepOnlyAction_") != std::string::npos);
+    assert(header.find("surfaceReductionScanReferenceAction_") != std::string::npos);
+    assert(source.find("仅 STEP B-rep") != std::string::npos);
+    assert(source.find("STEP B-rep + 扫描 STL 软参考") != std::string::npos);
+    assert(source.find("menuBar()->addMenu(\"曲面减面\")") != std::string::npos);
+    assert(source.find("addMenuButton(\"曲面减面\", reductionToolMenu)") != std::string::npos);
+    assert(source.find("Geomagic 后备（旧流程）") != std::string::npos);
+    assert(source.find("addMenuButton(\"Patch\"") == std::string::npos);
+    assert(source.find("execution.fitWorkerCount = 4") != std::string::npos);
+    assert(source.find("reduceSelectedFacesData(documentSnapshot, request, execution)") != std::string::npos);
+    assert(source.find(
+        "inputMode == SurfaceReductionInputMode::StepBrepWithScanReference") != std::string::npos);
+}
+
 void test_corner_baseline_probe_exports_applied_step_for_acceptance() {
     const auto root = source_root();
     const auto source = read_text_file(root / "tools" / "corner_baseline_probe.cpp");
@@ -672,6 +694,7 @@ void run_scripted_baseline_gate_tests() {
     test_native_surface_fit_sampling_ab_runner_has_fixed_dynamic_contract();
     test_native_surface_fit_local_g1_runner_and_probe_contract();
     test_gui_exposes_candidate_surface_over_cover_switch();
+    test_gui_uses_native_surface_reduction_as_primary_fitting_workflow();
     test_corner_baseline_probe_exports_applied_step_for_acceptance();
     test_corner_baseline_probe_reports_b2_8_external_cad_diagnostics_route();
     test_creo_step_diagnostic_script_is_optional_background_runner();

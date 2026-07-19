@@ -2,7 +2,7 @@
 
 本文档说明如何在 VS Code 或命令行中启动 `step-patch-optimizer` GUI，并给出当前 GUI 的主要交互方式和手动验证流程。
 
-> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer，支持 STEP/STP 模型显示、face/edge 命中选择、特征边显示、锁边高亮、same-domain 合并、undo/redo、合法性检查和 STEP 导出。Patch / Geomagic 菜单默认启用 `STP 候选面外扩带`；Route 2 当前主扩宽机制是沿原候选 STP 面边界做 parallel over-cover，adjacent-face support collar 只作为显式 A/B 窄辅助上下文保留。旧 B2 guard-band 和旧 B2.1 over-cover strip 不再作为可执行入口维护。
+> 当前状态：`OccViewWidget` 已接入真实 OCCT Viewer。产品主 GUI 流程是任意连通面选区的原生 B-rep 曲面减面，支持后台预览、质量报告、事务 Apply、undo/redo 和 STEP 导出。Geomagic 保留在“高级”菜单作为显式旧后备，不会由原生流程自动回退。
 
 ---
 
@@ -486,7 +486,34 @@ log\patch_preview_<timestamp>_candidate_<id>.log
 
 锁定边会以高亮方式显示，并在执行合并时加入 protectedEdges，防止合并跨越用户认为重要的结构边。
 
-### 5.4 执行合并
+### 5.4 原生 B-rep 曲面减面
+
+主菜单或工具栏：
+
+```text
+曲面减面
+→ 拟合输入
+   → 仅 STEP B-rep
+   → STEP B-rep + 扫描 STL 软参考
+→ 预览原生 B-rep 曲面减面
+→ 应用原生 B-rep 减面结果
+→ 清除原生减面预览
+```
+
+操作流程：
+
+```text
+1. 在“选择面”模式下选择至少两个相邻面；Shift 增选，Ctrl 移除。
+2. 默认使用“仅 STEP B-rep”：原始 STEP 曲面、参数域和边界是拟合与终验真值。
+3. 如需独立扫描辅助，先从“高级 → STL 裁剪 → 打开原始 STL”加载扫描 STL，再显式切换到“STEP B-rep + 扫描 STL 软参考”。
+4. 点击预览。GUI 使用 4 个固定工作线程运行确定性拟合；预览不会修改文档。
+5. 只有距离、法向、接缝、参数化、商业 CAD 类门、BRepCheck、StrictTopologyGate 和 STEP 回读全部通过时，Apply 才可用。
+6. Apply、撤销和重做交换已验证的缓存文档，不会重新拟合。
+```
+
+加载扫描 STL 不会再静默改变拟合输入；是否使用扫描软参考由上述模式显式决定。扫描 STL 只提供内部位置软参考，不替代 STEP 边界、参数域或最终质量门。
+
+### 5.5 旧 same-domain 合并实验
 
 菜单或工具栏：
 
@@ -502,9 +529,9 @@ protectedEdges 传入 SameDomainUnifier
 OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 ```
 
-注意：当前合并算法偏保守。same-domain 合并只处理同一底层几何域上的碎片面；现有 Geomagic 后备基线通过 MergePlanner / FeatureBoundedRegionBuilder 生成 FeatureBoundedRefit 候选，再进入 patch preview / Apply。`native-surface-refit` 分支当前只开发独立拟合探针，尚未接入本 GUI。旧 MergeRegionGrower / analytic candidate 路线已删除。
+注意：该入口是旧的同域合并实验，不是当前产品主拟合流程。当前主流程是上一节的 `SurfaceReductionEngine` 自制受限 B-spline B-rep 减面；Geomagic 候选、Patch preview 和 Apply 只保留在“高级 → Geomagic 后备（旧流程）”中。
 
-### 5.5 合法性检查
+### 5.6 合法性检查
 
 菜单或工具栏：
 
@@ -522,7 +549,7 @@ OCCT same-domain unify 尝试合并同一几何域上的相邻 faces
 5. multiple edge 数量。
 ```
 
-### 5.6 导出 STEP/STP
+### 5.7 导出 STEP/STP
 
 菜单或工具栏：
 

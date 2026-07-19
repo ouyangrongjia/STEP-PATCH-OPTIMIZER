@@ -15,6 +15,11 @@ class QTimer;
 
 namespace spo {
 
+enum class SurfaceReductionInputMode {
+    StepBrepOnly,
+    StepBrepWithScanReference
+};
+
 struct MainWindowWorkflowState {
     std::vector<MergeCandidate> candidates;
     std::set<int> visibleCandidateIds;
@@ -32,6 +37,8 @@ struct MainWindowWorkflowState {
     bool progressActive = false;
     GeomagicFittingInputMode fittingInputMode =
         GeomagicFittingInputMode::StpSampledCandidateSurface;
+    SurfaceReductionInputMode surfaceReductionInputMode =
+        SurfaceReductionInputMode::StepBrepOnly;
 
     void clearCandidates() {
         candidates.clear();

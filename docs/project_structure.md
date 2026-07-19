@@ -22,15 +22,16 @@ Feature-aware STEP Patch Optimization
 
 ## 1. 当前项目状态
 
-当前项目已经完成 MVP 基础闭环、FeatureBoundedRefit / Geomagic 稳定路径，并在独立 `native-surface-reduction` 分支加入任意选区减面第一版。`native-surface-refit` 和 `native-autosurface` 只保留为实验基线。当前已具备的产品流程是：
+当前项目已经完成 MVP 基础闭环和任意选区原生曲面减面；FeatureBoundedRefit / Geomagic 稳定路径只保留为高级后备。`native-surface-refit` 和 `native-autosurface` 只保留为实验基线。当前已具备的产品流程是：
 
 ```text
 STEP/STP 读取
 → B-rep 拓扑索引构建
 → OCCT Viewer 显示
 → face / edge 选择与多选
+→ 显式选择 STEP-only 或 STEP + 扫描 STL 软参考
 → 原始 B-rep 邻接驱动的选区动态分组
-→ 受限 B-spline 曲面拟合和独立样本终验
+→ 四工作线程受限 B-spline 曲面拟合和独立样本终验
 → 原始边界重裁剪、全局质量门和事务 Apply
 → 基础特征边检测
 → 用户锁边 / 解锁边
@@ -306,6 +307,7 @@ LockEdgeCommand
 UnlockEdgeCommand
 MergePatchCommand
 PatchReplacementCommand
+ReduceSelectedFacesCommand
 ```
 
 当前不可撤销命令：

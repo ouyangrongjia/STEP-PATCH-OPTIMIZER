@@ -115,7 +115,8 @@ public:
         PatchPreviewProgressCallback progress = {});
     static SurfaceReductionResult reduceSelectedFacesData(
         const ShapeDocument& document,
-        const SurfaceReductionRequest& request);
+        const SurfaceReductionRequest& request,
+        const SurfaceReductionExecutionOptions& execution = {});
     void setCurrentSurfaceReductionPreview(SurfaceReductionResult result);
     void clearCurrentSurfaceReductionPreview();
     bool surfaceReductionPreviewReady() const;

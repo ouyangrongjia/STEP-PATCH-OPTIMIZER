@@ -128,6 +128,16 @@ QString boolText(bool value) {
     return value ? "true" : "false";
 }
 
+QString surfaceReductionInputModeText(SurfaceReductionInputMode mode) {
+    switch (mode) {
+    case SurfaceReductionInputMode::StepBrepOnly:
+        return "仅 STEP B-rep";
+    case SurfaceReductionInputMode::StepBrepWithScanReference:
+        return "STEP B-rep + 扫描 STL 软参考";
+    }
+    return "仅 STEP B-rep";
+}
+
 struct PatchApplyUiResult {
     bool success = false;
     std::string resultMessage;
@@ -501,10 +511,21 @@ void MainWindow::createActions() {
     applyCurrentPatchAction_ = new QAction("应用当前 Patch 到候选区域", this);
     applyCurrentPatchAction_->setEnabled(false);
     clearPatchOverlayAction_ = new QAction("清除 Patch Overlay", this);
-    previewSurfaceReductionAction_ = new QAction("减少选区面数", this);
-    applySurfaceReductionAction_ = new QAction("应用曲面减面结果", this);
+    surfaceReductionStepOnlyAction_ = new QAction("仅 STEP B-rep", this);
+    surfaceReductionStepOnlyAction_->setCheckable(true);
+    surfaceReductionStepOnlyAction_->setChecked(true);
+    surfaceReductionScanReferenceAction_ = new QAction("STEP B-rep + 扫描 STL 软参考", this);
+    surfaceReductionScanReferenceAction_->setCheckable(true);
+    surfaceReductionScanReferenceAction_->setChecked(false);
+    auto* surfaceReductionInputModeGroup = new QActionGroup(this);
+    surfaceReductionInputModeGroup->setExclusive(true);
+    surfaceReductionInputModeGroup->addAction(surfaceReductionStepOnlyAction_);
+    surfaceReductionInputModeGroup->addAction(surfaceReductionScanReferenceAction_);
+
+    previewSurfaceReductionAction_ = new QAction("预览原生 B-rep 曲面减面", this);
+    applySurfaceReductionAction_ = new QAction("应用原生 B-rep 减面结果", this);
     applySurfaceReductionAction_->setEnabled(false);
-    clearSurfaceReductionAction_ = new QAction("清除曲面减面预览", this);
+    clearSurfaceReductionAction_ = new QAction("清除原生减面预览", this);
 
     exitAction_ = new QAction("退出", this);
     exitAction_->setShortcut(QKeySequence::Quit);
@@ -590,6 +611,15 @@ void MainWindow::createMenus() {
     auto* exportMenu = menuBar()->addMenu("导出");
     exportMenu->addAction(exportStepAction_);
 
+    auto* reductionMenu = menuBar()->addMenu("曲面减面");
+    auto* reductionInputMenu = reductionMenu->addMenu("拟合输入");
+    reductionInputMenu->addAction(surfaceReductionStepOnlyAction_);
+    reductionInputMenu->addAction(surfaceReductionScanReferenceAction_);
+    reductionMenu->addSeparator();
+    reductionMenu->addAction(previewSurfaceReductionAction_);
+    reductionMenu->addAction(applySurfaceReductionAction_);
+    reductionMenu->addAction(clearSurfaceReductionAction_);
+
     auto* advancedMenu = menuBar()->addMenu("高级");
 
     auto* candidateMenu = advancedMenu->addMenu("候选区域");
@@ -619,7 +649,7 @@ void MainWindow::createMenus() {
     stlMenu_->addAction(showCroppedStlAction_);
     stlMenu_->addAction(showStlCropBoxAction_);
 
-    patchMenu_ = advancedMenu->addMenu("Patch / Geomagic");
+    patchMenu_ = advancedMenu->addMenu("Geomagic 后备（旧流程）");
     auto* fittingInputModeMenu = patchMenu_->addMenu("Geomagic Fitting Input Mode");
     fittingInputModeMenu->addAction(fittingModeLegacyStlCropAction_);
     fittingInputModeMenu->addAction(fittingModeConservativeBandAction_);
@@ -642,11 +672,6 @@ void MainWindow::createMenus() {
     mergeMenu->addAction(undoAction_);
     mergeMenu->addAction(redoAction_);
 
-    auto* reductionMenu = advancedMenu->addMenu("曲面减面");
-    reductionMenu->addAction(previewSurfaceReductionAction_);
-    reductionMenu->addAction(applySurfaceReductionAction_);
-    reductionMenu->addAction(clearSurfaceReductionAction_);
-
     auto* helpMenu = menuBar()->addMenu("帮助");
     helpMenu->addAction("关于", this, [this]() {
         QMessageBox::about(this, "关于", "STEP 曲面片优化器\n特征感知的 STEP 曲面片合并与边界优化系统");
@@ -664,37 +689,15 @@ void MainWindow::createToolBars() {
     auto* selectionMenu = new QMenu(this);
     selectionMenu->addAction(selectFaceAction_);
     selectionMenu->addAction(selectEdgeAction_);
-    selectionMenu->addAction(selectCandidateAction_);
 
-    auto* candidateToolMenu = new QMenu(this);
-    candidateToolMenu->addAction(selectCandidateAction_);
-    candidateToolMenu->addSeparator();
-    candidateToolMenu->addAction(previewMergeAction_);
-    candidateToolMenu->addAction(showAllMergeCandidatesAction_);
-    candidateToolMenu->addAction(showAcceptedMergeCandidatesAction_);
-    candidateToolMenu->addAction(showPendingMergeCandidatesAction_);
-    candidateToolMenu->addAction(highlightMergeCandidateByIdAction_);
-    candidateToolMenu->addSeparator();
-    candidateToolMenu->addAction(acceptMergeCandidateAction_);
-    candidateToolMenu->addAction(rejectMergeCandidateAction_);
-    candidateToolMenu->addAction(hideMergeCandidateAction_);
-    candidateToolMenu->addAction(restoreMergeCandidateAction_);
-
-    auto* patchToolMenu = new QMenu(this);
-    patchToolMenu->addAction(generateAndPreviewCurrentPatchAction_);
-    patchToolMenu->addAction(applyCurrentPatchAction_);
-    patchToolMenu->addSeparator();
-    patchToolMenu->addAction(importPatchForCurrentCandidateAction_);
-    patchToolMenu->addAction(importPatchFromFileAction_);
-    patchToolMenu->addSeparator();
-    auto* fittingInputModeToolMenu = patchToolMenu->addMenu("Geomagic Fitting Input Mode");
-    fittingInputModeToolMenu->addAction(fittingModeLegacyStlCropAction_);
-    fittingInputModeToolMenu->addAction(fittingModeConservativeBandAction_);
-    fittingInputModeToolMenu->addAction(fittingModeStpSampledAction_);
-    patchToolMenu->addAction(useGeomagicRemeshAction_);
-    patchToolMenu->addAction(useStpSupportCollarAction_);
-    patchToolMenu->addSeparator();
-    patchToolMenu->addAction(clearPatchOverlayAction_);
+    auto* reductionToolMenu = new QMenu(this);
+    auto* reductionInputToolMenu = reductionToolMenu->addMenu("拟合输入");
+    reductionInputToolMenu->addAction(surfaceReductionStepOnlyAction_);
+    reductionInputToolMenu->addAction(surfaceReductionScanReferenceAction_);
+    reductionToolMenu->addSeparator();
+    reductionToolMenu->addAction(previewSurfaceReductionAction_);
+    reductionToolMenu->addAction(applySurfaceReductionAction_);
+    reductionToolMenu->addAction(clearSurfaceReductionAction_);
 
     auto* validateExportMenu = new QMenu(this);
     validateExportMenu->addAction(validateAction_);
@@ -715,9 +718,7 @@ void MainWindow::createToolBars() {
     toolBar->addSeparator();
     addMenuButton("选择", selectionMenu);
     toolBar->addAction(detectAction_);
-    toolBar->addAction(previewSurfaceReductionAction_);
-    addMenuButton("候选区域", candidateToolMenu);
-    addMenuButton("Patch", patchToolMenu);
+    addMenuButton("曲面减面", reductionToolMenu);
     toolBar->addAction(toggleFeaturesAction_);
     addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
@@ -810,6 +811,12 @@ void MainWindow::connectActions() {
     connect(importPatchFromFileAction_, &QAction::triggered, this, [this]() { importPatchFromFile(); });
     connect(applyCurrentPatchAction_, &QAction::triggered, this, [this]() { applyCurrentPatchPreview(); });
     connect(clearPatchOverlayAction_, &QAction::triggered, this, [this]() { clearPatchOverlay(); });
+    connect(surfaceReductionStepOnlyAction_, &QAction::triggered, this, [this]() {
+        setSurfaceReductionInputMode(SurfaceReductionInputMode::StepBrepOnly);
+    });
+    connect(surfaceReductionScanReferenceAction_, &QAction::triggered, this, [this]() {
+        setSurfaceReductionInputMode(SurfaceReductionInputMode::StepBrepWithScanReference);
+    });
     connect(previewSurfaceReductionAction_, &QAction::triggered, this, [this]() { previewSurfaceReduction(); });
     connect(applySurfaceReductionAction_, &QAction::triggered, this, [this]() { applySurfaceReduction(); });
     connect(clearSurfaceReductionAction_, &QAction::triggered, this, [this]() { clearSurfaceReductionPreview(); });
@@ -1719,28 +1726,46 @@ void MainWindow::previewSurfaceReduction() {
     SurfaceReductionRequest request;
     request.selectedFaces = selectedFaces;
     request.lockedEdges = controller_.lockedEdges();
-    if (controller_.hasSourceStl()) {
+    const auto inputMode = currentSurfaceReductionInputMode();
+    if (inputMode == SurfaceReductionInputMode::StepBrepWithScanReference &&
+        !controller_.hasSourceStl()) {
+        inspectPanel_->showReport("当前选择了扫描 STL 软参考模式，请先通过“高级 -> STL 裁剪 -> 打开原始 STL”加载扫描 STL。");
+        setStatus("扫描参考模式缺少源 STL");
+        return;
+    }
+    if (inputMode == SurfaceReductionInputMode::StepBrepWithScanReference) {
         request.scanReferenceStl = std::make_shared<StlMesh>(controller_.sourceStlMesh());
         request.scanReferenceCoverage = ScanReferenceCoverage::WholeModel;
     }
+    SurfaceReductionExecutionOptions execution;
+    execution.fitWorkerCount = 4;
+    execution.detailedTiming = true;
     const auto documentSnapshot = controller_.document();
     controller_.clearCurrentSurfaceReductionPreview();
     applySurfaceReductionAction_->setEnabled(false);
+    surfaceReductionStepOnlyAction_->setEnabled(false);
+    surfaceReductionScanReferenceAction_->setEnabled(false);
     setStlCropInProgress(true);
     setStatus("正在后台拟合曲面减面预览");
-    inspectPanel_->showReport(QString("曲面减面计算中\n输入面数：%1\n目标：50% 及以下").arg(selectedFaces.size()));
+    inspectPanel_->showReport(QString("原生 B-rep 曲面减面计算中\n输入面数：%1\n拟合输入：%2\n工作线程：%3\n目标：50% 及以下")
+        .arg(selectedFaces.size())
+        .arg(surfaceReductionInputModeText(inputMode))
+        .arg(execution.fitWorkerCount));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
 
     auto* watcher = new QFutureWatcher<SurfaceReductionResult>(this);
-    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode]() {
         auto output = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
+        surfaceReductionStepOnlyAction_->setEnabled(true);
+        surfaceReductionScanReferenceAction_->setEnabled(true);
         controller_.setCurrentSurfaceReductionPreview(output);
 
         const auto& report = output.report;
         QStringList lines;
-        lines << "曲面减面预览结果";
+        lines << "原生 B-rep 曲面减面预览结果";
+        lines << QString("拟合输入：%1").arg(surfaceReductionInputModeText(inputMode));
         lines << QString("状态：%1").arg(QString::fromLatin1(toString(report.outcome)));
         lines << QString("输入面数：%1").arg(report.inputFaceCount);
         lines << QString("输出面数：%1").arg(report.outputFaceCount);
@@ -1765,6 +1790,9 @@ void MainWindow::previewSurfaceReduction() {
             .arg(report.expandedStateCount)
             .arg(report.generatedStateCount)
             .arg(report.fitCacheHitCount);
+        lines << QString("并行拟合：%1 个工作线程，总耗时 %2 秒")
+            .arg(report.fitWorkerCount)
+            .arg(QString::number(report.timing.totalMs / 1000.0, 'f', 2));
         if (report.scanReferenceCoverage != ScanReferenceCoverage::None) {
             lines << QString("独立扫描：%1，样本 %2，最大 STEP 距离 %3 mm")
                 .arg(QString::fromLatin1(toString(report.scanReferenceCoverage)))
@@ -1802,8 +1830,8 @@ void MainWindow::previewSurfaceReduction() {
         }
         refreshUndoRedoActions();
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, request]() {
-        return AppController::reduceSelectedFacesData(documentSnapshot, request);
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, request, execution]() {
+        return AppController::reduceSelectedFacesData(documentSnapshot, request, execution);
     }));
 }
 
@@ -2816,6 +2844,27 @@ void MainWindow::updateFittingInputModeActions() {
         workflowState_.fittingInputMode == GeomagicFittingInputMode::ConservativeBoundaryBandStlCrop);
     fittingModeStpSampledAction_->setChecked(
         workflowState_.fittingInputMode == GeomagicFittingInputMode::StpSampledCandidateSurface);
+}
+
+void MainWindow::setSurfaceReductionInputMode(SurfaceReductionInputMode mode) {
+    workflowState_.surfaceReductionInputMode = mode;
+    updateSurfaceReductionInputModeActions();
+    setStatus(QString("原生曲面减面拟合输入：%1").arg(surfaceReductionInputModeText(mode)));
+}
+
+SurfaceReductionInputMode MainWindow::currentSurfaceReductionInputMode() const {
+    if (surfaceReductionScanReferenceAction_ != nullptr &&
+        surfaceReductionScanReferenceAction_->isChecked()) {
+        return SurfaceReductionInputMode::StepBrepWithScanReference;
+    }
+    return SurfaceReductionInputMode::StepBrepOnly;
+}
+
+void MainWindow::updateSurfaceReductionInputModeActions() {
+    surfaceReductionStepOnlyAction_->setChecked(
+        workflowState_.surfaceReductionInputMode == SurfaceReductionInputMode::StepBrepOnly);
+    surfaceReductionScanReferenceAction_->setChecked(
+        workflowState_.surfaceReductionInputMode == SurfaceReductionInputMode::StepBrepWithScanReference);
 }
 
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
