@@ -62,6 +62,28 @@ QString progressLine(
     if (status.boundaryEdgeCount > 0) {
         fields << QString("boundary_edges=%1").arg(status.boundaryEdgeCount);
     }
+    if (status.targetFaceCount > 0) {
+        fields << QString("target_faces=%1").arg(status.targetFaceCount);
+    }
+    if (status.currentFaceCount > 0) {
+        fields << QString("current_faces=%1").arg(status.currentFaceCount);
+    }
+    if (status.searchIteration > 0) {
+        fields << QString("search_layer=%1").arg(status.searchIteration);
+    }
+    if (status.maximumFitCount > 0) {
+        fields << QString("fits=%1/%2")
+            .arg(status.completedFitCount)
+            .arg(status.maximumFitCount);
+    }
+    if (status.candidateValidationCount > 0) {
+        fields << QString("validation=%1/%2")
+            .arg(status.candidateValidationIndex)
+            .arg(status.candidateValidationCount);
+    }
+    if (!status.activeGroup.empty()) {
+        fields << QString("group=%1").arg(QString::fromStdString(status.activeGroup));
+    }
     if (!status.localStlPath.empty()) {
         fields << QString("local STL=%1").arg(pathText(status.localStlPath));
     }
@@ -95,6 +117,10 @@ QString statusText(
         statusPrefix = "STEP/STP";
     } else if (header.startsWith("合并候选")) {
         statusPrefix = "合并候选";
+    } else if (header.startsWith("特征边")) {
+        statusPrefix = "特征边";
+    } else if (header.startsWith("原生重拟合")) {
+        statusPrefix = "原生重拟合";
     }
 
     QStringList fields;

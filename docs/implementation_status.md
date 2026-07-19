@@ -62,12 +62,15 @@
 | SR-12.2 | 已完成 | candidate 179 六组 FitSet 通过；渐进提案二面阶段通过精确分组基线并成为该回归脚本默认。`RefreshCache` 写入 170 项；`Replay` 170 命中、0 缺失、0 实际拟合，端到端 277 秒；禁用磁盘缓存的 `Full` 端到端 1632.8 秒。两者均保持 `49→46` 和三个锁定接受组，几何与拓扑门全部通过 |
 | SR-12.3 | 已完成 | GUI 顶层菜单和主工具栏切换为原生 B-rep 曲面减面主流程；拟合输入显式区分 STEP-only 与 STEP 加扫描 STL 软参考，默认 STEP-only，加载 STL 不再隐式改变请求；后台预览固定使用 4 个拟合工作线程并显示总耗时。旧候选、Patch 与 Geomagic 流程只保留在“高级”菜单作显式后备 |
 | SR-12.4 | 已完成 | GUI 主线纠正为“导入 STEP → 检测特征边 → 生成并选择候选区域 → 原生重拟合 → 显示/应用效果”。候选选择模式不再依赖会被清空的普通 face 选择，而是把当前 `MergeCandidate::faces` 传入 `SurfaceReductionEngine`；主工具栏使用一个状态化“原生重拟合”按钮承接预览/应用，并增加“一键预览并应用”。自动应用仍以当前候选匹配和全部质量门通过为前提 |
+| SR-12.5 | 已完成 | GUI 当前主线的 STEP 导入、特征边检测、候选生成、原生重拟合预览和 Apply 全部后台化并复用 2 秒心跳；`SurfaceReductionEngine` 通过执行期回调报告拓扑准备、束搜索层、唯一分组拟合计数、接缝候选终验、商业 CAD 类门、整件组装、`StrictTopologyGate` 和 STEP 回读，报告页与 Process Status 同步显示当前面数、目标面数、拟合进度和活动分组 |
 
 产品成功门：输出面数小于输入且所有质量门通过即成功；输出不大于 `floor(N/2)` 时标记达到目标。任何距离、法向、接缝、参数化、支撑曲面包络、稠密 `SameParameter`、B-rep 或 STEP 回读门失败都不能 Apply。
 
 SR-5 最终 12 区域报告位于 `data/runs/20260715_surface_reduction_benchmark_final12b/`。区域由平滑内部边和现有候选属性发现，不使用固定 candidate ordinal 或 FaceId；三个 2 面减为 1 面的成功结果均写出 STEP，且参数化、BRepCheck、STEP 回读和商业 CAD 类边界门全部通过。
 
 `03_配件_Clay.stp` 的 candidate 179 已完成 SR-11.1 跨内核纠偏。选区动态发现为 FaceId 1702～1750，共 49 面，目标比例 `0.95`。首轮产物虽通过 OCCT BRepCheck 和 STEP 回读，但 Creo 显示超大面片与裂缝；诊断确认新支撑面控制网达到 `39.5225 mm`，边面参数曲线偏差达到 `0.00391089 mm`。修复后混合路径使用 290 个唯一受限拟合，接受 `1727+1732`、`1742+1745`、`1746+1747`，得到 `49→46`、`TargetAchieved`；最大距离 `0.00134683 mm`、最大法向差 `1.77073°`、最大保留光顺接缝角 `2.93862°`。最终 STEP 为 2736 面、1 壳、1 实体，曲线在曲面上的最大偏差 `0.000942836 mm`，无超过 `0.001 mm` 的关联；Creo 手动复核为无超大面片、无可见裂缝的灰色水密实体。最终接受组使用 144 个扫描参考样本；唯一结果目录为 `data/runs/20260715_surface_reduction_candidate_0179_hybrid/`。
+
+GUI 默认参数与上述锁定回归并不相同。GUI 默认使用 `StepBrepOnly`、`targetOutputRatio=0.5`、`maximumProposalGroupSize=0`、禁用持久拟合缓存和 4 个工作线程；candidate 179 的 `49→46` 锁定回归则使用原始扫描 STL 软参考、`targetOutputRatio=0.95`、最多二面提案和分层脚本缓存策略。两者复用同一个 `SurfaceReductionEngine` 和同一套最终质量门，但不能把 GUI 默认运行视为 `49→46` 回放。
 
 以下 NSR 状态为保留的实验基线历史。
 

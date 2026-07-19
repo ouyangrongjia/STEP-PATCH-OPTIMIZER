@@ -9,7 +9,15 @@ enum class ProcessStage {
     Idle,
     LoadingStep,
     ExportingStep,
+    DetectingFeatureEdges,
     PreviewingMergeCandidates,
+    PreparingSurfaceReduction,
+    SearchingSurfaceReduction,
+    FittingSurfaceGroups,
+    ValidatingSurfaceReduction,
+    SurfaceReductionPreviewReady,
+    ApplyingSurfaceReduction,
+    SurfaceReductionFailed,
     AnalyzingBoundary,
     CroppingStl,
     RunningGeomagic,
@@ -33,6 +41,15 @@ struct ProcessStatusSnapshot {
     int candidateId = -1;
     int sourceFaceCount = 0;
     int boundaryEdgeCount = 0;
+    int targetFaceCount = 0;
+    int currentFaceCount = 0;
+    int searchIteration = 0;
+    int attemptedMergeCount = 0;
+    int completedFitCount = 0;
+    int maximumFitCount = 0;
+    int candidateValidationIndex = 0;
+    int candidateValidationCount = 0;
+    std::string activeGroup;
 
     std::filesystem::path localStlPath;
     std::filesystem::path patchStepPath;

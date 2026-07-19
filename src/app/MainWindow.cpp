@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <utility>
@@ -136,6 +137,58 @@ QString surfaceReductionInputModeText(SurfaceReductionInputMode mode) {
         return "STEP B-rep + 扫描 STL 软参考";
     }
     return "仅 STEP B-rep";
+}
+
+ProcessStage processStageForSurfaceReductionProgress(SurfaceReductionProgressStage stage) {
+    switch (stage) {
+    case SurfaceReductionProgressStage::ValidatingInput:
+    case SurfaceReductionProgressStage::PreparingTopology:
+        return ProcessStage::PreparingSurfaceReduction;
+    case SurfaceReductionProgressStage::Searching:
+        return ProcessStage::SearchingSurfaceReduction;
+    case SurfaceReductionProgressStage::Fitting:
+        return ProcessStage::FittingSurfaceGroups;
+    case SurfaceReductionProgressStage::ValidatingSeams:
+    case SurfaceReductionProgressStage::ValidatingCommercialCad:
+    case SurfaceReductionProgressStage::AssemblingModel:
+    case SurfaceReductionProgressStage::ValidatingTopology:
+    case SurfaceReductionProgressStage::Completed:
+        return ProcessStage::ValidatingSurfaceReduction;
+    }
+    return ProcessStage::PreparingSurfaceReduction;
+}
+
+std::string surfaceReductionGroupText(const std::vector<FaceId>& faces) {
+    std::string text;
+    for (const auto face : faces) {
+        if (!text.empty()) {
+            text += '+';
+        }
+        text += std::to_string(face);
+    }
+    return text;
+}
+
+ProcessStatusSnapshot surfaceReductionProgressStatus(
+    const SurfaceReductionProgress& progress,
+    int candidateId,
+    int boundaryEdgeCount) {
+    auto status = makeProcessStatus(
+        processStageForSurfaceReductionProgress(progress.stage),
+        progress.message);
+    status.candidateId = candidateId;
+    status.sourceFaceCount = progress.inputFaceCount;
+    status.boundaryEdgeCount = boundaryEdgeCount;
+    status.targetFaceCount = progress.targetFaceCount;
+    status.currentFaceCount = progress.currentFaceCount;
+    status.searchIteration = progress.searchIteration;
+    status.attemptedMergeCount = progress.attemptedMergeCount;
+    status.completedFitCount = progress.completedFitCount;
+    status.maximumFitCount = progress.maximumFitCount;
+    status.candidateValidationIndex = progress.candidateValidationIndex;
+    status.candidateValidationCount = progress.candidateValidationCount;
+    status.activeGroup = surfaceReductionGroupText(progress.activeGroup);
+    return status;
 }
 
 struct PatchApplyUiResult {
@@ -1807,6 +1860,31 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     SurfaceReductionExecutionOptions execution;
     execution.fitWorkerCount = 4;
     execution.detailedTiming = true;
+    const int targetFaceCount = std::max(
+        1,
+        static_cast<int>(std::floor(
+            static_cast<double>(selectedFaces.size()) * request.options.targetOutputRatio)));
+    const int maximumFitCount = request.options.maximumRestrictedFitEvaluations;
+    const int boundaryEdgeCount = candidate->boundary_edge_count > 0
+        ? candidate->boundary_edge_count
+        : static_cast<int>(candidate->boundary_edges.size());
+    QPointer<MainWindow> window(this);
+    execution.progressCallback = [window, candidateId, boundaryEdgeCount](
+                                     const SurfaceReductionProgress& progress) {
+        if (window.isNull()) {
+            return;
+        }
+        auto status = surfaceReductionProgressStatus(
+            progress,
+            candidateId,
+            boundaryEdgeCount);
+        QMetaObject::invokeMethod(window.data(), [window, status = std::move(status)]() mutable {
+            if (window.isNull()) {
+                return;
+            }
+            window->appendPatchPreviewProgress(std::move(status));
+        }, Qt::QueuedConnection);
+    };
     const auto documentSnapshot = controller_.document();
     controller_.clearCurrentSurfaceReductionPreview();
     workflowState_.surfaceReductionPreviewCandidateId = -1;
@@ -1814,17 +1892,38 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     surfaceReductionStepOnlyAction_->setEnabled(false);
     surfaceReductionScanReferenceAction_->setEnabled(false);
     setStlCropInProgress(true);
-    setStatus(applyAfterPreview ? "正在后台预览并准备应用原生重拟合" : "正在后台预览原生重拟合");
-    inspectPanel_->showReport(QString("原生 B-rep 重拟合计算中\n候选区域：%1\n输入面数：%2\n拟合输入：%3\n工作线程：%4\n完成策略：%5\n目标：50% 及以下")
+    auto initialStatus = makeProcessStatus(
+        ProcessStage::PreparingSurfaceReduction,
+        "原生重拟合任务已提交，正在验证候选和准备拓扑。");
+    initialStatus.candidateId = candidateId;
+    initialStatus.sourceFaceCount = static_cast<int>(selectedFaces.size());
+    initialStatus.boundaryEdgeCount = boundaryEdgeCount;
+    initialStatus.targetFaceCount = targetFaceCount;
+    initialStatus.currentFaceCount = static_cast<int>(selectedFaces.size());
+    initialStatus.maximumFitCount = maximumFitCount;
+    controller_.updateProcessStatus(initialStatus);
+    startPatchPreviewProgressReport(
+        initialStatus,
+        QString("原生重拟合正在后台运行\n候选区域：%1\n输入面数：%2\n目标面数：≤ %3（target ratio=%4）\n拟合输入：%5\n提案分组上限：%6\n持久拟合缓存：%7\n工作线程：%8\n完成策略：%9\n刷新策略：阶段事件实时追加；长阶段每 2 秒刷新心跳行。")
         .arg(candidateId)
         .arg(selectedFaces.size())
+        .arg(targetFaceCount)
+        .arg(QString::number(request.options.targetOutputRatio, 'g', 4))
         .arg(surfaceReductionInputModeText(inputMode))
+        .arg(execution.maximumProposalGroupSize > 0
+            ? QString::number(execution.maximumProposalGroupSize)
+            : "不限")
+        .arg(QString::fromLatin1(toString(execution.cacheMode)))
         .arg(execution.fitWorkerCount)
         .arg(applyAfterPreview ? "预览通过后自动应用" : "先预览，再用同一按钮应用"));
-    bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
+    logPanel_->appendInfo(QString("开始后台原生重拟合：候选 %1，%2 面，目标 ≤ %3 面。")
+        .arg(candidateId)
+        .arg(selectedFaces.size())
+        .arg(targetFaceCount));
+    setStatus(applyAfterPreview ? "正在后台预览并准备应用原生重拟合" : "正在后台预览原生重拟合");
 
     auto* watcher = new QFutureWatcher<SurfaceReductionResult>(this);
-    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode, candidateId, applyAfterPreview]() {
+    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode, candidateId, targetFaceCount, maximumFitCount, applyAfterPreview]() {
         auto output = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1834,6 +1933,24 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
         workflowState_.surfaceReductionPreviewCandidateId = candidateId;
 
         const auto& report = output.report;
+        auto completedStatus = makeProcessStatus(
+            output.canApply()
+                ? ProcessStage::SurfaceReductionPreviewReady
+                : ProcessStage::SurfaceReductionFailed,
+            report.message);
+        completedStatus.candidateId = candidateId;
+        completedStatus.sourceFaceCount = report.inputFaceCount;
+        completedStatus.targetFaceCount = targetFaceCount;
+        completedStatus.currentFaceCount = report.outputFaceCount;
+        completedStatus.attemptedMergeCount = report.attemptedMergeCount;
+        completedStatus.completedFitCount = report.fitCacheMissCount;
+        completedStatus.maximumFitCount = maximumFitCount;
+        if (!output.canApply()) {
+            completedStatus.latestWarning = report.message;
+        }
+        appendPatchPreviewProgress(std::move(completedStatus));
+        stopPatchPreviewProgressReport();
+
         QStringList lines;
         lines << "原生 B-rep 重拟合预览结果";
         lines << QString("候选区域：%1").arg(candidateId);
@@ -1919,6 +2036,11 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
 }
 
 void MainWindow::applySurfaceReduction() {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
     if (!controller_.surfaceReductionPreviewReady() ||
         workflowState_.surfaceReductionPreviewCandidateId < 0 ||
         workflowState_.surfaceReductionPreviewCandidateId != workflowState_.currentCandidateId) {
@@ -1926,21 +2048,63 @@ void MainWindow::applySurfaceReduction() {
         setStatus("原生重拟合结果不可应用");
         return;
     }
-    const auto result = controller_.applyCurrentSurfaceReduction();
-    if (!result.success()) {
-        inspectPanel_->showReport(QString::fromStdString(result.message()));
-        logPanel_->appendError(QString::fromStdString(result.message()));
-        setStatus("原生重拟合应用失败");
-        return;
-    }
-    viewer_->clearPatchOverlay();
-    workflowState_.surfaceReductionPreviewCandidateId = -1;
-    refreshDocumentViews(false);
-    refreshSurfaceReductionActions();
-    inspectPanel_->showReport("原生重拟合事务已提交。\n撤销和重做使用缓存结果，不会重新拟合。");
-    logPanel_->appendInfo("原生重拟合事务已提交。");
-    setStatus("原生重拟合已应用");
-    refreshUndoRedoActions();
+    const auto candidateId = workflowState_.surfaceReductionPreviewCandidateId;
+    const auto& previewReport = controller_.currentSurfaceReductionResult().report;
+    auto progress = makeProcessStatus(
+        ProcessStage::ApplyingSurfaceReduction,
+        "正在后台提交已经通过质量门的缓存减面结果。");
+    progress.candidateId = candidateId;
+    progress.sourceFaceCount = previewReport.inputFaceCount;
+    progress.currentFaceCount = previewReport.outputFaceCount;
+    controller_.updateProcessStatus(progress);
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        progress,
+        QString("原生重拟合应用正在后台运行\n候选区域：%1\n缓存结果：%2 → %3 面\n刷新策略：Apply 只提交已验证结果，不重新拟合；长阶段每 2 秒刷新心跳。")
+            .arg(candidateId)
+            .arg(previewReport.inputFaceCount)
+            .arg(previewReport.outputFaceCount));
+    logPanel_->appendInfo(QString("开始后台应用候选 %1 的原生重拟合结果。").arg(candidateId));
+    setStatus("正在后台应用原生重拟合结果");
+
+    auto* watcher = new QFutureWatcher<Result>(this);
+    connect(watcher, &QFutureWatcher<Result>::finished, this, [this, watcher, candidateId]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+        if (!result.success()) {
+            auto failed = makeProcessStatus(
+                ProcessStage::SurfaceReductionFailed,
+                result.message());
+            failed.candidateId = candidateId;
+            failed.latestWarning = result.message();
+            appendPatchPreviewProgress(std::move(failed));
+            stopPatchPreviewProgressReport();
+            inspectPanel_->showReport(QString::fromStdString(result.message()));
+            logPanel_->appendError(QString::fromStdString(result.message()));
+            setStatus("原生重拟合应用失败");
+            refreshSurfaceReductionActions();
+            return;
+        }
+
+        auto completed = makeProcessStatus(
+            ProcessStage::Applied,
+            "原生重拟合缓存结果已提交。");
+        completed.candidateId = candidateId;
+        appendPatchPreviewProgress(std::move(completed));
+        stopPatchPreviewProgressReport();
+        viewer_->clearPatchOverlay();
+        workflowState_.surfaceReductionPreviewCandidateId = -1;
+        refreshDocumentViews(false);
+        refreshSurfaceReductionActions();
+        inspectPanel_->showReport("原生重拟合事务已提交。\n撤销和重做使用缓存结果，不会重新拟合。");
+        logPanel_->appendInfo("原生重拟合事务已提交。");
+        setStatus("原生重拟合已应用");
+        refreshUndoRedoActions();
+    });
+    watcher->setFuture(QtConcurrent::run([this]() {
+        return controller_.applyCurrentSurfaceReduction();
+    }));
 }
 
 void MainWindow::clearSurfaceReductionPreview() {
@@ -1983,6 +2147,11 @@ void MainWindow::showPatchPreviewReport(
 }
 
 void MainWindow::detectFeatureEdges() {
+    if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
+        inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
+        setStatus("后台任务运行中");
+        return;
+    }
     if (!controller_.hasDocument()) {
         inspectPanel_->showReport("请先打开 STEP/STP 文件。");
         setStatus("未加载模型");
@@ -1990,26 +2159,62 @@ void MainWindow::detectFeatureEdges() {
     }
 
     const auto params = parameterPanel_->parameters();
-    const auto result = controller_.detectFeatureEdges(params.angular_threshold_degrees, params.min_edge_length);
     viewer_->clearPatchOverlay();
     controller_.clearCurrentSurfaceReductionPreview();
     workflowState_.surfaceReductionPreviewCandidateId = -1;
     clearMergeCandidateState();
-    workflowState_.hasFeatureEdgeResult = true;
-    selectFaceAction_->setChecked(true);
-    viewer_->setSelectionMode(SelectionMode::Face);
-    viewer_->showFeatureEdges(result);
-    viewer_->setFeatureLinesVisible(true);
-    toggleFeaturesAction_->setChecked(true);
-    refreshModelTree();
-    inspectPanel_->showReport(QString("特征边检测完成  |  %1 条边  |  Sharp %2  |  Free %3  |  Multiple %4")
-        .arg(result.edges.size())
-        .arg(result.sharp_edges)
-        .arg(result.free_edges)
-        .arg(result.multiple_edges));
-    refreshSurfaceReductionActions();
-    setStatus("特征边检测完成，请选择候选区域");
-    refreshUndoRedoActions();
+    workflowState_.hasFeatureEdgeResult = false;
+
+    auto progress = makeProcessStatus(
+        ProcessStage::DetectingFeatureEdges,
+        "正在后台遍历模型边并计算二面角、自由边和多重边。");
+    progress.sourceFaceCount = controller_.document().stats().faces;
+    controller_.updateProcessStatus(progress);
+    setStlCropInProgress(true);
+    startPatchPreviewProgressReport(
+        progress,
+        QString("特征边检测正在后台运行\n模型面数：%1\n角度阈值：%2°\n最小边长：%3\n刷新策略：长阶段每 2 秒刷新心跳，完成后回到 GUI 线程显示特征线。")
+            .arg(progress.sourceFaceCount)
+            .arg(QString::number(params.angular_threshold_degrees, 'g', 8))
+            .arg(QString::number(params.min_edge_length, 'g', 8)));
+    logPanel_->appendInfo("开始后台检测特征边。");
+    setStatus("特征边检测正在后台运行");
+
+    auto* watcher = new QFutureWatcher<FeatureEdgeDetectionResult>(this);
+    connect(watcher, &QFutureWatcher<FeatureEdgeDetectionResult>::finished, this, [this, watcher]() {
+        const auto result = watcher->result();
+        watcher->deleteLater();
+        setStlCropInProgress(false);
+
+        auto completed = makeProcessStatus(
+            ProcessStage::DetectingFeatureEdges,
+            "特征边检测完成。");
+        completed.sourceFaceCount = controller_.document().stats().faces;
+        appendPatchPreviewProgress(completed);
+        stopPatchPreviewProgressReport();
+
+        workflowState_.hasFeatureEdgeResult = true;
+        selectFaceAction_->setChecked(true);
+        viewer_->setSelectionMode(SelectionMode::Face);
+        viewer_->showFeatureEdges(result);
+        viewer_->setFeatureLinesVisible(true);
+        toggleFeaturesAction_->setChecked(true);
+        refreshModelTree();
+        inspectPanel_->showReport(QString("特征边检测完成  |  %1 条边  |  Sharp %2  |  Free %3  |  Multiple %4")
+            .arg(result.edges.size())
+            .arg(result.sharp_edges)
+            .arg(result.free_edges)
+            .arg(result.multiple_edges));
+        refreshSurfaceReductionActions();
+        setStatus("特征边检测完成，请选择候选区域");
+        refreshUndoRedoActions();
+        refreshProcessStatusPanel();
+    });
+    watcher->setFuture(QtConcurrent::run([this, params]() {
+        return controller_.detectFeatureEdges(
+            params.angular_threshold_degrees,
+            params.min_edge_length);
+    }));
 }
 
 void MainWindow::previewMergeCandidates(bool activateSelectionWhenReady) {

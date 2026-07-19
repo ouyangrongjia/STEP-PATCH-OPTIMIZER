@@ -12,8 +12,24 @@ const char* toString(ProcessStage stage) {
         return "LoadingStep";
     case ProcessStage::ExportingStep:
         return "ExportingStep";
+    case ProcessStage::DetectingFeatureEdges:
+        return "DetectingFeatureEdges";
     case ProcessStage::PreviewingMergeCandidates:
         return "PreviewingMergeCandidates";
+    case ProcessStage::PreparingSurfaceReduction:
+        return "PreparingSurfaceReduction";
+    case ProcessStage::SearchingSurfaceReduction:
+        return "SearchingSurfaceReduction";
+    case ProcessStage::FittingSurfaceGroups:
+        return "FittingSurfaceGroups";
+    case ProcessStage::ValidatingSurfaceReduction:
+        return "ValidatingSurfaceReduction";
+    case ProcessStage::SurfaceReductionPreviewReady:
+        return "SurfaceReductionPreviewReady";
+    case ProcessStage::ApplyingSurfaceReduction:
+        return "ApplyingSurfaceReduction";
+    case ProcessStage::SurfaceReductionFailed:
+        return "SurfaceReductionFailed";
     case ProcessStage::AnalyzingBoundary:
         return "AnalyzingBoundary";
     case ProcessStage::CroppingStl:

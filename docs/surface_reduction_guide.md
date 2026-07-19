@@ -97,8 +97,11 @@ GUI 用一个状态化按钮承接两阶段操作：没有合格预览时执行�
 | SR-12 拟合索引、持久缓存、确定性批量并行和分层回归 | 已完成 |
 | SR-12.3 GUI 原生 B-rep 主流程迁移 | 已完成 |
 | SR-12.4 GUI 候选选择与统一预览/应用入口 | 已完成 |
+| SR-12.5 GUI 主线后台执行与实时心跳 | 已完成 |
 
-GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏，操作顺序为“检测特征边 → 选择候选区域 → 原生重拟合”。“选择候选区域”在需要时自动生成候选并进入候选点击模式；“原生重拟合”在预览与 Apply 状态间切换，另有“一键预览并应用”。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪、商业 CAD 类门、`StrictTopologyGate` 和 STEP 回读。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
+GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏，操作顺序为“检测特征边 → 选择候选区域 → 原生重拟合”。“选择候选区域”在需要时自动生成候选并进入候选点击模式；“原生重拟合”在预览与 Apply 状态间切换，另有“一键预览并应用”。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。STEP 导入、特征边检测、候选生成、后台预览和 Apply 均不占用 GUI 线程；报告页每 2 秒刷新心跳，减面核心还会上报拓扑准备、搜索层、拟合计数、活动分组、接缝终验、商业 CAD 类门、整件组装、`StrictTopologyGate` 和 STEP 回读。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪和最终质量门。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
+
+GUI 默认请求使用 `StepBrepOnly`、`targetOutputRatio=0.5`、`maximumProposalGroupSize=0`、`SurfaceReductionCacheMode::Disabled` 和 4 个工作线程。candidate 179 的锁定 `49→46` 回归则使用原始扫描 STL 软参考、`targetOutputRatio=0.95`、`maximumProposalGroupSize=2`，并由分层脚本显式选择缓存模式。因此两者复用同一个引擎和质量门，但 GUI 默认运行会为 49 面候选尝试不超过 24 面，不是 `49→46` 基线回放。
 
 `surface_reduction_probe` 支持 `--source-stl <原始.stl>` 动态执行 STEP 面域裁剪，也支持 `--cropped-stl <选区.stl>` 复用已验证裁剪；选区可用 `--candidate-id <id>` 动态发现，或直接给出任意数量的 FaceId。成功时可用 `--selection-output <独立选区.step>` 同时导出减面后的选区面复合体。`step_stats <文件> --curve-on-surface` 用于稠密检查三维边/参数曲线偏差和 B-spline 控制网范围。`surface_reduction_benchmark` 从平滑内部边和现有候选属性发现选区，并动态记录输入、输出、质量指标和拒绝原因；生产逻辑和默认测试不包含 candidate 179。
 

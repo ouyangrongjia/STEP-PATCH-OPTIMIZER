@@ -475,6 +475,13 @@ void test_gui_uses_native_surface_reduction_as_primary_fitting_workflow() {
     assert(source.find("previewMergeCandidates(true)") != std::string::npos);
     assert(source.find("const auto selectedFaces = candidate->faces") != std::string::npos);
     assert(source.find("if (applyAfterPreview)") != std::string::npos);
+    assert(source.find("QFutureWatcher<FeatureEdgeDetectionResult>") != std::string::npos);
+    assert(source.find("ProcessStage::DetectingFeatureEdges") != std::string::npos);
+    assert(source.find("execution.progressCallback") != std::string::npos);
+    assert(source.find("SurfaceReductionProgress") != std::string::npos);
+    assert(source.find("QFutureWatcher<Result>") != std::string::npos);
+    assert(source.find("原生重拟合正在后台运行") != std::string::npos);
+    assert(source.find("长阶段每 2 秒刷新心跳") != std::string::npos);
     assert(source.find("Geomagic 后备（旧流程）") != std::string::npos);
     assert(source.find("addMenuButton(\"Patch\"") == std::string::npos);
     assert(source.find("applySurfaceReductionAction_") == std::string::npos);

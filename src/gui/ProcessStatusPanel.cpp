@@ -40,6 +40,17 @@ void ProcessStatusPanel::showStatus(const ProcessStatusSnapshot& snapshot) {
         {"candidate id", snapshot.candidateId >= 0 ? QString::number(snapshot.candidateId) : QString("none")},
         {"source face count", QString::number(snapshot.sourceFaceCount)},
         {"boundary edge count", QString::number(snapshot.boundaryEdgeCount)},
+        {"target face count", QString::number(snapshot.targetFaceCount)},
+        {"current face count", QString::number(snapshot.currentFaceCount)},
+        {"search iteration", QString::number(snapshot.searchIteration)},
+        {"attempted merges", QString::number(snapshot.attemptedMergeCount)},
+        {"completed fits / maximum", QString("%1/%2")
+            .arg(snapshot.completedFitCount)
+            .arg(snapshot.maximumFitCount)},
+        {"candidate validation", QString("%1/%2")
+            .arg(snapshot.candidateValidationIndex)
+            .arg(snapshot.candidateValidationCount)},
+        {"active group", QString::fromStdString(snapshot.activeGroup)},
         {"local STL", pathText(snapshot.localStlPath)},
         {"patch STEP", pathText(snapshot.patchStepPath)},
         {"patch IGS", pathText(snapshot.patchIgesPath)},
