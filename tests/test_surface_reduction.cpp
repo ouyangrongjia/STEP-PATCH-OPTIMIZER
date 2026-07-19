@@ -548,6 +548,10 @@ void run_surface_reduction_tests() {
         const auto second = spo::SurfaceReductionEngine().reduce(document, request);
         spo::SurfaceReductionExecutionOptions parallelExecution;
         parallelExecution.fitWorkerCount = 4;
+        std::vector<spo::SurfaceReductionProgress> progressUpdates;
+        parallelExecution.progressCallback = [&](const auto& progress) {
+            progressUpdates.push_back(progress);
+        };
         const auto parallel = spo::SurfaceReductionEngine().reduce(
             document, request, parallelExecution);
         assert(first.canApply());
@@ -562,6 +566,25 @@ void run_surface_reduction_tests() {
         assert(first.report.generatedStateCount > first.report.acceptedMergeCount);
         assert(!first.report.searchBudgetExhausted);
         assert(parallel.report.fitWorkerCount == 4);
+        assert(!progressUpdates.empty());
+        assert(progressUpdates.front().stage ==
+            spo::SurfaceReductionProgressStage::ValidatingInput);
+        assert(std::any_of(
+            progressUpdates.begin(),
+            progressUpdates.end(),
+            [](const auto& progress) {
+                return progress.stage == spo::SurfaceReductionProgressStage::Searching;
+            }));
+        assert(std::any_of(
+            progressUpdates.begin(),
+            progressUpdates.end(),
+            [](const auto& progress) {
+                return progress.stage == spo::SurfaceReductionProgressStage::ValidatingTopology;
+            }));
+        assert(progressUpdates.back().stage ==
+            spo::SurfaceReductionProgressStage::Completed);
+        assert(progressUpdates.back().inputFaceCount == 5);
+        assert(progressUpdates.back().targetFaceCount == 2);
     }
 
     {

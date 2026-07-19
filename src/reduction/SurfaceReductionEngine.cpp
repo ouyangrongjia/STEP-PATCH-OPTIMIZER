@@ -83,6 +83,37 @@ private:
     std::chrono::steady_clock::time_point started_;
 };
 
+void publishProgress(
+    const SurfaceReductionExecutionOptions& execution,
+    SurfaceReductionProgressStage stage,
+    const SurfaceReductionReport& report,
+    int targetFaceCount,
+    int currentFaceCount,
+    int maximumFitCount,
+    std::string message,
+    int searchIteration = 0,
+    std::vector<FaceId> activeGroup = {},
+    int candidateValidationIndex = 0,
+    int candidateValidationCount = 0) {
+    if (!execution.progressCallback) {
+        return;
+    }
+    SurfaceReductionProgress progress;
+    progress.stage = stage;
+    progress.inputFaceCount = report.inputFaceCount;
+    progress.targetFaceCount = targetFaceCount;
+    progress.currentFaceCount = currentFaceCount;
+    progress.searchIteration = searchIteration;
+    progress.attemptedMergeCount = report.attemptedMergeCount;
+    progress.completedFitCount = report.fitCacheMissCount;
+    progress.maximumFitCount = maximumFitCount;
+    progress.candidateValidationIndex = candidateValidationIndex;
+    progress.candidateValidationCount = candidateValidationCount;
+    progress.activeGroup = std::move(activeGroup);
+    progress.message = std::move(message);
+    execution.progressCallback(progress);
+}
+
 struct Cluster {
     std::vector<FaceId> faces;
     TopoDS_Face replacementFace;
@@ -774,7 +805,12 @@ FinalValidationResult validateFinalState(
     const std::vector<FaceId>& selectedFaces,
     const std::vector<Cluster>& clusters,
     const SurfaceReductionOptions& options,
-    SurfaceReductionStageTiming& timing) {
+    SurfaceReductionStageTiming& timing,
+    const SurfaceReductionExecutionOptions& execution,
+    const SurfaceReductionReport& report,
+    int targetFaceCount,
+    int candidateValidationIndex,
+    int candidateValidationCount) {
     FinalValidationResult result;
     auto assemblyTimer = std::make_unique<ScopedMilliseconds>(
         timing.assemblyAndCommercialCadMs);
@@ -786,6 +822,18 @@ FinalValidationResult validateFinalState(
         if (cluster.faces.size() < 2 || cluster.replacementFace.IsNull()) {
             continue;
         }
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::ValidatingCommercialCad,
+            report,
+            targetFaceCount,
+            static_cast<int>(clusters.size()),
+            options.maximumRestrictedFitEvaluations,
+            "正在检查局部替换面的边界、角点、特征边和接缝质量。",
+            0,
+            cluster.faces,
+            candidateValidationIndex,
+            candidateValidationCount);
         const auto candidate = makeQualityGateCandidate(document, cluster.faces);
         auto boundary = RegionBoundaryAnalyzer().analyze(document, candidate);
         if (!boundary.valid &&
@@ -818,6 +866,18 @@ FinalValidationResult validateFinalState(
         result.replacements.push_back({cluster.faces, cluster.replacementFace});
     }
 
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::AssemblingModel,
+        report,
+        targetFaceCount,
+        static_cast<int>(clusters.size()),
+        options.maximumRestrictedFitEvaluations,
+        "正在组装整件 B-rep 并执行保守修复。",
+        0,
+        {},
+        candidateValidationIndex,
+        candidateValidationCount);
     const auto replacedShape = document.stats().solids == 1 && document.stats().shells == 1
         ? assembleFaceCompound(document, clusters)
         : assembleWithReShape(document, clusters);
@@ -860,6 +920,18 @@ FinalValidationResult validateFinalState(
     const ShapeDocument reducedDocument(repaired.shape, document.sourcePath());
     assemblyTimer.reset();
     ScopedMilliseconds topologyTimer(timing.strictTopologyAndStepRoundtripMs);
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::ValidatingTopology,
+        report,
+        targetFaceCount,
+        static_cast<int>(clusters.size()),
+        options.maximumRestrictedFitEvaluations,
+        "正在执行 StrictTopologyGate、BRepCheck 和 STEP 回读。",
+        0,
+        {},
+        candidateValidationIndex,
+        candidateValidationCount);
     StrictTopologyGateInput gateInput;
     gateInput.beforeDocument = &document;
     gateInput.afterDocument = &reducedDocument;
@@ -903,6 +975,7 @@ DeterministicSearchResult runDeterministicReductionSearch(
     std::map<std::vector<FaceId>, CachedFit> fitCache;
     std::map<std::vector<FaceId>, CachedFit> stepOnlyFitCache;
     std::map<std::vector<FaceId>, TopoDS_Face> exactCache;
+    int searchIteration = 0;
     SurfaceReductionFitCache persistentCache(execution);
     const bool persistentCacheEnabled = execution.cacheMode != SurfaceReductionCacheMode::Disabled;
     const bool persistentCacheReadable = execution.cacheMode == SurfaceReductionCacheMode::ReadWrite ||
@@ -977,6 +1050,17 @@ DeterministicSearchResult runDeterministicReductionSearch(
         cached.method = SurfaceReductionMergeMethod::RestrictedBSpline;
         if (!loadPersistent(groupedFaces, options, cached)) {
             if (report.persistentFitCacheRequiredMiss) return nullptr;
+            publishProgress(
+                execution,
+                SurfaceReductionProgressStage::Fitting,
+                report,
+                targetCount,
+                frontier.empty() ? static_cast<int>(faces.size()) :
+                    static_cast<int>(frontier.front().clusters.size()),
+                request.options.maximumRestrictedFitEvaluations,
+                "正在计算 STEP-only 回退拟合。",
+                searchIteration,
+                groupedFaces);
             const auto fit = RestrictedBSplinePatchFitter().fit(document, groupedFaces, options);
             ++report.fitCacheMissCount;
             cached.success = fit.success();
@@ -986,6 +1070,17 @@ DeterministicSearchResult runDeterministicReductionSearch(
             report.timing.restrictedFitMs += fit.report.timing.totalMs;
             recordFitProfile(groupedFaces, cached, false);
             storePersistent(groupedFaces, options, cached);
+            publishProgress(
+                execution,
+                SurfaceReductionProgressStage::Fitting,
+                report,
+                targetCount,
+                frontier.empty() ? static_cast<int>(faces.size()) :
+                    static_cast<int>(frontier.front().clusters.size()),
+                request.options.maximumRestrictedFitEvaluations,
+                "STEP-only 回退拟合完成。",
+                searchIteration,
+                groupedFaces);
         }
         return &stepOnlyFitCache.emplace(groupedFaces, std::move(cached)).first->second;
     };
@@ -1017,6 +1112,17 @@ DeterministicSearchResult runDeterministicReductionSearch(
         }
         if (computeGroups.empty() || report.persistentFitCacheRequiredMiss) return;
         std::sort(computeGroups.begin(), computeGroups.end());
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::Fitting,
+            report,
+            targetCount,
+            frontier.empty() ? static_cast<int>(faces.size()) :
+                static_cast<int>(frontier.front().clusters.size()),
+            request.options.maximumRestrictedFitEvaluations,
+            "扫描辅助结果需要回退，正在批量计算 STEP-only 对照拟合。",
+            searchIteration,
+            computeGroups.front());
         const auto batchStarted = std::chrono::steady_clock::now();
         std::vector<std::future<RestrictedBSplinePatchFitResult>> futures;
         futures.reserve(computeGroups.size());
@@ -1040,6 +1146,17 @@ DeterministicSearchResult runDeterministicReductionSearch(
             recordFitProfile(computeGroups[index], cached, false);
             storePersistent(computeGroups[index], options, cached);
             stepOnlyFitCache.emplace(computeGroups[index], std::move(cached));
+            publishProgress(
+                execution,
+                SurfaceReductionProgressStage::Fitting,
+                report,
+                targetCount,
+                frontier.empty() ? static_cast<int>(faces.size()) :
+                    static_cast<int>(frontier.front().clusters.size()),
+                request.options.maximumRestrictedFitEvaluations,
+                "STEP-only 回退拟合已完成一个分组。",
+                searchIteration,
+                computeGroups[index]);
         }
         report.timing.restrictedFitMs += std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - batchStarted).count();
@@ -1048,6 +1165,16 @@ DeterministicSearchResult runDeterministicReductionSearch(
     while (!frontier.empty() &&
            static_cast<int>(frontier.front().clusters.size()) > targetCount &&
            !stopSearch) {
+        ++searchIteration;
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::Searching,
+            report,
+            targetCount,
+            static_cast<int>(frontier.front().clusters.size()),
+            request.options.maximumRestrictedFitEvaluations,
+            "正在展开确定性束搜索层。",
+            searchIteration);
         report.expandedStateCount += static_cast<int>(frontier.size());
         std::vector<SearchState> children;
         for (const auto& state : frontier) {
@@ -1178,6 +1305,18 @@ DeterministicSearchResult runDeterministicReductionSearch(
                             }
                         }
                         if (!report.persistentFitCacheRequiredMiss) {
+                            if (!computeGroups.empty()) {
+                                publishProgress(
+                                    execution,
+                                    SurfaceReductionProgressStage::Fitting,
+                                    report,
+                                    targetCount,
+                                    static_cast<int>(state.clusters.size()),
+                                    request.options.maximumRestrictedFitEvaluations,
+                                    "正在并行计算受限 B-spline 拟合批次。",
+                                    searchIteration,
+                                    computeGroups.front());
+                            }
                             const auto batchStarted = std::chrono::steady_clock::now();
                             std::vector<std::future<RestrictedBSplinePatchFitResult>> futures;
                             futures.reserve(computeGroups.size());
@@ -1201,6 +1340,16 @@ DeterministicSearchResult runDeterministicReductionSearch(
                                 recordFitProfile(computeGroups[futureIndex], prefetched, false);
                                 storePersistent(computeGroups[futureIndex], fitOptions, prefetched);
                                 fitCache.emplace(computeGroups[futureIndex], std::move(prefetched));
+                                publishProgress(
+                                    execution,
+                                    SurfaceReductionProgressStage::Fitting,
+                                    report,
+                                    targetCount,
+                                    static_cast<int>(state.clusters.size()),
+                                    request.options.maximumRestrictedFitEvaluations,
+                                    "受限 B-spline 拟合已完成一个分组。",
+                                    searchIteration,
+                                    computeGroups[futureIndex]);
                             }
                             report.timing.restrictedFitMs += std::chrono::duration<double, std::milli>(
                                 std::chrono::steady_clock::now() - batchStarted).count();
@@ -1215,6 +1364,16 @@ DeterministicSearchResult runDeterministicReductionSearch(
                             stopSearch = true;
                             break;
                         }
+                        publishProgress(
+                            execution,
+                            SurfaceReductionProgressStage::Fitting,
+                            report,
+                            targetCount,
+                            static_cast<int>(state.clusters.size()),
+                            request.options.maximumRestrictedFitEvaluations,
+                            "正在计算受限 B-spline 拟合。",
+                            searchIteration,
+                            groupedFaces);
                         const auto fit = RestrictedBSplinePatchFitter().fit(
                             document, groupedFaces, fitOptions);
                         ++report.fitCacheMissCount;
@@ -1225,6 +1384,16 @@ DeterministicSearchResult runDeterministicReductionSearch(
                         report.timing.restrictedFitMs += fit.report.timing.totalMs;
                         recordFitProfile(groupedFaces, cached, false);
                         storePersistent(groupedFaces, fitOptions, cached);
+                        publishProgress(
+                            execution,
+                            SurfaceReductionProgressStage::Fitting,
+                            report,
+                            targetCount,
+                            static_cast<int>(state.clusters.size()),
+                            request.options.maximumRestrictedFitEvaluations,
+                            "受限 B-spline 拟合完成。",
+                            searchIteration,
+                            groupedFaces);
                     }
                     fitCache.try_emplace(groupedFaces, cached);
                 }
@@ -1383,6 +1552,17 @@ DeterministicSearchResult runDeterministicReductionSearch(
         if (static_cast<int>(frontier.size()) > request.options.beamWidth) {
             frontier.resize(static_cast<std::size_t>(request.options.beamWidth));
         }
+        if (!frontier.empty()) {
+            publishProgress(
+                execution,
+                SurfaceReductionProgressStage::Searching,
+                report,
+                targetCount,
+                static_cast<int>(frontier.front().clusters.size()),
+                request.options.maximumRestrictedFitEvaluations,
+                "当前束搜索层完成，正在进入下一层。",
+                searchIteration);
+        }
     }
 
     search.finalCandidates.reserve(archivedStates.size());
@@ -1407,10 +1587,25 @@ FinalCandidateSelection validateReductionSearchCandidates(
     const std::vector<SearchState>& candidates,
     const std::set<EdgeId>& nonSmoothSeamEdges,
     const SurfaceReductionOptions& options,
+    const SurfaceReductionExecutionOptions& execution,
+    int targetFaceCount,
     SurfaceReductionReport& report,
     std::map<std::vector<FaceId>, SurfaceReductionRejectedGroup>& rejectedGroups) {
     FinalCandidateSelection selection;
-    for (const auto& candidateState : candidates) {
+    for (std::size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex) {
+        const auto& candidateState = candidates[candidateIndex];
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::ValidatingSeams,
+            report,
+            targetFaceCount,
+            static_cast<int>(candidateState.clusters.size()),
+            options.maximumRestrictedFitEvaluations,
+            "正在验证候选组合的保留接缝。",
+            0,
+            {},
+            static_cast<int>(candidateIndex + 1),
+            static_cast<int>(candidates.size()));
         SeamQuality seam;
         seam.maximumAngle = candidateState.maximumSeamAngle;
         seam.valid = std::all_of(
@@ -1441,7 +1636,12 @@ FinalCandidateSelection validateReductionSearchCandidates(
             faces,
             candidateState.clusters,
             options,
-            report.timing);
+            report.timing,
+            execution,
+            report,
+            targetFaceCount,
+            static_cast<int>(candidateIndex + 1),
+            static_cast<int>(candidates.size()));
         if (!validation.passed) {
             if (selection.bestFailure.empty()) {
                 selection.bestFailure = validation.message;
@@ -1503,6 +1703,30 @@ const char* toString(SurfaceReductionCacheMode mode) {
     case SurfaceReductionCacheMode::Refresh: return "Refresh";
     }
     return "Disabled";
+}
+
+const char* toString(SurfaceReductionProgressStage stage) {
+    switch (stage) {
+    case SurfaceReductionProgressStage::ValidatingInput:
+        return "ValidatingInput";
+    case SurfaceReductionProgressStage::PreparingTopology:
+        return "PreparingTopology";
+    case SurfaceReductionProgressStage::Searching:
+        return "Searching";
+    case SurfaceReductionProgressStage::Fitting:
+        return "Fitting";
+    case SurfaceReductionProgressStage::ValidatingSeams:
+        return "ValidatingSeams";
+    case SurfaceReductionProgressStage::ValidatingCommercialCad:
+        return "ValidatingCommercialCad";
+    case SurfaceReductionProgressStage::AssemblingModel:
+        return "AssemblingModel";
+    case SurfaceReductionProgressStage::ValidatingTopology:
+        return "ValidatingTopology";
+    case SurfaceReductionProgressStage::Completed:
+        return "Completed";
+    }
+    return "ValidatingInput";
 }
 
 const char* toString(SurfaceReductionFailureStage stage) {
@@ -1604,6 +1828,24 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         result.report.message = "首版只接受一个连通选区，请分别处理不连通区域。";
         return result;
     }
+    const int targetCount = std::max(1, static_cast<int>(std::floor(
+        static_cast<double>(faces.size()) * std::clamp(request.options.targetOutputRatio, 0.0, 1.0))));
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::ValidatingInput,
+        result.report,
+        targetCount,
+        static_cast<int>(faces.size()),
+        request.options.maximumRestrictedFitEvaluations,
+        "候选选区和执行参数验证完成。");
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::PreparingTopology,
+        result.report,
+        targetCount,
+        static_cast<int>(faces.size()),
+        request.options.maximumRestrictedFitEvaluations,
+        "正在预计算选区拓扑、边指标、三角化和扫描索引。");
 
     std::set<EdgeId> mergeBlockedEdges = request.lockedEdges;
     std::set<EdgeId> nonSmoothSeamEdges = request.lockedEdges;
@@ -1650,8 +1892,6 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
             {},
             SurfaceReductionMergeMethod::OriginalFace});
     }
-    const int targetCount = std::max(1, static_cast<int>(std::floor(
-        static_cast<double>(faces.size()) * std::clamp(request.options.targetOutputRatio, 0.0, 1.0))));
     RestrictedBSplinePatchFitOptions fitOptions;
     fitOptions.tolerance3d = request.options.tolerance3d;
     fitOptions.normalToleranceDegrees = request.options.normalToleranceDegrees;
@@ -1683,6 +1923,14 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         fitOptions.scanRegionIndex = scanRegionIndex.get();
     }
 
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::Searching,
+        result.report,
+        targetCount,
+        static_cast<int>(faces.size()),
+        request.options.maximumRestrictedFitEvaluations,
+        "拓扑准备完成，开始确定性束搜索和局部拟合。");
     auto search = runDeterministicReductionSearch(
         document,
         request,
@@ -1702,12 +1950,22 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         search.finalCandidates,
         nonSmoothSeamEdges,
         request.options,
+        execution,
+        targetCount,
         result.report,
         search.rejectedGroups);
 
     if (result.report.persistentFitCacheRequiredMiss) {
         result.report.outcome = SurfaceReductionOutcome::NoAcceptableReduction;
         result.report.message = "只读缓存回放缺少或损坏了必需的完整局部拟合项。";
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::Completed,
+            result.report,
+            targetCount,
+            result.report.outputFaceCount,
+            request.options.maximumRestrictedFitEvaluations,
+            result.report.message);
         return result;
     }
 
@@ -1719,6 +1977,14 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
         result.report.message = selection.bestFailure.empty()
             ? "无法在当前容差和搜索预算内减少选区面数。"
             : "所有局部减面状态均未通过全局质量门：" + selection.bestFailure;
+        publishProgress(
+            execution,
+            SurfaceReductionProgressStage::Completed,
+            result.report,
+            targetCount,
+            result.report.outputFaceCount,
+            request.options.maximumRestrictedFitEvaluations,
+            result.report.message);
         return result;
     }
 
@@ -1767,6 +2033,14 @@ SurfaceReductionResult SurfaceReductionEngine::reduce(
     result.report.message = result.report.targetAchieved
         ? "确定性束搜索已找到通过全部质量门且达到目标比例的减面状态。"
         : "确定性束搜索已找到通过全部质量门的部分减面状态。";
+    publishProgress(
+        execution,
+        SurfaceReductionProgressStage::Completed,
+        result.report,
+        targetCount,
+        result.report.outputFaceCount,
+        request.options.maximumRestrictedFitEvaluations,
+        result.report.message);
     return result;
 }
 

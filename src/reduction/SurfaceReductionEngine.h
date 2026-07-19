@@ -11,9 +11,10 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 
-#include <set>
 #include <filesystem>
+#include <functional>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,35 @@ enum class SurfaceReductionCacheMode {
 
 const char* toString(SurfaceReductionCacheMode mode);
 
+enum class SurfaceReductionProgressStage {
+    ValidatingInput,
+    PreparingTopology,
+    Searching,
+    Fitting,
+    ValidatingSeams,
+    ValidatingCommercialCad,
+    AssemblingModel,
+    ValidatingTopology,
+    Completed
+};
+
+const char* toString(SurfaceReductionProgressStage stage);
+
+struct SurfaceReductionProgress {
+    SurfaceReductionProgressStage stage = SurfaceReductionProgressStage::ValidatingInput;
+    int inputFaceCount = 0;
+    int targetFaceCount = 0;
+    int currentFaceCount = 0;
+    int searchIteration = 0;
+    int attemptedMergeCount = 0;
+    int completedFitCount = 0;
+    int maximumFitCount = 0;
+    int candidateValidationIndex = 0;
+    int candidateValidationCount = 0;
+    std::vector<FaceId> activeGroup;
+    std::string message;
+};
+
 struct SurfaceReductionExecutionOptions {
     SurfaceReductionCacheMode cacheMode = SurfaceReductionCacheMode::Disabled;
     std::filesystem::path cacheDirectory = "data/cache/surface-reduction/v1";
@@ -52,6 +82,7 @@ struct SurfaceReductionExecutionOptions {
     int fitWorkerCount = 1;
     int maximumProposalGroupSize = 0;
     bool detailedTiming = false;
+    std::function<void(const SurfaceReductionProgress&)> progressCallback;
 };
 
 const char* toString(SurfaceReductionMergeMethod method);
