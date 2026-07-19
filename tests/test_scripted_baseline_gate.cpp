@@ -458,14 +458,26 @@ void test_gui_uses_native_surface_reduction_as_primary_fitting_workflow() {
 
     assert(state.find("enum class SurfaceReductionInputMode") != std::string::npos);
     assert(state.find("SurfaceReductionInputMode::StepBrepOnly") != std::string::npos);
+    assert(state.find("surfaceReductionPreviewCandidateId") != std::string::npos);
     assert(header.find("surfaceReductionStepOnlyAction_") != std::string::npos);
     assert(header.find("surfaceReductionScanReferenceAction_") != std::string::npos);
+    assert(header.find("runSurfaceReductionAction_") != std::string::npos);
+    assert(header.find("previewAndApplySurfaceReductionAction_") != std::string::npos);
     assert(source.find("仅 STEP B-rep") != std::string::npos);
     assert(source.find("STEP B-rep + 扫描 STL 软参考") != std::string::npos);
     assert(source.find("menuBar()->addMenu(\"曲面减面\")") != std::string::npos);
-    assert(source.find("addMenuButton(\"曲面减面\", reductionToolMenu)") != std::string::npos);
+    assert(source.find("toolBar->addAction(selectCandidateAction_)") != std::string::npos);
+    assert(source.find("toolBar->addAction(runSurfaceReductionAction_)") != std::string::npos);
+    assert(source.find("toolBar->addAction(previewAndApplySurfaceReductionAction_)") != std::string::npos);
+    assert(source.find("原生重拟合（预览）") != std::string::npos);
+    assert(source.find("原生重拟合（应用）") != std::string::npos);
+    assert(source.find("一键预览并应用") != std::string::npos);
+    assert(source.find("previewMergeCandidates(true)") != std::string::npos);
+    assert(source.find("const auto selectedFaces = candidate->faces") != std::string::npos);
+    assert(source.find("if (applyAfterPreview)") != std::string::npos);
     assert(source.find("Geomagic 后备（旧流程）") != std::string::npos);
     assert(source.find("addMenuButton(\"Patch\"") == std::string::npos);
+    assert(source.find("applySurfaceReductionAction_") == std::string::npos);
     assert(source.find("execution.fitWorkerCount = 4") != std::string::npos);
     assert(source.find("reduceSelectedFacesData(documentSnapshot, request, execution)") != std::string::npos);
     assert(source.find(

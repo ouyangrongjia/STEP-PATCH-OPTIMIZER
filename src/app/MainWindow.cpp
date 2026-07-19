@@ -391,6 +391,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     qApp->installEventFilter(this);
 
+    refreshSurfaceReductionActions();
     setStatus("就绪");
     logPanel_->appendInfo("界面初始化完成。");
 }
@@ -522,9 +523,10 @@ void MainWindow::createActions() {
     surfaceReductionInputModeGroup->addAction(surfaceReductionStepOnlyAction_);
     surfaceReductionInputModeGroup->addAction(surfaceReductionScanReferenceAction_);
 
-    previewSurfaceReductionAction_ = new QAction("预览原生 B-rep 曲面减面", this);
-    applySurfaceReductionAction_ = new QAction("应用原生 B-rep 减面结果", this);
-    applySurfaceReductionAction_->setEnabled(false);
+    runSurfaceReductionAction_ = new QAction("原生重拟合（预览）", this);
+    runSurfaceReductionAction_->setEnabled(false);
+    previewAndApplySurfaceReductionAction_ = new QAction("一键预览并应用", this);
+    previewAndApplySurfaceReductionAction_->setEnabled(false);
     clearSurfaceReductionAction_ = new QAction("清除原生减面预览", this);
 
     exitAction_ = new QAction("退出", this);
@@ -549,7 +551,7 @@ void MainWindow::createActions() {
     selectionGroup->addAction(selectCandidateAction_);
 
     detectAction_ = new QAction("检测特征边", this);
-    previewMergeAction_ = new QAction("预览合并", this);
+    previewMergeAction_ = new QAction("生成候选区域", this);
     previewMergeAction_->setShortcut(QKeySequence("M"));
     showAllMergeCandidatesAction_ = new QAction("显示全部非隐藏候选", this);
     highlightMergeCandidateByIdAction_ = new QAction("按 ID 高亮候选", this);
@@ -612,12 +614,14 @@ void MainWindow::createMenus() {
     exportMenu->addAction(exportStepAction_);
 
     auto* reductionMenu = menuBar()->addMenu("曲面减面");
+    reductionMenu->addAction(selectCandidateAction_);
+    reductionMenu->addSeparator();
     auto* reductionInputMenu = reductionMenu->addMenu("拟合输入");
     reductionInputMenu->addAction(surfaceReductionStepOnlyAction_);
     reductionInputMenu->addAction(surfaceReductionScanReferenceAction_);
     reductionMenu->addSeparator();
-    reductionMenu->addAction(previewSurfaceReductionAction_);
-    reductionMenu->addAction(applySurfaceReductionAction_);
+    reductionMenu->addAction(runSurfaceReductionAction_);
+    reductionMenu->addAction(previewAndApplySurfaceReductionAction_);
     reductionMenu->addAction(clearSurfaceReductionAction_);
 
     auto* advancedMenu = menuBar()->addMenu("高级");
@@ -695,8 +699,6 @@ void MainWindow::createToolBars() {
     reductionInputToolMenu->addAction(surfaceReductionStepOnlyAction_);
     reductionInputToolMenu->addAction(surfaceReductionScanReferenceAction_);
     reductionToolMenu->addSeparator();
-    reductionToolMenu->addAction(previewSurfaceReductionAction_);
-    reductionToolMenu->addAction(applySurfaceReductionAction_);
     reductionToolMenu->addAction(clearSurfaceReductionAction_);
 
     auto* validateExportMenu = new QMenu(this);
@@ -718,7 +720,10 @@ void MainWindow::createToolBars() {
     toolBar->addSeparator();
     addMenuButton("选择", selectionMenu);
     toolBar->addAction(detectAction_);
-    addMenuButton("曲面减面", reductionToolMenu);
+    toolBar->addAction(selectCandidateAction_);
+    addMenuButton("拟合设置", reductionToolMenu);
+    toolBar->addAction(runSurfaceReductionAction_);
+    toolBar->addAction(previewAndApplySurfaceReductionAction_);
     toolBar->addAction(toggleFeaturesAction_);
     addMenuButton("检查/导出", validateExportMenu);
     toolBar->addSeparator();
@@ -817,8 +822,10 @@ void MainWindow::connectActions() {
     connect(surfaceReductionScanReferenceAction_, &QAction::triggered, this, [this]() {
         setSurfaceReductionInputMode(SurfaceReductionInputMode::StepBrepWithScanReference);
     });
-    connect(previewSurfaceReductionAction_, &QAction::triggered, this, [this]() { previewSurfaceReduction(); });
-    connect(applySurfaceReductionAction_, &QAction::triggered, this, [this]() { applySurfaceReduction(); });
+    connect(runSurfaceReductionAction_, &QAction::triggered, this, [this]() { runSurfaceReduction(); });
+    connect(previewAndApplySurfaceReductionAction_, &QAction::triggered, this, [this]() {
+        previewAndApplySurfaceReduction();
+    });
     connect(clearSurfaceReductionAction_, &QAction::triggered, this, [this]() { clearSurfaceReductionPreview(); });
     connect(showSourceStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setSourceStlVisible);
     connect(showCroppedStlAction_, &QAction::toggled, viewer_, &OccViewWidget::setCroppedStlVisible);
@@ -833,10 +840,7 @@ void MainWindow::connectActions() {
         viewer_->setSelectionMode(SelectionMode::Edge);
         setStatus("选择边模式");
     });
-    connect(selectCandidateAction_, &QAction::triggered, this, [this]() {
-        viewer_->setSelectionMode(SelectionMode::Candidate);
-        setStatus("候选区域选择模式");
-    });
+    connect(selectCandidateAction_, &QAction::triggered, this, [this]() { selectCandidateRegion(); });
 
     connect(detectAction_, &QAction::triggered, this, [this]() { detectFeatureEdges(); });
     connect(previewMergeAction_, &QAction::triggered, this, [this]() { previewMergeCandidates(); });
@@ -912,6 +916,7 @@ void MainWindow::openStepFile() {
         const auto& stats = document.stats();
         clearMergeCandidateState();
         workflowState_.hasFeatureEdgeResult = false;
+        refreshSurfaceReductionActions();
         refreshModelTree();
         const auto displayStatus = viewer_->displayDocument(document);
         if (!displayStatus.success()) {
@@ -923,6 +928,8 @@ void MainWindow::openStepFile() {
             refreshProcessStatusPanel();
             return;
         }
+        selectFaceAction_->setChecked(true);
+        viewer_->setSelectionMode(SelectionMode::Face);
         showSourceStlAction_->setChecked(true);
         showSourceStlAction_->setEnabled(false);
         showCroppedStlAction_->setChecked(true);
@@ -1705,7 +1712,58 @@ void MainWindow::clearPatchOverlay() {
     refreshProcessStatusPanel();
 }
 
-void MainWindow::previewSurfaceReduction() {
+void MainWindow::selectCandidateRegion() {
+    if (!controller_.hasDocument()) {
+        inspectPanel_->showReport("请先打开 STEP/STP 文件。");
+        selectFaceAction_->setChecked(true);
+        viewer_->setSelectionMode(SelectionMode::Face);
+        setStatus("未加载模型");
+        return;
+    }
+    if (!workflowState_.hasFeatureEdgeResult) {
+        inspectPanel_->showReport("请先检测特征边，再选择候选区域。");
+        selectFaceAction_->setChecked(true);
+        viewer_->setSelectionMode(SelectionMode::Face);
+        setStatus("请先检测特征边");
+        return;
+    }
+    if (workflowState_.candidates.empty()) {
+        previewMergeCandidates(true);
+        return;
+    }
+
+    selectCandidateAction_->setChecked(true);
+    viewer_->setSelectionMode(SelectionMode::Candidate);
+    showNonHiddenMergeCandidates();
+    inspectPanel_->showReport("候选区域已显示。\n请在模型上单击一个候选区域，然后执行原生重拟合。");
+    setStatus("请选择一个候选区域");
+}
+
+void MainWindow::runSurfaceReduction() {
+    const bool previewMatchesCandidate =
+        controller_.surfaceReductionPreviewReady() &&
+        workflowState_.surfaceReductionPreviewCandidateId >= 0 &&
+        workflowState_.surfaceReductionPreviewCandidateId == workflowState_.currentCandidateId;
+    if (previewMatchesCandidate) {
+        applySurfaceReduction();
+        return;
+    }
+    previewSurfaceReduction(false);
+}
+
+void MainWindow::previewAndApplySurfaceReduction() {
+    const bool previewMatchesCandidate =
+        controller_.surfaceReductionPreviewReady() &&
+        workflowState_.surfaceReductionPreviewCandidateId >= 0 &&
+        workflowState_.surfaceReductionPreviewCandidateId == workflowState_.currentCandidateId;
+    if (previewMatchesCandidate) {
+        applySurfaceReduction();
+        return;
+    }
+    previewSurfaceReduction(true);
+}
+
+void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     if (!controller_.hasDocument()) {
         inspectPanel_->showReport("请先打开 STEP/STP 文件。");
         setStatus("未加载模型");
@@ -1716,12 +1774,21 @@ void MainWindow::previewSurfaceReduction() {
         setStatus("后台任务运行中");
         return;
     }
-    const auto selectedFaces = viewer_->selectedFaceIds();
+    const auto* candidate = currentMergeCandidate();
+    if (candidate == nullptr || !candidate->valid ||
+        candidate->status == MergeCandidateStatus::Rejected ||
+        candidate->status == MergeCandidateStatus::Hidden) {
+        inspectPanel_->showReport("请先检测特征边，再点击“选择候选区域”并在模型上选择一个有效候选。");
+        setStatus("未选择有效候选区域");
+        return;
+    }
+    const auto selectedFaces = candidate->faces;
     if (selectedFaces.size() < 2) {
-        inspectPanel_->showReport("请在选择面模式下至少选择两个相邻面。");
+        inspectPanel_->showReport("当前候选区域少于两个面，不能执行原生重拟合。");
         setStatus("选区没有可减少的面数");
         return;
     }
+    const auto candidateId = candidate->candidate_id;
 
     SurfaceReductionRequest request;
     request.selectedFaces = selectedFaces;
@@ -1742,29 +1809,34 @@ void MainWindow::previewSurfaceReduction() {
     execution.detailedTiming = true;
     const auto documentSnapshot = controller_.document();
     controller_.clearCurrentSurfaceReductionPreview();
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    viewer_->clearPatchOverlay();
     surfaceReductionStepOnlyAction_->setEnabled(false);
     surfaceReductionScanReferenceAction_->setEnabled(false);
     setStlCropInProgress(true);
-    setStatus("正在后台拟合曲面减面预览");
-    inspectPanel_->showReport(QString("原生 B-rep 曲面减面计算中\n输入面数：%1\n拟合输入：%2\n工作线程：%3\n目标：50% 及以下")
+    setStatus(applyAfterPreview ? "正在后台预览并准备应用原生重拟合" : "正在后台预览原生重拟合");
+    inspectPanel_->showReport(QString("原生 B-rep 重拟合计算中\n候选区域：%1\n输入面数：%2\n拟合输入：%3\n工作线程：%4\n完成策略：%5\n目标：50% 及以下")
+        .arg(candidateId)
         .arg(selectedFaces.size())
         .arg(surfaceReductionInputModeText(inputMode))
-        .arg(execution.fitWorkerCount));
+        .arg(execution.fitWorkerCount)
+        .arg(applyAfterPreview ? "预览通过后自动应用" : "先预览，再用同一按钮应用"));
     bottomTabs_->setCurrentWidget(inspectPanel_->reportWidget());
 
     auto* watcher = new QFutureWatcher<SurfaceReductionResult>(this);
-    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode]() {
+    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode, candidateId, applyAfterPreview]() {
         auto output = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
         surfaceReductionStepOnlyAction_->setEnabled(true);
         surfaceReductionScanReferenceAction_->setEnabled(true);
         controller_.setCurrentSurfaceReductionPreview(output);
+        workflowState_.surfaceReductionPreviewCandidateId = candidateId;
 
         const auto& report = output.report;
         QStringList lines;
-        lines << "原生 B-rep 曲面减面预览结果";
+        lines << "原生 B-rep 重拟合预览结果";
+        lines << QString("候选区域：%1").arg(candidateId);
         lines << QString("拟合输入：%1").arg(surfaceReductionInputModeText(inputMode));
         lines << QString("状态：%1").arg(QString::fromLatin1(toString(report.outcome)));
         lines << QString("输入面数：%1").arg(report.inputFaceCount);
@@ -1818,15 +1890,26 @@ void MainWindow::previewSurfaceReduction() {
             viewer_->clearPatchOverlay();
             viewer_->showPatchOverlay(output.previewShape);
         }
-        applySurfaceReductionAction_->setEnabled(output.canApply());
+        refreshSurfaceReductionActions();
         if (output.canApply()) {
-            logPanel_->appendInfo(QString("曲面减面预览可应用：面 %1 -> %2。")
+            logPanel_->appendInfo(QString("候选 %1 原生重拟合预览可应用：面 %2 -> %3。")
+                .arg(candidateId)
                 .arg(report.inputFaceCount)
                 .arg(report.outputFaceCount));
-            setStatus("曲面减面预览完成，可应用");
+            if (workflowState_.currentCandidateId != candidateId) {
+                inspectPanel_->showReport(lines.join('\n') + "\n\n候选选择已在计算期间改变，结果不会自动应用。");
+                logPanel_->appendWarning("原生重拟合完成，但候选选择已改变，已阻止自动应用。");
+                setStatus("候选已改变，未自动应用");
+            } else if (applyAfterPreview) {
+                logPanel_->appendInfo(QString("候选 %1 预览通过，开始自动应用。").arg(candidateId));
+                applySurfaceReduction();
+                return;
+            } else {
+                setStatus("原生重拟合预览完成，再次点击可应用");
+            }
         } else {
             logPanel_->appendWarning(QString::fromStdString(report.message));
-            setStatus("曲面减面未生成可应用结果");
+            setStatus("原生重拟合未生成可应用结果");
         }
         refreshUndoRedoActions();
     });
@@ -1836,33 +1919,37 @@ void MainWindow::previewSurfaceReduction() {
 }
 
 void MainWindow::applySurfaceReduction() {
-    if (!controller_.surfaceReductionPreviewReady()) {
-        inspectPanel_->showReport("当前曲面减面预览未通过全部质量门，不能应用。");
-        setStatus("曲面减面结果不可应用");
+    if (!controller_.surfaceReductionPreviewReady() ||
+        workflowState_.surfaceReductionPreviewCandidateId < 0 ||
+        workflowState_.surfaceReductionPreviewCandidateId != workflowState_.currentCandidateId) {
+        inspectPanel_->showReport("当前候选没有通过全部质量门的原生重拟合预览，不能应用。");
+        setStatus("原生重拟合结果不可应用");
         return;
     }
     const auto result = controller_.applyCurrentSurfaceReduction();
     if (!result.success()) {
         inspectPanel_->showReport(QString::fromStdString(result.message()));
         logPanel_->appendError(QString::fromStdString(result.message()));
-        setStatus("曲面减面应用失败");
+        setStatus("原生重拟合应用失败");
         return;
     }
     viewer_->clearPatchOverlay();
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
     refreshDocumentViews(false);
-    inspectPanel_->showReport("曲面减面事务已提交。\n撤销和重做使用缓存结果，不会重新拟合。");
-    logPanel_->appendInfo("曲面减面事务已提交。");
-    setStatus("曲面减面已应用");
+    refreshSurfaceReductionActions();
+    inspectPanel_->showReport("原生重拟合事务已提交。\n撤销和重做使用缓存结果，不会重新拟合。");
+    logPanel_->appendInfo("原生重拟合事务已提交。");
+    setStatus("原生重拟合已应用");
     refreshUndoRedoActions();
 }
 
 void MainWindow::clearSurfaceReductionPreview() {
     viewer_->clearPatchOverlay();
     controller_.clearCurrentSurfaceReductionPreview();
-    applySurfaceReductionAction_->setEnabled(false);
-    inspectPanel_->showReport("曲面减面预览已清除。\n主模型未修改。");
-    setStatus("曲面减面预览已清除");
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
+    inspectPanel_->showReport("原生重拟合预览已清除。\n主模型未修改。");
+    setStatus("原生重拟合预览已清除");
 }
 
 void MainWindow::showPatchPreviewReport(
@@ -1904,7 +1991,13 @@ void MainWindow::detectFeatureEdges() {
 
     const auto params = parameterPanel_->parameters();
     const auto result = controller_.detectFeatureEdges(params.angular_threshold_degrees, params.min_edge_length);
+    viewer_->clearPatchOverlay();
+    controller_.clearCurrentSurfaceReductionPreview();
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    clearMergeCandidateState();
     workflowState_.hasFeatureEdgeResult = true;
+    selectFaceAction_->setChecked(true);
+    viewer_->setSelectionMode(SelectionMode::Face);
     viewer_->showFeatureEdges(result);
     viewer_->setFeatureLinesVisible(true);
     toggleFeaturesAction_->setChecked(true);
@@ -1914,11 +2007,12 @@ void MainWindow::detectFeatureEdges() {
         .arg(result.sharp_edges)
         .arg(result.free_edges)
         .arg(result.multiple_edges));
-    setStatus("特征边检测完成");
+    refreshSurfaceReductionActions();
+    setStatus("特征边检测完成，请选择候选区域");
     refreshUndoRedoActions();
 }
 
-void MainWindow::previewMergeCandidates() {
+void MainWindow::previewMergeCandidates(bool activateSelectionWhenReady) {
     if (workflowState_.stlCropInProgress || workflowState_.patchApplyInProgress) {
         inspectPanel_->showReport("后台任务正在运行，请等待当前任务完成。");
         setStatus("后台任务运行中");
@@ -1936,6 +2030,10 @@ void MainWindow::previewMergeCandidates() {
     MergePlannerOptions options;
     options.enable_feature_bounded_refit_candidates = true;
     options.min_feature_bounded_region_faces = 2;
+    viewer_->clearPatchOverlay();
+    controller_.clearCurrentSurfaceReductionPreview();
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
 
     auto progress = makeProcessStatus(
         ProcessStage::PreviewingMergeCandidates,
@@ -1949,7 +2047,7 @@ void MainWindow::previewMergeCandidates() {
     setStatus("合并候选区域预览中");
 
     auto* watcher = new QFutureWatcher<MergePreviewUiResult>(this);
-    connect(watcher, &QFutureWatcher<MergePreviewUiResult>::finished, this, [this, watcher]() {
+    connect(watcher, &QFutureWatcher<MergePreviewUiResult>::finished, this, [this, watcher, activateSelectionWhenReady]() {
         auto output = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -2012,12 +2110,21 @@ void MainWindow::previewMergeCandidates() {
             workflowState_.visibleCandidateCount = 0;
             workflowState_.visibleCandidateIds.clear();
             report += "\n\n没有可预览候选区域。";
+            if (activateSelectionWhenReady) {
+                selectFaceAction_->setChecked(true);
+                viewer_->setSelectionMode(SelectionMode::Face);
+            }
         } else {
             viewer_->showMergeCandidates(workflowState_.candidates, 10, false);
             workflowState_.visibleCandidateCount = static_cast<int>(std::min<std::size_t>(10, workflowState_.candidates.size()));
             workflowState_.visibleCandidateIds.clear();
             for (std::size_t index = 0; index < static_cast<std::size_t>(workflowState_.visibleCandidateCount); ++index) {
                 addVisibleCandidateId(workflowState_.visibleCandidateIds, workflowState_.candidates[index]);
+            }
+            if (activateSelectionWhenReady) {
+                selectCandidateAction_->setChecked(true);
+                viewer_->setSelectionMode(SelectionMode::Candidate);
+                report += "\n\n已进入候选区域选择模式，请在模型上单击一个候选区域。";
             }
         }
         viewer_->showFeatureEdges(controller_.featureEdges());
@@ -2031,7 +2138,11 @@ void MainWindow::previewMergeCandidates() {
             .arg(output.result.protected_edge_count)
             .arg(output.result.visited_faces)
             .arg(output.result.rejected_regions));
-        setStatus("合并候选区域预览完成");
+        refreshSurfaceReductionActions();
+        setStatus(
+            activateSelectionWhenReady && !workflowState_.candidates.empty()
+                ? "候选区域已生成，请选择一个候选"
+                : "候选区域生成完成");
         refreshProcessStatusPanel();
     });
     watcher->setFuture(QtConcurrent::run([this, beforeStats, params, options]() {
@@ -2231,6 +2342,11 @@ void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
         workflowState_.visibleCandidateIds.clear();
         refreshModelTree();
         if (hiddenCandidate != nullptr) {
+            if (workflowState_.currentCandidateId != hiddenCandidate->candidate_id) {
+                viewer_->clearPatchOverlay();
+                controller_.clearCurrentSurfaceReductionPreview();
+                workflowState_.surfaceReductionPreviewCandidateId = -1;
+            }
             workflowState_.currentCandidateId = hiddenCandidate->candidate_id;
             viewer_->clearMergeCandidates();
             showFaceInspectReport(info, !workflowState_.candidates.empty());
@@ -2241,9 +2357,15 @@ void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
             logPanel_->appendWarning(QString("Face %1 不属于当前候选区域。").arg(faceId));
             setStatus(workflowState_.candidates.empty() ? "未生成候选区域" : "未命中候选区域");
         }
+        refreshSurfaceReductionActions();
         return;
     }
 
+    if (workflowState_.currentCandidateId != matchedCandidate->candidate_id) {
+        viewer_->clearPatchOverlay();
+        controller_.clearCurrentSurfaceReductionPreview();
+        workflowState_.surfaceReductionPreviewCandidateId = -1;
+    }
     workflowState_.currentCandidateId = matchedCandidate->candidate_id;
     viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*matchedCandidate}, matchedCandidate->candidate_id);
     if (workflowState_.hasFeatureEdgeResult) {
@@ -2262,6 +2384,7 @@ void MainWindow::selectMergeCandidateByFace(FaceId faceId) {
         controller_.lockedEdges());
     showFaceInspectReport(selectedInfo, true);
     logPanel_->appendInfo(QString("已选择候选 ID：%1").arg(workflowState_.currentCandidateId));
+    refreshSurfaceReductionActions();
     setStatus(QString("已选择候选 %1").arg(workflowState_.currentCandidateId));
 }
 
@@ -2333,6 +2456,7 @@ void MainWindow::applyMerge() {
     const auto& document = controller_.document();
     clearMergeCandidateState();
     workflowState_.hasFeatureEdgeResult = false;
+    refreshSurfaceReductionActions();
     refreshModelTree();
     const auto displayStatus = viewer_->displayDocument(document);
     if (!displayStatus.success()) {
@@ -2406,7 +2530,8 @@ void MainWindow::undo() {
     }
 
     refreshDocumentViews(false);
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
     logPanel_->appendInfo("已撤销上一条编辑命令。");
     setStatus("已撤销");
     refreshUndoRedoActions();
@@ -2422,7 +2547,8 @@ void MainWindow::redo() {
     }
 
     refreshDocumentViews(false);
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
     logPanel_->appendInfo("已重做上一条编辑命令。");
     setStatus("已重做");
     refreshUndoRedoActions();
@@ -2571,6 +2697,8 @@ void MainWindow::refreshDocumentViews(bool clearPatchState) {
     const auto& document = controller_.document();
     clearMergeCandidateState();
     workflowState_.hasFeatureEdgeResult = false;
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
     refreshModelTree();
     const auto displayStatus = viewer_->displayDocument(document);
     if (!displayStatus.success()) {
@@ -2578,6 +2706,8 @@ void MainWindow::refreshDocumentViews(bool clearPatchState) {
         setStatus("模型刷新失败");
         return;
     }
+    selectFaceAction_->setChecked(true);
+    viewer_->setSelectionMode(SelectionMode::Face);
     syncLockedEdges();
 }
 
@@ -2614,10 +2744,12 @@ void MainWindow::refreshModelTree() {
 
 void MainWindow::clearMergeCandidateState() {
     workflowState_.clearCandidates();
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
     if (viewer_ != nullptr) {
         viewer_->clearMergeCandidates();
     }
     refreshPatchApplyAction();
+    refreshSurfaceReductionActions();
 }
 
 void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCandidatePreview) {
@@ -2655,7 +2787,7 @@ void MainWindow::showFaceInspectReport(const FaceInspectInfo& info, bool hasCand
             .arg(info.adjacent_protected_edge_count)
             .arg(info.adjacent_locked_edge_count);
         if (!hasCandidatePreview) {
-            report += "\nNote：当前尚未生成合并候选，请先点击“预览合并”。";
+            report += "\nNote：当前尚未生成候选区域，请先点击“选择候选区域”。";
         } else {
             report += "\nNote：当前候选检测只生成 FeatureBoundedRefit。若该面仍未进入候选，通常是因为区域面数不足，或邻接 protected/locked edge 阻断。";
         }
@@ -2694,6 +2826,11 @@ bool MainWindow::setCurrentMergeCandidateStatus(MergeCandidateStatus status) {
     }
 
     candidate->status = status;
+    if (status == MergeCandidateStatus::Rejected || status == MergeCandidateStatus::Hidden) {
+        viewer_->clearPatchOverlay();
+        controller_.clearCurrentSurfaceReductionPreview();
+        workflowState_.surfaceReductionPreviewCandidateId = -1;
+    }
     if (status == MergeCandidateStatus::Accepted || status == MergeCandidateStatus::Pending) {
         viewer_->showMergeCandidateById(std::vector<MergeCandidate>{*candidate}, candidate->candidate_id);
         workflowState_.visibleCandidateCount = 1;
@@ -2706,6 +2843,7 @@ bool MainWindow::setCurrentMergeCandidateStatus(MergeCandidateStatus status) {
         workflowState_.visibleCandidateIds.clear();
     }
     refreshModelTree();
+    refreshSurfaceReductionActions();
     return true;
 }
 
@@ -2809,6 +2947,7 @@ void MainWindow::setStlCropInProgress(bool inProgress) {
     }
     previewMergeAction_->setEnabled(!inProgress);
     highlightMergeCandidateByIdAction_->setEnabled(!inProgress);
+    refreshSurfaceReductionActions();
     refreshUndoRedoActions();
 }
 
@@ -2867,6 +3006,53 @@ void MainWindow::updateSurfaceReductionInputModeActions() {
         workflowState_.surfaceReductionInputMode == SurfaceReductionInputMode::StepBrepWithScanReference);
 }
 
+void MainWindow::refreshSurfaceReductionActions() {
+    if (runSurfaceReductionAction_ == nullptr ||
+        previewAndApplySurfaceReductionAction_ == nullptr ||
+        selectCandidateAction_ == nullptr) {
+        return;
+    }
+
+    const bool idle = !workflowState_.stlCropInProgress && !workflowState_.patchApplyInProgress;
+    const auto* candidate = currentMergeCandidate();
+    const bool candidateReady =
+        controller_.hasDocument() &&
+        workflowState_.hasFeatureEdgeResult &&
+        candidate != nullptr &&
+        candidate->valid &&
+        candidate->faces.size() >= 2 &&
+        candidate->status != MergeCandidateStatus::Rejected &&
+        candidate->status != MergeCandidateStatus::Hidden;
+    const bool previewReady =
+        candidateReady &&
+        controller_.surfaceReductionPreviewReady() &&
+        workflowState_.surfaceReductionPreviewCandidateId == candidate->candidate_id;
+
+    selectCandidateAction_->setEnabled(
+        idle && controller_.hasDocument() && workflowState_.hasFeatureEdgeResult);
+    runSurfaceReductionAction_->setText(
+        previewReady ? "原生重拟合（应用）" : "原生重拟合（预览）");
+    runSurfaceReductionAction_->setEnabled(idle && candidateReady);
+    previewAndApplySurfaceReductionAction_->setEnabled(idle && candidateReady);
+    clearSurfaceReductionAction_->setEnabled(
+        idle && workflowState_.surfaceReductionPreviewCandidateId >= 0);
+
+    const QString guidance = !controller_.hasDocument()
+        ? "请先打开 STEP/STP。"
+        : (!workflowState_.hasFeatureEdgeResult
+            ? "请先检测特征边。"
+            : (!candidateReady
+                ? "请点击“选择候选区域”并在模型上选择一个候选。"
+                : (previewReady
+                    ? "当前预览已通过全部质量门，点击提交缓存结果。"
+                    : "点击生成原生 B-rep 重拟合预览。")));
+    runSurfaceReductionAction_->setToolTip(guidance);
+    previewAndApplySurfaceReductionAction_->setToolTip(
+        candidateReady
+            ? "预览通过全部质量门后自动应用；失败时保留报告且不修改模型。"
+            : guidance);
+}
+
 void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
     if (edgeIds.empty()) {
         setStatus("未选择边");
@@ -2882,7 +3068,8 @@ void MainWindow::lockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
     }
 
     viewer_->clearPatchOverlay();
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
     logPanel_->appendInfo(QString("已锁定 %1 条边。").arg(edgeIds.size()));
     setStatus(QString("已锁定 %1 条边").arg(edgeIds.size()));
     syncLockedEdges();
@@ -2904,7 +3091,8 @@ void MainWindow::unlockSelectedEdges(const std::vector<EdgeId>& edgeIds) {
     }
 
     viewer_->clearPatchOverlay();
-    applySurfaceReductionAction_->setEnabled(false);
+    workflowState_.surfaceReductionPreviewCandidateId = -1;
+    refreshSurfaceReductionActions();
     logPanel_->appendInfo(QString("已解锁 %1 条边。").arg(edgeIds.size()));
     setStatus(QString("已解锁 %1 条边").arg(edgeIds.size()));
     syncLockedEdges();

@@ -48,11 +48,14 @@ private:
     void importPatchFromFile();
     void applyCurrentPatchPreview();
     void clearPatchOverlay();
-    void previewSurfaceReduction();
+    void selectCandidateRegion();
+    void runSurfaceReduction();
+    void previewAndApplySurfaceReduction();
+    void previewSurfaceReduction(bool applyAfterPreview = false);
     void applySurfaceReduction();
     void clearSurfaceReductionPreview();
     void detectFeatureEdges();
-    void previewMergeCandidates();
+    void previewMergeCandidates(bool activateSelectionWhenReady = false);
     void showAllMergeCandidates();
     void highlightMergeCandidateById();
     void selectMergeCandidateByFace(FaceId faceId);
@@ -104,6 +107,7 @@ private:
     void setSurfaceReductionInputMode(SurfaceReductionInputMode mode);
     SurfaceReductionInputMode currentSurfaceReductionInputMode() const;
     void updateSurfaceReductionInputModeActions();
+    void refreshSurfaceReductionActions();
     void lockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void unlockSelectedEdges(const std::vector<EdgeId>& edgeIds);
     void setStatus(const QString& message);
@@ -145,8 +149,8 @@ private:
     QAction* clearPatchOverlayAction_ = nullptr;
     QAction* surfaceReductionStepOnlyAction_ = nullptr;
     QAction* surfaceReductionScanReferenceAction_ = nullptr;
-    QAction* previewSurfaceReductionAction_ = nullptr;
-    QAction* applySurfaceReductionAction_ = nullptr;
+    QAction* runSurfaceReductionAction_ = nullptr;
+    QAction* previewAndApplySurfaceReductionAction_ = nullptr;
     QAction* clearSurfaceReductionAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* selectFaceAction_ = nullptr;

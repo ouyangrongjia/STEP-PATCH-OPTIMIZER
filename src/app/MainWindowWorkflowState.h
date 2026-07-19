@@ -26,6 +26,7 @@ struct MainWindowWorkflowState {
     int visibleCandidateCount = 0;
     int currentCandidateId = -1;
     bool hasFeatureEdgeResult = false;
+    int surfaceReductionPreviewCandidateId = -1;
 
     bool stlCropInProgress = false;
     bool patchApplyInProgress = false;

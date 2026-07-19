@@ -2,7 +2,7 @@
 
 Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，并对目标区域执行原生自由曲面重建或 Geomagic 后备拟合；结果通过原始边界、拓扑与外部 CAD 诊断验证后导出 STEP。
 
-当前产品开发主线是 `native-surface-reduction`：用户通过 GUI 任意多选一个连通区域，系统直接基于原始 STEP 的 B-rep 邻接和精确曲面求值尝试减面。`native-surface-refit` 保留为单曲面实验基线，`native-autosurface` 冻结为四边布局实验参考，不进入当前运行路径。
+当前产品开发主线是 `native-surface-reduction`：GUI 按“导入 STEP → 检测特征边 → 生成并选择候选区域 → 原生 B-rep 重拟合 → 预览或应用”的顺序工作，系统直接基于候选 FaceId 集合、原始 STEP 的 B-rep 邻接和精确曲面求值尝试减面。底层引擎仍支持任意连通 FaceId 选区；`native-surface-refit` 保留为单曲面实验基线，`native-autosurface` 冻结为四边布局实验参考，不进入当前运行路径。
 
 ## 当前核心能力
 
@@ -20,7 +20,7 @@ Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-
 - PatchReplacementRepair、StrictTopologyGate 和 CommercialCadLikeQualityGate
 - applied STEP 外部 CAD 诊断路由和 Creo ModelCHECK 脚本入口
 - 原生单曲面拟合探针、独立误差验证和诊断 patch 输出
-- 任意连通选区的自适应 B-spline 减面预览、质量报告、支撑曲面包络与稠密 `SameParameter` 跨内核门、Apply、撤销和重做
+- 特征边约束下的候选区域选择、自适应 B-spline 原生重拟合预览、质量报告、支撑曲面包络与稠密 `SameParameter` 跨内核门、Apply、撤销和重做
 - 命令级 undo/redo
 - 合法性检查
 - 导出 STEP 并二次读取校验
@@ -411,13 +411,13 @@ tools         批处理和 STEP 统计工具
 当前工作位于独立 `native-surface-reduction` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线，`native-surface-refit` 和 `native-autosurface` 保留为实验参考。当前 Surface Reduction 第一版已经具备：
 
 ```text
-1. GUI 任意选择一个连通、可定向的多面区域，输出面数和目标面数动态计算。
+1. 底层引擎接收任意连通、可定向的多面 FaceId 集合；GUI 主线先检测特征边，再生成并选择一个候选区域，输出面数和目标面数动态计算。
 2. 原始 STEP 的 B-rep 邻接负责分组；同域组合先精确合并，其余组合尝试受限三次 B-spline 重拟合；大于 `15°` 的明显折角、锁边和选区边界禁止跨越。
 3. 原始边界以 KKT 等式硬约束进入拟合，并用自适应锚点和每边 97 个独立样本执行边界终验；STEP 调和参数图的域外区域加入低权重守卫样本，支撑曲面控制网超出原始选区包络时直接拒绝。
 4. 重裁剪优先使用 OCCT 精确投影参数曲线；若其参数分支不连续，只允许通过连续投影分支构造的同参数采样曲线后备，并再次执行 97 点 `SameParameter` 检查。
 5. STEP 参数图负责拟合 UV；可选的独立扫描 STL 只在 STEP 边界限定后提供权重 `0.25` 的内部位置软参考，不覆盖 STEP 参数域或终验基准；扫描辅助拟合若破坏硬质量门或保留接缝，会在同一搜索中退回 STEP-only 拟合。
 6. 分组采用宽度 8 的确定性束搜索、每状态最多 16 个展开和最多 512 个唯一受限拟合；相邻组按法向、曲率、共享边长度和空间分布确定性排序，同时保留硬接缝可行状态与可继续扩大的过渡状态。
-7. 预览不修改文档；通过全部质量门的结果才可 Apply，撤销和重做复用缓存文档，不重新拟合。
+7. GUI 用一个状态化“原生重拟合”按钮承接预览和 Apply：无合格预览时执行预览，有合格预览时执行 Apply；另提供“一键预览并应用”。预览不修改文档，只有通过全部质量门的结果才可 Apply，撤销和重做复用缓存文档，不重新拟合。
 8. STEP 导出是预览或 Apply 后的独立操作，不是 Apply 事务的一部分。
 ```
 

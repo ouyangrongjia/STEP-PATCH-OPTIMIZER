@@ -2,7 +2,7 @@
 
 ## 1. 产品合同
 
-GUI 通过 `OccViewWidget::selectedFaceIds()` 获取一个连通选区。输入和输出面数完全由选区和拟合结果决定，不允许固定候选、面编号、分组或目标面数。拟合输入显式区分 STEP-only 与 STEP 加独立扫描 STL 软参考；加载 STL 本身不会静默切换模式。
+`SurfaceReductionEngine` 接收任意连通 FaceId 集合；GUI 产品主线先检测特征边，由 `MergePlanner` 动态生成候选，再把用户当前选中候选的 `MergeCandidate::faces` 作为请求。候选模式会清空普通 face 选择，因此 GUI 不再从 `OccViewWidget::selectedFaceIds()` 读取原生重拟合输入。输入和输出面数完全由本轮候选 FaceId 集合和拟合结果决定，不允许固定候选、面编号、分组或目标面数。拟合输入显式区分 STEP-only 与 STEP 加独立扫描 STL 软参考；加载 STL 本身不会静默切换模式。
 
 设输入面数为 `N`：
 
@@ -17,6 +17,8 @@ GUI 通过 `OccViewWidget::selectedFaceIds()` 获取一个连通选区。输入�
 
 ```text
 原始 ShapeDocument
+→ 检测特征边
+→ 动态生成并选择 FeatureBoundedRefit 候选
 → 校验选区连通性
 → 先尝试面积最大原始面的 STEP 支撑面投影；非单值、重叠或不可用时建立 STEP 调和参数图
 → 可选：按 STEP 修剪面域从独立扫描 STL 裁剪选区形貌软参考
@@ -35,6 +37,8 @@ GUI 通过 `OccViewWidget::selectedFaceIds()` 获取一个连通选区。输入�
 → GUI 预览
 → ReduceSelectedFacesCommand 事务 Apply
 ```
+
+GUI 用一个状态化按钮承接两阶段操作：没有合格预览时执行预览，当前候选已有合格预览时执行 Apply；“一键预览并应用”只在同一候选的预览通过全部质量门后自动提交。候选在计算期间改变时禁止自动 Apply。
 
 扩大分组时不得采样上一次拟合结果。局部三角细分只用于原始面 UV 域内的面积加权点位分配；所有验收点、法向均重新由原始 `Geom_Surface` 求值。加载原 STL 时，STL 只提供选区内部形貌参考，不替代 STEP 边界和终验基准。
 
@@ -92,8 +96,9 @@ GUI 通过 `OccViewWidget::selectedFaceIds()` 获取一个连通选区。输入�
 | SR-11.1 candidate 179 Creo 跨内核支撑面与裁剪回归 | 已完成 |
 | SR-12 拟合索引、持久缓存、确定性批量并行和分层回归 | 已完成 |
 | SR-12.3 GUI 原生 B-rep 主流程迁移 | 已完成 |
+| SR-12.4 GUI 候选选择与统一预览/应用入口 | 已完成 |
 
-GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪、商业 CAD 类门、`StrictTopologyGate` 和 STEP 回读。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
+GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏，操作顺序为“检测特征边 → 选择候选区域 → 原生重拟合”。“选择候选区域”在需要时自动生成候选并进入候选点击模式；“原生重拟合”在预览与 Apply 状态间切换，另有“一键预览并应用”。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪、商业 CAD 类门、`StrictTopologyGate` 和 STEP 回读。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
 
 `surface_reduction_probe` 支持 `--source-stl <原始.stl>` 动态执行 STEP 面域裁剪，也支持 `--cropped-stl <选区.stl>` 复用已验证裁剪；选区可用 `--candidate-id <id>` 动态发现，或直接给出任意数量的 FaceId。成功时可用 `--selection-output <独立选区.step>` 同时导出减面后的选区面复合体。`step_stats <文件> --curve-on-surface` 用于稠密检查三维边/参数曲线偏差和 B-spline 控制网范围。`surface_reduction_benchmark` 从平滑内部边和现有候选属性发现选区，并动态记录输入、输出、质量指标和拒绝原因；生产逻辑和默认测试不包含 candidate 179。
 
