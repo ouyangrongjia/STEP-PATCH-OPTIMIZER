@@ -10,7 +10,8 @@ param(
     [long]$MaximumMemoryMiB = 8192,
     [string]$OutputDir = "",
     [switch]$ConstraintsOnly,
-    [switch]$SamplingOnly
+    [switch]$SamplingOnly,
+    [switch]$LayoutOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,12 +25,12 @@ if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
 if ($Layout -eq "fixed" -and $PatchCount -le 0) {
     throw "Fixed layout requires -PatchCount greater than zero."
 }
-if ($ConstraintsOnly -and $SamplingOnly) {
-    throw "-ConstraintsOnly and -SamplingOnly cannot be used together."
+if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent + [int]$LayoutOnly.IsPresent -gt 1) {
+    throw "Stage diagnostic switches cannot be used together."
 }
 
 $candidateToken = if ($PSCmdlet.ParameterSetName -eq "Candidate") { [string]$CandidateId } else { "faces" }
-$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } else { $Layout }
+$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } elseif ($LayoutOnly) { "layout" } else { $Layout }
 $context = New-SpoRunContext `
     -RepoRoot $repoRoot `
     -Workflow "native-region-refit" `
@@ -65,6 +66,8 @@ if ($ConstraintsOnly) {
     $arguments += "--constraints-only"
 } elseif ($SamplingOnly) {
     $arguments += "--sampling-only"
+} elseif ($LayoutOnly) {
+    $arguments += "--layout-only"
 }
 
 $stdout = Join-Path $context.directories.logs "probe.stdout.log"
@@ -89,6 +92,18 @@ $artifacts = [ordered]@{}
 $samplingStl = Join-Path $context.directories.artifacts "sampling\adaptive_reference.stl"
 if (Test-Path -LiteralPath $samplingStl -PathType Leaf) {
     $artifacts["adaptive_sampling_stl"] = $samplingStl
+}
+$layoutJson = Join-Path $context.directories.artifacts "layout\selected_layout.json"
+$layoutPly = Join-Path $context.directories.artifacts "layout\selected_layout.ply"
+$layoutSvg = Join-Path $context.directories.artifacts "layout\selected_layout.svg"
+if (Test-Path -LiteralPath $layoutJson -PathType Leaf) {
+    $artifacts["selected_layout_json"] = $layoutJson
+}
+if (Test-Path -LiteralPath $layoutPly -PathType Leaf) {
+    $artifacts["selected_layout_ply"] = $layoutPly
+}
+if (Test-Path -LiteralPath $layoutSvg -PathType Leaf) {
+    $artifacts["selected_layout_svg"] = $layoutSvg
 }
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
 Write-Output $context.output_dir

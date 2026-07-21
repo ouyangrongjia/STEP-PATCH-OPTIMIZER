@@ -1,0 +1,880 @@
+#include "reduction/region_refit/RegionPatchLayout.h"
+
+#include <Eigen/Eigenvalues>
+
+#include <gp_Vec.hxx>
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <iomanip>
+#include <limits>
+#include <map>
+#include <numeric>
+#include <queue>
+#include <set>
+#include <sstream>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+
+namespace spo {
+
+namespace {
+
+using MeshEdge = std::array<std::size_t, 2>;
+
+constexpr double kPi = 3.14159265358979323846;
+
+MeshEdge orderedEdge(const std::size_t first, const std::size_t second) {
+    return {std::min(first, second), std::max(first, second)};
+}
+
+struct TriangleFeature {
+    gp_Pnt centroid;
+    gp_Dir normal {0.0, 0.0, 1.0};
+    double curvature = 0.0;
+    double area = 0.0;
+};
+
+struct MeshGraph {
+    std::vector<TriangleFeature> features;
+    std::vector<std::vector<std::size_t>> adjacency;
+    std::map<MeshEdge, std::vector<std::size_t>> edgeTriangles;
+    double diagonal = 1.0;
+    double curvatureScale = 1.0;
+};
+
+double curvatureFor(const RegionReferenceVertex& vertex) {
+    double value = 0.0;
+    for (const auto& source : vertex.sources) {
+        if (source.curvatureDefined) {
+            value = std::max(value, std::max(
+                std::abs(source.minimumCurvature),
+                std::abs(source.maximumCurvature)));
+        }
+    }
+    return value;
+}
+
+bool buildGraph(const RegionReferenceMesh& mesh, MeshGraph& graph, std::string& message) {
+    if (mesh.vertices.empty() || mesh.triangles.empty()) {
+        message = "Reference mesh is empty.";
+        return false;
+    }
+    graph.features.resize(mesh.triangles.size());
+    graph.adjacency.resize(mesh.triangles.size());
+    gp_Pnt minimum = mesh.vertices.front().point;
+    gp_Pnt maximum = minimum;
+    for (const auto& vertex : mesh.vertices) {
+        minimum.SetX(std::min(minimum.X(), vertex.point.X()));
+        minimum.SetY(std::min(minimum.Y(), vertex.point.Y()));
+        minimum.SetZ(std::min(minimum.Z(), vertex.point.Z()));
+        maximum.SetX(std::max(maximum.X(), vertex.point.X()));
+        maximum.SetY(std::max(maximum.Y(), vertex.point.Y()));
+        maximum.SetZ(std::max(maximum.Z(), vertex.point.Z()));
+    }
+    graph.diagonal = std::max(minimum.Distance(maximum), 1.0e-12);
+
+    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        if (std::any_of(triangle.vertices.begin(), triangle.vertices.end(), [&](const auto vertex) {
+                return vertex >= mesh.vertices.size();
+            })) {
+            message = "Reference mesh contains an invalid triangle index.";
+            return false;
+        }
+        const auto& first = mesh.vertices[triangle.vertices[0]];
+        const auto& second = mesh.vertices[triangle.vertices[1]];
+        const auto& third = mesh.vertices[triangle.vertices[2]];
+        auto& feature = graph.features[triangleIndex];
+        feature.centroid = gp_Pnt(
+            (first.point.X() + second.point.X() + third.point.X()) / 3.0,
+            (first.point.Y() + second.point.Y() + third.point.Y()) / 3.0,
+            (first.point.Z() + second.point.Z() + third.point.Z()) / 3.0);
+        gp_Vec areaVector(first.point, second.point);
+        areaVector.Cross(gp_Vec(first.point, third.point));
+        feature.area = areaVector.Magnitude() * 0.5;
+        gp_Vec normalSum(first.normal);
+        normalSum += gp_Vec(second.normal);
+        normalSum += gp_Vec(third.normal);
+        if (normalSum.SquareMagnitude() > 1.0e-24) {
+            feature.normal = gp_Dir(normalSum);
+        } else if (areaVector.SquareMagnitude() > 1.0e-24) {
+            feature.normal = gp_Dir(areaVector);
+        }
+        feature.curvature = (
+            curvatureFor(first) + curvatureFor(second) + curvatureFor(third)) / 3.0;
+        graph.curvatureScale = std::max(graph.curvatureScale, feature.curvature);
+        for (int edge = 0; edge < 3; ++edge) {
+            graph.edgeTriangles[orderedEdge(
+                triangle.vertices[static_cast<std::size_t>(edge)],
+                triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)])].push_back(triangleIndex);
+        }
+    }
+    for (const auto& [edge, triangles] : graph.edgeTriangles) {
+        (void)edge;
+        if (triangles.size() > 2) {
+            message = "Reference mesh contains a non-manifold edge.";
+            return false;
+        }
+        if (triangles.size() == 2) {
+            graph.adjacency[triangles[0]].push_back(triangles[1]);
+            graph.adjacency[triangles[1]].push_back(triangles[0]);
+        }
+    }
+    for (auto& adjacent : graph.adjacency) {
+        std::sort(adjacent.begin(), adjacent.end());
+    }
+    std::vector<bool> visited(mesh.triangles.size(), false);
+    std::queue<std::size_t> queue;
+    queue.push(0);
+    visited[0] = true;
+    while (!queue.empty()) {
+        const auto current = queue.front();
+        queue.pop();
+        for (const auto next : graph.adjacency[current]) {
+            if (!visited[next]) {
+                visited[next] = true;
+                queue.push(next);
+            }
+        }
+    }
+    if (std::find(visited.begin(), visited.end(), false) != visited.end()) {
+        message = "Reference mesh triangle graph is disconnected.";
+        return false;
+    }
+    return true;
+}
+
+double graphEdgeCost(const MeshGraph& graph, const std::size_t first, const std::size_t second) {
+    const auto& lhs = graph.features[first];
+    const auto& rhs = graph.features[second];
+    const auto position = lhs.centroid.Distance(rhs.centroid) / graph.diagonal;
+    const auto normal = std::max(0.0, 1.0 - lhs.normal.Dot(rhs.normal));
+    const auto curvature = std::abs(lhs.curvature - rhs.curvature) / graph.curvatureScale;
+    return std::max(1.0e-12, position + normal * 0.5 + curvature * 0.05);
+}
+
+std::vector<std::size_t> deterministicSeeds(const MeshGraph& graph, const int count) {
+    std::vector<std::size_t> seeds;
+    seeds.reserve(static_cast<std::size_t>(count));
+    const auto first = static_cast<std::size_t>(std::distance(
+        graph.features.begin(),
+        std::max_element(graph.features.begin(), graph.features.end(), [](const auto& lhs, const auto& rhs) {
+            return lhs.area < rhs.area;
+        })));
+    seeds.push_back(first);
+    std::vector<double> minimumDistance(graph.features.size(), std::numeric_limits<double>::infinity());
+
+    while (static_cast<int>(seeds.size()) < count) {
+        const auto source = seeds.back();
+        using Item = std::pair<double, std::size_t>;
+        std::priority_queue<Item, std::vector<Item>, std::greater<Item>> queue;
+        std::vector<double> distance(graph.features.size(), std::numeric_limits<double>::infinity());
+        distance[source] = 0.0;
+        queue.emplace(0.0, source);
+        while (!queue.empty()) {
+            const auto [cost, current] = queue.top();
+            queue.pop();
+            if (cost != distance[current]) {
+                continue;
+            }
+            for (const auto next : graph.adjacency[current]) {
+                const auto candidate = cost + graphEdgeCost(graph, current, next);
+                if (candidate < distance[next]) {
+                    distance[next] = candidate;
+                    queue.emplace(candidate, next);
+                }
+            }
+        }
+        for (std::size_t index = 0; index < minimumDistance.size(); ++index) {
+            minimumDistance[index] = std::min(minimumDistance[index], distance[index]);
+        }
+        std::size_t farthest = 0;
+        for (std::size_t index = 1; index < minimumDistance.size(); ++index) {
+            if (minimumDistance[index] > minimumDistance[farthest]) {
+                farthest = index;
+            }
+        }
+        if (std::find(seeds.begin(), seeds.end(), farthest) != seeds.end()) {
+            break;
+        }
+        seeds.push_back(farthest);
+    }
+    return seeds;
+}
+
+std::vector<int> assignConnectedRegions(
+    const MeshGraph& graph,
+    const std::vector<std::size_t>& seeds,
+    const int patchCount) {
+    struct Item {
+        double cost = 0.0;
+        std::size_t triangle = 0;
+        int patch = 0;
+    };
+    const auto greater = [](const Item& lhs, const Item& rhs) {
+        return std::tie(lhs.cost, lhs.patch, lhs.triangle) >
+            std::tie(rhs.cost, rhs.patch, rhs.triangle);
+    };
+    std::priority_queue<Item, std::vector<Item>, decltype(greater)> queue(greater);
+    std::vector<double> distance(graph.features.size(), std::numeric_limits<double>::infinity());
+    std::vector<int> assignments(graph.features.size(), -1);
+    for (int patch = 0; patch < patchCount; ++patch) {
+        const auto seed = seeds[static_cast<std::size_t>(patch)];
+        distance[seed] = 0.0;
+        assignments[seed] = patch;
+        queue.push({0.0, seed, patch});
+    }
+    while (!queue.empty()) {
+        const auto item = queue.top();
+        queue.pop();
+        if (item.cost != distance[item.triangle] || item.patch != assignments[item.triangle]) {
+            continue;
+        }
+        for (const auto next : graph.adjacency[item.triangle]) {
+            const auto candidate = item.cost + graphEdgeCost(graph, item.triangle, next);
+            if (candidate < distance[next] - 1.0e-15 ||
+                (std::abs(candidate - distance[next]) <= 1.0e-15 && item.patch < assignments[next])) {
+                distance[next] = candidate;
+                assignments[next] = item.patch;
+                queue.push({candidate, next, item.patch});
+            }
+        }
+    }
+    return assignments;
+}
+
+double proxyError(
+    const MeshGraph& graph,
+    const std::vector<int>& assignments,
+    const int patchCount) {
+    struct Proxy {
+        double weight = 0.0;
+        gp_XYZ point;
+        gp_XYZ normal;
+        double curvature = 0.0;
+    };
+    std::vector<Proxy> proxies(static_cast<std::size_t>(patchCount));
+    for (std::size_t triangle = 0; triangle < graph.features.size(); ++triangle) {
+        const auto patch = assignments[triangle];
+        if (patch < 0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        const auto& feature = graph.features[triangle];
+        const auto weight = std::max(feature.area, 1.0e-18);
+        auto& proxy = proxies[static_cast<std::size_t>(patch)];
+        proxy.weight += weight;
+        proxy.point += feature.centroid.XYZ() * weight;
+        proxy.normal += feature.normal.XYZ() * weight;
+        proxy.curvature += feature.curvature * weight;
+    }
+    for (auto& proxy : proxies) {
+        if (proxy.weight <= 0.0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        proxy.point /= proxy.weight;
+        proxy.curvature /= proxy.weight;
+        if (proxy.normal.SquareModulus() > 1.0e-24) {
+            proxy.normal.Normalize();
+        }
+    }
+    double energy = 0.0;
+    double totalWeight = 0.0;
+    for (std::size_t triangle = 0; triangle < graph.features.size(); ++triangle) {
+        const auto& feature = graph.features[triangle];
+        const auto& proxy = proxies[static_cast<std::size_t>(assignments[triangle])];
+        const auto weight = std::max(feature.area, 1.0e-18);
+        const gp_Pnt proxyPoint(proxy.point);
+        const auto position = feature.centroid.SquareDistance(proxyPoint) /
+            (graph.diagonal * graph.diagonal);
+        const auto normal = proxy.normal.SquareModulus() > 1.0e-24
+            ? std::max(0.0, 1.0 - feature.normal.XYZ().Dot(proxy.normal))
+            : 0.0;
+        const auto curvature = (feature.curvature - proxy.curvature) / graph.curvatureScale;
+        energy += weight * (position + normal * 0.5 + curvature * curvature * 0.05);
+        totalWeight += weight;
+    }
+    return totalWeight > 0.0 ? energy / totalWeight : std::numeric_limits<double>::infinity();
+}
+
+bool traverseBoundary(
+    const std::map<std::size_t, std::vector<std::size_t>>& boundaryNeighbors,
+    std::vector<std::size_t>& boundaryLoop) {
+    if (boundaryNeighbors.size() < 3 || std::any_of(
+            boundaryNeighbors.begin(), boundaryNeighbors.end(),
+            [](const auto& item) { return item.second.size() != 2; })) {
+        return false;
+    }
+    const auto start = boundaryNeighbors.begin()->first;
+    auto current = start;
+    auto previous = std::numeric_limits<std::size_t>::max();
+    do {
+        boundaryLoop.push_back(current);
+        const auto& adjacent = boundaryNeighbors.at(current);
+        const auto next = adjacent[0] == previous ? adjacent[1] : adjacent[0];
+        previous = current;
+        current = next;
+        if (boundaryLoop.size() > boundaryNeighbors.size()) {
+            return false;
+        }
+    } while (current != start);
+    return boundaryLoop.size() == boundaryNeighbors.size();
+}
+
+double normalizedTriangleQuality(
+    const gp_Pnt& first,
+    const gp_Pnt& second,
+    const gp_Pnt& third) {
+    gp_Vec area(first, second);
+    area.Cross(gp_Vec(first, third));
+    const auto maximumEdgeSquared = std::max({
+        first.SquareDistance(second), second.SquareDistance(third), third.SquareDistance(first)});
+    return maximumEdgeSquared > 1.0e-24 ? area.Magnitude() / maximumEdgeSquared : 0.0;
+}
+
+double signedArea2d(
+    const std::array<double, 2>& first,
+    const std::array<double, 2>& second,
+    const std::array<double, 2>& third) {
+    return (second[0] - first[0]) * (third[1] - first[1]) -
+        (second[1] - first[1]) * (third[0] - first[0]);
+}
+
+bool parameterizePatch(
+    const RegionReferenceMesh& mesh,
+    const std::vector<int>& assignments,
+    const int patch,
+    const double maximumDistortion,
+    const std::chrono::steady_clock::time_point deadline,
+    RegionPatchParameterization& result,
+    std::string& message) {
+    std::set<std::size_t> vertices;
+    std::map<MeshEdge, int> edgeUse;
+    struct DirectedUse {
+        std::size_t triangle = 0;
+        int direction = 0;
+    };
+    std::map<MeshEdge, std::vector<DirectedUse>> directedUses;
+    std::vector<std::vector<std::size_t>> triangleAdjacency(mesh.triangles.size());
+    std::map<MeshEdge, std::size_t> firstTriangle;
+    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
+        if (assignments[triangleIndex] != patch) {
+            continue;
+        }
+        result.triangleIndices.push_back(triangleIndex);
+        const auto& triangle = mesh.triangles[triangleIndex];
+        vertices.insert(triangle.vertices.begin(), triangle.vertices.end());
+        for (int edge = 0; edge < 3; ++edge) {
+            const auto key = orderedEdge(
+                triangle.vertices[static_cast<std::size_t>(edge)],
+                triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)]);
+            ++edgeUse[key];
+            const auto directedFirst = triangle.vertices[static_cast<std::size_t>(edge)];
+            const auto directedSecond = triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)];
+            directedUses[key].push_back({
+                triangleIndex,
+                directedFirst < directedSecond ? 1 : -1});
+            const auto found = firstTriangle.find(key);
+            if (found == firstTriangle.end()) {
+                firstTriangle.emplace(key, triangleIndex);
+            } else {
+                triangleAdjacency[triangleIndex].push_back(found->second);
+                triangleAdjacency[found->second].push_back(triangleIndex);
+            }
+        }
+    }
+    if (result.triangleIndices.empty()) {
+        message = "Layout contains an empty patch.";
+        return false;
+    }
+    std::set<std::size_t> reached;
+    std::queue<std::size_t> queue;
+    queue.push(result.triangleIndices.front());
+    reached.insert(result.triangleIndices.front());
+    while (!queue.empty()) {
+        const auto current = queue.front();
+        queue.pop();
+        for (const auto next : triangleAdjacency[current]) {
+            if (reached.insert(next).second) {
+                queue.push(next);
+            }
+        }
+    }
+    if (reached.size() != result.triangleIndices.size()) {
+        message = "Layout patch is disconnected.";
+        return false;
+    }
+    std::vector<int> triangleOrientation(mesh.triangles.size(), 0);
+    triangleOrientation[result.triangleIndices.front()] = 1;
+    queue.push(result.triangleIndices.front());
+    while (!queue.empty()) {
+        const auto currentTriangle = queue.front();
+        queue.pop();
+        const auto& triangle = mesh.triangles[currentTriangle];
+        for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+            const auto key = orderedEdge(
+                triangle.vertices[static_cast<std::size_t>(edgeIndex)],
+                triangle.vertices[static_cast<std::size_t>((edgeIndex + 1) % 3)]);
+            const auto& uses = directedUses.at(key);
+            if (uses.size() != 2) {
+                continue;
+            }
+            const auto current = uses[0].triangle == currentTriangle ? uses[0] : uses[1];
+            const auto other = uses[0].triangle == currentTriangle ? uses[1] : uses[0];
+            const auto expected = -current.direction * triangleOrientation[currentTriangle] * other.direction;
+            if (triangleOrientation[other.triangle] == 0) {
+                triangleOrientation[other.triangle] = expected;
+                queue.push(other.triangle);
+            } else if (triangleOrientation[other.triangle] != expected) {
+                message = "Layout patch triangle mesh is not orientable.";
+                return false;
+            }
+        }
+    }
+
+    std::map<std::size_t, std::vector<std::size_t>> boundaryNeighbors;
+    for (const auto& [edge, useCount] : edgeUse) {
+        if (useCount > 2) {
+            message = "Layout patch contains a non-manifold edge.";
+            return false;
+        }
+        if (useCount == 1) {
+            boundaryNeighbors[edge[0]].push_back(edge[1]);
+            boundaryNeighbors[edge[1]].push_back(edge[0]);
+        }
+    }
+    if (static_cast<long long>(vertices.size()) - static_cast<long long>(edgeUse.size()) +
+            static_cast<long long>(result.triangleIndices.size()) != 1 ||
+        !traverseBoundary(boundaryNeighbors, result.boundaryLoop)) {
+        message = "Layout patch is not a single-boundary disk.";
+        return false;
+    }
+
+    result.vertexIndices.assign(vertices.begin(), vertices.end());
+    result.parameters.resize(result.vertexIndices.size());
+    std::unordered_map<std::size_t, std::size_t> localIndex;
+    localIndex.reserve(result.vertexIndices.size());
+    for (std::size_t index = 0; index < result.vertexIndices.size(); ++index) {
+        localIndex.emplace(result.vertexIndices[index], index);
+    }
+    std::vector<std::set<std::size_t>> neighbors(result.vertexIndices.size());
+    for (const auto& [edge, useCount] : edgeUse) {
+        (void)useCount;
+        const auto first = localIndex.at(edge[0]);
+        const auto second = localIndex.at(edge[1]);
+        neighbors[first].insert(second);
+        neighbors[second].insert(first);
+    }
+    std::vector<double> cumulative(result.boundaryLoop.size() + 1, 0.0);
+    for (std::size_t index = 0; index < result.boundaryLoop.size(); ++index) {
+        cumulative[index + 1] = cumulative[index] + mesh.vertices[result.boundaryLoop[index]].point.Distance(
+            mesh.vertices[result.boundaryLoop[(index + 1) % result.boundaryLoop.size()]].point);
+    }
+    if (cumulative.back() <= 1.0e-12) {
+        message = "Layout patch boundary length is degenerate.";
+        return false;
+    }
+    std::set<std::size_t> boundaryLocal;
+    for (std::size_t index = 0; index < result.boundaryLoop.size(); ++index) {
+        const auto local = localIndex.at(result.boundaryLoop[index]);
+        boundaryLocal.insert(local);
+        const auto angle = 2.0 * kPi * cumulative[index] / cumulative.back();
+        result.parameters[local] = {std::cos(angle), std::sin(angle)};
+    }
+    std::vector<std::size_t> interior;
+    std::vector<int> interiorIndex(result.vertexIndices.size(), -1);
+    for (std::size_t vertex = 0; vertex < result.vertexIndices.size(); ++vertex) {
+        if (!boundaryLocal.contains(vertex)) {
+            interiorIndex[vertex] = static_cast<int>(interior.size());
+            interior.push_back(vertex);
+        }
+    }
+    result.matrixRows = interior.size();
+    result.matrixNonZeros = interior.size();
+    for (const auto vertex : interior) {
+        result.matrixNonZeros += std::count_if(
+            neighbors[vertex].begin(), neighbors[vertex].end(),
+            [&](const auto neighbor) { return !boundaryLocal.contains(neighbor); });
+    }
+    if (!interior.empty()) {
+        Eigen::Vector3d center = Eigen::Vector3d::Zero();
+        for (const auto vertex : result.vertexIndices) {
+            const auto& point = mesh.vertices[vertex].point;
+            center += Eigen::Vector3d(point.X(), point.Y(), point.Z());
+        }
+        center /= static_cast<double>(result.vertexIndices.size());
+        Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+        for (const auto vertex : result.vertexIndices) {
+            const auto& point = mesh.vertices[vertex].point;
+            const Eigen::Vector3d offset(point.X() - center.x(), point.Y() - center.y(), point.Z() - center.z());
+            covariance += offset * offset.transpose();
+        }
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver(covariance);
+        if (eigensolver.info() != Eigen::Success) {
+            message = "Harmonic parameterization PCA initialization failed.";
+            return false;
+        }
+        const auto firstAxis = eigensolver.eigenvectors().col(2);
+        const auto secondAxis = eigensolver.eigenvectors().col(1);
+        std::array<double, 2> minimumProjection {
+            std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
+        std::array<double, 2> maximumProjection {
+            -std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()};
+        for (std::size_t local = 0; local < result.vertexIndices.size(); ++local) {
+            const auto& point = mesh.vertices[result.vertexIndices[local]].point;
+            const Eigen::Vector3d offset(point.X() - center.x(), point.Y() - center.y(), point.Z() - center.z());
+            result.parameters[local] = {offset.dot(firstAxis), offset.dot(secondAxis)};
+            for (int axis = 0; axis < 2; ++axis) {
+                minimumProjection[static_cast<std::size_t>(axis)] = std::min(
+                    minimumProjection[static_cast<std::size_t>(axis)], result.parameters[local][static_cast<std::size_t>(axis)]);
+                maximumProjection[static_cast<std::size_t>(axis)] = std::max(
+                    maximumProjection[static_cast<std::size_t>(axis)], result.parameters[local][static_cast<std::size_t>(axis)]);
+            }
+        }
+        const auto projectionScale = 1.5 / std::max({
+            maximumProjection[0] - minimumProjection[0],
+            maximumProjection[1] - minimumProjection[1],
+            1.0e-12});
+        for (auto& parameter : result.parameters) {
+            parameter[0] = (parameter[0] - (minimumProjection[0] + maximumProjection[0]) * 0.5) * projectionScale;
+            parameter[1] = (parameter[1] - (minimumProjection[1] + maximumProjection[1]) * 0.5) * projectionScale;
+        }
+        for (std::size_t index = 0; index < result.boundaryLoop.size(); ++index) {
+            const auto local = localIndex.at(result.boundaryLoop[index]);
+            const auto angle = 2.0 * kPi * cumulative[index] / cumulative.back();
+            result.parameters[local] = {std::cos(angle), std::sin(angle)};
+        }
+
+        constexpr int maximumIterations = 400;
+        constexpr double relaxation = 1.75;
+        double maximumResidual = std::numeric_limits<double>::infinity();
+        for (int iteration = 0; iteration < maximumIterations; ++iteration) {
+            if ((iteration % 16) == 0 && std::chrono::steady_clock::now() >= deadline) {
+                message = "Harmonic parameterization reached the layout deadline.";
+                return false;
+            }
+            double maximumDelta = 0.0;
+            for (const auto vertex : interior) {
+                std::array<double, 2> average {};
+                for (const auto neighbor : neighbors[vertex]) {
+                    average[0] += result.parameters[neighbor][0];
+                    average[1] += result.parameters[neighbor][1];
+                }
+                const auto inverseDegree = 1.0 / static_cast<double>(neighbors[vertex].size());
+                average[0] *= inverseDegree;
+                average[1] *= inverseDegree;
+                for (int axis = 0; axis < 2; ++axis) {
+                    const auto delta = relaxation * (
+                        average[static_cast<std::size_t>(axis)] - result.parameters[vertex][static_cast<std::size_t>(axis)]);
+                    result.parameters[vertex][static_cast<std::size_t>(axis)] += delta;
+                    maximumDelta = std::max(maximumDelta, std::abs(delta));
+                }
+            }
+            if (maximumDelta < 1.0e-8) {
+                break;
+            }
+        }
+        maximumResidual = 0.0;
+        for (const auto vertex : interior) {
+            std::array<double, 2> average {};
+            for (const auto neighbor : neighbors[vertex]) {
+                average[0] += result.parameters[neighbor][0];
+                average[1] += result.parameters[neighbor][1];
+            }
+            for (int axis = 0; axis < 2; ++axis) {
+                average[static_cast<std::size_t>(axis)] /= static_cast<double>(neighbors[vertex].size());
+                maximumResidual = std::max(maximumResidual, std::abs(
+                    average[static_cast<std::size_t>(axis)] - result.parameters[vertex][static_cast<std::size_t>(axis)]));
+            }
+        }
+        if (!std::isfinite(maximumResidual) || maximumResidual > 5.0e-5) {
+            message = "Harmonic parameterization did not converge within its iteration budget.";
+            return false;
+        }
+    }
+
+    int positive = 0;
+    int negative = 0;
+    std::vector<double> distortions;
+    distortions.reserve(result.triangleIndices.size());
+    for (const auto triangleIndex : result.triangleIndices) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        const auto signedArea = static_cast<double>(triangleOrientation[triangleIndex]) * signedArea2d(
+            result.parameters[localIndex.at(triangle.vertices[0])],
+            result.parameters[localIndex.at(triangle.vertices[1])],
+            result.parameters[localIndex.at(triangle.vertices[2])]);
+        if (signedArea > 0.0) ++positive;
+        else if (signedArea < 0.0) ++negative;
+        else ++result.flippedTriangleCount;
+    }
+    if (negative > positive) {
+        for (auto& parameter : result.parameters) {
+            parameter[1] = -parameter[1];
+        }
+        std::swap(positive, negative);
+    }
+    result.flippedTriangleCount += negative;
+    if (result.flippedTriangleCount > 0) {
+        message = "Harmonic parameterization contains flipped or collapsed triangles.";
+        return false;
+    }
+    for (const auto triangleIndex : result.triangleIndices) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        const auto first = localIndex.at(triangle.vertices[0]);
+        const auto second = localIndex.at(triangle.vertices[1]);
+        const auto third = localIndex.at(triangle.vertices[2]);
+        const auto quality3d = normalizedTriangleQuality(
+            mesh.vertices[triangle.vertices[0]].point,
+            mesh.vertices[triangle.vertices[1]].point,
+            mesh.vertices[triangle.vertices[2]].point);
+        const gp_Pnt uvFirst(result.parameters[first][0], result.parameters[first][1], 0.0);
+        const gp_Pnt uvSecond(result.parameters[second][0], result.parameters[second][1], 0.0);
+        const gp_Pnt uvThird(result.parameters[third][0], result.parameters[third][1], 0.0);
+        const auto quality2d = normalizedTriangleQuality(uvFirst, uvSecond, uvThird);
+        if (quality3d <= 1.0e-14 || quality2d <= 1.0e-14) {
+            message = "Harmonic parameterization contains a degenerate triangle.";
+            return false;
+        }
+        distortions.push_back(std::max(quality3d / quality2d, quality2d / quality3d));
+    }
+    if (!distortions.empty()) {
+        const auto percentileIndex = std::min(
+            distortions.size() - 1,
+            static_cast<std::size_t>(std::ceil(static_cast<double>(distortions.size()) * 0.995)) - 1);
+        std::nth_element(
+            distortions.begin(),
+            distortions.begin() + static_cast<std::ptrdiff_t>(percentileIndex),
+            distortions.end());
+        result.maximumDistortion = distortions[percentileIndex];
+    }
+    if (result.maximumDistortion > maximumDistortion) {
+        std::ostringstream stream;
+        stream << "Harmonic parameterization 99.5th-percentile distortion "
+               << result.maximumDistortion << " exceeds the limit " << maximumDistortion << '.';
+        message = stream.str();
+        return false;
+    }
+    return true;
+}
+
+std::string layoutHash(const RegionPatchLayout& layout) {
+    std::uint64_t hash = 1469598103934665603ull;
+    auto append = [&](const std::uint64_t value) {
+        for (int shift = 0; shift < 64; shift += 8) {
+            hash ^= (value >> shift) & 0xffu;
+            hash *= 1099511628211ull;
+        }
+    };
+    append(static_cast<std::uint64_t>(layout.patchCount));
+    for (const auto patch : layout.trianglePatches) {
+        append(static_cast<std::uint64_t>(patch));
+    }
+    for (const auto& parameterization : layout.patches) {
+        for (const auto& uv : parameterization.parameters) {
+            append(static_cast<std::uint64_t>(std::llround(uv[0] * 1.0e12)));
+            append(static_cast<std::uint64_t>(std::llround(uv[1] * 1.0e12)));
+        }
+    }
+    std::ostringstream stream;
+    stream << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return stream.str();
+}
+
+void buildSeams(const MeshGraph& graph, RegionPatchLayout& layout) {
+    std::map<std::pair<int, int>, std::vector<MeshEdge>> grouped;
+    for (const auto& [edge, triangles] : graph.edgeTriangles) {
+        if (triangles.size() != 2) {
+            continue;
+        }
+        const auto first = layout.trianglePatches[triangles[0]];
+        const auto second = layout.trianglePatches[triangles[1]];
+        if (first == second) {
+            continue;
+        }
+        grouped[{std::min(first, second), std::max(first, second)}].push_back(edge);
+    }
+    for (auto& [patches, edges] : grouped) {
+        layout.seams.push_back({patches.first, patches.second, std::move(edges)});
+    }
+}
+
+std::uint64_t estimateSolverBytes(
+    const RegionPatchLayout& layout,
+    const RegionReferenceMesh& mesh,
+    std::size_t& rows,
+    std::size_t& nonZeros) {
+    const auto controlVariables = static_cast<std::size_t>(layout.patchCount) * 6u * 6u * 3u;
+    rows = mesh.vertices.size() * 3u + mesh.boundarySamples.size() * 3u;
+    for (const auto& seam : layout.seams) {
+        rows += seam.meshEdges.size() * 3u;
+    }
+    nonZeros = mesh.vertices.size() * 16u * 3u + rows * 4u + controlVariables * 5u;
+    return static_cast<std::uint64_t>(nonZeros) * 16ull * 8ull +
+        static_cast<std::uint64_t>(controlVariables + rows) * 64ull;
+}
+
+std::vector<std::size_t> paretoSelection(const std::vector<RegionPatchLayout>& candidates) {
+    std::vector<std::size_t> frontier;
+    double bestError = std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+        if (candidates[index].proxyError < bestError - 1.0e-15) {
+            frontier.push_back(index);
+            bestError = candidates[index].proxyError;
+        }
+    }
+    if (frontier.size() <= 3) {
+        return frontier;
+    }
+    return {frontier.front(), frontier[frontier.size() / 2], frontier.back()};
+}
+
+}
+
+bool RegionPatchLayoutGenerationResult::success() const {
+    return status == RegionRefitStatus::Success && !selectedCandidates.empty();
+}
+
+RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
+    const RegionReferenceMesh& mesh,
+    const RegionRefitLayoutMode mode,
+    const RegionRefitOptions& options) const {
+    RegionPatchLayoutGenerationResult result;
+    const auto started = std::chrono::steady_clock::now();
+    const auto deadline = started + std::chrono::milliseconds(options.layoutBudgetMilliseconds);
+    const auto expired = [&] {
+        return std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started).count() >
+            static_cast<double>(options.layoutBudgetMilliseconds);
+    };
+    MeshGraph graph;
+    if (!buildGraph(mesh, graph, result.message)) {
+        result.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        return result;
+    }
+    const int firstPatchCount = mode == RegionRefitLayoutMode::FixedPatchCount
+        ? options.fixedPatchCount : 1;
+    const int lastPatchCount = mode == RegionRefitLayoutMode::FixedPatchCount
+        ? options.fixedPatchCount : options.maximumAdaptivePatchCount;
+    if (firstPatchCount <= 0 || lastPatchCount <= 0 ||
+        static_cast<std::size_t>(lastPatchCount) > mesh.triangles.size()) {
+        result.status = RegionRefitStatus::InvalidRequest;
+        result.message = "Requested patch count is not valid for the reference mesh.";
+        return result;
+    }
+    const auto seeds = deterministicSeeds(graph, lastPatchCount);
+    if (static_cast<int>(seeds.size()) != lastPatchCount) {
+        result.message = "Could not generate the deterministic layout seed family.";
+        return result;
+    }
+
+    std::vector<RegionPatchLayout> accepted;
+    for (int patchCount = firstPatchCount; patchCount <= lastPatchCount; ++patchCount) {
+        if (expired()) {
+            result.status = RegionRefitStatus::TimeBudgetExceeded;
+            result.message = "Layout generation exceeded its wall-clock budget.";
+            return result;
+        }
+        const auto candidateStarted = std::chrono::steady_clock::now();
+        RegionLayoutCandidateReport report;
+        report.patchCount = patchCount;
+        RegionPatchLayout layout;
+        layout.patchCount = patchCount;
+        layout.trianglePatches = assignConnectedRegions(graph, seeds, patchCount);
+        layout.proxyError = proxyError(graph, layout.trianglePatches, patchCount);
+        report.proxyError = layout.proxyError;
+        report.topologyPassed = std::isfinite(layout.proxyError) &&
+            std::find(layout.trianglePatches.begin(), layout.trianglePatches.end(), -1) ==
+                layout.trianglePatches.end();
+        if (report.topologyPassed) {
+            layout.patches.resize(static_cast<std::size_t>(patchCount));
+            for (int patch = 0; patch < patchCount; ++patch) {
+                std::string failure;
+                if (!parameterizePatch(
+                        mesh,
+                        layout.trianglePatches,
+                        patch,
+                        options.maximumParameterDistortion,
+                        deadline,
+                        layout.patches[static_cast<std::size_t>(patch)],
+                        failure)) {
+                    const auto& failedPatch = layout.patches[static_cast<std::size_t>(patch)];
+                    report.maximumDistortion = std::max(
+                        report.maximumDistortion, failedPatch.maximumDistortion);
+                    report.flippedTriangleCount += failedPatch.flippedTriangleCount;
+                    report.matrixRows += failedPatch.matrixRows;
+                    report.matrixNonZeros += failedPatch.matrixNonZeros;
+                    report.topologyPassed = failure.find("not a single-boundary disk") == std::string::npos &&
+                        failure.find("disconnected") == std::string::npos &&
+                        failure.find("non-manifold") == std::string::npos;
+                    report.rejectionReason = std::move(failure);
+                    break;
+                }
+            }
+        }
+        if (expired()) {
+            result.candidates.push_back(std::move(report));
+            result.status = RegionRefitStatus::TimeBudgetExceeded;
+            result.message = "Layout generation exceeded its wall-clock budget.";
+            return result;
+        }
+        if (report.topologyPassed && report.rejectionReason.empty()) {
+            report.parameterizationPassed = true;
+            for (const auto& patch : layout.patches) {
+                report.maximumDistortion = std::max(report.maximumDistortion, patch.maximumDistortion);
+                report.flippedTriangleCount += patch.flippedTriangleCount;
+                report.matrixRows += patch.matrixRows;
+                report.matrixNonZeros += patch.matrixNonZeros;
+            }
+            buildSeams(graph, layout);
+            std::size_t fitRows = 0;
+            std::size_t fitNonZeros = 0;
+            layout.estimatedSolverBytes = estimateSolverBytes(layout, mesh, fitRows, fitNonZeros);
+            report.matrixRows += fitRows;
+            report.matrixNonZeros += fitNonZeros;
+            report.estimatedSolverBytes = layout.estimatedSolverBytes;
+            const auto solverLimit = static_cast<std::uint64_t>(options.solverMemoryPreflightMiB) * 1024ull * 1024ull;
+            report.coarseFitPassed = layout.estimatedSolverBytes <= solverLimit;
+            if (!report.coarseFitPassed) {
+                report.rejectionReason = "Estimated joint-fit memory exceeds the preflight limit.";
+            } else {
+                layout.hash = layoutHash(layout);
+                report.layoutHash = layout.hash;
+                accepted.push_back(std::move(layout));
+            }
+        } else if (report.rejectionReason.empty()) {
+            report.rejectionReason = "Layout did not cover the reference mesh.";
+        }
+        report.wallMilliseconds = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - candidateStarted).count();
+        result.candidates.push_back(std::move(report));
+    }
+    if (accepted.empty()) {
+        result.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.message = "No deterministic layout passed topology, parameterization, and memory preflight.";
+        return result;
+    }
+    const auto selection = mode == RegionRefitLayoutMode::FixedPatchCount
+        ? std::vector<std::size_t> {0}
+        : paretoSelection(accepted);
+    for (const auto index : selection) {
+        result.selectedCandidates.push_back(accepted[index]);
+        const auto patchCount = accepted[index].patchCount;
+        const auto found = std::find_if(result.candidates.begin(), result.candidates.end(), [&](const auto& report) {
+            return report.patchCount == patchCount;
+        });
+        if (found != result.candidates.end()) {
+            found->selectedForFullFit = true;
+        }
+    }
+    std::sort(result.selectedCandidates.begin(), result.selectedCandidates.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.patchCount < rhs.patchCount;
+    });
+    result.status = RegionRefitStatus::Success;
+    result.message = "Deterministic layouts passed coarse screening.";
+    return result;
+}
+
+}

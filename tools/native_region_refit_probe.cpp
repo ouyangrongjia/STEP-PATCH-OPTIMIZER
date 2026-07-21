@@ -2,6 +2,7 @@
 #include "io/StepReader.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
+#include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
@@ -9,12 +10,14 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QTextStream>
 
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <set>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -75,6 +78,205 @@ bool writeJson(const std::filesystem::path& path, const QJsonObject& object) {
     return file.commit();
 }
 
+bool writeText(const std::filesystem::path& path, const QByteArray& contents) {
+    std::filesystem::create_directories(path.parent_path());
+    QSaveFile file(QString::fromStdWString(path.wstring()));
+    if (!file.open(QIODevice::WriteOnly) || file.write(contents) != contents.size()) {
+        return false;
+    }
+    return file.commit();
+}
+
+QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
+    QJsonArray candidates;
+    for (const auto& candidate : result.report.layoutCandidates) {
+        candidates.append(QJsonObject {
+            {"patch_count", candidate.patchCount},
+            {"topology_passed", candidate.topologyPassed},
+            {"parameterization_passed", candidate.parameterizationPassed},
+            {"coarse_fit_passed", candidate.coarseFitPassed},
+            {"selected_for_full_fit", candidate.selectedForFullFit},
+            {"proxy_error", candidate.proxyError},
+            {"maximum_distortion", candidate.maximumDistortion},
+            {"flipped_triangles", candidate.flippedTriangleCount},
+            {"matrix_rows", QString::number(candidate.matrixRows)},
+            {"matrix_nonzeros", QString::number(candidate.matrixNonZeros)},
+            {"estimated_solver_bytes", QString::number(candidate.estimatedSolverBytes)},
+            {"wall_ms", candidate.wallMilliseconds},
+            {"layout_hash", QString::fromStdString(candidate.layoutHash)},
+            {"rejection_reason", QString::fromStdString(candidate.rejectionReason)}});
+    }
+    return {
+        {"status", result.selectedLayout ? "Success" : spo::toString(result.report.status)},
+        {"selected_patch_count", result.report.selectedPatchCount},
+        {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
+        {"candidates", candidates}};
+}
+
+QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
+    QJsonArray assignments;
+    for (const auto patch : layout.trianglePatches) {
+        assignments.append(patch);
+    }
+    QJsonArray patches;
+    for (std::size_t patchIndex = 0; patchIndex < layout.patches.size(); ++patchIndex) {
+        const auto& patch = layout.patches[patchIndex];
+        QJsonArray boundary;
+        for (const auto vertex : patch.boundaryLoop) {
+            boundary.append(QString::number(vertex));
+        }
+        patches.append(QJsonObject {
+            {"patch", static_cast<int>(patchIndex)},
+            {"triangles", QString::number(patch.triangleIndices.size())},
+            {"vertices", QString::number(patch.vertexIndices.size())},
+            {"boundary_loop", boundary},
+            {"matrix_rows", QString::number(patch.matrixRows)},
+            {"matrix_nonzeros", QString::number(patch.matrixNonZeros)},
+            {"flipped_triangles", patch.flippedTriangleCount},
+            {"maximum_distortion", patch.maximumDistortion}});
+    }
+    QJsonArray seams;
+    for (const auto& seam : layout.seams) {
+        seams.append(QJsonObject {
+            {"first_patch", seam.firstPatch},
+            {"second_patch", seam.secondPatch},
+            {"mesh_edges", QString::number(seam.meshEdges.size())}});
+    }
+    return {
+        {"schema_version", 1},
+        {"patch_count", layout.patchCount},
+        {"layout_hash", QString::fromStdString(layout.hash)},
+        {"proxy_error", layout.proxyError},
+        {"estimated_solver_bytes", QString::number(layout.estimatedSolverBytes)},
+        {"triangle_patches", assignments},
+        {"patches", patches},
+        {"seams", seams}};
+}
+
+std::array<int, 3> patchColor(const int patch) {
+    static constexpr std::array<std::array<int, 3>, 12> colors {{
+        {{31, 119, 180}}, {{255, 127, 14}}, {{44, 160, 44}}, {{214, 39, 40}},
+        {{148, 103, 189}}, {{140, 86, 75}}, {{227, 119, 194}}, {{127, 127, 127}},
+        {{188, 189, 34}}, {{23, 190, 207}}, {{57, 106, 177}}, {{218, 124, 48}}}};
+    return colors[static_cast<std::size_t>(patch) % colors.size()];
+}
+
+QByteArray layoutPly(
+    const spo::RegionReferenceMesh& mesh,
+    const spo::RegionPatchLayout& layout) {
+    QByteArray output;
+    QTextStream stream(&output, QIODevice::WriteOnly);
+    stream << "ply\nformat ascii 1.0\n"
+           << "element vertex " << mesh.vertices.size() << "\n"
+           << "property double x\nproperty double y\nproperty double z\n"
+           << "element face " << mesh.triangles.size() << "\n"
+           << "property list uchar int vertex_indices\n"
+           << "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n";
+    stream.setRealNumberPrecision(17);
+    for (const auto& vertex : mesh.vertices) {
+        stream << vertex.point.X() << ' ' << vertex.point.Y() << ' ' << vertex.point.Z() << '\n';
+    }
+    for (std::size_t index = 0; index < mesh.triangles.size(); ++index) {
+        const auto& triangle = mesh.triangles[index];
+        const auto color = patchColor(layout.trianglePatches[index]);
+        stream << "3 " << triangle.vertices[0] << ' ' << triangle.vertices[1] << ' '
+               << triangle.vertices[2] << ' ' << color[0] << ' ' << color[1] << ' '
+               << color[2] << '\n';
+    }
+    return output;
+}
+
+QByteArray layoutSvg(
+    const spo::RegionReferenceMesh& mesh,
+    const spo::RegionPatchLayout& layout) {
+    std::array<double, 3> minimum {
+        mesh.vertices.front().point.X(), mesh.vertices.front().point.Y(), mesh.vertices.front().point.Z()};
+    auto maximum = minimum;
+    for (const auto& vertex : mesh.vertices) {
+        const std::array<double, 3> point {vertex.point.X(), vertex.point.Y(), vertex.point.Z()};
+        for (int axis = 0; axis < 3; ++axis) {
+            minimum[static_cast<std::size_t>(axis)] = std::min(minimum[static_cast<std::size_t>(axis)], point[static_cast<std::size_t>(axis)]);
+            maximum[static_cast<std::size_t>(axis)] = std::max(maximum[static_cast<std::size_t>(axis)], point[static_cast<std::size_t>(axis)]);
+        }
+    }
+    std::array<int, 3> axes {0, 1, 2};
+    std::sort(axes.begin(), axes.end(), [&](const auto lhs, const auto rhs) {
+        return maximum[static_cast<std::size_t>(lhs)] - minimum[static_cast<std::size_t>(lhs)] >
+            maximum[static_cast<std::size_t>(rhs)] - minimum[static_cast<std::size_t>(rhs)];
+    });
+    const auto xAxis = axes[0];
+    const auto yAxis = axes[1];
+    const auto coordinate = [](const gp_Pnt& point, const int axis) {
+        return axis == 0 ? point.X() : (axis == 1 ? point.Y() : point.Z());
+    };
+    const auto width = std::max(1.0e-12, maximum[static_cast<std::size_t>(xAxis)] - minimum[static_cast<std::size_t>(xAxis)]);
+    const auto height = std::max(1.0e-12, maximum[static_cast<std::size_t>(yAxis)] - minimum[static_cast<std::size_t>(yAxis)]);
+    const auto scale = std::min(960.0 / width, 960.0 / height);
+    const auto project = [&](const gp_Pnt& point) {
+        return std::array<double, 2> {
+            20.0 + (coordinate(point, xAxis) - minimum[static_cast<std::size_t>(xAxis)]) * scale,
+            980.0 - (coordinate(point, yAxis) - minimum[static_cast<std::size_t>(yAxis)]) * scale};
+    };
+    std::map<std::array<std::size_t, 2>, std::vector<std::size_t>> edgeTriangles;
+    QByteArray output;
+    QTextStream stream(&output, QIODevice::WriteOnly);
+    stream.setRealNumberPrecision(8);
+    stream << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"1000\" viewBox=\"0 0 1000 1000\">\n"
+           << "<rect width=\"1000\" height=\"1000\" fill=\"white\"/>\n";
+    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        const auto color = patchColor(layout.trianglePatches[triangleIndex]);
+        stream << "<polygon points=\"";
+        for (const auto vertex : triangle.vertices) {
+            const auto point = project(mesh.vertices[vertex].point);
+            stream << point[0] << ',' << point[1] << ' ';
+        }
+        stream << "\" fill=\"rgb(" << color[0] << ',' << color[1] << ',' << color[2]
+               << ")\" fill-opacity=\"0.70\" stroke=\"none\"/>\n";
+        for (int edge = 0; edge < 3; ++edge) {
+            const auto first = triangle.vertices[static_cast<std::size_t>(edge)];
+            const auto second = triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)];
+            edgeTriangles[{std::min(first, second), std::max(first, second)}].push_back(triangleIndex);
+        }
+    }
+    for (const auto& [edge, triangles] : edgeTriangles) {
+        const bool outer = triangles.size() == 1;
+        const bool seam = triangles.size() == 2 &&
+            layout.trianglePatches[triangles[0]] != layout.trianglePatches[triangles[1]];
+        if (!outer && !seam) continue;
+        const auto first = project(mesh.vertices[edge[0]].point);
+        const auto second = project(mesh.vertices[edge[1]].point);
+        stream << "<line x1=\"" << first[0] << "\" y1=\"" << first[1]
+               << "\" x2=\"" << second[0] << "\" y2=\"" << second[1]
+               << "\" stroke=\"" << (outer ? "#000000" : "#ffffff")
+               << "\" stroke-width=\"" << (outer ? "2.2" : "1.4") << "\"/>\n";
+    }
+    std::vector<std::array<double, 2>> centers(static_cast<std::size_t>(layout.patchCount));
+    std::vector<std::size_t> counts(static_cast<std::size_t>(layout.patchCount));
+    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
+        const auto patch = static_cast<std::size_t>(layout.trianglePatches[triangleIndex]);
+        const auto& triangle = mesh.triangles[triangleIndex];
+        gp_Pnt centroid(
+            (mesh.vertices[triangle.vertices[0]].point.X() + mesh.vertices[triangle.vertices[1]].point.X() + mesh.vertices[triangle.vertices[2]].point.X()) / 3.0,
+            (mesh.vertices[triangle.vertices[0]].point.Y() + mesh.vertices[triangle.vertices[1]].point.Y() + mesh.vertices[triangle.vertices[2]].point.Y()) / 3.0,
+            (mesh.vertices[triangle.vertices[0]].point.Z() + mesh.vertices[triangle.vertices[1]].point.Z() + mesh.vertices[triangle.vertices[2]].point.Z()) / 3.0);
+        const auto point = project(centroid);
+        centers[patch][0] += point[0];
+        centers[patch][1] += point[1];
+        ++counts[patch];
+    }
+    for (std::size_t patch = 0; patch < centers.size(); ++patch) {
+        if (counts[patch] == 0) continue;
+        stream << "<text x=\"" << centers[patch][0] / counts[patch]
+               << "\" y=\"" << centers[patch][1] / counts[patch]
+               << "\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"18\""
+                  " font-weight=\"bold\" fill=\"#111\" stroke=\"white\" stroke-width=\"3\" paint-order=\"stroke\">"
+               << patch << "</text>\n";
+    }
+    stream << "</svg>\n";
+    return output;
+}
+
 QJsonObject constraintsToJson(const spo::RegionRefitResult& result) {
     QJsonArray boundary;
     for (const auto& edge : result.constraints.boundaryEdges) {
@@ -131,6 +333,8 @@ QJsonObject performanceToJson(
         {"welded_internal_seam_vertices", QString::number(result.report.weldedInternalSeamVertexCount)},
         {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
         {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
+        {"selected_patch_count", result.report.selectedPatchCount},
+        {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"stop_reason", QString::fromStdString(result.report.message)},
         {"stages", stages}};
 }
@@ -158,7 +362,7 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
-                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only]\n";
+                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only | --layout-only]\n";
         return 2;
     }
 
@@ -167,6 +371,7 @@ int main(int argc, char* argv[]) {
     int candidateId = -1;
     bool constraintsOnly = false;
     bool samplingOnly = false;
+    bool layoutOnly = false;
     spo::RegionRefitRequest request;
     try {
         for (int index = 3; index < argc; ++index) {
@@ -199,6 +404,8 @@ int main(int argc, char* argv[]) {
                 constraintsOnly = true;
             } else if (argument == "--sampling-only") {
                 samplingOnly = true;
+            } else if (argument == "--layout-only") {
+                layoutOnly = true;
             } else {
                 std::cerr << "未知参数：" << argument << '\n';
                 return 2;
@@ -213,8 +420,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "--candidate-id 与 --faces 必须且只能指定一个。\n";
         return 2;
     }
-    if (constraintsOnly && samplingOnly) {
-        std::cerr << "--constraints-only 与 --sampling-only 不能同时使用。\n";
+    if (static_cast<int>(constraintsOnly) + static_cast<int>(samplingOnly) + static_cast<int>(layoutOnly) > 1) {
+        std::cerr << "阶段诊断选项不能同时使用。\n";
         return 2;
     }
     if (request.layoutMode == spo::RegionRefitLayoutMode::FixedPatchCount &&
@@ -257,6 +464,8 @@ int main(int argc, char* argv[]) {
         request.diagnosticStopAfterStage = spo::RegionRefitStage::Constraints;
     } else if (samplingOnly) {
         request.diagnosticStopAfterStage = spo::RegionRefitStage::Sampling;
+    } else if (layoutOnly) {
+        request.diagnosticStopAfterStage = spo::RegionRefitStage::Layout;
     }
     const auto result = spo::RegionalSurfaceRefitEngine().run(read.document, request);
     timing.engineMilliseconds = std::chrono::duration<double, std::milli>(
@@ -266,6 +475,7 @@ int main(int argc, char* argv[]) {
     const auto diagnostics = outputDirectory / "diagnostics";
     if (!writeJson(diagnostics / "constraints.json", constraintsToJson(result)) ||
         !writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) ||
+        !writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) ||
         !writeJson(diagnostics / "performance_report.json", performanceToJson(result, request, timing))) {
         std::cerr << "无法写入区域重拟合诊断。\n";
         return 1;
@@ -281,6 +491,15 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+    if (result.referenceMesh && result.selectedLayout) {
+        const auto layoutDirectory = outputDirectory / "artifacts" / "layout";
+        if (!writeJson(layoutDirectory / "selected_layout.json", selectedLayoutToJson(*result.selectedLayout)) ||
+            !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.referenceMesh, *result.selectedLayout)) ||
+            !writeText(layoutDirectory / "selected_layout.svg", layoutSvg(*result.referenceMesh, *result.selectedLayout))) {
+            std::cerr << "无法写入布局证据。\n";
+            return 1;
+        }
+    }
 
     std::cout << "status=" << spo::toString(result.report.status) << '\n'
               << "failure_stage=" << spo::toString(result.report.failureStage) << '\n'
@@ -290,6 +509,8 @@ int main(int argc, char* argv[]) {
               << "sample_vertices=" << result.report.sampleVertexCount << '\n'
               << "sample_triangles=" << result.report.sampleTriangleCount << '\n'
               << "reference_mesh_fingerprint=" << result.report.referenceMeshFingerprint << '\n'
+              << "selected_patch_count=" << result.report.selectedPatchCount << '\n'
+              << "selected_layout_hash=" << result.report.selectedLayoutHash << '\n'
               << "total_ms=" << result.report.totalWallMilliseconds << '\n'
               << "message=" << result.report.message << '\n';
 
@@ -299,6 +520,9 @@ int main(int argc, char* argv[]) {
     }
     if (samplingOnly) {
         return result.referenceMesh && !result.referenceMesh->empty() ? 0 : 1;
+    }
+    if (layoutOnly) {
+        return result.selectedLayout && !result.selectedLayout->trianglePatches.empty() ? 0 : 1;
     }
     return result.canApply() ? 0 : 1;
 }

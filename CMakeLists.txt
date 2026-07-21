@@ -76,6 +76,7 @@ add_library(spo_core STATIC
     src/reduction/SurfaceReductionEngine.cpp
     src/reduction/region_refit/RegionalSurfaceRefitTypes.cpp
     src/reduction/region_refit/RegionReferenceMesh.cpp
+    src/reduction/region_refit/RegionPatchLayout.cpp
     src/reduction/region_refit/RegionConstraintExtractor.cpp
     src/reduction/region_refit/StepAdaptiveRegionSampler.cpp
     src/reduction/region_refit/RegionalSurfaceRefitEngine.cpp
@@ -96,6 +97,14 @@ add_library(spo_core STATIC
     src/validate/CommercialCadQualityGate.cpp
     src/validate/StrictTopologyGate.cpp
 )
+
+if(MSVC)
+    set_source_files_properties(
+        src/reduction/region_refit/RegionPatchLayout.cpp
+        PROPERTIES
+            COMPILE_OPTIONS "/O2"
+            VS_SETTINGS "BasicRuntimeChecks=Default")
+endif()
 
 target_include_directories(spo_core PUBLIC "${SPO_INCLUDE_DIR}")
 
@@ -208,6 +217,7 @@ if(SPO_BUILD_TESTS)
         tests/test_region_boundary_analyzer.cpp
         tests/test_region_refit_constraints.cpp
         tests/test_region_refit_sampling.cpp
+        tests/test_region_refit_layout.cpp
         tests/test_same_domain_merge.cpp
         tests/test_step_io.cpp
         tests/test_stl_io.cpp

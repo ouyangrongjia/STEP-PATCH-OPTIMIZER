@@ -18,6 +18,7 @@
 namespace spo {
 
 class RegionReferenceMesh;
+struct RegionPatchLayout;
 
 enum class RegionRefitLayoutMode {
     FixedPatchCount,
@@ -89,6 +90,7 @@ struct RegionRefitOptions {
     std::int64_t finalValidationBudgetMilliseconds = 180000;
     std::size_t maximumMemoryMiB = 8192;
     std::size_t solverMemoryPreflightMiB = 7168;
+    double maximumParameterDistortion = 100.0;
     RegionRefitCachePolicy cachePolicy = RegionRefitCachePolicy::Disabled;
     std::filesystem::path cacheDirectory;
     std::string algorithmFingerprint;
@@ -140,6 +142,23 @@ struct RegionRefitStageReport {
     std::string message;
 };
 
+struct RegionLayoutCandidateReport {
+    int patchCount = 0;
+    bool topologyPassed = false;
+    bool parameterizationPassed = false;
+    bool coarseFitPassed = false;
+    bool selectedForFullFit = false;
+    double proxyError = 0.0;
+    double maximumDistortion = 0.0;
+    int flippedTriangleCount = 0;
+    std::size_t matrixRows = 0;
+    std::size_t matrixNonZeros = 0;
+    std::uint64_t estimatedSolverBytes = 0;
+    double wallMilliseconds = 0.0;
+    std::string layoutHash;
+    std::string rejectionReason;
+};
+
 struct RegionRefitReport {
     RegionRefitStatus status = RegionRefitStatus::NotStarted;
     RegionRefitStage failureStage = RegionRefitStage::None;
@@ -158,6 +177,7 @@ struct RegionRefitReport {
     double maximumSamplingNormalErrorDegrees = 0.0;
     double maximumBoundaryChordError = 0.0;
     std::string referenceMeshFingerprint;
+    std::vector<RegionLayoutCandidateReport> layoutCandidates;
     double totalWallMilliseconds = 0.0;
     std::uint64_t peakWorkingSetBytes = 0;
     std::uint64_t peakPrivateBytes = 0;
@@ -168,6 +188,7 @@ struct RegionRefitResult {
     RegionRefitReport report;
     RegionTopologyConstraints constraints;
     std::shared_ptr<RegionReferenceMesh> referenceMesh;
+    std::shared_ptr<RegionPatchLayout> selectedLayout;
     TopoDS_Shape fittedPatchNetwork;
     TopoDS_Shape finalShape;
 
