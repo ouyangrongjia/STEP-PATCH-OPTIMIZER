@@ -4,9 +4,24 @@
 
 ## 当前承诺
 
-暂无已承诺的实现任务。
+### 原生区域级多曲面重拟合
 
-在明确选择下一项工作前，不把探索方向写成正在执行的阶段，也不为冻结路线预先建立任务清单。
+目标：
+
+- 从 STEP 候选区域提取硬边界和相邻面约束，生成自适应参考采样、少面布局、多曲面联合拟合与原边界重裁剪结果。
+- 新路线零调用、零运行时依赖 Geomagic 和 QuadriFlow，不改变现有 Surface Reduction 搜索语义或 GUI 入口。
+
+验收：
+
+- 首版明确拒绝孔洞、多外环、分支边界、非流形和不连通候选。
+- 最终运行目录同时保留自适应采样 STL、布局可视化和最终整件缝合 STEP，并登记 SHA-256 和门禁状态。
+- candidate-179 先通过距离、法向、接缝、BRep、StrictTopologyGate、STEP 往返和 Creo 整件检查，再动态复核两个额外真实候选。
+- `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
+- 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
+
+当前阶段：实现并验证 STEP 约束提取和命令行探针骨架。
+
+事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 
 ## 可选后续方向
 

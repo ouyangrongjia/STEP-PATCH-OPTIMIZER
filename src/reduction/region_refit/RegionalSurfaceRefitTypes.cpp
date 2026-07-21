@@ -1,0 +1,68 @@
+#include "reduction/region_refit/RegionalSurfaceRefitTypes.h"
+
+namespace spo {
+
+const char* toString(const RegionRefitLayoutMode mode) {
+    switch (mode) {
+    case RegionRefitLayoutMode::FixedPatchCount: return "FixedPatchCount";
+    case RegionRefitLayoutMode::Adaptive: return "Adaptive";
+    }
+    return "Adaptive";
+}
+
+const char* toString(const RegionRefitStatus status) {
+    switch (status) {
+    case RegionRefitStatus::NotStarted: return "NotStarted";
+    case RegionRefitStatus::Success: return "Success";
+    case RegionRefitStatus::InvalidRequest: return "InvalidRequest";
+    case RegionRefitStatus::UnsupportedTopology: return "UnsupportedTopology";
+    case RegionRefitStatus::TimeBudgetExceeded: return "TimeBudgetExceeded";
+    case RegionRefitStatus::MemoryBudgetExceeded: return "MemoryBudgetExceeded";
+    case RegionRefitStatus::SamplingBudgetExceeded: return "SamplingBudgetExceeded";
+    case RegionRefitStatus::NoValidatedLayoutWithinBudget: return "NoValidatedLayoutWithinBudget";
+    case RegionRefitStatus::Failed: return "Failed";
+    }
+    return "Failed";
+}
+
+const char* toString(const RegionRefitStage stage) {
+    switch (stage) {
+    case RegionRefitStage::None: return "None";
+    case RegionRefitStage::Constraints: return "Constraints";
+    case RegionRefitStage::Sampling: return "Sampling";
+    case RegionRefitStage::Layout: return "Layout";
+    case RegionRefitStage::Fitting: return "Fitting";
+    case RegionRefitStage::Retrim: return "Retrim";
+    case RegionRefitStage::Sewing: return "Sewing";
+    case RegionRefitStage::StrictTopology: return "StrictTopology";
+    case RegionRefitStage::StepRoundtrip: return "StepRoundtrip";
+    case RegionRefitStage::ExternalCad: return "ExternalCad";
+    }
+    return "None";
+}
+
+const char* toString(const RegionBoundaryContinuity continuity) {
+    switch (continuity) {
+    case RegionBoundaryContinuity::Free: return "Free";
+    case RegionBoundaryContinuity::HardCrease: return "HardCrease";
+    case RegionBoundaryContinuity::Smooth: return "Smooth";
+    case RegionBoundaryContinuity::Locked: return "Locked";
+    }
+    return "HardCrease";
+}
+
+const char* toString(const RegionRefitCachePolicy policy) {
+    switch (policy) {
+    case RegionRefitCachePolicy::Disabled: return "Disabled";
+    case RegionRefitCachePolicy::ReadWrite: return "ReadWrite";
+    case RegionRefitCachePolicy::ReadOnly: return "ReadOnly";
+    case RegionRefitCachePolicy::Refresh: return "Refresh";
+    }
+    return "Disabled";
+}
+
+bool RegionRefitResult::canApply() const {
+    return report.status == RegionRefitStatus::Success && !finalShape.IsNull();
+}
+
+}
