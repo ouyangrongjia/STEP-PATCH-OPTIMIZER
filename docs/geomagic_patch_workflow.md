@@ -1,1590 +1,426 @@
-# STEP-PATCH-OPTIMIZER 项目流程文档
+# Geomagic Patch 后备流程
 
-> 草案版本：v0.4-a57695d-baseline
-> 用途：定义从 STP 输入（默认 STP sampled fitting STL；自动 Patch 预览可选 legacy / conservative STL crop；Global Cut Chain 为独立 STL 裁剪路线），到候选预览、Geomagic patch 生成、patch 叠加预览、用户 Apply、真实贴回和验证的完整流程。
-> 当前基准：`feature-bounded-refit` / `origin/feature-bounded-refit` 指向 `a57695d`，即 `1f0c3d7` 可缝合几何基准 + GUI 后台任务、状态显示和 Gate 诊断优化。`d1c00e4` 与 Sharp Contours 不属于当前主线。
+本文定义 Geomagic AutoSurface 的当前输入输出合同、预览与 Apply 边界、质量门、命令和产物规范。
 
----
+状态：显式后备。当前默认产品主线是原生 Surface Reduction。只有用户明确选择高级流程时，才启动 Geomagic 或相关外部 CAD。
 
-## 0. 当前推进重点（2026-06-15）
+## 适用范围
 
-```text
-已确认：
-1. 裁剪问题不是当前最大瓶颈。
-2. Sharp Contours 实验无明显价值，已废弃。
-3. d1c00e4 的 boundary constrained flow 改动会让真实样例缝合回归，不进入当前主线。
-4. 当前可继续推进的稳定基准是 a57695d。
+该流程适用于：
 
-下一阶段关注：
-Geomagic 输出 patch 在拐角 / 特征交汇处圆角化，导致商业 CAD 中出现缝隙。
-GUI 视觉连续和 OCCT BRepCheck 通过不足以证明 Creo 类软件打开后无缝。
+- 需要使用 Geomagic Wrap AutoSurface 生成支撑 patch。
+- 需要检查历史 patch preview 或 Apply 行为。
+- 需要复现外部工具输出、trim、closure 或 Creo 诊断。
+- 原生主线无法满足明确任务，且用户接受外部软件依赖。
 
-流程层面的约束：
-1. fitting STL 可以在原 STP boundary 内外增加采样，但最终 CAD boundary 仍只来自原 STP wire。
-2. B2.0 邻接 STP face guard-band、B2.1 fitting STL over-cover、B2.2 adjacent-face support collar 和 B2.3 corner-safe support collar 都只能扩展 Geomagic 输入；拟合后必须用原 STP boundary 裁剪多余部分。
-3. corner / feature anchors 只能约束 Geomagic 输入或后处理评估，不能替代 StrictTopologyGate。
-4. 新增质量门控必须能暴露 corner rounding / edge drift / boundary deviation，而不是只重复 BRepCheck。
-```
+不适用于：
 
-### 0.1 最终流程增量
+- 默认候选缩减。
+- 仅为查看模型而自动启动外部工具。
+- 用 Geomagic 输出替代 STEP 原始边界。
+- 在没有最终合并 STEP 时声称完成外部 CAD 验证。
 
-下一轮流程新增两个明确阶段：
+## 总体合同
 
-```text
-Fitting input enhancement:
-  STP candidate faces / boundary
-  → detect sharp edges / corner vertices / feature junctions
-  → generate corner-aware dense samples
-  → generate inner boundary band + B2.0 outer STP guard-band samples or B2.1 fitting STL over-cover strip or B2.2/B2.3 adjacent-face support collar
-  → preserve feature / corner anchor set in report
-  → write enhanced fitting STL
-  → run Geomagic AutoSurface
+~~~text
+原始 STEP
+  -> 选择候选区域
+  -> 生成 fitting STL
+  -> Geomagic AutoSurface
+  -> patch STEP/IGES 与日志
+  -> 导入并预览
+  -> 以原始 STEP 边界重裁剪
+  -> PatchReplacementRepair
+  -> StrictTopologyGate 与几何质量门
+  -> 导出最终整件 STEP
+  -> STEP 往返与外部 CAD
+~~~
 
-Commercial-CAD-like quality gate:
-  after PatchReplacementRepair + StrictTopologyGate
-  → dense boundary deviation
-  → corner anchor drift
-  → feature edge drift
-  → sharpness preservation
-  → surface COPS-like deviation
-  → STEP roundtrip geometry drift
-  → B2.8 外部 CAD 诊断路由
-  → 只对已合并 STEP 做 Creo / commercial CAD 确认
-```
+关键边界：
 
-流程边界：
+- 原始 STEP 提供拓扑、边界和当前模型真值。
+- fitting STL 只提供第三方拟合输入。
+- patch STEP 只提供候选支撑几何或多面 patch。
+- 最终整件 STEP 只能由 Apply 成功后的当前模型导出。
 
-```text
-1. Enhanced fitting STL 只改变 Geomagic 输入，不改变 final CAD boundary。
-2. B2.0 guard-band 采样来自 STP 邻接 face；B2.1 over-cover strip 必须围绕当前 fitting STL patch boundary 连续生成；B2.2 support collar 从当前 fitting STL mesh boundary 接到原 STP 非候选邻接 face 的 pcurve rail；B2.3 在 B2.2 collar 上增加角点安全 clamp。四者都不信任 patch outer boundary。
-3. Apply 仍通过 original STP boundary re-trim / multi-surface shell。
-4. Commercial-CAD-like gate 不替代 StrictTopologyGate；它在拓扑 gate 之外判断几何质量。
-5. B2.8 只决定外部 CAD 诊断对象和跳过原因；原始 Geomagic 补片 STEP 只能做预诊断，最终诊断只能接 applied STEP。
-6. A/B 实验分支为 experiment/corner-preservation-ab。
-```
+任何阶段成功都不能替代后续阶段。
 
-最小实验矩阵：
+## 输入来源
 
-| 组 | 输入策略 | 必须比较的指标 |
-|---|---|---|
-| A0 | 当前 STP sampled baseline | corner drift / edge drift / boundary deviation 基线 |
-| B1 | corner / feature edge 加密采样 | 已接入 `-Experiment B1`；sharp edge drift 是否下降 |
-| B2.0 | adjacent-STP-face outer guard-band sampling | 已接入 `-Experiment B2`；真实样例 drift 下降但 Gate 未通过 |
-| B2.1 | fitting STL over-cover strip + original-boundary re-trim | 已接入 `-Experiment B2.1`；默认 `OverCoverWidth=0.05` 真实样例可进入 Apply / StrictTopologyGate / applied STEP export，但 CommercialCadLikeQualityGate 仍未通过 |
-| B2.2 | adjacent-face support collar + seam continuity report | 已接入 `-Experiment B2.2`；真实样例输入干净且 patch face count 未恶化，但 StrictTopologyGate / CommercialCadLikeQualityGate 仍失败 |
-| B2.3 | corner-safe support collar + optional SharpenContours A/B | 已接入 `-Experiment B2.3`；SharpenContours 降低 drift，但真实样例仍因 FreeEdgeIncreased 未通过 StrictTopologyGate |
-| B2.4 | Boundary Edge Rebuild + Local Closure Probe | Apply 侧增量：在 multi-surface boundary shell 中重建原 STP boundary edge 在 fitted surface 上的 pcurve / SameParameter，并输出 local closure diagnostics；真实样例 pcurve rebuild 全成功但仍有 1 条 free edge；不是新的 fitting STL experiment |
-| B2.5 | Pre-repair Closure Probe | 已完成最小版：在 PatchReplacementRepair 前后做 closure stats 和 free edge 定位；真实复用 patch 验证显示 pre-repair 已有 66 条 free edge，post-repair 剩 1 条且 `appeared_after_repair=true` |
-| B2.6 | Local Free-edge Closure Fix | 已完成最小诊断/repair selection/validator 分类修正版：围绕 detected edge 输出 length / tolerance / degenerated、nearest original boundary edge context、split-owner context 和 fitted patch projection diagnostics；`ShapeValidator` 排除 closed seam / degenerated edge 的 free-edge 误计数。真实样例 `StrictTopologyGate` 与 applied STEP readback 已通过，CommercialCadLikeQualityGate 仍失败；不是新的 fitting STL experiment |
-| B2.7 | Trim / over-cover / seam failure localization | 已完成最小诊断版：`trim_diagnostics` 已输出到 report / baseline JSON / patch_apply_probe / GUI Apply report；真实样例显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false |
-| B2.8 | External CAD diagnostic routing + Creo background diagnostic | 已完成最小路由版与显式 Creo 后台检查入口：`external_cad_diagnostics` 已输出到 PatchReplacementReport / baseline JSON / patch_apply_probe / GUI Apply report；原始补片仅为预诊断，最终外部 CAD 输入只能是 Apply 成功后导出的已合并 STEP。真实样例已通过 Creo Distributed Batch 生成 `.prt.1` 与 ModelCHECK HTML/XML，并解析出 `diagnostic_passed=false`、`GEOM_CHECKS`、`SHORT_EDGES` 和导入校验 `SOLID_FAILED` / `FAIL` |
-| B3 | corner anchors + B2.3 seam-aware fitting input | 条件分支：只有后续证明局部 under-cover / boundary gap 必须靠 fitting input 约束增强时再推进；否则先修 surface coverage / owner split / boundary projection |
+### 原始 STEP
 
-当前 A0 自动化入口：
+必须明确记录：
 
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -SourceStep "D:\path\to\model.stp" `
+- 文件路径或运行产物引用。
+- 当前 ShapeDocument 版本。
+- 候选区域的动态发现方式。
+- 原始面集合和边界。
+
+不要把 candidate ordinal 当作跨模型稳定身份。正式脚本应支持 auto 或可追溯的候选选择，而不是在通用代码中写死真实 FaceId。
+
+### fitting STL
+
+支持来源：
+
+- 从 STEP 候选面采样生成。
+- 从原始扫描 STL 显式裁剪。
+- 从已知运行目录复用并保留来源说明。
+
+默认后备链优先使用从 STEP 候选采样的 fitting mesh，以保持边界来源可解释。原始扫描可作为拟合参考，但不是边界真值。
+
+不得混淆：
+
+- 原始扫描 STL。
+- STEP 采样 mesh。
+- 缓存 crop STL。
+- Geomagic 处理中间 mesh。
+
+### 外部工具
+
+Geomagic 调用需要：
+
+- wrapCore.exe 的有效路径。
+- scripts/geomagic_wrap/autosurface_pipeline.py 或显式脚本。
+- 可写输出目录。
+- 适用的许可证和运行环境。
+
+外部工具不会由默认单元测试自动启动。
+
+## fitting STL 合同
+
+fitting STL 应满足：
+
+- 包含目标候选的拟合区域。
+- 单位和坐标系与 STEP 一致。
+- 法向和三角形绕序可解释。
+- 不用无关大范围网格稀释目标区域。
+- 边界扩展、support collar 或 over-cover 参数写入运行记录。
+
+如果使用 support collar：
+
+- collar 用于给 AutoSurface 提供候选边界外的局部支撑。
+- 它不能改变最终原始 STEP 边界。
+- 角点 clamp、平滑和最大偏移必须受参数约束。
+- collar 生成失败应在 Geomagic 前停止。
+
+fitting STL 的拓扑质量只能说明输入 mesh 可用，不能证明最终 B-rep 可替换。
+
+## 运行 Geomagic
+
+基础命令：
+
+~~~powershell
+./scripts/run_geomagic_patch.ps1 `
+  -InputStl <fitting-stl> `
+  -OutputStep <patch-step>
+~~~
+
+可选参数：
+
+- WrapCorePath：Geomagic Wrap 核心程序。
+- ScriptPath：AutoSurface Python 脚本。
+- StrictPatchTarget：要求输出符合严格 patch 目标。
+- NoStepStats：跳过输出后的 step_stats；只用于明确诊断。
+- Preset：工具构建预设。
+
+脚本设置并恢复 FIT_REGION_* 环境变量，调用外部脚本，并生成：
+
+- patch STEP。
+- AutoSurface IGES sidecar。
+- fit region 日志。
+- 可选 step_stats 输出。
+
+使用默认输出规则时，data/crop_stl 下的相对路径映射到 data/crop_stp。正式实验仍建议显式传入独立运行目录，避免覆盖历史文件。
+
+### Geomagic 配置
+
+示例配置：
+
+scripts/geomagic_wrap/autosurface_config.example.json
+
+配置的有效值应进入 run.json 或实际调用日志。不要只修改示例文件后假设运行采用了新值。
+
+### 成功判定
+
+Geomagic 阶段成功至少表示：
+
+- 外部进程成功结束。
+- 预期 patch 文件存在且非空。
+- STEP 可以被本项目读取。
+- 日志没有明确的脚本异常。
+
+这仍不表示 patch 能 Apply，也不表示商业 CAD 合格。
+
+## patch 导入与预览
+
+PatchImportService 读取 patch STEP，并建立 ImportedPatchInfo。预览阶段应输出：
+
+- 导入是否成功。
+- patch 面数和壳体结构。
+- 单面或多面分析。
+- 边界环和自由边信息。
+- 与目标候选的空间关系。
+- 可用于后续 Apply 的支撑面或 patch 结构。
+
+预览不得：
+
+- 替换当前 ShapeDocument。
+- 进入 CommandHistory。
+- 静默修复原始模型。
+- 把第三方自由边当作最终边界。
+
+patch 文件可以成功预览但无法应用，这是合法且必须可报告的结果。
+
+## Apply 边界
+
+PatchReplacementCommand 组织一次隔离事务。
+
+### 支撑几何与边界
+
+单面 patch 通常只提供支撑曲面；BoundaryConstrainedPatchBuilder 或 BoundaryConstrainedSurfaceRetrim 依据原始候选边界重建面。
+
+多面 patch 由 MultiFacePatchAnalyzer 和 BoundaryConstrainedMultiSurfaceShellBuilder 检查内部结构，并仍以原始外边界约束装配。
+
+不得直接把 patch 自由边缝入整件模型来规避边界不一致。
+
+### 替换装配
+
+PatchReplacementAssembler 在模型副本上：
+
+1. 移除目标原始面。
+2. 插入受边界约束的替换面。
+3. 检查方向和边界配对。
+4. 形成待修复候选。
+
+任何装配失败都返回原模型不变。
+
+### 受控修复
+
+PatchReplacementRepair 可执行受控 sewing、局部修复和候选选择，但必须：
+
+- 保留修复前后指标。
+- 惩罚新增自由边和退化。
+- 不以任意扩大容差获得表面成功。
+- 不删除 StrictTopologyGate。
+- 不把最佳失败结果提交为成功。
+
+点状退化边和真实 open boundary 必须按 Open CASCADE 语义区分；分类修正不能放宽自由边门。
+
+## 质量门
+
+### StrictTopologyGate
+
+Apply 的硬门禁。适用检查包括：
+
+- BRepCheck。
+- 壳体和实体结构。
+- 自由边。
+- 多重使用边。
+- 退化边分类。
+- 修复前后拓扑退化。
+- STEP 往返后的对应检查。
+
+门禁失败时没有 applied STEP 产品结果。
+
+### CommercialCadLikeQualityGate
+
+用于发现拓扑合法但几何不可交付的结果，适用指标包括：
+
+- 原始边界漂移。
+- 角部漂移。
+- 特征边漂移。
+- 边界 gap 的最大值、P95 和 RMS。
+- over-cover 与 under-cover。
+- internal seam gap。
+- 支撑面覆盖与投影稳定性。
+
+阈值和单位必须由实际运行配置记录。不要在文档复制某次实验的完整数值表。
+
+### STEP 往返
+
+最终整件模型写出后重新读取，并复查：
+
+- 面、壳和实体结构。
+- BRepCheck。
+- 自由边与多重边。
+- 曲线在曲面上的偏差。
+- 关键 trim 与 seam 诊断是否变化。
+
+原始 patch STEP 的往返不能替代最终整件 STEP 往返。
+
+## 诊断
+
+### closure
+
+PatchClosureDiagnostics 用于定位：
+
+- boundary cycle。
+- non-manifold vertex。
+- sewing 前后闭合变化。
+- 小孔填充或局部闭合效果。
+
+诊断可以指导修复，但不能自行改变成功标准。
+
+### free edge
+
+自由边诊断应记录：
+
+- 长度、容差和退化状态。
+- 所属面与邻近原始边界。
+- split segment、owner switch 和投影距离。
+- 是否在修复后新出现。
+
+需要区分 seam、OCCT degenerated edge 和真实 open edge。
+
+### trim
+
+PatchTrimDiagnostics 覆盖：
+
+- replacement face 数量。
+- 无效 trim wire。
+- over-cover 与 under-cover 样本。
+- boundary gap 与 internal seam gap。
+- 最差边标识。
+- STEP 往返前后变化。
+
+trim 诊断用于判断失败来自覆盖、边界投影、owner split、内部接缝还是往返。
+
+## 基线脚本
+
+后备链的综合入口：
+
+~~~powershell
+./scripts/run_corner_baseline_gate.ps1 `
+  -SourceStep <source-step> `
   -CandidateId auto `
-  -RealGeomagic
-```
-
-复用已有 patch、跳过 Geomagic 时：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId 7 `
-  -Patch "D:\path\to\patch.stp" `
-  -AllowQualityGateFailure
-```
-
-B1 加密采样入口：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B1 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
-```
-
-B1 也可复用已有 patch 来验证 fitting STL / report 链路：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B1 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId 7 `
-  -Patch "D:\path\to\patch.stp" `
-  -AllowQualityGateFailure
-```
-
-B2 外扩采样入口：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
-```
-
-B2.0 默认参数为 `-GuardBandSamples 16 -GuardBandRings 1 -GuardBandSpacing 0.10`。实现上 guard-band 只写入 Geomagic fitting STL，优先沿相邻非候选 STP face 采样，并通过桥接三角形接回现有采样面；最终 CAD replacement 仍必须使用 original STP boundary re-trim / multi-surface shell。
-
-B2.1 不是当前 `-Experiment B2` 的行为。B2.1 的基础版入口是：
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2.1 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
-```
-
-B2.1 在当前 STP-sampled fitting STL patch boundary 外围生成一圈连续、小幅、连通的 over-cover strip，让 Geomagic 拟合出的 surface 覆盖原 STP candidate boundary 外侧；Apply 阶段仍丢弃 Geomagic patch outer boundary，并使用 original STP boundary wire / pcurve 在 fitted surface 上 re-trim。这里所谓“相交裁剪”应优先落到 original-boundary re-trim / pcurve rebuild 上；直接用 patch outer boundary 或 STL boundary 做最终 CAD boundary 仍然禁止。JSON 的 `stp_sampled_fitting` 节会输出 `boundary_over_cover_*` 字段。
-
-B2.2 是独立入口，不是继续扩大 B2.0 guard-band，也不是 B2.1 over-cover 参数别名。B2.2 从当前 fitting STL mesh boundary 接出 adjacent-face support collar，外侧 support rail 来自原 STP 非候选邻接 face 的 pcurve 面内采样，用于给 Geomagic 提供 seam 高度上下文。Apply 阶段仍丢弃 Geomagic patch outer boundary，最终 CAD boundary 仍只来自 original STP boundary wire / pcurve。
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2.2 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
-```
-
-JSON 的 `stp_sampled_fitting` 节会输出 `adjacent_face_support_collar_*` 字段；`commercial_cad_like_quality_gate` 节新增 `seam_continuity`，测量原 boundary samples 到 patch 最近点在原 STP 邻接 face normal 方向上的 signed normal offset。
-
-2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 跑 B2.2 参数扫：
-
-```text
-共同输入事实：
-  adjacent_face_support_collar_sample_count=728
-  adjacent_face_support_collar_triangle_count=1456
-  adjacent_face_support_collar_boundary_coverage=1
-  adjacent_face_support_collar_fallback_count=0
-  adjacent_face_support_collar_rejected_count=0
-  Geomagic log before repair: components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0
-  patch_face_count=5, patch_edge_count=20, high_risk=false
-
-SupportCollarWidth=0.03:
-  StrictTopologyGate failed: FreeEdgeIncreased
-  boundary max/p95=0.106121/0.034150
-  seam max_abs/p95_abs=0.068317/0.032183
-
-SupportCollarWidth=0.04:
-  StrictTopologyGate failed: FreeEdgeIncreased
-  boundary max/p95=0.098052/0.036913
-  seam max_abs/p95_abs=0.068727/0.035968
-  corner max/p95=0.098052/0.059117
-
-SupportCollarWidth=0.05:
-  StrictTopologyGate failed: StepRoundtripFailed, roundtrip free_edges=1
-  boundary max/p95=0.090959/0.041232
-  seam max_abs/p95_abs=0.069443/0.040150
-  corner max/p95=0.090959/0.057764
-```
-
-结论：B2.2 初版证明 support collar 生成质量、真实 Geomagic 路径和 seam 指标可验证；它仍不是最终几何质量方案。下一步要解决的是 seam-aware 输入与 multi-surface boundary shell / STEP roundtrip 的水密稳定性，而不是继续盲目加宽 collar。
-
-B2.3 是独立入口，不是 B2.2 的参数别名。B2.3 仍使用当前 fitting STL mesh boundary 作为 collar 内环，仍使用原 STP 非候选邻接 face 的 pcurve rail 作为外侧 support，但会对角点 / support offset 跳变 / 超宽 offset 做局部平滑和最大 offset clamp，避免单 STL 里出现角点异常凸起。Geomagic `SharpenContours` 只通过显式 `-SharpenContours` 参与 A/B，默认关闭。
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2.3 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic
-```
-
-```powershell
-.\scripts\run_corner_baseline_gate.ps1 `
-  -Experiment B2.3 `
-  -SourceStep "D:\path\to\model.stp" `
-  -CandidateId auto `
-  -RealGeomagic `
-  -SharpenContours
-```
-
-JSON 的 `stp_sampled_fitting` 节会输出 `adjacent_face_support_collar_corner_clamp_enabled`、`adjacent_face_support_collar_corner_clamp_count`、`adjacent_face_support_collar_max_offset`；根节点输出 `geomagic_sharpen_contours`。
-
-2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 跑 B2.3：
-
-```text
-B2.3, SupportCollarWidth=0.05, SharpenContours=false:
-  corner_clamp_count=16, max_offset=0.0625
-  boundary/corner/feature max drift=0.095701
-  boundary p95=0.042605
-  StrictTopologyGate failed: FreeEdgeIncreased
-  Patch Apply success=false
-  applied_step_export.success=false
-
-B2.3, SupportCollarWidth=0.05, SharpenContours=true:
-  corner_clamp_count=16, max_offset=0.0625
-  boundary/corner/feature max drift=0.070672
-  boundary p95=0.038436
-  StrictTopologyGate failed: FreeEdgeIncreased
-  Patch Apply success=false
-  applied_step_export.success=false
-```
-
-结论：B2.3 + SharpenContours 能改善 drift，但没有解决 Apply 后 free edge 增量。由于 `StrictTopologyGate` 未通过，脚本不会导出 applied STEP；这保持了“失败不提交”的边界。
-
-B2.4 不是新的 Geomagic fitting input，也不是 `-Experiment` 参数别名。B2.4 发生在 Apply 的 strict multi-surface boundary shell 阶段：对被分配到某个 fitted patch face 的每段原 STP boundary edge，保留原 3D curve 和参数区间作为最终 CAD 边界源，再把该 3D curve 显式投影到目标 fitted surface，写入 edge pcurve / range，并做 SameParameter 检查。报告必须暴露 pcurve rebuild attempt/success/failure、SameParameter check/failure、max deviation 和 failed edge ids。若 B2.4 仍失败，失败应停留在 report / StrictTopologyGate，不允许回退到 Geomagic patch outer boundary，也不通过扩大 sewing tolerance 掩盖边界高低差。
-
-2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` patch 验证 B2.4 Apply 侧：
-
-```text
-B2.4 pcurve diagnostics:
-  multi_surface_boundary_edge_pcurve_rebuild_attempt_count=27
-  multi_surface_boundary_edge_pcurve_rebuild_success_count=27
-  multi_surface_boundary_edge_pcurve_rebuild_failure_count=0
-  multi_surface_boundary_edge_same_parameter_failure_count=0
-  multi_surface_boundary_edge_max_same_parameter_deviation=0.093401
-
-Apply / gate:
-  used_multi_surface_boundary_shell=true
-  replacement_face_count=5
-  StrictTopologyGate failed: FreeEdgeIncreased
-  gate_after_free_edges=1
-  gate_after_brep_check_valid=true
-  applied_step_export.success=false
-
-quality:
-  boundary max/p95=0.070672/0.038436
-  seam max_abs/p95_abs=0.055789/0.037368
-```
-
-结论：B2.4 已排除“原 STP boundary edge 无法在 fitted surface 上建立 pcurve / SameParameter”的主因；剩余失败是 repair / sewing 后仍出现 1 条 free edge，且 fitted surface 与原 boundary / 邻接旧面局部偏差仍高于 CommercialCadLikeQualityGate 的 0.03 量级。
-
-B2.5 已完成最小版 Pre-repair Closure Probe。它不是去掉 repair，也不是把 pre-repair shape 当作可提交结果；它是在 `assemble_replacement_shape` 成功后、`PatchReplacementRepair` 运行前，对 assembled replacement shape 做一次和 Gate 同口径的 closure snapshot，并在 repair 后保留当前 repair / Gate snapshot。B2.5 输出：
-
-```text
-pre_repair_face/edge/shell/solid_count
-pre_repair_brep_check_valid
-pre_repair_free_edge_count
-pre_repair_multiple_edge_count
-post_repair_free_edge_count
-post_repair_multiple_edge_count
-free_edge_midpoint / endpoints
-free_edge_adjacent_face_count
-matched_original_boundary_edge_id
-matched_split_boundary_segment_parameter_range
-matched_patch_face_owner
-appeared_after_repair
-```
-
-判定规则：如果 pre-repair 已有 free edge，问题在 replacement shell 构造、surface owner/split 策略或 fitted surface 与原边界几何间隙；如果 pre-repair 没有 free edge 而 post-repair 新增 free edge，问题在 repair/sewing 策略或 best-result selection。两种情况都不能通过放宽 StrictTopologyGate 处理。
-
-2026-06-17 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` patch 验证 B2.5：
-
-```text
-report:
-  data\baseline_runs\scripted_b2_5_apply_reuse_b2_3_sharpen_w005_auto_pre_repair_probe\baseline_report.json
-
-pre-repair closure:
-  BRepCheck=true
-  face/edge/shell/solid=2695/10804/0/0
-  free_edges=66
-  multiple_edges=0
-
-post-repair closure:
-  BRepCheck=true
-  face/edge/shell/solid=2695/10805/1/1
-  free_edges=1
-  multiple_edges=0
-
-post-repair free edge diagnostic:
-  appeared_after_repair=true
-  midpoint=endpoints=(-25.0904068, 42.5760562, -9.2595695)
-  nearest_original_boundary_edge_id=1600
-  nearest_original_boundary_edge_distance=0.0639331
-
-gate:
-  StrictTopologyGate failed: FreeEdgeIncreased
-```
-
-结论：当前失败不能只归咎于 repair/sewing。assembled replacement 在 repair 前已经有大量 free edge，repair 后残留的 1 条 free edge 又是 post-repair 新出现的点状/退化边。下一步应优先修 replacement shell 构造、surface owner / split 策略和局部边界偏差，同时检查 repair best-result selection 对退化 free edge 的处理。
-
-B2.6 已完成 Local Free-edge Closure Fix 的最小诊断 / repair best-result selection / validator 分类修正版。它不是 `-Experiment B2.6` fitting input，也不是对 B2.2/B2.3 collar 的全局加宽；它发生在 Apply 侧，以 B2.5 free edge 诊断为入口。B2.6 的中心是 detected edge；nearest original boundary edge id 只是诊断字段，当前真实样例中该字段为 1600。
-
-```text
-B2.6 implementation scope:
-  1. Report detected free edge local context:
-     free edge midpoint / endpoints / length / tolerance / adjacent face count
-     nearest or matched original boundary edge id
-     matched original boundary edge curve / endpoints / midpoint / parameter range
-     adjacent original faces and surface types for the matched boundary edge
-     pcurve availability on old faces
-     candidate fitted patch face owner candidates
-     split segment ranges and owner switches
-     projection distance distribution from free edge endpoints / midpoint and matched boundary samples to fitted patch faces
-
-  2. Stabilize owner / split:
-     prefer owner continuity across neighboring boundary segments
-     penalize frequent owner switching on one original boundary edge
-     reject or merge too-short split segments
-     report split decisions instead of silently sewing unstable fragments
-
-  3. Limit input-side changes to local boundary-conditioned input:
-     only around failed edge / local neighborhood
-     no global Blender quad-remesh mainline
-     no replacement of original STP boundary by STL / Geomagic boundary
-
-  4. Improve repair best-result diagnostics:
-     report zero-length or degenerated free edges
-     penalize sewing results that reduce free edge count by creating point-like free edges
-     keep StrictTopologyGate as the final submit gate
-```
-
-B2.6 验收规则：
-
-```text
-Default tests:
-  synthetic only; no real Geomagic; no real large sample path; no hardcoded candidate ordinal.
-
-CLI / JSON:
-  PatchReplacementReport, corner_baseline_probe JSON and patch_apply_probe must expose edge-local owner/split/degenerate-free-edge diagnostics.
-
-Real sample, if present:
-  reuse B2.3 + SharpenContours patch with candidate-id auto;
-  gate may still fail, but report must explain whether the detected free edge comes from owner/split instability, fitted-surface local drift, or repair degeneracy.
-
-Forbidden:
-  do not remove PatchReplacementRepair;
-  do not submit pre-repair shape;
-  do not relax StrictTopologyGate;
-  redo must not rerun Geomagic / crop / import / repair.
-```
-
-2026-06-17 真实样例验证：
-
-```text
-command:
-  corner_baseline_probe --source-step data\stp\03_配件_Clay.stp --candidate-id auto --patch data\crop_stp\03_配件_Clay\03_配件_Clay_candidate_0179.stp --output-dir data\baseline_runs\scripted_b2_6_apply_reuse_b2_3_sharpen_w005_auto_free_edge_gate_fix
-
-report:
-  data\baseline_runs\scripted_b2_6_apply_reuse_b2_3_sharpen_w005_auto_free_edge_gate_fix\baseline_report.json
-
-result:
-  StrictTopologyGate passed
-  gate_after_free_edges=0
-  gate_roundtrip_free_edges=0
-  gate_step_roundtrip_ok=true
-  applied_step_export.write_success=true
-  applied_step_export.readback_success=true
-  pre_repair_free_edge_count=66
-  pre_repair_degenerated_free_edge_count=0
-  post_repair_free_edge_count=0
-  post_repair_degenerated_free_edge_count=1
-  appeared_after_repair_degenerated_free_edge_count=1
-
-remaining post-repair diagnostic edge:
-  length=0
-  tolerance=1e-7
-  midpoint=endpoints=(-25.0904068, 42.5760562, -9.2595695)
-  nearest_original_boundary_edge_id=1600
-  nearest_original_boundary_edge_distance=0.0639331
-  nearest_original_boundary_adjacent_faces=2
-  nearest_original_boundary_surface_types=BSpline/BSpline
-  nearest_original_boundary_pcurve_available_face_count=2
-  same_original_boundary_edge_split_segment_count=0
-  nearest_split_boundary_original_edge_id=1582
-  nearest_split_boundary_segment_distance=4.22411
-  nearest_fitted_patch_face_index=0
-  fitted_patch_projection_min_distance=0.00746442
-
-commercial-CAD-like quality:
-  passed=false
-  boundary max/p95/rms=0.070672/0.038436/0.019153
-  corner max/p95=0.070672/0.058351
-  feature max/p95=0.070672/0.038436
-  seam max_abs/p95_abs=0.055789/0.037368
-```
-
-结论：B2.6 当前把原 `FreeEdgeIncreased` 收敛为 validator 分类问题：最终 afterDocument 上的点状 / 退化 diagnostic edge 不应作为真实 open boundary 计入 `StrictTopologyGate`。修正后拓扑 gate 和 applied STEP readback 已通过；但几何质量仍未闭合，下一步应围绕 boundary / corner / feature drift、局部 fitted surface 到原 boundary 的偏差和 owner/split 稳定性继续推进。
-
-B2.7 的最终路线是先查结果，不先修几何。它要用同一套诊断把 imported patch、assembled replacement、post-repair afterDocument 和 applied STEP roundtrip 串起来，回答截图暴露的三件事：内部 seam 为什么有缝、边界 seam 为什么没贴合、大于原边界的 fitted face 为什么没有被裁掉。B2.7 不新增 `-Experiment B2.7` fitting input；验证入口仍优先复用 `corner_baseline_probe`、`patch_apply_probe` 和 Apply report。当前最小版已完成：真实样例的 applied STEP / roundtrip 稳定，over-cover 为 0，internal seam gap 为 0，剩余主要信号是 under-cover 和局部 boundary gap。
-
-```text
-B2.7 diagnostics:
-  1. replacement face trim envelope
-     face id / patch face owner / surface type
-     outer and inner wire count
-     wire closed
-     UV bounds and pcurve range
-     original-boundary projection residual
-
-  2. over-cover / under-cover sampling
-     replacement samples outside original candidate boundary
-     original candidate samples not covered by replacement
-     worst point / nearest original boundary edge / old adjacent face / patch owner
-
-  3. boundary seam diagnostics
-     dense samples on original STP candidate outer boundary
-     distance to replacement
-     signed normal offset against old adjacent face
-     tangential drift
-     max / p95 / RMS per original boundary edge
-
-  4. internal seam diagnostics
-     imported patch internal seam samples
-     replacement internal edge samples
-     two-side 3D gap
-     normal angle
-     two-side pcurve availability
-     SameParameter deviation
-
-  5. stage comparison
-     imported patch
-     assembled replacement
-     post-repair afterDocument
-     applied STEP roundtrip
-     roundtrip_changed flag
-```
-
-最小报告字段放在 `trim_diagnostics`：
-
-```text
-replacement_face_count
-trim_wire_invalid_count
-trim_uv_loop_self_intersection_count
-over_cover_sample_count / over_cover_ratio / over_cover_max_distance
-under_cover_sample_count / under_cover_max_distance
-boundary_gap_max / boundary_gap_p95 / boundary_gap_rms
-internal_seam_gap_max / internal_seam_gap_p95 / internal_seam_gap_rms
-worst_boundary_edge_id
-worst_internal_edge_id
-roundtrip_changed
-```
-
-判定规则：
-
-```text
-imported patch 内部 seam 已有 gap：
-  问题在 Geomagic output / patch surface network，下一步修 fitting input 或拒绝该 patch。
-
-imported patch 无 gap，但 replacement internal seam 有 gap：
-  问题在 BoundaryConstrainedMultiSurfaceShellBuilder 的 internal seam / owner / split / wire construction。
-
-boundary projection residual 大：
-  fitted surface 没有覆盖原 STP boundary，下一步修局部输入、surface owner 或拒绝该 fitted face。
-
-over-cover 在原 candidate boundary 外仍可见：
-  trim wire / UV loop / face construction 未真正裁掉大面，下一步修 re-trim。
-
-under-cover 落在原 candidate 区域内：
-  replacement face 覆盖不足，下一步修 surface coverage 或 patch generation。
-
-内存 afterDocument 通过但 roundtrip 后失败：
-  问题在 STEP writer/readback、pcurve 或 SameParameter 稳定性。
-```
-
-B2.7 默认测试只能使用 synthetic fixture 构造 over-cover、under-cover、internal seam 和 boundary seam 失败；真实样例只作为存在时辅助验证，继续使用 candidate auto-selection，不写死 candidate ordinal、edge id 或路径。B2.7 不能放宽 `StrictTopologyGate`，不能删除 `PatchReplacementRepair`，不能提交 pre-repair shape，也不能把 Blender 四边形化作为绕过原 STP boundary re-trim 的主线。
-
-B2.8 是外部 CAD 诊断路由。它不修几何，也不在默认测试里调用 Creo / Geomagic 外部 API；它只把“该诊断哪个 STEP”变成可机读字段，避免把原始 Geomagic 补片 STEP 的预诊断误当成最终合并模型验收。
-
-```text
-B2.8 route:
-  原始 Geomagic 补片 STEP
-    → role=PatchPreflightOnly
-    → 可选外部 CAD 预诊断
-    → 只能说明补片自身是否可导入 / 是否已有补片缺陷
-
-  Patch Apply + PatchReplacementRepair + StrictTopologyGate
-    → failed:
-        final_applied_step_diagnostic_eligible=false
-        status=Skipped
-        reason=没有已合并 STEP，不能用原始补片验证合并模型
-    → passed:
-        export applied STEP
-        read back applied STEP
-        readback failed:
-          final_applied_step_diagnostic_eligible=false
-          status=Skipped
-        readback passed:
-          final_applied_step_diagnostic_eligible=true
-          input path=applied STEP
-          status=PendingExternalRunner
-```
-
-最小报告字段放在 `external_cad_diagnostics`：
-
-```text
-captured
-raw_patch_preflight_available
-raw_patch_preflight_executed
-raw_patch_preflight_input_path
-raw_patch_preflight_role
-raw_patch_preflight_status
-raw_patch_preflight_message
-final_applied_step_diagnostic_stage
-final_applied_step_diagnostic_eligible
-final_applied_step_diagnostic_executed
-final_applied_step_diagnostic_input_path
-final_applied_step_diagnostic_status
-final_applied_step_diagnostic_skipped_reason
-final_applied_step_diagnostic_message
-```
-
-B2.8 的硬边界：
-
-```text
-1. 不放宽 StrictTopologyGate。
-2. 不删除 PatchReplacementRepair。
-3. 不提交 pre-repair shape。
-4. 不让 redo 重新运行 Geomagic / crop / import / repair / 外部 CAD。
-5. 不把原始 Geomagic 补片 STEP 当成最终合并模型诊断对象。
-6. 默认测试不依赖真实样例、candidate ordinal、edge id、Creo 安装或 Geomagic 安装。
-```
-
-2026-06-18 使用真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + `SharpenContours` 补片验证 B2.8：
-
-```text
-report:
-  data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\baseline_report.json
-
-applied STEP:
-  data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\03_配件_Clay_candidate_0179_applied.stp
-
-route:
-  raw_patch_preflight_available=true
-  raw_patch_preflight_executed=false
-  raw_patch_preflight_role=PatchPreflightOnly
-  final_applied_step_diagnostic_eligible=true
-  final_applied_step_diagnostic_executed=false
-  final_applied_step_diagnostic_status=PendingExternalRunner
-
-gate:
-  StrictTopologyGate passed=true
-  applied STEP write/readback=true/true
-  CommercialCadLikeQualityGate passed=false
-  stage=failed_quality_gate
-```
-
-结论：B2.8 已经把最终外部 CAD 诊断对象收敛到已合并 STEP；下一步若接 Creo / commercial CAD API，应读取 `final_applied_step_diagnostic_input_path`，而不是直接诊断原始 Geomagic 补片 STEP。
-
-2026-06-18 已新增显式后台 Creo 检查入口 `scripts\run_creo_step_diagnostic.ps1`：
-
-```text
-链路：
-  applied STEP
-    → Creo Distributed Batch -nographics -process step_import.dxc
-    → step_3d_import.ttd
-    → generated .prt
-    → Creo Distributed Batch -nographics -process modelcheck.dxc
-    → modelcheck.ttd
-    → ModelCHECK report files
-
-输出：
-  creo_step_diagnostic_result.json
-  step_import.dxc / modelcheck.dxc
-  stdout / stderr
-  generated_prt / prt_path
-  modelcheck.report_files
-  modelcheck.summary:
-    diagnostic_passed
-    pass/info/warning/error count
-    key_checks
-    failed_checks / warning_checks
-    check item 明细，保留 raw_text 并提取 Creo edge id / feature id
-    import_validation
-  B2.9 追加 creo_diagnostic_correlation：
-    failed check 摘要
-    SHORT_EDGES item 摘要
-    imported feature id
-    import_validation
-    report_files
-    可选 baseline trim_diagnostics 阶段关联
-
-默认测试边界：
-  使用 XML fixture / parse-only，不启动 Creo。
-  不依赖本机安装。
-  不依赖真实样例路径。
-  检查脚本是否保持显式、后台、两段 TTD、JSON 结果、ModelCHECK 摘要字段、item 明细、关联 JSON 和无样例硬编码。
-```
-
-本机真实样例结果：
-
-```text
-排障过程：
-  ObjectText / ObjectPathAttribute 两种 .dxc object 写法在 DSQM 为空时均超时。
-  修正 .dxc 为 DSQM="_LOCAL" 后，Creo 后台 STEP 导入能生成版本化零件 input.prt.1。
-  脚本已显式匹配 *.prt.*，避免把 input.prt.1 误判为没有 .prt。
-
-有效结果：
-  input:
-    data\baseline_runs\scripted_b2_8_apply_reuse_b2_3_sharpen_w005_auto_external_cad_route\03_配件_Clay_candidate_0179_applied.stp
-  result:
-    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\creo_step_diagnostic_result.json
-  status=CreoModelCheckReportReady
-  success=true
-  generated_prt=true
-  prt_path=data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\step_import\input.prt.1
-  report_files:
-    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\modelcheck\input.p.html
-    data\baseline_runs\creo_b2_8_modelcheck_probe\scripted_runner_modelcheck_summary\modelcheck\input.p.xml
-  modelcheck.summary.parsed=true
-  modelcheck.diagnostic_passed=false
-  counts: PASS=26, INFO=33, WARNING=3, ERROR=2
-  failed checks:
-    GEOM_CHECKS ERROR, answer=1
-    SHORT_EDGES ERROR, answer=1491
-  warning checks:
-    IMPORT_FEAT WARNING, answer=1
-    ACCURACY_INFO WARNING, answer=0.004240749674
-  import_validation:
-    PTC_VAL_IMP_PART_STATUS=SOLID_FAILED
-    PTC_VAL_IMP_SCORE=FAIL
-    PTC_MP_VAL_IMP_AREA=1074.923639
-
-B2.9 解析/关联结果：
-  result=data\baseline_runs\creo_b2_9_modelcheck_correlation_probe\parse_existing_modelcheck\creo_step_diagnostic_result.json
-  parse mode=CreoModelCheckParseOnly
-  short_edge_item_count=1491
-  imported_feature_ids=[4]
-  modelcheck_spatial_mapping_status=CreoIdsOnlyNoCoordinates
-  occt_edge_mapping_available=false
-  baseline trim diagnostics:
-    under_cover_sample_count=81
-    under_cover_max_distance=2.034330381907445
-    boundary_gap_max=0.07068536422379083
-    worst_boundary_edge_id=1540
-    owner_split_correlation_status=StageLevelOnlyNoCreoCoordinates
-```
-
-当前判读：后台执行器已经真实跑通 `applied STEP -> Creo .prt -> ModelCHECK XML/HTML -> JSON 摘要`。结论不是“Creo 检查通过”，而是当前 B2.8 已合并 STEP 被 Creo 判为未通过；错误集中在几何检查、短边数量和导入实体状态。B2.9 已能把 Creo 错误和 B2.7 local surface coverage / boundary projection 指标放进同一 JSON，但 ModelCHECK XML 只给 Creo feature/edge id，不给空间坐标或 OCCT edge id。下一步不是继续证明 Creo 能否后台运行，也不是臆造 id 映射；应先评估 Creo API、失败选区导出或修复报告导出，再和 B2.7 owner/split、under-cover、boundary-gap 诊断做空间比对。
-
-2026-06-16 使用真实样例 `03_配件_Clay.stp` candidate 179 跑默认 B2.1：
-
-```text
-fitting STL:
-  output_triangle_count=78288
-  boundary_over_cover_sample_count=728
-  boundary_over_cover_triangle_count=1456
-  boundary_over_cover_boundary_coverage=1
-  boundary_over_cover_fallback_count=0
-  boundary_over_cover_rejected_count=0
-  boundary_over_cover_width=0.05
-  Geomagic log before repair: components=1, boundaryCycles=1, nonManifoldVertices=0, degenerateTriangles=0
-
-patch preview:
-  Geomagic AutoSurface success=true
-  imported patch BRepCheck valid=true
-  patch_face_count=5
-  patch_edge_count=20
-  high_risk=false
-
-apply / export:
-  Patch Apply success=true
-  StrictTopologyGate gate_passed=true
-  applied_step_export.success=true
-  applied_step_export.readback_success=true
-
-commercial-CAD-like quality:
-  passed=false
-  boundary / feature / corner max drift=0.088487
-
-conclusion:
-  B2.1 默认参数已能走完 GUI 同源 Apply + StrictTopologyGate + applied STEP 导出验收链路。
-  但 CommercialCadLikeQualityGate 仍未通过，不能标记为几何质量收口。
-  B2.2 已继续验证 seam-aware 输入和 seam_continuity 指标，但真实样例仍未通过 StrictTopologyGate / CommercialCadLikeQualityGate。
-  下一步应优先解决 seam-aware 输入与 multi-surface boundary shell / STEP roundtrip 的水密稳定性。
-```
-
-注意：复用已有 patch 时，CommercialCadLikeQualityGate 仍在测旧 patch 几何，不能作为 B1/B2 drift 改善证据。它只能证明增强输入 STL 生成、JSON 字段和 Apply / gate 后端链路可重复。
-
-底层 probe 入口：
-
-```powershell
-cmake --build --preset windows-msvc-debug --target corner_baseline_probe
-.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
-  --source-step "D:\path\to\model.stp" `
-  --candidate-id auto
-```
-
-无 Geomagic 或复用已有 patch：
-
-```powershell
-.\build\windows-msvc-debug\Debug\corner_baseline_probe.exe `
-  --source-step "D:\path\to\model.stp" `
-  --candidate-id 7 `
-  --patch "D:\path\to\patch.stp"
-```
-
-默认输出报告：
-
-```text
-data/runs/<timestamp>__corner-baseline__<model>__cand-<id|auto>__direct/baseline_report.json
-```
-
-通过 `run_corner_baseline_gate.ps1`、Route 2 runner 或 Creo runner 启动时，同一运行目录还会生成 `run.json`、`RUN.md`、`artifacts/`、`diagnostics/`、`logs/`。底层 probe 直接运行时也使用唯一时间戳目录，但统一 Git/参数清单以脚本入口为准。
-
-Geomagic staging 与 GUI 相同：
-
-```text
-data/crop_stl/<model>/<model>_candidate_<id>.stl
-data/crop_stp/<model>/<model>_candidate_<id>.stp
-data/crop_stp/<model>/<model>_candidate_<id>_fit_region.log
-```
-
----
-
-## 1. 总体流程
-
-```text
-输入：
-    当前 STP
-    原始 STL（legacy / conservative STL crop 和独立 Global Cut Chain crop 路线需要）
-
-流程：
-    1. 读取 STP，构建 ShapeDocument / FaceIndex / EdgeIndex / TopologyGraph。
-    2. 如果选择源 STL crop 路线，则读取原始 STL 并构建 StlMesh；默认 STP sampled 路线不要求源 STL。
-    3. 在 STP 上检测 feature edges，合并 user locked edges，得到 protectedEdges。
-    4. 通过 protectedEdges 分割 STP faces，生成 FeatureBoundedRegion candidates。
-    5. 用户预览、接受、拒绝或隐藏候选区域。
-    6. 对 accepted candidate 做 RegionBoundaryAnalyzer。
-    7. 仅允许 closed single outer boundary candidate 进入 patch generation。
-    8. 生成 fitting STL：默认从 STP candidate faces / boundary 采样；自动 Patch 预览可选从原始 STL 做 legacy / conservative crop；Global Cut Chain 当前作为独立 STL 裁剪路线。
-    9. 调用 wrapCore.exe + AutoSurface，生成 local IGS / STEP patch。
-    10. OCCT 导入 local patch。
-    11. Viewer 叠加预览 patch，原 candidate 高亮保持。
-    12. 输出 patch preview report。
-    13. 用户检查 overlay 后点击 Apply。
-    14. 使用原 STP boundary wire 进行 boundary-constrained patch replacement：先尝试 single-surface re-trim，失败且 all-surface coverage 成立时尝试 strict multi-surface boundary shell。
-    15. 执行 sewing / ShapeFix / SameParameter。
-    16. StrictTopologyGate 验证。
-    17. 合法则提交 Command；不合法则 rollback。
-    18. 成功后可 undo/redo。
-    19. 导出最终 STEP，并做 STEP roundtrip。
-```
-
-核心原则：
-
-```text
-STP 边界负责拓扑。
-STP sampled fitting STL 或源 STL crop 负责给 Geomagic 提供几何采样。
-Geomagic 负责拟合。
-OCCT 负责导入、预览、替换与验证。
-用户 Apply 是 patch preview 和真实贴回之间的硬分界线。
-最终 CAD boundary 仍只来自原 STP candidate outer boundary wire。
-```
-
----
-
-## 2. 用户操作流程
-
-### 2.1 加载输入
-
-```text
-File → Open STEP/STP
-File → Open Original STL（仅 legacy / conservative STL crop 或独立 Global Cut Chain 裁剪路线需要）
-```
-
-要求：
-
-```text
-1. STP sampled 默认路线只要求打开 STEP/STP。
-2. 使用 legacy / conservative STL crop 或独立 Global Cut Chain crop 时，STP 和 STL 必须位于同一坐标系。
-3. 第一版不自动对齐、不自动缩放。
-4. bbox 差异过大时提示用户坐标不一致。
-```
-
-检查项：
-
-```text
-STP bbox
-STL bbox
-bbox center distance
-bbox size ratio
-```
-
----
-
-### 2.2 生成候选区域
-
-```text
-Detect Feature Edges
-Preview FeatureBoundedRegion Candidates
-```
-
-内部：
-
-```text
-FeatureEdgeDetector
-+ CommandContext.lockedEdges
-+ model boundary / topological boundary
-→ protectedEdges
-
-FeatureBoundedRegionBuilder
-→ FeatureBoundedRefit candidates
-```
-
-候选显示字段：
-
-```text
-Candidate ID
-Candidate Type
-Face count
-Boundary edge count
-Protected edge count
-Boundary validity
-Risk level
-Candidate status
-Patch status
-```
-
-候选状态：
-
-```text
-Pending
-Accepted
-Rejected
-Hidden
-```
-
-注意：
-
-```text
-Preview Candidates 不启动 Geomagic。
-Candidate status 变化不修改主 ShapeDocument。
-```
-
----
-
-### 2.3 用户筛选候选区域
-
-推荐交互：
-
-```text
-1. 先只显示 Top N 大候选区域。
-2. 用户点击 candidate 查看 inspect 信息。
-3. 用户接受少量低风险 candidate。
-4. 只对 Accepted candidate 运行 Geomagic patch generation。
-```
-
-candidate 被 accepted 后，仍然不会自动替换主模型。
-
----
-
-## 3. Boundary 检查
-
-对每个 accepted candidate：
-
-```cpp
-RegionBoundaryAnalyzer.analyze(document, candidate)
-```
-
-MVP 硬要求：
-
-```text
-candidate faces 连通
-outer wire count = 1
-boundary closed = true
-inner wire count = 0
-has holes = false
-has non-manifold edges = false
-has branching boundary = false
-```
-
-失败处理：
-
-```text
-status = Rejected 或 HighRisk
-不进入 STL crop
-不进入 Geomagic
-报告 failure_reason
-```
-
-通过后：
-
-```text
-BoundaryWireBuilder 根据 ordered_boundary_edges 构造 original STP outer boundary wire。
-```
-
----
-
-## 4. Fitting STL 输入模式
-
-输入：
-
-```text
-当前 STP candidate
-candidate bbox
-candidate boundary report
-可选原始 STL
-fitting input mode
-```
-
-当前默认模式：
-
-```text
-stp-sampled-candidate-surface
-→ 从 STP candidate faces / boundary / boundary band 采样
-→ 生成 synthetic fitting STL
-→ 写入 data/crop_stl/<step-stem>/<candidate>.stl
-→ 交给 Geomagic AutoSurface
-```
-
-默认理由：
-
-```text
-1. 不要求先打开原始 STL。
-2. 避开源 STL crop 缺面、褶皱和邻接特征混入问题。
-3. 当前速度更快，效果与 STL crop 路线接近。
-4. 后续 artifact 路径仍复用 data/crop_stl / crop_stp / crop_igs 约定。
-```
-
-可选源 STL crop 模式：
-
-```text
-legacy-stl-crop
-→ StlRegionExtractor CentroidOnly
-
-conservative-boundary-band-stl-crop
-→ StlRegionExtractor ConservativeBoundaryBand
-→ 只用于 A/B 验证和缺面诊断，不作为默认生产路径
-
-global-cut-chain STL crop
-→ StlCutChainCutter
-→ 从原 STP ordered boundary 采样 red loop
-→ 投影到源 STL 得到 green loop
-→ 沿 STL face graph 构造 global cut chain
-→ constrained retriangulation + component flood fill
-→ snapBoundaryToRed 可将 patch outer boundary 回贴到原 STP red loop 附近
-→ 当前是独立 STL 裁剪路线，不是 GeomagicFittingInputMode
-→ 如需进入一键 Patch preview，需要后续显式接入 fitting input mode，或手动 / 脚本运行 Geomagic
-```
-
-重点：
-
-```text
-fitting STL 的边界不是最终 CAD 边界。
-STP sampled fitting STL / STL crop / Global Cut Chain 都只用于拟合或诊断。
-最终 CAD 边界来自原 STP boundary wire。
-boundary-loop coverage repair 必须保持与当前 crop mesh 连通；孤立命中点或漂浮三角片不能作为有效修补。
-```
-
----
-
-## 5. Geomagic AutoSurface
-
-输入：
-
-```text
-local_input.stl
-FIT_REGION_INPUT / FIT_REGION_OUTPUT / FIT_REGION_LOG_FILE
-```
-
-调用：
-
-```text
-wrapCore.exe --script autosurface_pipeline.py
-```
-
-推荐配置：
-
-```json
-{
-  "input_stl": "data/crop_stl/region_0001/local_input.stl",
-  "output_step": "data/crop_stp/region_0001/local_output.stp",
-  "fit_region_log": "data/crop_stp/region_0001/local_output_fit_region.log",
-  "repair_mesh": true,
-  "fill_hole_max_edges": 80,
-  "fill_hole_length_ratio": 1.0,
-  "adaptive_fit": false,
-  "auto_merge": true,
-  "num_patches": 1,
-  "fallback_num_patches": [2, 4, 8],
-  "detail": 0.10,
-  "geometry": "Mechanical",
-  "skip_remesh": true,
-  "convert_iges_to_step": true,
-  "timeout_seconds": 1800
-}
-```
-
-输出：
-
-```text
-data/crop_stp/<relative>/<name>.stp
-data/crop_stp/<relative>/<name>_autosurface.igs   # keepTemp 时保留
-autosurface_stdout.log
-autosurface_stderr.log
-fit_region.log
-```
-
-GUI 一键 Patch preview 每次运行还会额外创建 root run log：
-
-```text
-log/patch_preview_<yyyyMMdd_HHmmss_mmm>_candidate_<id>.log
-```
-
-`fit_region.log` 只覆盖 Geomagic Wrap 脚本内部步骤。root run log 覆盖 GUI 点击后到完成的整体链路，包括 output path 解析、STP sampled / source STL fitting mesh 生成、STL 写出、`RunningGeomagic` 调用耗时、patch import、viewer overlay 和 crop boundary diagnostics。状态栏会显示总 elapsed，Process Status 和报告会显示 root run log 路径。
-
-运行前处理：
-
-```text
-backend 和 autosurface_pipeline.py 会删除 stale STEP / IGS 输出。
-IGES→STEP 转换前也会删除旧 STP。
-因此 patch import 不应把上一次 AutoSurface 的旧文件误判为本次输出。
-```
-
-失败处理：
-
-```text
-记录 error_msg。
-保留 stdout/stderr 和 fit_region log。
-candidate job status = Failed。
-不导入 patch。
-不允许 Apply。
-```
-
-当前真实样例结论：
-
-```text
-RepairMesh / RemoveNonManifoldVertices / FillSmallHoles 负责处理 STL 内孔和非流形顶点。
-Mechanical + autoMerge=true 是当前 crop STL 的默认最佳组合；Organic 会导致 STEP face 数量过高。
-numPatches=1 只是 Geomagic AutoSurface 的近似目标，不保证最终 STEP face count 等于 1。
-Remesh 默认跳过；如果显式启用 Remesh，脚本会在 Remesh 失败时记录 warning 并继续使用原 mesh，在 Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
-```
-
----
-
-## 6. Patch 导入与叠加预览
-
-优先导入：
-
-```text
-data/crop_stp/<relative>/<name>.stp
-```
-
-GUI 的“从 local STL 定位并导入 Patch”入口选择的是 local STL，不是把 STL 当 patch 导入。它会用 local STL 的 `data/crop_stl/<relative>/<name>.stl` 作为 artifact key，自动定位 `data/crop_stp/<relative>/<name>.stp` / strategy suffix / IGES fallback，并把 local STL 交给 crop boundary diagnostics。
-
-如果失败，再尝试：
-
-```text
-<output_stp_stem>_autosurface.igs
-或兼容字段中的 data/crop_igs/<relative>/<name>.igs
-```
-
-导入后生成：
-
-```text
-ImportedPatchInfo
-PatchPreviewReport
-```
-
-`ImportedPatchInfo` 字段：
-
-```text
-candidate_id
-patch_path
-num_faces
-num_edges
-bbox
-brep_check_valid
-has_usable_face
-message
-```
-
-`PatchPreviewReport` 字段：
-
-```text
-candidate id
-source face count
-source boundary edge count
-patch path
-patch face count
-patch edge count
-candidate bbox
-patch bbox
-bbox deviation
-import BRepCheck result
-recommended action
-```
-
-Viewer 显示：
-
-```text
-原 STP candidate 保持高亮。
-imported patch 作为 overlay 显示。
-用户可以显示/隐藏/清除 patch。
-```
-
-注意：
-
-```text
-patch preview 不修改主 ShapeDocument。
-Patch PreviewReady 后，Apply 按钮才可启用。
-```
-
----
-
-## 7. Apply 与 Patch Replacement
-
-用户确认 overlay 后点击：
-
-```text
-Apply Current Patch To Candidate
-```
-
-Apply 前检查：
-
-```text
-selected candidate 存在。
-candidate status == Accepted。
-patch status == PreviewReady。
-boundary analysis 仍然 valid。
-imported patch valid。
-patch bbox 未明显异常。
-```
-
-输入：
-
-```text
-candidate source faces
-original STP boundary wire
-imported patch shape
-```
-
-目标路径：
-
-```text
-1. 保存 beforeDocument。
-2. 从 imported patch 中提取 underlying surface / usable faces。
-3. 优先使用 original STP boundary wire 构造 replacement face / patch。
-4. 从原模型中替换 candidate source faces。
-5. 将 replacement patch 接回原 shell。
-6. 执行 ShapeFix / SameParameter / Sewing。
-7. 得到临时 after ShapeDocument。
-8. 送入 StrictTopologyGate。
-```
-
-禁止：
-
-```text
-不要直接把 Geomagic patch 的外边界当作最终边界。
-不要直接用 STL 裁剪边界作为最终边界。
-不要绕过 StrictTopologyGate 提交。
-不要在 patch preview 前自动 Apply。
-```
-
-MVP 限制：
-
-```text
-单一 closed outer wire。
-无 holes。
-单 patch 或少量 patch。
-失败直接 rollback。
-```
-
----
-
-## 8. StrictTopologyGate
-
-检查：
-
-```text
-beforeStats
-afterStats
-BRepCheck
-free boundary
-multiple edge
-solid count
-shell closure
-bbox stability
-STEP export
-STEP roundtrip
-local STL deviation
-face / edge reduction
-```
-
-`free boundary` 使用 `ShapeValidator` 的真实 open-boundary 语义：普通单 face 邻接 edge 计为 free edge；OCCT degenerated edge 和 closed seam edge 不计为 free edge。这个分类用于避免周期面 seam / 极点退化边误报，不允许普通 open face 或真实缝隙绕过 gate。
-
-硬 gate：
-
-```text
-after.hasShape == true
-after.brepCheckValid == true
-after.freeEdges <= before.freeEdges
-after.multipleEdges <= before.multipleEdges
-after.solidCount == before.solidCount
-STEP export success
-STEP re-import success
-roundtrip.brepCheckValid == true
-```
-
-失败处理：
-
-```text
-accepted = false
-rollback_applied = true
-CommandContext.document 保持 beforeDocument
-GUI 显示失败原因
-workspace 写 validation_report.json
-```
-
-成功处理：
-
-```text
-CommandContext.document = afterDocument
-candidate patch status = Applied
-进入 undo 栈
-允许导出最终 STEP
-```
-
----
-
-## 9. 运行产物规范
-
-新运行统一写入：
-
-```text
-data/runs/
-  <yyyyMMdd_HHmmss_fff>__<workflow>__<model>__cand-<四位编号|auto|na>__<variant>/
-    run.json
-    RUN.md
-    artifacts/
-      fitting input / raw patch / normalized patch / applied STEP
-    diagnostics/
-      over-cover / OCCT / ModelCHECK diagnostics
-    logs/
-      build / ctest / Geomagic / external runner stdout/stderr
-```
-
-`run.json` 是机器可读真值，记录 Git commit/branch/dirty、源文件 SHA-256、入口参数、阶段状态和关键产物；`RUN.md` 是人工摘要。数字 candidate 统一四位补零。
-
-兼容边界：
-
-```text
-1. data/crop_stl、data/crop_stp、data/crop_igs 继续作为 GUI / Geomagic staging，允许覆盖。
-2. staging 文件不能单独作为某轮验收证据；应使用 run-local artifacts 和 run.json 中登记的来源。
-3. 旧 data/baseline_runs 保持只读历史，不批量迁移或删除。
-4. 显式 -OutputDir 仍支持，但目录中已有 run.json 时拒绝覆盖。
-5. scripts/list_runs.ps1 用于按 workflow、model、candidate、status 和时间查找运行。
-```
-
----
-
-## 10. Job 状态机
-
-```text
-Pending
-→ AnalyzingBoundary
-→ CroppingStl
-→ RunningGeomagic
-→ ImportingPatch
-→ PreviewReady
-→ ApplyPending
-→ Replacing
-→ Validating
-→ Applied
-```
-
-失败分支：
-
-```text
-Failed
-Rejected
-Cancelled
-ApplyFailed
-```
-
-默认并发：
-
-```text
-maxConcurrentGeomagicJobs = 1
-```
-
-观测约定：
-
-```text
-RunningGeomagic 表示 C++ backend 正在等待 Geomagic AutoSurface 调用返回。
-如果 Geomagic 的 fit_region.log 显示 Wrap 内部很快完成，但 GUI 仍未结束，应先查看 root log 中 RunningGeomagic、ImportingPatch、PreviewReady 的 duration_ms。
-root log 是运行诊断产物，写入仓库根目录 log/，不纳入 git。
-```
-
-原因：
-
-```text
-wrapCore 可能占用许可证。
-多进程可能冲突。
-Geomagic 启动开销大。
-```
-
----
-
-## 11. 缓存策略
-
-缓存 key：
-
-```text
-source STEP path + modified time
-source STL path + modified time
-candidate source face ids
-candidate boundary edge ids
-crop margin
-AutoSurface parameters
-autosurface_pipeline.py version
-```
-
-缓存命中条件：
-
-```text
-local STL 已存在且 crop_report success。
-fit_region.log 存在且 output STEP exists。
-patch import report valid。
-patch preview report valid。
-```
-
-命中后：
-
-```text
-跳过 STL crop 和 Geomagic。
-直接进入 patch import / overlay preview。
-```
-
-注意：
-
-```text
-缓存命中不代表可以自动 Apply。
-Apply 仍需用户确认。
-```
-
----
-
-## 12. MVP 验收
-
-### MVP-A：Candidate Preview
-
-```text
-1. 打开 STP。
-2. 检测特征边。
-3. 生成 FeatureBoundedRegion candidates。
-4. 显示 candidate overlay。
-5. candidate 可 accepted / rejected / hidden。
-```
-
-### MVP-B：Patch Generation + Overlay Preview
-
-```text
-1. 打开 STP。
-2. 打开 STL。
-3. 接受一个低风险 candidate。
-4. BoundaryAnalyzer 通过。
-5. 导出 local STL。
-6. 调用 Geomagic 输出 local IGS / STEP。
-7. 导入 patch。
-8. Viewer 叠加显示 patch。
-9. 输出 patch_preview_report。
-10. 主 ShapeDocument 不变。
-```
-
-### MVP-C：Apply + Replacement
-
-当前实现状态：
-
-```text
-T6.0 已完成 replacement 前置输入与 imported patch 拓扑分析。
-已新增 PatchReplacementInput / PatchReplacementReport / MultiFacePatchAnalyzer。
-当前可以在真正 replacement 前统一校验 document、candidate、boundary、imported patch 和 preview report。
-MultiFacePatchAnalyzer 已支持 TopoDS_Face / TopoDS_Shell / TopoDS_Solid / TopoDS_Compound 形态下的 one-face 与 multi-face patch。
-patchFaceCount > 1 不作为失败条件；multi-face patch 是后续 T6.1 replacement fragment 的主路径输入。
-T6.2 已完成 StrictTopologyGate 最小可用版，并提前于 T6.1 / PatchReplacementCommand 落地。
-StrictTopologyGate 检查 after BRepCheck、free/multiple edge 增量、solid/shell 一致性、bbox、STEP export 和 STEP roundtrip。
-replacementFaceCount > 1 不作为失败条件；multi-face replacement 只记录 multiFaceReplacement 和 warning。
-Gate 本身不修改 ShapeDocument，不调用 Geomagic，不重新裁剪 STL。
-T6.1 已完成 BoundaryConstrainedPatchBuilder 最小可用版。
-BoundaryConstrainedPatchBuilder 可从 MultiFacePatchAnalysis 构造 one-face fragment 或 multi-face compound replacement fragment，保留 internal patch seams，并仅把 boundary mismatch 作为 warning。
-Builder 本身不修改 ShapeDocument，不创建 Command，不接入 GUI，不调用 Geomagic。
-T6.3 已完成 PatchReplacementCommand 最小可用版：Command 会执行 input validation、MultiFacePatchAnalyzer、BoundaryConstrainedPatchBuilder、StrictTopologyGate，Gate 成功才提交 afterDocument，Gate 失败 rollback，undo/redo 复用缓存文档且 redo 不重新运行 Geomagic。
-T6.3 当前未真正删除 candidate source faces，未执行 sewing / ShapeFix / SameParameter，未接入 GUI；普通局部 patch 若无法通过 StrictTopologyGate 会失败并保持主 ShapeDocument 不变。
-T6.4 已完成最小 repair + gate 管线：PatchReplacementCommand 使用 BRepTools_ReShape 尝试替换 candidate source faces，然后执行 SameParameter、ShapeFix_Wire、ShapeFix_Face 和 Sewing，并记录 repair 前后拓扑统计。
-T6.4 仍由 StrictTopologyGate 作为最终提交门；Gate 失败 rollback，redo 只复用缓存 afterDocument，不重新运行 Geomagic、不裁剪 STL、不读取 patch、不重新 repair。
-T6.5 已完成 AppController / GUI 真实 Apply 接入：GUI 按钮调用 AppController::applyCurrentPatchToCurrentCandidate，并通过 CommandHistory 执行 PatchReplacementCommand。成功后主 ShapeDocument 显示 afterDocument 并清除 patch overlay / preview state；失败后主 ShapeDocument 不变且保留 overlay / preview state。GUI Apply 启用严格水密 Gate，要求 after 与 STEP roundtrip 后都通过 BRepCheck、solid count 保持、free edge=0、multiple edge=0。one-face path 会用 imported patch surface + 原 STP candidate boundary wire 重建 trimmed face；multi-face fragment 仍进入主路径，最终提交性由 repair + StrictTopologyGate 判断。redo 仍只复用缓存 afterDocument，不重新运行 Geomagic、不裁剪 STL、不导入 patch、不重新 repair。
-T6.5.1 Apply/Gate 失败诊断增强已完成：PatchReplacementReport 记录 repair 前后 stats、Gate before/after stats、STEP roundtrip stats、BRepCheck/free/multiple edge 和 watertight 选项，GUI Patch Apply report 会直接展示这些字段；可选 rejected after debug artifact 路径尚未实现。
-T6.6 Industrial Adaptive Sewing 已完成最小 C++ 集成：PatchReplacementRepair 执行 ShapeFix_Shape、ShapeUpgrade_UnifySameDomain、多 tolerance Sewing loop、ShapeFix_Shell、BRepBuilderAPI_MakeSolid、ShapeFix_Solid、collapsed guard 和 best-result selection，并把 selected tolerance、attempt count、best stats 写入 report / GUI。该路线只增强 repair 和诊断，不放宽 StrictTopologyGate，不绕过 rollback，不信任 STL crop boundary 或 Geomagic patch outer boundary。
-T6.6.1 Crop Boundary Diagnostics 已完成：用原 STP candidate outer boundary loop 采样点验证 local STL crop 和 imported patch outer boundary 是否存在缺口或覆盖不足，并在 GUI overlay / patch preview report 中显示 suspected gap。
-T6.6.2 Process Status Panel 已完成第一版：GUI 底部“进程”页显示 crop、Geomagic、import、replacement、repair、adaptive sewing、StrictTopologyGate 的当前阶段、candidate、路径、sewing best stats、Gate reason 和最近 message / warning；undo/redo 显示 cached undo / cached redo，不伪装成重新运行 Geomagic、crop、import 或 repair。
-T6.6.3 STL Crop Boundary-Band Diagnostics 已完成：在 boundary point coverage 外增加 candidate 内侧 boundary-band coverage，并对 source STL triangles 复现当前 centroid-only crop predicate，统计 rejected near-boundary triangles 与 conservative keep candidate；GUI overlay 新增橙色 boundary-band missing area 和紫色 near-boundary rejected triangles，crop bbox 线框保留手动开关但默认隐藏，避免干扰观察 STL、原 STP loop 和诊断 segment。
-T6.6.4 STL Region Extractor 保守裁剪修复已完成：crop 可在 conservative-boundary-band 模式下不只依赖 triangle centroid inside candidate region，新增 vertex-inside、edge-midpoint-inside 与 original CAD boundary-band inclusion，并用 output bbox / triangle-count leak guard 限制局部扩边。该扩边只改善 Geomagic 输入 STL 采样，不把 STL crop boundary 当作最终 CAD boundary。
-T6.6.4.1 STL Crop Mode Switch 已完成：由于手动验证显示 conservative-boundary-band 可能让 AutoSurface 生成过多 patch faces 并扩大 patch boundary mismatch，默认 crop mode 已回到 legacy centroid-only；GUI `STL -> 启用保守边界裁剪` 只用于显式 A/B 验证，单独裁剪和“生成并预览当前 Patch”共用同一开关。
-T6.6.5 Regenerate Geomagic Patch + Apply Verification 已完成手动验证：legacy centroid-only crop 产生较简单 patch 但 patch outer boundary 仍局部 mismatch；conservative-boundary-band crop 补齐 STL 但会让 AutoSurface patch face count 暴涨并扩大全环 boundary mismatch。两者共同证明：directly using Geomagic patch outer boundary as replacement boundary is invalid for this class of feature-bounded regions。
-T6.6.4.2 STL Boundary Loop Repair Connectivity Guard 已完成：boundary-loop repair 只允许加入与当前 crop mesh 顶点近似连通的三角片；仅满足边界距离但不连通的候选会计入 orphan repair candidates 并被拒绝，避免生成漂浮碎片污染 AutoSurface。
-T6.7 Boundary-Constrained Surface Re-trim 与 T6.7.4 Strict Multi-surface Boundary Shell 已完成增强版：Geomagic AutoSurface 只提供 surface / 曲面趋势，最终 CAD boundary 必须来自原 STP candidate outer boundary wire；默认 replacement 先由 selected Geomagic surface + original CAD boundary wire 重新 trim / rebuild，单 surface 不覆盖但 all-surface coverage 成立时，再由 T6.7.4 按原 CAD boundary edge 整段优先分配 surface；若整条 edge 无单一 surface 覆盖但采样点均被 surface 集合覆盖，则只对该失败 edge 分段。T6.7.4 保留 imported patch 内部 seam、构造 multi-face bounded shell；同一 patch face 形成多个 closed wire 时，所有 closed wire 都构造成 replacement face。Apply report 同时显示最佳单 surface 投影统计、all-surface 最近投影 coverage / uncovered edge ids，以及 multi-surface attempted / used / assigned segments / split edges / built faces / closed wires / open wires / failed face / failed edges。T6.7.4 失败不回退 Geomagic patch outer boundary；成功结果进入 face-compound assembly、PatchReplacementRepair 与 StrictTopologyGate。
-T6.7.5 / B2.7 Trim Diagnostics 已完成最小版：`PatchTrimDiagnostics` 在 Apply 构造出 replacement 后输出 `trim_diagnostics`，并同步到 PatchReplacementReport、baseline JSON、patch_apply_probe 和 GUI Apply report。诊断覆盖 over-cover / under-cover、boundary gap、internal seam gap 和 roundtrip changed；它只定位结果，不新增 fitting input，不替代 PatchReplacementRepair，不放宽 StrictTopologyGate，不把 Geomagic patch outer boundary 当最终 CAD boundary。真实样例 `03_配件_Clay.stp` auto-selected candidate 179 复用 B2.3 + SharpenContours patch 后，StrictTopologyGate 与 applied STEP readback 通过，但 CommercialCadLikeQualityGate 仍失败；B2.7 显示 over-cover=0、under-cover=81/256、boundary_gap_max=0.0706854、internal_seam_gap=0、roundtrip_changed=false。下一步应优先修 local surface coverage、boundary projection 和 owner/split 稳定性，而不是先扩大 STL 或围绕单个 edge id 硬编码修复。
-T6.7.6 / B2.8 External CAD Diagnostic Routing 已完成最小版：`PatchExternalCadDiagnosticsReport` 挂入 PatchReplacementReport，并同步到 baseline JSON、patch_apply_probe 和 GUI Apply report。原始 Geomagic 补片 STEP 仅标记为 `PatchPreflightOnly`，用于补片自身预诊断；最终外部 CAD 诊断只在 Patch Apply、StrictTopologyGate、已合并 STEP 导出和二次读取均成功后标记为 eligible，输入路径指向已合并 STEP。显式后台 Creo 脚本已可用并完成真实样例诊断：Creo 能生成 `.prt.1` 和 ModelCHECK HTML/XML，JSON 摘要显示 `diagnostic_passed=false`、`GEOM_CHECKS`、`SHORT_EDGES=1491`、`PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`。B2.9 继续扩展脚本解析和关联：ModelCHECK `item` 明细会保留到 JSON，`SHORT_EDGES` 当前解析出 1491 个 Creo edge id，`creo_diagnostic_correlation` 可把这些失败项与 B2.7 `trim_diagnostics` 阶段指标放在同一报告中；但当前 XML 没有空间坐标或 OCCT edge id，不能直接做 edge 映射。默认测试只使用 XML fixture / parse-only，不调用 Creo / Geomagic 外部 API，不改变 repair / Gate / redo 语义。
-Post-T6.7.4 fitting input modes 已完成：`GeomagicFittingInputMode::StpSampledCandidateSurface` 已作为 GUI 默认模式，直接从 STP candidate faces / boundary 生成 synthetic fitting STL，不要求源 STL；legacy STL crop 与 conservative boundary-band STL crop 保留为自动 Patch preview 的对照路线。`StlCropMode::GlobalCutChain` 已接入 GUI 的 STL crop 开关，作为独立 STL 全局切链裁剪器，支持 boundary snap 回贴原 STP red loop；当前它不是 `GeomagicFittingInputMode`，仍只影响手动 / 脚本可使用的 fitting STL 输入，不改变最终 CAD boundary。
-Geomagic pipeline hygiene 已完成：backend / autosurface_pipeline.py 运行前删除 stale STEP / IGS，Remesh 默认跳过但可由 GUI Patch 菜单显式启用，并通过 FIT_REGION_* 环境变量传递 repair / remesh / AutoSurface 参数；Remesh 失败只记录 warning 后继续原 mesh，Remesh 后 AutoSurface 全失败时 retry pre-remesh mesh。
-```
-
-```text
-1. 对 PreviewReady candidate 点击 Apply。
-2. 执行 PatchReplacementCommand。
-3. StrictTopologyGate 通过。
-4. Command 可 undo/redo。
-5. 导出 STEP。
-6. STEP roundtrip 通过。
-```
-
----
-
-## 13. 最小手动验证流程
-
-```text
-默认：STP
-→ Preview FeatureBoundedRefit candidates
-→ Accept one low-risk candidate
-→ Analyze boundary
-→ Generate STP-sampled fitting STL
-→ Run Geomagic AutoSurface
-→ Import local STEP / IGS
-→ Overlay preview patch
-→ Click Apply
-→ Replacement + sewing
-→ StrictTopologyGate
-→ Undo / Redo
-→ Export STEP
-→ STEP roundtrip
-```
-
-```text
-可选诊断：STP + 原始 STL
-→ Legacy STL crop / Conservative Boundary Band crop / Global Cut Chain crop
-→ Legacy / Conservative 可走一键 Patch preview
-→ Global Cut Chain 当前输出 local STL，需手动 / 脚本运行 Geomagic 后再进入 patch import / preview / Apply 路径
-```
-
-### 13.1 T6.5 后续工业级 sewing 路线
-
-```text
-T6.5.1 DONE:
-ApplyFailed
-→ PatchReplacementReport 展示 repair 前后 face/edge/shell/solid
-→ 展示 StrictTopologyGate before/after stats
-→ 展示 STEP roundtrip stats
-→ 可选导出 rejected after debug STEP 尚未实现
-
-T6.6 DONE:
-assembled after candidate
-→ ShapeFix_Shape
-→ ShapeFix_Face orientation / ShapeFix_Wire / ShapeFix_Face
-→ ShapeUpgrade_UnifySameDomain
-→ adaptive BRepBuilderAPI_Sewing tolerance loop
-→ ShapeFix_Shell
-→ BRepBuilderAPI_MakeSolid
-→ ShapeFix_Solid
-→ collapsed guard / best-result selection
-→ StrictTopologyGate
-
-T6.6.1 DONE:
-original STP candidate outer loop
-→ per-edge boundary sampling
-→ compare with local STL crop coverage
-→ compare with imported patch outer boundary
-→ suspected gap segment report
-→ GUI overlay highlights original loop / STL coverage issue / patch outer boundary / gap
-→ patch preview report includes CropBoundaryDiagnosticsReport fields
-
-T6.6.2 DONE:
-GUI process status panel
-→ current stage
-→ candidate id / paths / counts
-→ Geomagic / crop / import / Apply params
-→ adaptive sewing tolerance attempt and best stats
-→ StrictTopologyGate reason
-→ redo displayed as cached redo, not rerun
-→ first version is stage-level; per-tolerance live progress remains a later job/progress-callback task
-
-T6.6.3 DONE:
-original STP candidate outer loop
-→ candidate-inner boundary-band sampling
-→ compare band samples with local STL crop coverage
-→ audit source STL triangles against current bbox + centroid-inside crop predicate
-→ report rejected near-boundary triangles and conservative keep candidates
-→ GUI overlay highlights orange band missing area and purple rejected near-boundary triangles
-→ crop bbox remains available but hidden by default for cleaner diagnostic viewing
-
-T6.6.4 DONE:
-StlRegionExtractor conservative crop mode
-→ keep centroid-inside triangles as the baseline path
-→ also keep bbox-intersecting triangles whose vertex or edge midpoint is inside candidate region
-→ also keep bbox-intersecting triangles near the original STP candidate boundary band
-→ record centroid / vertex / edge-midpoint / boundary-band keep counts in StlCropReport
-→ enforce output bbox and triangle-count leak guards
-→ GUI crop report shows keep/reject counts for manual recrop verification
-
-T6.6.4.1 DONE:
-STL crop mode switch
-→ default crop mode is centroid-only, matching the legacy extractor behavior
-→ conservative-boundary-band remains available behind a GUI STL menu toggle
-→ crop reports and automatic Patch preview reports show crop mode
-→ the toggle affects crop input only, not replacement, ShapeDocument, StrictTopologyGate, or redo
-
-T6.6.4.2 DONE:
-STL boundary-loop repair connectivity guard
-→ boundary-loop repair candidates must connect to the currently kept crop mesh
-→ orphan repair candidates are rejected and reported
-→ missing-after=0 is not sufficient if it depends on floating triangles
-→ crop repair still affects Geomagic input only, not final CAD boundary
-
-T6.6.5 DONE:
-manual patch regeneration and Apply verification
-→ centroid-only crop keeps AutoSurface patch simple but does not make patch outer boundary CAD-compatible
-→ conservative-boundary-band crop improves STL coverage but can overfit boundary wrinkles and adjacent features
-→ direct multi-face AutoSurface outer-boundary replacement remains blocked by free edges and BRepCheck
-→ route decision: stop treating crop / sewing tolerance as the primary fix
-
-T6.7 DONE:
-Boundary-Constrained Surface Re-trim + strict multi-surface boundary shell
-→ select or fit surface geometry from the imported Geomagic patch
-→ project / build original STP candidate outer boundary wire on that surface
-→ rebuild a trimmed replacement face when one surface covers the boundary
-→ when one surface fails but all-surface coverage passes, assign original CAD boundary edges to Geomagic surfaces, split only the edges that cannot be owned by one surface, and build a bounded multi-face shell from original boundary segments plus internal patch seams
-→ when one patch face produces multiple closed wires, build every closed wire as a replacement face instead of discarding extra loops
-→ assemble multi-surface results as non-source original faces plus replacement faces before repair sewing
-→ report both selected single-surface coverage and all-surface nearest-projection coverage
-→ report multi-surface attempted / used / assigned segments / split edges / built faces / closed wires / open wires / failed patch face / failed edge ids
-→ direct patch outer-boundary fragment is no longer the default replacement path
-→ final result still must pass PatchReplacementRepair and StrictTopologyGate
-→ real GUI / Apply report diagnosis shows the remaining failure is split-boundary adjacency / bridge closure after multi-surface shell, not patch outer-boundary fallback or STL crop tolerance
-
-Post-T6.7.4 input modes DONE:
-→ STP Sampled Candidate Surface is the current default fitting input mode
-→ it generates synthetic fitting STL directly from STP candidate faces / boundary
-→ it does not require loading source STL before Patch preview
-→ legacy STL crop and conservative boundary-band STL crop remain available for A/B verification
-→ Global Cut Chain crop is available as an explicit STL crop mode for source-STL-based extraction
-→ Global Cut Chain is not currently a GeomagicFittingInputMode in the one-click Patch preview path
-→ Global Cut Chain boundary snap only improves manually/script-fed fitting STL input, not final CAD boundary
-
-Geomagic pipeline hygiene DONE:
-→ stale STEP / IGS outputs are removed before a new AutoSurface run
-→ stale STP is removed before IGES→STEP WriteFile attempts
-→ Remesh is skipped by default, can be enabled explicitly, and AutoSurface failures after Remesh retry the pre-remesh mesh
-→ backend passes FIT_REGION_* repair / remesh / AutoSurface parameters to the script
-```
-
-注意：
-
-```text
-adaptive sewing 不能替代 StrictTopologyGate。
-free edge 变 0 但 face count 严重塌缩的结果不能提交。
-multi-face patch 内部 seam 可以保留；外边界是否能形成实体由 repair + gate 判断。
-redo 只复用缓存 afterDocument，不重新运行 adaptive sewing。
-T6.6.1 overlay 只显示诊断几何，不参与 replacement，不改变 ShapeDocument。
-T6.6.3 overlay 只显示诊断几何，不参与 crop inclusion、不参与 replacement，不改变 ShapeDocument。
-T6.6.4 boundary-band inclusion 只影响 local STL crop 输入，不参与 replacement，不改变 ShapeDocument，不改变最终 CAD boundary。
-T6.6.4.1 crop mode 开关只决定 local STL 采样策略，不改变 patch replacement / Apply / StrictTopologyGate 规则。
-T6.6.4.2 boundary-loop repair connectivity guard 只拒绝不连通的 STL 修补候选，不用 STL 修补结果替代原 STP boundary。
-T6.6.5 结论已否定“Geomagic patch outer boundary 可直接作为最终 replacement boundary”的路线。
-T6.7 起，Patch Apply 的核心判断从“patch outer boundary 是否贴合”转为“Geomagic surface 是否覆盖原 STP candidate boundary，并能否用原 STP wire 重新 trim 或构造 strict multi-surface bounded shell”。
-T6.7 的 all-surface coverage 是 T6.7.4 的进入条件之一，但仍不把 Geomagic patch outer boundary 或 STL crop boundary 变成最终 CAD boundary。
-T6.7.4 multi-surface shell 成功不等于 Apply 成功；repair 后仍必须 free edges=0、multiple edges=0、BRepCheck=true、solid/watertight 和 STEP roundtrip 均通过。
-STP sampled fitting STL 是当前默认 Geomagic 输入模式；它不要求源 STL，但它的三角边界仍不是最终 CAD boundary。
-Global Cut Chain 是可选 STL 裁剪器；它可以改善源 STL 局部提取，但当前不是一键 Patch preview 的 `GeomagicFittingInputMode`，也不应在没有更多真实样例证据前替代 STP sampled 默认模式。
-如果 T6.6.1 / T6.6.3 证明 STL crop 或 patch outer boundary 有缺口，修复应优先发生在 crop / boundary sampling / patch generation 输入层，而不是继续放宽 Gate 或强行采用 sewing result。
-Geomagic stale output cleanup 是流程正确性要求，不代表 patch 可 Apply；Apply 仍必须通过 repair 与 StrictTopologyGate。
-```
+  -OutputDir <run-directory>
+~~~
+
+只有明确需要真实 Geomagic 时添加：
+
+~~~powershell
+-RealGeomagic
+~~~
+
+脚本保留 A0、B1、B2、B2.2 和 B2.3 等历史实验选择用于复现；这些名称不是当前产品阶段，也不应重新写入状态流水账。
+
+AllowQualityGateFailure 只允许诊断运行继续归档失败证据，不能把结果标记为可交付。
+
+## 外部 CAD 路由
+
+外部 CAD 分为两类：
+
+### patch 预检查
+
+对象是 Geomagic 原始 patch STEP，用于判断：
+
+- 第三方输出能否导入。
+- patch 自身是否存在明显结构问题。
+
+预检查不能证明最终替换模型有效。
+
+### 最终整件检查
+
+对象必须是 Apply 成功并导出的最终整件 STEP。
+
+Creo 批处理入口：
+
+~~~powershell
+./scripts/run_creo_step_diagnostic.ps1 `
+  -StepPath <applied-step> `
+  -OutputDir <diagnostic-directory>
+~~~
+
+脚本可执行 STEP 导入和 ModelCHECK，并归档：
+
+- 生成的 Creo part。
+- 导入状态。
+- ModelCHECK XML 与解析摘要。
+- pass、info、warning 和 error 计数。
+- 失败检查与短边样本。
+- 与 baseline trim 诊断的阶段级关联。
+
+若报告只有 Creo edge/feature id 而没有空间坐标，不得声称已映射到 OCCT edge。需要 Creo API 或额外几何导出才能做空间关联。
+
+## 运行产物
+
+正式运行目录至少包含：
+
+~~~text
+data/runs/<run-id>/
+├─ run.json
+├─ RUN.md
+├─ logs/
+├─ fitting/
+│  └─ candidate_fitting.stl
+├─ geomagic/
+│  ├─ patch.step
+│  ├─ patch_autosurface.igs
+│  └─ fit_region.log
+├─ apply/
+│  ├─ baseline_report.json
+│  └─ applied.step
+└─ external/
+   └─ creo_step_diagnostic_result.json
+~~~
+
+具体目录可由脚本调整，但 run.json 必须能定位实际产物。
+
+RUN.md 只摘要：
+
+- 输入来源。
+- 实际参数。
+- 各阶段状态。
+- 最终是否通过。
+- 主要失败原因。
+- 产物入口。
+
+完整指标放 JSON、CSV 和日志，不复制回本文。
+
+## 失败处理
+
+### 外部进程失败
+
+保留 stdout、stderr、环境参数和部分输出。不得继续导入不存在或不完整的 patch。
+
+### patch 无法导入
+
+记录 StepReader 或结构错误。不要尝试以 IGES 成功替代 STEP 产品合同，除非任务明确只做支撑面诊断。
+
+### 预览通过但 Apply 失败
+
+保留 preview 和 Apply 报告，按 boundary、trim、repair、topology、quality 或 roundtrip 阶段分类。当前模型保持不变。
+
+### StrictTopologyGate 失败
+
+停止产品提交。可以继续生成诊断，但不能导出 applied STEP 作为成功结果。
+
+### 商业 CAD 类门失败
+
+拓扑可能仍合法，但结果不满足交付质量。保留整件诊断文件，并把状态记录为失败或仅诊断。
+
+### Creo 失败
+
+区分：
+
+- STEP 无法导入。
+- 导入后不是有效实体。
+- ModelCHECK 几何或短边失败。
+- 工具或许可失败。
+
+外部工具基础设施失败不能冒充几何失败，反之亦然。
+
+## 安全边界
+
+- 不自动启动 Geomagic、Creo 或其他昂贵外部阶段。
+- 不删除 StrictTopologyGate 或 PatchReplacementRepair。
+- 不用更宽容差掩盖裂缝。
+- 不覆盖既有运行目录。
+- 不把真实样例路径、candidate id 或 edge id 写进通用实现。
+- 不把截图作为唯一证据。
+- 不把 patch 预检查冒充最终整件检查。
+- 不把 Open CASCADE 成功冒充跨内核成功。
+
+## 维护规则
+
+本文只维护当前后备合同。新的历史实验、阶段日志和完整指标写入 data/runs 与开发日志；路线状态变化写入 implementation_status.md；形成里程碑时只在 completed_features.md 增加短结论。

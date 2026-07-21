@@ -1,468 +1,223 @@
-# 项目结构与目录职责
+# 项目结构
 
-项目名称：
+本文只记录当前目录和目录职责。架构依赖见 module_design.md，当前实现状态见 implementation_status.md。
 
-```text
-step-patch-optimizer
-```
+## 根目录
 
-中文定位：
-
-```text
-特征感知的 STEP 曲面片合并与边界优化系统
-```
-
-英文定位：
-
-```text
-Feature-aware STEP Patch Optimization
-```
-
----
-
-## 1. 当前项目状态
-
-当前项目已经完成 MVP 基础闭环和任意选区原生曲面减面；FeatureBoundedRefit / Geomagic 稳定路径只保留为高级后备。`native-surface-refit` 和 `native-autosurface` 只保留为实验基线。当前已具备的产品流程是：
-
-```text
-STEP/STP 读取
-→ B-rep 拓扑索引构建
-→ OCCT Viewer 显示
-→ face / edge 选择与多选
-→ 显式选择 STEP-only 或 STEP + 扫描 STL 软参考
-→ 原始 B-rep 邻接驱动的选区动态分组
-→ 四工作线程受限 B-spline 曲面拟合和独立样本终验
-→ 原始边界重裁剪、全局质量门和事务 Apply
-→ 基础特征边检测
-→ 用户锁边 / 解锁边
-→ FeatureBoundedRefit 候选区域生成和预览
-→ STP Sampled Candidate Surface fitting STL
-→ Geomagic AutoSurface patch generation / import / overlay preview
-→ original STP boundary constrained Patch Apply
-→ PatchReplacementRepair
-→ StrictTopologyGate / CommercialCadLikeQualityGate
-→ STEP/STP 导出、二次读取校验和可选外部 CAD 诊断
-```
-
-当前阶段已经完成 NSR-1 原生单曲面工程探针、NSR-1.1 失败诊断 / 固定三档实验和 NSR-1.2 结构诊断 / 固定 96 点采样分配实验。当前重点是：
-
-```text
-1. 当前 P0：执行 NSR-1.3 局部切平面约束有限周期实验，验证位置与局部法向能否同时收敛。
-2. 已完成 Filling 输出、方向反转后和 STEP roundtrip 的 BRepCheck 对照，以及每张源面的训练 / 验证覆盖和法向样本级诊断。
-3. 固定 96 点分层面积加权已消除内存态结构失败和零训练源面，但内部与法向质量门仍未通过。
-4. 独立 native_surface_fit_probe 继续输出诊断 patch、JSON、CSV 和 OBJ，不先改 AppController 或 GUI。
-5. 原生单曲面通过自身质量门后，再复用 PatchReplacementRepair、StrictTopologyGate 和 STEP roundtrip。
-6. 固定 96 点仅用于 NSR-1.3 受控实验；后续 NSR-1.4 再按区域面积、边界与曲率 / 法向变化计算拓扑无关的训练预算。
-6. Geomagic 流程保留为后备和对照，不是本分支默认拟合入口。
-```
-
----
-
-## 2. 推荐技术栈
-
-当前主技术路线：
-
-```text
-C++20 + OCCT + Qt6 + CMake + vcpkg
-```
-
-当前核心依赖：
-
-```text
-OpenCASCADE / OCCT   STEP 读写、B-rep 拓扑、几何算法、Viewer
-Qt6                  GUI、窗口、菜单、面板、交互
-Eigen3                稀疏最小二乘控制点求解
-CMake                构建系统
-vcpkg                依赖管理
-```
-
-后续可选依赖：
-
-```text
-CGAL          用于 mesh 层 sharp edge / region segmentation 辅助
-nlohmann/json 用于项目文件与参数保存
-spdlog        用于日志
-GoogleTest    用于单元测试；当前测试仍采用项目内轻量测试方式
-```
-
-第一阶段不引入新的拟合依赖。当前只使用现有 OCCT + B-rep 拓扑完成 NSR-1 原生单曲面可行性验证。
-
----
-
-## 3. 当前目录结构
-
-```text
+~~~text
 step-patch-optimizer/
-├── CMakeLists.txt
-├── CMakePresets.json
-├── README.md
-├── AGENTS.md
-├── vcpkg.json
-│
-├── .vscode/
-│   ├── extensions.json
-│   ├── launch.json
-│   ├── settings.json
-│   └── tasks.json
-│
-├── docs/
-│   ├── module_design.md
-│   ├── implementation_status.md
-│   ├── completed_features.md
-│   ├── TODO.md
-│   ├── native_surface_refitting_guide.md
-│   ├── geomagic_patch_workflow.md
-│   ├── geomagic_patch_cleanup_plan.md
-│   ├── project_structure.md
-│   └── run_gui.md
-│
-├── scripts/
-│   ├── bootstrap_windows.ps1
-│   ├── build_debug.ps1
-│   ├── configure.ps1
-│   ├── run_boundary_trim_fill_experiments.ps1
-│   ├── run_corner_baseline_gate.ps1
-│   ├── run_creo_step_diagnostic.ps1
-│   ├── run_creo_toolkit_baseline_probe.ps1
-│   ├── run_creo_toolkit_phase1_repair.ps1
-│   ├── run_geomagic_patch.ps1
-│   ├── run_native_surface_fit_tiers.ps1
-│   ├── run_native_surface_fit_sampling_ab.ps1
-│   ├── run_gui.ps1
-│   ├── run_artifacts.ps1
-│   ├── list_runs.ps1
-│   ├── setup_deps.ps1
-│   ├── test.ps1
-│   └── verify_spo.ps1
-│
-├── scripts/geomagic_wrap/
-│   └── autosurface_pipeline.py
-│
-├── log/                         # 运行时 Patch preview root run log，git ignore
-├── data/runs/                   # 新测试/实验的一次运行一个目录，含 run.json / RUN.md / artifacts / diagnostics / logs
-├── data/baseline_runs/          # 旧实验历史，只读保留，不再作为新运行默认目录
-├── data/crop_stl|crop_stp|crop_igs/ # GUI / Geomagic 共享暂存区，可覆盖，不作为历史验收来源
-│
-├── src/
-│   ├── app/                    # main, MainWindow, AppController, process status, patch preview logging
-│   ├── gui/                    # OCCT viewer, panels, process status panel
-│   ├── command/                # Command system, lock/unlock, same-domain merge, PatchReplacementCommand
-│   ├── io/                     # STEP/STP and STL IO, project serializer placeholder
-│   ├── brep/                   # ShapeDocument, face/edge index, topology graph, boundary wire helper
-│   ├── feature/                # feature edge detection and constraint interfaces
-│   ├── merge/                  # FeatureBoundedRefit candidates, boundary analysis, same-domain unifier
-│   ├── stl/                    # STP sampled fitting mesh, STL crop, Global Cut Chain
-│   ├── patch/                  # patch import, preview, original-boundary constrained Apply, repair, diagnostics
-│   ├── external/geomagic/      # Geomagic AutoSurface config/backend/output path resolver
-│   ├── validate/               # ShapeValidator, StrictTopologyGate, CommercialCadLikeQualityGate
-│   └── common/                 # common types, config, tolerance, Result
-│
-├── tests/
-│   ├── fixtures/
-│   ├── test_patch_replacement_command.cpp
-│   ├── test_patch_replacement_repair.cpp
-│   ├── test_surface_refitter.cpp
-│   ├── test_strict_topology_gate.cpp
-│   ├── test_commercial_cad_quality_gate.cpp
-│   ├── test_stp_sampled_fitting_mesh.cpp
-│   ├── test_stl_region_extractor.cpp
-│   ├── test_geomagic_backend_mock.cpp
-│   └── ...                    # 其余 command / IO / topology / patch / STL 回归测试
-│
-└── tools/
-    ├── step_stats.cpp
-    ├── native_surface_fit_probe.cpp
-    ├── surface_reduction_probe.cpp
-    ├── surface_reduction_benchmark.cpp
-    ├── patch_apply_probe.cpp
-    ├── corner_baseline_probe.cpp
-    ├── strict_topology_gate_probe.cpp
-    ├── step_unit_normalizer.cpp
-    ├── creo_phase1_input_exporter.cpp
-    └── g1_boundary_fill_patch_exporter.cpp
-```
+├─ .ai-bridge/           本地大模型桥接配置
+├─ .claude/              本地代理技能和配置
+├─ .gitnexus/            GitNexus 本地索引与启动脚本
+├─ .vscode/              VS Code 构建与调试配置
+├─ assets/               GUI 和文档使用的静态资源
+├─ build/                本地 CMake 构建产物
+├─ data/                 样例、缓存和可复现运行证据
+├─ docs/                 当前有效的职责型文档
+├─ experiments/          隔离实验代码或输入
+├─ log/                  本地临时日志
+├─ scripts/              构建、测试、验证和实验脚本
+├─ src/                  产品源代码
+├─ tests/                单元、合同和回归测试
+├─ tools/                命令行探针与辅助工具
+├─ vcpkg_installed/      本地依赖安装结果
+├─ AGENTS.md             本地忽略的大模型协作说明
+├─ CLAUDE.md             本地代理入口说明
+├─ CMakeLists.txt        CMake 构建入口
+├─ CMakePresets.json     Windows MSVC 预设
+├─ README.md             项目入口
+└─ vcpkg.json            依赖清单
+~~~
 
----
+build、vcpkg_installed、log 及部分本地代理目录不是产品源代码。是否纳入 Git 以 .gitignore 和当前索引为准。
 
-## 4. 文档职责
+## src
 
-| 文档 | 作用 |
-|---|---|
-| `README.md` | 面向新用户：项目简介、环境配置、构建、运行、测试、常见问题 |
-| `docs/module_design.md` | 长期架构文档：模块边界、依赖关系、阶段规划 |
-| `docs/implementation_status.md` | 当前实现进度：已完成、待办、验收方式、近期开发顺序 |
-| `docs/completed_features.md` | 已完成、已验证或已退役的功能事实，承接旧 TODO 中的历史计划 |
-| `docs/TODO.md` | 当前执行 TODO：阶段任务、冻结范围、验收要求 |
-| `docs/surface_reduction_guide.md` | `native-surface-reduction` 产品主线的动态分组、受限 B-spline 拟合、质量门和已验证基线 |
-| `docs/native_surface_refitting_guide.md` | `native-surface-refit` 原生单曲面实验基线、Geomagic 后备路线和验收边界 |
-| `docs/native_autosurface_guide.md` | 已冻结的 `native-autosurface` 四边布局实验及停止原因 |
-| `docs/geomagic_patch_workflow.md` | Geomagic patch preview / Apply 稳定基线和后备流程 |
-| `docs/geomagic_patch_cleanup_plan.md` | 旧 analytic region merge 路线清理计划和删除检查表 |
-| `docs/run_gui.md` | GUI 使用文档：启动方式、操作方式、快捷键、手动验证流程 |
-| `docs/project_structure.md` | 目录结构文档：当前文件树、目录职责、开发边界 |
+~~~text
+src/
+├─ app/                  应用入口、窗口编排与工作流状态
+├─ brep/                 ShapeDocument、拓扑图和实体索引
+├─ command/              可撤销命令与事务历史
+├─ common/               Result、配置、容差和通用类型
+├─ external/
+│  └─ geomagic/          Geomagic 配置、路径和结果协议
+├─ feature/              特征边检测
+├─ gui/                  三维视图和停靠面板
+├─ io/                   STEP/STL 读取与写出
+├─ merge/                区域、候选、边界及冻结的原生拟合
+├─ patch/                patch 导入、重裁剪、装配、修复和诊断
+├─ reduction/            当前 Surface Reduction 主线
+├─ stl/                  STL 索引、裁剪与拟合网格
+└─ validate/             形状、严格拓扑和商业 CAD 类质量门
+~~~
 
-开发时的文档优先级：
+### app
 
-```text
-架构边界：module_design.md
-当前任务：implementation_status.md / TODO.md
-已完成和已退役事实：completed_features.md
-构建运行：README.md / run_gui.md
-目录职责：project_structure.md
-原生自由曲面拟合：native_surface_refitting_guide.md
-Geomagic 稳定基线 / 后备：geomagic_patch_workflow.md
-旧代码清理：geomagic_patch_cleanup_plan.md
-```
+包含 AppController、MainWindow、PatchPreviewWorkflow、应用工作流状态和运行记录器。这里负责调用顺序和 UI 生命周期，不实现几何算法。
 
----
+### brep
 
-## 5. 目录职责说明
+包含 ShapeDocument、FaceIndex、EdgeIndex、TopologyGraph 和 SurfaceTypeProbe。索引只对所属文档版本有效。
 
-| 目录 | 当前职责 |
-|---|---|
-| `src/app/` | 程序入口、主窗口、应用级控制器、补片预览工作流、GUI 内部状态与进度文本；连接 GUI、Command 和几何模块 |
-| `src/gui/` | Qt/OCCT GUI、三维视图、模型树、参数面板、日志/检查/验证/报告面板 |
-| `src/command/` | 命令系统、CommandContext、CommandHistory、undo/redo、锁边命令、same-domain 合并命令、PatchReplacementCommand、导入导出命令 |
-| `src/io/` | STEP/STP 读写、STL 二进制读写、导出后二次读取校验 |
-| `src/brep/` | ShapeDocument、Face/Edge 索引、TopologyGraph、拓扑查询、基础统计 |
-| `src/feature/` | 基础特征边检测 |
-| `src/merge/` | same-domain 合并、FeatureBoundedRefit 候选结构、候选规划、区域边界分析、BoundaryWireBuilder、Face Inspect、`SurfaceRefitter` 原生单曲面拟合 |
-| `src/reduction/` | `SurfaceReductionEngine` 动态分组和全局验证、`RestrictedBSplinePatchFitter` 受限曲面求解 |
-| `src/stl/` | STP sampled fitting mesh 的基础采样、支撑带、区外覆盖带与网格诊断，以及 legacy/conservative STL crop、Global Cut Chain、STL mesh 和 crop report |
-| `src/patch/` | Patch import / artifact lookup / preview report / Apply state / replacement 组装 / repair / closure 与 trim diagnostics |
-| `src/external/geomagic/` | Geomagic AutoSurface 配置、backend、result 和输出路径解析 |
-| `src/validate/` | ShapeValidator、BRepCheck/free/multiple edge 检查、StrictTopologyGate、CommercialCadLikeQualityGate |
-| `src/common/` | 公共类型、配置、容差、Result 返回结构 |
-| `tests/` | 单元测试、命令测试、patch / STL / gate / script contract 回归测试 |
-| `tools/` | STEP 统计、Surface Reduction / Patch Apply / baseline / StrictTopologyGate probe、Creo / boundary fill 辅助工具 |
-| `scripts/` | Windows 环境初始化、依赖安装、构建运行、验证、Geomagic、Route 2 和 Creo 诊断脚本 |
-| `data/runs/` | 新测试和实验运行归档；目录名包含时间、流程、模型、候选、变体，每轮含统一清单和标准子目录 |
-| `data/baseline_runs/` | 旧运行历史，只读保留；不做批量迁移，不再接收默认新运行 |
-| `data/crop_stl/` / `data/crop_stp/` / `data/crop_igs/` | GUI / Geomagic 兼容 staging；同模型同候选可被覆盖，不能单独证明某轮测试结果 |
-| `docs/` | 架构、进度、运行、目录文档 |
+### command
 
----
+包含加载、导出、锁边、候选合并、patch 替换、Surface Reduction 和验证命令。成功命令才能进入 CommandHistory。
 
-## 6. 当前已完成能力
+### external/geomagic
 
-### 6.1 GUI 与交互
+封装 GeomagicAutoSurfaceBackend、配置、JSON 文件和输出路径解析。第三方结果仍需经过 patch 与 validate 模块。
 
-```text
-1. 主窗口布局。
-2. OCCT Viewer 真实显示 STEP/STP 模型。
-3. face / edge 命中选择。
-4. Shift 多选 face / edge。
-5. Ctrl 点击移除选择。
-6. 鼠标中键旋转、滚轮缩放、右键或 Alt+左键平移。
-7. 特征线显示。
-8. 锁定边高亮显示。
-9. undo / redo 按钮和快捷键。
-10. FeatureBoundedRefit 候选区域高亮、选择、接受、拒绝、隐藏和恢复。
-11. Patch preview overlay、crop / boundary diagnostics overlay。
-12. Process Status Panel 展示 crop、Geomagic、import、Apply、repair、Gate 和 roundtrip 关键状态。
-13. 基础报告、检查、验证信息展示。
-```
+### merge
 
-### 6.2 几何主流程
+包含特征边约束区域、候选筛选、边界分析、同域合并和 SurfaceRefitter。当前搜索策略不在此目录扩展。
 
-```text
-1. STEP/STP 读取。
-2. B-rep 拓扑索引构建。
-3. ShapeDocument 维护当前模型。
-4. 基于二面角的 sharp edge 检测。
-5. free edge / multiple edge 检测。
-6. 用户锁边进入 protectedEdges。
-7. MergePlanner / FeatureBoundedRegionBuilder 生成 FeatureBoundedRefit 候选区域。
-8. STP Sampled Candidate Surface 生成 fitting STL。
-9. Geomagic AutoSurface 生成 patch 并通过 PatchImportService 导入。
-10. PatchReplacementCommand 执行 original-boundary constrained Apply。
-11. PatchReplacementRepair 执行 ShapeFix / adaptive sewing / shell-to-solid / best-result selection。
-12. StrictTopologyGate 执行 BRepCheck、free/multiple edge、solid/watertight、STEP export/readback gate。
-13. CommercialCadLikeQualityGate 输出 boundary / corner / feature drift 和 seam continuity。
-14. StepWriter 导出 STEP，外部 CAD 诊断路由只指向 Apply 成功后的已合并 STEP。
-15. SurfaceRefitter 使用原始边界和内部 STEP 点输出一张原生拟合面，并执行独立误差与有效性检查。
-```
+### patch
 
-### 6.3 Command 与 undo/redo
+包含导入、预览报告、边界约束构造、多面 patch 分析、替换装配、PatchReplacementRepair、闭合和裁剪诊断。
 
-```text
-1. Command 基类。
-2. CommandContext。
-3. CommandHistory。
-4. LoadStepCommand。
-5. DetectFeatureCommand。
-6. LockEdgeCommand。
-7. UnlockEdgeCommand。
-8. MergePatchCommand。
-9. PatchReplacementCommand。
-10. ValidateShapeCommand。
-11. ExportStepCommand。
-12. LockedEdgeRef，用于锁边几何签名和合并后重映射。
-```
+### reduction
 
-当前可撤销命令：
+包含 SurfaceReductionEngine、SurfaceReductionFitCache、RestrictedBSplinePatchFitter 和 StlHybridParameterization。
 
-```text
-LockEdgeCommand
-UnlockEdgeCommand
-MergePatchCommand
-PatchReplacementCommand
-ReduceSelectedFacesCommand
-```
+### validate
 
-当前不可撤销命令：
+包含 ShapeValidator、StrictTopologyGate 和 CommercialCadQualityGate。验证层不静默改变候选。
 
-```text
-LoadStepCommand
-DetectFeatureCommand
-ValidateShapeCommand
-ExportStepCommand
-```
+## tests
 
-### 6.4 Geomagic patch preview / Apply 后备基线
+tests 采用与产品模块相邻的合同和回归测试，覆盖：
 
-```text
-1. 默认 fitting input mode 是 STP Sampled Candidate Surface。
-2. 生产默认使用 candidate surface over-cover；adjacent-face support collar 只提供有限辅助扩宽。
-3. Legacy centroid-only crop、conservative boundary-band crop 和 Global Cut Chain 保留为诊断 / 对照路线。
-4. Geomagic patch outer boundary、STP sampled mesh boundary、support collar 外环和 STL crop boundary 都不能作为最终 CAD boundary。
-5. Apply 使用原 STP candidate outer boundary wire / pcurve 构造 replacement。
-6. Multi-surface patch 是主路径输入，patch face count > 1 不再作为 unsupported。
-7. Apply 成功后才允许导出已合并 STEP 并进入外部 CAD 诊断。
-8. redo 只复用缓存 afterDocument，不重新运行 Geomagic、STL generation、crop、import、repair 或 external CAD。
-```
+- B-rep 与索引。
+- 命令事务、撤销和重做。
+- 候选与边界分析。
+- patch 导入、替换、修复和诊断。
+- Surface Reduction 搜索、拟合、缓存和质量门。
+- PowerShell 脚本静态合同。
+- 真实基线的非硬编码约束。
 
-### 6.5 Geomagic 后备基线真实样例诊断事实
+测试夹具不应写死真实用户路径、一次性 candidate ordinal 或稳定性不足的 FaceId，除非明确作为锁定夹具。
 
-```text
-1. Route 2 support collar 输入 STL 已验证为干净：components=1、boundaryCycles=1、effective width=0.25。
-2. normalized patch 单位已正确归一到 millimeter。
-3. patch 侧 CommercialCadLikeQualityGate 已明显改善。
-4. Geomagic 后备 blocker 不是 support collar 断开、adaptive width 被压小或单位错误。
-5. Geomagic 后备 blocker 是 72-face patch 下 strict multi-surface boundary shell open-wire closure。
-6. 已知失败点集中在 failed_patch_face_index=2、original-boundary edge ids 1540/1543/1546 和 endpoint gap 0.879063。
-7. Creo Toolkit sewing 当前不能把失败样例救回水密实体；ModelCHECK runner 成功不等于模型验收成功。
-```
+spo_tests 由 CMake 生成并通过 CTest 执行。
 
----
+## tools
 
-## 7. 原生单曲面实验历史边界
+tools 提供面向单一问题的命令行入口，例如：
 
-### 7.1 已冻结：NSR-1 局部切平面约束证据
+- STEP 统计与曲线在曲面上检查。
+- 原生曲面拟合探针。
+- Surface Reduction 探针。
+- patch Apply 与角部基线探针。
+- Creo Toolkit 实验探针。
 
-以下内容保留为 `native-surface-refit` 分支的历史实验边界，不代表当前产品主线：
+探针用于生成证据和定位失败，不应绕过产品命令的质量合同。
 
-```text
-1. 保留已完成的 SurfaceRefitter::fitSingleFace、全部失败门、三阶段 BRepCheck 和样本级诊断合同。
-2. 以分层面积加权已经通过内存态结构检查为基础，依次比较 1 / 4 / 8 个局部 G1 约束；约束总数仍为 96，只把选中位置由 G0 点约束替换为 G1 支撑面约束。
-3. 不增加总训练点，不放宽 0.03 距离容差或 15° 法向阈值，不重新混调已经通过的边界约束。
-4. 验证残余内部误差与 face 1705 法向离群能否同时下降；真实 face id 只作为本轮证据，不写入生产逻辑或默认测试。
-5. 只有原生 patch 自身全部质量门通过后才允许进入 NSR-2；三个有限周期均失败且同类问题在至少三个受支持候选中重复出现时，才解冻 NSR-4。
-6. 将“一步到位”定义为一次用户操作内部的有限策略组合与自动质量择优，不承诺单一参数覆盖任意拓扑曲面。
-7. NSR-1.3 不实现自适应采样；NSR-1.4 才依据连续区域几何计算训练预算，避免把 Geomagic / STEP 的碎面数量重新带入原生拟合决策。
-```
+工具输出应进入本次 data/runs 目录或显式实验目录，而不是覆盖输入。
 
-注意：P0 不改 GUI，不做多曲面，不自动回退 Geomagic，不给全部边界施加 G1，也不放宽 `StrictTopologyGate`。
+## scripts
 
-### 7.2 P1：支撑带输入质量判定
+脚本按用途分为：
 
-```text
-1. 确认 support collar 与主体 STL 拓扑连通。
-2. 确认 Geomagic pre-repair components=1、boundaryCycles=1。
-3. 确认 support collar effective width 不小于显式配置值。
-4. 确认 normalized patch 单位仍为 millimeter。
-5. 输入 STL 干净但 Apply 失败时，优先转向 strict retrim / multi-surface shell / owner split / local coverage 诊断。
-```
+- 环境与依赖：setup_deps.ps1、configure.ps1。
+- 日常构建：build_debug.ps1。
+- 日常测试：test.ps1。
+- GUI 启动：run_gui.ps1。
+- 仓库验证：verify_spo.ps1。
+- 运行产物：run_artifacts.ps1。
+- Surface Reduction、Geomagic、patch、Creo 和基线实验脚本。
 
-### 7.3 P2：项目保存与报告
+脚本应：
 
-```text
-1. 实现项目状态序列化。
-2. 保存 .spo.json。
-3. 保存源文件路径、参数、锁边、操作日志、验证报告。
-4. 实现统一基础报告。
-5. 输出 face/edge 变化、free/multiple edge、BRepCheck、导出校验、patch apply、gate 和 external CAD routing 结果。
-```
+- 从仓库根目录解析路径。
+- 接受显式输出目录或创建独立 run-id。
+- 把参数、日志和产物写入运行上下文。
+- 不隐式启动昂贵外部 CAD 流程。
+- 不用文档同步门禁替代事实维护。
 
-### 7.4 NSR 后续：高级特征线、自定义拟合与多曲面
+## data
 
-```text
-1. 实现曲率估计能力。
-2. 实现圆角起止线、凸起边界和凹陷边界分类能力。
-3. ridge / valley / weak feature 检测。
-4. OCCT Plate 路线被证据证明不足后，再评估自定义 B-spline 约束最小二乘。
-5. 单曲面路线完成后，再评估局部 patch layout 重构。
-```
+~~~text
+data/
+├─ baseline_runs/        旧基线与后备路线结果
+├─ cache/                可复用内容寻址缓存
+├─ crop_igs/             历史裁剪 IGES 产物
+├─ crop_stl/             裁剪或 fitting STL 产物
+├─ crop_stp/             裁剪或 patch STEP 产物
+├─ expected/             测试期望数据
+├─ runs/                 统一的可复现运行目录
+├─ samples/              小型测试样例
+├─ stl/                  STL 输入
+└─ stp/                  STEP 输入
+~~~
 
----
+### data/runs
 
-## 8. 模块开发原则
+每次正式运行使用独立目录：
 
-后续使用 Codex 或人工开发时，应遵守以下约束：
+~~~text
+data/runs/<run-id>/
+├─ run.json              机器可读参数、环境、阶段和产物索引
+├─ RUN.md                人工摘要
+├─ logs/                 构建、测试、探针和外部工具日志
+└─ ...                   STEP、STL、JSON、CSV 或图片证据
+~~~
 
-```text
-1. GUI 不直接修改 TopoDS_Shape。
-2. GUI 只通过 AppController 发起业务操作。
-3. AppController 不承载复杂几何算法。
-4. 所有修改模型或用户约束状态的操作都应通过 Command 执行。
-5. merge 模块不负责界面显示。
-6. validate 模块不负责合并策略。
-7. brep 模块只负责索引和查询，不负责修改模型。
-8. 新增功能应优先补测试或至少给出可执行验证方式。
-9. 算法增强应先生成候选和报告，再执行破坏性拓扑替换。
-10. Patch Apply 不能绕过 PatchReplacementRepair、StrictTopologyGate 或 STEP roundtrip。
-11. Geomagic patch outer boundary、STL crop boundary、support collar 外环都不能作为最终 CAD boundary。
-12. 默认测试不得硬编码真实样例路径、candidate ordinal、Creo edge id 或 OCCT edge id。
-13. redo 必须复用缓存结果，不能重新运行 Geomagic、crop、import、repair 或 external CAD。
-```
+run.json 和实际产物是精确实验事实。仓库文档只保留短结论和入口。
 
----
+### data/cache
 
-## 9. 项目文件格式建议
+缓存只加速可重复计算，不是交付证据。使用者必须验证算法指纹、输入面集合和配置匹配，并继续执行最终候选质量门。
 
-后续实现项目状态序列化时，建议保存一个项目状态文件：
+### crop 与 baseline 目录
 
-```text
-case_001.spo.json
-```
+这些目录包含历史工作流产物，来源可能是原始扫描、STEP 采样、缓存裁剪或第三方工具。引用时必须说明来源，不能仅按扩展名推断。
 
-建议结构：
+## docs
 
-```json
-{
-  "source_step": "case_001.step",
-  "linear_tolerance": 0.001,
-  "angular_tolerance_deg": 25.0,
-  "curvature_tolerance": 0.1,
-  "min_edge_length": 0.0,
-  "locked_edges": [12, 30, 44],
-  "selected_merge_groups": [[1, 2, 3], [10, 11, 12]],
-  "operations": [
-    {
-      "type": "detect_feature_edges",
-      "angle_threshold_deg": 25.0
-    },
-    {
-      "type": "same_domain_unify",
-      "face_count_before": 570,
-      "face_count_after": 497,
-      "edge_count_before": 2280,
-      "edge_count_after": 2094
-    }
-  ],
-  "validation": {
-    "brep_check_valid": true,
-    "free_edges": 0,
-    "multiple_edges": 0
-  }
-}
-```
+~~~text
+docs/
+├─ module_design.md                    稳定架构与依赖约束
+├─ implementation_status.md            当前能力、限制和验证基线
+├─ TODO.md                             当前未完成任务
+├─ completed_features.md               里程碑摘要
+├─ run_gui.md                          GUI 使用与冒烟验证
+├─ project_structure.md                当前目录职责
+├─ surface_reduction_guide.md          Surface Reduction 产品合同
+├─ geomagic_patch_workflow.md          Geomagic 显式后备合同
+├─ native_surface_refitting_guide.md   冻结单曲面实验边界
+└─ native_autosurface_guide.md         冻结 AutoSurface 结论
+~~~
 
-目的：
+docs 不保存历史归档副本。删除或重写内容仍可由 Git 查询。
 
-```text
-1. 保证交互过程可复现。
-2. 便于后续实验记录。
-3. 便于组会汇报。
-4. 便于论文复现实验。
-```
+## experiments
+
+experiments 只用于隔离尚未进入产品合同的尝试。实验成熟前：
+
+- 不从 GUI 默认入口调用。
+- 不改变当前产品状态声明。
+- 不把一次性输入写入通用代码。
+- 结果进入独立运行目录。
+
+实验被冻结时，应在相应指南记录结论和重新启用条件，不保留日常流水账。
+
+## 构建产物
+
+windows-msvc-debug 的主要输出：
+
+~~~text
+build/windows-msvc-debug/Debug/
+├─ step-patch-optimizer.exe
+├─ spo_tests.exe
+└─ Qt/Open CASCADE 运行依赖
+~~~
+
+build 可由配置和源代码重建，不是事实来源。
+
+## 路径维护规则
+
+- 产品代码放入与职责匹配的 src 子目录。
+- 新探针放 tools，新可复用自动化放 scripts。
+- 测试与受测合同同一提交维护。
+- 精确运行事实放 data/runs。
+- 当前状态、任务和架构分别只在对应文档维护。
+- 不新增 docs/archive 来搬运已过期流水账。

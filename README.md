@@ -1,432 +1,224 @@
-# STEP 曲面片优化器
+# STEP Patch Optimizer
 
-Feature-aware STEP Patch Optimization，用于导入 STEP/STP 模型、显示 B-rep 拓扑、检测/冻结特征边，生成 FeatureBoundedRefit 候选区域，并对目标区域执行原生自由曲面重建或 Geomagic 后备拟合；结果通过原始边界、拓扑与外部 CAD 诊断验证后导出 STEP。
+STEP Patch Optimizer 是一个面向 STEP/B-rep 模型的桌面工具，用于检查曲面、构造受控候选、验证替换质量，并在证据充分时减少曲面数量。当前产品主线是原生 Surface Reduction；Geomagic AutoSurface 仅作为显式后备路线。
 
-当前产品开发主线是 `native-surface-reduction`：GUI 按“导入 STEP → 检测特征边 → 生成并选择候选区域 → 原生 B-rep 重拟合 → 预览或应用”的顺序工作，系统直接基于候选 FaceId 集合、原始 STEP 的 B-rep 邻接和精确曲面求值尝试减面。底层引擎仍支持任意连通 FaceId 选区；`native-surface-refit` 保留为单曲面实验基线，`native-autosurface` 冻结为四边布局实验参考，不进入当前运行路径。
+项目坚持三个边界：
 
-## 当前核心能力
+- STEP 边界、拓扑与解析几何是硬事实。
+- STL、点云和采样网格只用于拟合与检查，不能覆盖 STEP 真值。
+- 候选只有通过拓扑、几何、往返和外部 CAD 证据后，才可视为可交付结果。
 
-- 导入 STEP/STP
-- OCCT 三维视图显示
-- face / edge 命中与多选
-- 用户冻结边与解冻
-- 冻结边常驻高亮
-- 特征边检测
-- same-domain 合并
-- FeatureBoundedRefit 候选区域预览、选择、接受、拒绝、隐藏和恢复
-- STP Sampled Candidate Surface fitting STL 生成
-- Geomagic AutoSurface patch 生成、导入和 overlay preview
-- original STP boundary constrained Patch Apply
-- PatchReplacementRepair、StrictTopologyGate 和 CommercialCadLikeQualityGate
-- applied STEP 外部 CAD 诊断路由和 Creo ModelCHECK 脚本入口
-- 原生单曲面拟合探针、独立误差验证和诊断 patch 输出
-- 特征边约束下的候选区域选择、自适应 B-spline 原生重拟合预览、质量报告、支撑曲面包络与稠密 `SameParameter` 跨内核门、Apply、撤销和重做
-- 命令级 undo/redo
-- 合法性检查
-- 导出 STEP 并二次读取校验
+## 当前主线
 
-## 开发文档阅读顺序
+分支状态及最近验证基线见 docs/implementation_status.md。Surface Reduction 的产品合同见 docs/surface_reduction_guide.md。
 
-后续开发、Codex 修改和阶段规划建议按以下顺序阅读文档：
+主线流程：
 
-```text
-1. docs/module_design.md
-   架构边界、模块职责、依赖关系、长期阶段规划。
+1. 载入 STEP，并建立面、边、壳体和支撑曲面信息。
+2. 生成可以减少输出面数的候选分组。
+3. 从原始 STEP 面重新拟合候选支撑曲面。
+4. 以原始边界重建替换面，并执行修复。
+5. 运行 StrictTopologyGate、几何质量门和 STEP 往返检查。
+6. 仅归档通过全部适用门禁的候选与证据。
 
-2. docs/implementation_status.md
-   当前实现进度、已完成能力、待办任务、近期开发顺序和验收方式。
+49→46 的 candidate-179 结果是已锁定回归基线，不代表全局最少面数证明。最少面模式按预算返回当前最好结果，并明确区分 BestFoundWithinBudget 与最优性证明。
 
-3. docs/completed_features.md
-   已完成、已验证或已退役的功能事实，承接旧 TODO 中的历史计划。
+## 快速开始
 
-4. docs/run_gui.md
-   GUI 启动方式、操作说明、快捷键、手动验证流程。
+### 环境
 
-5. docs/project_structure.md
-   当前目录结构、文件职责、开发边界和后续增强边界。
+推荐环境：
 
-6. docs/TODO.md
-   当前执行 TODO、阶段边界和验收要求。
-
-7. docs/surface_reduction_guide.md
-   native-surface-reduction 产品主线、动态分组、受限 B-spline 拟合和质量门。
-
-8. docs/native_surface_refitting_guide.md
-   native-surface-refit 单曲面实验基线和验收边界。
-
-9. docs/native_autosurface_guide.md
-   已冻结的 native-autosurface 四边布局实验及停止原因。
-
-10. docs/geomagic_patch_workflow.md
-   Geomagic patch preview / Apply 稳定基线和后备流程。
-```
-
-如果文档之间出现冲突，按以下规则处理：
-
-```text
-架构边界以 docs/module_design.md 为准。
-当前任务优先级和验收标准以 docs/implementation_status.md / docs/TODO.md 为准。
-已完成和已退役功能事实以 docs/completed_features.md 为准。
-构建、运行、测试命令以 README.md 和 docs/run_gui.md 为准。
-目录结构以真实仓库和 CMakeLists.txt 为准，再同步更新 docs/project_structure.md。
-Geomagic patch preview / Apply 后备基线以 docs/geomagic_patch_workflow.md 为准。
-native-surface-refit 分支的原生拟合任务以 docs/native_surface_refitting_guide.md、docs/TODO.md 和 docs/implementation_status.md 为准。
-native-surface-reduction 分支的产品实现以 docs/surface_reduction_guide.md、docs/TODO.md 和 docs/implementation_status.md 为准。
-```
-
-## 从 0 开始一键配置
-
-适用于一台新的 Windows 开发机。先把项目源码放到本机，例如：
-
-```powershell
-cd D:\pyProject\step-patch-optimizer
-```
-
-然后执行一键初始化：
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\bootstrap_windows.ps1
-```
-
-这个脚本会做这些事：
-
-```text
-1. 检查 Git / CMake / Visual Studio 2022 Build Tools
-2. 缺少系统工具时，优先用 winget 自动安装
-3. 如果没有 vcpkg，自动 clone 到 %USERPROFILE%\vcpkg
-4. 设置用户级 VCPKG_ROOT
-5. 根据 vcpkg.json 安装 OpenCASCADE 和 Qt
-6. 配置 CMake
-7. 构建 GUI 和测试
-8. 运行测试
-```
-
-如果希望初始化完成后直接打开 GUI：
-
-```powershell
-.\scripts\bootstrap_windows.ps1 -RunGui
-```
-
-如果系统工具已经装好，只想安装 vcpkg 依赖并构建：
-
-```powershell
-.\scripts\bootstrap_windows.ps1 -SkipSystemInstall
-```
-
-注意：Visual Studio Build Tools 安装可能会弹出 UAC 或要求重启终端。若脚本安装完系统工具后仍提示找不到编译器，关闭当前 PowerShell，重新打开后再执行一次同一条命令即可。
-
-## 日常使用
-
-完成第一次初始化后，日常开发通常只需要：
-
-```powershell
-.\scripts\build_debug.ps1
-.\scripts\run_gui.ps1
-```
-
-运行测试：
-
-```powershell
-.\scripts\test.ps1
-```
-
-每次执行 `test.ps1` 都会创建独立运行目录，不再只留下终端输出：
-
-```text
-data/runs/<yyyyMMdd_HHmmss_fff>__unit-tests__repository__cand-na__<preset>/
-  run.json
-  RUN.md
-  artifacts/
-  diagnostics/
-  logs/build.log
-  logs/ctest.log
-```
-
-查询最近运行：
-
-```powershell
-.\scripts\list_runs.ps1 -Latest 10
-.\scripts\list_runs.ps1 -Workflow unit-tests -Status passed -Latest 5
-.\scripts\list_runs.ps1 -Workflow boundary-trim-fill -CandidateId 179
-```
-
-`data/crop_stl`、`data/crop_stp`、`data/crop_igs` 仍是 GUI / Geomagic 兼容暂存区，文件会被同模型、同候选的后续运行覆盖；历史验收必须以 `data/runs/<run-id>/` 内的 run-local 产物为准。
-
-## 这几个脚本做了什么
-
-```text
-scripts\bootstrap_windows.ps1  从 0 检查/安装系统工具、vcpkg、项目依赖并构建
-scripts\setup_deps.ps1         使用 vcpkg.json 安装依赖
-scripts\configure.ps1          执行 cmake --preset windows-msvc-debug
-scripts\build_debug.ps1        配置并构建 GUI 和测试
-scripts\run_gui.ps1            启动 GUI，如果 exe 不存在会先构建
-scripts\test.ps1               构建测试并运行 ctest
-scripts\verify_spo.ps1         本地统一验证入口，可按参数覆盖 GUI / Geomagic / step_stats
-scripts\list_runs.ps1          按流程、模型、候选、状态和时间查询运行清单
-scripts\run_artifacts.ps1      统一生成 run id、run.json、RUN.md 和标准产物子目录
-scripts\run_corner_baseline_gate.ps1 运行脚本化 A0 baseline / commercial-CAD-like gate
-scripts\run_boundary_trim_fill_experiments.ps1 运行 Route 2 support collar 真实样例实验
-scripts\run_native_surface_fit_tiers.ps1 运行 NSR-1.1 固定三档训练点实验
-scripts\run_native_surface_fit_sampling_ab.ps1 运行 NSR-1.2 固定 96 点采样分配实验
-scripts\run_creo_step_diagnostic.ps1 显式运行后台 Creo STEP import + ModelCHECK 诊断
-```
-
-默认路径：
-
-```text
-项目目录：D:\pyProject\step-patch-optimizer
-vcpkg：%USERPROFILE%\vcpkg
-CMake preset：windows-msvc-debug
-构建目录：build\windows-msvc-debug
-GUI exe：build\windows-msvc-debug\Debug\step-patch-optimizer.exe
-```
-
-如果你的 vcpkg 不在默认位置，可以这样指定：
-
-```powershell
-.\scripts\setup_deps.ps1 -VcpkgRoot D:\dev\vcpkg
-```
-
-`CMakePresets.json` 使用环境变量 `VCPKG_ROOT` 查找 vcpkg toolchain。`bootstrap_windows.ps1` 会自动设置它；如果手动换 vcpkg 位置，也请同步设置：
-
-```powershell
-[Environment]::SetEnvironmentVariable("VCPKG_ROOT", "D:\dev\vcpkg", "User")
-$env:VCPKG_ROOT = "D:\dev\vcpkg"
-```
-
-## 必需工具
-
-需要先安装：
-
-- Visual Studio 2022 Build Tools，包含 `Desktop development with C++` / MSVC v143 / Windows SDK
+- Windows 10 或 Windows 11
+- Visual Studio 2022，包含 C++ 桌面开发组件
 - CMake 3.25 或更高版本
-- Git
 - vcpkg
-- VS Code，推荐但不是必需
+- Qt 与 Open CASCADE，由 vcpkg 清单解析
+- PowerShell 7 或 Windows PowerShell 5.1
 
-`bootstrap_windows.ps1` 会尝试自动安装 Git、CMake 和 Visual Studio 2022 Build Tools，并自动 clone/bootstrap vcpkg。VS Code 不参与构建，可以之后再装。
+默认预设为 windows-msvc-debug。构建脚本会优先使用 VCPKG_ROOT；未设置时使用用户目录下的 vcpkg。
 
-VS Code 只作为编辑器和启动器，不需要打开 Visual Studio IDE。
+### 配置与构建
 
-## vcpkg manifest
+~~~powershell
+./scripts/build_debug.ps1
+~~~
 
-仓库已提供 `vcpkg.json`：
+等价的底层命令：
 
-```json
-{
-  "dependencies": [
-    "opencascade",
-    "qtbase"
-  ]
-}
-```
-
-因此不需要再手动记：
-
-```powershell
-vcpkg install opencascade:x64-windows qtbase:x64-windows
-```
-
-直接执行：
-
-```powershell
-.\scripts\setup_deps.ps1
-```
-
-脚本会等价执行 manifest 安装：
-
-```powershell
-%USERPROFILE%\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root=D:\pyProject\step-patch-optimizer
-```
-
-## 手动构建命令
-
-如果不使用脚本，也可以直接执行底层命令：
-
-```powershell
-cd D:\pyProject\step-patch-optimizer
-$env:VCPKG_ROOT="$env:USERPROFILE\vcpkg"
-$env:Path="C:\Program Files\CMake\bin;$env:VCPKG_ROOT;" + $env:Path
-
+~~~powershell
 cmake --preset windows-msvc-debug
-cmake --build --preset windows-msvc-debug --target step-patch-optimizer
-cmake --build --preset windows-msvc-debug --target spo_tests
-ctest --preset windows-msvc-debug --output-on-failure --timeout 30
-```
+cmake --build --preset windows-msvc-debug
+~~~
 
-正常情况下不要手写裸命令：
+应用程序位于：
 
-```powershell
-cmake -S . -B build
-```
+~~~text
+build/windows-msvc-debug/Debug/step-patch-optimizer.exe
+~~~
 
-因为裸命令不会自动带上本项目 preset 里的 vcpkg toolchain，容易找不到 Qt6 或 OpenCASCADE。
+### 运行测试
 
-## 运行 GUI
+~~~powershell
+./scripts/test.ps1
+~~~
 
-脚本方式：
+该脚本构建 spo_tests，运行 CTest，并把日志和 run.json 写入 data/runs 下的独立运行目录。
 
-```powershell
-.\scripts\run_gui.ps1
-```
+只执行 CTest 时可使用：
 
-手动方式：
+~~~powershell
+ctest --preset windows-msvc-debug --output-on-failure
+~~~
 
-```powershell
-.\build\windows-msvc-debug\Debug\step-patch-optimizer.exe
-```
+### 启动 GUI
 
-也可以直接双击：
+~~~powershell
+./build/windows-msvc-debug/Debug/step-patch-optimizer.exe
+~~~
 
-```text
-D:\pyProject\step-patch-optimizer\build\windows-msvc-debug\Debug\step-patch-optimizer.exe
-```
+也可使用：
 
-构建时 CMake 会自动执行 `windeployqt`，把 Qt 运行时和插件部署到 exe 同级目录。
+~~~powershell
+./scripts/run_gui.ps1
+~~~
 
-## VS Code 使用方式
+完整操作、快捷键和冒烟步骤见 docs/run_gui.md。
 
-```powershell
-code D:\pyProject\step-patch-optimizer
-```
+## GUI 主流程
 
-推荐扩展：
+1. 打开 STEP 文件。
+2. 在三维视图或面列表中检查目标区域。
+3. 进入 Surface Reduction，生成并评估候选。
+4. 检查候选的面数变化、偏差、边界和质量门状态。
+5. 对通过门禁的候选执行 Apply。
+6. 使用撤销、重做和导出验证事务行为。
+7. 对交付候选执行 STEP 往返及外部 CAD 检查。
 
-- `ms-vscode.cpptools`
-- `ms-vscode.cmake-tools`
+Apply 必须是事务性的：任何替换、修复或质量门失败都不得留下半成品状态。预览成功也不等于可应用或可交付。
 
-仓库已提供：
+## 常用命令
 
-```text
-.vscode\extensions.json
-.vscode\settings.json
-.vscode\tasks.json
-.vscode\launch.json
-```
+### 完整仓库验证
 
-VS Code 中常用操作：
+~~~powershell
+./scripts/verify_spo.ps1
+~~~
 
-- `Ctrl+Shift+P` -> `CMake: Configure`
-- `Ctrl+Shift+P` -> `CMake: Build`
-- `Ctrl+Shift+P` -> `CMake: Run Tests`
-- `F5` -> 启动 `Launch step-patch-optimizer`
+该脚本负责构建、测试和现有工程验证，不再机械要求同时修改多份文档。
+
+### 运行 Surface Reduction 基线
+
+具体参数、模式和产物合同见 docs/surface_reduction_guide.md。运行前应为本次实验创建独立 data/runs/<run-id> 目录，不覆盖既有证据。
+
+### 运行 Geomagic 后备流程
+
+Geomagic 路线必须由用户显式选择。命令、输入输出合同与质量门见 docs/geomagic_patch_workflow.md。
+
+### 检查 GitNexus 索引
+
+~~~powershell
+node .gitnexus/run.cjs status
+node .gitnexus/run.cjs analyze
+~~~
+
+只有索引过期时才需要重新分析。
+
+## 事实来源
+
+不同类型的事实只维护在一个位置：
+
+| 内容 | 唯一事实来源 |
+|------|--------------|
+| 当前分支、能力、限制和最近基线 | docs/implementation_status.md |
+| 当前未完成任务和验收条件 | docs/TODO.md |
+| 稳定架构与依赖约束 | docs/module_design.md |
+| 里程碑级完成事实 | docs/completed_features.md |
+| 精确实验参数、指标和产物 | data/runs/<run-id>/run.json、RUN.md 及同目录产物 |
+| 详细开发过程与技术日志 | Obsidian 项目库 |
+| 历史版本 | Git |
+
+仓库文档只摘要实验结论并链接证据，不复制完整指标表或长期流水账。
+
+## 按任务查阅文档
+
+无需预读固定文档集合。遇到具体任务时，按职责查阅：
+
+| 文档 | 内容 |
+|------|------|
+| docs/module_design.md | 稳定架构、模块边界、依赖方向和事务不变量 |
+| docs/implementation_status.md | 当前实现快照、限制和验证基线 |
+| docs/TODO.md | 当前未完成工作及验收条件 |
+| docs/completed_features.md | MVP、后备路线、冻结实验和 SR 里程碑 |
+| docs/run_gui.md | GUI 启动、操作、快捷键、冒烟验证和故障排查 |
+| docs/project_structure.md | 当前目录树和目录职责 |
+| docs/surface_reduction_guide.md | Surface Reduction 产品合同 |
+| docs/geomagic_patch_workflow.md | Geomagic 显式后备流程 |
+| docs/native_surface_refitting_guide.md | 冻结的原生单曲面实验边界 |
+| docs/native_autosurface_guide.md | 冻结的原生 AutoSurface 实验结论 |
+
+## 核心工程约束
+
+### 拓扑与修复
+
+- StrictTopologyGate 是候选进入交付链的硬门禁。
+- PatchReplacementRepair 负责替换后的受控修复，不能用宽松容差掩盖裂缝。
+- 不允许仅凭 Open CASCADE 构造成功判定结果有效。
+- 边界配对、方向、SameParameter、缝边和壳体闭合必须纳入验证。
+
+### 拟合与缓存
+
+- 放大后的候选分组必须从原始 STEP 面重新拟合，不能把父候选拟合面当作新真值。
+- 可复用缓存以原始面集合和拟合配置做内容寻址。
+- FitSet、Replay、Full 与 RefreshCache 的语义必须保持可区分。
+- 缓存命中不能跳过最终候选质量门。
+
+### 证据
+
+- 每次正式运行使用独立 run-id。
+- run.json 记录参数、环境、阶段结果和产物路径。
+- RUN.md 提供供人检查的短摘要。
+- 失败运行也应留下足以定位失败阶段的日志；不应把失败结果冒充基线。
+- 商业 CAD 或 Creo 证据用于弥补单一内核可能漏掉的裂缝和参数化问题。
+
+## 目录入口
+
+~~~text
+src/                 核心库、GUI 与缩减实现
+include/             公共头文件
+apps/                桌面应用入口
+tests/               单元、合同与回归测试
+tools/               探针和批处理工具
+scripts/             构建、验证和实验脚本
+docs/                当前有效的职责型文档
+data/runs/           可复现运行证据
+build/               本地构建产物
+~~~
+
+更完整的当前目录说明见 docs/project_structure.md。
 
 ## 常见问题
 
-### PowerShell 禁止运行 ps1
+### CMake 找不到 vcpkg
 
-如果出现脚本执行策略错误，可以只对当前终端放开：
+确认 VCPKG_ROOT 指向有效安装目录，且目录中存在 scripts/buildsystems/vcpkg.cmake。
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
+### GUI 无法启动
 
-然后重新执行脚本。
+先确认 Debug 可执行文件已生成，再从仓库根目录启动。若缺少 Qt 或 Open CASCADE 运行库，重新运行构建脚本并检查 vcpkg 安装结果。
 
-### Qt platform plugin "windows" 找不到
+### 测试输出难以定位
 
-如果运行 exe 时出现：
+scripts/test.ps1 会打印本次 data/runs 目录。优先检查其中 logs/build.log、logs/ctest.log 和 run.json。
 
-```text
-qt.qpa.plugin: Could not find the Qt platform plugin "windows" in ""
-This application failed to start because no Qt platform plugin could be initialized.
-```
+### 候选预览正常但 Apply 失败
 
-说明 Qt 插件没有部署到 exe 同级目录。先重新构建 GUI：
+这是允许的结果。预览只证明候选可展示；Apply 仍需通过边界重建、修复、拓扑和几何门禁。不要绕过失败门禁。
 
-```powershell
-.\scripts\build_debug.ps1
-```
+### 结果在 Open CASCADE 中正常但外部 CAD 失败
 
-如果还不行，手动执行：
+按跨内核失败处理。检查边界距离、法向、缝边、SameParameter、支撑曲面包络和 STEP 往返证据，不得只保留内部内核结果。
 
-```powershell
-%USERPROFILE%\vcpkg\installed\x64-windows\tools\Qt6\bin\windeployqt.debug.bat --no-translations --no-system-d3d-compiler --no-compiler-runtime D:\pyProject\step-patch-optimizer\build\windows-msvc-debug\Debug\step-patch-optimizer.exe
-```
+## 许可证
 
-成功后 exe 同级目录应包含：
-
-```text
-platforms\qwindowsd.dll
-styles\
-imageformats\
-```
-
-### 链接失败 LNK1168
-
-如果构建时出现：
-
-```text
-LINK : fatal error LNK1168: 无法打开 ... step-patch-optimizer.exe 进行写入
-```
-
-说明 GUI 程序正在运行。关闭窗口后重新构建：
-
-```powershell
-.\scripts\build_debug.ps1
-```
-
-### MSBuild tlog 文件被占用
-
-如果并行启动多个构建命令，可能出现 `.tlog` 文件被占用。不要同时运行两个 `cmake --build` 或两个构建脚本，单独重跑即可。
-
-### 找不到 Qt6 或 OpenCASCADE
-
-先确认依赖安装：
-
-```powershell
-.\scripts\setup_deps.ps1
-```
-
-再重新配置和构建：
-
-```powershell
-.\scripts\configure.ps1
-.\scripts\build_debug.ps1
-```
-
-## 主要目录
-
-```text
-src\app       应用入口、MainWindow、AppController
-src\command   命令系统、CommandContext、CommandHistory、undo/redo、锁边命令、合并命令、PatchReplacementCommand
-src\brep      ShapeDocument、TopologyGraph、face/edge 索引
-src\feature   特征边检测、曲率估计接口、边界分类接口
-src\merge     same-domain 合并、FeatureBoundedRefit 候选区域规划、边界分析、Face Inspect
-src\stl       STL 读写对象、STP sampled fitting mesh、legacy/conservative crop、Global Cut Chain
-src\patch     Patch import / preview / original-boundary constrained replacement / repair / trim diagnostics
-src\external  Geomagic AutoSurface backend、配置、输出路径解析
-src\validate  ShapeValidator、StrictTopologyGate、CommercialCadLikeQualityGate、误差/报告接口
-src\gui       Qt/OCCT GUI 组件
-src\io        STEP 读写、项目文件保存恢复接口
-tests         单元测试、命令测试、流程回归测试
-docs          模块设计、实现状态、运行说明、目录结构
-scripts       环境配置、构建、运行和测试脚本
-tools         批处理和 STEP 统计工具
-```
-
-## 当前开发阶段
-
-当前工作位于独立 `native-surface-reduction` 分支；`feature-bounded-refit` 保留 Geomagic 稳定基线，`native-surface-refit` 和 `native-autosurface` 保留为实验参考。当前 Surface Reduction 第一版已经具备：
-
-```text
-1. 底层引擎接收任意连通、可定向的多面 FaceId 集合；GUI 主线先检测特征边，再生成并选择一个候选区域，并在固定预算内寻找通过全部质量门的最少输出面数。
-2. 原始 STEP 的 B-rep 邻接负责分组；同域组合先精确合并，其余组合尝试受限三次 B-spline 重拟合；大于 `15°` 的明显折角、锁边和选区边界禁止跨越。
-3. 原始边界以 KKT 等式硬约束进入拟合，并用自适应锚点和每边 97 个独立样本执行边界终验；STEP 调和参数图的域外区域加入低权重守卫样本，支撑曲面控制网超出原始选区包络时直接拒绝。
-4. 重裁剪优先使用 OCCT 精确投影参数曲线；若其参数分支不连续，只允许通过连续投影分支构造的同参数采样曲线后备，并再次执行 97 点 `SameParameter` 检查。
-5. STEP 参数图负责拟合 UV；可选的独立扫描 STL 只在 STEP 边界限定后提供权重 `0.25` 的内部位置软参考，不覆盖 STEP 参数域或终验基准；扫描辅助拟合若破坏硬质量门或保留接缝，会在同一搜索中退回 STEP-only 拟合。
-6. GUI 的 `MinimizeFaceCount` 模式先直接探测受保护边图的理论下界，再执行宽度 8、每状态最多 16 个提案和最多 512 次唯一受限拟合的确定性束搜索；支持组+组、组+单面、单面+单面和局部三组跳级，达到下界并通过全部质量门时报告 `OptimalProven`。旧基准显式保留 `TargetRatio`。
-7. GUI 用一个状态化“原生重拟合”按钮承接预览和 Apply：无合格预览时执行预览，有合格预览时执行 Apply；另提供“一键预览并应用”。STEP 导入、特征边检测、候选生成、原生重拟合预览和 Apply 均在后台执行，报告页每 2 秒刷新心跳；拟合阶段还实时报告拓扑准备、搜索层、分组拟合和最终质量门。预览不修改文档，只有通过全部质量门的结果才可 Apply，撤销和重做复用缓存文档，不重新拟合。
-8. STEP 导出是预览或 Apply 后的独立操作，不是 Apply 事务的一部分。
-```
-
-后续开发时，Codex 或人工修改应优先遵循：
-
-```text
-架构边界：docs/module_design.md
-任务顺序与验收：docs/implementation_status.md / docs/TODO.md
-Surface Reduction：docs/surface_reduction_guide.md
-原生单曲面实验基线：docs/native_surface_refitting_guide.md
-Geomagic 后备流程：docs/geomagic_patch_workflow.md
-```
+许可证和第三方依赖声明以仓库实际文件及依赖清单为准。

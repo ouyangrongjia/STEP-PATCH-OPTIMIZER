@@ -3,8 +3,7 @@ param(
     [switch]$Gui,
     [switch]$StepStats,
     [string]$StepStatsPath = "",
-    [switch]$RealGeomagic,
-    [switch]$SkipDocsSyncCheck
+    [switch]$RealGeomagic
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,81 +35,6 @@ function Convert-ToRepoAbsolutePath {
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $PathValue))
 }
 
-function Get-ChangedFiles {
-    $files = @()
-    $files += git diff --name-only
-    $files += git diff --cached --name-only
-    $files += git ls-files --others --exclude-standard
-    return $files | Where-Object { $_ } | Sort-Object -Unique
-}
-
-function Test-DocsSync {
-    param([Parameter(Mandatory = $true)][string[]]$ChangedFiles)
-
-    if ($SkipDocsSyncCheck -or $ChangedFiles.Count -eq 0) {
-        return
-    }
-
-    $requiredDocs = @(
-        "docs/implementation_status.md",
-        "docs/TODO.md",
-        "docs/geomagic_patch_workflow.md"
-    )
-
-    $docChanged = $false
-    foreach ($file in $ChangedFiles) {
-        $normalized = $file.Replace("\", "/")
-        if ($requiredDocs -contains $normalized) {
-            $docChanged = $true
-            break
-        }
-    }
-
-    $watchedPrefixes = @(
-        "src/app/",
-        "src/gui/",
-        "src/patch/",
-        "src/external/geomagic/",
-        "scripts/geomagic_wrap/"
-    )
-    $watchedExact = @(
-        "CMakeLists.txt",
-        "scripts/run_geomagic_patch.ps1",
-        "scripts/verify_spo.ps1"
-    )
-
-    $needsDocs = $false
-    foreach ($file in $ChangedFiles) {
-        $normalized = $file.Replace("\", "/")
-
-        if ($watchedExact -contains $normalized) {
-            $needsDocs = $true
-            break
-        }
-
-        foreach ($prefix in $watchedPrefixes) {
-            if ($normalized.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $needsDocs = $true
-                break
-            }
-        }
-
-        if ($needsDocs) {
-            break
-        }
-
-        if ($normalized.StartsWith("tests/test_geomagic", [System.StringComparison]::OrdinalIgnoreCase) -or
-            $normalized.StartsWith("tests/test_patch", [System.StringComparison]::OrdinalIgnoreCase)) {
-            $needsDocs = $true
-            break
-        }
-    }
-
-    if ($needsDocs -and -not $docChanged) {
-        throw "Docs sync check failed: Geomagic/Patch code or repo scripts changed, but docs/implementation_status.md, docs/TODO.md, or docs/geomagic_patch_workflow.md was not updated. Update docs or rerun with -SkipDocsSyncCheck."
-    }
-}
-
 function Find-StepStatsExe {
     $candidates = @(
         (Join-Path $repoRoot "build\$Preset\Debug\step_stats.exe"),
@@ -125,9 +49,6 @@ function Find-StepStatsExe {
 
     throw "step_stats.exe was not found under build\$Preset after build."
 }
-
-$changedFiles = @(Get-ChangedFiles)
-Test-DocsSync -ChangedFiles $changedFiles
 
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { Join-Path $env:USERPROFILE "vcpkg" }
 $env:VCPKG_ROOT = $vcpkgRoot

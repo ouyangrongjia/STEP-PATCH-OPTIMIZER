@@ -1,1039 +1,208 @@
-# 原生自由曲面重拟合开发指南
+# 原生单曲面重拟合实验指南
 
-> 2026-07-15 路线说明：本指南对应的 `native-surface-refit` 已冻结为单曲面实验基线。当前产品主线是 `native-surface-reduction`，请先阅读 `docs/surface_reduction_guide.md`。本文件后续只维护实验事实，不再作为 GUI 多面减面的实现入口。
+状态：冻结实验。
 
-> 文档定位：指导 FeatureBoundedRefit 局部区域的原生自由曲面拟合开发，并定义 Geomagic 后备路线、失败分流和验收边界。
->
-> 当前状态：`NSR-1.3` 局部切平面约束 0 / 1 / 4 / 8 有限周期已完成，但尚无 `patch_acceptable=true`；下一证据任务为至少三个受支持真实候选的同类失败复核，NSR-2 / NSR-1.4 / NSR-4 继续冻结。
->
-> 开发分支：`native-surface-refit`。该路线作为独立分支推进，不直接改写 `feature-bounded-refit` 上的 Geomagic 稳定主线。
-> 更新时间：2026-07-14
+本文保留 SurfaceRefitter、native_surface_fit_probe 和 NSR 路线的支持边界、失败结论、重新启用条件与证据入口。当前产品主线见 surface_reduction_guide.md。
 
----
+## 实验目标
 
-## 1. 当前决策
+NSR 路线尝试把一个受特征边约束的多面候选区域重拟合为单个自由曲面，并使用原始边界生成替换面。
 
-项目当前主线从“继续优化 Geomagic 输入并修补导出面片”切换为：
+目标链：
 
-```text
-原始 STEP
-→ FeatureBoundedRefit 候选区域
-→ 读取原始 B-rep 边界与候选面
-→ 原生单张自由曲面拟合
-→ 原始边界裁剪 / pcurve / SameParameter
-→ 独立误差验证
-→ PatchReplacementCommand
-→ PatchReplacementRepair
-→ StrictTopologyGate / STEP roundtrip
-```
+~~~text
+候选 STEP 面
+  -> 采样与边界分析
+  -> 参数化
+  -> 单个 B-spline 支撑曲面拟合
+  -> 原始边界重裁剪
+  -> 替换、修复和验证
+~~~
 
-Geomagic 不删除，但降级为后备路线。只有原生路线明确返回“不支持”或在受控参数范围内拟合失败时，才允许进入 Geomagic。
+它回答的是“复杂区域能否稳定成为一个面”，不是当前 Surface Reduction 的多组搜索问题。
 
-分支边界：
+## 保留实现
 
-- `feature-bounded-refit`：保留当前 Geomagic patch preview / Apply 稳定基线和历史对照。
-- `native-surface-refit`：实现原生自由曲面拟合，当前文档、TODO 和实现状态以该分支为准。
-- 原生路线尚未通过 NSR-1 / NSR-2 验收前，不回合到 `feature-bounded-refit`。
-- 后续是否合并由真实样例、拓扑 Gate、STEP roundtrip 和商业 CAD 类质量门共同决定。
+主要代码位于：
 
-当前不做：
+- src/merge/SurfaceRefitter.*
+- src/merge/SurfaceRefitDiagnostics.*
+- 相关 BoundaryWireBuilder 和 RegionBoundaryAnalyzer。
+- native_surface_fit_probe 工具及对应测试。
 
-- 不做整个潮玩件的全局自由曲面重建。
-- 不做自动多曲面布局。
-- 不做 GUI 正式入口。
-- 不开发完整商业级 AutoSurface。
-- 不要求与外围曲面统一 G1。
-- 不通过放宽 Sewing 或 `StrictTopologyGate` 掩盖几何误差。
+保留能力包括：
 
----
+- 从候选面采样内部点和边界点。
+- 构造区域边界。
+- 生成参数域初值。
+- 求解受约束 B-spline 曲面。
+- 输出拟合、参数化和边界诊断。
+- 使用原始边界尝试重裁剪。
+- 对结果执行基础几何和拓扑检查。
 
-## 2. 为什么切换主线
+代码保留不表示路线仍处于开发中，也不表示其结果可绕过当前主线门禁。
 
-最新真实运行目录：
+## 支持范围
 
-```text
-data/runs/20260711_000459_570__boundary-trim-fill__03_配件_Clay__cand-0179__route1-route2/
-```
+实验更适合：
 
-当前证据链：
+- 单一外边界。
+- 拓扑接近圆盘。
+- 曲率变化平缓。
+- 没有强角部、分支或窄颈。
+- 可由单张参数图覆盖。
+- 原始边界能稳定投影到新支撑面。
 
-1. `crop_stl_candidate_179.stl` 与拆除候选区域后的 STEP 边界完整贴合，角点没有缺口。
-2. `raw_geomagic_crop_stp_candidate_179.stp` 的底层曲面在相同角点已经向内圆化。
-3. `normalized_patch_mm.stp` 保留了相同欠覆盖，问题不是单位归一化造成的。
-4. 多曲面最大投影距离约为 `0.1050485`。
-5. 角点最大偏差约为 `0.1050273`，与最大投影距离基本一致。
-6. Apply 可以通过提高 Sewing 容差得到拓扑闭合，但商业 CAD 类质量门仍失败。
+以下情形是高风险：
+
+- 多边界环或孔。
+- 非流形邻接。
+- 参数域折叠。
+- 强凹角和尖角。
+- 多个几何特征在单面内冲突。
+- 边界投影跨越参数缝。
+- 局部采样误差小但面外区域失控。
+
+## 接受合同
+
+实验候选若要进入产品评估，至少需要：
+
+1. 输入区域和边界拓扑有效。
+2. 参数化无翻转、无不可解释重叠。
+3. 训练点与留出点误差均满足阈值。
+4. 原始边界投影和重裁剪稳定。
+5. 角部和特征边不因全局平滑丢失。
+6. 替换后通过 PatchReplacementRepair。
+7. 通过 StrictTopologyGate。
+8. 通过 STEP 写出和重新读入。
+9. 适用时通过商业 CAD 或跨内核检查。
+
+仅有拟合残差、可视化平滑或 Open CASCADE 构造成功都不够。
+
+## 阶段结论
+
+### NSR-1.1：基础单曲面拟合
+
+完成了基本采样、参数化、B-spline 求解和探针输出。简单合成区域可构造曲面，但真实候选暴露参数化与边界条件不足。
 
 结论：
 
-```text
-Geomagic AutoSurface 没有把裁剪 STL 的角点当成必须精确保留的 CAD 硬约束。
-一旦导出的底层曲面没有覆盖原始角点，后续 original-boundary re-trim 无法凭空补出支撑曲面。
-继续提高采样密度、Sewing 容差或修补 pcurve 不能解决该几何根因。
-```
+- 训练残差不能代表裁剪后的整面质量。
+- 仅用内部点拟合会让边界和面外支撑失控。
+- 单张参数图对复杂区域不是稳定默认选择。
 
-### 2.1 商业软件通常如何完成自由曲面拟合
+### NSR-1.2：边界与连续性增强
 
-需要先区分公开事实和工程推断。3D Systems 的公开资料确认 Geomagic Wrap 的 Exact Surfacing 能控制 NURBS patch layout、曲面质量和连续性，Design X 的 Selective Surfacing 会组合有机曲面和高精度特征建模；但厂商没有公开 AutoSurface 的具体目标函数、权重、求解器或失败恢复策略。因此，不能把下面的通用逆向工程流程表述为 Geomagic 的确定内部实现。
+增加边界采样、约束和连续性诊断，尝试改善边界贴合与邻接质量。
 
-典型商业级 AutoSurface 可合理理解为以下分层流水线：
+结论：
 
-```text
-点云 / 三角网格清理
-→ 曲率、尖锐特征和区域分割
-→ 自动或人工建立四边化 patch layout
-→ 每个 patch 的二维参数化
-→ NURBS 控制点拟合与光顺正则化
-→ patch 间 G0 / G1 / G2 连续性协调
-→ 偏差分析、局部加密和迭代优化
-→ trimming、sewing、B-rep 检查和 CAD 导出
-```
+- 边界权重可以降低局部漂移，但会把误差转移到内部或角部。
+- G1 类目标不能只看平均法向差。
+- 相邻面信息若没有明确硬边界语义，容易过度平滑特征。
+- 在真实候选上仍未建立稳定接受率。
 
-其中最难的通常不是解一次最小二乘，而是：
+### NSR-1.3：多图与真实候选
 
-- 决定曲面应被分成几张 patch，以及 seam 放在哪里。
-- 在拟合误差、曲面光顺、patch 数量、次数和连续性之间做全局折中。
-- 处理任意拓扑、孔洞、分支、尖角、噪声和扫描缺失。
-- 让最终 B-rep 能被不同商业 CAD 稳定读取。
+探索了更复杂参数化、多图组织和真实样例探针。
 
-自动模式通常更偏向“整体光顺、patch 网络稳定、数量受控、平均偏差合格”，而不是“任意裁剪边界和角点都作为不可移动硬约束”。这是对本项目现象的工程解释，不是对 Geomagic 私有算法的反编译结论：输入 STL 角点完整，但 raw patch 的底层曲面仍向内圆化，说明当前 AutoSurface 设置没有为该角点建立足够强的覆盖约束。
+结论：
 
-公开资料：
+- 多图能缓解局部失真，但重新拼接成单一产品面仍受参数兼容和边界重裁剪限制。
+- 复杂区域的单面目标本身可能与几何特征冲突。
+- 增加拟合自由度会提高通过训练点的能力，也扩大支撑曲面失控风险。
+- 真实候选证据不足以把该路线设为默认产品。
 
-- [Geomagic Wrap 官方资料：Exact Surfacing、NURBS patch layout、曲面质量与连续性](https://www.3dsystems.com/sites/default/files/2019-11/3d-systems-wrap-en-letter-web-2019-11-01.pdf)
-- [3D Systems 官方说明：Selective Surfacing 组合有机曲面和高精度特征建模](https://www.3dsystems.com/press-releases/3d-systems-announces-first-market-enhancements-reverse-engineering-software-enabling)
-- [The Quad Layout Immersion：四边 patch layout 与 spline fitting 的关系](https://arxiv.org/abs/2012.09368)
+## 冻结原因
 
-### 2.2 自己拟合的难度边界
+路线冻结不是因为代码无法运行，而是因为产品证据不足：
 
-“复刻 Geomagic AutoSurface”和“重建一个已经圈定的局部区域”不是同一难度：
+- 合成夹具通过不能外推到真实候选。
+- 真实候选的参数化、角部、边界投影和支撑面包络存在耦合失败。
+- 需要的复杂度逐渐接近局部 AutoSurface，而单面输出仍限制过强。
+- 继续扩展会与 Surface Reduction 的多面分组搜索重复投入。
+- 当时没有建立跨样例、跨内核、可重复的接受基线。
 
-| 任务 | 难度判断 | 本项目处理 |
-|---|---:|---|
-| 整件任意拓扑自动分区、自动多曲面布局 | 很高 | 不做 |
-| 多曲面 seam 布局和全局 G1 / G2 协调 | 很高 | NSR-5 冻结 |
-| 自研通用 NURBS 参数化和约束优化器 | 高 | NSR-4 冻结 |
-| 已知单外轮廓、无孔局部区域的一张曲面拟合 | 中等、可控 | 当前 NSR-1 |
-| 用现成 OCCT Filling 验证可行性 | 中等偏低 | 第一版方案 |
+因此：
 
-当前任务已经由用户选出的特征线给出了区域边界，也保留原始 STEP 作为几何真值，因此绕开了商业 AutoSurface 最难的全局分区和 patch layout。真正需要验证的是：一张曲面能否在保留原始角点的同时覆盖内部形状，并在可接受复杂度下通过误差和有效性门控。这仍有算法风险，但工程规模明显小于自研商业级自动曲面系统。
+- 不再把 NSR 阶段写入当前 TODO。
+- GUI 默认入口不调用 SurfaceRefitter。
+- 不以增加局部阈值或特殊分支恢复真实样例。
+- 历史代码只用于诊断、回归和新方案对照。
 
----
+## 与 Surface Reduction 的关系
 
-## 3. 任务边界
+Surface Reduction 继承了部分经验，但不是 NSR 的简单延续：
 
-### 3.1 第一阶段支持范围
+| NSR | Surface Reduction |
+|-----|-------------------|
+| 目标区域尽量成为一个面 | 在预算内寻找多个可接受合并组 |
+| 单一参数化承担整个区域 | 每个分组独立从原始面拟合 |
+| 单次拟合决定成败 | 搜索、缓存和最终候选验证分层 |
+| 主要关注拟合与重裁剪 | 同时要求接缝、包络、拓扑和跨内核 |
+| 无最少面证明语义 | 明确区分最好已知结果与最优证明 |
 
-原生拟合只接收满足以下条件的候选：
+Surface Reduction 可以复用参数化、边界约束和诊断思想，但新候选必须遵守 reduction 模块合同。
 
-- 候选类型为 `FeatureBoundedRefit`。
-- 候选面连通。
-- 只有一个闭合外轮廓。
-- 没有孔洞。
-- 没有分支边界。
-- 没有非流形边。
-- 输出目标为一张 `TopoDS_Face`。
-- 原始边界全部按 G0 约束处理。
+## 探针使用边界
 
-不满足条件时必须返回明确的“不支持”原因，不得静默改变拓扑或自动扩大任务范围。
+native_surface_fit_probe 可用于：
 
-### 3.2 当前成功定义
+- 复现历史参数化或拟合失败。
+- 比较单一算法改动前后的诊断。
+- 为新方案提供局部证据。
 
-第一阶段的成功不是“生成了一个 Face”，而是同时满足：
+使用要求：
 
-1. 输出只有一张拟合面。
-2. 使用原始 STEP 边界，不出现 Geomagic 式角点圆化。
-3. `BRepCheck_Analyzer` 通过。
-4. 边界、角点和内部独立验证样本满足配置容差。
-5. 曲面没有 Jacobian 翻转或近奇异区域。
-6. 曲面次数、控制点和分段数量没有失控。
-7. Patch Apply 仍经过 repair、`StrictTopologyGate` 和 STEP roundtrip。
+- 输入与参数写入独立运行目录。
+- 不写死真实用户路径或候选编号到通用代码。
+- 同时保存失败原因，而不是只保存成功 STEP。
+- 不把探针成功结果直接标记为 GUI 产品能力。
+- 涉及当前主线时使用 Surface Reduction 的最终质量门重新验证。
 
-### 3.3 “一步到位”的可实现边界
+## 证据入口
 
-对本项目而言，“一步到位”可以作为产品交互目标，但不能解释为“一次固定参数的 Filling 调用保证任意自由曲面成功”。合理定义是：
+历史证据分布在：
 
-```text
-用户选择特征区域并触发一次原生重拟合
-→ 系统检查候选拓扑和单曲面适用性
-→ 在固定预算内执行少量、确定性的拟合 / 采样策略
-→ 每个结果经过同一组几何与 BRep 质量门
-→ 自动选择复杂度最低的合格结果
-→ 全部失败时返回可定位原因或进入显式后备路线
-```
+- data/runs 中的 NSR 运行目录。
+- data/crop_stl 与 data/crop_stp 中的历史探针产物。
+- tests 中的合成合同和回归夹具。
+- Git 中的 native-surface-refit 阶段提交。
+- Obsidian 项目日志中的详细开发过程。
 
-预期可以覆盖的大部分区域：
+引用历史产物时必须注明：
 
-- 单外轮廓、无孔、连通且整体光顺的局部自由曲面。
-- 可以被一张规则参数域曲面稳定覆盖，没有内部真实折痕或分支。
-- 曲率变化可由受控次数和控制点规模表达。
+- 原始 STEP 或 STL 来源。
+- 候选发现方式。
+- 实际算法和参数版本。
+- 是否只通过 Open CASCADE。
+- 是否完成 STEP 往返或外部 CAD。
 
-不能承诺由一张面自动覆盖的区域：
+历史 crop 文件不自动等于当前可复现基线。
 
-- 带孔、分支、非流形或需要多张参数域的区域。
-- 内部存在必须保留的 G0 / G1 不连续、尖脊、折痕或自遮叠。
-- 单曲面需要失控次数、控制点或局部翻转才能逼近的形状。
+## 重新启用条件
 
-因此长期目标是“单次用户操作 + 内部有限策略组合 + 严格自动验收”。NSR-1.2 只验证其中最小的一步：在相同总训练点和 solver 参数下，改进训练点覆盖是否能稳定通过多数光顺局部区域；不在本阶段实现完整策略调度器。
+只有同时具备以下条件，才建议重新打开该路线：
 
----
+1. 有明确的新算法假设，而不是继续微调旧阈值。
+2. 目标样例集合不少于单个方便样例，并覆盖不同拓扑和角部。
+3. 预先定义参数化、留出、边界、包络、拓扑和跨内核门。
+4. 能说明为什么单面输出优于当前多组 Surface Reduction。
+5. 有拟合、终验、墙钟和内存预算。
+6. 失败结果可归类，且不会通过样例特判绕过。
+7. 新结果从原始 STEP 面构造，不复用父拟合面作为真值。
 
-## 4. 原生单曲面拟合方案
+重新启用时应建立新的任务与运行目录，不把本指南恢复成阶段流水账。
 
-### 4.1 第一版算法选择
+## 不变量
 
-第一版优先使用 OCCT `BRepFill_Filling`，不立即自研 B-spline 最小二乘求解器。
+- STEP 边界与拓扑是硬事实。
+- STL 是软参考。
+- SurfaceRefitter 不能直接提交 ShapeDocument。
+- PatchReplacementRepair 与 StrictTopologyGate 继续适用。
+- 拟合误差不能替代边界、拓扑和往返证据。
+- 冻结状态只由 implementation_status.md 声明。
 
-原因：
+## 维护规则
 
-- 当前仓库已经在 `g1_boundary_fill_patch_exporter` 中验证了构建、误差读取和 STEP 导出链路。
-- `BRepFill_Filling` 支持边界 G0/G1/G2 约束和内部点约束。
-- 第一阶段只需要验证“原始边界 + 内部 STEP 点”能否生成一张合格自由曲面。
-- 失败后可以根据诊断决定是否需要进入自定义参数化和 B-spline 求解。
-
-与既有 G1 实验的区别：
-
-```text
-既有实验：全部边界 G1，主要依赖边界填充，内部形状约束不足。
-NSR-1：全部边界 G0，原始角点保留，加入独立的内部 STEP 点约束。
-```
-
-### 4.2 拟合输入
-
-拟合输入只来自原始 STEP：
-
-```text
-原始 TopoDS_Edge      → 曲面边界约束
-原始边界顶点          → 角点位置
-候选面内部采样点      → 内部形状约束
-候选面内部法向        → 第一版只用于验证
-候选面与边界拓扑关系  → 输入合法性和输出方向
-```
-
-STL 只保留为显示、诊断和 Geomagic 后备输入，不作为原生拟合的几何真值。
-
-### 4.3 边界约束
-
-按有序外环将原始边直接加入 Filling：
-
-```cpp
-filling.Add(edge, GeomAbs_C0, Standard_True);
-```
-
-要求：
-
-- 使用原始三维边，不用离散折线替代。
-- 保持边界 Wire 的方向和连接顺序。
-- 第一阶段不加载外围 support face，不施加 G1。
-- 原始边端点必须作为角点保留。
-- 生成后检查每条边的 pcurve 和 `SameParameter`。
-
-### 4.4 内部样本
-
-第一版采用确定性、面积加权采样：
-
-1. 对候选区域各原始面建立 OCCT 三角化。
-2. 按三角形面积分配样本。
-3. 使用固定重心坐标生成训练点。
-4. 将训练点重新投影或求值到对应原始面，避免三角近似成为几何真值。
-5. 按项目容差做空间去重。
-6. 设置总样本上限，防止 Filling 点约束失控。
-
-训练集与验证集必须分离：
-
-- 训练集参与 `filling.Add(point)`。
-- 验证集使用不同重心坐标，只用于拟合后误差检查。
-- 不允许用训练点误差代替泛化误差。
-
-第一阶段使用固定的稀疏、中等、较密三档样本，不做无限自动调参。candidate 179 的首轮中等档只证明探针可运行，下一轮统一使用以下对照参数：
-
-| 档位 | 训练样本 | 独立验证样本 | 每条边边界样本 | Jacobian 网格 |
-|---|---:|---:|---:|---:|
-| 稀疏 | 24 | 192 | 32 | 16 |
-| 中等 | 48 | 192 | 32 | 16 |
-| 较密 | 96 | 192 | 32 | 16 |
-
-三档实验只改变训练样本数量。`tolerance3d=0.03`、法向阈值、Plate 次数、曲线采样、迭代次数、最大次数和最大分段必须保持一致，避免把多种变量混在一次实验中。
-
-2026-07-13 的 candidate 179 三档实测确认除 training 外配置逐字段一致。interior max/p95 从 sparse 的 `0.154917/0.114527`，经 medium 的 `0.093389/0.042576`，降到 dense 的 `0.041323/0.025610`；说明增加训练样本有明显收益。dense 边界和角点通过，但出现 `BRepCheckFailed`，并仍有 1 个法向超限样本，因此该结果进入 NSR-1.2 的结构失败与法向离群诊断，没有混调边界参数。
-
-2026-07-14 的 NSR-1.2 固定 96 点 A/B 保持全部 solver / validation 配置一致，只改变训练点分配。纯面积加权每面 training min/max/zero=`0/4/2`，Filling / oriented / roundtrip BRep=`false/false/true`；分层面积加权为 `1/3/0` 和 `true/true/true`。分层策略证明每面最低覆盖能改变 BRep 结构，但 interior max/over 从 `0.041323/4` 变为 `0.068507/8`，normal max 只从 `45.4750°` 降至 `40.7441°`，因此不能作为可接受结果。
-
-### 4.5 构建流程
-
-```text
-验证 candidate / boundary
-→ 构造 BRepFill_Filling
-→ 按顺序加入全部 G0 原始边
-→ 加入内部训练点
-→ Build
-→ IsDone / G0Error
-→ Face
-→ BRepCheck
-→ 曲面有效性检查
-→ 独立验证集误差
-→ 输出 STEP patch 与 JSON 报告
-```
-
-沿用现有 `tolerance3d`、`toleranceAngle`、最大次数和最大分段配置，不在 NSR-1 中建立第二套容差体系。
-
-### 4.6 曲面有效性检查
-
-除了 `BRepCheck`，还必须在 UV 域采样并检查：
-
-- `dU × dV` 是否接近零。
-- 法向方向是否发生局部翻转。
-- Jacobian 符号是否一致。
-- U/V degree。
-- U/V pole count。
-- U/V knot / segment count。
-
-出现 Jacobian 翻转、近奇异区域或复杂度达到上限时，直接拒绝，不通过继续放宽容差接受。
-
-### 4.7 独立误差报告
-
-报告必须分开记录：
-
-```text
-边界：max / p95 / rms / over_tolerance
-角点：max / p95 / rms / over_tolerance
-内部：max / p95 / rms / over_tolerance
-法向：max_angle / p95_angle / rms_angle
-```
-
-还要记录：
-
-- 最差样本坐标。
-- 最差样本来源 face id。
-- 最差边界 edge id。
-- 训练/验证样本数量。
-- Filling 的 G0/G1/G2 报告值。
-- 输出曲面次数、控制点和分段数量。
-- `BRepCheck` 结果和失败信息。
-- 全部失败质量门；现有单值 `failure_reason` 只保留为兼容的首个失败项。
-- 每个诊断样本的原始点、投影点、距离、是否超限、来源 face id / edge id。
-- 失败诊断 patch 的语义；`patch_written=true` 不得被解释为拟合验收通过。
-
-NSR-1.1 的诊断产物统一写入：
-
-```text
-data/runs/<run-id>/diagnostics/native_surface_fit/
-  surface_error_samples.csv
-  surface_error_vectors.obj
-```
-
-CSV 至少覆盖 boundary / corner / interior 三类样本。OBJ 只用于人工定位超限原始点与投影点之间的误差向量，不作为数值验收来源。
-
----
-
-## 5. 最小代码落点
-
-### 5.1 `SurfaceRefitter`
-
-`src/merge/SurfaceRefitter.h/.cpp` 已完成 NSR-1 单曲面接口和第一版质量门。NSR-1.1 只补充失败诊断与受控实验，不设计多后端框架，也不改变拟合算法。
-
-建议最小类型：
-
-```text
-SurfaceRefitOptions
-SurfaceRefitReport
-SurfaceRefitResult
-SurfaceRefitter::fitSingleFace(...)
-```
-
-`SurfaceRefitResult` 返回：
-
-- `TopoDS_Face face`
-- 完整 `SurfaceRefitReport`
-- 成功或失败状态
-- 稳定、可搜索的失败原因
-
-### 5.2 独立探针
-
-新增：
-
-```text
-tools/native_surface_fit_probe.cpp
-```
-
-命令合同：
-
-```text
-native_surface_fit_probe
-  --source-step <path>
-  --candidate-id <id|auto>
-  --output-patch <path>
-  --report <path>
-```
-
-NSR-1 探针只生成 patch 和报告，不修改 GUI，不自动 Apply。
-
-原生 patch 通过自身质量检查后，再复用现有 `patch_apply_probe` 或 `corner_baseline_probe --apply-only` 验证 Apply，避免第一步就改动 AppController 和 GUI。
-
-### 5.3 测试范围
-
-默认单元测试：
-
-1. 多张共面裁剪面拟合成一张面。
-2. 一张已知 B-spline 人工切分后拟合回一张面。
-3. 光顺底层曲面加尖角裁剪轮廓，验证角点不圆化。
-4. 带孔候选明确拒绝。
-5. 非流形或开放边界候选明确拒绝。
-6. 训练集与验证集分离。
-7. Jacobian 翻转或近奇异结果被拒绝。
-
-真实样例：
-
-- candidate 179 用于手动探针和 run artifact，不写入默认单元测试。
-- 真实文件测试必须存在性门控。
-- 不在测试和生产代码中硬编码 `03_配件_Clay.stp` 或候选序号。
-
----
-
-## 6. NSR-1 失败分流
-
-| 失败类型 | 处理方式 |
-|---|---|
-| 原始边界 Wire 无法构造 | 修边界顺序、方向或输入分析，不进入拟合调参 |
-| G0 边界误差超限 | 检查边约束和曲线兼容性，不提高 Sewing 容差 |
-| 边界合格但内部误差大 | 在固定三档样本/复杂度范围内比较一次 |
-| 距离合格但法向误差大 | 记录为需要切平面约束，NSR-1 返回失败 |
-| Jacobian 翻转或近奇异 | 直接拒绝单曲面结果 |
-| 控制点或分段数量失控 | 判定单曲面简化收益不足 |
-| `BRepFill_Filling` 不收敛 | 记录 OCCT Plate 路线失败，不无限调参 |
-
-只有在 NSR-1 对代表性样例失败且失败原因指向拟合能力不足时，才启动下一阶段的显式参数化和 B-spline 约束最小二乘；该阶段不属于当前任务。
-
-### 6.1 candidate 179 当前失败判读
-
-首轮中等档产物：
-
-```text
-data/runs/20260713_200400_711__native-surface-fit__03_配件_Clay__cand-0179__nsr-1-medium/
-```
-
-已确认：
-
-| 检查项 | 结果 | 判读 |
-|---|---:|---|
-| 边界 | 12 / 416 超限，max=0.0381795 | 大部分边界合格，edge 1540 附近局部超限 |
-| 角点 | 2 / 26 超限，max=0.0381795 | 与最差边界位置重合 |
-| 内部 | 6 / 96 超限，max=0.0933887，p95=0.0356314 | 当前更显著的形状误差，最差来源 face 1709 |
-| 法向 | max=14.1263°，阈值 15° | 通过但接近上限，不能抵消位置误差 |
-| Jacobian | 无翻转、无近奇异 | 参数化健康 |
-| BRep | 有效、STEP 二次读取为一张面 | 只证明结构合法，不证明几何贴合 |
-
-`BoundaryErrorExceeded` 是按边界、角点、内部顺序返回的首个失败项，不表示内部验证通过。当前结果应归类为“边界局部超限 + 内部自由曲面欠拟合”；诊断 STEP 是失败产物，不能进入 NSR-2。
-
-NSR-1.1 已补齐全部失败门和样本级定位产物，并完成固定三档对照：
-
-```text
-若训练样本增加后内部误差明显下降：继续评估 OCCT Filling 单曲面路线。
-若内部误差基本不变且 U/V degree 持续达到 8：记录 Plate 路线能力不足证据，再评估 NSR-4。
-若主要只剩 edge 1540 边界局部超限：另立边界约束参数实验，不与训练样本实验混跑。
-```
-
-实际结果：
-
-| tier | failed_gates | boundary max/p95/RMS/over | corner max/p95/RMS/over | interior max/p95/RMS/over | normal max/p95 | degree/poles/segments | Jacobian | BRepCheck |
-|---|---|---|---|---|---|---|---:|---:|
-| sparse | InteriorErrorExceeded, NormalErrorExceeded | 0.014135/0.008378/0.003548/0 | 0.012527/0.011608/0.004509/0 | 0.154917/0.114527/0.053045/89 | 58.4834°/14.7188° | 8x8/529/9 | true | true |
-| medium | BoundaryErrorExceeded, CornerErrorExceeded, InteriorErrorExceeded, NormalErrorExceeded | 0.038180/0.025657/0.011631/24 | 0.038180/0.034959/0.014290/2 | 0.093389/0.042576/0.019742/18 | 47.9057°/9.3050° | 8x8/256/4 | true | true |
-| dense | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.015591/0.009086/0.004321/0 | 0.015591/0.013647/0.005295/0 | 0.041323/0.025610/0.010416/4 | 45.4750°/9.7698° | 8x8/529/9 | true | false |
-
-结论：虽然三档 degree 都达到 8，但内部 max/p95 和法向超限数随训练密度明显改善，不能把当前结果归类为“Plate 能力基本不变”。medium 的最差边界仍是 edge 1540，dense 中该边仍最差但误差已低于 0.03，因此暂不进入边界约束实验。当前继续 OCCT Filling，先另立 dense BRepCheck / 法向离群诊断；所有 patch 都是失败诊断产物，不进入 NSR-2。
-
-NSR-1.1 补充诊断：三档 patch 写出 STEP 后重新读取均为一张 face 且 `BRepCheck=true`，但 sparse / medium / dense 的 edge 数分别为 44 / 46 / 50，而内存态 face 均遍历到 26 条边。当时实现只在输出方向反转前记录 `brep_check_valid`，因此该结果成为 NSR-1.2 分阶段诊断的输入证据，不能用 STEP roundtrip 自动接受。
-
-NSR-1.2 已给出明确结果：
-
-```text
-area_weighted:
-  Filling face[0] = UnorientableShape
-  Filling wire[0] = SelfIntersectingWire
-  oriented face[0] = UnorientableShape
-  oriented wire[0] = SelfIntersectingWire
-  output orientation reversed = true
-  memory edges = 26
-  roundtrip face/edges/BRep = 1/50/true
-
-face_stratified_area_weighted:
-  Filling BRep = true
-  oriented BRep = true
-  output orientation reversed = true
-  memory edges = 26
-  roundtrip face/edges/BRep = 1/43/true
-```
-
-两策略的 26 条内存态输出边都能一一映射到 26 条原始 boundary edge；没有 missing pcurve、SameRange 或 SameParameter 失败。纯面积加权最差边表示为 output edge 5 / source edge 1540，3D curve 与 curve-on-surface 最大偏差 `0.0178773`，仍小于该 edge tolerance `0.0189194`。因此该轮 BRep 失败定位在 wire 自交 / face 不可定向，而不是单条输出边缺失 pcurve。
-
-纯面积加权的 4 个内部超限点来自 face 1719/1717/1710/1750，每面 training=`3/3/3/2`，最近训练距离=`0.378863/0.313861/0.287934/0.426819`；两个零训练面 1735/1738 没有产生超限点。分层策略让这四个同一验证点全部通过，但在 face 1709/1717/1718 形成新的 `5/2/1` 个超限点。该证据说明“每面至少一点”解决了零覆盖和本轮 BRep 结构问题，但点数统计本身不能保证局部误差收敛。
-
----
-
-## 7. Geomagic 后备路线
-
-### 7.1 启动条件
-
-仅在以下情况启动：
-
-- 候选不满足原生单曲面支持范围。
-- 原生拟合在受控三档参数内明确失败。
-- 原生结果出现 Jacobian 翻转、近奇异或复杂度失控。
-
-不得因为希望节省一次原生拟合而默认跳转 Geomagic。
-
-### 7.2 后备流程
-
-```text
-原始 STEP candidate
-→ 生成 fitting STL / 必要的真实邻接曲面窄带
-→ Geomagic AutoSurface
-→ 导入 raw patch STEP
-→ 底层曲面覆盖 Gate
-→ original-boundary constrained re-trim
-→ Apply / repair / StrictTopologyGate
-→ 商业 CAD 类质量门
-```
-
-### 7.3 覆盖 Gate
-
-Geomagic patch 在 Apply 前必须满足：
-
-- 每个原始边界采样点可投影到至少一张导入底层曲面。
-- 所有原始角点可投影到导入底层曲面。
-- 最大、P95、RMS 投影距离均记录。
-- 连续未覆盖边界区间为空。
-- 不允许通过提高 Sewing 容差掩盖底层曲面欠覆盖。
-
-覆盖 Gate 失败时直接拒绝，不进入 strict re-trim 和 Apply。
-
-### 7.4 Geomagic 输出语义
-
-Geomagic 只提供候选拟合曲面，不拥有最终 CAD 拓扑决定权：
-
-- 不信任 Geomagic patch outer boundary。
-- 不把 Geomagic 内部 seam 自动视为理想最终 seam。
-- 不把拓扑 Gate 通过视为几何质量通过。
-- 不提交 raw patch 或 pre-repair shape。
-- 最终边界仍来自原始 STEP。
-
----
-
-## 8. 开发阶段
-
-### NSR-0：证据与方案锁定
-
-状态：已完成。
-
-- 确认 fitting STL 角点完整。
-- 确认 raw Geomagic 底层曲面角点圆化。
-- 确认问题不是归一化、pcurve 或 Sewing 单独造成。
-- 建立本指导文档。
-
-### NSR-1：原生单曲面拟合探针
-
-状态：工程探针已完成；candidate 179 首轮中等档未通过 0.03 几何容差。
-
-验收：
-
-- `SurfaceRefitter::fitSingleFace` 可用。
-- G0 原始边界 + 内部 STEP 点约束可运行。
-- `native_surface_fit_probe` 输出 patch 和 JSON。
-- 合成测试通过。
-- candidate 179 产生可审阅 run artifact，成功或失败均有可定位报告。
-
-### NSR-1.1：失败诊断与固定三档实验
-
-状态：已完成。
-
-- 已报告全部失败质量门，同时保留兼容的首个 `failure_reason`。
-- 已输出样本级 CSV 和超限误差向量 OBJ。
-- 已补齐 solver 配置、candidate face 数、boundary valid 和诊断 patch 语义。
-- 已对 candidate 179 运行稀疏、中等、较密三档；三档只改变训练样本数量。
-- 结果支持继续 OCCT Filling；下一独立任务定位 dense BRepCheck 失败和法向离群，不启动 NSR-4。
-- 本阶段未启动 NSR-2。
-
-### NSR-1.2：dense 结构诊断与受控采样
-
-状态：已完成诊断与 A/B，未通过 NSR-1 验收。
-
-- 已补齐 Filling 输出、方向反转后和 STEP 二次读取后的 BRepCheck 与具体子形状状态。
-- 已补齐每张源面的训练 / 验证样本覆盖、离群点最近训练距离，以及法向样本级诊断。
-- 已固定 training=96、validation=192 和全部 solver 参数，只比较纯面积加权与“每张源面至少一点 + 剩余点面积加权”。
-- 全程未调用 repair，没有把 STEP roundtrip 后 BRepCheck 通过直接当成拟合通过。
-- 分层策略通过 Filling / oriented BRepCheck，但 interior 和 normal 仍失败；两策略均 `patch_acceptable=false`。
-- NSR-1 尚未结束；该阶段留下的局部切平面约束任务已由 NSR-1.3 完成，NSR-2 / NSR-4 仍未启动。
-
-正式运行：
-
-```text
-data/runs/20260714_014513_419__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-area-weighted
-data/runs/20260714_014616_181__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-face-stratified-area-weighted
-data/runs/20260714_014717_549__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.2-sampling-ab
-```
-
-### NSR-1.3：局部切平面约束有限周期证据
-
-状态：已完成，但未通过 NSR-1 接受门。
-
-OCCT 现有接口已经支持 `BRepFill_Filling::Add(U, V, Support, GeomAbs_G1)`，因此本阶段先使用原始源面的 UV 与支撑曲面施加局部 G1，不直接启动自研求解器。
-
-已落地合同：
-
-```text
-1. 基线使用 face_stratified_area_weighted，保持原始边界 G0、training=96 和既有求解器参数。
-2. SourceSample 增加源面 / UV；选中的训练位置由 Add(point) 改为 Add(U, V, Support, GeomAbs_G1)。
-3. G1 约束替换同数量的 G0 点约束，训练约束总数仍为 96。
-4. 独立选择集只负责形成归一化距离 / 法向残差簇；每个簇映射到最近的现有训练样本，并将该样本由 G0 升级为 G1，不读取最终终验集，不硬编码真实 face id。
-5. 新增固定 192 点终验集，并保持它与训练集、选择集空间互斥。
-6. 运行 0 / 1 / 4 / 8 四档；成功调用固定生成四个 tier run 和一个 comparison run。单档基础设施异常时保留已完成产物并生成失败汇总。
-```
-
-通过条件与现有原生质量门完全一致：边界、角点、终验内部距离和法向全部通过，Filling / oriented BRepCheck 通过，无 Jacobian 翻转或近奇异，复杂度不过限，STEP 二次读取仍为一张有效面。任一周期通过后进入 NSR-2。
-
-candidate 179 实测：
-
-| G1 | failed_gates | selection interior max/p95/RMS/over | selection normal max/p95/RMS/over | holdout interior max/p95/RMS/over | holdout normal max/p95/RMS/over | BRep filling/oriented/roundtrip | Jacobian near/flip | degree/poles/segments |
-|---:|---|---|---|---|---|---|---|---|
-| 0 | InteriorErrorExceeded, NormalErrorExceeded | 0.068507/0.024468/0.012112/8 | 40.7441°/8.2060°/4.7287°/1 | 0.054879/0.026982/0.010159/8 | 23.5646°/7.2512°/3.9602°/2 | true/true/true | 0/0 | 8x8/529/9 |
-| 1 | InteriorErrorExceeded, NormalErrorExceeded | 0.068275/0.024458/0.012137/8 | 38.9583°/8.2059°/4.6291°/1 | 0.054914/0.026859/0.010164/8 | 23.1334°/7.2574°/3.9184°/2 | true/true/true | 0/0 | 8x8/529/9 |
-| 4 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.044250/0.022206/0.009061/4 | 38.7154°/7.6144°/4.3457°/1 | 0.038039/0.017075/0.007938/2 | 22.9609°/7.2526°/3.5619°/1 | false/false/true | 0/0 | 8x8/529/9 |
-| 8 | BRepCheckFailed, InteriorErrorExceeded, NormalErrorExceeded | 0.044311/0.022247/0.008834/4 | 38.6458°/6.4799°/4.2270°/1 | 0.038155/0.017076/0.007676/2 | 22.8859°/6.7965°/3.4800°/1 | false/false/true | 0/0 | 8x8/529/9 |
-
-0 档逐值复现 NSR-1.2 分层基线；96 个训练样本的支撑面 UV 重算点最大偏差为 `1.59e-14`。四档 training-selection / training-holdout / selection-holdout 交集均为 0，实际 G1 数与配置一致。4 / 8 个 G1 将 holdout interior 超限数从 8 降到 2，但 normal max 仍约 23°，并重新引入 face[0]=`UnorientableShape`、wire[0]=`SelfIntersectingWire`；STEP roundtrip 虽均为一张有效 face，也不能替代 oriented face 验收。四档均为诊断 patch，`patch_acceptable=false`。
-
-正式运行：
-
-```text
-data/runs/20260714_142505_621__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-0
-data/runs/20260714_142629_618__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-1
-data/runs/20260714_142756_421__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-4
-data/runs/20260714_142922_182__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.3-local-g1-8
-data/runs/20260714_143049_479__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.3-local-g1-tiers
-```
-
-停止判定已触发：不再增加 G1 数量，也不混调 OCCT Filling 参数。下一步先在至少三个满足当前单曲面支持范围的真实候选上复核失败是否重复。只有距离 / 法向相互牺牲、结构失败或误差平台在多个候选上重复，才解冻 NSR-4；candidate 179 单例失败不足以证明需要自研求解器。
-
-### NSR-1.4：自适应训练预算与拓扑无关采样
-
-状态：后续冻结；NSR-1.3 已完成，但本轮未实现。
-
-固定 96 个训练约束的作用，是让 NSR-1.3 只比较局部 G1 的效果。它不是适用于不同大小区域的生产参数。生产方案不应继续采用“每张原始面至少一个点”作为主要规则，否则会重新受到 Geomagic / STEP 碎面数量限制。
-
-后续方案：
-
-```text
-1. 先由连续目标区域的面积和目标采样间距估算基础预算：N_base ≈ area / target_spacing²。
-2. 再依据边界长度、角点复杂度、曲率和法向变化增加局部密度，并设置最小预算、最大预算和单曲面复杂度上限。
-3. 在目标区域的三角化表示上执行确定性的空间均匀采样，并向高曲率 / 高法向变化区域加权；原始 face id 只用于回查支撑面和 UV。
-4. 局部 G1 约束档位随训练预算按比例确定，例如约为预算的 1% / 4% / 8%，而不是永远固定为 1 / 4 / 8 个。
-5. 选择集和终验集也按同一几何尺度增加，但必须继续与训练集互斥，并保持“选择约束”和“最终验收”职责分离。
-6. 若所需预算超过单曲面复杂度上限，或区域包含单张光顺曲面无法同时表达的曲率分区，返回 unsupported，交给多曲面阶段或 Geomagic 后备。
-```
-
-这样，区域面积增大时不会因为仍使用 96 点而欠采样；区域很小时也不会被无意义地塞入过多约束。更重要的是，预算由连续几何决定，而不是由导入模型被切成多少张面决定。
-
-### NSR-2：复用现有 Apply 验证
-
-状态：NSR-1 通过后启动。
-
-- 先通过已有 probe 的 `--patch` / `--apply-only` 路径验证。
-- 保留 repair、`StrictTopologyGate` 和 STEP roundtrip。
-- 不先改 GUI。
-
-### NSR-3：主流程接入
-
-状态：NSR-2 通过后启动。
-
-- 在 AppController 中增加原生拟合路线。
-- GUI 只在真实样例通过后增加入口。
-- Geomagic 保持后备路线。
-
-### NSR-4：自定义 B-spline 求解
-
-状态：冻结。
-
-只有 NSR-1.3 的 1 / 4 / 8 个局部 G1 周期全部失败，且同类问题在至少三个受支持真实候选上重复时才解冻。
-
-解冻后也不重写完整 NURBS 内核，按两步推进：
-
-```text
-NSR-4A：固定参数化、次数和节点布局，求解 B-spline 控制点；目标包含原始边界位置、内部位置和公平性正则项。
-NSR-4B：只有 4A 仍无法通过法向门时，再增加局部切平面 / 法向项和防翻折约束。
-```
-
-曲面表示、B-rep 构造、STEP 写出和二次读取继续使用 OCCT。
-
-### NSR-5：原生多曲面布局
-
-状态：冻结。
-
-不属于当前单曲面目标。
-
----
-
-## 9. 当前验证命令
-
-日常构建和测试优先使用：
-
-```powershell
-cd D:\pyProject\step-patch-optimizer
-.\scripts\build_debug.ps1
-.\scripts\test.ps1
-.\scripts\run_native_surface_fit_tiers.ps1 -SourceStep "<source-step>" -CandidateId <id>
-.\scripts\run_native_surface_fit_sampling_ab.ps1 -SourceStep "<source-step>" -CandidateId <id>
-```
-
-底层验证：
-
-```powershell
-cmake --preset windows-msvc-debug
-cmake --build --preset windows-msvc-debug
-ctest --preset windows-msvc-debug --output-on-failure
-```
-
-真实样例不得进入默认测试。探针运行必须写入唯一的 `data/runs/<run-id>/` 目录并保留参数、报告和产物清单。三档运行器成功时固定保留 sparse、medium、dense 和 comparison 四个正式目录；NSR-1.2 A/B 运行器成功时固定保留两个策略 run 和一个 comparison run；NSR-1.3 成功调用固定保留 0 / 1 / 4 / 8 四个 tier run 和一个 comparison run。NSR-1.3 某档基础设施异常时不得删除已完成档位，必须继续形成明确失败汇总并在最后返回错误；只有调用被外部强制中断而无法形成汇总时，才由执行者核对绝对路径后清理本次不完整目录，不删除历史 run。
-
----
-
-## 10. 文档同步规则
-
-每完成一个 NSR 子阶段：
-
-1. `docs/TODO.md` 只勾选实际完成的具体子项。
-2. `docs/implementation_status.md` 记录实现状态和验证证据。
-3. 已完成、已验证或退役事实移入 `docs/completed_features.md`。
-4. 若主流程或目录职责改变，同步 `README.md`、`docs/module_design.md` 或 `docs/project_structure.md`。
-5. Geomagic 后备语义改变时同步 `docs/geomagic_patch_workflow.md`。
-
----
-
-## 11. NSR-1.1 已执行任务模板（归档）
-
-```text
-请在真实仓库 D:\pyProject\step-patch-optimizer 中完成 NSR-1.1：原生单曲面失败诊断与固定三档受控实验。
-
-开始前：
-1. 严格遵守仓库 AGENTS.md。
-2. 按规定顺序阅读 README.md、docs/module_design.md、docs/implementation_status.md、docs/completed_features.md、docs/run_gui.md、docs/project_structure.md、docs/TODO.md。
-3. 额外完整阅读 docs/native_surface_refitting_guide.md；只有实际改动 Geomagic / Apply 主线时才读取并修改对应 Geomagic 文档。
-4. 说明已阅读文档、任务假设和成功标准。
-5. 检查 git status，保护用户已有改动。
-6. 确认当前 Git 分支为 native-surface-refit；不得在 feature-bounded-refit 上实现本任务，也不得覆盖或回滚该分支的 Geomagic 稳定主线。
-7. 修改任何函数、类或方法前，先运行 GitNexus impact，并报告影响范围；若为 HIGH 或 CRITICAL，先停止并说明风险。
-
-已知基线：
-- source：data/stp/03_配件_Clay.stp。
-- candidate：179，仅用于手动真实探针。
-- run：data/runs/20260713_200400_711__native-surface-fit__03_配件_Clay__cand-0179__nsr-1-medium
-- tolerance3d=0.03。
-- boundary：12/416 超限，max=0.0381795，worst edge=1540。
-- corner：2/26 超限，max=0.0381795。
-- interior：6/96 超限，max=0.0933887，p95=0.0356314，worst face=1709。
-- normal max=14.1263°，Jacobian 和 BRepCheck 通过。
-- 当前 failure_reason=BoundaryErrorExceeded 只是首个失败门，不能掩盖 corner / interior 同时失败。
-
-本次只做两部分。
-
-第一部分：失败诊断可解释化。
-1. 保留现有 failure_reason 的兼容语义，新增 failed_gates 数组，列出本轮全部失败门。
-2. 报告 candidate_face_count、boundary_valid、完整 solver 配置和 diagnostic_patch=true/false。
-3. 保留 boundary / corner / interior 的聚合统计，并新增样本级诊断：类别、原始点、投影点、距离、是否超限、face id、edge id。
-4. 在 run 的 diagnostics/native_surface_fit/ 下输出：
-   - surface_error_samples.csv
-   - surface_error_vectors.obj
-5. OBJ 只写超限样本的原始点、投影点和连线，用于人工定位；数值验收仍以 JSON/CSV 为准。
-6. patch_written=true 但 fit_success=false 时，报告必须明确它是失败诊断 patch，不是可接受结果。
-7. 增加合成测试，至少覆盖“边界先失败但内部也失败时 failed_gates 同时包含两者”和诊断文件字段合同。
-
-第二部分：固定三档受控实验。
-1. 使用同一 source STEP 和 candidate 179，分别运行：
-   - sparse：training=24
-   - medium：training=48
-   - dense：training=96
-2. 三档统一使用 validation=192、boundary samples per edge=32、Jacobian grid=16、tolerance3d=0.03、normal tolerance=15°。
-3. Plate degree、points_on_curve、iterations、max_degree、max_segments 等 solver 参数保持不变；本轮只改变训练样本数量。
-4. 每档必须写入独立 data/runs/<run-id>/，保留 run.json、RUN.md、patch STEP、JSON、CSV、OBJ 和日志。
-5. 生成一份三档比较表，至少包含 success、failed_gates、boundary/corner/interior max/p95/RMS/超限数、normal max/p95、degree、poles、segments、Jacobian、BRepCheck 和耗时。
-6. candidate 179 只允许出现在手动探针命令和 run artifact 中，不得写进默认测试或生产逻辑。
-
-本次不要做：
-- 不改 GUI。
-- 不做原生多曲面布局。
-- 不启动 NSR-2、候选区域替换或 Apply。
-- 不启动 NSR-4，不实现自定义 B-spline 求解器。
-- 不接 Geomagic 自动回退。
-- 不给全部边界施加 G1。
-- 不调整 Plate、points_on_curve、iterations、max_degree、max_segments。
-- 不放宽 0.03 几何容差或 15° 法向阈值。
-- 不放宽 StrictTopologyGate、Sewing 或商业 CAD 类质量门。
-- 不重构无关代码。
-
-验证：
-1. 优先运行 .\scripts\build_debug.ps1 和 .\scripts\test.ps1。
-2. 必要时补充 cmake --build --preset windows-msvc-debug 和 ctest --preset windows-msvc-debug --output-on-failure。
-3. 运行三档 candidate 179 手动探针并检查每个 run 清单和诊断产物存在。
-4. 完成后运行 GitNexus detect_changes，对比 feature-bounded-refit，确认只影响预期符号和流程。
-5. 同步 docs/TODO.md、docs/implementation_status.md、docs/completed_features.md 和 docs/native_surface_refitting_guide.md 的具体子项。
-
-结果判读：
-- 如果训练样本增加使 interior max/p95 明显下降，说明 OCCT Filling 路线仍值得继续。
-- 如果 interior 误差基本不变且 U/V degree 持续达到 8，记录为 Plate 路线能力不足证据，但本次仍不实现 NSR-4。
-- 如果内部收敛但 edge 1540 边界仍局部超限，把边界约束参数实验列为下一独立任务，不在本轮混调。
-
-最终报告必须包含：
-- 修改文件。
-- GitNexus impact 风险。
-- 实际验证命令与结果。
-- 三档 run 路径和对比表。
-- candidate 179 的全部 failed_gates 与误差趋势判读。
-- 明确说明是否继续 OCCT Filling、转入边界约束实验，或只为 NSR-4 记录证据。
-- 未完成项和下一步；不要擅自实现 NSR-2 或 NSR-4。
-```
-
----
-
-## 12. NSR-1.2 已执行任务模板（归档）
-
-```text
-请在真实仓库 D:\pyProject\step-patch-optimizer 中完成 NSR-1.2：dense 结构诊断与固定 96 点采样分配实验。
-
-开始前：
-1. 严格遵守仓库 AGENTS.md。
-2. 按规定顺序完整阅读 README.md、docs/module_design.md、docs/implementation_status.md、docs/completed_features.md、docs/run_gui.md、docs/project_structure.md、docs/TODO.md。
-3. 额外完整阅读 docs/native_surface_refitting_guide.md。
-4. 说明已阅读文档、任务假设和成功标准。
-5. 检查 git status，保护用户已有修改；确认当前分支为 native-surface-refit。
-6. 修改任何函数、类或方法前，先运行 GitNexus impact；HIGH 或 CRITICAL 时先报告风险。
-
-已知基线：
-- source：data/stp/03_配件_Clay.stp。
-- candidate：179，仅用于手动真实探针，不得写入生产逻辑或默认测试。
-- NSR-1.1 comparison：data/runs/20260713_234510_378__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.1-three-tier/。
-- dense：training=96、validation=192、boundary samples per edge=32、Jacobian grid=16。
-- tolerance3d=0.03，normal tolerance=15°。
-- dense boundary / corner 全部通过；interior 4/192 超限，max=0.0413227，p95=0.0256105。
-- dense normal 1/192 超限，max=45.475°，最差 face=1705。
-- dense 内部超限 face=1719、1717、1750、1710。
-- dense 内存态 BRepCheck=false，missing pcurve=0，SameParameter failure=0，Jacobian 无翻转 / 近奇异。
-- 三档 STEP 二次读取均为一张 face 且 BRepCheck=true，但 edge 数为 44/46/50；内存态均为 26 条边。
-- 当前代码在输出方向反转前记录 brep_check_valid，因此必须先明确检查时机和真实失败子形状。
-
-本次目标分为两阶段，必须先完成诊断，再决定是否执行采样 A/B；不得直接修改 solver 参数。
-
-第一阶段：BRep 与离群点诊断。
-1. 在 SurfaceRefitReport 中分别记录：
-   - filling_face_brep_check_valid
-   - oriented_face_brep_check_valid
-   - step_roundtrip_brep_check_valid（仅 probe 层执行并报告）
-2. 输出 face、wire、edge、vertex 的具体 BRepCheck_Status；必须能定位失败发生在哪类子形状和哪条输出边。
-3. 对每条输出边记录：
-   - edge index / 对应原始 boundary edge id（能够映射时）
-   - tolerance
-   - degenerated
-   - SameRange / SameParameter
-   - pcurve 是否存在及参数范围
-   - 3D curve 与 curve-on-surface 的采样最大偏差
-4. 不调用 ShapeFix、Sewing 或放宽 tolerance 修复；本阶段只诊断。
-5. 报告每张候选源面的 training_count、validation_count，以及每个验证离群点到最近训练点的距离。
-6. 为法向验证增加样本级记录：source point、projected point、source normal、fitted normal、angle、UV、face id、projection success、over tolerance。
-7. 为法向超限样本输出单独 CSV；可选 OBJ 用线段显示源法向与拟合法向，但数值验收仍以 JSON/CSV 为准。
-8. 增加合成测试，覆盖 BRep 状态序列化、方向反转前后字段、每面样本统计和法向样本字段合同。
-
-第二阶段：固定 96 点采样分配 A/B。
-只有第一阶段报告能够明确生成后，再运行两个策略：
-A. area_weighted：当前纯面积加权，training=96。
-B. face_stratified_area_weighted：每张源面至少分配一个确定性训练点，剩余训练点继续按面积加权；总数仍为 96。
-
-两档必须保持以下配置逐字段一致：
-- validation=192
-- boundary samples per edge=32
-- Jacobian grid=16
-- tolerance3d=0.03
-- normal tolerance=15°
-- plate_degree=3
-- points_on_curve=24
-- iterations=3
-- max_degree=8
-- max_segments=12
-- 其他 SurfaceRefitOptions 不变
-
-采样要求：
-1. 策略必须确定性、训练 / 验证互斥、空间去重。
-2. 每张源面至少一点只适用于候选面数不超过训练预算的情况；否则明确返回 unsupported / invalid configuration，不静默超预算。
-3. 不针对 face 1705、1719、1717、1750、1710 写死任何特殊逻辑。
-4. 不增加总训练点，不做 residual adaptive 第三轮，不改变 solver 参数。
-
-输出与比较：
-1. 两个策略分别写入唯一 data/runs/<run-id>/。
-2. 每轮保留 run.json、RUN.md、patch STEP、JSON、距离 CSV/OBJ、法向 CSV 和日志。
-3. 比较表至少包含：
-   - 全部 failed_gates
-   - boundary / corner / interior max、p95、RMS、超限数
-   - normal max、p95、RMS、超限数
-   - 每面 training min / max / zero-count
-   - degree、poles、segments
-   - Jacobian
-   - 三阶段 BRepCheck
-   - STEP roundtrip face / edge 数
-   - 耗时
-
-通过标准：
-1. 输出仍为一张拟合面。
-2. 边界、角点、内部距离和法向全部满足既有容差。
-3. oriented face 的 BRepCheck 通过；不能只依赖 STEP roundtrip 后通过。
-4. 无 Jacobian 翻转或近奇异。
-5. 曲面复杂度不超过现有 NSR-1 限制。
-6. 只有满足全部条件的策略可以 patch_acceptable=true。
-
-本次不要做：
-- 不改 GUI、AppController、Apply、PatchReplacementRepair 或 Geomagic。
-- 不启动 NSR-2、NSR-3、NSR-4 或 NSR-5。
-- 不增加训练样本总数到 192。
-- 不给全部边界或内部点施加 G1。
-- 不调用 ShapeFix / Sewing 把诊断失败变成成功。
-- 不放宽 0.03、15°、StrictTopologyGate 或商业 CAD 类质量门。
-- 不实现完整多策略调度器；本轮只建立两个确定性采样策略的证据。
-- 不重构无关代码。
-
-验证：
-1. 优先运行 .\scripts\build_debug.ps1 和 .\scripts\test.ps1。
-2. 运行 candidate 179 两策略真实探针并检查全部 run artifacts。
-3. 用 step_stats 验证每个诊断 patch 的 STEP 二次读取 face / edge / BRepCheck。
-4. 运行 git diff --check。
-5. 提交前运行 GitNexus detect_changes，对比 feature-bounded-refit，确认没有影响 GUI、Apply 或 Geomagic 流程。
-6. 同步 docs/TODO.md、docs/implementation_status.md、docs/completed_features.md 和 docs/native_surface_refitting_guide.md。
-
-最终报告必须包含：
-- 修改文件与 GitNexus 风险。
-- BRepCheck 的具体失败状态、子形状和检查阶段。
-- face 1705 法向离群点的完整向量信息。
-- 4 个内部超限点与每面训练覆盖的关系。
-- 两种采样策略的完整比较表和 run 路径。
-- 是否已有 patch_acceptable=true 的结果。
-- 是否可以进入 NSR-2；若不能，明确下一步是局部切平面约束证据还是 NSR-4 证据，不要擅自实现。
-```
-
----
-
-## 13. 下一步开发 Prompt：NSR-1.3
-
-```text
-请在真实仓库 D:\pyProject\step-patch-optimizer 的 native-surface-refit 分支完成 NSR-1.3：局部切平面约束有限周期实验。
-
-开始前：
-1. 严格遵守仓库 AGENTS.md。
-2. 按规定顺序完整阅读 README.md、docs/module_design.md、docs/implementation_status.md、docs/completed_features.md、docs/run_gui.md、docs/project_structure.md、docs/TODO.md。
-3. 额外完整阅读 docs/native_surface_refitting_guide.md。
-4. 先说明已阅读的文档、任务假设、实施计划和可验证成功标准。
-5. 检查 git status，保护用户已有修改；确认当前分支是 native-surface-refit，不得改写 feature-bounded-refit 的 Geomagic 稳定基线。
-6. 修改任何函数、类或方法前，先运行 GitNexus impact；若风险为 HIGH 或 CRITICAL，先报告影响范围再继续。
-
-已知真实基线：
-- source：data/stp/03_配件_Clay.stp。
-- candidate：179，只允许用于手动真实探针，不得写入生产逻辑或默认测试。
-- 纯面积加权：data/runs/20260714_014513_419__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-area-weighted/。
-- 分层面积加权：data/runs/20260714_014616_181__native-surface-fit__03_配件_Clay__cand-0179__nsr-1.2-face-stratified-area-weighted/。
-- A/B 比较：data/runs/20260714_014717_549__native-surface-fit-comparison__03_配件_Clay__cand-0179__nsr-1.2-sampling-ab/。
-- 本轮以 face_stratified_area_weighted 为结构合法基线：Filling、方向调整后和 STEP 二次读取的 BRepCheck 均通过。
-- 该基线内部距离 8 / 192 超限，max=0.0685065，p95=0.024468；法向 1 / 192 超限，max=40.744°；边界和角点通过。
-- 当前曲面为 U/V degree=8、529 poles、9 segments；Jacobian 无翻转、无近奇异。
-- 固定配置为 training=96、当前选择用 validation=192、boundary samples per edge=32、Jacobian grid=16、tolerance3d=0.03、normal tolerance=15°、plate degree=3、points on curve=24、iterations=3、max degree=8、max segments=12。
-
-本轮唯一目标：
-在训练约束总数、边界和求解器参数均不改变的前提下，验证少量局部 G1 支撑面约束能否同时改善内部距离与法向误差。不要在本轮实现自适应训练预算，也不要启动自定义 B-spline 求解器。
-
-一、补齐局部 G1 所需的数据合同
-1. 扩展内部采样记录，使训练样本保留原始源面标识、可用的 TopoDS_Face 支撑面以及该点在支撑面上的 U/V。
-2. 不得通过 face id 重新搜索并猜测支撑面；采样时建立稳定关联，后续直接使用该关联。
-3. 当局部 G1 数量为 0 时，新数据通路必须数值复现现有 face_stratified_area_weighted 基线；不得因本轮改造改变采样点、边界或求解器配置。
-4. candidate 179、face 1705、face 1709 等真实编号只能出现在手动结果和诊断报告中，不得写入生产选择逻辑或默认测试。
-
-二、严格分离训练集、约束选择集和最终终验集
-1. 保留现有确定性 192 点作为约束选择集；它只能用于计算残差和选择局部 G1 位置，不能证明最终结果通过。
-2. 新增一组固定 192 点最终终验集，使用与训练集、选择集不同的确定性序列或序列偏移。
-3. 三组样本必须空间互斥并在报告中给出交集计数；任何交集非零都应使本轮结果无效。
-4. 最终 patch_acceptable 只能由终验集的内部距离、法向以及既有边界、角点、Jacobian、复杂度和 BRepCheck 质量门共同决定。
-
-三、确定性选择局部 G1 位置
-1. 在选择集上对每个有效样本计算归一化分数：
-   score = max(distance / 0.03, normal_angle / 15°)。
-2. 对高分样本执行确定性的空间聚类或非极大值抑制，避免多个约束全部堆在同一个误差小斑块。
-3. 每个误差簇映射到最近的现有分层训练样本；只把该训练样本从 G0 点约束升级为 G1 支撑面约束，不改变其位置，也不新增训练约束。
-4. 形成嵌套集合：1 个约束集合必须是 4 个集合的子集，4 个集合必须是 8 个集合的子集。
-5. 选择顺序、并列分数处理和空间去重必须完全确定；相同输入重复运行应得到相同的样本和排序。
-
-四、使用 OCCT 现有局部 G1 接口
-1. 未选中的训练样本继续调用 BRepFill_Filling::Add(point) 作为 G0 位置约束。
-2. 选中的训练样本改用 BRepFill_Filling::Add(U, V, Support, GeomAbs_G1)。
-3. 每轮总训练约束仍严格等于 96；实际 G1 数量应分别为 0、1、4、8，其余为 G0。
-4. 原始边界保持现有 G0 位置约束，不给全部边界施加 G1，不使用 GeomAbs_G2。
-5. 如果某个选中样本缺少有效支撑面或 U/V，不得静默退化为 G0 后仍声称完成该档实验；应记录明确失败原因和实际 G1 数量。
-
-五、只运行四个受控结果
-1. 基线：0 个局部 G1，用来验证本轮改造没有改变 NSR-1.2 的结构合法基线。
-2. 第一档：1 个局部 G1。
-3. 第二档：4 个局部 G1。
-4. 第三档：8 个局部 G1。
-5. 四轮除 G1 数量外，训练点位置、总训练数、边界、选择集、终验集和全部求解器参数必须逐字段一致。
-6. 编写独立手动运行脚本，例如 scripts/run_native_surface_fit_local_g1_tiers.ps1；每轮写入唯一 data/runs/<run-id>/，并生成单独比较目录。
-
-六、报告与产物
-每轮至少输出：
-1. run.json、RUN.md、诊断 patch STEP、完整 JSON、距离 CSV/OBJ、法向 CSV 和日志。
-2. 选择集与终验集的指标分开记录，禁止用一个 validation 字段混淆两者。
-3. 每个入选 G1 样本记录：排名、score、来源 face id、来源 U/V、源点、源法向、映射到训练样本的距离和最终约束类型。
-4. 记录 configured_g1_count、actual_g1_count、G0 数量、总训练约束数以及三个样本集合的交集计数。
-5. 完整记录 failed_gates、boundary / corner / selection / holdout 的 max、p95、RMS、超限数，法向统计，Jacobian，degree / poles / segments，耗时。
-6. 继续记录 Filling、方向调整后和 STEP 二次读取三个阶段的 BRepCheck，以及 roundtrip face / edge 数。
-7. patch_written=true 但 patch_acceptable=false 时，必须明确它只是诊断 patch。
-8. 比较表按 0 / 1 / 4 / 8 四轮并排展示，不能只报告最佳一轮。
-
-七、测试要求
-至少增加以下自动测试：
-1. 样本能稳定保留来源支撑面和 U/V，且 U/V 对应点与源点在容差内一致。
-2. G1=0 数值回归：训练样本、主要指标和 BRep 状态复现既有分层基线，允许的数值浮动必须明确且足够小。
-3. 1 / 4 / 8 选择确定、空间去重且集合嵌套。
-4. 四轮训练约束总数始终为 96，G1 只替换同数量的 G0。
-5. 训练集、选择集和终验集互斥；选择集不会进入最终接受判定。
-6. 报告字段和比较表合同完整，configured_g1_count 与 actual_g1_count 不一致时不能误报成功。
-7. 默认测试不依赖 candidate 179 或任何固定真实 candidate / face 序号。
-8. 手动运行脚本在部分轮次失败时仍能完成清理、保留已有产物并生成明确失败汇总。
-
-通过与停止规则：
-1. 任一 G1 档只有在终验内部距离与法向、边界、角点、Jacobian、复杂度、方向调整后的 BRepCheck 和 STEP roundtrip 全部通过时，才允许 patch_acceptable=true。
-2. 任一档全部通过后，可把 NSR-2 列为下一任务，但本轮不得实现 NSR-2、候选替换或 Apply。
-3. 1 / 4 / 8 三档全部失败时，本轮停止继续增加 G1 数量或混调 OCCT Filling 参数，记录能力边界证据。
-4. candidate 179 单例失败不足以自动启动 NSR-4；必须在后续至少三个受支持真实候选上重复同类失败，才评估受限 B-spline 控制点求解器。
-
-本轮明确不做：
-- 不实现 NSR-1.4 自适应训练预算；96 只是本轮固定实验常量。
-- 不根据区域大小改变训练点、选择集或终验集数量。
-- 不启动 NSR-2、NSR-3、NSR-4 或 NSR-5。
-- 不实现自定义 B-spline / NURBS 求解器。
-- 不改 GUI、AppController、Apply、PatchReplacementRepair 或 Geomagic 流程。
-- 不放宽 0.03 距离容差、15° 法向阈值、StrictTopologyGate 或商业 CAD 类质量门。
-- 不改变边界采样、Plate、points_on_curve、iterations、max_degree、max_segments。
-- 不使用 ShapeFix 或 Sewing 把失败结果变成成功。
-- 不重构无关代码。
-
-验证：
-1. 优先运行 .\scripts\build_debug.ps1 和 .\scripts\test.ps1。
-2. 必要时补充 cmake --build --preset windows-msvc-debug 和 ctest --preset windows-msvc-debug --output-on-failure。
-3. 运行 candidate 179 的 0 / 1 / 4 / 8 四轮手动探针，检查每个 run 的产物和最终比较表。
-4. 使用 step_stats 验证每个诊断 STEP 的 face / edge / BRepCheck。
-5. 运行 git diff --check。
-6. 提交前运行 GitNexus detect_changes，对比 feature-bounded-refit，确认只影响预期符号和执行流程。
-7. 根据真实完成状态同步 docs/TODO.md、docs/implementation_status.md、docs/completed_features.md 和 docs/native_surface_refitting_guide.md，不得提前标记 NSR-1.4、NSR-2 或 NSR-4 完成。
-
-最终报告必须包含：
-- 修改文件和 GitNexus impact 风险。
-- 实际验证命令及结果。
-- 0 / 1 / 4 / 8 四轮 run 路径和完整比较表。
-- 三组样本是否互斥、每轮实际 G1 数量是否符合配置。
-- 每个 G1 位置的选择依据，以及内部距离和法向误差如何变化。
-- 每轮全部 failed_gates、三阶段 BRepCheck、Jacobian 和复杂度。
-- 是否出现 patch_acceptable=true，是否具备进入 NSR-2 的条件。
-- 若全部失败，明确停止本轮调参，并把“多候选复核”列为下一证据任务；不要擅自实现 NSR-1.4 或 NSR-4。
-```
+本文只记录冻结实验边界和重新启用条件。新的产品状态写入 implementation_status.md；新的当前任务写入 TODO.md；精确实验参数和指标写入 data/runs。

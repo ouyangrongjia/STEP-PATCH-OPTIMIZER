@@ -1,142 +1,265 @@
-# 任意选区自适应曲面减面指南
+# Surface Reduction 指南
 
-## 1. 产品合同
+状态：当前产品主线。
 
-`SurfaceReductionEngine` 接收任意连通 FaceId 集合；GUI 产品主线先检测特征边，由 `MergePlanner` 动态生成候选，再把用户当前选中候选的 `MergeCandidate::faces` 作为请求。候选模式会清空普通 face 选择，因此 GUI 不再从 `OccViewWidget::selectedFaceIds()` 读取原生重拟合输入。输入和输出面数完全由本轮候选 FaceId 集合和拟合结果决定，不允许固定候选、面编号、分组或目标面数。拟合输入显式区分 STEP-only 与 STEP 加独立扫描 STL 软参考；加载 STL 本身不会静默切换模式。
+本文定义 SurfaceReductionEngine 的产品合同、输入模式、搜索语义、拟合边界、质量门和运行证据。当前验证快照见 implementation_status.md。
 
-库级接口默认保留 `TargetRatio` 兼容模式，GUI 产品入口显式使用 `MinimizeFaceCount`。设输入面数为 `N`：
+## 产品合同
 
-- `N < 2`：`InvalidSelection`；
-- `output_faces < N` 且全部质量门通过：`Reduced`；
-- `TargetRatio` 中 `output_faces <= floor(N * targetOutputRatio)`：`TargetAchieved`；
-- `MinimizeFaceCount` 中，通过结果达到硬阻断边图连通分量数：`OptimalProven`；
-- `MinimizeFaceCount` 中，通过结果未达到理论下界：`BestFoundWithinBudget`；
-- 搜索或最终验证预算内没有通过结果：`NoValidatedResultFound`；这不证明所有未展开或未验证分区不可行；
-- 没有合法合并：`NoAcceptableReduction`，不得 Apply。
+SurfaceReductionEngine 接收当前 ShapeDocument 中任意连通的 FaceId 集合。GUI 先检测特征边，由 MergePlanner 动态生成候选，再把当前 MergeCandidate::faces 作为请求。
 
-`OptimalProven` 只表示：在当前硬阻断边、每个 Cluster 由一个替换面表示、当前拟合选项和全部质量门约束下，结果达到结构下界；它不是无约束曲面分割问题的数学全局最优证明。
+禁止：
 
-默认质量门为最大距离 `0.03 mm`、最大法向差 `15°`、保留普通光顺接缝 `5°`。锁边、选区外边界、非流形边和大于 `15°` 的明显折角不可跨越；原始角度在 `5°～15°` 的边不作为保留光顺接缝验收对象，但只有合并后的距离、法向、边界和全局质量门全部通过时才能被内化。
+- 固定真实 candidate ordinal。
+- 在通用实现中写死 FaceId 或 EdgeId。
+- 预设某个样例的输入、输出面数或接受分组。
+- 从普通 GUI face 选择推断已保存候选。
+- 用父候选拟合面作为扩展分组的真值。
 
-## 2. 数据流
+设输入面数为 N：
 
-```text
+- N 小于 2：InvalidSelection。
+- 输出面数小于 N 且全部门禁通过：Reduced。
+- TargetRatio 达到目标比例：TargetAchieved。
+- MinimizeFaceCount 达到受保护边图下界：OptimalProven。
+- MinimizeFaceCount 有通过结果但未达到下界：BestFoundWithinBudget。
+- 预算内没有通过结果：NoValidatedResultFound。
+- 没有合法合并：NoAcceptableReduction。
+
+只有通过结果可以 Apply。
+
+OptimalProven 只对当前硬边界、每个 Cluster 由一个替换面表示、当前拟合选项和当前质量门成立；它不是无约束曲面分割问题的数学全局最优证明。
+
+## 输入模式
+
+### StepBrepOnly
+
+默认模式。
+
+- STEP 修剪面和 Geom_Surface 是拟合真值。
+- 原始边界、模型选择和终验都来自 STEP。
+- 不需要扫描 STL。
+
+### STEP 加扫描 STL 软参考
+
+必须显式选择并提供来源明确的扫描 STL。
+
+- STL 只为选区内部形貌提供位置软目标。
+- 参数域、边界和终验仍来自 STEP。
+- STEP 与扫描指纹进入不同缓存键。
+- 加载 STL 不会自动切换模式。
+
+WholeModel、SelectionCrop 与 None 必须在报告中区分。原始扫描、缓存裁剪和 STEP 采样 mesh 不可互换命名。
+
+## 数据流
+
+~~~text
 原始 ShapeDocument
-→ 检测特征边
-→ 动态生成并选择 FeatureBoundedRefit 候选
-→ 校验选区连通性
-→ 先尝试面积最大原始面的 STEP 支撑面投影；非单值、重叠或不可用时建立 STEP 调和参数图
-→ 可选：按 STEP 修剪面域从独立扫描 STL 裁剪选区形貌软参考
-→ 每个原始面作为初始分组
-→ 从 TopologyGraph 构造相邻分组队列
-→ 锁边、非流形边、大于 15° 的明显折角和选区边界保护
-→ 计算未受保护原始共享边图的连通分量数，直接拟合理论最少面数分区
-→ 直探未通过时，以法向、曲率、共享边长度、组合规模和 FaceId 生成确定性相邻队列
-→ 初始单面种子先保留一半质量排序槽，再用原始面面积加权质心执行确定性最远点采样；可用的持久成功拟合优先进入同类排序
-→ 宽度 8 的确定性束搜索，每状态最多选择 16 个提案；组+组、组+单面、单面+单面各有保留位置
-→ 局部 Cluster 的普通提案均失败时，可使用最多两个连通三组并集跳过不可行中间二面组
-→ 普通、跳级和理论下界直探都在求值前检查 FaceId 并集，任何会内化锁边、明显折角或非流形边的组合直接拒绝
-→ 同时保留硬接缝可行状态与可继续扩大的过渡状态
-→ 按原始 FaceId 集合缓存精确同域合并和受限拟合，最多执行 512 个唯一受限拟合
-→ 始终回到原始 FaceId 对应的 STEP 曲面采样
-→ 调和参数域外守卫和支撑曲面控制网包络门
-→ 模型选择集通过后再执行独立终验
-→ 原始外边界重裁剪和参数曲线重建
-→ 保守 B-rep repair
-→ 归档束剪枝前的全部唯一状态，按字典序对最多 64 个候选执行商业 CAD 类质量门、StrictTopologyGate 和 STEP 回读
-→ GUI 预览
-→ ReduceSelectedFacesCommand 事务 Apply
-```
+  -> 特征边与锁边
+  -> 动态候选区域
+  -> 选区连通性和硬边界
+  -> 原始面初始分组
+  -> 理论下界直探或预算搜索
+  -> 从原始 STEP 面进行受限拟合
+  -> 分组重裁剪
+  -> 候选装配与保守修复
+  -> 几何、接缝与商业 CAD 类门
+  -> StrictTopologyGate
+  -> STEP 往返
+  -> GUI 预览
+  -> ReduceSelectedFacesCommand 事务 Apply
+~~~
 
-持久拟合缓存按归一化 FaceId 集合和输入变体寻址；扫描参考与 `STEP-only` 回退使用不同键。键同时覆盖 STEP/扫描指纹、全部拟合选项、拟合算法指纹以及 Qt、OCCT、编译器和构建身份。只写入成功结果或带明确几何失败阶段的确定性负结果；缓存缺失、墙钟预算、异常和基础设施失败不写入负缓存。
+预览不改变 ShapeDocument。Apply、撤销和重做交换已验证的文档状态，不重新执行昂贵拟合。
 
-GUI 用一个状态化按钮承接两阶段操作：没有合格预览时执行预览，当前候选已有合格预览时执行 Apply；“一键预览并应用”只在同一候选的预览通过全部质量门后自动提交。候选在计算期间改变时禁止自动 Apply。
+## 硬边界
 
-扩大分组时不得采样上一次拟合结果。局部三角细分只用于原始面 UV 域内的面积加权点位分配；所有验收点、法向均重新由原始 `Geom_Surface` 求值。加载原 STL 时，STL 只提供选区内部形貌参考，不替代 STEP 边界和终验基准。
+下列边不得被候选内化：
 
-## 3. 受限 B-spline 拟合
+- 用户锁定边。
+- 选区外边界。
+- 非流形边。
+- 明显折角。
+- 产品配置指定的其他保护边。
 
-`RestrictedBSplinePatchFitter` 以原始 STEP 几何和参数域为真值：
+普通光顺接缝可以被合并，但最终结果仍需满足距离、法向、边界和保留接缝质量门。
 
-1. 每个分组先尝试面积最大原始面的 STEP 支撑曲面投影；只有该投影不是单值、出现 UV 重叠或不可用时，才从 STEP 三角细分建立单边界环调和参数图；
-2. 三次、夹持、非有理 B-spline 从能够承载边界约束的最小控制网起步；配置硬上限为 `1024`，实际还受拟合样本和边界约束能够支持的控制点数量限制；
-3. 原始边界端点、中点和按长度自适应的锚点进入 KKT 等式约束，不参与位置软目标；Eigen `SparseQR` 同时求解控制点和拉格朗日乘子；
-4. 每轮另用每条边 97 个稠密样本检查边界，超过 `min(0.03 mm, 0.0025 mm)` 时把最差点加入硬约束，最多细化 8 次；报告约束残差、细化次数和独立边界误差；
-5. STEP 调和参数图只覆盖不规则选区时，在矩形 B-spline 参数域的图外区域加入 `13×13` 低权重守卫样本；控制网对原始选区的尺寸比超过 `2.0`，或单个控制点越界距离超过选区对角线的 `0.5` 时拒绝，避免商业 CAD 展示未裁剪支撑面时出现巨幅外推；
-6. 软目标只包含 STEP 内部位置、法向切平面、系数 `0.01` 的二阶公平性、域外守卫，以及可选的扫描 STL 位置项；
-7. 每个节点布局统一执行最多 5 轮 UV 迭代；只更新内部软样本，边界 UV 固定，最多回溯 8 次，并且只有目标下降、参数仍在 STEP 域内且 Jacobian 有效时才接受；最大位移低于 `1e-8` 时收敛；
-8. 模型选择失败时在最大残差所在参数区间插入节点；STEP 参数图三角形翻转、投影失败、边界等式残差超限、支撑曲面包络超限或曲面 Jacobian 幅值近奇异立即拒绝当前组合。
+默认阈值以运行配置和报告为准。修改阈值时需要保持单位、语义和回归证据，不在本文维护每次实验数值。
 
-训练、模型选择和独立终验使用不同的 Halton 序列并执行空间去重。样本预算由面积、边界长度和三维容差计算，不使用原始面数作为预算规则。
+## 搜索模式
 
-启用 STEP/STL 混合路径时：
+### TargetRatio
 
-1. `StlRegionExtractor` 以 STEP 修剪面域和边界带从独立扫描 STL 保留选区三角形；也可由探针显式传入已经裁好的选区 STL；
-2. 拟合 UV 始终来自 STEP 参数图或 STEP 支撑面投影；STL 不建立、覆盖或更新参数域；
-3. STL 三角形按面积确定性采样后映射到 STEP UV，只有距 STEP 不超过 `0.2 mm` 的点才进入位置软目标；默认权重为 `0.25`，法向权重为 `0`；
-4. 原 STEP 边界 KKT 等式、STEP 模型选择和独立终验、商业 CAD 门、BRepCheck 与 STEP 回读不因 STL 参考而放宽；
-5. 扫描辅助拟合若未通过拟合硬门，或使当前组合的保留光顺接缝不合格，引擎会在同一 FaceId 分组上比较 STEP-only 后备；只有扫描方案本身满足硬门时才保留扫描样本；
-6. 报告区分 `WholeModel`、`SelectionCrop` 和 `None`，并记录最终接受组实际采用的扫描样本数及 STEP 到扫描参考的最大距离，便于判断扫描软项是否真正进入结果。
+兼容锁定比例回归：
 
-## 4. B-rep 和事务边界
+- 以目标输出比例决定停止条件。
+- 找到达到目标且通过门禁的结果即可返回。
+- candidate-179 49→46 基线使用此模式和显式扫描 STL 软参考。
 
-- 成功分组使用原始外轮廓和内孔重裁剪；精确同域合并直接保留全部线框，拟合路径无法可靠重建任一线框时只拒绝该分组；
-- 未参与成功合并的面保持原始几何和拓扑；
-- 邻接输出面沿原始边界复用三维边，并各自保存参数曲线；精确投影参数曲线必须通过 97 点 `SameParameter` 检查，参数分支不连续时只允许使用 129 点连续投影分支后备并执行相同终验；
-- 单实体、单壳模型中，严格重裁剪生成的新边界边先与未替换面组成面复合体，再执行固定容差 Sewing，避免把独立边直接嵌回旧 Solid 后形成自由边；其他容器保持保守 ReShape 路径并由全局质量门决定是否接受；
-- repair 不允许通过 same-domain 全局统一或自适应 Sewing 制造额外成功；
-- 商业 CAD 类质量门对每个成功分组复核原始边界、角点、特征边和接缝法向偏移；
-- `StrictTopologyGate` 检查 BRepCheck、自由边、多重边、实体、壳体、包围盒和 STEP 回读；
-- 预览不修改文档；Apply、撤销和重做只交换缓存的 `ShapeDocument`，不重新拟合。
+### MinimizeFaceCount
 
-## 5. 分支和阶段
+GUI 默认产品目标：
 
-| 阶段 | 状态 |
-|---|---|
-| SR-0 新分支与旧路线冻结 | 已完成 |
-| SR-1 原始 STEP 精确采样和质量报告 | 已完成第一版 |
-| SR-2 动态分组和受限 B-spline 拟合 | 已完成第一版 |
-| SR-3 多分组组装和全局验证 | 已完成第一版 |
-| SR-4 GUI、Apply、撤销和重做 | 已完成第一版 |
-| SR-5 十二个真实选区基准 | 已完成第一版 |
-| SR-6 STEP/STL 混合形貌参考 | 已完成第一版 |
-| SR-7 STEP 参数域与边界 KKT 硬约束 | 已完成 |
-| SR-8 统一的内部 UV 迭代与回溯 | 已完成 |
-| SR-9 确定性非贪心束搜索与拟合缓存 | 已完成 |
-| SR-10 阶段化拒绝和搜索诊断 | 已完成 |
-| SR-11 candidate 179 STEP-only / 扫描参考真实回归 | 已完成 |
-| SR-11.1 candidate 179 Creo 跨内核支撑面与裁剪回归 | 已完成 |
-| SR-12 拟合索引、持久缓存、确定性批量并行和分层回归 | 已完成 |
-| SR-12.3 GUI 原生 B-rep 主流程迁移 | 已完成 |
-| SR-12.4 GUI 候选选择与统一预览/应用入口 | 已完成 |
-| SR-12.5 GUI 主线后台执行与实时心跳 | 已完成 |
-| SR-13 预算内最少面数搜索、理论下界与证明状态 | 已完成 |
+- 先计算受保护边图连通分量下界。
+- 可直接探测下界分区。
+- 使用确定性束搜索探索组+组、组+单面和单面+单面提案。
+- 在局部条件满足时允许有限三组跳级。
+- 以拟合数、最终验证数、墙钟和档案大小控制预算。
+- 归档通过结果，并按输出面数和稳定次序选择当前最好结果。
 
-GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏，操作顺序为“检测特征边 → 选择候选区域 → 原生重拟合”。“选择候选区域”在需要时自动生成候选并进入候选点击模式；“原生重拟合”在预览与 Apply 状态间切换，另有“一键预览并应用”。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。STEP 导入、特征边检测、候选生成、后台预览和 Apply 均不占用 GUI 线程；报告页每 2 秒刷新心跳，减面核心还会上报拓扑准备、搜索层、拟合计数、活动分组、接缝终验、商业 CAD 类门、整件组装、`StrictTopologyGate` 和 STEP 回读。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪和最终质量门。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
+预算耗尽、前沿耗尽或没有进一步有效提案都不自动构成最优证明。
 
-GUI 默认请求使用 `MinimizeFaceCount`、`StepBrepOnly`、`maximumProposalGroupSize=0`、`SurfaceReductionCacheMode::ReadWrite` 和 4 个工作线程，工作预算为 512 次受限拟合与 64 次最终验证，墙钟上限默认关闭。candidate 179 的锁定 `49→46` 回归则显式使用 `TargetRatio`、原始扫描 STL 软参考、`targetOutputRatio=0.95`、`maximumProposalGroupSize=2`，并由分层脚本显式选择缓存模式。因此两者复用同一个引擎和质量门，但 GUI 默认运行不是 `49→46` 基线回放。
+## 拟合
 
-`surface_reduction_probe` 通过 `--search-objective target-ratio|minimize-face-count` 显式选择目标，支持 `--source-stl <原始.stl>` 动态执行 STEP 面域裁剪，也支持 `--cropped-stl <选区.stl>` 复用已验证裁剪；选区可用 `--candidate-id <id>` 动态发现，或直接给出任意数量的 FaceId。`--maximum-final-validations`、`--maximum-skip-triples` 和 `--search-time-budget-ms` 可覆盖新模式预算；JSON 报告的 `search_iterations` 逐层记录当前最佳面数、归档状态、拟合预算和四类提案累计选择数。成功时可用 `--selection-output <独立选区.step>` 同时导出减面后的选区面复合体。`step_stats <文件> --curve-on-surface` 用于稠密检查三维边/参数曲线偏差和 B-spline 控制网范围。`surface_reduction_benchmark` 显式保留 `TargetRatio`，生产逻辑和默认测试不包含 candidate 179。
+RestrictedBSplinePatchFitter 对每个分组：
 
-2026-07-15 的最终真实基准位于 `data/runs/20260715_surface_reduction_benchmark_final12b/`：四个真实 STEP 共 12 个选区，3 个选区由 2 面减为 1 面并达到 50% 目标，9 个选区无合法减少；三个成功结果的参数化、BRepCheck、STEP 回读和商业 CAD 类边界门均为 `true`。合成测试另行覆盖部分减少、孔洞、高曲率 B-spline、锁边和尖锐边。
+1. 从原始 STEP 面重新采样。
+2. 优先尝试合适的原始支撑面参数投影。
+3. 必要时建立 STEP 调和参数图。
+4. 构造夹持的非有理 B-spline。
+5. 以原始边界锚点建立等式约束。
+6. 使用内部位置、法向、公平性和可选扫描软项求解。
+7. 执行 UV 迭代、回溯和模型选择。
+8. 检查参数域、边界、留出误差和支撑曲面包络。
 
-2026-07-21 的 candidate 179 最少面数当前真实实验位于 `data/runs/20260721_055601_195__surface-reduction-minimize__03-clay__cand-0179__windows-msvc-debug/`：49 面选区的理论下界为 1，预算搜索归档 137 个状态；本轮复用已经建立的 154 项拟合缓存，没有启动新拟合，最终以 `BestFoundWithinBudget` 返回 47 面。接受组为 `1724+1731`、`1742+1745`；最大距离 `0.00268118 mm`、最大法向差 `3.78833°`、最大保留光顺接缝角 `4.91344°`，全部最终质量门和 STEP 回读通过。搜索期间的最少状态为 40 面，但其保留接缝不合格，因此没有作为结果输出；该实验不声称达到理论最优，也不预设必须优于 `TargetRatio` 锁定回归的 46 面。
+边界硬约束、独立终验和商业 CAD 类门不会因启用 STL 而放宽。
 
-SR-11 第一轮虽然得到 `49→46`，且 OCCT 的 BRepCheck、STEP 回读、零自由边和零多重边均通过，但 Creo 暴露了质量门漏检：两个新面的底层 B-spline 控制网对角线达到 `39.5225 mm` 和 `7.56982 mm`，而原模型最大值只有 `2.64837 mm`；三维边与参数曲线最大偏差为 `0.00391089 mm`。不规则调和参数图之外的控制点缺少约束，叠加参数投影分支跳变，使 OCCT 裁剪能够隐藏的问题在 Creo 中表现为超大面片和裂缝。该产物已被 SR-11.1 替代，不能再视为跨 CAD 合格结果。
+参数图翻转、投影失败、约束残差超限、支撑面包络超限或 Jacobian 异常都会拒绝当前分组。
 
-SR-11.1 增加调和域外守卫、支撑曲面包络拒绝门、连续投影分支后备和 97 点 `SameParameter` 终验后，原始扫描 STL 混合回归接受 `1727+1732`、`1742+1745`、`1746+1747` 三组，得到 `49→46`、`TargetAchieved`。最大距离为 `0.00134683 mm`、最大法向差为 `1.77073°`、最大保留光顺接缝角为 `2.93862°`；三个接受组的支撑面尺寸比分别为 `1.36413`、`1.20572`、`1.45109`，控制点最大越界比分别为 `0.192629`、`0.100638`、`0.243959`。最终接受组共使用 144 个扫描参考样本，说明 STL 软项确实进入本次结果；未执行同版本 STEP-only A/B，因此不单独声称 STL 相对 STEP-only 提高了精度。
+## 重裁剪与装配
 
-最终整件 STEP 为 2736 面、10950 边、1 壳、1 实体，BRepCheck 和 STEP 回读通过；三维边/参数曲线最大偏差降至 `0.000942836 mm`，没有超过 `0.001 mm` 的边面关联，最大 B-spline 控制网仍为原模型已有的 `2.64837 mm`，最大新面为 `2.50686 mm`。Creo 手动复核已显示为无超大面片、无可见裂缝的灰色水密实体。目录同时保留独立 46 面选区 STEP，供不带整件模型的单独观察。
+通过拟合的分组使用原始外轮廓和内孔重裁剪。
 
-唯一结果目录为 `data/runs/20260715_surface_reduction_candidate_0179_hybrid/`。
+- 精确同域合并保留全部适用线框。
+- 拟合路径不能可靠重建任一线框时拒绝该分组。
+- 未参与合并的面保持原始几何。
+- 邻接输出面复用适用的三维边，并建立各自参数曲线。
+- SameParameter 和连续参数投影接受稠密终验。
+- 单实体、单壳模型可在固定容差下进行受控 sewing。
+- repair 不允许通过全局同域统一或自适应放宽制造成功。
 
-## 6. 验证命令
+## 最终质量门
 
-```powershell
-cd D:\pyProject\step-patch-optimizer
-.\scripts\build_debug.ps1
-.\scripts\test.ps1
+最终候选按适用顺序执行：
+
+1. 原始边界、角点、特征边和接缝偏移。
+2. 最大距离、法向和保留光顺接缝。
+3. 参数化、支撑面包络与 SameParameter。
+4. PatchReplacementRepair。
+5. 全局 BRepCheck。
+6. StrictTopologyGate。
+7. STEP 写出与重新读入。
+8. CommercialCadQualityGate 或外部 CAD 证据。
+
+任一门禁失败：
+
+- 不得 Apply。
+- 不进入 CommandHistory。
+- 报告保留阶段化拒绝原因。
+- 搜索可以在预算内继续探索其他状态。
+
+## 缓存
+
+SurfaceReductionFitCache 以归一化 FaceId 集合和输入变体寻址，键覆盖：
+
+- STEP 指纹。
+- 可选扫描指纹。
+- 全部影响拟合的选项。
+- 拟合算法指纹。
+- 影响二进制结果的构建身份。
+
+允许写入：
+
+- 成功拟合。
+- 带明确几何失败阶段的确定性负结果。
+
+不写入负缓存：
+
+- 缓存缺失。
+- 墙钟预算。
+- 未分类异常。
+- 外部基础设施失败。
+
+执行模式：
+
+- FitSet：建立或检查选定分组的拟合事实。
+- Replay：只重放兼容缓存。
+- Full：执行完整搜索和终验。
+- RefreshCache：忽略旧条目并刷新。
+
+缓存命中不跳过最终候选装配和质量门。
+
+## GUI 合同
+
+GUI 入口位于“曲面减面”菜单和主工具栏。
+
+操作顺序：
+
+1. 检测特征边。
+2. 选择候选区域。
+3. 选择拟合输入模式。
+4. 原生重拟合预览。
+5. 检查报告。
+6. Apply 或放弃。
+
+状态化按钮在“预览”和“应用”间切换。“一键预览并应用”只在同一候选的预览通过全部质量门后提交。
+
+模型、候选、输入模式或参数变化会使旧预览失效。后台预览固定报告心跳、搜索层、拟合计数、活动分组和终验阶段。
+
+详细交互见 run_gui.md。
+
+## 探针
+
+surface_reduction_probe 支持：
+
+- --search-objective target-ratio|minimize-face-count
+- --candidate-id <id> 动态发现候选
+- 显式 FaceId 集合
+- --source-stl <原始扫描>
+- --cropped-stl <已验证选区裁剪>
+- --maximum-final-validations
+- --maximum-skip-triples
+- --search-time-budget-ms
+- --selection-output <选区 STEP>
+
+具体可用选项以工具 --help 为准。
+
+step_stats <文件> --curve-on-surface 用于检查三维边与参数曲线偏差及支撑曲面范围。
+
+surface_reduction_benchmark 保留 TargetRatio 基准合同；默认测试不依赖 candidate-179 的真实路径或编号。
+
+## 当前证据
+
+12 区域回归：
+
+data/runs/20260715_surface_reduction_benchmark_final12b/
+
+candidate-179 49→46 TargetRatio 跨内核回归：
+
+data/runs/20260715_surface_reduction_candidate_0179_hybrid/
+
+candidate-179 MinimizeFaceCount 预算结果：
+
+data/runs/20260721_055601_195__surface-reduction-minimize__03-clay__cand-0179__windows-msvc-debug/
+
+结论摘要见 implementation_status.md；精确参数、指标和产物只以对应 run.json、RUN.md 与实际文件为准。
+
+## 验证命令
+
+~~~powershell
+./scripts/build_debug.ps1
+./scripts/test.ps1
 git diff --check
-```
+~~~
 
-真实文件基准必须单独运行并把输入面数、输出面数、距离、法向、接缝、拒绝原因和 STEP 回读结果写入唯一运行目录。
+真实文件基准必须使用独立 run-id，并记录输入面数、输出面数、结果语义、拒绝原因和 STEP 往返结果。
+
+## 不变量
+
+- STEP 边界和几何是硬事实。
+- STL 是软参考。
+- 扩大分组从原始 STEP 面重新拟合。
+- StrictTopologyGate 和 PatchReplacementRepair 不可绕过。
+- Open CASCADE 成功不替代跨内核证据。
+- BestFoundWithinBudget 不等于最优。
+- 精确实验事实留在 data/runs。

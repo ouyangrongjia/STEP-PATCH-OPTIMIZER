@@ -1,813 +1,332 @@
-# 分模块设计
+# 模块设计
 
-> 文档定位：本文件作为项目的长期模块规划与架构设计文档。  
-> 当前实现进度、已完成任务、待办事项、测试状态不放在本文件中，统一记录在 `implementation_status.md`。  
-> 目标是让本文件保持稳定，作为后续开发、重构和汇报时的模块边界参考。
+本文只记录稳定架构、模块边界、依赖方向、事务边界和长期不变量。当前实现状态见 implementation_status.md，当前任务见 TODO.md，运行历史与精确指标见 data/runs。
 
-## 当前产品主线补充：Surface Reduction
+## 设计目标
 
-`native-surface-reduction` 不依赖全局三角布局。新增模块边界如下：
+系统围绕一个受控的 B-rep 修改事务组织：
 
-| 模块 | 职责 | 禁止承担 |
-|---|---|---|
-| `SurfaceReductionEngine` | 选区校验、原始 B-rep 邻接、保护边、确定性动态分组、全局事务验证 | 不直接修改当前文档，不缓存上一次拟合曲面作为新真值 |
-| `RestrictedBSplinePatchFitter` | 单个原始 FaceId 分组的参数初始化、稀疏控制点求解、UV 更新、节点插入和独立质量门 | 不决定 GUI 状态，不跨锁边或尖锐边 |
-| `ReduceSelectedFacesCommand` | 提交已经验证的缓存结果并提供撤销/重做 | 不重新求解，不复用 `PatchReplacementCommand` 的 Geomagic 状态机 |
-| `AppController` / `MainWindow` | 后台预览、报告、Apply 可用性和视图刷新 | 不自动回退到 Geomagic 或 AS |
+1. 从 STEP 建立可信的拓扑与几何索引。
+2. 在不修改当前文档的前提下分析区域并生成候选。
+3. 从原始事实构造替换几何。
+4. 在隔离副本上执行修复和验证。
+5. 成功时一次性提交，失败时保持原状态。
 
-`SurfaceReductionEngine` 提供互相隔离的 `TargetRatio` 与 `MinimizeFaceCount` 搜索目标。前者用于既有基准兼容；后者负责理论下界直探、合并组提案、预算搜索和证明状态。拟合缓存身份只由原始 FaceId 集合、输入变体、几何选项和算法/构建指纹决定，不由父状态拟合曲面或搜索路径决定。
+架构优先保证可追溯、可回滚和跨内核可验证，而不是追求单次构造成功率。
 
-`SurfaceRefitter` 保留单曲面实验行为；`native-autosurface` 的全局三角网格、QuadriFlow 和多图参数化不进入上述依赖图。
+## 分层与依赖方向
 
----
+依赖从交互层指向应用层，再指向领域模块和基础设施。领域核心不能反向依赖 GUI。
 
-## 1. 总体架构
-
-项目采用分层模块设计：
-
-```text
-GUI 层
-  ↓
-Application Controller
-  ↓
-Command / Operation 层
-  ↓
-Core Geometry Modules
-  ├── IO
-  ├── B-rep Topology
-  ├── Feature Detection
-  ├── Patch Merge
-  └── Validation
-  ↓
-OCCT Kernel
-```
-
-核心原则：
-
-```text
-1. GUI 不直接修改 TopoDS_Shape。
-2. GUI 只通过 AppController 发起业务操作。
-3. AppController 负责组织 Command 与 Core Geometry Modules，不承载复杂几何算法。
-4. 所有会修改模型或用户约束状态的操作，应通过 Command 执行。
-5. IO、B-rep、Feature、Merge、Validation 模块保持职责单一。
-6. OCCT 作为底层几何内核，不向 GUI 层泄露过多实现细节。
-```
-
----
-
-## 2. 模块总览
-
-| 模块 | 目录 | 规划职责 |
-|---|---|---|
-| GUI 模块 | `src/gui/` | 三维显示、用户交互、参数配置、结果展示、上下文菜单 |
-| 应用控制模块 | `src/app/` | 连接 GUI 与 Command/Core 模块，维护主流程入口 |
-| 命令模块 | `src/command/` | 封装可执行操作，支持 undo/redo 与操作上下文 |
-| IO 模块 | `src/io/` | STEP/STP 读写、项目文件保存与恢复 |
-| B-rep 拓扑模块 | `src/brep/` | face/edge 索引、邻接图、拓扑查询、基础统计 |
-| 特征线模块 | `src/feature/` | 自动特征边检测、曲率特征、拓扑异常边、用户约束整合 |
-| 合并模块 | `src/merge/` | 候选区域生成、same-domain 合并、区域生长、局部重拟合 |
-| 验证模块 | `src/validate/` | 合法性检查、误差评估、导出校验、报告生成 |
-| 公共模块 | `src/common/` | 公共类型、配置、Result、容差参数 |
-| 测试模块 | `tests/` | 单元测试、流程测试、回归测试 |
-
----
-
-## 3. GUI 模块
-
-### 3.1 目标
-
-GUI 模块负责最终软件的可交互呈现。用户应能够在界面中完成：
-
-```text
-STEP 导入
-→ 模型查看
-→ face/edge 选择
-→ 特征线检测与显示
-→ 用户锁边/解锁边
-→ 合并候选预览
-→ 执行合并
-→ 合法性检查
-→ undo/redo
-→ STEP 导出
-```
-
-### 3.2 界面布局
-
-推荐界面结构：
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Menu: File | View | Detect | Merge | Validate | Export      │
-├───────────────┬───────────────────────────────┬─────────────┤
-│ Model Tree    │                               │ Parameters  │
-│ - Solid       │                               │ angle tol   │
-│ - Shell       │          3D Viewer            │ linear tol  │
-│ - Faces       │                               │ merge mode  │
-│ - Edges       │                               │             │
-├───────────────┴───────────────────────────────┴─────────────┤
-│ Log / Inspect / Validation / Report                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 3.3 交互规划
-
-| 鼠标/键盘操作 | 功能 |
-|---|---|
-| 鼠标中键拖拽 | 旋转三维视角 |
-| 鼠标滚轮 | 放大 / 缩小视图 |
-| 鼠标左键 | 选择 face 或 edge |
-| Shift + 鼠标左键 | 多选 face 或 edge |
-| Ctrl + 鼠标左键 | 从选择集中移除 face 或 edge |
-| 鼠标右键 | 打开上下文菜单 |
-| Ctrl + Z | 撤销最近一次可撤销编辑 |
-| Ctrl + Y | 重做最近一次撤销编辑 |
-| F | 切换到面选择模式 |
-| E | 切换到边选择模式 |
-| H | 显示 / 隐藏特征线 |
-| M | 预览合并候选 |
-| R | 重置视角 |
-| V | 合法性检查 |
-
-### 3.4 右键菜单规划
-
-Edge 选择模式：
-
-```text
-锁定选中边
-解锁选中边
-显示边信息
-隐藏边
-```
-
-Face 选择模式：
-
-```text
-显示面信息
-加入合并组
-移出合并组
-预览合并区域
-```
-
-Candidate 选择模式：
-
-```text
-预览此候选区域
-应用此候选区域
-拒绝此候选区域
-显示候选区域统计
-```
-
-### 3.5 核心类规划
-
-```cpp
-class MainWindow;
-class OccViewWidget;
-class ModelTreePanel;
-class ParameterPanel;
-class InspectPanel;
-class LogPanel;
-```
-
-`OccViewWidget` 负责 Qt 鼠标事件与 OCCT Viewer 的桥接。
-
----
-
-## 4. 应用控制模块
-
-### 4.1 目标
-
-应用控制模块负责协调 GUI、Command 与底层几何模块，避免 GUI 直接调用复杂几何处理逻辑。
-
-### 4.2 核心类规划
-
-```cpp
-class AppController {
-public:
-    Result openStepFile(const std::filesystem::path& path);
-    Result exportStepFile(const std::filesystem::path& path);
-
-    FeatureEdgeDetectionResult detectFeatureEdges(
-        double angularThresholdDegrees,
-        double minEdgeLength);
-
-    SameDomainUnifyResult unifySameDomain(
-        double angularThresholdDegrees,
-        double minEdgeLength,
-        double linearTolerance);
-
-    ShapeValidationReport validateShape();
-
-    Result lockEdges(const std::vector<EdgeId>& edgeIds);
-    Result unlockEdges(const std::vector<EdgeId>& edgeIds);
-
-    Result undo();
-    Result redo();
-
-    bool canUndo() const;
-    bool canRedo() const;
-    bool hasDocument() const;
-
-    const ShapeDocument& document() const;
-};
-```
-
-### 4.3 职责
-
-```text
-1. 管理当前 CommandContext。
-2. 管理 CommandHistory。
-3. 通过 Command 封装会修改状态的操作。
-4. 调用 StepReader / StepWriter。
-5. 调用 FeatureEdgeDetector。
-6. 调用 SameDomainUnifier / MergePlanner。
-7. 调用 ShapeValidator。
-8. 向 GUI 提供统一的业务入口。
-```
-
----
-
-## 5. 命令模块
-
-### 5.1 目标
-
-命令模块用于封装用户操作，并为破坏性或状态修改操作提供 undo/redo 能力。
-
-### 5.2 核心类规划
-
-```cpp
-class Command {
-public:
-    virtual ~Command() = default;
-    virtual const char* name() const = 0;
-    virtual Result execute(CommandContext& context) = 0;
-
-    virtual bool undoable() const { return false; }
-    virtual Result undo(CommandContext& context);
-    virtual Result redo(CommandContext& context);
-};
-
-struct CommandContext;
-class CommandHistory;
-```
-
-### 5.3 CommandContext 规划
-
-`CommandContext` 保存当前命令执行所需的上下文状态：
-
-```text
-1. 当前 ShapeDocument。
-2. 当前特征边检测结果。
-3. 当前合法性检查报告。
-4. 当前源文件路径。
-5. 用户锁定边集合。
-6. dirty 状态。
-```
-
-### 5.4 可撤销命令与不可撤销命令
-
-| 命令 | 是否可撤销 | 原因 |
-|---|---:|---|
-| `MergePatchCommand` | 是 | 修改几何模型，是破坏性编辑 |
-| `LockEdgeCommand` | 是 | 修改用户约束状态 |
-| `UnlockEdgeCommand` | 是 | 修改用户约束状态 |
-| `LoadStepCommand` | 否 | 打开新文件是会话边界，成功后清空历史 |
-| `DetectFeatureCommand` | 否 | 重新计算检测结果，不属于编辑 |
-| `ValidateShapeCommand` | 否 | 只生成验证报告 |
-| `ExportStepCommand` | 否 | 导出文件，不修改当前模型 |
-
-### 5.5 Undo/Redo 设计原则
-
-```text
-1. 只有 undoable() == true 且 execute 成功的命令进入 undo 栈。
-2. 执行新的可撤销命令后，应清空 redo 栈。
-3. 非编辑命令不影响 undo/redo 栈。
-4. MergePatchCommand 的 redo 不应重新运行几何算法，而应恢复已保存的 afterDocument。
-5. 打开新 STEP 后清空 undo/redo 历史与用户锁边状态。
-6. 当前语义约定：撤销 MergePatchCommand 时，清空合并后的用户锁边状态。这是有意设计，不作为缺陷处理。
-```
-
----
-
-## 6. IO 模块
-
-### 6.1 目标
-
-IO 模块负责 STEP/STP 文件读写，以及项目文件保存与恢复。
-
-### 6.2 当前核心类型
-
-```cpp
-class StepReader;
-class StepWriter;
-```
-
-### 6.3 StepReader 职责
-
-```text
-1. 读取 .step / .stp 文件。
-2. 转换为 TopoDS_Shape。
-3. 检查读取状态。
-4. 获取单位信息。
-5. 返回 ShapeDocument 初始化所需数据。
-```
-
-### 6.4 StepWriter 职责
-
-```text
-1. 将当前 TopoDS_Shape 写出为 STEP/STP。
-2. 保留必要单位信息。
-3. 写出后可重新读取验证。
-```
-
-### 6.5 后续项目序列化职责
-
-项目文件建议使用：
-
-```text
-.spo.json
-```
-
-应保存：
-
-```text
-1. 源 STEP 文件路径。
-2. 当前参数配置。
-3. 用户锁边信息。
-4. 合并历史或操作日志。
-5. 最近一次验证报告。
-6. GUI 可恢复状态。
-```
-
----
-
-## 7. B-rep 拓扑模块
-
-### 7.1 目标
-
-B-rep 拓扑模块负责把 OCCT 的 `TopoDS_Shape` 转换为程序内部可查询、可统计、可关联的结构。
-
-### 7.2 核心类规划
-
-```cpp
-class ShapeDocument;
-class FaceIndex;
-class EdgeIndex;
-class TopologyGraph;
-```
-
-### 7.3 职责
-
-```text
-1. 为每个 face 编号。
-2. 为每条 edge 编号。
-3. 建立 face → edges 映射。
-4. 建立 edge → adjacent faces 映射。
-5. 建立 face → neighbor faces 映射。
-6. 支持从 TopoDS_Shape 反查 FaceId / EdgeId。
-7. 支持 GUI 选择后的属性查询。
-8. 提供基础统计信息。
-```
-
-### 7.4 后续可增强数据
-
-```cpp
-struct FaceInfo {
-    FaceId id;
-    TopoDS_Face face;
-    SurfaceType surfaceType;
-    double area;
-    gp_Pnt center;
-    gp_Dir avgNormal;
-    std::vector<EdgeId> edgeIds;
-};
-
-struct EdgeInfo {
-    EdgeId id;
-    TopoDS_Edge edge;
-    std::vector<FaceId> adjacentFaceIds;
-    double length;
-    bool isFreeEdge;
-    bool isMultipleEdge;
-    bool isFeatureEdge;
-    bool isUserLocked;
-};
-```
-
----
-
-## 8. 特征线模块
-
-### 8.1 目标
-
-特征线模块判断哪些边应当保留，哪些边可以被合并消除。
-
-特征线是本项目的关键，因为合并结果是否合理，主要取决于边界是否贴合模型真实结构。
-
-### 8.2 特征边类型规划
-
-```cpp
-enum class FeatureEdgeType {
-    None,
-    StrongFeature,
-    WeakFeature,
-    TopologicalFeature,
-    UserLocked
-};
-```
-
-| 类型 | 说明 | 是否允许跨越合并 |
-|---|---|---|
-| `None` | 普通内部 patch 边界 | 允许 |
-| `StrongFeature` | 明显棱边、折角、二面角突变 | 不允许 |
-| `WeakFeature` | 曲率突变或凸起边界 | 默认不允许 |
-| `TopologicalFeature` | free edge、multiple edge、non-manifold edge | 不允许 |
-| `UserLocked` | 用户手动冻结边 | 不允许 |
-
-### 8.3 当前核心类型与后续能力
-
-```cpp
-class FeatureEdgeDetector;
-```
-
-曲率估计、边界分类和约束持久化仍是后续能力，不为未实现功能保留空占位类。
-
-### 8.4 检测依据
-
-```text
-1. 二面角。
-2. 相邻面法向变化。
-3. 曲率变化。
-4. 曲面类型变化。
-5. free edge / multiple edge / non-manifold edge。
-6. 用户手动冻结边。
-```
-
-### 8.5 基础规则
-
-```text
-如果 edge 是 free edge：
-    标记为 TopologicalFeature。
-
-如果 edge 相邻面数量 > 2：
-    标记为 TopologicalFeature。
-
-如果 edge 两侧 face 的二面角 > angle_threshold：
-    标记为 StrongFeature。
-
-如果 edge 两侧曲率变化 > curvature_threshold：
-    标记为 WeakFeature。
-
-如果 edge 被用户手动锁定：
-    标记为 UserLocked。
-```
-
----
-
-## 9. 合并模块
-
-### 9.1 目标
-
-合并模块负责生成合并候选、过滤不合理候选并执行面片合并。
-
-本项目的合并目标不是单纯减少面片数，而是在尽量保留棱边、凸起边界、圆角起止线和潮玩件造型细节的前提下，减少转换过程造成的碎片面。
-
-### 9.2 核心类规划
-
-```cpp
-class MergeCandidate;
-class FeatureBoundedRegionBuilder;
-class MergePlanner;
-class SameDomainUnifier;
-class SurfaceRefitter;
-```
-
-### 9.3 合并候选类型
-
-| 类型 | 说明 | 阶段定位 |
-|---|---|---|
-| FeatureBoundedRefit | 被特征边 / 锁边围定的候选区域；在 `native-surface-refit` 分支进入原生局部重拟合，Geomagic 保留为后备 | 当前候选类型 |
-| SameDomain | 同一底层几何域上的 trimmed faces 合并 | 保留能力 |
-| Unknown | 兼容和统计兜底，不作为主动生成的主候选类型 | 兜底 |
-| 局部 patch layout 重构 | 重构局部曲面片布局 | 研究增强 |
-| 单外轮廓、无孔区域单曲面重拟合 | 以原始 STEP 边界和内部点生成一张自由曲面 | 当前 NSR-1 |
-| 近似 G1 连续区域重拟合 | 重新拟合新 B-spline surface | NSR-4 后续增强 |
-
-### 9.4 MergePlanner 职责
-
-```text
-1. 从 TopologyGraph 获取相邻 face。
-2. 判断共享边是否为特征边。
-3. 判断共享边是否为用户锁定边。
-4. 计算合并优先级或合并风险。
-5. 生成候选合并区域。
-6. 将候选区域传给 GUI 预览。
-7. 根据用户确认生成 MergePlan。
-```
-
-### 9.5 FeatureBoundedRegionBuilder 职责
-
-```text
-for each unvisited face:
-    create new region
-    push seed face
-
-    while queue is not empty:
-        current = queue.pop()
-
-        for each neighbor of current:
-            if neighbor is visited:
-                continue
-
-            edge = shared edge between current and neighbor
-
-            if edge is feature edge:
-                continue
-
-            if edge is user locked:
-                continue
-
-            if merge risk is too high:
-                continue
-
-            add neighbor to region
-            push neighbor
-```
-
-历史 `MergeRegionGrower` / PlaneLike / SphereLike / CylinderLike / ConeLike / TorusLike 候选检测已在 Cleanup-6 删除；不要按旧 analytic candidate 路线扩展新功能。
-
-### 9.6 SameDomainUnifier 职责
-
-`SameDomainUnifier` 负责最可靠的一类合并：
-
-```text
-多个相邻 face 位于同一个几何域，
-只是被 STEP 导出过程切成了多个 trimmed face。
-```
-
-输入：
-
-```text
-1. ShapeDocument。
-2. protectedEdges，即自动特征边 + 用户锁定边。
-3. linear_tolerance。
-4. angular_tolerance。
-```
-
-输出：
-
-```text
-1. 合并后的 ShapeDocument。
-2. 合并前后统计。
-3. 被保护边数量。
-```
-
-### 9.7 SurfaceRefitter 职责
-
-`SurfaceRefitter` 是 `native-surface-refit` 独立分支的当前核心实现入口。NSR-1 只解决单外轮廓、无孔、连通候选区域的一张自由曲面拟合，不在本阶段扩展为通用多后端框架。
-
-当前职责：
-
-```text
-1. 接收 FeatureBoundedRefit 候选、原始有序边界和原始 STEP 内部样本。
-2. 使用原始边界 G0 约束和内部点约束生成一张 OCCT 自由曲面。
-3. 返回可独立写出的 patch face 及拟合诊断数据。
-4. 将孔洞、非流形、多外轮廓或曲面有效性失败显式路由为 unsupported / failed。
-```
-
-不属于 NSR-1 的后续增强：
-
-```text
-1. 自研通用 B-spline 优化求解器。
-2. G1 / G2 边界约束。
-3. 多曲面 patch layout 重构。
-```
-
----
-
-## 10. 验证模块
-
-### 10.1 目标
-
-每次执行合并后，都必须验证模型是否仍然合法。
-
-验证模块需要回答：
-
-```text
-1. 模型是否仍然是一个合法实体。
-2. 是否产生新的 free edge / multiple edge。
-3. face / edge / solid 数量是否异常变化。
-4. 几何偏差是否可接受。
-5. 特征边是否被错误删除。
-6. 导出的 STEP 是否能重新读取。
-```
-
-### 10.2 当前核心类型
-
-```cpp
-class ShapeValidator;
-class StrictTopologyGate;
-class CommercialCadQualityGate;
-```
-
-缝合诊断、误差评估和报告输出由当前 repair、gate 与具体工作流报告承担，不保留空占位类。
-
-### 10.3 基础检查内容
-
-```text
-1. 是否存在 shape。
-2. 是否仍为 solid。
-3. solid 数量是否异常变化。
-4. shell 是否闭合。
-5. 是否产生 free edge。
-6. 是否产生 multiple edge。
-7. OCCT BRepCheck 是否通过。
-8. STEP 导出后重新读取是否成功。
-```
-
-### 10.4 后续评估指标
-
-```text
-face_count_before
-face_count_after
-face_reduction_ratio
-edge_count_before
-edge_count_after
-free_edge_count
-multiple_edge_count
-solid_count
-shell_count
-max_deviation
-mean_deviation
-rms_deviation
-feature_edge_preserve_rate
-locked_edge_preserve_rate
-invalid_merge_count
-manual_correction_count
-```
-
-### 10.5 报告示例
-
-```json
-{
-  "input_file": "toy_model.step",
-  "output_file": "toy_model_optimized.step",
-  "face_count_before": 2850,
-  "face_count_after": 940,
-  "face_reduction_ratio": 0.670,
-  "edge_count_before": 5712,
-  "edge_count_after": 1881,
-  "free_edge_count": 0,
-  "multiple_edge_count": 0,
-  "solid_count": 1,
-  "max_deviation": 0.012,
-  "rms_deviation": 0.003,
-  "feature_edge_preserve_rate": 0.983,
-  "locked_edge_preserve_rate": 1.000
-}
-```
-
-### 10.6 运行产物与可追溯性
-
-单元测试、baseline、Route 2 和外部 CAD 诊断统一使用一次运行一个目录：
-
-```text
-data/runs/<时间>__<流程>__<模型>__cand-<四位编号>__<变体>/
-  run.json
-  RUN.md
-  artifacts/
-  diagnostics/
-  logs/
-```
-
-约束：
-
-```text
-1. 默认运行目录必须唯一，不能覆盖上一轮结果。
-2. candidate 数字编号统一补齐四位；自动发现使用 cand-auto，无候选使用 cand-na。
-3. run.json 记录 Git commit、dirty 状态、源文件 SHA-256、有效入口参数、阶段状态和关键产物路径。
-4. RUN.md 是面向人工复核的同内容摘要。
-5. data/crop_stl、data/crop_stp、data/crop_igs 只作为兼容暂存区，不作为历史验收来源。
-6. 旧 data/baseline_runs 只读保留，不迁移、不删除；新运行统一进入 data/runs。
-```
-
----
-
-## 11. 公共模块
-
-### 11.1 目标
-
-公共模块保存通用类型、容差配置、日志、错误返回结构。
-
-### 11.2 建议类型
-
-```cpp
-struct ToleranceConfig {
-    double linearTol = 0.001;
-    double angularTolDeg = 25.0;
-    double curvatureTol = 0.1;
-};
-
-struct AlgorithmParameters {
-    double angular_threshold_degrees = 25.0;
-    double linear_tolerance = 0.001;
-    double curvature_threshold = 0.1;
-    double min_edge_length = 0.0;
-};
-```
-
-### 11.3 配置项
-
-```text
-linear_tolerance
-angular_tolerance_degrees
-curvature_tolerance
-min_edge_length
-merge_mode
-preserve_feature_edges
-preserve_user_locked_edges
-enable_same_domain_merge
-enable_region_growing
-enable_surface_refit
-max_deviation
-```
-
----
-
-## 12. 模块依赖关系
-
-推荐依赖方向：
-
-```text
-gui
- ↓
-app
- ↓
+~~~text
+app / gui
+    |
+    v
 command
- ↓
-io / brep / feature / merge / validate
- ↓
-common
- ↓
-OCCT
-```
+    |
+    +--> reduction / merge / patch / feature
+    |          |
+    |          +--> brep / validate
+    |
+    +--> io / external
+               |
+               v
+            common
+~~~
 
-约束：
+允许的主要方向：
 
-```text
-1. GUI 不直接修改 TopoDS_Shape。
-2. GUI 只通过 AppController 发起操作。
-3. app 可以组织 command，但不应承载复杂几何算法。
-4. command 可以调用 core geometry modules。
-5. merge 模块不负责界面显示。
-6. validate 模块不负责合并策略。
-7. brep 模块只负责索引和查询，不负责修改模型。
-8. 所有修改模型或用户约束状态的操作都应进入 command 系统。
-```
+- app 调度 command、gui 和工作流服务。
+- gui 只展示状态、收集输入和发送意图。
+- command 组织一次可撤销事务。
+- reduction、merge、patch 和 feature 实现领域算法。
+- brep 提供文档、索引和拓扑查询。
+- validate 只验证候选，不改变产品策略。
+- io 负责文件边界，不决定候选是否可接受。
+- external 隔离第三方工具协议。
+- common 不依赖任何上层模块。
 
----
+禁止的方向：
 
-## 13. 阶段规划
+- 领域模块直接操纵 Qt 控件。
+- 验证模块静默修复输入。
+- IO 模块绕过 ShapeDocument 替换当前模型。
+- 外部工具结果直接成为当前模型。
+- GUI 状态被当作几何事实来源。
 
-### 13.1 MVP 阶段
+## app：应用编排
 
-目标：跑通稳定、可演示的 STEP 后处理闭环。
+src/app 负责窗口级生命周期和跨模块工作流。
 
-```text
-1. STEP 读取 / 显示。
-2. face / edge 选择。
-3. Shift 多选。
-4. 特征边检测。
-5. 用户锁边 / 解锁。
-6. same-domain 合并。
-7. undo / redo。
-8. 基础合法性检查。
-9. STEP 导出。
-```
+主要职责：
 
-### 13.2 工程增强阶段
+- 创建并持有应用级服务。
+- 把 GUI 意图转换为命令或工作流调用。
+- 管理当前选择、预览和进程状态。
+- 汇总日志、错误和可展示报告。
+- 保证长任务不会把中间结果误提交为当前模型。
 
-目标：从“能用”提升到“可控、可解释、可批量验证”。
+AppController 是应用编排入口。MainWindow 负责窗口装配，不承载几何算法。PatchPreviewWorkflow、AppPatchWorkflowState 和 PatchPreviewRunLogger 隔离后备 patch 流程的状态、执行与运行记录。
 
-```text
-1. MergePlanner 候选区域生成。
-2. FeatureBoundedRegionBuilder 区域构建。
-3. 合并候选 GUI 预览。
-4. 手动合并组编辑。
-5. 项目状态序列化。
-6. 几何误差评估。
-7. 实验报告汇总。
-8. 更完整的锁边状态持久化。
-```
+应用层可以决定何时调用某项能力，但不能降低领域层的质量门。
 
-### 13.3 研究增强阶段
+## gui：交互与可视化
 
-目标：面向潮玩件复杂曲面和论文方向拓展。
+src/gui 负责：
 
-```text
-1. 曲率估计能力。
-2. 圆角起止线和凸起边界分类能力。
-3. ridge / valley / weak feature 检测。
-4. SurfaceRefitter 自定义 B-spline 求解与 G1 / G2 约束。
-5. 局部 patch layout 重构。
-6. 学习辅助候选区域推荐。
-```
+- 三维视图与选择反馈。
+- 模型树、检查面板和参数面板。
+- 日志、进度和处理状态。
+- 将报告字段以可读方式呈现。
+
+GUI 不负责：
+
+- 判定候选是否通过质量门。
+- 根据显示网格推断 STEP 拓扑。
+- 在控件回调中直接改写 B-rep。
+- 维护独立于领域对象的第二份真值。
+
+OccViewWidget 负责 Open CASCADE 视图交互。各面板只读取应用提供的稳定视图模型或报告。
+
+## command：可撤销事务
+
+src/command 将用户动作封装为命令。
+
+命令的基本合同：
+
+- execute 成功后才能进入历史。
+- execute 失败时不得改变可观察模型。
+- undo 恢复执行前的模型与必要状态。
+- redo 重放同一语义，不依赖偶然的 GUI 状态。
+- 报告和错误应足以解释失败阶段。
+
+CommandHistory 只管理已经成功提交的命令。LoadStepCommand、ExportStepCommand、PatchReplacementCommand、ReduceSelectedFacesCommand 等分别封装文件或几何事务。
+
+命令不得把预览对象当作已提交文档。若算法需要多阶段中间对象，应在命令私有上下文中持有，直到最终验证通过。
+
+## brep：模型真值与索引
+
+src/brep 是 STEP/B-rep 真值的内存边界。
+
+ShapeDocument 持有当前形状及与其版本绑定的索引。FaceIndex、EdgeIndex 和 TopologyGraph 提供稳定查询，SurfaceTypeProbe 提供支撑曲面分类。
+
+长期约束：
+
+- 索引必须与当前 ShapeDocument 版本一致。
+- 形状提交后重建或失效相关索引。
+- 不能跨文档版本复用面号或边号。
+- STL 三角形编号不能替代 B-rep 实体身份。
+- 原始面集合是重新拟合和缓存寻址的基础。
+
+## feature：特征边识别
+
+src/feature 识别影响候选分组的特征边。
+
+FeatureEdgeDetector 可以使用几何、拓扑和用户锁定信息，但输出只是候选生成约束，不是最终质量结论。
+
+特征边约束需要保持可解释：
+
+- 自动识别结果应能追溯阈值与来源。
+- 用户锁定边优先于自动合并意图。
+- 候选不得跨越已锁定边。
+- 阈值变化不得改变原始模型。
+
+## merge：区域分析与冻结的原生拟合
+
+src/merge 包含区域构造、候选筛选、边界分析和历史原生单曲面拟合能力。
+
+稳定职责：
+
+- FeatureBoundedRegionBuilder 构造受特征边约束的连通区域。
+- FeatureBoundedCandidateSelector 与 CandidateFilters 过滤不可行候选。
+- RegionBoundaryAnalyzer 和 BoundaryWireBuilder 建立边界语义。
+- MergePlanner 组织候选，不直接提交模型。
+- SameDomainUnifier 只处理满足同域合同的情形。
+- SurfaceRefitter 与相关诊断属于冻结实验能力，边界见 native_surface_refitting_guide.md。
+
+merge 不应承载当前 Surface Reduction 的搜索策略；新主线逻辑位于 reduction。
+
+## reduction：Surface Reduction 主线
+
+src/reduction 实现当前原生曲面缩减产品合同。
+
+核心对象：
+
+- SurfaceReductionEngine：候选搜索、拟合、验证和结果选择。
+- SurfaceReductionFitCache：原始面集合与拟合配置的内容寻址缓存。
+- RestrictedBSplinePatchFitter：受约束 B-spline 支撑曲面拟合。
+- StlHybridParameterization：在明确边界内提供混合参数化。
+
+引擎应把以下阶段保持可区分：
+
+1. 候选分组生成。
+2. FitSet 评估。
+3. 支撑曲面拟合。
+4. Replay 或完整候选重建。
+5. 修复与质量门。
+6. 最终档案选择。
+
+搜索合同：
+
+- TargetRatio 保持兼容的目标比例模式。
+- MinimizeFaceCount 在预算内寻找当前最好结果。
+- 预算耗尽时必须报告 BestFoundWithinBudget，不能声称已证明最优。
+- 搜索档案必须有限，避免无界保留重型 B-rep 对象。
+- 放大后的分组从原始 STEP 面重新拟合。
+
+缓存合同：
+
+- 键包含原始面集合、拟合配置和影响结果的版本信息。
+- 正负结果均可缓存，但失败原因必须保留。
+- RefreshCache 明确绕过旧条目并刷新结果。
+- 缓存命中不能跳过与最终候选有关的修复和质量门。
+
+## patch：边界约束替换
+
+src/patch 将候选支撑曲面重裁剪为受原始边界约束的替换区域。
+
+主要职责：
+
+- 定位并导入候选产物。
+- 检查单面或多面 patch 结构。
+- 依据原始边界构造或重裁剪替换面。
+- 装配替换形状并执行受控修复。
+- 输出闭合、裁剪和修复诊断。
+
+PatchReplacementAssembler 负责替换装配。PatchReplacementRepair 负责装配后的受控修复。两者均不得通过任意放宽容差隐藏几何不一致。
+
+边界约束是硬合同：
+
+- 原始 STEP 边界优先于导入 patch 的自由边。
+- 导入 patch 只提供支撑几何或明确的多面结构。
+- Apply 必须检查边界配对、方向和裁剪有效性。
+- 修复后的形状仍须通过 StrictTopologyGate。
+
+## validate：质量门
+
+src/validate 提供分层验证。
+
+ShapeValidator 提供基础形状检查。StrictTopologyGate 是交付链硬门禁，至少覆盖适用的壳体、边使用、自由边、退化边和拓扑一致性。CommercialCadQualityGate 表达需要外部 CAD 或商业内核证据的边界。
+
+验证原则：
+
+- 构造成功不是验证成功。
+- 修复成功不是拓扑门成功。
+- Open CASCADE 成功不是跨内核成功。
+- STEP 写出成功不是往返成功。
+- 视觉无裂缝不是数值无裂缝。
+
+适用时还应检查：
+
+- 边界距离和法向连续性。
+- seam 与 SameParameter。
+- 支撑曲面参数域和控制网包络。
+- STEP 导出后重新导入。
+- Creo 或其他商业 CAD 打开、再生和检查。
+
+## stl：软参考与拟合输入
+
+src/stl 负责 STL 读取后的区域索引、裁剪、切链和拟合网格构造。
+
+STL 的允许用途：
+
+- 构造拟合采样。
+- 提供粗糙形状参考。
+- 支持偏差检查和可视化。
+- 为显式后备工作流生成输入。
+
+STL 的禁止用途：
+
+- 覆盖 STEP 边界。
+- 独立决定拓扑连通性。
+- 证明壳体闭合。
+- 把缓存裁剪结果误称为原始扫描。
+
+StpSampledFittingMeshBuilder 生成的网格来源于 STEP 采样，应与外部原始 STL 明确区分。
+
+## io：文件边界
+
+src/io 负责 STEP 和 STL 的读取、写出及错误报告。
+
+读取合同：
+
+- 解析失败不得替换当前 ShapeDocument。
+- 返回值应区分文件、格式和几何失败。
+- 成功后由上层建立文档与索引。
+
+写出合同：
+
+- 只接收已经选择的明确形状。
+- 写出失败不得改变当前模型。
+- 正式候选写出后仍需往返验证。
+- 运行产物路径由运行上下文统一记录。
+
+## external/geomagic：第三方协议隔离
+
+src/external/geomagic 只封装 Geomagic AutoSurface 的配置、输入输出路径和结果协议。
+
+该模块不能：
+
+- 自动把 Geomagic 设为默认路线。
+- 把进程退出成功等同于 patch 合格。
+- 绕过导入、边界重建和质量门。
+- 把第三方临时文件当作仓库真值。
+
+完整后备流程见 geomagic_patch_workflow.md。
+
+## common：基础类型
+
+src/common 提供 Result、Tolerance、配置、日志和通用几何类型。
+
+基础模块应保持小而稳定：
+
+- 不包含产品阶段状态。
+- 不依赖 GUI、命令或外部工具。
+- 容差必须有单位和语义，不能用无名常量传播。
+- Result 应保留足够错误上下文，不以日志替代返回合同。
+
+## 事务边界
+
+所有会改变当前模型的路径遵循相同事务：
+
+~~~text
+当前文档
+  -> 隔离候选
+  -> 重建与修复
+  -> 拓扑和几何验证
+  -> STEP 往返或外部证据
+  -> 原子提交
+~~~
+
+任一阶段失败：
+
+- 当前文档保持不变。
+- 不进入 CommandHistory。
+- 预览和失败产物可保留用于诊断。
+- 报告指出失败阶段和证据位置。
+
+## 长期不变量
+
+以下约束跨路线、跨阶段保持不变：
+
+1. STEP 边界和拓扑优先于 STL。
+2. 当前模型只有一个事实来源。
+3. Apply、撤销和重做是原子事务。
+4. StrictTopologyGate 与 PatchReplacementRepair 不得被旁路删除。
+5. 候选分组扩大后必须从原始面重新拟合。
+6. 最少面搜索必须区分最好已知结果与最优证明。
+7. 缓存命中不改变质量门。
+8. 实验参数和精确指标写入 data/runs，不复制到架构文档。
+9. 冻结路线不会因代码仍存在而自动恢复为产品主线。
+10. 外部工具和商业 CAD 证据必须可追溯到同一候选。
+
+## 文档边界
+
+- 本文只描述稳定结构和约束。
+- implementation_status.md 描述当前能力和基线。
+- TODO.md 描述未完成任务。
+- completed_features.md 描述里程碑。
+- project_structure.md 描述当前目录。
+- 各路线指南描述对应产品或冻结实验合同。
+
+架构变化时只更新受影响的稳定职责，不在本文追加开发日志。
