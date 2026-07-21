@@ -29,6 +29,35 @@ enum class SurfaceReductionOutcome {
 
 const char* toString(SurfaceReductionOutcome outcome);
 
+enum class SurfaceReductionSearchObjective {
+    TargetRatio,
+    MinimizeFaceCount
+};
+
+const char* toString(SurfaceReductionSearchObjective objective);
+
+enum class SurfaceReductionOptimality {
+    NotEvaluated,
+    OptimalProven,
+    BestFoundWithinBudget,
+    NoValidatedResultFound
+};
+
+const char* toString(SurfaceReductionOptimality optimality);
+
+enum class SurfaceReductionStopReason {
+    None,
+    TargetReached,
+    LowerBoundAccepted,
+    FrontierExhausted,
+    FitBudgetExhausted,
+    SearchTimeBudgetExhausted,
+    FinalValidationBudgetExhausted,
+    RequiredCacheMiss
+};
+
+const char* toString(SurfaceReductionStopReason reason);
+
 enum class SurfaceReductionMergeMethod {
     OriginalFace,
     ExactSameDomain,
@@ -60,8 +89,11 @@ const char* toString(SurfaceReductionProgressStage stage);
 
 struct SurfaceReductionProgress {
     SurfaceReductionProgressStage stage = SurfaceReductionProgressStage::ValidatingInput;
+    SurfaceReductionSearchObjective searchObjective =
+        SurfaceReductionSearchObjective::TargetRatio;
     int inputFaceCount = 0;
     int targetFaceCount = 0;
+    int theoreticalMinimumFaceCount = 0;
     int currentFaceCount = 0;
     int searchIteration = 0;
     int attemptedMergeCount = 0;
@@ -81,6 +113,7 @@ struct SurfaceReductionExecutionOptions {
     std::string algorithmFingerprint;
     int fitWorkerCount = 1;
     int maximumProposalGroupSize = 0;
+    int maximumSearchWallTimeMilliseconds = 0;
     bool detailedTiming = false;
     std::function<void(const SurfaceReductionProgress&)> progressCallback;
 };
@@ -107,6 +140,8 @@ enum class SurfaceReductionFailureStage {
 const char* toString(SurfaceReductionFailureStage stage);
 
 struct SurfaceReductionOptions {
+    SurfaceReductionSearchObjective searchObjective =
+        SurfaceReductionSearchObjective::TargetRatio;
     double tolerance3d = 0.03;
     double normalToleranceDegrees = 15.0;
     double smoothSeamToleranceDegrees = 5.0;
@@ -118,7 +153,9 @@ struct SurfaceReductionOptions {
     double uvConvergenceTolerance = 1.0e-8;
     int beamWidth = 8;
     int maximumPairExpansionsPerState = 16;
+    int maximumSkipTripleProposalsPerState = 2;
     int maximumRestrictedFitEvaluations = 512;
+    int maximumFinalValidationEvaluations = 64;
     double scanReferenceWeight = 0.25;
     double maximumScanReferenceDistance = 0.2;
 };
@@ -166,10 +203,41 @@ struct SurfaceReductionFitProfile {
     bool persistentCacheHit = false;
 };
 
+struct SurfaceReductionProposalStatistics {
+    int generatedCount = 0;
+    int selectedCount = 0;
+    int cacheHitCount = 0;
+    int restrictedFitCount = 0;
+    int successCount = 0;
+    int rejectedCount = 0;
+    int maximumCombinedOriginalFaceCount = 0;
+};
+
+struct SurfaceReductionSearchIterationReport {
+    int iteration = 0;
+    int continuingStateCount = 0;
+    int bestFaceCount = 0;
+    int archivedStateCount = 0;
+    int restrictedFitEvaluationCount = 0;
+    int clusterClusterSelectedCount = 0;
+    int clusterSingletonSelectedCount = 0;
+    int singletonSingletonSelectedCount = 0;
+    int skipTripleSelectedCount = 0;
+};
+
 struct SurfaceReductionReport {
     SurfaceReductionOutcome outcome = SurfaceReductionOutcome::InvalidSelection;
+    SurfaceReductionSearchObjective searchObjective =
+        SurfaceReductionSearchObjective::TargetRatio;
+    SurfaceReductionOptimality optimality = SurfaceReductionOptimality::NotEvaluated;
+    SurfaceReductionStopReason stopReason = SurfaceReductionStopReason::None;
     int inputFaceCount = 0;
     int outputFaceCount = 0;
+    int theoreticalMinimumFaceCount = 0;
+    int bestValidatedFaceCount = -1;
+    int maximumRestrictedFitEvaluations = 0;
+    int maximumFinalValidationEvaluations = 0;
+    int maximumSearchWallTimeMilliseconds = 0;
     double reductionRatio = 0.0;
     bool targetAchieved = false;
     bool allQualityGatesPassed = false;
@@ -183,12 +251,25 @@ struct SurfaceReductionReport {
     int expandedStateCount = 0;
     int generatedStateCount = 0;
     int deduplicatedStateCount = 0;
+    int archivedStateCount = 0;
+    int beamPrunedStateCount = 0;
+    int proposalLimitPrunedCount = 0;
+    int finalValidationAttemptCount = 0;
+    int uniqueGroupSetCount = 0;
+    int restrictedFitEvaluationCount = 0;
+    int speculativePrefetchCount = 0;
+    int unusedPrefetchCount = 0;
+    int exactSameDomainAttemptCount = 0;
+    int exactSameDomainSuccessCount = 0;
     int fitCacheHitCount = 0;
     int fitCacheMissCount = 0;
     int persistentFitCacheHitCount = 0;
     int persistentFitCacheMissCount = 0;
     int persistentFitCacheWriteCount = 0;
     bool persistentFitCacheRequiredMiss = false;
+    SurfaceReductionCacheMode persistentCacheMode =
+        SurfaceReductionCacheMode::Disabled;
+    std::string persistentCacheMessage;
     int fitWorkerCount = 1;
     int scanIndexCandidateTriangleCount = 0;
     double fitDurationP50Ms = 0.0;
@@ -196,10 +277,16 @@ struct SurfaceReductionReport {
     double fitDurationP99Ms = 0.0;
     SurfaceReductionStageTiming timing;
     bool searchBudgetExhausted = false;
+    bool searchTimeBudgetExhausted = false;
     bool stepParameterizationUsed = false;
     ScanReferenceCoverage scanReferenceCoverage = ScanReferenceCoverage::None;
     int scanReferenceSampleCount = 0;
     double maxStepToScanDistance = 0.0;
+    SurfaceReductionProposalStatistics clusterClusterProposals;
+    SurfaceReductionProposalStatistics clusterSingletonProposals;
+    SurfaceReductionProposalStatistics singletonSingletonProposals;
+    SurfaceReductionProposalStatistics skipTripleProposals;
+    std::vector<SurfaceReductionSearchIterationReport> searchIterations;
     std::vector<std::vector<FaceId>> outputGroups;
     std::vector<SurfaceReductionGroupReport> groupReports;
     std::vector<SurfaceReductionRejectedGroup> rejectedGroups;

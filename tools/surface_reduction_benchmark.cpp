@@ -194,6 +194,8 @@ int main(int argc, char* argv[]) {
             }
             spo::SurfaceReductionRequest request;
             request.selectedFaces = candidate.faces;
+            request.options.searchObjective =
+                spo::SurfaceReductionSearchObjective::TargetRatio;
             const auto result = spo::SurfaceReductionEngine().reduce(read.document, request);
             ++regionCount;
             ++modelRegionCount;

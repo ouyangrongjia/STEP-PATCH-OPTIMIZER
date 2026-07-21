@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
+#include <algorithm>
 #include <sstream>
 
 namespace spo {
@@ -204,16 +205,42 @@ SurfaceReductionFitCache::SurfaceReductionFitCache(SurfaceReductionExecutionOpti
 std::string SurfaceReductionFitCache::key(
     const std::vector<FaceId>& faces,
     const RestrictedBSplinePatchFitOptions& options) const {
+#ifdef _MSC_VER
+    const auto compilerIdentity = QStringLiteral("msvc-%1").arg(_MSC_FULL_VER);
+#elif defined(__clang__)
+    const auto compilerIdentity = QStringLiteral("clang-%1.%2.%3")
+        .arg(__clang_major__).arg(__clang_minor__).arg(__clang_patchlevel__);
+#elif defined(__GNUC__)
+    const auto compilerIdentity = QStringLiteral("gcc-%1.%2.%3")
+        .arg(__GNUC__).arg(__GNUC_MINOR__).arg(__GNUC_PATCHLEVEL__);
+#else
+    const auto compilerIdentity = QStringLiteral("unknown-compiler");
+#endif
+    const bool scanReferenced =
+        options.scanReference != nullptr &&
+        options.scanReferenceCoverage != ScanReferenceCoverage::None;
+    auto normalizedFaceIds = faces;
+    std::sort(normalizedFaceIds.begin(), normalizedFaceIds.end());
+    normalizedFaceIds.erase(
+        std::unique(normalizedFaceIds.begin(), normalizedFaceIds.end()),
+        normalizedFaceIds.end());
     QJsonArray faceIds;
-    for (const auto face : faces) faceIds.append(QString::number(face));
+    for (const auto face : normalizedFaceIds) {
+        faceIds.append(QString::number(face));
+    }
     QJsonObject identity {
         {"schema", cacheSchema},
         {"source", QString::fromStdString(execution_.sourceFingerprint)},
-        {"scan", QString::fromStdString(execution_.scanFingerprint)},
+        {"inputVariant", scanReferenced ? "ScanReferenced" : "StepOnly"},
+        {"scan", scanReferenced
+            ? QString::fromStdString(execution_.scanFingerprint)
+            : QStringLiteral("none")},
         {"algorithm", QString::fromStdString(execution_.algorithmFingerprint)},
-        {"build", QStringLiteral("qt-%1|occt-%2|ptr-%3|%4")
+        {"build", QStringLiteral("qt-%1|occt-%2|%3|cxx-%4|ptr-%5|%6")
             .arg(QT_VERSION_STR)
             .arg(OCC_VERSION_COMPLETE)
+            .arg(compilerIdentity)
+            .arg(static_cast<qulonglong>(__cplusplus))
             .arg(static_cast<qulonglong>(sizeof(void*)))
             .arg(
 #ifdef _DEBUG
@@ -246,7 +273,12 @@ std::optional<SurfaceReductionFitCacheEntry> SurfaceReductionFitCache::load(
     SurfaceReductionFitCacheEntry entry;
     entry.success = object["success"].toBool();
     entry.report = reportFromJson(object["report"].toObject());
-    if (!entry.success) return entry;
+    if (!entry.success) {
+        return entry.report.failureStage ==
+                RestrictedBSplinePatchFitFailureStage::None
+            ? std::nullopt
+            : std::optional<SurfaceReductionFitCacheEntry>(std::move(entry));
+    }
     const auto brep = QByteArray::fromBase64(object["brep"].toString().toLatin1());
     if (brep.isEmpty()) return std::nullopt;
     try {
@@ -267,6 +299,10 @@ std::optional<SurfaceReductionFitCacheEntry> SurfaceReductionFitCache::load(
 bool SurfaceReductionFitCache::store(
     const std::string& keyValue,
     const SurfaceReductionFitCacheEntry& entry) const {
+    if (!entry.success &&
+        entry.report.failureStage == RestrictedBSplinePatchFitFailureStage::None) {
+        return false;
+    }
     const auto root = QString::fromStdWString(execution_.cacheDirectory.wstring());
     const auto key = QString::fromStdString(keyValue);
     const auto directory = QDir(root).filePath(key.left(2));

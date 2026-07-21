@@ -2101,11 +2101,14 @@ RestrictedBSplinePatchFitResult RestrictedBSplinePatchFitter::fit(
         }
         return result;
     } catch (const Standard_Failure& error) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::None;
         const auto* message = error.GetMessageString();
         result.report.message = std::string("OCCT 拟合失败：") + (message == nullptr ? "未知错误" : message);
     } catch (const std::exception& error) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::None;
         result.report.message = std::string("分组拟合失败：") + error.what();
     } catch (...) {
+        result.report.failureStage = RestrictedBSplinePatchFitFailureStage::None;
         result.report.message = "分组拟合失败：未知错误。";
     }
     return result;

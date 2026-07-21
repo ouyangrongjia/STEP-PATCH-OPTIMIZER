@@ -486,7 +486,12 @@ void test_gui_uses_native_surface_reduction_as_primary_fitting_workflow() {
     assert(source.find("addMenuButton(\"Patch\"") == std::string::npos);
     assert(source.find("applySurfaceReductionAction_") == std::string::npos);
     assert(source.find("execution.fitWorkerCount = 4") != std::string::npos);
-    assert(source.find("reduceSelectedFacesData(documentSnapshot, request, execution)") != std::string::npos);
+    assert(source.find("SurfaceReductionSearchObjective::MinimizeFaceCount") !=
+        std::string::npos);
+    assert(source.find("execution.cacheMode = SurfaceReductionCacheMode::ReadWrite") !=
+        std::string::npos);
+    assert(source.find("正在寻找预算内最少面数") != std::string::npos);
+    assert(source.find("reduceSelectedFacesData(") != std::string::npos);
     assert(source.find(
         "inputMode == SurfaceReductionInputMode::StepBrepWithScanReference") != std::string::npos);
 }

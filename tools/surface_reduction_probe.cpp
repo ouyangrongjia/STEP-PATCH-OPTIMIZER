@@ -54,6 +54,19 @@ QJsonObject fitTimingToJson(const spo::RestrictedBSplinePatchFitReport& fit) {
         {"scan_index_candidate_triangles", fit.scanIndexCandidateTriangleCount}};
 }
 
+QJsonObject proposalStatisticsToJson(
+    const spo::SurfaceReductionProposalStatistics& statistics) {
+    return {
+        {"generated", statistics.generatedCount},
+        {"selected", statistics.selectedCount},
+        {"cache_hits", statistics.cacheHitCount},
+        {"restricted_fits", statistics.restrictedFitCount},
+        {"successful_children", statistics.successCount},
+        {"rejected", statistics.rejectedCount},
+        {"maximum_combined_original_faces",
+         statistics.maximumCombinedOriginalFaceCount}};
+}
+
 QJsonObject reportToJson(const spo::SurfaceReductionResult& result) {
     const auto& report = result.report;
     QJsonArray groups;
@@ -85,11 +98,35 @@ QJsonObject reportToJson(const spo::SurfaceReductionResult& result) {
     }
     QJsonArray outputGroups;
     for (const auto& group : report.outputGroups) outputGroups.append(facesToJson(group));
+    QJsonArray searchIterations;
+    for (const auto& iteration : report.searchIterations) {
+        searchIterations.append(QJsonObject {
+            {"iteration", iteration.iteration},
+            {"continuing_states", iteration.continuingStateCount},
+            {"best_faces", iteration.bestFaceCount},
+            {"archived_states", iteration.archivedStateCount},
+            {"restricted_fit_evaluations", iteration.restrictedFitEvaluationCount},
+            {"cluster_cluster_selected", iteration.clusterClusterSelectedCount},
+            {"cluster_singleton_selected", iteration.clusterSingletonSelectedCount},
+            {"singleton_singleton_selected", iteration.singletonSingletonSelectedCount},
+            {"skip_triple_selected", iteration.skipTripleSelectedCount}});
+    }
     return {
         {"outcome", spo::toString(report.outcome)},
+        {"search_objective", spo::toString(report.searchObjective)},
+        {"optimality", spo::toString(report.optimality)},
+        {"stop_reason", spo::toString(report.stopReason)},
         {"message", QString::fromStdString(report.message)},
         {"input_faces", report.inputFaceCount},
         {"output_faces", report.outputFaceCount},
+        {"theoretical_minimum_faces", report.theoreticalMinimumFaceCount},
+        {"best_validated_faces", report.bestValidatedFaceCount},
+        {"maximum_restricted_fit_evaluations",
+         report.maximumRestrictedFitEvaluations},
+        {"maximum_final_validation_evaluations",
+         report.maximumFinalValidationEvaluations},
+        {"maximum_search_wall_time_ms",
+         report.maximumSearchWallTimeMilliseconds},
         {"output_groups", outputGroups},
         {"max_distance", report.maxDistance},
         {"max_normal_degrees", report.maxNormalAngleDegrees},
@@ -100,12 +137,40 @@ QJsonObject reportToJson(const spo::SurfaceReductionResult& result) {
         {"after_free_edges", report.topologyReport.afterFreeEdges},
         {"after_multiple_edges", report.topologyReport.afterMultipleEdges},
         {"attempted_merges", report.attemptedMergeCount},
+        {"expanded_states", report.expandedStateCount},
+        {"generated_states", report.generatedStateCount},
+        {"deduplicated_states", report.deduplicatedStateCount},
+        {"archived_states", report.archivedStateCount},
+        {"beam_pruned_states", report.beamPrunedStateCount},
+        {"proposal_limit_pruned", report.proposalLimitPrunedCount},
+        {"final_validation_attempts", report.finalValidationAttemptCount},
+        {"unique_group_sets", report.uniqueGroupSetCount},
+        {"restricted_fit_evaluations", report.restrictedFitEvaluationCount},
+        {"speculative_prefetches", report.speculativePrefetchCount},
+        {"unused_prefetches", report.unusedPrefetchCount},
+        {"exact_same_domain_attempts", report.exactSameDomainAttemptCount},
+        {"exact_same_domain_successes", report.exactSameDomainSuccessCount},
+        {"proposal_statistics", QJsonObject {
+            {"cluster_cluster",
+             proposalStatisticsToJson(report.clusterClusterProposals)},
+            {"cluster_singleton",
+             proposalStatisticsToJson(report.clusterSingletonProposals)},
+            {"singleton_singleton",
+             proposalStatisticsToJson(report.singletonSingletonProposals)},
+            {"skip_triple",
+             proposalStatisticsToJson(report.skipTripleProposals)}}},
+        {"search_iterations", searchIterations},
         {"fit_cache_hits", report.fitCacheHitCount},
         {"fit_cache_misses", report.fitCacheMissCount},
         {"persistent_cache_hits", report.persistentFitCacheHitCount},
         {"persistent_cache_misses", report.persistentFitCacheMissCount},
         {"persistent_cache_writes", report.persistentFitCacheWriteCount},
         {"persistent_cache_required_miss", report.persistentFitCacheRequiredMiss},
+        {"persistent_cache_mode", spo::toString(report.persistentCacheMode)},
+        {"persistent_cache_message",
+         QString::fromStdString(report.persistentCacheMessage)},
+        {"search_budget_exhausted", report.searchBudgetExhausted},
+        {"search_time_budget_exhausted", report.searchTimeBudgetExhausted},
         {"fit_workers", report.fitWorkerCount},
         {"scan_index_candidate_triangles", report.scanIndexCandidateTriangleCount},
         {"fit_p50_ms", report.fitDurationP50Ms},
@@ -159,6 +224,7 @@ int main(int argc, char* argv[]) {
     if (argc < 4) {
         std::cerr << "用法：surface_reduction_probe <输入.step> <输出.step> "
                      "[--source-stl <原始.stl> | --cropped-stl <选区裁剪.stl>] "
+                     "[--search-objective <target-ratio|minimize-face-count>] "
                      "[--target-ratio <0到1>] "
                      "[--cache-mode <disabled|read-write|read-only-required|refresh>] "
                      "[--cache-dir <目录>] [--algorithm-fingerprint <指纹>] "
@@ -166,6 +232,9 @@ int main(int argc, char* argv[]) {
                      "[--local-fit-only] "
                      "[--local-fit-group <面编号,面编号,...>] "
                      "[--maximum-fit-evaluations <数量>] "
+                     "[--maximum-final-validations <数量>] "
+                     "[--maximum-skip-triples <数量>] "
+                     "[--search-time-budget-ms <毫秒>] "
                      "[--maximum-proposal-group-size <数量>] "
                      "[--selection-output <独立选区.step>] "
                      "(<面编号> <面编号> [...] | --candidate-id <候选编号>)\n";
@@ -205,6 +274,19 @@ int main(int argc, char* argv[]) {
                     return 2;
                 }
                 targetRatio = std::stod(argv[index]);
+            } else if (argument == "--search-objective") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "target-ratio") {
+                    request.options.searchObjective =
+                        spo::SurfaceReductionSearchObjective::TargetRatio;
+                } else if (value == "minimize-face-count") {
+                    request.options.searchObjective =
+                        spo::SurfaceReductionSearchObjective::MinimizeFaceCount;
+                } else {
+                    std::cerr << "未知搜索目标。\n";
+                    return 2;
+                }
             } else if (argument == "--candidate-id") {
                 if (++index >= argc || candidateId >= 0) {
                     std::cerr << "--candidate-id 必须且只能指定一个候选编号。\n";
@@ -240,6 +322,18 @@ int main(int argc, char* argv[]) {
             } else if (argument == "--maximum-fit-evaluations") {
                 if (++index >= argc) return 2;
                 request.options.maximumRestrictedFitEvaluations = std::stoi(argv[index]);
+            } else if (argument == "--maximum-final-validations") {
+                if (++index >= argc) return 2;
+                request.options.maximumFinalValidationEvaluations =
+                    std::stoi(argv[index]);
+            } else if (argument == "--maximum-skip-triples") {
+                if (++index >= argc) return 2;
+                request.options.maximumSkipTripleProposalsPerState =
+                    std::stoi(argv[index]);
+            } else if (argument == "--search-time-budget-ms") {
+                if (++index >= argc) return 2;
+                execution.maximumSearchWallTimeMilliseconds =
+                    std::stoi(argv[index]);
             } else if (argument == "--maximum-proposal-group-size") {
                 if (++index >= argc) return 2;
                 execution.maximumProposalGroupSize = std::stoi(argv[index]);
@@ -329,6 +423,7 @@ int main(int argc, char* argv[]) {
     std::cout << '\n'
               << "source_stl=" << sourceStl.string() << '\n'
               << "source_stl_is_selection_crop=" << sourceStlIsSelectionCrop << '\n'
+              << "search_objective=" << spo::toString(request.options.searchObjective) << '\n'
               << "target_ratio=" << request.options.targetOutputRatio << '\n'
               << std::flush;
 
@@ -397,8 +492,14 @@ int main(int argc, char* argv[]) {
         result = spo::SurfaceReductionEngine().reduce(read.document, request, execution);
     }
     std::cout << "outcome=" << spo::toString(result.report.outcome) << '\n'
+              << "search_objective=" << spo::toString(result.report.searchObjective) << '\n'
+              << "optimality=" << spo::toString(result.report.optimality) << '\n'
+              << "stop_reason=" << spo::toString(result.report.stopReason) << '\n'
               << "input_faces=" << result.report.inputFaceCount << '\n'
               << "output_faces=" << result.report.outputFaceCount << '\n'
+              << "theoretical_minimum_faces="
+              << result.report.theoreticalMinimumFaceCount << '\n'
+              << "best_validated_faces=" << result.report.bestValidatedFaceCount << '\n'
               << "reduction_ratio=" << result.report.reductionRatio << '\n'
               << "max_distance=" << result.report.maxDistance << '\n'
               << "max_normal_degrees=" << result.report.maxNormalAngleDegrees << '\n'
@@ -412,6 +513,17 @@ int main(int argc, char* argv[]) {
               << "expanded_states=" << result.report.expandedStateCount << '\n'
               << "generated_states=" << result.report.generatedStateCount << '\n'
               << "deduplicated_states=" << result.report.deduplicatedStateCount << '\n'
+              << "archived_states=" << result.report.archivedStateCount << '\n'
+              << "beam_pruned_states=" << result.report.beamPrunedStateCount << '\n'
+              << "proposal_limit_pruned=" << result.report.proposalLimitPrunedCount << '\n'
+              << "final_validation_attempts=" << result.report.finalValidationAttemptCount << '\n'
+              << "unique_group_sets=" << result.report.uniqueGroupSetCount << '\n'
+              << "restricted_fit_evaluations="
+              << result.report.restrictedFitEvaluationCount << '\n'
+              << "skip_triple_generated="
+              << result.report.skipTripleProposals.generatedCount << '\n'
+              << "skip_triple_successes="
+              << result.report.skipTripleProposals.successCount << '\n'
               << "fit_cache_hits=" << result.report.fitCacheHitCount << '\n'
               << "fit_cache_misses=" << result.report.fitCacheMissCount << '\n'
               << "persistent_fit_cache_hits=" << result.report.persistentFitCacheHitCount << '\n'

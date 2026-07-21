@@ -262,6 +262,12 @@ void run_surface_reduction_tests() {
         assert(fit.success());
         spo::RestrictedBSplinePatchFitOptions options;
         const auto key = cache.key({0, 1}, options);
+        assert(cache.key({1, 0, 1}, options) == key);
+        auto scanOptions = options;
+        const auto scanReference = makeCurvedReferencePatch();
+        scanOptions.scanReference = &scanReference;
+        scanOptions.scanReferenceCoverage = spo::ScanReferenceCoverage::WholeModel;
+        assert(cache.key({0, 1}, scanOptions) != key);
         spo::SurfaceReductionFitCacheEntry entry;
         entry.success = true;
         entry.face = fit.face;
@@ -284,6 +290,11 @@ void run_surface_reduction_tests() {
         assert(loadedNegative.has_value());
         assert(!loadedNegative->success);
         assert(loadedNegative->report.message == "negative");
+
+        auto nondeterministic = negative;
+        nondeterministic.report.failureStage =
+            spo::RestrictedBSplinePatchFitFailureStage::None;
+        assert(!cache.store(cache.key({1, 2}, options), nondeterministic));
 
         const auto cacheFile = temporary.path() + "/" +
             QString::fromStdString(key).left(2) + "/" + QString::fromStdString(key) + ".json";
@@ -543,6 +554,8 @@ void run_surface_reduction_tests() {
         const auto document = makePlanarStrip(5);
         spo::SurfaceReductionRequest request;
         request.selectedFaces = allFaces(document);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::TargetRatio;
         request.options.targetOutputRatio = 0.4;
         const auto first = spo::SurfaceReductionEngine().reduce(document, request);
         const auto second = spo::SurfaceReductionEngine().reduce(document, request);
@@ -564,6 +577,8 @@ void run_surface_reduction_tests() {
         assert(first.report.expandedStateCount == second.report.expandedStateCount);
         assert(first.report.generatedStateCount == second.report.generatedStateCount);
         assert(first.report.generatedStateCount > first.report.acceptedMergeCount);
+        assert(!first.report.searchIterations.empty());
+        assert(first.report.searchIterations.back().bestFaceCount <= 2);
         assert(!first.report.searchBudgetExhausted);
         assert(parallel.report.fitWorkerCount == 4);
         assert(!progressUpdates.empty());
@@ -591,6 +606,8 @@ void run_surface_reduction_tests() {
         const auto document = makePlanarStrip(20);
         spo::SurfaceReductionRequest request;
         request.selectedFaces = allFaces(document);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::TargetRatio;
         request.options.targetOutputRatio = 0.95;
         const auto result = spo::SurfaceReductionEngine().reduce(document, request);
         assert(result.report.inputFaceCount == 20);
@@ -616,6 +633,8 @@ void run_surface_reduction_tests() {
         assert(document.topology().faceCount() == 8);
         spo::SurfaceReductionRequest request;
         request.selectedFaces = allFaces(document);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::TargetRatio;
         request.options.targetOutputRatio = 0.2;
         const auto result = spo::SurfaceReductionEngine().reduce(document, request);
         if (!result.canApply()) {
@@ -642,5 +661,90 @@ void run_surface_reduction_tests() {
         assert(result.canApply());
         const spo::ShapeDocument preview(result.previewShape, {});
         assert(preview.topology().faceCount() == 2);
+    }
+
+    {
+        const auto document = makePlanarStrip(3);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::MinimizeFaceCount;
+        const auto result = spo::SurfaceReductionEngine().reduce(document, request);
+        assert(result.canApply());
+        assert(result.report.outputFaceCount == 1);
+        assert(result.report.theoreticalMinimumFaceCount == 1);
+        assert(result.report.bestValidatedFaceCount == 1);
+        assert(result.report.optimality ==
+            spo::SurfaceReductionOptimality::OptimalProven);
+        assert(result.report.stopReason ==
+            spo::SurfaceReductionStopReason::LowerBoundAccepted);
+        assert(!result.report.targetAchieved);
+    }
+
+    {
+        const auto document = makePlanarStrip(3);
+        const auto edges = internalEdges(document);
+        assert(edges.size() == 2);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.lockedEdges.insert(*edges.begin());
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::MinimizeFaceCount;
+        const auto result = spo::SurfaceReductionEngine().reduce(document, request);
+        spo::SurfaceReductionExecutionOptions parallelExecution;
+        parallelExecution.fitWorkerCount = 4;
+        const auto parallel = spo::SurfaceReductionEngine().reduce(
+            document, request, parallelExecution);
+        assert(result.canApply());
+        assert(parallel.canApply());
+        assert(result.report.outputFaceCount == 2);
+        assert(result.report.theoreticalMinimumFaceCount == 2);
+        assert(result.report.optimality ==
+            spo::SurfaceReductionOptimality::OptimalProven);
+        assert(result.report.outputGroups == parallel.report.outputGroups);
+        assert(result.report.stopReason == parallel.report.stopReason);
+    }
+
+    {
+        const auto document = makePlanarRing();
+        const auto edges = internalEdges(document);
+        assert(!edges.empty());
+        const auto lockedEdge = *edges.begin();
+        const auto* adjacency =
+            document.topology().adjacencyForEdge(lockedEdge);
+        assert(adjacency != nullptr);
+        assert(adjacency->faces.size() == 2);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.lockedEdges.insert(lockedEdge);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::MinimizeFaceCount;
+        const auto result =
+            spo::SurfaceReductionEngine().reduce(document, request);
+        assert(result.canApply());
+        assert(result.report.outputFaceCount >= 2);
+        for (const auto& group : result.report.outputGroups) {
+            const std::set<spo::FaceId> grouped(
+                group.begin(), group.end());
+            assert(!(grouped.contains(adjacency->faces[0]) &&
+                     grouped.contains(adjacency->faces[1])));
+        }
+        assert(result.report.optimality !=
+            spo::SurfaceReductionOptimality::OptimalProven);
+    }
+
+    {
+        const auto document = makePlanarStrip(3);
+        spo::SurfaceReductionRequest request;
+        request.selectedFaces = allFaces(document);
+        request.options.searchObjective =
+            spo::SurfaceReductionSearchObjective::MinimizeFaceCount;
+        spo::SurfaceReductionExecutionOptions execution;
+        execution.maximumProposalGroupSize = 2;
+        const auto result =
+            spo::SurfaceReductionEngine().reduce(document, request, execution);
+        assert(result.report.outcome ==
+            spo::SurfaceReductionOutcome::InvalidSelection);
+        assert(!result.canApply());
     }
 }

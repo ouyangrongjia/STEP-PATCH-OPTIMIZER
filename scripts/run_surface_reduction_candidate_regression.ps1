@@ -66,6 +66,7 @@ function Invoke-Probe(
         $sourceStep,
         $step,
         '--source-stl', $scanStl,
+        '--search-objective', 'target-ratio',
         '--target-ratio', ([string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0}', $TargetRatio)),
         '--workers', $Workers,
         '--maximum-fit-evaluations', $MaximumFitEvaluations,

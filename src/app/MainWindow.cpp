@@ -15,6 +15,8 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QDockWidget>
+#include <QCryptographicHash>
+#include <QFile>
 #include <QFileDialog>
 #include <QFutureWatcher>
 #include <QInputDialog>
@@ -51,6 +53,18 @@ std::filesystem::path pathFromQString(const QString& path) {
 
 QString pathToQString(const std::filesystem::path& path) {
     return QString::fromStdWString(path.wstring());
+}
+
+std::string sha256File(const std::filesystem::path& path) {
+    QFile file(pathToQString(path));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    while (!file.atEnd()) {
+        hash.addData(file.read(1024 * 1024));
+    }
+    return hash.result().toHex().toStdString();
 }
 
 QString candidateTypeText(MergeCandidateType type) {
@@ -179,7 +193,12 @@ ProcessStatusSnapshot surfaceReductionProgressStatus(
     status.candidateId = candidateId;
     status.sourceFaceCount = progress.inputFaceCount;
     status.boundaryEdgeCount = boundaryEdgeCount;
-    status.targetFaceCount = progress.targetFaceCount;
+    status.targetFaceCount =
+        progress.searchObjective ==
+                SurfaceReductionSearchObjective::MinimizeFaceCount &&
+            progress.theoreticalMinimumFaceCount > 0
+        ? progress.theoreticalMinimumFaceCount
+        : progress.targetFaceCount;
     status.currentFaceCount = progress.currentFaceCount;
     status.searchIteration = progress.searchIteration;
     status.attemptedMergeCount = progress.attemptedMergeCount;
@@ -1846,6 +1865,8 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     SurfaceReductionRequest request;
     request.selectedFaces = selectedFaces;
     request.lockedEdges = controller_.lockedEdges();
+    request.options.searchObjective =
+        SurfaceReductionSearchObjective::MinimizeFaceCount;
     const auto inputMode = currentSurfaceReductionInputMode();
     if (inputMode == SurfaceReductionInputMode::StepBrepWithScanReference &&
         !controller_.hasSourceStl()) {
@@ -1860,11 +1881,10 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     SurfaceReductionExecutionOptions execution;
     execution.fitWorkerCount = 4;
     execution.detailedTiming = true;
-    const int targetFaceCount = std::max(
-        1,
-        static_cast<int>(std::floor(
-            static_cast<double>(selectedFaces.size()) * request.options.targetOutputRatio)));
+    execution.cacheMode = SurfaceReductionCacheMode::ReadWrite;
+    execution.algorithmFingerprint = "surface-reduction-minimize-v1";
     const int maximumFitCount = request.options.maximumRestrictedFitEvaluations;
+    const auto sourceStlPath = controller_.sourceStlPath();
     const int boundaryEdgeCount = candidate->boundary_edge_count > 0
         ? candidate->boundary_edge_count
         : static_cast<int>(candidate->boundary_edges.size());
@@ -1898,32 +1918,30 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
     initialStatus.candidateId = candidateId;
     initialStatus.sourceFaceCount = static_cast<int>(selectedFaces.size());
     initialStatus.boundaryEdgeCount = boundaryEdgeCount;
-    initialStatus.targetFaceCount = targetFaceCount;
+    initialStatus.targetFaceCount = 0;
     initialStatus.currentFaceCount = static_cast<int>(selectedFaces.size());
     initialStatus.maximumFitCount = maximumFitCount;
     controller_.updateProcessStatus(initialStatus);
     startPatchPreviewProgressReport(
         initialStatus,
-        QString("原生重拟合正在后台运行\n候选区域：%1\n输入面数：%2\n目标面数：≤ %3（target ratio=%4）\n拟合输入：%5\n提案分组上限：%6\n持久拟合缓存：%7\n工作线程：%8\n完成策略：%9\n刷新策略：阶段事件实时追加；长阶段每 2 秒刷新心跳行。")
+        QString("原生重拟合正在后台运行\n候选区域：%1\n输入面数：%2\n搜索目标：预算内最少面数（理论下界计算中）\n拟合输入：%3\n提案分组上限：%4\n持久拟合缓存：%5\n工作线程：%6\n最终验证预算：%7\n完成策略：%8\n刷新策略：阶段事件实时追加；长阶段每 2 秒刷新心跳行。")
         .arg(candidateId)
         .arg(selectedFaces.size())
-        .arg(targetFaceCount)
-        .arg(QString::number(request.options.targetOutputRatio, 'g', 4))
         .arg(surfaceReductionInputModeText(inputMode))
         .arg(execution.maximumProposalGroupSize > 0
             ? QString::number(execution.maximumProposalGroupSize)
             : "不限")
         .arg(QString::fromLatin1(toString(execution.cacheMode)))
         .arg(execution.fitWorkerCount)
+        .arg(request.options.maximumFinalValidationEvaluations)
         .arg(applyAfterPreview ? "预览通过后自动应用" : "先预览，再用同一按钮应用"));
-    logPanel_->appendInfo(QString("开始后台原生重拟合：候选 %1，%2 面，目标 ≤ %3 面。")
+    logPanel_->appendInfo(QString("开始后台原生重拟合：候选 %1，%2 面，正在寻找预算内最少面数。")
         .arg(candidateId)
-        .arg(selectedFaces.size())
-        .arg(targetFaceCount));
+        .arg(selectedFaces.size()));
     setStatus(applyAfterPreview ? "正在后台预览并准备应用原生重拟合" : "正在后台预览原生重拟合");
 
     auto* watcher = new QFutureWatcher<SurfaceReductionResult>(this);
-    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode, candidateId, targetFaceCount, maximumFitCount, applyAfterPreview]() {
+    connect(watcher, &QFutureWatcher<SurfaceReductionResult>::finished, this, [this, watcher, inputMode, candidateId, maximumFitCount, applyAfterPreview]() {
         auto output = watcher->result();
         watcher->deleteLater();
         setStlCropInProgress(false);
@@ -1940,7 +1958,8 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
             report.message);
         completedStatus.candidateId = candidateId;
         completedStatus.sourceFaceCount = report.inputFaceCount;
-        completedStatus.targetFaceCount = targetFaceCount;
+        completedStatus.targetFaceCount =
+            report.theoreticalMinimumFaceCount;
         completedStatus.currentFaceCount = report.outputFaceCount;
         completedStatus.attemptedMergeCount = report.attemptedMergeCount;
         completedStatus.completedFitCount = report.fitCacheMissCount;
@@ -1956,10 +1975,21 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
         lines << QString("候选区域：%1").arg(candidateId);
         lines << QString("拟合输入：%1").arg(surfaceReductionInputModeText(inputMode));
         lines << QString("状态：%1").arg(QString::fromLatin1(toString(report.outcome)));
+        lines << QString("搜索目标：%1").arg(
+            QString::fromLatin1(toString(report.searchObjective)));
+        lines << QString("最优性：%1").arg(
+            QString::fromLatin1(toString(report.optimality)));
+        lines << QString("停止原因：%1").arg(
+            QString::fromLatin1(toString(report.stopReason)));
         lines << QString("输入面数：%1").arg(report.inputFaceCount);
         lines << QString("输出面数：%1").arg(report.outputFaceCount);
+        lines << QString("理论最少面数：%1").arg(
+            report.theoreticalMinimumFaceCount);
+        lines << QString("最佳已验证面数：%1").arg(
+            report.bestValidatedFaceCount >= 0
+                ? QString::number(report.bestValidatedFaceCount)
+                : "无");
         lines << QString("减少比例：%1%").arg(QString::number(report.reductionRatio * 100.0, 'f', 2));
-        lines << QString("达到 50% 目标：%1").arg(report.targetAchieved ? "是" : "否");
         lines << QString("最大距离：%1 mm").arg(QString::number(report.maxDistance, 'g', 8));
         lines << QString("最大法向差：%1°").arg(QString::number(report.maxNormalAngleDegrees, 'g', 8));
         lines << QString("最大保留光顺接缝夹角：%1°").arg(QString::number(report.maxSmoothSeamAngleDegrees, 'g', 8));
@@ -1979,6 +2009,24 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
             .arg(report.expandedStateCount)
             .arg(report.generatedStateCount)
             .arg(report.fitCacheHitCount);
+        lines << QString("状态归档 %1，束剪枝 %2，提案剪枝 %3，最终验证 %4")
+            .arg(report.archivedStateCount)
+            .arg(report.beamPrunedStateCount)
+            .arg(report.proposalLimitPrunedCount)
+            .arg(report.finalValidationAttemptCount);
+        lines << QString("跳级三组：生成 %1，成功 %2；唯一分组 %3，实际拟合 %4")
+            .arg(report.skipTripleProposals.generatedCount)
+            .arg(report.skipTripleProposals.successCount)
+            .arg(report.uniqueGroupSetCount)
+            .arg(report.restrictedFitEvaluationCount);
+        lines << QString("持久缓存：%1，命中 %2，写入 %3")
+            .arg(QString::fromLatin1(toString(report.persistentCacheMode)))
+            .arg(report.persistentFitCacheHitCount)
+            .arg(report.persistentFitCacheWriteCount);
+        if (!report.persistentCacheMessage.empty()) {
+            lines << QString("缓存说明：%1").arg(
+                QString::fromStdString(report.persistentCacheMessage));
+        }
         lines << QString("并行拟合：%1 个工作线程，总耗时 %2 秒")
             .arg(report.fitWorkerCount)
             .arg(QString::number(report.timing.totalMs / 1000.0, 'f', 2));
@@ -2030,8 +2078,24 @@ void MainWindow::previewSurfaceReduction(bool applyAfterPreview) {
         }
         refreshUndoRedoActions();
     });
-    watcher->setFuture(QtConcurrent::run([documentSnapshot, request, execution]() {
-        return AppController::reduceSelectedFacesData(documentSnapshot, request, execution);
+    watcher->setFuture(QtConcurrent::run([documentSnapshot, request, execution, sourceStlPath]() mutable {
+        execution.sourceFingerprint = sha256File(documentSnapshot.sourcePath());
+        execution.scanFingerprint = request.scanReferenceStl != nullptr
+            ? sha256File(sourceStlPath)
+            : "none";
+        const bool cacheFingerprintValid =
+            !execution.sourceFingerprint.empty() &&
+            !execution.scanFingerprint.empty();
+        if (!cacheFingerprintValid) {
+            execution.cacheMode = SurfaceReductionCacheMode::Disabled;
+        }
+        auto output = AppController::reduceSelectedFacesData(
+            documentSnapshot, request, execution);
+        if (!cacheFingerprintValid) {
+            output.report.persistentCacheMessage =
+                "输入文件指纹不可用，已退回本次运行内缓存。";
+        }
+        return output;
     }));
 }
 
