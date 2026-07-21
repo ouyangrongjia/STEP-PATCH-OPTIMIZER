@@ -78,6 +78,8 @@ std::string RegionReferenceMesh::deterministicFingerprint() const {
         hashValue(hash, vertex.boundary ? 1u : 0u);
         hashValue(hash, vertex.internalSeam ? 1u : 0u);
         hashValue(hash, vertex.normalDiscontinuity ? 1u : 0u);
+        hashValue(hash, vertex.boundaryEdgeIds.size());
+        for (const auto edgeId : vertex.boundaryEdgeIds) hashValue(hash, edgeId);
     }
     for (const auto& triangle : triangles) {
         hashValue(hash, triangle.vertices[0]);

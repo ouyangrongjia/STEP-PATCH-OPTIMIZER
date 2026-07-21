@@ -75,9 +75,11 @@ add_library(spo_core STATIC
     src/reduction/SurfaceReductionFitCache.cpp
     src/reduction/SurfaceReductionEngine.cpp
     src/reduction/region_refit/RegionalSurfaceRefitTypes.cpp
+    src/reduction/region_refit/RegionRefitResourceMonitor.cpp
     src/reduction/region_refit/RegionReferenceMesh.cpp
     src/reduction/region_refit/RegionPatchLayout.cpp
     src/reduction/region_refit/JointBSplineNetworkFitter.cpp
+    src/reduction/region_refit/NativeRegionPatchNetworkBuilder.cpp
     src/reduction/region_refit/RegionConstraintExtractor.cpp
     src/reduction/region_refit/StepAdaptiveRegionSampler.cpp
     src/reduction/region_refit/RegionalSurfaceRefitEngine.cpp
@@ -119,6 +121,10 @@ target_link_libraries(spo_core
         TKXSBase
         TKernel
 )
+
+if(WIN32)
+    target_link_libraries(spo_core PUBLIC Psapi)
+endif()
 
 if(SPO_BUILD_APP)
     qt_standard_project_setup()

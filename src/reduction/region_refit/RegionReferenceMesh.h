@@ -29,6 +29,7 @@ struct RegionReferenceVertex {
     gp_Pnt point;
     gp_Dir normal {0.0, 0.0, 1.0};
     std::vector<RegionReferenceSourceSample> sources;
+    std::vector<EdgeId> boundaryEdgeIds;
     bool boundary = false;
     bool hardBoundary = false;
     bool boundaryEndpoint = false;

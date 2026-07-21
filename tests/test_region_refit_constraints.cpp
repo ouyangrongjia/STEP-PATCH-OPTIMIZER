@@ -170,6 +170,22 @@ void test_engine_rejects_invalid_resource_budget_without_mutating_shape() {
     assert(fixture.document.stats().faces == beforeFaces);
 }
 
+void test_engine_stops_before_work_when_process_exceeds_memory_budget() {
+    const auto fixture = make_two_face_fixture();
+    const auto beforeFaces = fixture.document.stats().faces;
+    spo::RegionRefitRequest request;
+    request.selectedFaces = {0, 1};
+    request.options.maximumMemoryMiB = 1;
+
+    const auto result = spo::RegionalSurfaceRefitEngine().run(fixture.document, request);
+
+    assert(result.report.status == spo::RegionRefitStatus::MemoryBudgetExceeded);
+    assert(result.report.failureStage == spo::RegionRefitStage::Constraints);
+    assert(!result.canApply());
+    assert(result.finalShape.IsNull());
+    assert(fixture.document.stats().faces == beforeFaces);
+}
+
 void test_engine_records_constraint_stage_before_unimplemented_layout() {
     const auto fixture = make_two_face_fixture();
     spo::RegionRefitRequest request;
@@ -195,5 +211,6 @@ void run_region_refit_constraint_tests() {
     test_constraint_extractor_rejects_hole();
     test_constraint_extractor_rejects_missing_face();
     test_engine_rejects_invalid_resource_budget_without_mutating_shape();
+    test_engine_stops_before_work_when_process_exceeds_memory_budget();
     test_engine_records_constraint_stage_before_unimplemented_layout();
 }

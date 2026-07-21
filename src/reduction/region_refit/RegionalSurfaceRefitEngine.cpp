@@ -2,13 +2,130 @@
 
 #include "reduction/region_refit/RegionConstraintExtractor.h"
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
+#include "reduction/region_refit/NativeRegionPatchNetworkBuilder.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
+#include "reduction/region_refit/RegionRefitResourceMonitor.h"
 #include "reduction/region_refit/StepAdaptiveRegionSampler.h"
+#include "merge/RegionBoundaryAnalyzer.h"
+#include "patch/PatchReplacementAssembler.h"
+#include "patch/PatchReplacementRepair.h"
+#include "validate/StrictTopologyGate.h"
+
+#include <Precision.hxx>
 
 #include <chrono>
 
 namespace spo {
+
+namespace {
+
+RegionBoundaryAnalysis boundaryAnalysisFromConstraints(
+    const RegionTopologyConstraints& constraints) {
+    RegionBoundaryAnalysis boundary;
+    boundary.valid = !constraints.outerWire.IsNull() && !constraints.orderedBoundaryEdges.empty();
+    boundary.connected_component_count = 1;
+    boundary.outer_wire_count = 1;
+    boundary.inner_wire_count = 0;
+    boundary.boundary_closed = true;
+    boundary.has_holes = false;
+    boundary.has_non_manifold_edges = false;
+    boundary.has_branching_boundary = false;
+    boundary.ordered_boundary_edges = constraints.orderedBoundaryEdges;
+    boundary.boundary_loops = {constraints.orderedBoundaryEdges};
+    boundary.message = boundary.valid
+        ? "Constructed the native replacement boundary contract."
+        : "Native replacement constraints have no valid outer boundary wire.";
+    return boundary;
+}
+
+BoundaryConstrainedPatchBuildResult replacementBuildResult(
+    const RegionTopologyConstraints& constraints,
+    const NativeRegionPatchNetworkBuildResult& native) {
+    BoundaryConstrainedPatchBuildResult replacement;
+    replacement.success = native.success();
+    replacement.replacementShape = native.replacementShape;
+    replacement.replacementFaces = native.replacementFaces;
+    replacement.internalPatchEdges = native.internalSeamEdges;
+    replacement.sourceFaceIds = constraints.selectedFaces;
+    replacement.usedMultiFaceFragment = native.replacementFaces.size() > 1;
+    replacement.attemptedMultiSurfaceBoundaryShell = true;
+    replacement.usedMultiSurfaceBoundaryShell = native.success();
+    replacement.sourceFaceCount = static_cast<int>(constraints.selectedFaces.size());
+    replacement.patchFaceCount = static_cast<int>(native.replacementFaces.size());
+    replacement.replacementFaceCount = static_cast<int>(native.replacementFaces.size());
+    replacement.internalPatchEdgeCount = static_cast<int>(native.internalSeamEdges.size());
+    replacement.multiSurfaceAssignedBoundarySegmentCount =
+        native.reusedOriginalBoundaryEdgeCount + native.splitBoundarySegmentCount;
+    replacement.multiSurfaceSplitBoundaryEdgeCount = native.splitBoundarySegmentCount;
+    replacement.multiSurfaceBuiltFaceCount = replacement.replacementFaceCount;
+    replacement.multiSurfaceClosedWireCount = replacement.replacementFaceCount;
+    replacement.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = native.pcurveProjectionCount;
+    replacement.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount =
+        native.pcurveProjectionCount - native.sameParameterFailureCount;
+    replacement.multiSurfaceBoundaryEdgePcurveRebuildFailureCount =
+        native.sameParameterFailureCount;
+    replacement.multiSurfaceBoundaryEdgeSameParameterCheckCount =
+        native.sameParameterCheckCount;
+    replacement.multiSurfaceBoundaryEdgeSameParameterFailureCount =
+        native.sameParameterFailureCount;
+    replacement.multiSurfaceBoundaryEdgeMaxSameParameterDeviation =
+        native.maximumSameParameterDeviation;
+    replacement.multiSurfaceSplitBoundarySegments = native.splitBoundarySegments;
+    replacement.message = native.message;
+    return replacement;
+}
+
+void copyStrictTopologyReport(
+    RegionRefitReport& target,
+    const StrictTopologyGateReport& source) {
+    target.strictTopologyPassed = source.passed;
+    target.strictTopologyFailureReason = toString(source.failureReason);
+    target.afterBRepCheckValid = source.afterBRepCheckValid;
+    target.stepExportOk = source.stepExportOk;
+    target.stepRoundtripOk = source.stepRoundtripOk;
+    target.roundtripBRepCheckValid = source.roundtripBRepCheckValid;
+    target.beforeSolidCount = source.beforeStats.solids;
+    target.afterSolidCount = source.afterStats.solids;
+    target.roundtripSolidCount = source.roundtripStats.solids;
+    target.beforeFaceCount = source.beforeStats.faces;
+    target.afterFaceCount = source.afterStats.faces;
+    target.roundtripFaceCount = source.roundtripStats.faces;
+    target.beforeFreeEdgeCount = source.beforeFreeEdges;
+    target.afterFreeEdgeCount = source.afterFreeEdges;
+    target.roundtripFreeEdgeCount = source.roundtripFreeEdges;
+    target.beforeMultipleEdgeCount = source.beforeMultipleEdges;
+    target.afterMultipleEdgeCount = source.afterMultipleEdges;
+    target.roundtripMultipleEdgeCount = source.roundtripMultipleEdges;
+}
+
+bool finishStageResources(
+    RegionRefitStageReport& stage,
+    const RegionProcessResourceSnapshot& before,
+    RegionRefitReport& report,
+    const RegionRefitOptions& options) {
+    const auto after = captureRegionProcessResources();
+    stage.cpuMilliseconds = std::max(
+        0.0, after.processCpuMilliseconds - before.processCpuMilliseconds);
+    stage.peakWorkingSetBytes = after.peakWorkingSetBytes;
+    stage.peakPrivateBytes = std::max(report.peakPrivateBytes, after.privateBytes);
+    report.peakWorkingSetBytes = std::max(
+        report.peakWorkingSetBytes, after.peakWorkingSetBytes);
+    report.peakPrivateBytes = std::max(report.peakPrivateBytes, after.privateBytes);
+    const auto budgetBytes = static_cast<std::uint64_t>(options.maximumMemoryMiB) *
+        1024ull * 1024ull;
+    return after.workingSetBytes > budgetBytes || after.privateBytes > budgetBytes;
+}
+
+void failMemoryBudget(
+    RegionRefitResult& result,
+    const RegionRefitStage stage) {
+    result.report.status = RegionRefitStatus::MemoryBudgetExceeded;
+    result.report.failureStage = stage;
+    result.report.message = "Native regional refit exceeded the process memory budget.";
+}
+
+}
 
 RegionRefitResult RegionalSurfaceRefitEngine::run(
     const ShapeDocument& document,
@@ -31,6 +148,18 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
+    const auto initialResources = captureRegionProcessResources();
+    result.report.peakWorkingSetBytes = initialResources.peakWorkingSetBytes;
+    result.report.peakPrivateBytes = initialResources.privateBytes;
+    const auto memoryBudgetBytes =
+        static_cast<std::uint64_t>(request.options.maximumMemoryMiB) * 1024ull * 1024ull;
+    if (initialResources.workingSetBytes > memoryBudgetBytes ||
+        initialResources.privateBytes > memoryBudgetBytes) {
+        failMemoryBudget(result, RegionRefitStage::Constraints);
+        return result;
+    }
+
+    const auto constraintResources = captureRegionProcessResources();
     const auto started = std::chrono::steady_clock::now();
     const auto extraction = RegionConstraintExtractor().extract(document, request);
     const auto ended = std::chrono::steady_clock::now();
@@ -39,6 +168,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     stage.success = extraction.success();
     stage.wallMilliseconds = std::chrono::duration<double, std::milli>(ended - started).count();
     stage.message = extraction.message;
+    const auto constraintMemoryExceeded = finishStageResources(
+        stage, constraintResources, result.report, request.options);
     result.report.stages.push_back(stage);
     result.report.totalWallMilliseconds = stage.wallMilliseconds;
 
@@ -46,6 +177,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.status = extraction.status;
         result.report.failureStage = RegionRefitStage::Constraints;
         result.report.message = extraction.message;
+        return result;
+    }
+    if (constraintMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Constraints);
         return result;
     }
     if (stage.wallMilliseconds > static_cast<double>(request.options.constraintsBudgetMilliseconds) ||
@@ -65,6 +200,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
+    const auto samplingResources = captureRegionProcessResources();
     const auto samplingStarted = std::chrono::steady_clock::now();
     auto sampling = StepAdaptiveRegionSampler().sample(
         document,
@@ -77,6 +213,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     samplingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         samplingEnded - samplingStarted).count();
     samplingStage.message = sampling.report.message;
+    const auto samplingMemoryExceeded = finishStageResources(
+        samplingStage, samplingResources, result.report, request.options);
     result.report.stages.push_back(samplingStage);
     result.report.totalWallMilliseconds += samplingStage.wallMilliseconds;
     result.report.sampleVertexCount = sampling.report.vertexCount;
@@ -95,6 +233,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.message = sampling.report.message;
         return result;
     }
+    if (samplingMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Sampling);
+        return result;
+    }
     result.referenceMesh = std::make_shared<RegionReferenceMesh>(std::move(sampling.mesh));
     if (samplingStage.wallMilliseconds > static_cast<double>(request.options.samplingBudgetMilliseconds) ||
         result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
@@ -111,6 +253,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
+    const auto layoutResources = captureRegionProcessResources();
     const auto layoutStarted = std::chrono::steady_clock::now();
     auto layouts = RegionPatchLayoutGenerator().generate(
         *result.referenceMesh,
@@ -123,6 +266,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     layoutStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         layoutEnded - layoutStarted).count();
     layoutStage.message = layouts.message;
+    const auto layoutMemoryExceeded = finishStageResources(
+        layoutStage, layoutResources, result.report, request.options);
     result.report.stages.push_back(layoutStage);
     result.report.totalWallMilliseconds += layoutStage.wallMilliseconds;
     result.report.layoutCandidates = layouts.candidates;
@@ -130,6 +275,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.status = layouts.status;
         result.report.failureStage = RegionRefitStage::Layout;
         result.report.message = layouts.message;
+        return result;
+    }
+    if (layoutMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Layout);
         return result;
     }
     result.selectedLayout = std::make_shared<RegionPatchLayout>(
@@ -163,6 +312,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.message = "Insufficient wall-clock budget remains for fitting and reserved final validation.";
         return result;
     }
+    const auto fittingResources = captureRegionProcessResources();
     const auto fittingStarted = std::chrono::steady_clock::now();
     auto fitted = JointBSplineNetworkFitter().fit(
         *result.referenceMesh,
@@ -177,6 +327,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     fittingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         fittingEnded - fittingStarted).count();
     fittingStage.message = fitted.message;
+    const auto fittingMemoryExceeded = finishStageResources(
+        fittingStage, fittingResources, result.report, request.options);
     result.report.stages.push_back(fittingStage);
     result.report.totalWallMilliseconds += fittingStage.wallMilliseconds;
     result.report.fitAttempts = fitted.attempts;
@@ -185,6 +337,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.status = fitted.status;
         result.report.failureStage = RegionRefitStage::Fitting;
         result.report.message = fitted.message;
+        return result;
+    }
+    if (fittingMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Fitting);
         return result;
     }
     result.fittedNetwork = fitted.network;
@@ -199,9 +355,214 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
-    result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
-    result.report.failureStage = RegionRefitStage::Retrim;
-    result.report.message = "Joint fitting passed; native retrimming is not complete yet.";
+    const auto retrimResources = captureRegionProcessResources();
+    const auto retrimStarted = std::chrono::steady_clock::now();
+    const auto nativeBuild = NativeRegionPatchNetworkBuilder().build(
+        *result.referenceMesh,
+        result.constraints,
+        *result.fittedNetwork,
+        request.options.curveOnSurfaceTolerance);
+    const auto boundary = boundaryAnalysisFromConstraints(result.constraints);
+    PatchReplacementAssemblyResult assembly;
+    if (nativeBuild.success() && boundary.valid) {
+        assembly = PatchReplacementAssembler().assemble(
+            document,
+            boundary,
+            replacementBuildResult(result.constraints, nativeBuild),
+            true);
+    }
+    const auto retrimEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport retrimStage;
+    retrimStage.stage = RegionRefitStage::Retrim;
+    retrimStage.success = nativeBuild.success() && boundary.valid && assembly.success;
+    retrimStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        retrimEnded - retrimStarted).count();
+    retrimStage.message = !nativeBuild.success()
+        ? nativeBuild.message
+        : (!boundary.valid ? boundary.message : assembly.message);
+    const auto retrimMemoryExceeded = finishStageResources(
+        retrimStage, retrimResources, result.report, request.options);
+    result.report.stages.push_back(retrimStage);
+    result.report.totalWallMilliseconds += retrimStage.wallMilliseconds;
+    result.report.retrimReplacementFaceCount =
+        static_cast<int>(nativeBuild.replacementFaces.size());
+    result.report.retrimInternalSeamCount = nativeBuild.internalSeamCount;
+    result.report.retrimReusedBoundaryEdgeCount = nativeBuild.reusedOriginalBoundaryEdgeCount;
+    result.report.retrimSplitBoundarySegmentCount = nativeBuild.splitBoundarySegmentCount;
+    result.report.retrimPcurveProjectionCount = nativeBuild.pcurveProjectionCount;
+    result.report.retrimSameParameterCheckCount = nativeBuild.sameParameterCheckCount;
+    result.report.retrimSameParameterFailureCount = nativeBuild.sameParameterFailureCount;
+    result.report.retrimMaximumSameParameterDeviation = nativeBuild.maximumSameParameterDeviation;
+    result.report.assemblyPassed = assembly.success;
+    if (!retrimStage.success) {
+        result.report.status = RegionRefitStatus::Failed;
+        result.report.failureStage = RegionRefitStage::Retrim;
+        result.report.message = retrimStage.message;
+        return result;
+    }
+    if (retrimMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Retrim);
+        return result;
+    }
+    if (retrimStage.wallMilliseconds > static_cast<double>(request.options.retrimBudgetMilliseconds) ||
+        result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = RegionRefitStage::Retrim;
+        result.report.message = "Native retrimming exceeded its wall-clock budget.";
+        return result;
+    }
+    if (request.diagnosticStopAfterStage == RegionRefitStage::Retrim) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::Sewing;
+        result.report.message = "Retrim-only diagnostic completed.";
+        return result;
+    }
+
+    const auto sewingResources = captureRegionProcessResources();
+    const auto sewingStarted = std::chrono::steady_clock::now();
+    PatchReplacementRepairOptions repairOptions;
+    repairOptions.runUnifySameDomain = false;
+    repairOptions.runAdaptiveSewing = false;
+    repairOptions.keepInternalPatchSeams = true;
+    repairOptions.sewingTolerance = std::max(
+        request.options.curveOnSurfaceTolerance, static_cast<double>(Precision::Confusion()));
+    repairOptions.preferredSewingTolerance = repairOptions.sewingTolerance;
+    repairOptions.minSewingTolerance = repairOptions.sewingTolerance;
+    repairOptions.maxSewingTolerance = repairOptions.sewingTolerance;
+    const auto repaired = repairPatchReplacementShape(assembly.shape, repairOptions);
+    const auto sewingEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport sewingStage;
+    sewingStage.stage = RegionRefitStage::Sewing;
+    sewingStage.success = repaired.success && !repaired.shape.IsNull();
+    sewingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        sewingEnded - sewingStarted).count();
+    sewingStage.message = repaired.report.message;
+    const auto sewingMemoryExceeded = finishStageResources(
+        sewingStage, sewingResources, result.report, request.options);
+    result.report.stages.push_back(sewingStage);
+    result.report.totalWallMilliseconds += sewingStage.wallMilliseconds;
+    result.report.repairPassed = repaired.success;
+    result.report.selectedSewingTolerance = repaired.report.selectedSewingTolerance;
+    result.report.sewingAttemptCount = repaired.report.sewingAttemptCount;
+    result.report.freeEdgesBeforeRepair = repaired.report.freeEdgesBeforeRepair;
+    result.report.freeEdgesAfterRepair = repaired.report.freeEdgesAfterRepair;
+    result.report.multipleEdgesBeforeRepair = repaired.report.multipleEdgesBeforeRepair;
+    result.report.multipleEdgesAfterRepair = repaired.report.multipleEdgesAfterRepair;
+    if (!sewingStage.success) {
+        result.report.status = RegionRefitStatus::Failed;
+        result.report.failureStage = RegionRefitStage::Sewing;
+        result.report.message = sewingStage.message;
+        return result;
+    }
+    if (sewingMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::Sewing);
+        return result;
+    }
+    if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = RegionRefitStage::Sewing;
+        result.report.message = "Replacement sewing exceeded the total wall-clock budget.";
+        return result;
+    }
+    if (request.diagnosticStopAfterStage == RegionRefitStage::Sewing) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::StrictTopology;
+        result.report.message = "Sewing-only diagnostic completed.";
+        return result;
+    }
+
+    const ShapeDocument afterDocument(repaired.shape, document.sourcePath());
+    StrictTopologyGateInput strictInput;
+    strictInput.beforeDocument = &document;
+    strictInput.afterDocument = &afterDocument;
+    strictInput.replacementFaceCount = nativeBuild.replacementFaces.size();
+    strictInput.requireStepRoundtrip = false;
+    strictInput.allowMultiFaceReplacement = true;
+    strictInput.allowFaceCountIncrease = false;
+    strictInput.requireWatertightSolid = document.stats().solids > 0;
+    strictInput.requireZeroFreeEdges = true;
+    strictInput.requireZeroMultipleEdges = true;
+    strictInput.requireRoundtripWatertight = true;
+    const auto strictResources = captureRegionProcessResources();
+    const auto strictStarted = std::chrono::steady_clock::now();
+    auto strictReport = StrictTopologyGate().evaluate(strictInput);
+    if (strictReport.passed && strictReport.afterStats.faces >= strictReport.beforeStats.faces) {
+        strictReport.passed = false;
+        strictReport.failureReason = StrictTopologyFailureReason::ReplacementStatsInvalid;
+        strictReport.message = "Native regional refit did not reduce the final whole-part face count.";
+    }
+    const auto strictEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport strictStage;
+    strictStage.stage = RegionRefitStage::StrictTopology;
+    strictStage.success = strictReport.passed;
+    strictStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        strictEnded - strictStarted).count();
+    strictStage.message = strictReport.message;
+    const auto strictMemoryExceeded = finishStageResources(
+        strictStage, strictResources, result.report, request.options);
+    result.report.stages.push_back(strictStage);
+    result.report.totalWallMilliseconds += strictStage.wallMilliseconds;
+    copyStrictTopologyReport(result.report, strictReport);
+    if (!strictReport.passed) {
+        result.report.status = RegionRefitStatus::Failed;
+        result.report.failureStage = RegionRefitStage::StrictTopology;
+        result.report.message = strictReport.message;
+        return result;
+    }
+    if (strictMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::StrictTopology);
+        return result;
+    }
+    if (request.diagnosticStopAfterStage == RegionRefitStage::StrictTopology) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::StepRoundtrip;
+        result.report.message = "Strict-topology-only diagnostic completed.";
+        return result;
+    }
+
+    strictInput.requireStepRoundtrip = true;
+    const auto roundtripResources = captureRegionProcessResources();
+    const auto roundtripStarted = std::chrono::steady_clock::now();
+    const auto roundtripReport = StrictTopologyGate().evaluate(strictInput);
+    const auto roundtripEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport roundtripStage;
+    roundtripStage.stage = RegionRefitStage::StepRoundtrip;
+    roundtripStage.success = roundtripReport.passed;
+    roundtripStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        roundtripEnded - roundtripStarted).count();
+    roundtripStage.message = roundtripReport.message;
+    const auto roundtripMemoryExceeded = finishStageResources(
+        roundtripStage, roundtripResources, result.report, request.options);
+    result.report.stages.push_back(roundtripStage);
+    result.report.totalWallMilliseconds += roundtripStage.wallMilliseconds;
+    copyStrictTopologyReport(result.report, roundtripReport);
+    if (!roundtripReport.passed) {
+        result.report.status = RegionRefitStatus::Failed;
+        result.report.failureStage = RegionRefitStage::StepRoundtrip;
+        result.report.message = roundtripReport.message;
+        return result;
+    }
+    if (roundtripMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::StepRoundtrip);
+        return result;
+    }
+    const auto finalValidationMilliseconds = sewingStage.wallMilliseconds +
+        strictStage.wallMilliseconds + roundtripStage.wallMilliseconds;
+    if (finalValidationMilliseconds >
+            static_cast<double>(request.options.finalValidationBudgetMilliseconds) ||
+        result.report.totalWallMilliseconds >
+            static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = RegionRefitStage::StepRoundtrip;
+        result.report.message = "Sewing, topology, and STEP roundtrip exceeded the final validation budget.";
+        return result;
+    }
+
+    result.finalShape = repaired.shape;
+    result.report.outputFaceCount = roundtripReport.afterStats.faces;
+    result.report.status = RegionRefitStatus::Success;
+    result.report.failureStage = RegionRefitStage::None;
+    result.report.message = "Native regional multi-surface refit passed retrimming, sewing, strict topology, and STEP roundtrip gates.";
     return result;
 }
 

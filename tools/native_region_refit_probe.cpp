@@ -202,6 +202,56 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
         {"attempts", attempts}};
 }
 
+QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
+    return {
+        {"status", result.report.retrimReplacementFaceCount > 0
+            ? "Success"
+            : spo::toString(result.report.status)},
+        {"replacement_faces", result.report.retrimReplacementFaceCount},
+        {"internal_seams", result.report.retrimInternalSeamCount},
+        {"reused_original_boundary_edges", result.report.retrimReusedBoundaryEdgeCount},
+        {"split_boundary_segments", result.report.retrimSplitBoundarySegmentCount},
+        {"pcurve_projections", result.report.retrimPcurveProjectionCount},
+        {"same_parameter_checks", result.report.retrimSameParameterCheckCount},
+        {"same_parameter_failures", result.report.retrimSameParameterFailureCount},
+        {"maximum_same_parameter_deviation", result.report.retrimMaximumSameParameterDeviation},
+        {"assembly_passed", result.report.assemblyPassed}};
+}
+
+QJsonObject sewingReportToJson(const spo::RegionRefitResult& result) {
+    return {
+        {"status", result.report.repairPassed ? "Success" : spo::toString(result.report.status)},
+        {"repair_passed", result.report.repairPassed},
+        {"selected_sewing_tolerance", result.report.selectedSewingTolerance},
+        {"sewing_attempts", result.report.sewingAttemptCount},
+        {"free_edges_before_repair", result.report.freeEdgesBeforeRepair},
+        {"free_edges_after_repair", result.report.freeEdgesAfterRepair},
+        {"multiple_edges_before_repair", result.report.multipleEdgesBeforeRepair},
+        {"multiple_edges_after_repair", result.report.multipleEdgesAfterRepair}};
+}
+
+QJsonObject strictTopologyReportToJson(const spo::RegionRefitResult& result) {
+    return {
+        {"passed", result.report.strictTopologyPassed},
+        {"failure_reason", QString::fromStdString(result.report.strictTopologyFailureReason)},
+        {"after_brep_check_valid", result.report.afterBRepCheckValid},
+        {"step_export_ok", result.report.stepExportOk},
+        {"step_roundtrip_ok", result.report.stepRoundtripOk},
+        {"roundtrip_brep_check_valid", result.report.roundtripBRepCheckValid},
+        {"before_solids", result.report.beforeSolidCount},
+        {"after_solids", result.report.afterSolidCount},
+        {"roundtrip_solids", result.report.roundtripSolidCount},
+        {"before_faces", result.report.beforeFaceCount},
+        {"after_faces", result.report.afterFaceCount},
+        {"roundtrip_faces", result.report.roundtripFaceCount},
+        {"before_free_edges", result.report.beforeFreeEdgeCount},
+        {"after_free_edges", result.report.afterFreeEdgeCount},
+        {"roundtrip_free_edges", result.report.roundtripFreeEdgeCount},
+        {"before_multiple_edges", result.report.beforeMultipleEdgeCount},
+        {"after_multiple_edges", result.report.afterMultipleEdgeCount},
+        {"roundtrip_multiple_edges", result.report.roundtripMultipleEdgeCount}};
+}
+
 std::array<int, 3> patchColor(const int patch) {
     static constexpr std::array<std::array<int, 3>, 12> colors {{
         {{31, 119, 180}}, {{255, 127, 14}}, {{44, 160, 44}}, {{214, 39, 40}},
@@ -532,6 +582,9 @@ int main(int argc, char* argv[]) {
         !writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) ||
         !writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) ||
         !writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) ||
+        !writeJson(diagnostics / "retrim_report.json", retrimReportToJson(result)) ||
+        !writeJson(diagnostics / "sewing_report.json", sewingReportToJson(result)) ||
+        !writeJson(diagnostics / "strict_topology_report.json", strictTopologyReportToJson(result)) ||
         !writeJson(diagnostics / "performance_report.json", performanceToJson(result, request, timing))) {
         std::cerr << "无法写入区域重拟合诊断。\n";
         return 1;
@@ -562,6 +615,17 @@ int main(int argc, char* argv[]) {
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(result.fittedPatchNetwork, {}),
             fitDirectory / "fitted_patch_network.step");
+        if (!write.success()) {
+            std::cerr << write.message() << '\n';
+            return 1;
+        }
+    }
+    if (result.canApply()) {
+        const auto assemblyDirectory = outputDirectory / "artifacts" / "assembly";
+        std::filesystem::create_directories(assemblyDirectory);
+        const auto write = spo::StepWriter().write(
+            spo::ShapeDocument(result.finalShape, {}),
+            assemblyDirectory / "final_sewn.step");
         if (!write.success()) {
             std::cerr << write.message() << '\n';
             return 1;

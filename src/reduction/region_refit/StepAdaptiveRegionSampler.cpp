@@ -380,6 +380,10 @@ bool addBoundarySamples(
         if (std::find(boundaryEdges.begin(), boundaryEdges.end(), constraint.edgeId) == boundaryEdges.end()) {
             boundaryEdges.push_back(constraint.edgeId);
         }
+        auto& boundaryEdgeIds = faceMesh.vertices[localIndex].value.boundaryEdgeIds;
+        if (std::find(boundaryEdgeIds.begin(), boundaryEdgeIds.end(), constraint.edgeId) == boundaryEdgeIds.end()) {
+            boundaryEdgeIds.push_back(constraint.edgeId);
+        }
     }
 
     const auto parameterTolerance = std::max(
@@ -406,6 +410,7 @@ bool addBoundarySamples(
         vertex.value.boundary = true;
         vertex.value.hardBoundary = true;
         vertex.boundaryEdges.push_back(constraint.edgeId);
+        vertex.value.boundaryEdgeIds.push_back(constraint.edgeId);
         const auto localIndex = faceMesh.vertices.size();
         faceMesh.vertices.push_back(std::move(vertex));
         requiredVertices.emplace(parameter, localIndex);
@@ -1100,6 +1105,12 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
                     existing.sources.end(),
                     local.value.sources.begin(),
                     local.value.sources.end());
+                for (const auto edgeId : local.value.boundaryEdgeIds) {
+                    if (std::find(existing.boundaryEdgeIds.begin(), existing.boundaryEdgeIds.end(), edgeId) ==
+                        existing.boundaryEdgeIds.end()) {
+                        existing.boundaryEdgeIds.push_back(edgeId);
+                    }
+                }
                 normalSums[*globalIndex] += gp_Vec(local.value.normal);
             }
             for (const auto edgeId : local.internalSeamEdges) {
