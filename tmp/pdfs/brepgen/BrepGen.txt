@@ -1,0 +1,912 @@
+BrepGen: A B-rep Generative Diffusion Model with Structured Latent
+Geometry
+XIANG XU, Simon Fraser University, Canada and Autodesk Research, Canada
+JOSEPH G. LAMBOURNE, Autodesk Research, UK
+PRADEEP KUMAR JAYARAMAN, Autodesk Research, Canada
+ZHENGQING WANG, Simon Fraser University, Canada
+KARL D.D. WILLIS, Autodesk Research, USA
+YASUTAKA FURUKAWA, Simon Fraser University, Canada
+
+
+
+
+Fig. 1. BrepGen is a diffusion-based approach to generate 3D CAD models in B-rep format. Geometry and topology relations are progressively denoised for
+faces, edges, and vertices to form a water-tight solid at the end. Extensive evaluations demonstrate that BrepGen generates a wide range of complex B-reps.
+
+This paper presents BrepGen, a diffusion-based generative approach that                         B-rep topology information is implicitly represented by node duplication.
+directly outputs a Boundary representation (B-rep) Computer-Aided Design                        When two faces share an edge, the edge curve will appear twice in the
+(CAD) model. BrepGen represents a B-rep model as a novel structured latent                      tree, and a T-junction vertex with three incident edges appears six times in
+geometry in a hierarchical tree. With the root node representing a whole                        the tree with identical node features. Starting from the root and progress-
+CAD solid, each element of a B-rep model (i.e., a face, an edge, or a vertex)                   ing to the leaf, BrepGen employs Transformer-based diffusion models to
+progressively turns into a child-node from top to bottom. B-rep geometry                        sequentially denoise node features while duplicated nodes are detected and
+information goes into the nodes as the global bounding box of each prim-                        merged, recovering the B-Rep topology information. Extensive experiments
+itive along with a latent code describing the local geometric shape. The                        show that BrepGen advances the task of CAD B-rep generation, surpassing
+                                                                                                existing methods on various benchmarks. Results on our newly collected
+Authors’ Contact Information: Xiang Xu, Simon Fraser University, Canada and Au-
+                                                                                                furniture dataset further showcase its exceptional capability in generating
+todesk Research, Canada, xuxiangx@sfu.ca; Joseph G. Lambourne, Autodesk Re-
+search, UK, joseph.lambourne@autodesk.com; Pradeep Kumar Jayaraman, Autodesk                    complicated geometry. While previous methods were limited to generating
+Research, Canada, pradeep.kumar.jayaraman@autodesk.com; Zhengqing Wang, Si-                     simple prismatic shapes, BrepGen incorporates free-form and doubly-curved
+mon Fraser University, Canada, zwa170@sfu.ca; Karl D.D. Willis, Autodesk Research,              surfaces for the first time. Additional applications of BrepGen include CAD
+USA, karl.willis@autodesk.com; Yasutaka Furukawa, Simon Fraser University, Canada,
+                                                                                                autocomplete and design interpolation. The code, pretrained models, and
+furukawa@sfu.ca.
+                                                                                                dataset are available at https://github.com/samxuxiang/BrepGen.
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed           CCS Concepts: • Computing methodologies → Computer vision; •
+for profit or commercial advantage and that copies bear this notice and the full citation       Applied computing → Computer-aided design.
+on the first page. Copyrights for components of this work owned by others than the
+author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or          Additional Key Words and Phrases: B-rep, Diffusion, AIGC
+republish, to post on servers or to redistribute to lists, requires prior specific permission
+and/or a fee. Request permissions from permissions@acm.org.
+© 2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+                                                                                                ACM Reference Format:
+ACM 1557-7368/2024/7-ART119                                                                     Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing
+https://doi.org/10.1145/3658129                                                                 Wang, Karl D.D. Willis, and Yasutaka Furukawa. 2024. BrepGen: A B-rep
+
+
+                                                                                                         ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:2    • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+Generative Diffusion Model with Structured Latent Geometry. ACM Trans.                    This node duplication is the key in our structured latent geom-
+Graph. 43, 4, Article 119 (July 2024), 14 pages. https://doi.org/10.1145/3658129       etry representation, encoding both the B-rep geometry and topol-
+                                                                                       ogy information in a unified tree format, where continuous geom-
+                                                                                       etry regression implicitly recovers discrete topology. Concretely,
+                                                                                       a Transformer-based diffusion model generates node features top
+1       INTRODUCTION                                                                   to bottom (i.e., face to edge to vertex), while nodes with similar
+Nearly every man-made object begins its life as a Computer-Aided                       features are detected and merged 1) across different parents to re-
+Design (CAD) model. Within the realm of CAD, the Boundary rep-                         cover mating and adjacency relations, and 2) within each parent to
+resentation (B-rep) is the predominant format for describing shapes,                   restore unique geometric elements associated with it. By merging
+and is widely used in freeform surface modeling to express compli-                     the duplicated nodes, the topology of each face is reconstructed,
+cated geometry. The B-rep representation [Weiler 1986] generalizes                     first connecting edges into closed loops and then using them to trim
+half-edge meshes [Muller and Preparata 1978], allowing parametric                      the parent face. The resulting trimmed faces are joined together to
+curves and surfaces to replace the planar facets and linear edges                      directly output the CAD model in B-rep format. In summary, we
+used in mesh modeling. A B-rep consists of sets of interconnected                      make the following contributions:
+faces, edges, and vertices. A face is the visible region of a paramet-                     • A structured latent geometry representation, whose hierarchi-
+ric surface, bounded by closed loops formed by its adjacent edges,                           cal tree, with node duplication, encodes the B-rep geometry
+while an edge is the visible region of a parametric curve, trimmed                           and topology information in a unified format.
+by vertices that define its start and end points. The adjacency of                         • A latent diffusion module, capable of generating free-form
+neighbouring edges and vertices is recorded, allowing the structure                          surfaces and trimming curves.
+to provide a complete description of the final solid shape. A system                       • A newly collected Furniture B-rep Dataset with high-quality
+capable of directly generating B-reps would revolutionize the CAD                            B-reps of indoor objects across 10 different categories.
+design workflow, reducing the extensive manual labor required from                         • Direct B-rep generation with state-of-the-art performance.
+skilled designers and the reliance on professional CAD software.
+   However, directly generating the B-rep poses significant chal-
+                                                                                       2     RELATED WORK
+lenges. In contrast to triangle meshes, B-reps contain a variety of
+parametric surface and curve types such as arcs, toruses, and Non-                    This section reviews three CAD model representations used in the
+Uniform Rational B-Splines (NURBS). Each geometry has a different                     literature: constructive solid geometry, sketch and extrude, and B-
+definition and its own set of parameters, making it difficult to gen-                 rep, followed by a summary of B-rep datasets and the use of diffusion
+erate. Furthermore, the topological relations between all geometry                    models for CAD model generation.
+must be correct to form a water-tight solid. Recent CAD generative
+models avoid direct B-rep generation and instead focus on sketch
+                                                                                       2.1    Constructive Solid Geometry (CSG)
+and extrude modeling operations [Li et al. 2023; Ren et al. 2022; Wu                  CSG is a common method to create 3D shapes by combining prim-
+et al. 2021; Xu et al. 2023, 2022; Zhou et al. 2023] that represent only              itives (e.g. cuboids, spheres) with Boolean operations (e.g. union,
+a limited range of 3D shapes. Direct B-rep generation methods, like                   subtraction) to form a CSG tree. CSG has been used extensively in
+SolidGen [Jayaraman et al. 2022], are limited to highly simplified                    ‘shape programs’ [Ritchie et al. 2023] both with neural guidance [El-
+prismatic shapes and non-freeform surfaces.                                           lis et al. 2019; Sharma et al. 2018; Tian et al. 2019] and without [Du
+   To this end, we introduce BrepGen, a generative approach that                      et al. 2018; Nandi et al. 2017, 2018], thanks to its simplicity. Recent
+directly outputs diverse B-rep CAD models using Denoising Dif-                        CSG-based approaches have focused on recovering 3D shapes as
+fusion Probabilistic Models (DDPM) [Ho et al. 2020]. Key to our                       primitive assemblies without supervision from the ground truth
+method is the use of a structured latent geometry representation                      CSG tree [Kania et al. 2020; Ren et al. 2021; Yu et al. 2023, 2022].
+that transforms any B-rep into a tree data structure. Concretely,                     Even though most CSG primitives can be represented as B-reps,
+BrepGen encodes the geometry as node features in a tree, where the                    converting non-trivial CSG shapes into B-reps induces unwanted
+root node identifies the CAD solid, and child-nodes, at the following                 complexity. For example, thin sliver faces are created when CSG
+three levels, define the global position and latent local geometry                    primitives are almost aligned but not coincident. A major advan-
+for every face, edge, and vertex. For the local geometry, we follow                   tage of our work is that we learn from the B-rep topology found in
+UV-Net [Jayaraman et al. 2021] and use a grid of points uniformly-                    industrial quality designs, resulting in well structured B-rep output
+sampled along the UV domain as a substitute for its parametric                        that can be edited using standard direct modeling CAD tools.
+function. Mating and association topologies are encoded through
+the duplication of tree nodes in two ways. First, every shared edge                    2.2    Sketch and Extrude
+(resp. vertex) in a B-rep model turns into multiple nodes in a tree                    Sketch and extrude is a popular format, representing a CAD model
+with the same node features, establishing connections between adja-                    as a sequence of modeling operations stored in parametric CAD files.
+cent geometries and their corresponding mating duplicates. Second,                     Reconstruction [Li et al. 2023; Xu et al. 2021] and generation [Ren
+since the number of faces constituting a solid and the number of                       et al. 2022; Wu et al. 2021; Xu et al. 2023, 2022; Zhou et al. 2023]
+edges bounding a face vary, an additional duplication is performed                     of the format have been studied in recent years. While significant
+to pad child nodes at each parent to a predefined length, leading to                   progress has been made on improving the fidelity and controlla-
+uniform width trees.                                                                   bility, sequential CAD generative models currently are limited to
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                                                            BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •        119:3
+
+
+
+
+Fig. 2. Our structured latent geometry tree representation of a B-rep CAD model. Shape feature is sampled from the parametric surface or curve using grid in
+the parameter domain (left). Position and local geometry are extracted for the face, edge, and vertex, and then encoded as node features in the tree (mid).
+Topology is encoded by mating and association duplication. Node feature is represented by color values, where duplicated nodes are of the same color (right).
+
+
+producing sketches comprised of line, arc and circle primitives, and              trained on. Our method is more general and can produce prismatic-
+only the extrude modeling operation. Our method focuses on direct                 looking, as well as freeform doubly-curved geometry.
+synthesis of the B-rep data with emphasis on supporting complex
+curves and surfaces that cannot be achieved by previous methods.                  2.4    Diffusion Models for CAD Generation
+                                                                                 Diffusion models have been successful at generating geometry when
+                                                                                 topology is given. HouseDiffusion [Shabani et al. 2023] generates 2D
+2.3   Boundary Representation                                                    floor-plan that follows a given room connectivity. CAGE [Liu et al.
+                                                                                 2023] generates 3D articulated object conditioned on the ground-
+B-rep 3D models are represented as a graph [Ansaldi et al. 1985],                truth part connections. More recent methods like PolyDiff [Alliegro
+consisting of geometric primitives i.e., parametric curves and sur-              et al. 2023] do not require topology as input conditioning but are also
+faces, and topological primitives, i.e., vertices, edges, and faces that         limited to generating triangle soups of polygonal meshes without
+are used to trim and sew the surface patches into a solid model. B-rep           any topology. Using diffusion model to unconditionally generate
+classification and segmentation tasks have been tackled with graph               well-structured geometry together with the correct topology rela-
+neural networks [Cao et al. 2020a; Jayaraman et al. 2021; Willis et al.          tions remains a challenge, which is what our method aims to solve.
+2022], custom convolutions [Lambourne et al. 2021], and hierar-
+chical graph structures [Bian et al. 2023; Jones et al. 2021, 2023].
+                                                                                  2.5    B-rep Datasets
+For generation, previous approaches handled predefined template
+shapes [Smirnov et al. 2021] such as parametric curves [Wang et al.              B-rep 3D datasets have grown in number over the last several years.
+2020] and surfaces [Li et al. 2019; Sharma et al. 2020]. A challenge             These include synthetically created datasets with class labels, such as
+remains for cases, where a watertight solid is formed by trimming                FabWave [Angrish et al. 2019], SolidLetters [Jayaraman et al. 2021],
+and connecting surfaces.                                                         and MFCAD [Cao et al. 2020b], as well as datasets of human designed
+   PolyGen [Nash et al. 2020] uses Transformers [Vaswani et al.                  3D models without canonical class labels, such as ABC [Koch et al.
+2017] and pointer networks [Vinyals et al. 2015] to generate n-gon               2019], Fusion 360 Gallery [Lambourne et al. 2021; Willis et al. 2022,
+meshes, which is a special case of B-rep models with planar faces                2021b], Automate [Jones et al. 2021], and DeepCAD [Wu et al. 2021].
+and linear edges. Other mesh generation methods also include BSP-                Our Furniture B-rep Dataset, to the best of our knowledge, is the first
+Net [Chen et al. 2020] and MeshGPT [Siddiqui et al. 2023]. Wang                  dataset to contain human-designed 3D models in the B-rep format
+et al. reconstructs a B-rep model from a 2D wireframe drawing by                 across a standard set of classes (e.g. tables, chairs etc).
+identifying planar and cylindrical faces [Wang et al. 2022]. Guo et
+al. reconstructs B-rep from point clouds using a neural network to                3     STRUCTURED LATENT GEOMETRY
+predict the rough B-rep geometry and topology, that were refined                 A B-rep model consists of geometric elements (faces, edges, vertices)
+using a combinatorial optimization [Guo et al. 2022].                            with pairwise topological relationships (face-edge, edge-vertex ad-
+   Closest to our work is SolidGen [Jayaraman et al. 2022], that can             jacency matrix). The challenge lies in generating these two distinct
+generate entire B-reps, first with the synthesis of vertices, followed           data representations in a general graph topology. To solve this, our
+by conditional construction of edge topology using a pointer net-                approach unifies the geometry and topology of a B-rep model as a
+work, finally followed by another pointer network that conditionally             hierarchical tree with a fixed graph topology, where node features
+connected the edges to faces. While this approach can produce plau-              encode the geometry information and duplicated nodes (i.e., nodes
+sible B-reps, it is restricted to prismatic primitives which limit the           with near identical features during generation) implicitly encode
+complexity of the results, and the amount of data that it can be                 the topology information. With the root node representing a whole
+
+                                                                                           ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:4   • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+CAD solid, the tree has three levels: faces, edges, and vertices from                 3.2   Topology Encoding by Node Duplication
+top to bottom. The unified tree representation effectively bridges                    Node duplication in BrepGen serves two purposes: 1) encode the
+the two formats and becomes the foundation for training our diffu-                    topological relationships between faces, edges, and vertices, 2) pad
+sion models. This section first explains the node features encoding                   the number of faces in a B-rep and edges surrounding a face to
+geometry and then node duplication schemes encoding topology.                         a fixed maximum length. Two node duplication schemes achieve
+                                                                                      these objectives: mating and association.
+3.1     Geometry Encoding by Node Features                                           3.2.1 Mating Duplication. Mating duplication encodes face-edge-
+A face, an edge, or a vertex node encodes its geometry informa-                      face and edge-vertex-edge adjacency relationships geometrically.
+tion into a node feature with 1) a global position as bounding box                   Shared edges are duplicated so that each parent face gets a copy
+parameters or a point and 2) local shape details as a latent code.                   of the edge geometry as a child node. Similarly shared vertices are
+                                                                                     duplicated as child nodes of their parent edges. This procedure turns
+3.1.1 Face (𝐹 ). Underlying each face is a parametric surface (plane,                a B-rep graph structure into a tree. The top-right tree in Figure 2
+cylinder, cone, sphere, torus, Bezier, or NURBS) with a function                     shows the resulting tree with node features represented by color
+𝑆 (𝑢, 𝑣) : R2 → R3 , mapping a UV coordinate to a 3D point on the                    values, shared blue vertices, and purple duplicated edges. Mating
+unbounded surface on which the face lies (Figure 2 left). The shape                  relations are later recovered by merging edge or vertex nodes with
+feature 𝐹𝑠 is a 2D array of 3D points sampled on the parametric                      similar geometry across different parents.
+surface, and the position feature 𝐹𝑝 is the axis-aligned bounding                    3.2.2 Association Duplication. The number of edges bounding a
+box enclosing the points: 𝐹𝑝 = [𝑥 1, 𝑦1, 𝑧 1, 𝑥 2, 𝑦2, 𝑧 2 ] encoding the            face and the number of faces forming a solid vary, however the num-
+bottom-left and top-right corners. Following UV-Net [Jayaraman                       bers of faces and edges required to build a solid will not be known
+et al. 2021], let [𝑢 min, 𝑢 max ] × [𝑣 min, 𝑣 max ] ∈ R2 be a 2D axis-aligned        at inference time. Our idea is to pick a predetermined maximum
+bounding box along the UV axes. Points are sampled from a 𝑁 × 𝑁                      branching factor for each tree level and randomly duplicate nodes
+equally spaced grid along the UV axes with step size 𝛿𝑢 = 𝑢max𝑁−𝑢min ,               until reaching the maximum number of children. We found this
+𝛿𝑣 = 𝑣max𝑁−𝑣min . 3D coordinates at all grid locations are concatenated              ‘duplication padding’ strategy results in fewer missing faces and
+to form 𝐹𝑠 ∈ R𝑁 ×𝑁 ×3 as the shape details. Capitalizing on the                      edges at inference time than the zero-padding strategy. Randomly
+success of latent diffusion models for image generation [Rombach                     selecting the duplicated nodes per training iteration also helps pre-
+et al. 2022], a variational autoencoder (VAE) with a UNet backbone                   vent over-fitting. The bottom-right tree in Figure 2 illustrates this
+further compresses 𝐹𝑠 into a latent code 𝐹𝑧 , after normalizing the                  process with the tree randomly padded to two faces and three edges
+3D coordinates by an affine transformation that maps the bounding                    per face. The yellow edge is duplicated once and the purple edge is
+box to the canonical cube (i.e., [−1, 1] 3 ). The feature of a face node is          duplicated twice. Association relations can be recovered by remov-
+then defined as 𝐹 = [𝐹𝑝 , 𝐹𝑧 ]. Note that this feature does not include              ing child nodes with the same geometry under each parent. Note
+the outer trimming boundary or inner holes, which are given by                       that every edge is always connected to two vertices of its start and
+the associated edges. The ‘Face’ row in Figure 2 (middle) illustrates                end, making the association duplication unnecessary for vertices.
+two faces with different bounding box positions and normalized
+sampled points, revealing the local shape details.                                    4     METHOD
+                                                                                      BrepGen consists of two VAEs that compress the face and edge shape
+3.1.2 Edge (𝐸). Underlying each edge is a parametric curve (line,                     feature into geometry latent vectors, and a latent diffusion module
+circle, elliptic, Bezier, or B-spline) with a function 𝐶 (𝑢) : R → R3 ,               that sequentially denoises the node latent features in a tree from
+mapping a 𝑢-coordinate to a 3D point on the unbounded curve                           root to leaf, enabling effective training and inference.
+on which the edge lies (Figure 2 left). The shape feature 𝐸𝑠 is a 1D
+array of 3D points sampled along the parametric curve. The position                   4.1   Shape Geometry VAE
+feature 𝐸𝑝 is again defined as the bounding box parameters enclosing                 Following Stable Diffusion [Rombach et al. 2022], we use two VAEs
+the points. Let [𝑢 min, 𝑢 max ] ∈ R be the minimum and the maximum                   to compress the shape feature 𝐹𝑠 , 𝐸𝑠 into lower-dimensional latent
+U-coordinate value of an edge. Points are sampled from an 𝑁 equally                  𝐹𝑧 , 𝐸𝑧 . Shape feature is first normalized to [−1, 1]. A VAE with
+spaced grid along the u-axis with step size 𝛿𝑢 = 𝑢max𝑁−𝑢min . 3D                     2D convolution UNet backbone compresses the normalized face
+coordinates at all grid locations are concatenated to form 𝐸𝑠 ∈ R𝑁 ×3                feature. A similar VAE with 1D convolution compresses the edge
+as the shape details. Akin to the face feature construction, a VAE                   feature. Both VAEs are trained with MSE reconstruction loss and
+compresses 𝐸𝑠 into 𝐸𝑧 , where 𝐸 = [𝐸𝑝 , 𝐸𝑧 ] becomes the feature of                  a KL regularization term. Concretely, the face VAE encoder com-
+an edge node. The ‘Edge’ row in Figure 2 (middle) visualizes the                     presses 𝐹𝑠 into latent vector 𝐹𝑧 = 𝐸 (𝐹𝑠 ). A decoder then reconstructs
+position and the shape details.                                                      𝐹ˆ𝑠 = 𝐷 (𝐹𝑧 ) = 𝐷 (𝐸 (𝐹𝑠 )), Reconstruction loss is between 𝐹ˆ𝑠 , 𝐹𝑠 . In
+                                                                                     practice, we set 𝑁 = 32 to densely sample the UV parameter do-
+3.1.3 Vertex (𝑉 ). A vertex is a 3D point without additional shape                   main, and downsample the input by a factor of 8 while retaining the
+details. The feature of a vertex node is its point coordinate 𝑉 =                    feature depth, resulting in 𝐹𝑧 ∈ R4×4×3 and 𝐸𝑧 ∈ R4×3 . To further
+(𝑥, 𝑦, 𝑧). The ‘Vertex’ row in Figure 2 (middle) shows the location of               reduce computation, the two endpoint vertices are concatenated
+two vertices.                                                                        with an edge to form joint latent 𝐸𝑧𝑣 ∈ R4×3+6 .
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                                                                     BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •        119:5
+
+
+
+
+Fig. 3. Top row: Generation of the face bounding box position and face latent geometry. Nodes are split in half to represent each. 𝑡 indicates the time step and
+𝑐 indicates the class label in the Furniture dataset. Bottom row: Generation of the edge bounding box position and edge-vertex joint latent geometry, both
+conditioned on the parent face. Gray color represents noisy feature values. Points are decoded from the latent geometry for visualization.
+
+
+4.2      Latent Diffusion Module                                                          tokens from Figure 3 (top-row), which are embedded as:
+Our latent diffusion module is trained with the compressed latent
+                                                                                                               𝑭 ← MLP(𝑊𝑝 𝐹𝑝 ) + MLP(𝑊𝑧 𝐹𝑧 ).                               (3)
+geometry and global position as node features in the tree. The
+overall architecture of our generative latent diffusion module is                         𝐹𝑝 ∈ R6 is the face bounding box coordinates and 𝐹𝑧 ∈ R48 is the
+illustrated in Figure 3. We follow the DDPM [Ho et al. 2020] training                     flattened latent geometry vector. 𝑊𝑝 ∈ R𝑑 ×6 , 𝑊𝑧 ∈ R𝑑 ×48 are the
+scheme and use four Transformer-based denoisers to remove the                             two 𝑑-dimension embedding matrices. MLP is fully connected layers
+noise added to the nodes sequentially.                                                    with SiLU activation. The noisy edge bounding boxes are encoded
+4.2.1 Diffusion Process. Given a tree with node features x0 , the                         in a similar manner as 𝑬𝒑 = MLP(𝑊𝑝 𝐸𝑝 ).
+forward diffusion process adds Gaussian noise to all the nodes in T                          Rather than using cross-attention, the predefined parent-child
+steps. The noisy tree node features x𝑡 at time step 𝑡 are sampled as:                     relations from the tree are used to directly inject the face condition.
+                                     √                                                    Let edge 𝑗 be the child node of face 𝑖. Embedding from the 𝑖th face
+                 𝑞(x𝑡 |x0 ) = N (x𝑡 ; 𝛼¯𝑡 x0, (1 − 𝛼¯𝑡 )I),                               token is added to the 𝑗th edge bounding box position token as:
+                              √        √                                (1)
+                        x𝑡 = 𝛼¯𝑡 x0 + 1 − 𝛼¯𝑡 𝝐 𝑡 ,
+                                       Î𝑡                                                                               𝑬ˆ 𝒑, 𝒋 ← 𝑬𝒑, 𝒋 + 𝑭 𝒊 .                             (4)
+where noise 𝝐 𝑡 ∼ N (0, I) and 𝛼¯𝑡 = 𝑖=1       𝛼𝑖 , 𝛼𝑡 = 1 − 𝛽𝑡 . The 𝛽𝑡 is
+determined by the noise variance scheduler, a linear scheduler by                         During top-down generation, a known number of child nodes are
+default. After the noise injection, the encoded B-rep geometry and                        added for each parent at the next stage, leading to simple token
+topology are corrupted. For example, duplicated nodes have different                      addition for the condition. Edge embedding 𝐸𝑧𝑣 is similarly em-
+features and no longer exhibit the correct topological relations.                         bedded as 𝑬 𝒛𝒗 = MLP(𝑊𝑧𝑣 𝐸𝑧𝑣 ) with 𝑊𝑧𝑣 ∈ R𝑑 ×18 . The previously
+                                                                                          denoised edge position and parent face condition are added to every
+4.2.2 Sequential Denoising. Generating all geometry at once is                            𝑗th edge token as 𝑬 𝒛𝒗, 𝒋 + 𝑬ˆ 𝒑, 𝒋 following Equation 4. Final input to
+difficult. We use sequential generation to denoise the face, edge,                        the denoiser also adds the time and condition embedding as 𝑓 (𝑡, 𝑐).
+and vertex progressively. Concretely, we factored the distribution                        Note that we do not use learnable positional encoding.
+of node features x into a product of conditional distributions:
+      𝑝 (x) = 𝑝 (𝐹, 𝐸, 𝑉 ) = 𝑝 (𝐸𝑧𝑣 |𝐸𝑝 , 𝐹 )𝑝 (𝐸𝑝 |𝐹 )𝑝 (𝐹𝑧 |𝐹𝑝 )𝑝 (𝐹𝑝 |∅).   (2)        4.2.3 Loss Function. The four Transformer-based denoisers are
+                                                                                          trained separately to predict the L2-norm regression loss of the
+The ordering reflects a top-down generation process with edge                             added sampled noise as in DDPM [Ho et al. 2020]. Loss term is:
+conditioned on face, and latent geometry conditioned on global                                                   h            √        √                    i
+position. Figure 3 shows the conditional denoising process with a                                  𝐿 = E𝑡,x0 ,𝝐 𝑡 ∥𝝐 𝑡 − 𝝐 𝜃 ( 𝛼¯𝑡 x0 + 1 − 𝛼¯𝑡 𝝐 𝑡 , 𝑡) ∥ 2 , (5)
+denoising network for each distribution.
+   The four denoising networks in our latent diffusion module share                       where 𝝐 𝑡 is the Gaussian noise added at time 𝑡 in the forward pass,
+a common Transformer backbone. Without loss of generality, we                             x𝑡 is the corrupted data following Equation 1. In our case, x0 is the
+will use edge position denoiser (Figure 3 bottom-left) as an example.                     clean node features 𝐹𝑝 , 𝐹𝑧 , 𝐸𝑝 , 𝐸𝑧𝑣 , and x𝑡 is the noisy node features
+Input to the denoiser are edge tokens with noisy bounding box                             after forward pass. During sampling, the predicted noise at every
+parameters. Network is conditioned on the previously denoised face                        time step is used to denoise the data from random Gaussian noise.
+
+                                                                                                    ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:6    • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+                                                                                                                                                                                                                                        Body Count Per Design
+4.3      B-rep Post-Processing                                                                              1600
+                                                                                                                                         Design Count Per Category
+                                                                                                                                                                                                                 50%
+
+
+
+
+                                                                                       Number of Designs
+                                                                                                            1400
+
+A set of heuristics is used to find duplicated nodes in the tree and                                        1200                                                                                                 40%
+                                                                                                            1000
+explicitly decode the generated B-rep topology. For efficiency, we                                                                                                                                               30%
+
+
+
+
+                                                                                                                                                                                                       Total %
+                                                                                                            800
+
+                                                                                                            600
+use early pruning to recover association as the tree is being gen-                                          400
+                                                                                                                                                                                                                 20%
+
+erated. Given the face nodes, we detect duplicates as those with                                            200
+
+                                                                                                                 0
+                                                                                                                                                                                                                 10%
+
+
+bounding box corners within 0.08 Euclidean distance of each other                                                                                                                                                0%
+
+
+
+
+                                                                                                                                           et
+
+
+
+
+                                                                                                                                                                             fa
+                                                                                                                                   r
+
+
+
+
+                                                                                                                                                      h
+
+
+
+
+                                                                                                                                                                                                 f
+                                                                                                                           e
+
+
+
+
+                                                                                                                                                              d
+
+
+                                                                                                                                                                      p
+
+
+
+
+                                                                                                                                                                                                 b
+                                                                                                                                                                                        h
+
+                                                                                                                                                                                               el
+                                                                                                                                 ai
+                                                                                                                        bl
+
+
+
+
+                                                                                                                                                            Be
+
+
+                                                                                                                                                                     m
+
+
+
+
+                                                                                                                                                                                              tu
+                                                                                                                                                  nc
+                                                                                                                                                                                                                       0   5 10 15 20 25 30 35 40 45 50 55 60 65 70 75+
+
+
+
+
+                                                                                                                                                                                     uc
+                                                                                                                                         in
+
+
+
+
+                                                                                                                                                                           So
+
+
+
+
+                                                                                                                                                                                             sh
+                                                                                                                               Ch
+                                                                                                                     Ta
+
+
+
+
+                                                                                                                                                                  La
+
+
+
+
+                                                                                                                                                                                            th
+                                                                                                                                                                                  Co
+                                                                                                                                                Be
+                                                                                                                                          b
+
+
+
+
+                                                                                                                                                                                          ok
+                                                                                                                                                                                                                                             Number of Bodies
+
+
+
+
+                                                                                                                                       Ca
+
+
+
+
+                                                                                                                                                                                         Ba
+                                                                                                                                                                                        Bo
+and averaged point-wise difference less than 0.2 for the decoded
+points from the latent shape feature. Duplicate faces are removed to                    (a) B-rep model count per category.                                                                                       (b) Number of solids per B-rep.
+recover the unique faces belonging to a solid. We avoid regenerating
+edges for the duplicated faces in the next stage.                                                                                                Face Count Per Design                                                                  Edge Count Per Design
+                                                                                                           40%
+                                                                                                                                                                                                                 35%
+    A similar procedure recovers the unique edges associated under                                         35%
+                                                                                                                                                                                                                 30%
+every face, the same 0.08 edge bounding box threshold and 0.2                                              30%
+                                                                                                                                                                                                                 25%
+                                                                                                           25%
+threshold for the decoded shape feature points are used to merge
+
+
+
+
+                                                                                      Total %
+
+
+
+
+                                                                                                                                                                                                       Total %
+                                                                                                                                                                                                                 20%
+                                                                                                           20%
+                                                                                                           15%                                                                                                   15%
+edges under the same parent. The vertex/edge association is always                                         10%                                                                                                   10%
+two and does not require deduplication. Finally, we traverse the tree                                      5%                                                                                                    5%
+                                                                                                           0%                                                                                                    0%
+again from leaf to root to find duplicated child nodes at the same                                                   0         50      100      150       200     250
+                                                                                                                                                          Number of Faces
+                                                                                                                                                                          300     350       400 450+                   0   100   200   300   400   500   600
+                                                                                                                                                                                                                                             Number of Edges
+                                                                                                                                                                                                                                                                700   800 900+
+
+level but associated with different parents, which are the shared
+edges and vertices for determining the final mating relations.                                               (c) Number of faces per B-rep.                                                                       (d) Number of edges per B-rep.
+    After recovering the mating and association relations, we perform
+an extra step of fine-tuning the geometry based on the generated                                                                                Fig. 5. Statistics for the Furniture B-rep Dataset.
+topology. The vertex positions are averaged across its associated
+duplicates. Edge shape geometry points are scaled and translated to
+align with the associated start and end vertices. An edge is flipped                  remove low quality data, and rotate the 3D models in each category
+if it is reversed with regard to its vertices. The face shape geometry                into a canonical orientation. A visual overview of the CAD B-rep
+points are also scaled and translated so that they tightly fit all the                models in the Furniture B-rep Dataset is provided in Figure 4.
+associated edges with the minimum Chamfer Distance.                                      Additional statistics for the Furniture B-rep Dataset are provided
+                                                                                      in Figure 5. Figure 5a shows the category names in the dataset along
+                                                                                      with the number of B-rep models per category. Figure 5b provides
+                                                                                      the distribution for the number of solid bodies per B-rep in the
+                                                                                      dataset. Similarly, Figure 5c and Figure 5d plot the distributions of
+                                                                                      the face and edge counts in every B-rep model.
+
+                                                                                       6                             EXPERIMENTS
+                                                                                      This section presents unconditional and conditional generation re-
+                                                                                      sults. Extensive analysis demonstrates that BrepGen consistently
+                                                                                      produces high quality B-reps with complex topology and geometry,
+                                                                                      while providing enhanced control over the generation process.
+
+                                                                                       6.1                                 Experiment Setup
+                                                                                       6.1.1 Datasets. We evaluate generation performance on 1) the
+         Fig. 4. Furniture B-rep Dataset overview colored by category.                 DeepCAD dataset [Wu et al. 2021] of mechanical parts made from
+                                                                                       sketch and extrude operations, 2) the Furniture B-rep Dataset with
+                                                                                       more complicated furniture models, and 3) the ABC dataset [Koch
+5       FURNITURE B-REP DATASET                                                        et al. 2019] containing a wide variety of parts from industrial de-
+To promote future B-rep generation research, we introduce the                          signs. We use the original train/val/test split from DeepCAD and
+Furniture B-rep Dataset containing 6,171 B-rep CAD models across                       remove duplicated models in the training set following [Willis et al.
+10 common furniture categories. To our knowledge, this is the first                    2021a]. Closed faces (cylinders, etc.) are split on the seams following
+dataset in the B-rep format containing 3D models with freeform                         SolidGen [Jayaraman et al. 2022]. B-reps with more than 30 faces or
+surfaces in addition to canonical category labels. We reached out                      20 edges per face, and made from multiple bodies are removed. After
+to OnShape, a web-based CAD tool and repository [Onshape 2012],                        filtering, a total of 87,815 B-reps are used for training the VAEs and
+and obtained an agreement to export their publicly available design                    the latent diffusion module. We also randomly split the ABC and
+assets into our B-rep dataset. We used keywords to identify 3D                         Furniture B-rep Dataset into 90%-5%-5% for train/val/test. In total,
+models in each category and searched inside both partstudio and                        259,597 ABC B-reps and 1,198 furniture B-reps with a maximum of
+assembly documents. We perform a number of manual filtering                            50 faces and 30 edges per face are used for training. Latent diffusion
+steps on the raw data to remove duplicates, verify correct categories,                 model is trained on all 10 categories for the Furniture B-rep Dataset.
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                                                          BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •        119:7
+
+
+
+
+Fig. 6. Unconditional generation results on DeepCAD mechanical parts by (a) DeepCAD, (b) SolidGen and (c) our method BrepGen. Our method generates
+more realistic-looking CAD models with fewer broken geometry. Topological connections are also correct even on complicated objects.
+
+
+6.1.2 Training. We implement BrepGen in PyTorch and trained it                 5 seconds to generate a B-rep trained on DeepCAD data, and around
+on 4 NVIDIA RTX A5000 GPUs. Half-precision is used to speed up                 10 seconds for the more complicated Furniture and ABC data.
+the training. We use AdamW [Loshchilov and Hutter 2018] with
+5𝑒 − 4 learning rate. Gradient clipping of 5 are used for the VAE
+                                                                               6.1.4 Network Architecture. The face VAE network has four down-
+optimization. Weight for KL regularization is set to 1𝑒 − 6. Latent
+                                                                               sampling and four upsampling blocks. Each block contains two
+diffusion module uses 1,000 diffusion steps and a linear beta schedule
+                                                                               layers of 2D-ResNet blocks with skip connections. The feature di-
+from 1𝑒 − 4 to 0.02. The face and edge VAEs are trained for 400
+                                                                               mensions of the downsampling and upsampling blocks are 512-512-
+epochs on DeepCAD (or 200 epochs on ABC) with a batch size of
+                                                                               256-128 and 128-256-512-512, respectively. The edge VAE has similar
+512. Weights are further fine-tuned for 200 epochs for the Furniture
+                                                                               ResNet blocks but uses 1D convolution instead. The diffusion model
+B-rep Dataset. The two face denoisers in the latent diffusion model
+                                                                               is a standard Transformer module with pre-layer normalization,
+are trained for 3,000 epochs with a batch size of 512, and the two
+                                                                               12 self-attention layers with 12 heads, a hidden dimension of 1024,
+edge denoisers are trained for 1,000 epochs with a batch size of 64.
+                                                                               feature dimension of 768, and a 0.1 dropout rate.
+For the ABC dataset, we reduce the training epochs of the edge
+denoisers to 300, and the surface latent geometry denoiser to 1,000.
+   To alleviate train and test time difference, we perform cross-model         6.1.5 Evaluation Metrics. We use two sets of metrics to quantita-
+augmentation where input to the conditional denoisers are randomly             tively measure generation quality: Distribution Metrics and CAD Met-
+augmented following the scheme used in [Ho et al. 2022]. Associa-              rics. For Distribution Metrics we use 3,000 B-reps randomly-sampled
+tion duplication randomly selects and pads the edges and faces in              from the generated data and 1,000 B-reps from the reference test
+a B-rep (with repetition) until reaching the predefined maximum                set. For each B-rep, we sample 2,000 points from the solid surface
+length, which is 30/600 for the face/edge denoisers of DeepCAD,                and compute the following metrics:
+and 50/1500 for the face/edge denoisers of the Furniture B-Rep and             • Coverage (COV) is the percentage of reference data with at least
+ABC dataset. All bounding boxes are normalized to [-3, 3] range.               one match after assigning every generated data to its closest neigh-
+                                                                               bor in the reference set based on Chamfer Distance (CD).
+6.1.3 Inference. At inference time, we use PNDM [Liu et al. 2022]              • Minimum Matching Distance (MMD) is the averaged CD between
+of 200 forward passes for fast sampling, with the exception of the             a reference set data and its nearest neighbor in the generated data.
+face and edge position denoisers where we switch to a slower DDPM              • Jensen-Shannon Divergence (JSD) measures the distribution dis-
+without strided sampling from 𝑇 = 250 to 0. Empirically, this coarse-          tance between reference and generated data after converting point
+to-fine denoising generates a more precise bounding box position.              clouds into 283 discrete voxels.
+When sampling from random Gaussian noise, increasing the number                   For CAD Metrics the same 3,000 B-reps are used to compute the
+of tokens beyond the maximum threshold used in training is help-               following metrics, as used by [Jayaraman et al. 2022]:
+ful. This avoids noisy nodes being incorrectly merged early in the             • Novel percentage of data that do not appear in training set.
+denoising process, leading to a lack of available primitives to fill in        • Unique percentage of data that appears only once in generation.
+missing regions. For the DeepCAD dataset we denoise B-reps with a              • Valid percentage of B-rep data that are watertight solids.
+maximum of 50 faces and 30 edges per face. For the Furniture B-rep
+Dataset and ABC, 80 faces and 40 edges per face are denoised. After
+denoising and post-processing, we use the OpenCascade functions                6.2    Unconditional B-rep Generation
+GeomAPI_PointsToBSplineSurface and GeomAPI_PointsToBSpline to                  We compare with DeepCAD [Wu et al. 2021] and SolidGen [Jayara-
+approximate the face and edge points with B-Spline surfaces and                man et al. 2022] for unconditional generation of mechanical parts.
+curves. The connected loops bound the surface, and the trimmed                 DeepCAD is evaluated based on the reconstructed B-reps from its
+faces are sewn together to form the final B-rep solid. On a RTX                generated sketch and extrude sequences. We also evaluate BrepGen
+A5000 GPU, the four denoisers in total require an average of around            on the large-scale ABC dataset [Koch et al. 2019].
+
+                                                                                         ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:8   • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+
+
+        Fig. 7. Unconditional generation results on the ABC dataset. BrepGen generates realistic CAD B-reps with complicated geometry and topology.
+
+
+Table 1. Quantitative evaluations for DeepCAD unconditional generation
+based on the Coverage (COV) percentage, Minimum Matching Distance
+(MMD), Jensen-Shannon Divergence (JSD), and Unique, Novel, Valid ratio.
+The bottom row reports BrepGen results on the ABC dataset.
+
+
+        Method              COV MMD JSD Novel Unique Valid
+                            %↑   ↓   ↓   %↑    %↑     %↑                              Fig. 8. Generated B-rep data distributions, for the number of faces, edges,
+        DeepCAD            65.46     1.29    1.67    87.4       89.3     46.1         and vertices, compared with the DeepCAD training set and other baselines.
+        SolidGen           71.03     1.08    1.31    99.1       96.2     60.3
+        BrepGen            71.26     1.04    0.09    99.8       99.7     62.9
+        BrepGen (ABC) 57.92          1.35    3.69    99.7       99.4     48.2         baselines. The plot shows that our method has the best matching
+                                                                                      curves to the ground-truth DeepCAD training data.
+
+                                                                                      6.2.3 Shape Novelty Analysis. To further evaluate the ability of
+6.2.1 Quantitative Evaluation. The first three rows in Table 1 report
+                                                                                      BrepGen to generate novel shapes, we adopt the settings from Neu-
+the averaged scores on DeepCAD data from 10 different runs. Brep-
+                                                                                      ral Wavelet [Hui et al. 2022] and retrieve the most similar shapes
+Gen consistently outperforms both baselines with better COV, MMD
+                                                                                      from the DeepCAD training set using Chamfer Distance (CD) and
+scores and a substantially lower JSD; demonstrating improvements
+                                                                                      Light Field Distance (LFD) [Chen et al. 2003]. Figure 9 (top) shows
+in generation quality and a closer match to the ground-truth dis-
+                                                                                      the generated shapes (blue), together with the top-two most similar
+tribution. Generated data from BrepGen is also novel and different
+                                                                                      training shapes (yellow) retrieved using LFD or CD. Additionally,
+from the training set, as indicated by the high novel and unique
+                                                                                      Figure 9 (bottom) plots the LFD distribution between 500 randomly
+scores. Here, we consider two B-reps identical if the topology con-
+                                                                                      generated samples and their closest retrieved results from the train-
+nections are the same, and the shape geometry points from the
+                                                                                      ing set. Results show that BrepGen generates realistic and visually
+faces are equal after 4 bit quantization. The valid ratio of BrepGen
+                                                                                      accurate CAD models, while featuring novel topology and geometry
+is also better compared to the SolidGen direct B-rep generation
+                                                                                      different from the training data.
+baseline. Our criteria for validity enforces watertight CAD models
+with no broken topology. Novel and unique scores are calculated
+using the valid B-reps. Last row in Table 1 also reports the BrepGen                  6.3   Controllable B-rep Generation
+quantitative results for ABC unconditional generation.                               We demonstrate BrepGen results on Furniture B-rep Dataset and
+                                                                                     show two applications for CAD design. With no positional encoding
+6.2.2 Qualitative Evaluation. Figure 6 illustrates qualitative results               and random shuffling at training, BrepGen is permutation invariant
+for unconditional DeepCAD generation. We see that BrepGen gen-                       with respect to the input tokens, eliminating the need for a specific
+erates appealing B-reps made of a wide range of topologically con-                   sequence order between existing and to-be-generated components.
+nected faces, showing better generation diversity than the baselines.
+The structural complexity is also higher with fewer unbounded open                    6.3.1 Class-conditioned Generation. A class-conditioned BrepGen is
+regions or self-intersecting edges. Additional results are provided                   trained on the Furniture B-rep Dataset using classifier-free guidance
+in Figure 16. Figure 7 also shows the unconditional ABC generation                    [Ho and Salimans 2022]. Class embeddings are added to every input
+results by BrepGen. We observe that our method effectively trains                     token and an extra label indicates the unconditional case, which
+on the large-scale ABC dataset and generates realistic, diverse CAD                   occurs with a 10% probability at training. Figure 10 shows the gen-
+B-reps of complicated topology and geometry. Figure 8 further com-                    eration results for all 10 categories. BrepGen generates the correct
+pares the distribution of B-reps generated using BrepGen for the                      topological connections across different components and outputs
+number of faces, edges, and vertices, with the training set and other                 free-form surfaces not possible with SolidGen. The generated edges
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                                                              BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •        119:9
+
+
+                                                                                   Table 2. Quantitative evaluations for DeepCAD generation with ground-
+                                                                                   truth topology shown as BrepGen*. Second row reports the unconditional
+                                                                                   topology generation using multinomial diffusion.
+
+
+                                                                                             Method       COV MMD JSD Novel Unique Valid
+                                                                                                          %↑   ↓   ↓   %↑    %↑     %↑
+                                                                                             BrepGen* 78.16         1.02    0.09    99.9      97.6      79.8
+                                                                                             Topology   -             -       -     95.1      64.5      6.2
+
+
+
+                                                                                   tokens from the target are increasingly added to the source for face
+                                                                                   generation, after which the source tokens are removed until only
+                                                                                   the target tokens are left. The topology and geometry changes are
+                                                                                   smooth, with interpolated design directly generated in B-rep format.
+
+                                                                                   6.4    Ablation Studies
+                                                                                   6.4.1 Two-stage Generation. To demonstrate the effectiveness of
+                                                                                   our unified generation approach, we conduct an ablation study
+                                                                                   where topology and geometry are separately generated in two stages.
+                                                                                   In the second stage, we modify BrepGen to generate geometry con-
+                                                                                   ditioned on the given ground-truth topology. The node duplication
+                                                                                   process is removed and replaced by the graph attention used in
+                                                                                   HouseDiffusion [Shabani et al. 2023] to encode the topology rela-
+                                                                                   tions. The first row in Table 2 shows the conditional generation
+                                                                                   results trained on DeepCAD data, with visual results shown in Fig-
+                                                                                   ure 13. Noticeably, the coverage and valid ratios increase, and the
+Fig. 9. Novelty analysis of the generated DeepCAD shapes. Top: Given gen-          generated B-reps exhibit more intricate structures. We attribute this
+erated shapes (blue), we visualize the top-two most similar shapes (yellow)        improvement primarily to knowing the ground-truth topology.
+retrieved from the training set using LFD or CD. Bottom: LFD distribution             For the initial topology stage, we design a multinomial diffusion
+between 500 randomly generated data and their most-similar retrieved               baseline [Hoogeboom et al. 2021] that unconditionally generates the
+training shapes. Visual results at different percentiles are shown, where          face-edge, edge-vertex incidence matrix as a 128 × 128 binary image.
+generated shapes can be both realistic and novel.
+                                                                                   We observe that it is challenging to unconditionally generate the
+                                                                                   correct incidence matrix. Last row in Table 2 reports a very low valid
+                                                                                   ratio. Topology is deemed valid only if every edge is connected to
+form connected wireframes with loops precisely trimming the faces
+                                                                                   two faces and two vertices, and edges on each face form closed loops.
+into water-tight solids. Additional results are provided in Figure 17.
+                                                                                   Broken topology makes it difficult to integrate the two modules
+6.3.2 CAD Autocompletion. We use a pretrained BrepGen to au-                       and output valid B-reps. This further shows the advantage of our
+tocomplete the full B-rep from partial faces provided by the user.                 structured latent geometry, which unifies topology and geometry
+Motivated by RePaint [Lugmayr et al. 2022], a random subset of face                and jointly generates rather than in two separate stages.
+tokens are replaced with the provided face geometry diffused to that
+                                                                                   6.4.2 Post-process Thresholds. To study the impact of different
+time step during face denoising. The replacement is discontinued
+                                                                                   thresholds on B-rep post-processing, we perform a grid search of
+in the final 50 steps to allow minor adjustments to the provided
+                                                                                   the bounding box and decoded shape feature threshold values from
+faces. Subsequent edges and vertices are also regenerated. Figure 11
+                                                                                   subsection 4.3. Concretely, we trained a latent diffusion model on
+shows diverse autocompleted results from different Gaussian noise.
+                                                                                   the DeepCAD validation set and report the ratio of valid B-reps
+Disjoint parts are connected and transformed into water-tight solids
+                                                                                   that are watertight from 100 randomly generated samples. Figure 14
+with faces seamlessly generated between, below, or above the given
+                                                                                   shows the valid ratios obtained under various threshold combina-
+input. The inpainting process can make slight adjustments to user
+                                                                                   tions. From the figure, we see that the best ratio is achieved when
+input so that it connects with the rest of the geometry. For example,
+                                                                                   the bounding box threshold is within the range of 0.06 to 0.1, and the
+the radius of the legs slightly increase for the bed in the last row.
+                                                                                   shape feature threshold is around 0.2. A large bounding box thresh-
+6.3.3 Design Interpolation. Given a pair of CAD models, face to-                   old tends to incorrectly merge unique edges or faces, whereas a very
+kens from the two shapes are concatenated, diffused for 150 steps,                 small threshold fails to effectively identify duplicated geometry.
+repeatedly padded and passed to the face denoiser. Edges and ver-
+tices are also regenerated. This is different from blending the latent             6.5    Failure Cases
+value as mixing two geometry tokens will not lead to valid shapes.                 Figure 15 shows B-reps generated by BrepGen from three common
+Figure 12 shows the interpolated results. From left to right, face                 failure case categories. 1) Missing faces resulting in non-watertight
+
+                                                                                             ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:10   • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+
+
+Fig. 10. BrepGen generation results conditioned on the class label. Last row shows the wireframe connected by the generated edges and vertices. The results
+clearly show that BrepGen excels in generating well-structured CAD models with free-form surfaces and curvatures.
+
+
+
+
+                                                                                     Fig. 13. DeepCAD generation results conditioned on ground-truth topology.
+
+
+Fig. 11. Given partial faces (gray), BrepGen auto-completes the full B-rep
+geometry and topology, generating a diverse set of CAD models (blue).
+
+
+
+
+                                                                                     Fig. 14. Valid ratio under different threshold values. Brighter color indicates
+                                                                                     higher ratio value. Result are averaged over 100 randomly generated samples
+                                                                                     from a model trained on the DeepCAD validation set.
+Fig. 12. Design interpolation from source to target. The geometry and
+topology of the generated B-rep undergo progressive changes.
+
+                                                                                     BrepGen supports only single body solids; more complicated CAD
+solids (top row). This failure is anticipated given BrepGen can not                  models with multiple assembled bodies are left to future work. If
+guarantee watertight outputs. A potential solution involves detect-                  edges or faces are too close to one another they will be merged and
+ing and denoising additional faces in the open regions. 2) Self-                     identified as one after deduplication. In practice, this implies a mini-
+intersection of edges or faces leading to broken geometry after                      mum threshold, determining how close two similar surfaces or edges
+trimming (middle row). Future integration of a self-intersection loss                can be. We train on data with a minimum threshold of 0.05 after
+might reduce such occurrences. 3) Wobbly and broken geometry                         normalizing the CAD geometry to the [−3, 3] range. This limitation
+(bottom row). This is mostly caused by noise in the decoded points,                  is similar to other sketch-and-extrude generation approaches, e.g.
+or inconsistent geometry between a surface and its connected edges.                  [Xu et al. 2022], that quantize geometry to a set bit range resulting
+                                                                                     in vertex merging. The chosen threshold of 0.05 is roughly equiva-
+7    LIMITATIONS AND FUTURE WORK                                                     lent to 1 bin difference after 7 bit quantization. BrepGen does not
+BrepGen enables the generation of 3D models in the Boundary rep-                     guarantee watertight solids. Small gaps may exist due to the slow
+resentation but has several limitations that warrant future work.                    convergence of the denoising process. Occasionally entire faces are
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                                                                          BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •          119:11
+
+
+                                                                                                Weijuan Cao, Trevor Robinson, Yang Hua, Flavien Boussuge, Andrew R. Colligan,
+                                                                                                    and Wanbin Pan. 2020a. Graph Representation of 3D CAD Models for Machining
+                                                                                                    Feature Recognition With Deep Learning. In Proceedings of the ASME 2020 Interna-
+                                                                                                    tional Design Engineering Technical Conferences and Computers and Information in
+                                                                                                    Engineering Conference (IDETC-CIE). ASME.
+                                                                                                Weijuan Cao, Trevor Robinson, Yang Hua, Flavien Boussuge, Andrew R. Colligan,
+                                                                                                    and Wanbin Pan. 2020b. Graph Representation of 3D CAD Models for Machining
+                                                                                                    Feature Recognition With Deep Learning. In Proceedings of the ASME 2020 Interna-
+                                                                                                    tional Design Engineering Technical Conferences and Computers and Information in
+                                                                                                    Engineering Conference (IDETC-CIE). ASME.
+                                                                                                Ding-Yun Chen, Xiao-Pei Tian, Yu-Te Shen, and Ming Ouhyoung. 2003. On visual
+                                                                                                    similarity based 3D model retrieval. In Computer graphics forum, Vol. 22. Wiley
+                                                                                                    Online Library, 223–232.
+                                                                                                Zhiqin Chen, Andrea Tagliasacchi, and Hao Zhang. 2020. BSP-Net: Generating Compact
+                                                                                                    Meshes via Binary Space Partitioning. Proceedings of IEEE Conference on Computer
+                                                                                                    Vision and Pattern Recognition (CVPR) (2020).
+Fig. 15. Three common failure cases categories for BrepGen. Top row: non-                       Tao Du, Jeevana Priya Inala, Yewen Pu, Andrew Spielberg, Adriana Schulz, Daniela
+watertight solids. Middle row: self-intersecting edges or faces. Bottom row:                        Rus, Armando Solar-Lezama, and Wojciech Matusik. 2018. Inversecsg: Automatic
+wobbly and broken geometry.                                                                         conversion of 3d models to csg trees. Annual Conference on Computer Graphics and
+                                                                                                    Interactive Techniques (SIGGRAPH) 37, 6 (2018), 1–16.
+                                                                                                Kevin Ellis, Maxwell Nye, Yewen Pu, Felix Sosa, Josh Tenenbaum, and Armando Solar-
+                                                                                                    Lezama. 2019. Write, execute, assess: Program synthesis with a repl. In Advances in
+                                                                                                    Neural Information Processing Systems (NeurIPS). 9169–9178.
+also missing. Experimentally we find that the valid ratio for BrepGen,                          Haoxiang Guo, Shilin Liu, Hao Pan, Yang Liu, Xin Tong, and Baining Guo. 2022. Com-
+which includes watertightness, is higher than for other architectures.                              plexGen: CAD Reconstruction by B-Rep Chain Complex Generation. ACM Trans.
+                                                                                                    Graph. (SIGGRAPH) 41, 4, Article 129 (July 2022), 18 pages. https://doi.org/10.1145/
+Finally, while the heuristic post-processing used to generate the                                   3528223.3530078
+B-rep is simple, fast, and can handle complicated data, to achieve bet-                         Jonathan Ho, Ajay Jain, and Pieter Abbeel. 2020. Denoising diffusion probabilistic
+ter results future work on a learning-based post-processing module                                  models. Advances in neural information processing systems 33 (2020), 6840–6851.
+                                                                                                Jonathan Ho, Chitwan Saharia, William Chan, David J Fleet, Mohammad Norouzi, and
+may provide more robust handling of invalid shapes.                                                Tim Salimans. 2022. Cascaded diffusion models for high fidelity image generation.
+                                                                                                    The Journal of Machine Learning Research 23, 1 (2022), 2249–2281.
+8    CONCLUSION                                                                                 Jonathan Ho and Tim Salimans. 2022. Classifier-free diffusion guidance. arXiv preprint
+                                                                                                    arXiv:2207.12598 (2022).
+We introduced BrepGen, a generative diffusion model for direct B-rep                            Emiel Hoogeboom, Didrik Nielsen, Priyank Jaini, Patrick Forré, and Max Welling.
+                                                                                                    2021. Argmax flows and multinomial diffusion: Learning categorical distributions.
+generation. Extensive experiments showed that BrepGen surpasses                                     Advances in Neural Information Processing Systems 34 (2021), 12454–12465.
+existing methods and establishes state-of-the-art results for B-rep                             Ka-Hei Hui, Ruihui Li, Jingyu Hu, and Chi-Wing Fu. 2022. Neural wavelet-domain
+generation. We outlined our newly collected Furniture B-rep Dataset                                 diffusion for 3d shape generation. In SIGGRAPH Asia 2022 Conference Papers. 1–9.
+                                                                                                Pradeep Kumar Jayaraman, Joseph G. Lambourne, Nishkrit Desai, Karl D. D. Willis,
+and results that demonstrate the ability of BrepGen to generate                                    Aditya Sanghi, and Nigel J. W. Morris. 2022. SolidGen: An Autoregressive Model
+complicated B-rep 3D models with free-form and doubly-curved                                        for Direct B-rep Synthesis. "arXiv Preprint" (2022). https://doi.org/10.48550/ARXIV.
+surfaces for the first time. We believe BrepGen moves us one step                                   2203.13944
+                                                                                                Pradeep Kumar Jayaraman, Aditya Sanghi, Joseph G. Lambourne, Karl D.D. Willis,
+closer towards an automatic system capable of directly generating                                  Thomas Davies, Hooman Shayani, and Nigel Morris. 2021. UV-Net: Learning From
+B-reps to reduce the extensive manual labor required from skilled                                   Boundary Representations. In The IEEE Conference on Computer Vision and Pattern
+                                                                                                    Recognition (CVPR). 11703–11712.
+designers using today’s professional CAD software.                                              Benjamin Jones, Dalton Hildreth, Duowen Chen, Ilya Baran, Vladimir G Kim, and
+                                                                                                   Adriana Schulz. 2021. Automate: A dataset and learning approach for automatic
+ACKNOWLEDGMENTS                                                                                     mating of cad assemblies. ACM Transactions on Graphics (TOG) 40, 6 (2021), 1–18.
+                                                                                                Benjamin T Jones, Michael Hu, Milin Kodnongbua, Vladimir G Kim, and Adriana
+This research is partially supported by NSERC Discovery Grants                                      Schulz. 2023. Self-Supervised Representation Learning for CAD. In Proceedings of
+with Accelerator Supplements and DND/NSERC Discovery Grant                                          the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 21327–21336.
+                                                                                                Kacper Kania, Maciej Zięba, and Tomasz Kajdanowicz. 2020. UCSG-Net–Unsupervised
+Supplement, NSERC Alliance Grants, and John R. Evans Leaders                                        Discovering of Constructive Solid Geometry Tree. In Advances in Neural Information
+Fund (JELF). We also thank Onshape for their support and access of                                  Processing Systems (NeurIPS).
+                                                                                                Sebastian Koch, Albert Matveev, Zhongshi Jiang, Francis Williams, Alexey Artemov,
+the publicly available CAD models.                                                                  Evgeny Burnaev, Marc Alexa, Denis Zorin, and Daniele Panozzo. 2019. ABC: A
+                                                                                                    Big CAD Model Dataset For Geometric Deep Learning. In The IEEE Conference on
+REFERENCES                                                                                          Computer Vision and Pattern Recognition (CVPR).
+                                                                                                Joseph G. Lambourne, Karl D.D. Willis, Pradeep Kumar Jayaraman, Aditya Sanghi,
+Antonio Alliegro, Yawar Siddiqui, Tatiana Tommasi, and Matthias Nießner. 2023. Poly-                Peter Meltzer, and Hooman Shayani. 2021. BRepNet: A Topological Message Passing
+    Diff: Generating 3D Polygonal Meshes with Diffusion Models. arXiv preprint                      System for Solid Models. In Proceedings of the IEEE/CVF Conference on Computer
+    arXiv:2312.11417 (2023).                                                                        Vision and Pattern Recognition (CVPR). 12773–12782.
+Atin Angrish, Benjamin Craver, and Binil Starly. 2019. “FabSearch”: A 3D CAD Model-             Lingxiao Li, Minhyuk Sung, Anastasia Dubrovina, Li Yi, and Leonidas J Guibas. 2019.
+    Based Search Engine for Sourcing Manufacturing Services. Journal of Comput-                     Supervised fitting of geometric primitives to 3d point clouds. In Proceedings of the
+    ing and Information Science in Engineering 19, 4 (2019). https://doi.org/10.1115/1.             IEEE/CVF Conference on Computer Vision and Pattern Recognition. 2652–2660.
+    4043211 arXiv:https://asmedigitalcollection.asme.org/computingengineering/article-          P. Li, J. Guo, X. Zhang, and D. Yan. 2023. SECAD-Net: Self-Supervised CAD Recon-
+    pdf/19/4/041006/5999469/jcise_19_4_041006.pdf 041006.                                           struction by Learning Sketch-Extrude Operations. In 2023 IEEE/CVF Conference
+Silvia Ansaldi, Leila De Floriani, and Bianca Falcidieno. 1985. Geometric modeling of               on Computer Vision and Pattern Recognition (CVPR). IEEE Computer Society, Los
+    solid objects by using a face adjacency graph representation. Annual Conference on             Alamitos, CA, USA, 16816–16826. https://doi.org/10.1109/CVPR52729.2023.01613
+    Computer Graphics and Interactive Techniques (SIGGRAPH) 19, 3 (1985), 131–139.              Jiayi Liu, Hou In Ivan Tam, Ali Mahdavi-Amiri, and Manolis Savva. 2023. CAGE:
+Shijie Bian, Daniele Grandi, Tianyang Liu, Pradeep Kumar Jayaraman, Karl Willis, Elliot             Controllable Articulation GEneration. arXiv preprint arXiv:2312.09570 (2023).
+    Sadler, Bodia Borijin, Thomas Lu, Richard Otis, Nhut Ho, and Bingbing Li. 2023.             Luping Liu, Yi Ren, Zhijie Lin, and Zhou Zhao. 2022. Pseudo numerical methods for
+    HG-CAD: Hierarchical Graph Learning for Material Prediction and Recommenda-                     diffusion models on manifolds. arXiv preprint arXiv:2202.09778 (2022).
+    tion in Computer-Aided Design. Journal of Computing and Information Science in
+    Engineering 24, 1 (10 2023), 011007.
+
+
+                                                                                                          ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:12   • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+Ilya Loshchilov and Frank Hutter. 2018. Decoupled Weight Decay Regularization. In               Conference on Computer Vision and Pattern Recognition Workshops (CVPR Workshop).
+    International Conference on Learning Representations.                                       2105–2114.
+Andreas Lugmayr, Martin Danelljan, Andres Romero, Fisher Yu, Radu Timofte, and               Karl D. D. Willis, Yewen Pu, Jieliang Luo, Hang Chu, Tao Du, Joseph G. Lambourne,
+    Luc Van Gool. 2022. Repaint: Inpainting using denoising diffusion probabilistic             Armando Solar-Lezama, and Wojciech Matusik. 2021b. Fusion 360 Gallery: A Dataset
+    models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern            and Environment for Programmatic CAD Construction from Human Design Se-
+    Recognition. 11461–11471.                                                                   quences. ACM Transactions on Graphics (TOG) 40, 4 (2021).
+D.E. Muller and F.P. Preparata. 1978. Finding the intersection of two convex polyhedra.      Rundi Wu, Chang Xiao, and Changxi Zheng. 2021. DeepCAD: A Deep Generative
+    Theoretical Computer Science 7, 2 (1978), 217–236. https://doi.org/10.1016/0304-            Network for Computer-Aided Design Models. In Proceedings of the IEEE/CVF Inter-
+    3975(78)90051-8                                                                             national Conference on Computer Vision (ICCV).
+Chandrakana Nandi, Anat Caspi, Dan Grossman, and Zachary Tatlock. 2017. Program-             Xiang Xu, Pradeep Kumar Jayaraman, Joseph G. Lambourne, Karl D.D. Willis, and
+    ming language tools and techniques for 3D printing. In 2nd Summit on Advances               Yasutaka Furukawa. 2023. Hierarchical Neural Coding for Controllable CAD Model
+    in Programming Languages (SNAPL 2017). Schloss Dagstuhl-Leibniz-Zentrum fuer                Generation. In Proceedings of the 40th International Conference on Machine Learning
+    Informatik.                                                                                 (Honolulu, Hawaii, USA) (ICML’23). JMLR.org, Article 1601, 19 pages.
+Chandrakana Nandi, James R Wilcox, Pavel Panchekha, Taylor Blau, Dan Grossman,               Xianghao Xu, Wenzhe Peng, Chin-Yi Cheng, Karl D.D. Willis, and Daniel Ritchie. 2021.
+    and Zachary Tatlock. 2018. Functional programming for compiling and decompiling             Inferring CAD Modeling Sequences Using Zone Graphs. In IEEE Conference on
+    computer-aided design. Proceedings of the ACM on Programming Languages 2, ICFP              Computer Vision and Pattern Recognition (CVPR). 6062–6070.
+    (2018), 1–31.                                                                            Xiang Xu, Karl DD Willis, Joseph G Lambourne, Chin-Yi Cheng, Pradeep Kumar Jayara-
+Charlie Nash, Yaroslav Ganin, SM Ali Eslami, and Peter Battaglia. 2020. Polygen:                man, and Yasutaka Furukawa. 2022. SkexGen: Autoregressive Generation of CAD
+    An autoregressive generative model of 3d meshes. In International Conference on             Construction Sequences with Disentangled Codebooks. In International Conference
+    Machine Learning (ICML). PMLR, 7220–7229.                                                   on Machine Learning. PMLR, 24698–24724.
+Onshape. 2012. http://www.onshape.com.                                                       Fenggen Yu, Qimin Chen, Maham Tanveer, Ali Mahdavi Amiri, and Hao Zhang. 2023.
+Daxuan Ren, Jianmin Zheng, Jianfei Cai, Jiatong Li, Haiyong Jiang, Zhongang Cai,                DualCSG: Learning Dual CSG Trees for General and Compact CAD Modeling. arXiv
+    Junzhe Zhang, Liang Pan, Mingyuan Zhang, Haiyu Zhao, et al. 2021. Csg-stump: A              preprint arXiv:2301.11497 (2023).
+    learning friendly csg-like representation for interpretable shape parsing. In Proceed-   Fenggen Yu, Zhiqin Chen, Manyi Li, Aditya Sanghi, Hooman Shayani, Ali Mahdavi-
+    ings of the IEEE/CVF International Conference on Computer Vision. 12478–12487.              Amiri, and Hao Zhang. 2022. CAPRI-Net: Learning compact CAD shapes with
+Daxuan Ren, Jianmin Zheng, Jianfei Cai, Jiatong Li, and Junzhe Zhang. 2022. ExtrudeNet:         adaptive primitive assembly. In Proceedings of the IEEE/CVF Conference on Computer
+    Unsupervised Inverse Sketch-and-Extrude for Shape Parsing. In ECCV.                         Vision and Pattern Recognition. 11768–11778.
+Daniel Ritchie, Paul Guerrero, R Kenny Jones, Niloy J Mitra, Adriana Schulz, Karl DD         Shengdi Zhou, Tianyi Tang, and Bin Zhou. 2023. CADParser: A Learning Approach of
+   Willis, and Jiajun Wu. 2023. Neurosymbolic Models for Computer Graphics. In                  Sequence Modeling for B-Rep CAD. In Proceedings of the Thirty-Second International
+    Computer Graphics Forum, Vol. 42. Wiley Online Library, 545–568.                            Joint Conference on Artificial Intelligence, IJCAI 2023, 19th-25th August 2023, Macao,
+Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer.               SAR, China. ijcai.org, 1804–1812. https://doi.org/10.24963/IJCAI.2023/200
+    2022. High-resolution image synthesis with latent diffusion models. In Proceedings
+    of the IEEE/CVF conference on computer vision and pattern recognition. 10684–10695.
+Mohammad Amin Shabani, Sepidehsadat Hosseini, and Yasutaka Furukawa. 2023.
+    Housediffusion: Vector floorplan generation via a diffusion model with discrete and
+    continuous denoising. In Proceedings of the IEEE/CVF Conference on Computer Vision
+    and Pattern Recognition. 5466–5475.
+Gopal Sharma, Rishabh Goyal, Difan Liu, Evangelos Kalogerakis, and Subhransu Maji.
+    2018. CSGNet: Neural Shape Parser for Constructive Solid Geometry. In IEEE
+    Conference on Computer Vision and Pattern Recognition (CVPR).
+Gopal Sharma, Difan Liu, Evangelos Kalogerakis, Subhransu Maji, Siddhartha Chaud-
+    huri, and Radomír Měch. 2020. ParSeNet: A Parametric Surface Fitting Network for
+    3D Point Clouds. arXiv:2003.12181 [cs.CV]
+Yawar Siddiqui, Antonio Alliegro, Alexey Artemov, Tatiana Tommasi, Daniele Sirigatti,
+    Vladislav Rosov, Angela Dai, and Matthias Nießner. 2023. Meshgpt: Generating
+    triangle meshes with decoder-only transformers. arXiv preprint arXiv:2311.15475
+    (2023).
+Dmitriy Smirnov, Mikhail Bessmeltsev, and Justin Solomon. 2021. Learning Manifold
+    Patch-Based Representations of Man-Made Shapes. In International Conference on
+    Learning Representations (ICLR).
+Yonglong Tian, Andrew Luo, Xingyuan Sun, Kevin Ellis, William T. Freeman, Joshua B.
+    Tenenbaum, and Jiajun Wu. 2019. Learning to Infer and Execute 3D Shape Programs.
+    In International Conference on Learning Representations (ICLR).
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N.
+    Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is All You Need. In
+    Proceedings of the 31st International Conference on Neural Information Processing
+    Systems (Long Beach, California, USA) (NIPS’17). Curran Associates Inc., Red Hook,
+    NY, USA, 6000–6010.
+Oriol Vinyals, Meire Fortunato, and Navdeep Jaitly. 2015. Pointer networks. Advances
+    in Neural Information Processing Systems (NeurIPS) (2015).
+Kehan Wang, Jia Zheng, and Zihan Zhou. 2022. Neural Face Identification in a 2D
+   Wireframe Projection of a Manifold Object. In 2022 IEEE/CVF Conference on Com-
+    puter Vision and Pattern Recognition (CVPR). 1612–1621. https://doi.org/10.1109/
+    CVPR52688.2022.00167
+Xiaogang Wang, Yuelang Xu, Kai Xu, Andrea Tagliasacchi, Bin Zhou, Ali Mahdavi-
+   Amiri, and Hao Zhang. 2020. PIE-NET: Parametric Inference of Point Cloud Edges.
+    In Advances in Neural Information Processing Systems, Vol. 33. Curran Associates,
+    Inc., 20167–20178.
+K.J. Weiler. 1986. Topological structures for geometric modeling. University Microfilms.
+Karl DD Willis, Pradeep Kumar Jayaraman, Hang Chu, Yunsheng Tian, Yifei Li, Daniele
+    Grandi, Aditya Sanghi, Linh Tran, Joseph G Lambourne, Armando Solar-Lezama, and
+   Wojciech Matusik. 2022. JoinABLe: Learning Bottom-up Assembly of Parametric
+    CAD Joints. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+    Pattern Recognition (CVPR).
+Karl DD Willis, Pradeep Kumar Jayaraman, Joseph G Lambourne, Hang Chu, and
+    Yewen Pu. 2021a. Engineering sketch generation for computer-aided design. In IEEE
+
+
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+                                BrepGen: A B-rep Generative Diffusion Model with Structured Latent Geometry •        119:13
+
+
+
+
+Fig. 16. Unconditionally generated mechanical part B-reps from BrepGen.
+
+
+
+
+                                                ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+119:14   • Xiang Xu, Joseph G. Lambourne, Pradeep Kumar Jayaraman, Zhengqing Wang, Karl D.D. Willis, and Yasutaka Furukawa
+
+
+
+
+                                         Fig. 17. Conditionally generated furniture B-reps from BrepGen, colored by category.
+
+
+
+ACM Trans. Graph., Vol. 43, No. 4, Article 119. Publication date: July 2024.
+

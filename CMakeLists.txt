@@ -150,6 +150,9 @@ if(SPO_BUILD_TOOLS)
     add_executable(step_stats tools/step_stats.cpp)
     target_link_libraries(step_stats PRIVATE spo_core)
 
+    add_executable(step_sew_probe tools/step_sew_probe.cpp)
+    target_link_libraries(step_sew_probe PRIVATE spo_core)
+
     add_executable(raw_patch_unify_probe tools/raw_patch_unify_probe.cpp)
     target_link_libraries(raw_patch_unify_probe PRIVATE spo_core)
 
