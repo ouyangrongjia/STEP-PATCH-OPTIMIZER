@@ -9,7 +9,8 @@ param(
     [long]$WallTimeMilliseconds = 900000,
     [long]$MaximumMemoryMiB = 8192,
     [string]$OutputDir = "",
-    [switch]$ConstraintsOnly
+    [switch]$ConstraintsOnly,
+    [switch]$SamplingOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,9 +24,12 @@ if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
 if ($Layout -eq "fixed" -and $PatchCount -le 0) {
     throw "Fixed layout requires -PatchCount greater than zero."
 }
+if ($ConstraintsOnly -and $SamplingOnly) {
+    throw "-ConstraintsOnly and -SamplingOnly cannot be used together."
+}
 
 $candidateToken = if ($PSCmdlet.ParameterSetName -eq "Candidate") { [string]$CandidateId } else { "faces" }
-$variant = if ($ConstraintsOnly) { "constraints" } else { $Layout }
+$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } else { $Layout }
 $context = New-SpoRunContext `
     -RepoRoot $repoRoot `
     -Workflow "native-region-refit" `
@@ -59,6 +63,8 @@ $arguments += @(
     "--max-memory-mib", [string]$MaximumMemoryMiB)
 if ($ConstraintsOnly) {
     $arguments += "--constraints-only"
+} elseif ($SamplingOnly) {
+    $arguments += "--sampling-only"
 }
 
 $stdout = Join-Path $context.directories.logs "probe.stdout.log"
@@ -79,6 +85,11 @@ $message = if ($process.ExitCode -eq 0) {
 } else {
     "Native regional refit probe failed with exit code $($process.ExitCode)."
 }
-Complete-SpoRun -Context $context -Status $status -Message $message
+$artifacts = [ordered]@{}
+$samplingStl = Join-Path $context.directories.artifacts "sampling\adaptive_reference.stl"
+if (Test-Path -LiteralPath $samplingStl -PathType Leaf) {
+    $artifacts["adaptive_sampling_stl"] = $samplingStl
+}
+Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
 Write-Output $context.output_dir
 exit $process.ExitCode

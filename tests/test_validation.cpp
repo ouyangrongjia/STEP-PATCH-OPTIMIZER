@@ -6,6 +6,7 @@ void run_same_domain_merge_tests();
 void run_merge_planner_tests();
 void run_region_boundary_analyzer_tests();
 void run_region_refit_constraint_tests();
+void run_region_refit_sampling_tests();
 void run_face_inspect_tests();
 void run_candidate_type_statistics_tests();
 void run_feature_bounded_region_builder_tests();
@@ -134,6 +135,7 @@ void run_unit_tests() {
     run_merge_planner_tests();
     run_region_boundary_analyzer_tests();
     run_region_refit_constraint_tests();
+    run_region_refit_sampling_tests();
     run_face_inspect_tests();
     run_candidate_type_statistics_tests();
     run_feature_bounded_region_builder_tests();

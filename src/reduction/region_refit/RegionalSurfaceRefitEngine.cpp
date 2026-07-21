@@ -1,6 +1,8 @@
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
 #include "reduction/region_refit/RegionConstraintExtractor.h"
+#include "reduction/region_refit/RegionReferenceMesh.h"
+#include "reduction/region_refit/StepAdaptiveRegionSampler.h"
 
 #include <chrono>
 
@@ -53,9 +55,62 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
 
     result.constraints = extraction.constraints;
     result.report.inputFaceCount = static_cast<int>(result.constraints.selectedFaces.size());
+    if (request.diagnosticStopAfterStage == RegionRefitStage::Constraints) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::Sampling;
+        result.report.message = "Constraint-only diagnostic completed.";
+        return result;
+    }
+
+    const auto samplingStarted = std::chrono::steady_clock::now();
+    auto sampling = StepAdaptiveRegionSampler().sample(
+        document,
+        result.constraints,
+        request.options);
+    const auto samplingEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport samplingStage;
+    samplingStage.stage = RegionRefitStage::Sampling;
+    samplingStage.success = sampling.report.success();
+    samplingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        samplingEnded - samplingStarted).count();
+    samplingStage.message = sampling.report.message;
+    result.report.stages.push_back(samplingStage);
+    result.report.totalWallMilliseconds += samplingStage.wallMilliseconds;
+    result.report.sampleVertexCount = sampling.report.vertexCount;
+    result.report.sampleTriangleCount = sampling.report.triangleCount;
+    result.report.boundarySampleCount = sampling.report.boundarySampleCount;
+    result.report.weldedInternalSeamVertexCount = sampling.report.weldedInternalSeamVertexCount;
+    result.report.normalDiscontinuityVertexCount = sampling.report.normalDiscontinuityVertexCount;
+    result.report.maximumSamplingChordError = sampling.report.maximumInteriorChordError;
+    result.report.maximumSamplingNormalErrorDegrees = sampling.report.maximumInteriorNormalErrorDegrees;
+    result.report.maximumBoundaryChordError = sampling.report.maximumBoundaryChordError;
+    result.report.referenceMeshFingerprint = sampling.report.meshFingerprint;
+
+    if (!sampling.report.success()) {
+        result.report.status = sampling.report.status;
+        result.report.failureStage = RegionRefitStage::Sampling;
+        result.report.message = sampling.report.message;
+        return result;
+    }
+    result.referenceMesh = std::make_shared<RegionReferenceMesh>(std::move(sampling.mesh));
+    if (samplingStage.wallMilliseconds > static_cast<double>(request.options.samplingBudgetMilliseconds) ||
+        result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = RegionRefitStage::Sampling;
+        result.report.message = "Adaptive STEP sampling exceeded its wall-clock budget.";
+        return result;
+    }
+
+    if (request.diagnosticStopAfterStage == RegionRefitStage::Sampling) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::Layout;
+        result.report.message = "Sampling-only diagnostic completed.";
+        return result;
+    }
+
     result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
     result.report.failureStage = RegionRefitStage::Layout;
-    result.report.message = "Constraint extraction passed; sampling and layout are not complete yet.";
+    result.report.message = "Adaptive STEP sampling passed; layout generation is not complete yet.";
     return result;
 }
 

@@ -1,6 +1,8 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
+#include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
+#include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
 #include <QJsonArray>
@@ -123,8 +125,28 @@ QJsonObject performanceToJson(
         {"peak_working_set_bytes", QString::number(result.report.peakWorkingSetBytes)},
         {"peak_private_bytes", QString::number(result.report.peakPrivateBytes)},
         {"full_fit_count", result.report.fullFitCount},
+        {"sample_vertices", QString::number(result.report.sampleVertexCount)},
+        {"sample_triangles", QString::number(result.report.sampleTriangleCount)},
+        {"boundary_samples", QString::number(result.report.boundarySampleCount)},
+        {"welded_internal_seam_vertices", QString::number(result.report.weldedInternalSeamVertexCount)},
+        {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
+        {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
         {"stop_reason", QString::fromStdString(result.report.message)},
         {"stages", stages}};
+}
+
+QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
+    return {
+        {"status", result.referenceMesh ? "Success" : spo::toString(result.report.status)},
+        {"vertices", QString::number(result.report.sampleVertexCount)},
+        {"triangles", QString::number(result.report.sampleTriangleCount)},
+        {"boundary_samples", QString::number(result.report.boundarySampleCount)},
+        {"welded_internal_seam_vertices", QString::number(result.report.weldedInternalSeamVertexCount)},
+        {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
+        {"maximum_interior_chord_error", result.report.maximumSamplingChordError},
+        {"maximum_interior_normal_error_degrees", result.report.maximumSamplingNormalErrorDegrees},
+        {"maximum_boundary_chord_error", result.report.maximumBoundaryChordError},
+        {"mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)}};
 }
 
 }
@@ -136,7 +158,7 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
-                     "[--max-memory-mib <MiB>] [--constraints-only]\n";
+                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only]\n";
         return 2;
     }
 
@@ -144,6 +166,7 @@ int main(int argc, char* argv[]) {
     const std::filesystem::path outputDirectory = argv[2];
     int candidateId = -1;
     bool constraintsOnly = false;
+    bool samplingOnly = false;
     spo::RegionRefitRequest request;
     try {
         for (int index = 3; index < argc; ++index) {
@@ -174,6 +197,8 @@ int main(int argc, char* argv[]) {
                 request.options.maximumMemoryMiB = std::stoull(argv[index]);
             } else if (argument == "--constraints-only") {
                 constraintsOnly = true;
+            } else if (argument == "--sampling-only") {
+                samplingOnly = true;
             } else {
                 std::cerr << "未知参数：" << argument << '\n';
                 return 2;
@@ -186,6 +211,10 @@ int main(int argc, char* argv[]) {
 
     if ((candidateId >= 0) == !request.selectedFaces.empty()) {
         std::cerr << "--candidate-id 与 --faces 必须且只能指定一个。\n";
+        return 2;
+    }
+    if (constraintsOnly && samplingOnly) {
+        std::cerr << "--constraints-only 与 --sampling-only 不能同时使用。\n";
         return 2;
     }
     if (request.layoutMode == spo::RegionRefitLayoutMode::FixedPatchCount &&
@@ -224,6 +253,11 @@ int main(int argc, char* argv[]) {
     }
 
     const auto engineStarted = std::chrono::steady_clock::now();
+    if (constraintsOnly) {
+        request.diagnosticStopAfterStage = spo::RegionRefitStage::Constraints;
+    } else if (samplingOnly) {
+        request.diagnosticStopAfterStage = spo::RegionRefitStage::Sampling;
+    }
     const auto result = spo::RegionalSurfaceRefitEngine().run(read.document, request);
     timing.engineMilliseconds = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - engineStarted).count();
@@ -231,9 +265,21 @@ int main(int argc, char* argv[]) {
         std::chrono::steady_clock::now() - coreStarted).count();
     const auto diagnostics = outputDirectory / "diagnostics";
     if (!writeJson(diagnostics / "constraints.json", constraintsToJson(result)) ||
+        !writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) ||
         !writeJson(diagnostics / "performance_report.json", performanceToJson(result, request, timing))) {
         std::cerr << "无法写入区域重拟合诊断。\n";
         return 1;
+    }
+    if (result.referenceMesh) {
+        const auto samplingDirectory = outputDirectory / "artifacts" / "sampling";
+        std::filesystem::create_directories(samplingDirectory);
+        const auto write = spo::StlWriter().write(
+            result.referenceMesh->toStlMesh(),
+            samplingDirectory / "adaptive_reference.stl");
+        if (!write.success) {
+            std::cerr << write.message << '\n';
+            return 1;
+        }
     }
 
     std::cout << "status=" << spo::toString(result.report.status) << '\n'
@@ -241,12 +287,18 @@ int main(int argc, char* argv[]) {
               << "selected_faces=" << result.constraints.selectedFaces.size() << '\n'
               << "boundary_edges=" << result.constraints.boundaryEdges.size() << '\n'
               << "internal_edges=" << result.constraints.internalEdges.size() << '\n'
+              << "sample_vertices=" << result.report.sampleVertexCount << '\n'
+              << "sample_triangles=" << result.report.sampleTriangleCount << '\n'
+              << "reference_mesh_fingerprint=" << result.report.referenceMeshFingerprint << '\n'
               << "total_ms=" << result.report.totalWallMilliseconds << '\n'
               << "message=" << result.report.message << '\n';
 
     if (constraintsOnly) {
         return !result.constraints.boundaryEdges.empty() &&
             !result.report.stages.empty() && result.report.stages.front().success ? 0 : 1;
+    }
+    if (samplingOnly) {
+        return result.referenceMesh && !result.referenceMesh->empty() ? 0 : 1;
     }
     return result.canApply() ? 0 : 1;
 }

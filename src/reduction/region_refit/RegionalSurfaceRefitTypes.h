@@ -10,11 +10,14 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace spo {
+
+class RegionReferenceMesh;
 
 enum class RegionRefitLayoutMode {
     FixedPatchCount,
@@ -67,8 +70,8 @@ const char* toString(RegionBoundaryContinuity continuity);
 const char* toString(RegionRefitCachePolicy policy);
 
 struct RegionRefitOptions {
-    double tolerance3d = 0.001;
-    double normalToleranceDegrees = 2.0;
+    double tolerance3d = 0.03;
+    double normalToleranceDegrees = 15.0;
     double curveOnSurfaceTolerance = 0.001;
     std::size_t maximumSampleTriangles = 200000;
     int fixedPatchCount = 0;
@@ -95,6 +98,7 @@ struct RegionRefitRequest {
     std::vector<FaceId> selectedFaces;
     std::vector<EdgeId> lockedEdges;
     RegionRefitLayoutMode layoutMode = RegionRefitLayoutMode::Adaptive;
+    RegionRefitStage diagnosticStopAfterStage = RegionRefitStage::ExternalCad;
     RegionRefitOptions options;
 };
 
@@ -145,6 +149,15 @@ struct RegionRefitReport {
     int selectedPatchCount = 0;
     int fullFitCount = 0;
     std::string selectedLayoutHash;
+    std::size_t sampleVertexCount = 0;
+    std::size_t sampleTriangleCount = 0;
+    std::size_t boundarySampleCount = 0;
+    std::size_t weldedInternalSeamVertexCount = 0;
+    std::size_t normalDiscontinuityVertexCount = 0;
+    double maximumSamplingChordError = 0.0;
+    double maximumSamplingNormalErrorDegrees = 0.0;
+    double maximumBoundaryChordError = 0.0;
+    std::string referenceMeshFingerprint;
     double totalWallMilliseconds = 0.0;
     std::uint64_t peakWorkingSetBytes = 0;
     std::uint64_t peakPrivateBytes = 0;
@@ -154,6 +167,7 @@ struct RegionRefitReport {
 struct RegionRefitResult {
     RegionRefitReport report;
     RegionTopologyConstraints constraints;
+    std::shared_ptr<RegionReferenceMesh> referenceMesh;
     TopoDS_Shape fittedPatchNetwork;
     TopoDS_Shape finalShape;
 

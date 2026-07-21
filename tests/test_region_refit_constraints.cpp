@@ -174,11 +174,12 @@ void test_engine_records_constraint_stage_before_unimplemented_layout() {
     const auto fixture = make_two_face_fixture();
     spo::RegionRefitRequest request;
     request.selectedFaces = {0, 1};
+    request.diagnosticStopAfterStage = spo::RegionRefitStage::Constraints;
 
     const auto result = spo::RegionalSurfaceRefitEngine().run(fixture.document, request);
 
     assert(result.report.status == spo::RegionRefitStatus::NoValidatedLayoutWithinBudget);
-    assert(result.report.failureStage == spo::RegionRefitStage::Layout);
+    assert(result.report.failureStage == spo::RegionRefitStage::Sampling);
     assert(result.report.stages.size() == 1);
     assert(result.report.stages.front().success);
     assert(result.constraints.boundaryEdges.size() == 6);
