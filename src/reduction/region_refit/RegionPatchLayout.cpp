@@ -300,6 +300,120 @@ double proxyError(
     return totalWeight > 0.0 ? energy / totalWeight : std::numeric_limits<double>::infinity();
 }
 
+struct VsaProxy {
+    double weight = 0.0;
+    gp_XYZ point;
+    gp_XYZ normal;
+    double curvature = 0.0;
+};
+
+std::vector<VsaProxy> buildVsaProxies(
+    const MeshGraph& graph,
+    const std::vector<int>& assignments,
+    const int patchCount) {
+    std::vector<VsaProxy> proxies(static_cast<std::size_t>(patchCount));
+    for (std::size_t triangle = 0; triangle < graph.features.size(); ++triangle) {
+        const auto patch = assignments[triangle];
+        if (patch < 0 || patch >= patchCount) continue;
+        const auto& feature = graph.features[triangle];
+        const auto weight = std::max(feature.area, 1.0e-18);
+        auto& proxy = proxies[static_cast<std::size_t>(patch)];
+        proxy.weight += weight;
+        proxy.point += feature.centroid.XYZ() * weight;
+        proxy.normal += feature.normal.XYZ() * weight;
+        proxy.curvature += feature.curvature * weight;
+    }
+    for (auto& proxy : proxies) {
+        if (proxy.weight <= 0.0) continue;
+        proxy.point /= proxy.weight;
+        proxy.curvature /= proxy.weight;
+        if (proxy.normal.SquareModulus() > 1.0e-24) proxy.normal.Normalize();
+    }
+    return proxies;
+}
+
+double triangleProxyCost(
+    const MeshGraph& graph,
+    const std::size_t triangle,
+    const VsaProxy& proxy) {
+    const auto& feature = graph.features[triangle];
+    const auto position = feature.centroid.SquareDistance(gp_Pnt(proxy.point)) /
+        (graph.diagonal * graph.diagonal);
+    const auto normal = proxy.normal.SquareModulus() > 1.0e-24
+        ? std::max(0.0, 1.0 - feature.normal.XYZ().Dot(proxy.normal))
+        : 0.0;
+    const auto curvature = (feature.curvature - proxy.curvature) / graph.curvatureScale;
+    return position + normal + curvature * curvature * 0.05;
+}
+
+std::vector<int> refineConnectedRegions(
+    const MeshGraph& graph,
+    std::vector<int> assignments,
+    const int patchCount) {
+    struct Item {
+        double cost = 0.0;
+        std::size_t triangle = 0;
+        int patch = 0;
+    };
+    const auto greater = [](const Item& lhs, const Item& rhs) {
+        return std::tie(lhs.cost, lhs.patch, lhs.triangle) >
+            std::tie(rhs.cost, rhs.patch, rhs.triangle);
+    };
+
+    constexpr int maximumIterations = 8;
+    for (int iteration = 0; iteration < maximumIterations; ++iteration) {
+        const auto proxies = buildVsaProxies(graph, assignments, patchCount);
+        std::vector<std::size_t> seeds(static_cast<std::size_t>(patchCount), 0);
+        for (int patch = 0; patch < patchCount; ++patch) {
+            double bestCost = std::numeric_limits<double>::infinity();
+            bool found = false;
+            for (std::size_t triangle = 0; triangle < assignments.size(); ++triangle) {
+                if (assignments[triangle] != patch) continue;
+                const auto cost = triangleProxyCost(graph, triangle, proxies[static_cast<std::size_t>(patch)]);
+                if (!found || cost < bestCost - 1.0e-15 ||
+                    (std::abs(cost - bestCost) <= 1.0e-15 && triangle < seeds[static_cast<std::size_t>(patch)])) {
+                    found = true;
+                    bestCost = cost;
+                    seeds[static_cast<std::size_t>(patch)] = triangle;
+                }
+            }
+            if (!found) return assignments;
+        }
+
+        std::vector<int> refined(assignments.size(), -1);
+        std::priority_queue<Item, std::vector<Item>, decltype(greater)> queue(greater);
+        for (int patch = 0; patch < patchCount; ++patch) {
+            const auto seed = seeds[static_cast<std::size_t>(patch)];
+            refined[seed] = patch;
+        }
+        for (int patch = 0; patch < patchCount; ++patch) {
+            const auto seed = seeds[static_cast<std::size_t>(patch)];
+            for (const auto adjacent : graph.adjacency[seed]) {
+                if (refined[adjacent] < 0) {
+                    queue.push({triangleProxyCost(
+                        graph, adjacent, proxies[static_cast<std::size_t>(patch)]), adjacent, patch});
+                }
+            }
+        }
+        while (!queue.empty()) {
+            const auto item = queue.top();
+            queue.pop();
+            if (refined[item.triangle] >= 0) continue;
+            refined[item.triangle] = item.patch;
+            for (const auto adjacent : graph.adjacency[item.triangle]) {
+                if (refined[adjacent] < 0) {
+                    queue.push({triangleProxyCost(
+                        graph, adjacent, proxies[static_cast<std::size_t>(item.patch)]), adjacent, item.patch});
+                }
+            }
+        }
+        if (std::find(refined.begin(), refined.end(), -1) != refined.end()) return assignments;
+        if (refined == assignments) break;
+        assignments = std::move(refined);
+    }
+    return assignments;
+}
+
 bool traverseBoundary(
     const std::map<std::size_t, std::vector<std::size_t>>& boundaryNeighbors,
     std::vector<std::size_t>& boundaryLoop) {
@@ -573,9 +687,7 @@ bool parameterizePatch(
                     maximumDelta = std::max(maximumDelta, std::abs(delta));
                 }
             }
-            if (maximumDelta < 1.0e-8) {
-                break;
-            }
+            if (maximumDelta < 1.0e-8) break;
         }
         maximumResidual = 0.0;
         for (const auto vertex : interior) {
@@ -782,14 +894,20 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
         report.patchCount = patchCount;
         RegionPatchLayout layout;
         layout.patchCount = patchCount;
-        layout.trianglePatches = assignConnectedRegions(graph, seeds, patchCount);
-        layout.proxyError = proxyError(graph, layout.trianglePatches, patchCount);
-        report.proxyError = layout.proxyError;
-        report.topologyPassed = std::isfinite(layout.proxyError) &&
-            std::find(layout.trianglePatches.begin(), layout.trianglePatches.end(), -1) ==
-                layout.trianglePatches.end();
-        if (report.topologyPassed) {
-            layout.patches.resize(static_cast<std::size_t>(patchCount));
+        const auto initialAssignments = assignConnectedRegions(graph, seeds, patchCount);
+        const auto refinedAssignments = refineConnectedRegions(
+            graph, initialAssignments, patchCount);
+        const auto tryParameterization = [&](const std::vector<int>& assignments) {
+            layout.trianglePatches = assignments;
+            layout.patches.assign(static_cast<std::size_t>(patchCount), {});
+            report.maximumDistortion = 0.0;
+            report.flippedTriangleCount = 0;
+            report.matrixRows = 0;
+            report.matrixNonZeros = 0;
+            report.rejectionReason.clear();
+            report.topologyPassed =
+                std::find(assignments.begin(), assignments.end(), -1) == assignments.end();
+            if (!report.topologyPassed) return false;
             for (int patch = 0; patch < patchCount; ++patch) {
                 std::string failure;
                 if (!parameterizePatch(
@@ -801,26 +919,33 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                         layout.patches[static_cast<std::size_t>(patch)],
                         failure)) {
                     const auto& failedPatch = layout.patches[static_cast<std::size_t>(patch)];
-                    report.maximumDistortion = std::max(
-                        report.maximumDistortion, failedPatch.maximumDistortion);
-                    report.flippedTriangleCount += failedPatch.flippedTriangleCount;
-                    report.matrixRows += failedPatch.matrixRows;
-                    report.matrixNonZeros += failedPatch.matrixNonZeros;
+                    report.maximumDistortion = failedPatch.maximumDistortion;
+                    report.flippedTriangleCount = failedPatch.flippedTriangleCount;
+                    report.matrixRows = failedPatch.matrixRows;
+                    report.matrixNonZeros = failedPatch.matrixNonZeros;
                     report.topologyPassed = failure.find("not a single-boundary disk") == std::string::npos &&
                         failure.find("disconnected") == std::string::npos &&
                         failure.find("non-manifold") == std::string::npos;
                     report.rejectionReason = std::move(failure);
-                    break;
+                    return false;
                 }
             }
+            return true;
+        };
+        auto parameterized = tryParameterization(refinedAssignments);
+        if (!parameterized && refinedAssignments != initialAssignments && !expired()) {
+            parameterized = tryParameterization(initialAssignments);
         }
+        layout.proxyError = proxyError(graph, layout.trianglePatches, patchCount);
+        report.proxyError = layout.proxyError;
+        report.topologyPassed = report.topologyPassed && std::isfinite(layout.proxyError);
         if (expired()) {
             result.candidates.push_back(std::move(report));
             result.status = RegionRefitStatus::TimeBudgetExceeded;
             result.message = "Layout generation exceeded its wall-clock budget.";
             return result;
         }
-        if (report.topologyPassed && report.rejectionReason.empty()) {
+        if (parameterized && report.topologyPassed && report.rejectionReason.empty()) {
             report.parameterizationPassed = true;
             for (const auto& patch : layout.patches) {
                 report.maximumDistortion = std::max(report.maximumDistortion, patch.maximumDistortion);

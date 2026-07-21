@@ -1,6 +1,7 @@
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
 #include "reduction/region_refit/RegionConstraintExtractor.h"
+#include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/StepAdaptiveRegionSampler.h"
@@ -132,7 +133,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
     result.selectedLayout = std::make_shared<RegionPatchLayout>(
-        std::move(layouts.selectedCandidates.front()));
+        layouts.selectedCandidates.front());
     result.report.selectedPatchCount = result.selectedLayout->patchCount;
     result.report.selectedLayoutHash = result.selectedLayout->hash;
     if (layoutStage.wallMilliseconds > static_cast<double>(request.options.layoutBudgetMilliseconds) ||
@@ -149,9 +150,58 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
+    const auto reservedMilliseconds = request.options.retrimBudgetMilliseconds +
+        request.options.finalValidationBudgetMilliseconds;
+    const auto fitBudgetMilliseconds = std::min(
+        request.options.totalFitBudgetMilliseconds,
+        request.options.maximumWallClockMilliseconds -
+            static_cast<std::int64_t>(result.report.totalWallMilliseconds) -
+            reservedMilliseconds);
+    if (fitBudgetMilliseconds <= 0) {
+        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = RegionRefitStage::Fitting;
+        result.report.message = "Insufficient wall-clock budget remains for fitting and reserved final validation.";
+        return result;
+    }
+    const auto fittingStarted = std::chrono::steady_clock::now();
+    auto fitted = JointBSplineNetworkFitter().fit(
+        *result.referenceMesh,
+        result.constraints,
+        layouts.selectedCandidates,
+        request.options,
+        fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
+    const auto fittingEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport fittingStage;
+    fittingStage.stage = RegionRefitStage::Fitting;
+    fittingStage.success = fitted.success();
+    fittingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
+        fittingEnded - fittingStarted).count();
+    fittingStage.message = fitted.message;
+    result.report.stages.push_back(fittingStage);
+    result.report.totalWallMilliseconds += fittingStage.wallMilliseconds;
+    result.report.fitAttempts = fitted.attempts;
+    result.report.fullFitCount = static_cast<int>(fitted.attempts.size());
+    if (!fitted.success()) {
+        result.report.status = fitted.status;
+        result.report.failureStage = RegionRefitStage::Fitting;
+        result.report.message = fitted.message;
+        return result;
+    }
+    result.fittedNetwork = fitted.network;
+    result.selectedLayout = std::make_shared<RegionPatchLayout>(fitted.network->layout);
+    result.fittedPatchNetwork = fitted.network->inspectionShape;
+    result.report.selectedPatchCount = fitted.network->layout.patchCount;
+    result.report.selectedLayoutHash = fitted.network->layout.hash;
+    if (request.diagnosticStopAfterStage == RegionRefitStage::Fitting) {
+        result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::Retrim;
+        result.report.message = "Fitting-only diagnostic completed.";
+        return result;
+    }
+
     result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
-    result.report.failureStage = RegionRefitStage::Fitting;
-    result.report.message = "Layout screening passed; joint fitting is not complete yet.";
+    result.report.failureStage = RegionRefitStage::Retrim;
+    result.report.message = "Joint fitting passed; native retrimming is not complete yet.";
     return result;
 }
 

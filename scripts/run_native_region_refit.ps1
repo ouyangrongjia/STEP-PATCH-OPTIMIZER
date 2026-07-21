@@ -11,7 +11,8 @@ param(
     [string]$OutputDir = "",
     [switch]$ConstraintsOnly,
     [switch]$SamplingOnly,
-    [switch]$LayoutOnly
+    [switch]$LayoutOnly,
+    [switch]$FitOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,12 +26,13 @@ if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
 if ($Layout -eq "fixed" -and $PatchCount -le 0) {
     throw "Fixed layout requires -PatchCount greater than zero."
 }
-if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent + [int]$LayoutOnly.IsPresent -gt 1) {
+if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent +
+        [int]$LayoutOnly.IsPresent + [int]$FitOnly.IsPresent -gt 1) {
     throw "Stage diagnostic switches cannot be used together."
 }
 
 $candidateToken = if ($PSCmdlet.ParameterSetName -eq "Candidate") { [string]$CandidateId } else { "faces" }
-$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } elseif ($LayoutOnly) { "layout" } else { $Layout }
+$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } elseif ($LayoutOnly) { "layout" } elseif ($FitOnly) { "fit" } else { $Layout }
 $context = New-SpoRunContext `
     -RepoRoot $repoRoot `
     -Workflow "native-region-refit" `
@@ -68,6 +70,8 @@ if ($ConstraintsOnly) {
     $arguments += "--sampling-only"
 } elseif ($LayoutOnly) {
     $arguments += "--layout-only"
+} elseif ($FitOnly) {
+    $arguments += "--fit-only"
 }
 
 $stdout = Join-Path $context.directories.logs "probe.stdout.log"
@@ -104,6 +108,10 @@ if (Test-Path -LiteralPath $layoutPly -PathType Leaf) {
 }
 if (Test-Path -LiteralPath $layoutSvg -PathType Leaf) {
     $artifacts["selected_layout_svg"] = $layoutSvg
+}
+$fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch_network.step"
+if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
+    $artifacts["fitted_patch_network_step"] = $fittedPatchNetwork
 }
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
 Write-Output $context.output_dir

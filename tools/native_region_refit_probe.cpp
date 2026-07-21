@@ -1,8 +1,10 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
+#include "io/StepWriter.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
+#include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
@@ -151,6 +153,53 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
         {"triangle_patches", assignments},
         {"patches", patches},
         {"seams", seams}};
+}
+
+QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
+    QJsonArray attempts;
+    for (const auto& attempt : result.report.fitAttempts) {
+        QJsonArray iterations;
+        for (const auto& iteration : attempt.iterations) {
+            iterations.append(QJsonObject {
+                {"iteration", iteration.iteration},
+                {"u_control_count", iteration.uControlCount},
+                {"v_control_count", iteration.vControlCount},
+                {"matrix_rows", QString::number(iteration.matrixRows)},
+                {"matrix_columns", QString::number(iteration.matrixColumns)},
+                {"matrix_nonzeros", QString::number(iteration.matrixNonZeros)},
+                {"estimated_solver_bytes", QString::number(iteration.estimatedSolverBytes)},
+                {"symbolic_factorization_reuse_count", iteration.symbolicFactorizationReuseCount},
+                {"training_maximum_distance", iteration.trainingMaximumDistance},
+                {"selection_maximum_distance", iteration.selectionMaximumDistance},
+                {"holdout_maximum_distance", iteration.holdoutMaximumDistance},
+                {"holdout_maximum_normal_degrees", iteration.holdoutMaximumNormalDegrees},
+                {"holdout_95_distance", iteration.holdout95Distance},
+                {"holdout_95_normal_degrees", iteration.holdout95NormalDegrees},
+                {"holdout_worst_distance_vertex", QString::number(iteration.holdoutWorstDistanceVertex)},
+                {"holdout_worst_normal_vertex", QString::number(iteration.holdoutWorstNormalVertex)},
+                {"holdout_worst_distance_patch", iteration.holdoutWorstDistancePatch},
+                {"holdout_worst_normal_patch", iteration.holdoutWorstNormalPatch},
+                {"holdout_worst_distance_internal_seam", iteration.holdoutWorstDistanceInternalSeam},
+                {"holdout_worst_normal_internal_seam", iteration.holdoutWorstNormalInternalSeam},
+                {"boundary_maximum_distance", iteration.boundaryMaximumDistance},
+                {"seam_maximum_distance", iteration.seamMaximumDistance},
+                {"wall_ms", iteration.wallMilliseconds},
+                {"stop_reason", QString::fromStdString(iteration.stopReason)}});
+        }
+        attempts.append(QJsonObject {
+            {"patch_count", attempt.patchCount},
+            {"layout_hash", QString::fromStdString(attempt.layoutHash)},
+            {"success", attempt.success},
+            {"wall_ms", attempt.wallMilliseconds},
+            {"stop_reason", QString::fromStdString(attempt.stopReason)},
+            {"iterations", iterations}});
+    }
+    return {
+        {"status", result.fittedNetwork ? "Success" : spo::toString(result.report.status)},
+        {"full_fit_count", result.report.fullFitCount},
+        {"selected_patch_count", result.report.selectedPatchCount},
+        {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
+        {"attempts", attempts}};
 }
 
 std::array<int, 3> patchColor(const int patch) {
@@ -362,7 +411,7 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
-                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only | --layout-only]\n";
+                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only | --layout-only | --fit-only]\n";
         return 2;
     }
 
@@ -372,6 +421,7 @@ int main(int argc, char* argv[]) {
     bool constraintsOnly = false;
     bool samplingOnly = false;
     bool layoutOnly = false;
+    bool fitOnly = false;
     spo::RegionRefitRequest request;
     try {
         for (int index = 3; index < argc; ++index) {
@@ -406,6 +456,8 @@ int main(int argc, char* argv[]) {
                 samplingOnly = true;
             } else if (argument == "--layout-only") {
                 layoutOnly = true;
+            } else if (argument == "--fit-only") {
+                fitOnly = true;
             } else {
                 std::cerr << "未知参数：" << argument << '\n';
                 return 2;
@@ -420,7 +472,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "--candidate-id 与 --faces 必须且只能指定一个。\n";
         return 2;
     }
-    if (static_cast<int>(constraintsOnly) + static_cast<int>(samplingOnly) + static_cast<int>(layoutOnly) > 1) {
+    if (static_cast<int>(constraintsOnly) + static_cast<int>(samplingOnly) +
+            static_cast<int>(layoutOnly) + static_cast<int>(fitOnly) > 1) {
         std::cerr << "阶段诊断选项不能同时使用。\n";
         return 2;
     }
@@ -466,6 +519,8 @@ int main(int argc, char* argv[]) {
         request.diagnosticStopAfterStage = spo::RegionRefitStage::Sampling;
     } else if (layoutOnly) {
         request.diagnosticStopAfterStage = spo::RegionRefitStage::Layout;
+    } else if (fitOnly) {
+        request.diagnosticStopAfterStage = spo::RegionRefitStage::Fitting;
     }
     const auto result = spo::RegionalSurfaceRefitEngine().run(read.document, request);
     timing.engineMilliseconds = std::chrono::duration<double, std::milli>(
@@ -476,6 +531,7 @@ int main(int argc, char* argv[]) {
     if (!writeJson(diagnostics / "constraints.json", constraintsToJson(result)) ||
         !writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) ||
         !writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) ||
+        !writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) ||
         !writeJson(diagnostics / "performance_report.json", performanceToJson(result, request, timing))) {
         std::cerr << "无法写入区域重拟合诊断。\n";
         return 1;
@@ -497,6 +553,17 @@ int main(int argc, char* argv[]) {
             !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.referenceMesh, *result.selectedLayout)) ||
             !writeText(layoutDirectory / "selected_layout.svg", layoutSvg(*result.referenceMesh, *result.selectedLayout))) {
             std::cerr << "无法写入布局证据。\n";
+            return 1;
+        }
+    }
+    if (result.fittedNetwork && !result.fittedPatchNetwork.IsNull()) {
+        const auto fitDirectory = outputDirectory / "artifacts" / "fit";
+        std::filesystem::create_directories(fitDirectory);
+        const auto write = spo::StepWriter().write(
+            spo::ShapeDocument(result.fittedPatchNetwork, {}),
+            fitDirectory / "fitted_patch_network.step");
+        if (!write.success()) {
+            std::cerr << write.message() << '\n';
             return 1;
         }
     }
@@ -523,6 +590,9 @@ int main(int argc, char* argv[]) {
     }
     if (layoutOnly) {
         return result.selectedLayout && !result.selectedLayout->trianglePatches.empty() ? 0 : 1;
+    }
+    if (fitOnly) {
+        return result.fittedNetwork && !result.fittedPatchNetwork.IsNull() ? 0 : 1;
     }
     return result.canApply() ? 0 : 1;
 }

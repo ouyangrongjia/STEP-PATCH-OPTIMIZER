@@ -19,6 +19,7 @@ namespace spo {
 
 class RegionReferenceMesh;
 struct RegionPatchLayout;
+struct RegionFittedPatchNetwork;
 
 enum class RegionRefitLayoutMode {
     FixedPatchCount,
@@ -159,6 +160,42 @@ struct RegionLayoutCandidateReport {
     std::string rejectionReason;
 };
 
+struct RegionFitIterationReport {
+    int iteration = 0;
+    int uControlCount = 0;
+    int vControlCount = 0;
+    std::size_t matrixRows = 0;
+    std::size_t matrixColumns = 0;
+    std::size_t matrixNonZeros = 0;
+    std::uint64_t estimatedSolverBytes = 0;
+    int symbolicFactorizationReuseCount = 0;
+    double trainingMaximumDistance = 0.0;
+    double selectionMaximumDistance = 0.0;
+    double holdoutMaximumDistance = 0.0;
+    double holdoutMaximumNormalDegrees = 0.0;
+    double holdout95Distance = 0.0;
+    double holdout95NormalDegrees = 0.0;
+    std::size_t holdoutWorstDistanceVertex = 0;
+    std::size_t holdoutWorstNormalVertex = 0;
+    int holdoutWorstDistancePatch = -1;
+    int holdoutWorstNormalPatch = -1;
+    bool holdoutWorstDistanceInternalSeam = false;
+    bool holdoutWorstNormalInternalSeam = false;
+    double boundaryMaximumDistance = 0.0;
+    double seamMaximumDistance = 0.0;
+    double wallMilliseconds = 0.0;
+    std::string stopReason;
+};
+
+struct RegionFitAttemptReport {
+    int patchCount = 0;
+    std::string layoutHash;
+    bool success = false;
+    double wallMilliseconds = 0.0;
+    std::string stopReason;
+    std::vector<RegionFitIterationReport> iterations;
+};
+
 struct RegionRefitReport {
     RegionRefitStatus status = RegionRefitStatus::NotStarted;
     RegionRefitStage failureStage = RegionRefitStage::None;
@@ -178,6 +215,7 @@ struct RegionRefitReport {
     double maximumBoundaryChordError = 0.0;
     std::string referenceMeshFingerprint;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
+    std::vector<RegionFitAttemptReport> fitAttempts;
     double totalWallMilliseconds = 0.0;
     std::uint64_t peakWorkingSetBytes = 0;
     std::uint64_t peakPrivateBytes = 0;
@@ -189,6 +227,7 @@ struct RegionRefitResult {
     RegionTopologyConstraints constraints;
     std::shared_ptr<RegionReferenceMesh> referenceMesh;
     std::shared_ptr<RegionPatchLayout> selectedLayout;
+    std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;
     TopoDS_Shape finalShape;
 
