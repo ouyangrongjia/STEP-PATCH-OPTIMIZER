@@ -517,7 +517,7 @@ face / edge 手动选择、锁边、same-domain 合并和 Geomagic 仍保留，�
 
 当前主线中，STEP 导入、特征边检测、候选生成、原生重拟合预览和 Apply 都在后台执行；报告页和底部状态栏持续显示心跳，窗口事件循环不会因这些长计算被占用。候选点击和预览结果显示只更新 GUI 状态，本身不是长计算。
 
-GUI 默认重拟合合同是 `StepBrepOnly`、`targetOutputRatio=0.5`、提案分组大小不限、禁用持久拟合缓存、4 个工作线程。因此，49 面候选在 GUI 默认设置下会尝试搜索到不超过 24 面。`data/runs/20260715_surface_reduction_candidate_0179_hybrid/` 中锁定的 `49→46` 回归使用原始扫描 STL 软参考、`targetOutputRatio=0.95`、最多二面提案和分层脚本缓存策略。两条路径使用同一个 `SurfaceReductionEngine`、重裁剪和最终质量门，但参数和输入证据不同，GUI 默认运行不是锁定回归的直接回放。
+GUI 默认重拟合合同是 `MinimizeFaceCount`、`StepBrepOnly`、提案分组大小不限、512 次唯一受限拟合、64 次最终候选验证、持久拟合缓存和 4 个工作线程。界面先显示受保护边图决定的理论下界，再持续寻找预算内最少面数；只有达到下界并通过全部质量门才显示“已证明最优”。`data/runs/20260715_surface_reduction_candidate_0179_hybrid/` 中锁定的 `49→46` 回归显式使用 `TargetRatio`、原始扫描 STL 软参考、`targetOutputRatio=0.95`、最多二面提案和分层脚本缓存策略。两条路径使用同一个 `SurfaceReductionEngine`、重裁剪和最终质量门，但搜索目标和输入证据不同，GUI 默认运行不是锁定回归的直接回放。
 
 重新检测特征边、切换到另一个候选、锁边/解锁边、Apply、撤销或重做都会使旧原生重拟合预览失效，防止把旧候选的缓存结果应用到新候选。
 

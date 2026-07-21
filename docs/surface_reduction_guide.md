@@ -4,12 +4,17 @@
 
 `SurfaceReductionEngine` 接收任意连通 FaceId 集合；GUI 产品主线先检测特征边，由 `MergePlanner` 动态生成候选，再把用户当前选中候选的 `MergeCandidate::faces` 作为请求。候选模式会清空普通 face 选择，因此 GUI 不再从 `OccViewWidget::selectedFaceIds()` 读取原生重拟合输入。输入和输出面数完全由本轮候选 FaceId 集合和拟合结果决定，不允许固定候选、面编号、分组或目标面数。拟合输入显式区分 STEP-only 与 STEP 加独立扫描 STL 软参考；加载 STL 本身不会静默切换模式。
 
-设输入面数为 `N`：
+库级接口默认保留 `TargetRatio` 兼容模式，GUI 产品入口显式使用 `MinimizeFaceCount`。设输入面数为 `N`：
 
 - `N < 2`：`InvalidSelection`；
 - `output_faces < N` 且全部质量门通过：`Reduced`；
-- `output_faces <= floor(N * targetOutputRatio)`：`TargetAchieved`，默认比例为 `0.5`；
+- `TargetRatio` 中 `output_faces <= floor(N * targetOutputRatio)`：`TargetAchieved`；
+- `MinimizeFaceCount` 中，通过结果达到硬阻断边图连通分量数：`OptimalProven`；
+- `MinimizeFaceCount` 中，通过结果未达到理论下界：`BestFoundWithinBudget`；
+- 搜索或最终验证预算内没有通过结果：`NoValidatedResultFound`；这不证明所有未展开或未验证分区不可行；
 - 没有合法合并：`NoAcceptableReduction`，不得 Apply。
+
+`OptimalProven` 只表示：在当前硬阻断边、每个 Cluster 由一个替换面表示、当前拟合选项和全部质量门约束下，结果达到结构下界；它不是无约束曲面分割问题的数学全局最优证明。
 
 默认质量门为最大距离 `0.03 mm`、最大法向差 `15°`、保留普通光顺接缝 `5°`。锁边、选区外边界、非流形边和大于 `15°` 的明显折角不可跨越；原始角度在 `5°～15°` 的边不作为保留光顺接缝验收对象，但只有合并后的距离、法向、边界和全局质量门全部通过时才能被内化。
 
@@ -25,18 +30,25 @@
 → 每个原始面作为初始分组
 → 从 TopologyGraph 构造相邻分组队列
 → 锁边、非流形边、大于 15° 的明显折角和选区边界保护
-→ 法向/曲率/共享边长度聚合名次与空间分箱生成确定性相邻队列
-→ 宽度 8 的确定性束搜索，每个状态最多输出 16 个相邻组合，同时保留硬接缝可行状态与可继续扩大的过渡状态
+→ 计算未受保护原始共享边图的连通分量数，直接拟合理论最少面数分区
+→ 直探未通过时，以法向、曲率、共享边长度、组合规模和 FaceId 生成确定性相邻队列
+→ 初始单面种子先保留一半质量排序槽，再用原始面面积加权质心执行确定性最远点采样；可用的持久成功拟合优先进入同类排序
+→ 宽度 8 的确定性束搜索，每状态最多选择 16 个提案；组+组、组+单面、单面+单面各有保留位置
+→ 局部 Cluster 的普通提案均失败时，可使用最多两个连通三组并集跳过不可行中间二面组
+→ 普通、跳级和理论下界直探都在求值前检查 FaceId 并集，任何会内化锁边、明显折角或非流形边的组合直接拒绝
+→ 同时保留硬接缝可行状态与可继续扩大的过渡状态
 → 按原始 FaceId 集合缓存精确同域合并和受限拟合，最多执行 512 个唯一受限拟合
 → 始终回到原始 FaceId 对应的 STEP 曲面采样
 → 调和参数域外守卫和支撑曲面控制网包络门
 → 模型选择集通过后再执行独立终验
 → 原始外边界重裁剪和参数曲线重建
 → 保守 B-rep repair
-→ 按排序逐个执行商业 CAD 类质量门、StrictTopologyGate 和 STEP 回读，失败时继续尝试下一状态
+→ 归档束剪枝前的全部唯一状态，按字典序对最多 64 个候选执行商业 CAD 类质量门、StrictTopologyGate 和 STEP 回读
 → GUI 预览
 → ReduceSelectedFacesCommand 事务 Apply
 ```
+
+持久拟合缓存按归一化 FaceId 集合和输入变体寻址；扫描参考与 `STEP-only` 回退使用不同键。键同时覆盖 STEP/扫描指纹、全部拟合选项、拟合算法指纹以及 Qt、OCCT、编译器和构建身份。只写入成功结果或带明确几何失败阶段的确定性负结果；缓存缺失、墙钟预算、异常和基础设施失败不写入负缓存。
 
 GUI 用一个状态化按钮承接两阶段操作：没有合格预览时执行预览，当前候选已有合格预览时执行 Apply；“一键预览并应用”只在同一候选的预览通过全部质量门后自动提交。候选在计算期间改变时禁止自动 Apply。
 
@@ -98,14 +110,17 @@ GUI 用一个状态化按钮承接两阶段操作：没有合格预览时执行�
 | SR-12.3 GUI 原生 B-rep 主流程迁移 | 已完成 |
 | SR-12.4 GUI 候选选择与统一预览/应用入口 | 已完成 |
 | SR-12.5 GUI 主线后台执行与实时心跳 | 已完成 |
+| SR-13 预算内最少面数搜索、理论下界与证明状态 | 已完成 |
 
 GUI 的原生入口位于顶层“曲面减面”菜单和主工具栏，操作顺序为“检测特征边 → 选择候选区域 → 原生重拟合”。“选择候选区域”在需要时自动生成候选并进入候选点击模式；“原生重拟合”在预览与 Apply 状态间切换，另有“一键预览并应用”。默认“仅 STEP B-rep”；“STEP B-rep + 扫描 STL 软参考”必须显式选择且要求先加载扫描 STL。STEP 导入、特征边检测、候选生成、后台预览和 Apply 均不占用 GUI 线程；报告页每 2 秒刷新心跳，减面核心还会上报拓扑准备、搜索层、拟合计数、活动分组、接缝终验、商业 CAD 类门、整件组装、`StrictTopologyGate` 和 STEP 回读。后台预览使用 4 个拟合工作线程，仍执行同一套搜索、重裁剪和最终质量门。Geomagic 不会自动接管失败分组，只保留在“高级 → Geomagic 后备（旧流程）”。
 
-GUI 默认请求使用 `StepBrepOnly`、`targetOutputRatio=0.5`、`maximumProposalGroupSize=0`、`SurfaceReductionCacheMode::Disabled` 和 4 个工作线程。candidate 179 的锁定 `49→46` 回归则使用原始扫描 STL 软参考、`targetOutputRatio=0.95`、`maximumProposalGroupSize=2`，并由分层脚本显式选择缓存模式。因此两者复用同一个引擎和质量门，但 GUI 默认运行会为 49 面候选尝试不超过 24 面，不是 `49→46` 基线回放。
+GUI 默认请求使用 `MinimizeFaceCount`、`StepBrepOnly`、`maximumProposalGroupSize=0`、`SurfaceReductionCacheMode::ReadWrite` 和 4 个工作线程，工作预算为 512 次受限拟合与 64 次最终验证，墙钟上限默认关闭。candidate 179 的锁定 `49→46` 回归则显式使用 `TargetRatio`、原始扫描 STL 软参考、`targetOutputRatio=0.95`、`maximumProposalGroupSize=2`，并由分层脚本显式选择缓存模式。因此两者复用同一个引擎和质量门，但 GUI 默认运行不是 `49→46` 基线回放。
 
-`surface_reduction_probe` 支持 `--source-stl <原始.stl>` 动态执行 STEP 面域裁剪，也支持 `--cropped-stl <选区.stl>` 复用已验证裁剪；选区可用 `--candidate-id <id>` 动态发现，或直接给出任意数量的 FaceId。成功时可用 `--selection-output <独立选区.step>` 同时导出减面后的选区面复合体。`step_stats <文件> --curve-on-surface` 用于稠密检查三维边/参数曲线偏差和 B-spline 控制网范围。`surface_reduction_benchmark` 从平滑内部边和现有候选属性发现选区，并动态记录输入、输出、质量指标和拒绝原因；生产逻辑和默认测试不包含 candidate 179。
+`surface_reduction_probe` 通过 `--search-objective target-ratio|minimize-face-count` 显式选择目标，支持 `--source-stl <原始.stl>` 动态执行 STEP 面域裁剪，也支持 `--cropped-stl <选区.stl>` 复用已验证裁剪；选区可用 `--candidate-id <id>` 动态发现，或直接给出任意数量的 FaceId。`--maximum-final-validations`、`--maximum-skip-triples` 和 `--search-time-budget-ms` 可覆盖新模式预算；JSON 报告的 `search_iterations` 逐层记录当前最佳面数、归档状态、拟合预算和四类提案累计选择数。成功时可用 `--selection-output <独立选区.step>` 同时导出减面后的选区面复合体。`step_stats <文件> --curve-on-surface` 用于稠密检查三维边/参数曲线偏差和 B-spline 控制网范围。`surface_reduction_benchmark` 显式保留 `TargetRatio`，生产逻辑和默认测试不包含 candidate 179。
 
 2026-07-15 的最终真实基准位于 `data/runs/20260715_surface_reduction_benchmark_final12b/`：四个真实 STEP 共 12 个选区，3 个选区由 2 面减为 1 面并达到 50% 目标，9 个选区无合法减少；三个成功结果的参数化、BRepCheck、STEP 回读和商业 CAD 类边界门均为 `true`。合成测试另行覆盖部分减少、孔洞、高曲率 B-spline、锁边和尖锐边。
+
+2026-07-21 的 candidate 179 最少面数当前真实实验位于 `data/runs/20260721_055601_195__surface-reduction-minimize__03-clay__cand-0179__windows-msvc-debug/`：49 面选区的理论下界为 1，预算搜索归档 137 个状态；本轮复用已经建立的 154 项拟合缓存，没有启动新拟合，最终以 `BestFoundWithinBudget` 返回 47 面。接受组为 `1724+1731`、`1742+1745`；最大距离 `0.00268118 mm`、最大法向差 `3.78833°`、最大保留光顺接缝角 `4.91344°`，全部最终质量门和 STEP 回读通过。搜索期间的最少状态为 40 面，但其保留接缝不合格，因此没有作为结果输出；该实验不声称达到理论最优，也不预设必须优于 `TargetRatio` 锁定回归的 46 面。
 
 SR-11 第一轮虽然得到 `49→46`，且 OCCT 的 BRepCheck、STEP 回读、零自由边和零多重边均通过，但 Creo 暴露了质量门漏检：两个新面的底层 B-spline 控制网对角线达到 `39.5225 mm` 和 `7.56982 mm`，而原模型最大值只有 `2.64837 mm`；三维边与参数曲线最大偏差为 `0.00391089 mm`。不规则调和参数图之外的控制点缺少约束，叠加参数投影分支跳变，使 OCCT 裁剪能够隐藏的问题在 Creo 中表现为超大面片和裂缝。该产物已被 SR-11.1 替代，不能再视为跨 CAD 合格结果。
 

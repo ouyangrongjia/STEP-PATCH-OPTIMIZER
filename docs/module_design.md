@@ -15,6 +15,8 @@
 | `ReduceSelectedFacesCommand` | 提交已经验证的缓存结果并提供撤销/重做 | 不重新求解，不复用 `PatchReplacementCommand` 的 Geomagic 状态机 |
 | `AppController` / `MainWindow` | 后台预览、报告、Apply 可用性和视图刷新 | 不自动回退到 Geomagic 或 AS |
 
+`SurfaceReductionEngine` 提供互相隔离的 `TargetRatio` 与 `MinimizeFaceCount` 搜索目标。前者用于既有基准兼容；后者负责理论下界直探、合并组提案、预算搜索和证明状态。拟合缓存身份只由原始 FaceId 集合、输入变体、几何选项和算法/构建指纹决定，不由父状态拟合曲面或搜索路径决定。
+
 `SurfaceRefitter` 保留单曲面实验行为；`native-autosurface` 的全局三角网格、QuadriFlow 和多图参数化不进入上述依赖图。
 
 ---

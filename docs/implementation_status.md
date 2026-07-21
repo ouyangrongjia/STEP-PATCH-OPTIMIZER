@@ -63,14 +63,17 @@
 | SR-12.3 | 已完成 | GUI 顶层菜单和主工具栏切换为原生 B-rep 曲面减面主流程；拟合输入显式区分 STEP-only 与 STEP 加扫描 STL 软参考，默认 STEP-only，加载 STL 不再隐式改变请求；后台预览固定使用 4 个拟合工作线程并显示总耗时。旧候选、Patch 与 Geomagic 流程只保留在“高级”菜单作显式后备 |
 | SR-12.4 | 已完成 | GUI 主线纠正为“导入 STEP → 检测特征边 → 生成并选择候选区域 → 原生重拟合 → 显示/应用效果”。候选选择模式不再依赖会被清空的普通 face 选择，而是把当前 `MergeCandidate::faces` 传入 `SurfaceReductionEngine`；主工具栏使用一个状态化“原生重拟合”按钮承接预览/应用，并增加“一键预览并应用”。自动应用仍以当前候选匹配和全部质量门通过为前提 |
 | SR-12.5 | 已完成 | GUI 当前主线的 STEP 导入、特征边检测、候选生成、原生重拟合预览和 Apply 全部后台化并复用 2 秒心跳；`SurfaceReductionEngine` 通过执行期回调报告拓扑准备、束搜索层、唯一分组拟合计数、接缝候选终验、商业 CAD 类门、整件组装、`StrictTopologyGate` 和 STEP 回读，报告页与 Process Status 同步显示当前面数、目标面数、拟合进度和活动分组 |
+| SR-13 | 已完成 | 新增 `MinimizeFaceCount` 产品模式：先直接探测受保护边图的理论下界，再执行合并组驱动的预算束搜索；支持组+组、组+单面、单面+单面类型保留、真实三维空间分散种子和局部三组跳级。结果独立报告 `OptimalProven`、`BestFoundWithinBudget` 或 `NoValidatedResultFound`，最终验证保持商业 CAD 类门、保守 repair、`StrictTopologyGate` 和 STEP 回读不变 |
 
-产品成功门：输出面数小于输入且所有质量门通过即成功；输出不大于 `floor(N/2)` 时标记达到目标。任何距离、法向、接缝、参数化、支撑曲面包络、稠密 `SameParameter`、B-rep 或 STEP 回读门失败都不能 Apply。
+产品成功门：输出面数小于输入且所有质量门通过即成功。GUI 默认在 512 次唯一受限拟合和 64 次最终验证内寻找最少面数；只有通过结果达到硬阻断边图的连通分量数时才标记 `OptimalProven`。任何距离、法向、接缝、参数化、支撑曲面包络、稠密 `SameParameter`、B-rep 或 STEP 回读门失败都不能 Apply。
 
 SR-5 最终 12 区域报告位于 `data/runs/20260715_surface_reduction_benchmark_final12b/`。区域由平滑内部边和现有候选属性发现，不使用固定 candidate ordinal 或 FaceId；三个 2 面减为 1 面的成功结果均写出 STEP，且参数化、BRepCheck、STEP 回读和商业 CAD 类边界门全部通过。
 
 `03_配件_Clay.stp` 的 candidate 179 已完成 SR-11.1 跨内核纠偏。选区动态发现为 FaceId 1702～1750，共 49 面，目标比例 `0.95`。首轮产物虽通过 OCCT BRepCheck 和 STEP 回读，但 Creo 显示超大面片与裂缝；诊断确认新支撑面控制网达到 `39.5225 mm`，边面参数曲线偏差达到 `0.00391089 mm`。修复后混合路径使用 290 个唯一受限拟合，接受 `1727+1732`、`1742+1745`、`1746+1747`，得到 `49→46`、`TargetAchieved`；最大距离 `0.00134683 mm`、最大法向差 `1.77073°`、最大保留光顺接缝角 `2.93862°`。最终 STEP 为 2736 面、1 壳、1 实体，曲线在曲面上的最大偏差 `0.000942836 mm`，无超过 `0.001 mm` 的关联；Creo 手动复核为无超大面片、无可见裂缝的灰色水密实体。最终接受组使用 144 个扫描参考样本；唯一结果目录为 `data/runs/20260715_surface_reduction_candidate_0179_hybrid/`。
 
-GUI 默认参数与上述锁定回归并不相同。GUI 默认使用 `StepBrepOnly`、`targetOutputRatio=0.5`、`maximumProposalGroupSize=0`、禁用持久拟合缓存和 4 个工作线程；candidate 179 的 `49→46` 锁定回归则使用原始扫描 STL 软参考、`targetOutputRatio=0.95`、最多二面提案和分层脚本缓存策略。两者复用同一个 `SurfaceReductionEngine` 和同一套最终质量门，但不能把 GUI 默认运行视为 `49→46` 回放。
+SR-13 的当前真实预算实验位于 `data/runs/20260721_055601_195__surface-reduction-minimize__03-clay__cand-0179__windows-msvc-debug/`。同一 49 面选区在 `MinimizeFaceCount`、512 次拟合预算、64 次最终验证和无墙钟上限下返回 `49→47`、`BestFoundWithinBudget`，理论下界为 1，停止原因为 `FrontierExhausted`；本轮复用同一拟合算法指纹下已建立的 154 项拟合缓存，没有启动新拟合，共命中 439 个持久缓存项并归档 137 个状态，最终接受 `1724+1731` 与 `1742+1745`。最大距离为 `0.00268118 mm`、最大法向差为 `3.78833°`、最大保留光顺接缝角为 `4.91344°`，商业 CAD 类门、BRepCheck、严格拓扑门和 STEP 回读均通过。独立 `step_stats --curve-on-surface` 回读整件得到 2737 面、1 壳、1 实体、BRepCheck 有效，参数曲线偏差 P95 为 `1.36355e-13 mm`、最大值为 `0.0010402 mm`。本实验只记录真实预算结果，不把搜索期间出现但接缝未通过的 40 面状态计为有效结果，也不声称达到理论最优。
+
+GUI 默认参数与上述锁定回归并不相同。GUI 显式使用 `MinimizeFaceCount`、`StepBrepOnly`、`maximumProposalGroupSize=0`、持久拟合缓存和 4 个工作线程；candidate 179 的 `49→46` 锁定回归显式使用 `TargetRatio`、原始扫描 STL 软参考、`targetOutputRatio=0.95`、最多二面提案和分层脚本缓存策略。两者复用同一个 `SurfaceReductionEngine` 和同一套最终质量门，但不能把 GUI 默认运行视为 `49→46` 回放。
 
 以下 NSR 状态为保留的实验基线历史。
 
