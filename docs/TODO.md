@@ -19,7 +19,7 @@
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：实现并验证 STEP 约束提取和命令行探针骨架。
+当前阶段：约束提取、自适应采样、确定性布局、联合拟合、原边界重裁剪、整件缝合门禁、分层缓存、性能报告和规模基准均已进入命令行探针。candidate-179 当前仍停在几何门禁：已有受预算控制的失败报告，但尚无合格的 `final_sewn.step`，因此 Creo 检查、两个额外真实候选和 GUI 接入均未启动。本任务保持未完成。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

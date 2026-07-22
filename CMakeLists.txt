@@ -209,6 +209,9 @@ if(SPO_BUILD_TOOLS)
 
     add_executable(native_region_refit_probe tools/native_region_refit_probe.cpp)
     target_link_libraries(native_region_refit_probe PRIVATE spo_core)
+
+    add_executable(native_region_refit_benchmark tools/native_region_refit_benchmark.cpp)
+    target_link_libraries(native_region_refit_benchmark PRIVATE spo_core)
 endif()
 
 if(SPO_BUILD_TESTS)
