@@ -530,6 +530,7 @@ int main(int argc, char* argv[]) {
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
+                     "[--input-read-budget-ms <毫秒>] "
                      "[--cache-policy <disabled|read-write|read-only|refresh>] "
                      "[--run-identity <名称>] [--commit <提交>] "
                      "[--constraints-only | --sampling-only | --layout-only | --fit-only]\n";
@@ -579,6 +580,9 @@ int main(int argc, char* argv[]) {
                 request.options.solverMemoryPreflightMiB = request.options.maximumMemoryMiB > 1024
                     ? request.options.maximumMemoryMiB - 1024
                     : request.options.maximumMemoryMiB;
+            } else if (argument == "--input-read-budget-ms") {
+                if (++index >= argc) return 2;
+                request.options.inputReadBudgetMilliseconds = std::stoll(argv[index]);
             } else if (argument == "--cache-dir") {
                 if (++index >= argc) return 2;
                 request.options.cacheDirectory = std::filesystem::path(argv[index]);

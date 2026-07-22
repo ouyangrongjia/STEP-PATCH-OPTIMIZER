@@ -7,6 +7,7 @@ param(
     [int]$PatchCount = 0,
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
+    [long]$InputReadBudgetMilliseconds = 10000,
     [long]$MaximumMemoryMiB = 8192,
     [ValidateSet("disabled", "read-write", "read-only", "refresh")][string]$CachePolicy = "disabled",
     [string]$CacheDir = "",
@@ -66,6 +67,7 @@ if ($LockedEdgeIds.Count -gt 0) {
 }
 $baseArguments += @(
     "--wall-time-ms", [string]$WallTimeMilliseconds,
+    "--input-read-budget-ms", [string]$InputReadBudgetMilliseconds,
     "--max-memory-mib", [string]$MaximumMemoryMiB)
 if ($ConstraintsOnly) {
     $baseArguments += "--constraints-only"
