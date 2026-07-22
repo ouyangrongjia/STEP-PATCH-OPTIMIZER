@@ -1124,7 +1124,8 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
 
     auto mesherLinearDeflection = report.linearDeflection;
     auto mesherAngularDeflectionDegrees = report.angularDeflectionDegrees;
-    if (options.samplingMode == RegionRefitSamplingMode::UniformUv) {
+    if (options.samplingMode == RegionRefitSamplingMode::UniformUv ||
+        options.samplingMode == RegionRefitSamplingMode::QualityBalanced) {
         GProp_GProps properties;
         BRepGProp::SurfaceProperties(selectedCompound, properties);
         if (properties.Mass() > 1.0e-20) {
@@ -1417,40 +1418,60 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
             if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
             return result;
         }
-        auto balanced = QualityBalancedRegionRemesher().remesh(
-            document,
-            constraints,
-            options,
-            result.mesh,
-            deadline);
-        result.mesh = std::move(balanced.mesh);
-        report.edgeLengthP01 = balanced.report.edgeLengthP01;
-        report.edgeLengthP50 = balanced.report.edgeLengthP50;
-        report.edgeLengthP99 = balanced.report.edgeLengthP99;
-        report.edgeLengthP99P01Ratio = balanced.report.edgeLengthP99P01Ratio;
-        report.minimumAngleP05Degrees = balanced.report.minimumAngleP05Degrees;
-        report.minimumAngleP50Degrees = balanced.report.minimumAngleP50Degrees;
-        report.aspectRatioP50 = balanced.report.aspectRatioP50;
-        report.aspectRatioP95 = balanced.report.aspectRatioP95;
-        report.aspectRatioP99 = balanced.report.aspectRatioP99;
-        report.normalizedQualityP05 = balanced.report.normalizedQualityP05;
-        report.normalizedQualityP50 = balanced.report.normalizedQualityP50;
-        report.zeroAreaTriangleCount = balanced.report.zeroAreaTriangleCount;
-        report.nonManifoldEdgeCount = balanced.report.nonManifoldEdgeCount;
-        report.remeshSplitCount = balanced.report.splitCount;
-        report.remeshCollapseCount = balanced.report.collapseCount;
-        report.remeshFlipCount = balanced.report.flipCount;
-        report.remeshRelocationCount = balanced.report.relocationCount;
-        if (!balanced.report.success) {
-            report.status = balanced.report.timeBudgetExceeded
-                ? RegionRefitStatus::TimeBudgetExceeded
-                : RegionRefitStatus::Failed;
-            report.message = balanced.report.message;
-            report.vertexCount = result.mesh.vertices.size();
-            report.triangleCount = result.mesh.triangles.size();
-            report.boundarySampleCount = result.mesh.boundarySamples.size();
-            if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
-            return result;
+        const auto useQuality = [&](const RegionMeshQualityReport& quality) {
+            report.edgeLengthP01 = quality.edgeLengthP01;
+            report.edgeLengthP50 = quality.edgeLengthP50;
+            report.edgeLengthP99 = quality.edgeLengthP99;
+            report.edgeLengthP99P01Ratio = quality.edgeLengthP99P01Ratio;
+            report.minimumAngleP05Degrees = quality.minimumAngleP05Degrees;
+            report.minimumAngleP50Degrees = quality.minimumAngleP50Degrees;
+            report.aspectRatioP50 = quality.aspectRatioP50;
+            report.aspectRatioP95 = quality.aspectRatioP95;
+            report.aspectRatioP99 = quality.aspectRatioP99;
+            report.normalizedQualityP05 = quality.normalizedQualityP05;
+            report.normalizedQualityP50 = quality.normalizedQualityP50;
+            report.zeroAreaTriangleCount = quality.zeroAreaTriangleCount;
+            report.nonManifoldEdgeCount = quality.nonManifoldEdgeCount;
+        };
+        const auto initialQuality = measureRegionMeshQuality(result.mesh);
+        const auto minimumTargetTriangles = std::max<std::size_t>(
+            1, options.targetSampleTriangles / 2);
+        const auto maximumTargetTriangles = std::min(
+            options.maximumSampleTriangles,
+            options.targetSampleTriangles * 4);
+        const auto targetScaledCarrierPassed =
+            result.mesh.triangles.size() >= minimumTargetTriangles &&
+            result.mesh.triangles.size() <= maximumTargetTriangles &&
+            initialQuality.zeroAreaTriangleCount == 0 &&
+            initialQuality.nonManifoldEdgeCount == 0;
+        if (targetScaledCarrierPassed) {
+            useQuality(initialQuality);
+            result.mesh.updateIntegrationWeights();
+            report.message = "Target-scaled Open CASCADE carrier already satisfies structural quality preflight.";
+        } else {
+            auto balanced = QualityBalancedRegionRemesher().remesh(
+                document,
+                constraints,
+                options,
+                result.mesh,
+                deadline);
+            result.mesh = std::move(balanced.mesh);
+            useQuality(balanced.report);
+            report.remeshSplitCount = balanced.report.splitCount;
+            report.remeshCollapseCount = balanced.report.collapseCount;
+            report.remeshFlipCount = balanced.report.flipCount;
+            report.remeshRelocationCount = balanced.report.relocationCount;
+            if (!balanced.report.success) {
+                report.status = balanced.report.timeBudgetExceeded
+                    ? RegionRefitStatus::TimeBudgetExceeded
+                    : RegionRefitStatus::Failed;
+                report.message = balanced.report.message;
+                report.vertexCount = result.mesh.vertices.size();
+                report.triangleCount = result.mesh.triangles.size();
+                report.boundarySampleCount = result.mesh.boundarySamples.size();
+                if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
+                return result;
+            }
         }
     } else {
         result.mesh.updateIntegrationWeights();

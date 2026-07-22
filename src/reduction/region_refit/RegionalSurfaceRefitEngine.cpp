@@ -322,20 +322,27 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.layoutCarrierMeshFingerprint = layoutCarrierSampling.report.meshFingerprint;
     if (cache.enabled()) result.report.cacheEvents.push_back(samplingCacheEvent);
 
+    if (!sampling.mesh.empty()) {
+        result.referenceMesh = std::make_shared<RegionReferenceMesh>(std::move(sampling.mesh));
+    }
+    if (!layoutCarrierSampling.mesh.empty()) {
+        result.layoutCarrierMesh = std::make_shared<RegionReferenceMesh>(
+            std::move(layoutCarrierSampling.mesh));
+    }
+
     if (!sampling.report.success() || !layoutCarrierSampling.report.success()) {
         const auto& failed = sampling.report.success() ? layoutCarrierSampling.report : sampling.report;
         result.report.status = failed.status;
         result.report.failureStage = RegionRefitStage::Sampling;
         result.report.message = failed.message;
+        result.report.selectionOutcome = "NoCandidateGenerated";
+        result.report.unattainableReason = failed.message;
         return result;
     }
     if (samplingMemoryExceeded) {
         failMemoryBudget(result, RegionRefitStage::Sampling);
         return result;
     }
-    result.referenceMesh = std::make_shared<RegionReferenceMesh>(std::move(sampling.mesh));
-    result.layoutCarrierMesh = std::make_shared<RegionReferenceMesh>(
-        std::move(layoutCarrierSampling.mesh));
     if (samplingStage.wallMilliseconds > static_cast<double>(request.options.samplingBudgetMilliseconds) ||
         result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
