@@ -138,10 +138,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         request.options.constraintsBudgetMilliseconds <= 0 ||
         request.options.maximumMemoryMiB == 0 ||
         request.options.maximumSampleTriangles == 0 ||
-        (request.options.samplingMode == RegionRefitSamplingMode::QualityBalanced &&
+        ((request.options.samplingMode == RegionRefitSamplingMode::QualityBalanced ||
+             request.options.samplingMode == RegionRefitSamplingMode::UniformUv) &&
             (request.options.targetSampleTriangles == 0 ||
-                request.options.targetSampleTriangles > request.options.maximumSampleTriangles ||
-                request.options.maximumRemeshSweeps <= 0 ||
+                request.options.targetSampleTriangles > request.options.maximumSampleTriangles)) ||
+        (request.options.samplingMode == RegionRefitSamplingMode::QualityBalanced &&
+            (request.options.maximumRemeshSweeps <= 0 ||
                 request.options.maximumLocalSizeRatio <= 1.0)) ||
         request.options.maximumFullFitCount <= 0 ||
         request.options.maximumAdaptivePatchCount <= 0 ||

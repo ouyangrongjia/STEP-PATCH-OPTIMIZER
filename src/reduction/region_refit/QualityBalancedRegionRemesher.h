@@ -39,6 +39,8 @@ struct QualityBalancedRegionRemeshResult {
     RegionMeshQualityReport report;
 };
 
+RegionMeshQualityReport measureRegionMeshQuality(const RegionReferenceMesh& mesh);
+
 class QualityBalancedRegionRemesher {
 public:
     QualityBalancedRegionRemeshResult remesh(

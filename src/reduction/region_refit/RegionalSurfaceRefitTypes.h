@@ -28,7 +28,8 @@ enum class RegionRefitLayoutMode {
 
 enum class RegionRefitSamplingMode {
     AdaptiveOcct,
-    QualityBalanced
+    QualityBalanced,
+    UniformUv
 };
 
 enum class RegionRefitExecutionMode {

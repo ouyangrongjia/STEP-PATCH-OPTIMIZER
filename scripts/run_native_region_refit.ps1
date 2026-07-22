@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Faces")][long[]]$FaceIds,
     [ValidateSet("adaptive", "fixed")][string]$Layout = "adaptive",
     [int]$PatchCount = 0,
-    [ValidateSet("adaptive-occt", "quality-balanced")][string]$SamplingMode = "adaptive-occt",
+    [ValidateSet("adaptive-occt", "quality-balanced", "uv-uniform")][string]$SamplingMode = "adaptive-occt",
     [long]$TargetSampleTriangles = 80000,
     [int]$MaximumFullFitCount = 3,
     [switch]$BestEffortThroughSewing,

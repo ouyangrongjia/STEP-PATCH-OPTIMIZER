@@ -19,7 +19,7 @@
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：约束提取、自适应采样、确定性布局、联合拟合、原边界重裁剪、整件缝合门禁、分层缓存、性能报告和规模基准均已进入命令行探针。candidate-179 的质量均衡采样 K=1 实验记录于 `data/runs/20260722_candidate_0179_balanced_sampling_k1_best_effort`；本次在采样阶段耗时约 571 秒后因重网格结构无效而停止，未进入布局、拟合和缝合。当前仍无合格的 `final_sewn.step`，因此 Creo 检查、两个额外真实候选和 GUI 接入均未启动。本任务保持未完成。
+当前阶段：约束提取、自适应采样、确定性布局、联合拟合、原边界重裁剪、整件缝合门禁、分层缓存、性能报告和规模基准均已进入命令行探针。candidate-179 的 UV 均匀参考采样 K=1 最佳努力实验记录于 `data/runs/20260722_candidate_0179_uniform_uv_k1_best_effort`：目标 10,000 个三角形，实际 14,385 个；完成一次 20 轮联合拟合、重裁剪、缝合、严格拓扑检查和 STEP 往返，总耗时约 291 秒。诊断缝合件保持单实体、自由边和多重边均为零，并从 2,739 面降至 2,691 面，但拟合距离、法向、边界和全部 SameParameter 门禁未通过，因此只有未验证的 `sewn_attempt.step`，没有 `final_sewn.step`。Creo 检查、两个额外真实候选和 GUI 接入均未启动，本任务保持未完成。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

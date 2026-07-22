@@ -112,7 +112,7 @@ double percentile(std::vector<double> values, const double fraction) {
     return values[index];
 }
 
-RegionMeshQualityReport measureQuality(const RegionReferenceMesh& mesh) {
+RegionMeshQualityReport measureQualityImpl(const RegionReferenceMesh& mesh) {
     RegionMeshQualityReport report;
     const auto edges = buildEdgeTriangles(mesh);
     std::vector<double> lengths;
@@ -675,6 +675,10 @@ std::size_t relocateVertices(
 
 }
 
+RegionMeshQualityReport measureRegionMeshQuality(const RegionReferenceMesh& mesh) {
+    return measureQualityImpl(mesh);
+}
+
 QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
     const ShapeDocument& document,
     const RegionTopologyConstraints& constraints,
@@ -770,7 +774,7 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
         if (static_cast<double>(operationCount) < static_cast<double>(edgeCount) * 0.005) break;
     }
     result.mesh.updateIntegrationWeights();
-    const auto quality = measureQuality(result.mesh);
+    const auto quality = measureRegionMeshQuality(result.mesh);
     const auto targetEdgeLength = result.report.targetEdgeLength;
     const auto splitCount = result.report.splitCount;
     const auto collapseCount = result.report.collapseCount;

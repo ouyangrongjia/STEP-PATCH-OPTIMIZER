@@ -4,8 +4,10 @@
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
+#include <BRepGProp.hxx>
 #include <BRepLProp_SLProps.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Poly_PolygonOnTriangulation.hxx>
@@ -19,6 +21,7 @@
 #include <TopoDS_Face.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Vec.hxx>
+#include <GProp_GProps.hxx>
 
 #include <algorithm>
 #include <array>
@@ -39,7 +42,9 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kMinimumTriangleShapeQuality = 1.0e-8;
+constexpr double kUniformUvCarrierSpacingScale = 4.0;
 constexpr int kMaximumNormalRefinementIterations = 14;
+constexpr int kMaximumUniformUvRefinementIterations = 4;
 
 struct LocalVertex {
     RegionReferenceVertex value;
@@ -852,6 +857,170 @@ bool refineLocalTrianglesForNormals(
     return true;
 }
 
+bool refineLocalTrianglesUniformUv(
+    const TopoDS_Face& originalFace,
+    const int divisions,
+    const std::size_t maximumTriangles,
+    const std::chrono::steady_clock::time_point deadline,
+    LocalFaceMesh& faceMesh,
+    std::size_t& refinementCount,
+    std::string& failureMessage) {
+    for (auto& triangle : faceMesh.triangles) {
+        orientLocalTriangle(originalFace, faceMesh, triangle);
+    }
+
+    double firstU = 0.0;
+    double lastU = 0.0;
+    double firstV = 0.0;
+    double lastV = 0.0;
+    BRepTools::UVBounds(originalFace, firstU, lastU, firstV, lastV);
+    const auto uRange = lastU - firstU;
+    const auto vRange = lastV - firstV;
+    if (!std::isfinite(uRange) || !std::isfinite(vRange) ||
+        uRange <= Precision::PConfusion() || vRange <= Precision::PConfusion() || divisions <= 0) {
+        failureMessage = "Uniform UV sampling requires a finite, non-degenerate face parameter domain.";
+        return false;
+    }
+
+    using LocalEdge = std::pair<std::size_t, std::size_t>;
+    const auto edgeKey = [](const std::size_t first, const std::size_t second) {
+        return LocalEdge {std::min(first, second), std::max(first, second)};
+    };
+    const auto sharesEdgeId = [](const std::vector<EdgeId>& first, const std::vector<EdgeId>& second) {
+        return std::any_of(first.begin(), first.end(), [&](const auto edgeId) {
+            return std::find(second.begin(), second.end(), edgeId) != second.end();
+        });
+    };
+    const auto isConstrainedEdge = [&](const LocalEdge& edge) {
+        const auto& first = faceMesh.vertices[edge.first];
+        const auto& second = faceMesh.vertices[edge.second];
+        return sharesEdgeId(first.boundaryEdges, second.boundaryEdges) ||
+            sharesEdgeId(first.internalSeamEdges, second.internalSeamEdges);
+    };
+    BRepAdaptor_Surface surface(originalFace, true);
+    const auto normalizedLength = [&](const LocalEdge& edge) {
+        const auto& first = faceMesh.vertices[edge.first].value.sources.front().uv;
+        const auto& second = faceMesh.vertices[edge.second].value.sources.front().uv;
+        auto secondU = second.X();
+        auto secondV = second.Y();
+        if (surface.IsUPeriodic()) {
+            secondU = unwrapPeriodicParameter(secondU, first.X(), surface.UPeriod());
+        }
+        if (surface.IsVPeriodic()) {
+            secondV = unwrapPeriodicParameter(secondV, first.Y(), surface.VPeriod());
+        }
+        return std::hypot((secondU - first.X()) / uRange, (secondV - first.Y()) / vRange);
+    };
+    const auto maximumNormalizedEdge =
+        kUniformUvCarrierSpacingScale / static_cast<double>(divisions);
+
+    for (int iteration = 0; iteration < kMaximumUniformUvRefinementIterations; ++iteration) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            failureMessage = "Uniform UV refinement reached the sampling deadline.";
+            return false;
+        }
+        std::set<LocalEdge> splitEdges;
+        for (const auto& triangle : faceMesh.triangles) {
+            std::array<LocalEdge, 3> edges;
+            bool requiresRefinement = false;
+            for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                edges[static_cast<std::size_t>(edgeIndex)] = edgeKey(
+                    triangle.vertices[static_cast<std::size_t>(edgeIndex)],
+                    triangle.vertices[static_cast<std::size_t>((edgeIndex + 1) % 3)]);
+                const auto& edge = edges[static_cast<std::size_t>(edgeIndex)];
+                if (!isConstrainedEdge(edge) && normalizedLength(edge) > maximumNormalizedEdge) {
+                    requiresRefinement = true;
+                }
+            }
+            if (!requiresRefinement) continue;
+            for (const auto& edge : edges) {
+                if (!isConstrainedEdge(edge)) splitEdges.insert(edge);
+            }
+        }
+        if (splitEdges.empty()) return true;
+
+        std::map<LocalEdge, std::size_t> midpointVertices;
+        for (const auto& edge : splitEdges) {
+            const auto& first = faceMesh.vertices[edge.first];
+            const auto& second = faceMesh.vertices[edge.second];
+            auto secondU = second.value.sources.front().uv.X();
+            auto secondV = second.value.sources.front().uv.Y();
+            if (surface.IsUPeriodic()) {
+                secondU = unwrapPeriodicParameter(
+                    secondU, first.value.sources.front().uv.X(), surface.UPeriod());
+            }
+            if (surface.IsVPeriodic()) {
+                secondV = unwrapPeriodicParameter(
+                    secondV, first.value.sources.front().uv.Y(), surface.VPeriod());
+            }
+            const gp_Pnt2d uv(
+                (first.value.sources.front().uv.X() + secondU) * 0.5,
+                (first.value.sources.front().uv.Y() + secondV) * 0.5);
+            LocalVertex midpoint;
+            midpoint.value = makeVertex(
+                originalFace,
+                faceMesh.faceId,
+                surface.Value(uv.X(), uv.Y()),
+                uv);
+            const auto midpointIndex = faceMesh.vertices.size();
+            faceMesh.vertices.push_back(std::move(midpoint));
+            midpointVertices.emplace(edge, midpointIndex);
+            ++refinementCount;
+        }
+
+        std::vector<LocalTriangle> refinedTriangles;
+        refinedTriangles.reserve(faceMesh.triangles.size() + splitEdges.size() * 2);
+        const auto append = [&](const std::size_t first, const std::size_t second, const std::size_t third) {
+            LocalTriangle triangle {{first, second, third}};
+            orientLocalTriangle(originalFace, faceMesh, triangle);
+            refinedTriangles.push_back(triangle);
+        };
+        for (const auto& triangle : faceMesh.triangles) {
+            const auto v0 = triangle.vertices[0];
+            const auto v1 = triangle.vertices[1];
+            const auto v2 = triangle.vertices[2];
+            const auto m0 = midpointVertices.find(edgeKey(v0, v1));
+            const auto m1 = midpointVertices.find(edgeKey(v1, v2));
+            const auto m2 = midpointVertices.find(edgeKey(v2, v0));
+            const int mask = (m0 != midpointVertices.end() ? 1 : 0) |
+                (m1 != midpointVertices.end() ? 2 : 0) |
+                (m2 != midpointVertices.end() ? 4 : 0);
+            switch (mask) {
+            case 0: refinedTriangles.push_back(triangle); break;
+            case 1:
+                append(v0, m0->second, v2); append(m0->second, v1, v2); break;
+            case 2:
+                append(v1, m1->second, v0); append(m1->second, v2, v0); break;
+            case 4:
+                append(v2, m2->second, v1); append(m2->second, v0, v1); break;
+            case 3:
+                append(v1, m1->second, m0->second); append(v0, m0->second, v2);
+                append(m0->second, m1->second, v2); break;
+            case 6:
+                append(v2, m2->second, m1->second); append(v1, m1->second, v0);
+                append(m1->second, m2->second, v0); break;
+            case 5:
+                append(v0, m0->second, m2->second); append(v2, m2->second, v1);
+                append(m2->second, m0->second, v1); break;
+            case 7:
+                append(v0, m0->second, m2->second); append(m0->second, v1, m1->second);
+                append(m2->second, m1->second, v2); append(m0->second, m1->second, m2->second); break;
+            }
+        }
+        if (refinedTriangles.size() > maximumTriangles) {
+            std::ostringstream message;
+            message << "FaceId " << faceMesh.faceId << " uniform UV refinement exceeded "
+                    << maximumTriangles << " triangles; refined_triangles="
+                    << refinedTriangles.size() << '.';
+            failureMessage = message.str();
+            return false;
+        }
+        faceMesh.triangles = std::move(refinedTriangles);
+    }
+
+    return true;
+}
+
 void validateInterior(
     const ShapeDocument& document,
     StepAdaptiveRegionSamplingReport& report,
@@ -953,11 +1122,25 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
         compoundBuilder.Add(selectedCompound, copiedFace);
     }
 
+    auto mesherLinearDeflection = report.linearDeflection;
+    auto mesherAngularDeflectionDegrees = report.angularDeflectionDegrees;
+    if (options.samplingMode == RegionRefitSamplingMode::UniformUv) {
+        GProp_GProps properties;
+        BRepGProp::SurfaceProperties(selectedCompound, properties);
+        if (properties.Mass() > 1.0e-20) {
+            const auto targetPhysicalEdge = std::sqrt(
+                4.0 * properties.Mass() /
+                (std::sqrt(3.0) * static_cast<double>(options.targetSampleTriangles)));
+            mesherLinearDeflection = std::max(mesherLinearDeflection, targetPhysicalEdge);
+        }
+        mesherAngularDeflectionDegrees = std::max(mesherAngularDeflectionDegrees, 30.0);
+    }
+
     BRepMesh_IncrementalMesh mesher(
         selectedCompound,
-        report.linearDeflection,
+        mesherLinearDeflection,
         false,
-        report.angularDeflectionDegrees * kPi / 180.0,
+        mesherAngularDeflectionDegrees * kPi / 180.0,
         true);
     mesher.Perform();
     if (!mesher.IsDone()) {
@@ -970,6 +1153,11 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     const std::set<EdgeId> internalEdges(
         constraints.internalEdges.begin(),
         constraints.internalEdges.end());
+    const auto uniformUvDivisions = options.samplingMode == RegionRefitSamplingMode::UniformUv
+        ? std::max(2, static_cast<int>(std::ceil(std::sqrt(
+              static_cast<double>(options.targetSampleTriangles) /
+              (2.0 * static_cast<double>(constraints.selectedFaces.size()))))))
+        : 0;
     std::vector<LocalFaceMesh> localMeshes;
     localMeshes.reserve(constraints.selectedFaces.size());
     for (const auto faceId : constraints.selectedFaces) {
@@ -1061,20 +1249,36 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
                 return fail(RegionRefitStatus::Failed, "Could not force adaptive boundary samples into the reference mesh.");
             }
         }
-        std::string normalRefinementFailure;
-        const auto normalDiscontinuityLengthThreshold = std::max(
-            Precision::Confusion() * 100.0,
-            std::min(report.linearDeflection * 0.05, report.boundaryChordTolerance));
-        if (!refineLocalTrianglesForNormals(
-                document.topology().face(faceId),
-                report.angularDeflectionDegrees,
-                normalDiscontinuityLengthThreshold,
-                options.maximumSampleTriangles,
-                faceMesh,
-                report.normalRefinementCount,
-                report.normalDiscontinuityVertexCount,
-                normalRefinementFailure)) {
-            return fail(RegionRefitStatus::SamplingBudgetExceeded, std::move(normalRefinementFailure));
+        std::string refinementFailure;
+        if (options.samplingMode == RegionRefitSamplingMode::UniformUv) {
+            if (!refineLocalTrianglesUniformUv(
+                    document.topology().face(faceId),
+                    uniformUvDivisions,
+                    options.maximumSampleTriangles,
+                    deadline,
+                    faceMesh,
+                    report.remeshSplitCount,
+                    refinementFailure)) {
+                const auto status = std::chrono::steady_clock::now() >= deadline
+                    ? RegionRefitStatus::TimeBudgetExceeded
+                    : RegionRefitStatus::SamplingBudgetExceeded;
+                return fail(status, std::move(refinementFailure));
+            }
+        } else {
+            const auto normalDiscontinuityLengthThreshold = std::max(
+                Precision::Confusion() * 100.0,
+                std::min(report.linearDeflection * 0.05, report.boundaryChordTolerance));
+            if (!refineLocalTrianglesForNormals(
+                    document.topology().face(faceId),
+                    report.angularDeflectionDegrees,
+                    normalDiscontinuityLengthThreshold,
+                    options.maximumSampleTriangles,
+                    faceMesh,
+                    report.normalRefinementCount,
+                    report.normalDiscontinuityVertexCount,
+                    refinementFailure)) {
+                return fail(RegionRefitStatus::SamplingBudgetExceeded, std::move(refinementFailure));
+            }
         }
         localMeshes.push_back(std::move(faceMesh));
     }
@@ -1250,6 +1454,35 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
         }
     } else {
         result.mesh.updateIntegrationWeights();
+        if (options.samplingMode == RegionRefitSamplingMode::UniformUv) {
+            const auto quality = measureRegionMeshQuality(result.mesh);
+            report.edgeLengthP01 = quality.edgeLengthP01;
+            report.edgeLengthP50 = quality.edgeLengthP50;
+            report.edgeLengthP99 = quality.edgeLengthP99;
+            report.edgeLengthP99P01Ratio = quality.edgeLengthP99P01Ratio;
+            report.minimumAngleP05Degrees = quality.minimumAngleP05Degrees;
+            report.minimumAngleP50Degrees = quality.minimumAngleP50Degrees;
+            report.aspectRatioP50 = quality.aspectRatioP50;
+            report.aspectRatioP95 = quality.aspectRatioP95;
+            report.aspectRatioP99 = quality.aspectRatioP99;
+            report.normalizedQualityP05 = quality.normalizedQualityP05;
+            report.normalizedQualityP50 = quality.normalizedQualityP50;
+            report.zeroAreaTriangleCount = quality.zeroAreaTriangleCount;
+            report.nonManifoldEdgeCount = quality.nonManifoldEdgeCount;
+            if (quality.zeroAreaTriangleCount != 0 || quality.nonManifoldEdgeCount != 0) {
+                report.status = RegionRefitStatus::Failed;
+                std::ostringstream message;
+                message << "Uniform UV STEP sampling produced a structurally invalid mesh: zero_area_triangles="
+                        << quality.zeroAreaTriangleCount << ", non_manifold_edges="
+                        << quality.nonManifoldEdgeCount << '.';
+                report.message = message.str();
+                report.vertexCount = result.mesh.vertices.size();
+                report.triangleCount = result.mesh.triangles.size();
+                report.boundarySampleCount = result.mesh.boundarySamples.size();
+                report.meshFingerprint = result.mesh.deterministicFingerprint();
+                return result;
+            }
+        }
     }
 
     report.maximumInteriorChordError = 0.0;
@@ -1279,9 +1512,13 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     }
 
     report.status = RegionRefitStatus::Success;
-    report.message = report.geometricLimitsPassed
-        ? "STEP reference mesh satisfies its sampling limits."
-        : "Quality-balanced STEP reference mesh is structurally valid; geometric sampling limits are recorded as diagnostic failures.";
+    if (report.geometricLimitsPassed) {
+        report.message = "STEP reference mesh satisfies its sampling limits.";
+    } else if (options.samplingMode == RegionRefitSamplingMode::UniformUv) {
+        report.message = "Uniform UV STEP reference mesh is structurally valid; geometric sampling limits are diagnostic only.";
+    } else {
+        report.message = "Quality-balanced STEP reference mesh is structurally valid; geometric sampling limits are recorded as diagnostic failures.";
+    }
     return result;
 }
 

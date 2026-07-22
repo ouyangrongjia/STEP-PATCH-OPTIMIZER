@@ -14,6 +14,7 @@ const char* toString(const RegionRefitSamplingMode mode) {
     switch (mode) {
     case RegionRefitSamplingMode::AdaptiveOcct: return "AdaptiveOcct";
     case RegionRefitSamplingMode::QualityBalanced: return "QualityBalanced";
+    case RegionRefitSamplingMode::UniformUv: return "UniformUv";
     }
     return "AdaptiveOcct";
 }

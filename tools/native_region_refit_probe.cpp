@@ -584,7 +584,7 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
-                     "[--sampling-mode <adaptive-occt|quality-balanced>] "
+                     "[--sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
                      "[--target-sample-triangles <数量>] [--maximum-full-fit-count <数量>] "
                      "[--best-effort-through-sewing] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
@@ -637,6 +637,8 @@ int main(int argc, char* argv[]) {
                     request.options.samplingMode = spo::RegionRefitSamplingMode::AdaptiveOcct;
                 } else if (value == "quality-balanced") {
                     request.options.samplingMode = spo::RegionRefitSamplingMode::QualityBalanced;
+                } else if (value == "uv-uniform") {
+                    request.options.samplingMode = spo::RegionRefitSamplingMode::UniformUv;
                 } else {
                     return 2;
                 }
@@ -708,6 +710,9 @@ int main(int argc, char* argv[]) {
     if (!algorithmFingerprintSpecified &&
         request.options.samplingMode == spo::RegionRefitSamplingMode::QualityBalanced) {
         request.options.algorithmFingerprint = "native-regional-refit-v16-quality-balanced";
+    } else if (!algorithmFingerprintSpecified &&
+        request.options.samplingMode == spo::RegionRefitSamplingMode::UniformUv) {
+        request.options.algorithmFingerprint = "native-regional-refit-v17-uniform-uv";
     }
 
     if ((candidateId >= 0) == !request.selectedFaces.empty()) {

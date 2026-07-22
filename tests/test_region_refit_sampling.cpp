@@ -199,6 +199,40 @@ void test_quality_balanced_sampler_honors_expired_deadline() {
     assert(sampled.mesh.empty());
 }
 
+void test_uniform_uv_sampler_is_deterministic_and_preserves_step_edges() {
+    const auto document = make_sampling_two_face_fixture();
+    const auto constraints = constraintsFor(document, {0, 1});
+    spo::RegionRefitOptions options;
+    options.samplingMode = spo::RegionRefitSamplingMode::UniformUv;
+    options.targetSampleTriangles = 800;
+    options.maximumSampleTriangles = 10000;
+
+    const auto first = spo::StepAdaptiveRegionSampler().sample(document, constraints, options);
+    const auto second = spo::StepAdaptiveRegionSampler().sample(document, constraints, options);
+
+    assert(first.report.success());
+    assert(second.report.success());
+    assert(first.report.meshFingerprint == second.report.meshFingerprint);
+    assert(first.report.remeshSplitCount > 0);
+    assert(first.report.weldedInternalSeamVertexCount == first.report.internalSeamVertexCount);
+    assert(first.report.zeroAreaTriangleCount == 0);
+    assert(first.report.nonManifoldEdgeCount == 0);
+    assert(first.report.edgeLengthP50 > 0.0);
+    assert(std::any_of(
+        first.mesh.vertices.begin(),
+        first.mesh.vertices.end(),
+        [](const auto& vertex) { return vertex.areaWeight > 0.0; }));
+    for (const auto& sample : first.mesh.boundarySamples) {
+        const auto found = std::find_if(
+            constraints.boundaryEdges.begin(),
+            constraints.boundaryEdges.end(),
+            [&](const auto& edge) { return edge.edgeId == sample.edgeId; });
+        assert(found != constraints.boundaryEdges.end());
+        const auto exact = BRepAdaptor_Curve(found->originalEdge).Value(sample.parameter);
+        assert(exact.Distance(first.mesh.vertices[sample.vertexIndex].point) < 1.0e-8);
+    }
+}
+
 }
 
 void run_region_refit_sampling_tests() {
@@ -208,4 +242,5 @@ void run_region_refit_sampling_tests() {
     test_adaptive_sampler_honors_triangle_budget();
     test_quality_balanced_sampler_is_deterministic_and_structurally_valid();
     test_quality_balanced_sampler_honors_expired_deadline();
+    test_uniform_uv_sampler_is_deterministic_and_preserves_step_edges();
 }

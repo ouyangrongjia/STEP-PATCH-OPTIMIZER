@@ -705,12 +705,14 @@ void test_native_region_refit_best_effort_artifact_contract() {
     const auto probe = read_text_file(root / "tools" / "native_region_refit_probe.cpp");
 
     assert(script.find("quality-balanced") != std::string::npos);
+    assert(script.find("uv-uniform") != std::string::npos);
     assert(script.find("BestEffortThroughSewing") != std::string::npos);
     assert(script.find("MaximumFullFitCount") != std::string::npos);
     assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
     assert(script.find("sewn_attempt.step") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
     assert(probe.find("native-regional-refit-v16-quality-balanced") != std::string::npos);
+    assert(probe.find("native-regional-refit-v17-uniform-uv") != std::string::npos);
     assert(probe.find("best_effort_fitted_patch_network.step") != std::string::npos);
     assert(probe.find("sewn_attempt.step") != std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);

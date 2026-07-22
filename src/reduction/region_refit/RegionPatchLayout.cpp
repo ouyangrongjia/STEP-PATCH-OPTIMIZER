@@ -1,6 +1,8 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
 
 #include <Eigen/Eigenvalues>
+#include <Eigen/SparseCholesky>
+#include <Eigen/SparseCore>
 
 #include <gp_Vec.hxx>
 
@@ -662,34 +664,54 @@ bool parameterizePatch(
             result.parameters[local] = {std::cos(angle), std::sin(angle)};
         }
 
-        constexpr int maximumIterations = 400;
-        constexpr double relaxation = 1.75;
-        double maximumResidual = std::numeric_limits<double>::infinity();
-        for (int iteration = 0; iteration < maximumIterations; ++iteration) {
-            if ((iteration % 16) == 0 && std::chrono::steady_clock::now() >= deadline) {
-                message = "Harmonic parameterization reached the layout deadline.";
-                return false;
-            }
-            double maximumDelta = 0.0;
-            for (const auto vertex : interior) {
-                std::array<double, 2> average {};
-                for (const auto neighbor : neighbors[vertex]) {
-                    average[0] += result.parameters[neighbor][0];
-                    average[1] += result.parameters[neighbor][1];
-                }
-                const auto inverseDegree = 1.0 / static_cast<double>(neighbors[vertex].size());
-                average[0] *= inverseDegree;
-                average[1] *= inverseDegree;
-                for (int axis = 0; axis < 2; ++axis) {
-                    const auto delta = relaxation * (
-                        average[static_cast<std::size_t>(axis)] - result.parameters[vertex][static_cast<std::size_t>(axis)]);
-                    result.parameters[vertex][static_cast<std::size_t>(axis)] += delta;
-                    maximumDelta = std::max(maximumDelta, std::abs(delta));
-                }
-            }
-            if (maximumDelta < 1.0e-8) break;
+        if (std::chrono::steady_clock::now() >= deadline) {
+            message = "Harmonic parameterization reached the layout deadline.";
+            return false;
         }
-        maximumResidual = 0.0;
+        using SparseMatrix = Eigen::SparseMatrix<double>;
+        std::vector<Eigen::Triplet<double>> coefficients;
+        coefficients.reserve(result.matrixNonZeros);
+        Eigen::VectorXd rightU = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(interior.size()));
+        Eigen::VectorXd rightV = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(interior.size()));
+        for (const auto vertex : interior) {
+            const auto row = interiorIndex[vertex];
+            coefficients.emplace_back(row, row, static_cast<double>(neighbors[vertex].size()));
+            for (const auto neighbor : neighbors[vertex]) {
+                const auto column = interiorIndex[neighbor];
+                if (column >= 0) {
+                    coefficients.emplace_back(row, column, -1.0);
+                } else {
+                    rightU[row] += result.parameters[neighbor][0];
+                    rightV[row] += result.parameters[neighbor][1];
+                }
+            }
+        }
+        SparseMatrix matrix(
+            static_cast<Eigen::Index>(interior.size()),
+            static_cast<Eigen::Index>(interior.size()));
+        matrix.setFromTriplets(coefficients.begin(), coefficients.end());
+        matrix.makeCompressed();
+        Eigen::SimplicialLDLT<SparseMatrix> solver;
+        solver.compute(matrix);
+        if (solver.info() != Eigen::Success) {
+            message = "Harmonic parameterization sparse factor setup failed.";
+            return false;
+        }
+        const auto solutionU = solver.solve(rightU);
+        if (solver.info() != Eigen::Success) {
+            message = "Harmonic parameterization U solve did not converge.";
+            return false;
+        }
+        const auto solutionV = solver.solve(rightV);
+        if (solver.info() != Eigen::Success) {
+            message = "Harmonic parameterization V solve did not converge.";
+            return false;
+        }
+        for (const auto vertex : interior) {
+            const auto row = interiorIndex[vertex];
+            result.parameters[vertex] = {solutionU[row], solutionV[row]};
+        }
+        double maximumResidual = 0.0;
         for (const auto vertex : interior) {
             std::array<double, 2> average {};
             for (const auto neighbor : neighbors[vertex]) {
