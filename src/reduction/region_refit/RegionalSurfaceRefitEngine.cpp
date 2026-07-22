@@ -261,12 +261,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             auto carrierOptions = request.options;
             carrierOptions.samplingMode = request.options.layoutCarrierSamplingMode;
             carrierOptions.targetSampleTriangles = request.options.targetLayoutCarrierTriangles;
+            const auto carrierBudgetMilliseconds = std::max<std::int64_t>(
+                1, request.options.samplingBudgetMilliseconds - 1000);
             layoutCarrierSampling = StepAdaptiveRegionSampler().sample(
                 document,
                 result.constraints,
                 carrierOptions,
                 samplingStarted + std::chrono::milliseconds(
-                    request.options.samplingBudgetMilliseconds));
+                    carrierBudgetMilliseconds));
         }
     }
     const auto samplingEnded = std::chrono::steady_clock::now();

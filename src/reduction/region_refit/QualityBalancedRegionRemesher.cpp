@@ -737,12 +737,6 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
             options.maximumLocalSizeRatio);
         const auto collapse = collapseShortEdges(
             document, afterSplitTargets, result.mesh, deadline, canceled);
-        if (canceled) {
-            result.report.splitCount += split;
-            result.report.collapseCount += collapse;
-            result.report.timeBudgetExceeded = true;
-            break;
-        }
         const auto intermediateQuality = measureRegionMeshQuality(result.mesh);
         const auto minimumAcceptedTriangles = std::max<std::size_t>(
             1, options.targetSampleTriangles * 4 / 5);
@@ -757,6 +751,12 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
         if (targetReached) {
             result.report.splitCount += split;
             result.report.collapseCount += collapse;
+            break;
+        }
+        if (canceled) {
+            result.report.splitCount += split;
+            result.report.collapseCount += collapse;
+            result.report.timeBudgetExceeded = true;
             break;
         }
         const auto flip = flipEdges(result.mesh, deadline, canceled);
