@@ -1265,7 +1265,7 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
                     : RegionRefitStatus::SamplingBudgetExceeded;
                 return fail(status, std::move(refinementFailure));
             }
-        } else {
+        } else if (options.samplingMode == RegionRefitSamplingMode::AdaptiveOcct) {
             const auto normalDiscontinuityLengthThreshold = std::max(
                 Precision::Confusion() * 100.0,
                 std::min(report.linearDeflection * 0.05, report.boundaryChordTolerance));
