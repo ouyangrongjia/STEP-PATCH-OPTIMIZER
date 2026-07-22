@@ -3,6 +3,7 @@
 #include "reduction/region_refit/RegionConstraintExtractor.h"
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/NativeRegionPatchNetworkBuilder.h"
+#include "reduction/region_refit/QualityBalancedRegionRemesher.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionRefitResourceMonitor.h"
@@ -134,6 +135,48 @@ void markNoProductResult(
     result.report.unattainableReason = reason;
 }
 
+StepAdaptiveRegionSamplingResult remeshLayoutCarrier(
+    const ShapeDocument& document,
+    const RegionTopologyConstraints& constraints,
+    const RegionRefitOptions& options,
+    const RegionReferenceMesh& reference,
+    const std::chrono::steady_clock::time_point deadline) {
+    auto balanced = QualityBalancedRegionRemesher().remesh(
+        document, constraints, options, reference, deadline);
+    StepAdaptiveRegionSamplingResult result;
+    result.mesh = std::move(balanced.mesh);
+    auto& report = result.report;
+    report.status = balanced.report.success
+        ? RegionRefitStatus::Success
+        : (balanced.report.timeBudgetExceeded
+            ? RegionRefitStatus::TimeBudgetExceeded
+            : RegionRefitStatus::Failed);
+    report.message = balanced.report.message;
+    report.sourceFaceCount = constraints.selectedFaces.size();
+    report.vertexCount = result.mesh.vertices.size();
+    report.triangleCount = result.mesh.triangles.size();
+    report.boundarySampleCount = result.mesh.boundarySamples.size();
+    report.edgeLengthP01 = balanced.report.edgeLengthP01;
+    report.edgeLengthP50 = balanced.report.edgeLengthP50;
+    report.edgeLengthP99 = balanced.report.edgeLengthP99;
+    report.edgeLengthP99P01Ratio = balanced.report.edgeLengthP99P01Ratio;
+    report.minimumAngleP05Degrees = balanced.report.minimumAngleP05Degrees;
+    report.minimumAngleP50Degrees = balanced.report.minimumAngleP50Degrees;
+    report.aspectRatioP50 = balanced.report.aspectRatioP50;
+    report.aspectRatioP95 = balanced.report.aspectRatioP95;
+    report.aspectRatioP99 = balanced.report.aspectRatioP99;
+    report.normalizedQualityP05 = balanced.report.normalizedQualityP05;
+    report.normalizedQualityP50 = balanced.report.normalizedQualityP50;
+    report.zeroAreaTriangleCount = balanced.report.zeroAreaTriangleCount;
+    report.nonManifoldEdgeCount = balanced.report.nonManifoldEdgeCount;
+    report.remeshSplitCount = balanced.report.splitCount;
+    report.remeshCollapseCount = balanced.report.collapseCount;
+    report.remeshFlipCount = balanced.report.flipCount;
+    report.remeshRelocationCount = balanced.report.relocationCount;
+    if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
+    return result;
+}
+
 }
 
 RegionRefitResult RegionalSurfaceRefitEngine::run(
@@ -263,12 +306,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             carrierOptions.targetSampleTriangles = request.options.targetLayoutCarrierTriangles;
             const auto carrierBudgetMilliseconds = std::max<std::int64_t>(
                 1, request.options.samplingBudgetMilliseconds - 1000);
-            layoutCarrierSampling = StepAdaptiveRegionSampler().sample(
-                document,
-                result.constraints,
-                carrierOptions,
-                samplingStarted + std::chrono::milliseconds(
-                    carrierBudgetMilliseconds));
+            const auto carrierDeadline = samplingStarted + std::chrono::milliseconds(
+                carrierBudgetMilliseconds);
+            layoutCarrierSampling = request.options.layoutCarrierSamplingMode ==
+                    RegionRefitSamplingMode::QualityBalanced
+                ? remeshLayoutCarrier(
+                    document, result.constraints, carrierOptions, sampling.mesh, carrierDeadline)
+                : StepAdaptiveRegionSampler().sample(
+                    document, result.constraints, carrierOptions, carrierDeadline);
         }
     }
     const auto samplingEnded = std::chrono::steady_clock::now();

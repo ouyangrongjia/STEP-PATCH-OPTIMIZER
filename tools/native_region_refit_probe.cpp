@@ -737,6 +737,16 @@ QJsonObject performanceToJson(
 }
 
 QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
+    const auto samplingStage = std::find_if(
+        result.report.stages.begin(), result.report.stages.end(), [](const auto& stage) {
+            return stage.stage == spo::RegionRefitStage::Sampling;
+        });
+    const auto layoutCarrierHardGatesPassed =
+        result.report.layoutCarrierZeroAreaTriangleCount == 0 &&
+        result.report.layoutCarrierNonManifoldEdgeCount == 0;
+    const auto layoutCarrierSucceeded = result.layoutCarrierMesh &&
+        layoutCarrierHardGatesPassed && samplingStage != result.report.stages.end() &&
+        samplingStage->success;
     const QJsonObject fittingReference {
         {"role", "FittingReference"},
         {"status", result.referenceMesh ? "Success" : spo::toString(result.report.status)},
@@ -769,7 +779,7 @@ QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
         {"mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)}};
     const QJsonObject layoutCarrier {
         {"role", "LayoutCarrier"},
-        {"status", result.layoutCarrierMesh ? "Success" : spo::toString(result.report.status)},
+        {"status", layoutCarrierSucceeded ? "Success" : spo::toString(result.report.status)},
         {"vertices", QString::number(result.report.layoutCarrierVertexCount)},
         {"triangles", QString::number(result.report.layoutCarrierTriangleCount)},
         {"boundary_samples", QString::number(result.report.layoutCarrierBoundarySampleCount)},
@@ -777,8 +787,7 @@ QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
         {"aspect_ratio_p95", result.report.layoutCarrierAspectRatioP95},
         {"zero_area_triangles", QString::number(result.report.layoutCarrierZeroAreaTriangleCount)},
         {"non_manifold_edges", QString::number(result.report.layoutCarrierNonManifoldEdgeCount)},
-        {"hard_gates_passed", result.report.layoutCarrierZeroAreaTriangleCount == 0 &&
-            result.report.layoutCarrierNonManifoldEdgeCount == 0},
+        {"hard_gates_passed", layoutCarrierHardGatesPassed},
         {"mesh_fingerprint", QString::fromStdString(result.report.layoutCarrierMeshFingerprint)}};
     return {
         {"schema_version", 2},
