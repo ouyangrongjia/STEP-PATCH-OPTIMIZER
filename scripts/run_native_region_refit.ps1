@@ -175,7 +175,10 @@ if ($PerformanceAcceptance) {
     foreach ($run in $runs) {
         $path = Join-Path $context.directories.diagnostics "performance_$($run.identity).json"
         if (Test-Path -LiteralPath $path -PathType Leaf) {
-            $performanceRuns += Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+            $performanceRun = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+            $performanceRun | Add-Member -NotePropertyName process_wall_ms -NotePropertyValue $run.wall_ms
+            $performanceRun | Add-Member -NotePropertyName process_exit_code -NotePropertyValue $run.exit_code
+            $performanceRuns += $performanceRun
         }
     }
     $cold = @($performanceRuns | Where-Object run_identity -eq "cold") | Select-Object -First 1
@@ -184,8 +187,10 @@ if ($PerformanceAcceptance) {
         "$($_.status)|$($_.selected_layout_hash)|$($_.selected_patch_count)|$($_.geometry_metrics | ConvertTo-Json -Compress)"
     } | Select-Object -Unique)
     $consistencyPassed = $performanceRuns.Count -eq 3 -and $signatures.Count -eq 1
-    $coldBudgetPassed = $null -ne $cold -and [double]$cold.core_total_ms -le 900000.0
-    $warmBudgetPassed = $warm.Count -eq 2 -and @($warm | Where-Object { [double]$_.core_total_ms -gt 300000.0 }).Count -eq 0
+    $coldBudgetPassed = $null -ne $cold -and [double]$cold.process_wall_ms -le 900000.0
+    $warmBudgetPassed = $warm.Count -eq 2 -and @($warm | Where-Object {
+        [double]$_.process_wall_ms -gt 300000.0
+    }).Count -eq 0
     $memoryBudgetBytes = [uint64]$MaximumMemoryMiB * [uint64]1024 * [uint64]1024
     $memoryPassed = $performanceRuns.Count -eq 3 -and @($performanceRuns | Where-Object {
         [uint64]$_.peak_working_set_bytes -gt $memoryBudgetBytes -or
