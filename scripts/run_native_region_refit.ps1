@@ -194,9 +194,51 @@ if ($PerformanceAcceptance) {
     $fitCountPassed = $performanceRuns.Count -eq 3 -and @($performanceRuns | Where-Object {
         [int]$_.full_fit_count -gt 3
     }).Count -eq 0
+    $stageMeasurements = [ordered]@{}
+    $stageViolations = @()
+    if ($null -ne $cold) {
+        function Get-ColdStageWallMilliseconds {
+            param([Parameter(Mandatory = $true)][string[]]$StageNames)
+            return [double](@($cold.stages | Where-Object { $_.stage -in $StageNames } |
+                Measure-Object -Property wall_ms -Sum).Sum)
+        }
+
+        $stageMeasurements["input_and_constraints_ms"] = [double]$cold.input_read_ms +
+            [double]$cold.candidate_resolution_ms + (Get-ColdStageWallMilliseconds @("Constraints"))
+        $stageMeasurements["sampling_ms"] = Get-ColdStageWallMilliseconds @("Sampling")
+        $stageMeasurements["layout_ms"] = Get-ColdStageWallMilliseconds @("Layout")
+        $fitAttemptWalls = @($cold.fit.attempts | ForEach-Object { [double]$_.wall_ms })
+        $stageMeasurements["maximum_single_fit_ms"] = if ($fitAttemptWalls.Count -gt 0) {
+            [double](($fitAttemptWalls | Measure-Object -Maximum).Maximum)
+        } else { 0.0 }
+        $stageMeasurements["cumulative_fit_ms"] = [double](($fitAttemptWalls | Measure-Object -Sum).Sum)
+        $stageMeasurements["retrim_ms"] = Get-ColdStageWallMilliseconds @("Retrim")
+        $stageMeasurements["final_validation_ms"] = Get-ColdStageWallMilliseconds @(
+            "Sewing", "StrictTopology", "StepRoundtrip")
+
+        $stageLimits = [ordered]@{
+            input_and_constraints_ms = 10000
+            sampling_ms = 90000
+            layout_ms = 60000
+            maximum_single_fit_ms = 180000
+            cumulative_fit_ms = 450000
+            retrim_ms = 90000
+            final_validation_ms = 180000
+        }
+        foreach ($entry in $stageLimits.GetEnumerator()) {
+            if ([double]$stageMeasurements[$entry.Key] -gt [double]$entry.Value) {
+                $stageViolations += [ordered]@{
+                    stage = $entry.Key
+                    actual_ms = [double]$stageMeasurements[$entry.Key]
+                    limit_ms = [double]$entry.Value
+                }
+            }
+        }
+    }
+    $stageBudgetsPassed = $null -ne $cold -and $stageViolations.Count -eq 0
     $algorithmPassed = $runs.Count -eq 3 -and @($runs | Where-Object exit_code -ne 0).Count -eq 0
     $performancePassed = $algorithmPassed -and $coldBudgetPassed -and $warmBudgetPassed -and
-        $memoryPassed -and $fitCountPassed -and $consistencyPassed
+        $memoryPassed -and $fitCountPassed -and $consistencyPassed -and $stageBudgetsPassed
     [ordered]@{
         schema_version = 1
         passed = $performancePassed
@@ -206,6 +248,15 @@ if ($PerformanceAcceptance) {
             warm_wall_ms = 300000
             memory_bytes = $memoryBudgetBytes
             maximum_full_fits = 3
+            stages_ms = [ordered]@{
+                input_and_constraints = 10000
+                sampling = 90000
+                layout = 60000
+                maximum_single_fit = 180000
+                cumulative_fit = 450000
+                retrim = 90000
+                final_validation = 180000
+            }
         }
         gates = [ordered]@{
             algorithm = $algorithmPassed
@@ -214,7 +265,10 @@ if ($PerformanceAcceptance) {
             memory = $memoryPassed
             full_fit_count = $fitCountPassed
             deterministic_consistency = $consistencyPassed
+            stage_budgets = $stageBudgetsPassed
         }
+        stage_budget_measurements = $stageMeasurements
+        stage_budget_violations = $stageViolations
         runs = $performanceRuns
     } | ConvertTo-Json -Depth 100 | Set-Content `
         -LiteralPath (Join-Path $context.directories.diagnostics "performance_report.json") `
