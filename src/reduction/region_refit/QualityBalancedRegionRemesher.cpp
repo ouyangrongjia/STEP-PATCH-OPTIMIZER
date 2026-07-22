@@ -699,6 +699,11 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
         result.report.message = "Quality-balanced remeshing received a zero-area reference mesh.";
         return result;
     }
+    const auto inputQuality = measureRegionMeshQuality(input);
+    const auto inputStructurallyValid = inputQuality.zeroAreaTriangleCount == 0 &&
+        inputQuality.nonManifoldEdgeCount == 0 &&
+        input.triangles.size() <= options.maximumSampleTriangles;
+    const auto enteredWithTimeRemaining = std::chrono::steady_clock::now() < deadline;
     result.report.targetEdgeLength = std::sqrt(
         4.0 * area / (std::sqrt(3.0) * static_cast<double>(options.targetSampleTriangles)));
     const auto chordTolerance = std::min(options.tolerance3d / 4.0, 0.01);
@@ -790,24 +795,38 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
         if (static_cast<double>(operationCount) < static_cast<double>(edgeCount) * 0.005) break;
     }
     result.mesh.updateIntegrationWeights();
-    const auto quality = measureRegionMeshQuality(result.mesh);
+    auto quality = measureRegionMeshQuality(result.mesh);
     const auto targetEdgeLength = result.report.targetEdgeLength;
     const auto splitCount = result.report.splitCount;
     const auto collapseCount = result.report.collapseCount;
     const auto flipCount = result.report.flipCount;
     const auto relocationCount = result.report.relocationCount;
     const auto timeBudgetExceeded = result.report.timeBudgetExceeded;
+    const auto remeshedStructurallyValid = quality.zeroAreaTriangleCount == 0 &&
+        quality.nonManifoldEdgeCount == 0 &&
+        result.mesh.triangles.size() <= options.maximumSampleTriangles;
+    const auto structuralFallbackUsed = enteredWithTimeRemaining && inputStructurallyValid &&
+        (timeBudgetExceeded || !remeshedStructurallyValid);
+    if (structuralFallbackUsed && !remeshedStructurallyValid) {
+        result.mesh = input;
+        result.mesh.updateIntegrationWeights();
+        quality = inputQuality;
+    }
     result.report = quality;
     result.report.targetEdgeLength = targetEdgeLength;
     result.report.splitCount = splitCount;
     result.report.collapseCount = collapseCount;
     result.report.flipCount = flipCount;
     result.report.relocationCount = relocationCount;
-    result.report.timeBudgetExceeded = timeBudgetExceeded;
+    result.report.timeBudgetExceeded = timeBudgetExceeded && !structuralFallbackUsed;
     result.report.success = !result.report.timeBudgetExceeded && !result.mesh.empty() &&
         result.report.zeroAreaTriangleCount == 0 &&
         result.report.nonManifoldEdgeCount == 0 && result.mesh.triangles.size() <= options.maximumSampleTriangles;
-    if (result.report.success) {
+    if (result.report.success && structuralFallbackUsed) {
+        result.report.message = timeBudgetExceeded
+            ? "Quality-balanced optimization reached its deadline and retained a structurally valid carrier; recorded quality metrics remain diagnostic."
+            : "Quality-balanced optimization rejected an invalid edit and retained the structurally valid input carrier.";
+    } else if (result.report.success) {
         result.report.message = "Quality-balanced STEP remeshing produced a structurally valid reference mesh.";
     } else if (result.report.timeBudgetExceeded) {
         result.report.message = "Quality-balanced STEP remeshing reached the sampling deadline.";
