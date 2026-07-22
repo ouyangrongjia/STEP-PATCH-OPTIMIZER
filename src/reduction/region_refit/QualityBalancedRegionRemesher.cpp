@@ -743,6 +743,22 @@ QualityBalancedRegionRemeshResult QualityBalancedRegionRemesher::remesh(
             result.report.timeBudgetExceeded = true;
             break;
         }
+        const auto intermediateQuality = measureRegionMeshQuality(result.mesh);
+        const auto minimumAcceptedTriangles = std::max<std::size_t>(
+            1, options.targetSampleTriangles * 4 / 5);
+        const auto maximumAcceptedTriangles = options.targetSampleTriangles * 6 / 5;
+        const auto targetReached =
+            result.mesh.triangles.size() >= minimumAcceptedTriangles &&
+            result.mesh.triangles.size() <= maximumAcceptedTriangles &&
+            intermediateQuality.zeroAreaTriangleCount == 0 &&
+            intermediateQuality.nonManifoldEdgeCount == 0 &&
+            intermediateQuality.minimumAngleP05Degrees >= 5.0 &&
+            intermediateQuality.aspectRatioP95 <= 20.0;
+        if (targetReached) {
+            result.report.splitCount += split;
+            result.report.collapseCount += collapse;
+            break;
+        }
         const auto flip = flipEdges(result.mesh, deadline, canceled);
         if (canceled) {
             result.report.splitCount += split;
