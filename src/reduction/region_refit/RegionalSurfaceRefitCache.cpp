@@ -238,7 +238,8 @@ void writeCandidateReport(QDataStream& stream, const RegionLayoutCandidateReport
            << report.coarseFitPassed << report.selectedForFullFit << report.proxyError
            << report.maximumDistortion << report.flippedTriangleCount
            << quint64(report.matrixRows) << quint64(report.matrixNonZeros)
-           << quint64(report.estimatedSolverBytes) << report.wallMilliseconds;
+           << quint64(report.estimatedSolverBytes)
+           << quint64(report.estimatedOutputEntities) << report.wallMilliseconds;
     writeString(stream, report.layoutHash);
     writeString(stream, report.rejectionReason);
 }
@@ -247,14 +248,16 @@ bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& repor
     quint64 rows = 0;
     quint64 nonZeros = 0;
     quint64 bytes = 0;
+    quint64 outputEntities = 0;
     stream >> report.patchCount >> report.topologyPassed >> report.parameterizationPassed
            >> report.coarseFitPassed >> report.selectedForFullFit >> report.proxyError
            >> report.maximumDistortion >> report.flippedTriangleCount >> rows >> nonZeros
-           >> bytes >> report.wallMilliseconds;
+           >> bytes >> outputEntities >> report.wallMilliseconds;
     if (!readString(stream, report.layoutHash) || !readString(stream, report.rejectionReason)) return false;
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     report.estimatedSolverBytes = bytes;
+    report.estimatedOutputEntities = outputEntities;
     return stream.status() == QDataStream::Ok;
 }
 
@@ -271,6 +274,10 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         for (const auto& uv : patch.parameters) stream << uv[0] << uv[1];
         stream << quint64(patch.boundaryLoop.size());
         for (const auto index : patch.boundaryLoop) stream << quint64(index);
+        for (const auto& side : patch.boundarySides) {
+            stream << quint64(side.size());
+            for (const auto index : side) stream << quint64(index);
+        }
         stream << quint64(patch.matrixRows) << quint64(patch.matrixNonZeros)
                << patch.flippedTriangleCount << patch.maximumDistortion;
     }
@@ -279,7 +286,8 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         stream << seam.firstPatch << seam.secondPatch << quint64(seam.meshEdges.size());
         for (const auto& edge : seam.meshEdges) stream << quint64(edge[0]) << quint64(edge[1]);
     }
-    stream << layout.proxyError << quint64(layout.estimatedSolverBytes);
+    stream << layout.proxyError << quint64(layout.estimatedSolverBytes)
+           << quint64(layout.estimatedOutputEntities);
     writeString(stream, layout.hash);
 }
 
@@ -316,6 +324,15 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
             stream >> value;
             index = static_cast<std::size_t>(value);
         }
+        for (auto& side : patch.boundarySides) {
+            if (!readCount(stream, count)) return false;
+            side.resize(count);
+            for (auto& index : side) {
+                quint64 value = 0;
+                stream >> value;
+                index = static_cast<std::size_t>(value);
+            }
+        }
         quint64 rows = 0;
         quint64 nonZeros = 0;
         stream >> rows >> nonZeros >> patch.flippedTriangleCount >> patch.maximumDistortion;
@@ -336,8 +353,10 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
         }
     }
     quint64 bytes = 0;
-    stream >> layout.proxyError >> bytes;
+    quint64 outputEntities = 0;
+    stream >> layout.proxyError >> bytes >> outputEntities;
     layout.estimatedSolverBytes = bytes;
+    layout.estimatedOutputEntities = outputEntities;
     return readString(stream, layout.hash) && stream.status() == QDataStream::Ok;
 }
 
@@ -464,17 +483,23 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.curveOnSurfaceTolerance
          << '|' << request.options.maximumSampleTriangles
          << '|' << static_cast<int>(request.options.samplingMode)
+         << '|' << static_cast<int>(request.options.layoutCarrierSamplingMode)
          << '|' << request.options.targetSampleTriangles
+         << '|' << request.options.targetLayoutCarrierTriangles
          << '|' << request.options.maximumRemeshSweeps
          << '|' << request.options.maximumLocalSizeRatio
          << '|' << request.options.fixedPatchCount
+         << '|' << request.options.requestedPatchCount
+         << '|' << request.options.patchCountSearchRadius
+         << '|' << static_cast<int>(request.options.adaptiveObjective)
          << '|' << request.options.maximumAdaptivePatchCount
          << '|' << request.options.maximumFullFitCount
          << '|' << request.options.maximumFitIterations
          << '|' << request.options.singleFitBudgetMilliseconds
          << '|' << request.options.totalFitBudgetMilliseconds
          << '|' << request.options.solverMemoryPreflightMiB
-         << '|' << request.options.maximumParameterDistortion;
+         << '|' << request.options.maximumParameterDistortion
+         << '|' << request.options.maximumControlPointsPerSide;
     const auto digest = QCryptographicHash::hash(
         QByteArray::fromStdString(text.str()), QCryptographicHash::Sha256);
     return digest.toHex().toStdString();

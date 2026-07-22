@@ -708,13 +708,25 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("uv-uniform") != std::string::npos);
     assert(script.find("BestEffortThroughSewing") != std::string::npos);
     assert(script.find("MaximumFullFitCount") != std::string::npos);
+    assert(script.find("RequestedPatchCount") != std::string::npos);
+    assert(script.find("AdaptiveSafetyCap") != std::string::npos);
+    assert(script.find("LayoutCarrierSamplingMode") != std::string::npos);
     assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
     assert(script.find("sewn_attempt.step") != std::string::npos);
+    assert(script.find("cad_check_candidate.step") != std::string::npos);
+    assert(script.find("edge_consistency_report.json") != std::string::npos);
+    assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
-    assert(probe.find("native-regional-refit-v16-quality-balanced") != std::string::npos);
-    assert(probe.find("native-regional-refit-v17-uniform-uv") != std::string::npos);
+    assert(probe.find("native-regional-refit-v18-local-domains") != std::string::npos);
+    assert(probe.find("--patch-mode") != std::string::npos);
+    assert(probe.find("--requested-patch-count") != std::string::npos);
+    assert(probe.find("--adaptive-safety-cap") != std::string::npos);
     assert(probe.find("best_effort_fitted_patch_network.step") != std::string::npos);
     assert(probe.find("sewn_attempt.step") != std::string::npos);
+    assert(probe.find("cad_check_candidate.step") != std::string::npos);
+    assert(probe.find("edge_consistency_report.json") != std::string::npos);
+    assert(probe.find("output_complexity_report.json") != std::string::npos);
+    assert(probe.find("final_sewn.step") == std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
 }

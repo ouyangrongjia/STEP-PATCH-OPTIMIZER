@@ -37,6 +37,14 @@ struct JointBSplineNetworkFitResult {
 class JointBSplineNetworkFitter {
 public:
     JointBSplineNetworkFitResult fit(
+        const RegionReferenceMesh& fittingReference,
+        const RegionReferenceMesh& layoutCarrier,
+        const RegionTopologyConstraints& constraints,
+        const std::vector<RegionPatchLayout>& candidates,
+        const RegionRefitOptions& options,
+        std::chrono::steady_clock::time_point deadline) const;
+
+    JointBSplineNetworkFitResult fit(
         const RegionReferenceMesh& mesh,
         const RegionTopologyConstraints& constraints,
         const std::vector<RegionPatchLayout>& candidates,

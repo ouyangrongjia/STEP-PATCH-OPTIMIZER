@@ -4,17 +4,26 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepLib.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <Geom2dAPI_Interpolate.hxx>
+#include <Geom2d_BSplineCurve.hxx>
 #include <Geom2d_Curve.hxx>
 #include <GeomAPI_Interpolate.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_Curve.hxx>
+#include <Geom_Surface.hxx>
+#include <Poly_PolygonOnTriangulation.hxx>
+#include <Poly_Triangulation.hxx>
 #include <ShapeAnalysis_Edge.hxx>
-#include <ShapeConstruct_ProjectCurveOnSurface.hxx>
 #include <Standard_Failure.hxx>
 #include <TColgp_HArray1OfPnt.hxx>
+#include <TColgp_HArray1OfPnt2d.hxx>
+#include <TColStd_HArray1OfReal.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
@@ -31,6 +40,7 @@
 #include <optional>
 #include <set>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 namespace spo {
@@ -153,22 +163,12 @@ bool curveParameter(
 bool attachPcurve(
     const TopoDS_Edge& edge,
     const Handle(Geom_BSplineSurface)& surface,
+    const Handle(Geom2d_Curve)& pcurve,
+    const double first,
+    const double last,
     const double tolerance) {
-    double first = 0.0;
-    double last = 0.0;
-    auto curve = BRep_Tool::Curve(edge, first, last);
-    if (curve.IsNull() || std::abs(last - first) <= 1.0e-14) return false;
-    Handle(Geom2d_Curve) pcurve;
-    try {
-        Handle(ShapeConstruct_ProjectCurveOnSurface) projector =
-            new ShapeConstruct_ProjectCurveOnSurface;
-        projector->Init(surface, tolerance);
-        if (!projector->Perform(curve, first, last, pcurve, tolerance, tolerance) || pcurve.IsNull()) {
-            return false;
-        }
-    } catch (const Standard_Failure&) {
-        return false;
-    }
+    if (edge.IsNull() || surface.IsNull() || pcurve.IsNull() ||
+        std::abs(last - first) <= 1.0e-14) return false;
     BRep_Builder builder;
     const TopLoc_Location location;
     builder.UpdateEdge(
@@ -181,9 +181,56 @@ bool attachPcurve(
         pcurve->Value(last));
     builder.Range(edge, first, last, Standard_False);
     builder.Range(edge, surface, location, first, last);
-    builder.SameRange(edge, Standard_True);
+    builder.SameRange(edge, Standard_False);
+    builder.SameParameter(edge, Standard_False);
     builder.UpdateEdge(edge, tolerance);
+    BRepLib::SameRange(edge, tolerance);
+    BRepLib::SameParameter(edge, tolerance);
     return true;
+}
+
+Handle(Geom2d_Curve) parameterPcurve(
+    const TopoDS_Edge& edge,
+    const std::vector<std::pair<gp_Pnt, gp_Pnt2d>>& points,
+    double& first,
+    double& last,
+    const double tolerance) {
+    const auto curve = BRep_Tool::Curve(edge, first, last);
+    if (curve.IsNull() || points.size() < 2 || std::abs(last - first) <= 1.0e-14) return {};
+    std::vector<std::pair<double, gp_Pnt2d>> samples;
+    samples.reserve(points.size());
+    for (const auto& [point, uv] : points) {
+        double parameter = 0.0;
+        if (!curveParameter(curve, point, first, last, parameter)) return {};
+        samples.emplace_back(parameter, uv);
+    }
+    std::sort(samples.begin(), samples.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.first < rhs.first;
+    });
+    samples.erase(std::unique(samples.begin(), samples.end(), [&](const auto& lhs, const auto& rhs) {
+        return std::abs(lhs.first - rhs.first) <= std::max(1.0e-12, std::abs(last - first) * 1.0e-12);
+    }), samples.end());
+    if (samples.size() < 2) return {};
+    first = samples.front().first;
+    last = samples.back().first;
+    Handle(TColgp_HArray1OfPnt2d) interpolationPoints =
+        new TColgp_HArray1OfPnt2d(1, static_cast<int>(samples.size()));
+    Handle(TColStd_HArray1OfReal) parameters =
+        new TColStd_HArray1OfReal(1, static_cast<int>(samples.size()));
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        interpolationPoints->SetValue(static_cast<int>(index + 1), samples[index].second);
+        parameters->SetValue(static_cast<int>(index + 1), samples[index].first);
+    }
+    try {
+        Geom2dAPI_Interpolate interpolate(
+            interpolationPoints, parameters, Standard_False, tolerance * 0.1);
+        interpolate.Perform();
+        if (!interpolate.IsDone()) return {};
+        Handle(Geom2d_Curve) result = interpolate.Curve();
+        return result;
+    } catch (const Standard_Failure&) {
+        return {};
+    }
 }
 
 TopoDS_Edge orientedForPair(
@@ -217,11 +264,226 @@ TopoDS_Edge interpolatedSeamEdge(
         GeomAPI_Interpolate interpolate(points, Standard_False, tolerance);
         interpolate.Perform();
         if (!interpolate.IsDone() || interpolate.Curve().IsNull()) return {};
-        BRepBuilderAPI_MakeEdge edgeBuilder(interpolate.Curve(), firstVertex, lastVertex);
+        const auto curve = interpolate.Curve();
+        BRepBuilderAPI_MakeEdge edgeBuilder(
+            curve,
+            firstVertex,
+            lastVertex,
+            curve->FirstParameter(),
+            curve->LastParameter());
         return edgeBuilder.IsDone() ? edgeBuilder.Edge() : TopoDS_Edge {};
     } catch (const Standard_Failure&) {
         return {};
     }
+}
+
+double percentile95(std::vector<double> values) {
+    if (values.empty()) return 0.0;
+    const auto index = std::min(
+        values.size() - 1,
+        static_cast<std::size_t>(std::ceil(static_cast<double>(values.size()) * 0.95)) - 1);
+    std::nth_element(
+        values.begin(), values.begin() + static_cast<std::ptrdiff_t>(index), values.end());
+    return values[index];
+}
+
+double pointSegmentDistance(
+    const gp_Pnt& point,
+    const gp_Pnt& first,
+    const gp_Pnt& second) {
+    const gp_Vec segment(first, second);
+    if (segment.SquareMagnitude() <= 1.0e-24) return point.Distance(first);
+    const auto parameter = std::clamp(
+        gp_Vec(first, point).Dot(segment) / segment.SquareMagnitude(), 0.0, 1.0);
+    return point.Distance(first.Translated(segment * parameter));
+}
+
+double polylineSeparation(
+    const std::vector<gp_Pnt>& first,
+    const std::vector<gp_Pnt>& second) {
+    if (first.size() < 2 || second.size() < 2) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const auto directed = [](const std::vector<gp_Pnt>& points, const std::vector<gp_Pnt>& target) {
+        auto maximum = 0.0;
+        for (const auto& point : points) {
+            auto minimum = std::numeric_limits<double>::infinity();
+            for (std::size_t index = 0; index + 1 < target.size(); ++index) {
+                minimum = std::min(minimum, pointSegmentDistance(point, target[index], target[index + 1]));
+            }
+            maximum = std::max(maximum, minimum);
+        }
+        return maximum;
+    };
+    return std::max(directed(first, second), directed(second, first));
+}
+
+std::vector<gp_Pnt> edgePolyline(
+    const TopoDS_Edge& edge,
+    const TopoDS_Face& face) {
+    TopLoc_Location location;
+    const auto triangulation = BRep_Tool::Triangulation(face, location);
+    if (triangulation.IsNull()) return {};
+    const auto polygon = BRep_Tool::PolygonOnTriangulation(edge, triangulation, location);
+    if (polygon.IsNull()) return {};
+    std::vector<gp_Pnt> points;
+    const auto& nodes = polygon->Nodes();
+    points.reserve(static_cast<std::size_t>(nodes.Length()));
+    for (auto index = nodes.Lower(); index <= nodes.Upper(); ++index) {
+        points.push_back(triangulation->Node(nodes.Value(index)).Transformed(location.Transformation()));
+    }
+    return points;
+}
+
+std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
+    const TopoDS_Shape& replacementShape,
+    const std::vector<TopoDS_Face>& faces,
+    const std::vector<TopoDS_Edge>& internalSeams,
+    const double tolerance) {
+    struct EdgeGroup {
+        TopoDS_Edge edge;
+        bool internal = false;
+        std::vector<TopoDS_Face> faces;
+    };
+    std::vector<EdgeGroup> groups;
+    for (const auto& face : faces) {
+        for (TopExp_Explorer explorer(face, TopAbs_EDGE); explorer.More(); explorer.Next()) {
+            const auto edge = TopoDS::Edge(explorer.Current());
+            auto found = std::find_if(groups.begin(), groups.end(), [&](const auto& group) {
+                return group.edge.IsSame(edge);
+            });
+            if (found == groups.end()) {
+                EdgeGroup group;
+                group.edge = edge;
+                group.internal = std::any_of(internalSeams.begin(), internalSeams.end(), [&](const auto& seam) {
+                    return seam.IsSame(edge);
+                });
+                group.faces.push_back(face);
+                groups.push_back(std::move(group));
+            } else if (std::none_of(found->faces.begin(), found->faces.end(), [&](const auto& existing) {
+                    return existing.IsSame(face);
+                })) {
+                found->faces.push_back(face);
+            }
+        }
+    }
+
+    std::vector<RegionEdgeConsistencyReport> reports(groups.size());
+    for (std::size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+        const auto& group = groups[groupIndex];
+        auto& report = reports[groupIndex];
+        report.edgeIndex = static_cast<int>(groupIndex);
+        report.internalSeam = group.internal;
+        report.expectedFaceUseCount = group.internal ? 2 : 1;
+        report.actualFaceUseCount = static_cast<int>(group.faces.size());
+        report.sharedSameEdge = report.actualFaceUseCount == report.expectedFaceUseCount;
+        report.freeEdge = group.internal && report.actualFaceUseCount < 2;
+        report.multipleEdge = report.actualFaceUseCount > report.expectedFaceUseCount;
+        report.sameRange = BRep_Tool::SameRange(group.edge);
+        report.sameParameter = BRep_Tool::SameParameter(group.edge);
+
+        double curveFirst = 0.0;
+        double curveLast = 0.0;
+        const auto curve = BRep_Tool::Curve(group.edge, curveFirst, curveLast);
+        std::vector<double> deviations;
+        if (!curve.IsNull()) {
+            for (const auto& face : group.faces) {
+                double pcurveFirst = 0.0;
+                double pcurveLast = 0.0;
+                const auto pcurve = BRep_Tool::CurveOnSurface(
+                    group.edge, face, pcurveFirst, pcurveLast);
+                const auto surface = BRep_Tool::Surface(face);
+                if (pcurve.IsNull() || surface.IsNull()) {
+                    deviations.push_back(std::numeric_limits<double>::infinity());
+                    continue;
+                }
+                const auto first = std::max(std::min(curveFirst, curveLast), std::min(pcurveFirst, pcurveLast));
+                const auto last = std::min(std::max(curveFirst, curveLast), std::max(pcurveFirst, pcurveLast));
+                for (int sample = 0; sample < 97 && last >= first; ++sample) {
+                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 96.0;
+                    const auto uv = pcurve->Value(parameter);
+                    const auto deviation = curve->Value(parameter).Distance(surface->Value(uv.X(), uv.Y()));
+                    deviations.push_back(deviation);
+                    if (deviation > report.curveOnSurfaceMaximumDeviation) {
+                        report.curveOnSurfaceMaximumDeviation = deviation;
+                        report.worstParameter = parameter;
+                    }
+                }
+            }
+        }
+        report.curveOnSurfaceP95Deviation = percentile95(deviations);
+        if (!deviations.empty()) {
+            auto squared = 0.0;
+            for (const auto deviation : deviations) squared += deviation * deviation;
+            report.curveOnSurfaceRmsDeviation = std::sqrt(squared / static_cast<double>(deviations.size()));
+        }
+
+        if (group.faces.size() == 2) {
+            double firstParameters[2] {};
+            double lastParameters[2] {};
+            const auto firstPcurve = BRep_Tool::CurveOnSurface(
+                group.edge, group.faces[0], firstParameters[0], lastParameters[0]);
+            const auto secondPcurve = BRep_Tool::CurveOnSurface(
+                group.edge, group.faces[1], firstParameters[1], lastParameters[1]);
+            const auto firstSurface = BRep_Tool::Surface(group.faces[0]);
+            const auto secondSurface = BRep_Tool::Surface(group.faces[1]);
+            if (!firstPcurve.IsNull() && !secondPcurve.IsNull() &&
+                !firstSurface.IsNull() && !secondSurface.IsNull()) {
+                const auto first = std::max(
+                    std::min(firstParameters[0], lastParameters[0]),
+                    std::min(firstParameters[1], lastParameters[1]));
+                const auto last = std::min(
+                    std::max(firstParameters[0], lastParameters[0]),
+                    std::max(firstParameters[1], lastParameters[1]));
+                for (int sample = 0; sample < 97 && last >= first; ++sample) {
+                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 96.0;
+                    const auto firstUv = firstPcurve->Value(parameter);
+                    const auto secondUv = secondPcurve->Value(parameter);
+                    gp_Pnt firstPoint;
+                    gp_Pnt secondPoint;
+                    gp_Vec firstDu;
+                    gp_Vec firstDv;
+                    gp_Vec secondDu;
+                    gp_Vec secondDv;
+                    firstSurface->D1(firstUv.X(), firstUv.Y(), firstPoint, firstDu, firstDv);
+                    secondSurface->D1(secondUv.X(), secondUv.Y(), secondPoint, secondDu, secondDv);
+                    report.adjacentSurfaceMaximumSeparation = std::max(
+                        report.adjacentSurfaceMaximumSeparation, firstPoint.Distance(secondPoint));
+                    const auto firstNormal = firstDu.Crossed(firstDv);
+                    const auto secondNormal = secondDu.Crossed(secondDv);
+                    if (firstNormal.SquareMagnitude() > 1.0e-24 && secondNormal.SquareMagnitude() > 1.0e-24) {
+                        const auto dot = std::clamp(
+                            std::abs(gp_Dir(firstNormal).Dot(gp_Dir(secondNormal))), 0.0, 1.0);
+                        report.adjacentSurfaceMaximumNormalDegrees = std::max(
+                            report.adjacentSurfaceMaximumNormalDegrees,
+                            std::acos(dot) * 180.0 / 3.14159265358979323846);
+                    }
+                }
+            }
+        }
+        report.triangulationDeflections = {0.03, 0.01, 0.003};
+        report.triangulationPolylineSeparations.assign(3, 0.0);
+    }
+
+    for (std::size_t deflectionIndex = 0; deflectionIndex < 3; ++deflectionIndex) {
+        BRepTools::Clean(replacementShape);
+        BRepMesh_IncrementalMesh mesh(
+            replacementShape,
+            reports.front().triangulationDeflections[deflectionIndex],
+            Standard_False,
+            0.5,
+            Standard_False);
+        for (std::size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+            if (groups[groupIndex].faces.size() != 2) continue;
+            reports[groupIndex].triangulationPolylineSeparations[deflectionIndex] = polylineSeparation(
+                edgePolyline(groups[groupIndex].edge, groups[groupIndex].faces[0]),
+                edgePolyline(groups[groupIndex].edge, groups[groupIndex].faces[1]));
+        }
+    }
+    for (auto& report : reports) {
+        report.classification = classifyRegionEdgeConsistency(report, tolerance);
+    }
+    return reports;
 }
 
 }
@@ -434,22 +696,51 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         }
         BRepBuilderAPI_MakeWire wireBuilder;
         std::vector<TopoDS_Edge> distinctEdges;
-        for (std::size_t offset = 0; offset < loopEdges.size(); ++offset) {
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
+            localByGlobal.emplace(parameterization.vertexIndices[local], local);
+        }
+        std::size_t offset = 0;
+        while (offset < loopEdges.size()) {
             const auto index = (start + offset) % loopEdges.size();
-            const auto previous = (index + loopEdges.size() - 1) % loopEdges.size();
-            if (loopEdges[index].IsSame(loopEdges[previous])) continue;
+            auto runLength = std::size_t {1};
+            while (offset + runLength < loopEdges.size() &&
+                loopEdges[(start + offset + runLength) % loopEdges.size()].IsSame(loopEdges[index])) {
+                ++runLength;
+            }
             auto edge = loopEdges[index];
-            if (!attachPcurve(edge, network.surfaces[patch], curveOnSurfaceTolerance)) {
-                result.message = "Could not project a shared B-rep edge onto a fitted patch surface.";
+            std::vector<std::pair<gp_Pnt, gp_Pnt2d>> pcurvePoints;
+            pcurvePoints.reserve(runLength + 1);
+            for (std::size_t run = 0; run <= runLength; ++run) {
+                const auto vertex = loop[(start + offset + run) % loop.size()];
+                const auto local = localByGlobal.at(vertex);
+                const auto uv = parameterization.parameters[local];
+                pcurvePoints.emplace_back(
+                    mesh.vertices[vertex].point,
+                    gp_Pnt2d(uv[0], uv[1]));
+            }
+            double pcurveFirst = 0.0;
+            double pcurveLast = 0.0;
+            const auto pcurve = parameterPcurve(
+                edge, pcurvePoints, pcurveFirst, pcurveLast, curveOnSurfaceTolerance);
+            if (!attachPcurve(
+                    edge,
+                    network.surfaces[patch],
+                    pcurve,
+                    pcurveFirst,
+                    pcurveLast,
+                    curveOnSurfaceTolerance)) {
+                result.message = "Could not construct a parameter-aligned pcurve for a shared B-rep edge.";
                 return result;
             }
             ++result.pcurveProjectionCount;
             edge = orientedForPair(
                 edge,
                 mesh.vertices[loop[index]].point,
-                mesh.vertices[loop[(index + 1) % loop.size()]].point);
+                mesh.vertices[loop[(start + offset + runLength) % loop.size()]].point);
             wireBuilder.Add(edge);
             distinctEdges.push_back(edge);
+            offset += runLength;
         }
         if (!wireBuilder.IsDone()) {
             result.message = "Could not assemble a closed fitted patch wire.";
@@ -466,8 +757,8 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
             gp_Vec du;
             gp_Vec dv;
             network.surfaces[patch]->D1(
-                std::clamp((uv[0] + 1.0) * 0.5, 0.0, 1.0),
-                std::clamp((uv[1] + 1.0) * 0.5, 0.0, 1.0),
+                std::clamp(uv[0], 0.0, 1.0),
+                std::clamp(uv[1], 0.0, 1.0),
                 point,
                 du,
                 dv);
@@ -511,6 +802,11 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     builder.MakeCompound(compound);
     for (const auto& face : result.replacementFaces) builder.Add(compound, face);
     result.replacementShape = compound;
+    result.edgeConsistency = measureEdgeConsistency(
+        result.replacementShape,
+        result.replacementFaces,
+        result.internalSeamEdges,
+        curveOnSurfaceTolerance);
     const auto validated = result.sameParameterFailureCount == 0 &&
         result.brepValidationFailureCount == 0;
     result.status = validated ? RegionRefitStatus::Success : RegionRefitStatus::Failed;

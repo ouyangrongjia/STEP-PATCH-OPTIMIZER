@@ -22,6 +22,7 @@ struct RegionPatchParameterization {
     std::vector<std::size_t> vertexIndices;
     std::vector<std::array<double, 2>> parameters;
     std::vector<std::size_t> boundaryLoop;
+    std::array<std::vector<std::size_t>, 4> boundarySides;
     std::size_t matrixRows = 0;
     std::size_t matrixNonZeros = 0;
     int flippedTriangleCount = 0;
@@ -35,6 +36,7 @@ struct RegionPatchLayout {
     std::vector<RegionLayoutSeam> seams;
     double proxyError = 0.0;
     std::uint64_t estimatedSolverBytes = 0;
+    std::uint64_t estimatedOutputEntities = 0;
     std::string hash;
 };
 

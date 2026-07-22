@@ -27,8 +27,6 @@ namespace {
 
 using MeshEdge = std::array<std::size_t, 2>;
 
-constexpr double kPi = 3.14159265358979323846;
-
 MeshEdge orderedEdge(const std::size_t first, const std::size_t second) {
     return {std::min(first, second), std::max(first, second)};
 }
@@ -459,6 +457,84 @@ double signedArea2d(
         (second[1] - first[1]) * (third[0] - first[0]);
 }
 
+bool mapBoundaryToSquare(
+    const std::vector<std::size_t>& boundaryLoop,
+    const std::vector<double>& cumulative,
+    std::vector<std::size_t> corners,
+    const std::unordered_map<std::size_t, std::size_t>& localIndex,
+    RegionPatchParameterization& result,
+    std::string& message) {
+    for (auto& side : result.boundarySides) side.clear();
+    const auto count = boundaryLoop.size();
+    if (count < 4 || cumulative.size() != count + 1 || cumulative.back() <= 1.0e-12) {
+        message = "A four-sided local parameter domain needs at least four non-degenerate boundary vertices.";
+        return false;
+    }
+    std::sort(corners.begin(), corners.end());
+    corners.erase(std::unique(corners.begin(), corners.end()), corners.end());
+    if (corners.size() > 4) {
+        message = "A stable four-sided parameter domain would require more than four boundary corners.";
+        return false;
+    }
+    if (corners.empty()) corners.push_back(0);
+    while (corners.size() < 4) {
+        std::size_t best = count;
+        double bestDistance = -1.0;
+        for (std::size_t candidate = 0; candidate < count; ++candidate) {
+            if (std::find(corners.begin(), corners.end(), candidate) != corners.end()) continue;
+            double nearest = cumulative.back();
+            for (const auto corner : corners) {
+                const auto direct = std::abs(cumulative[candidate] - cumulative[corner]);
+                nearest = std::min(nearest, std::min(direct, cumulative.back() - direct));
+            }
+            if (nearest > bestDistance) {
+                bestDistance = nearest;
+                best = candidate;
+            }
+        }
+        if (best == count) {
+            message = "A four-sided parameter domain could not select four distinct corners.";
+            return false;
+        }
+        corners.push_back(best);
+        std::sort(corners.begin(), corners.end());
+    }
+
+    const auto squarePoint = [](const std::size_t side, const double parameter) {
+        switch (side) {
+        case 0: return std::array<double, 2> {parameter, 0.0};
+        case 1: return std::array<double, 2> {1.0, parameter};
+        case 2: return std::array<double, 2> {1.0 - parameter, 1.0};
+        default: return std::array<double, 2> {0.0, 1.0 - parameter};
+        }
+    };
+    for (std::size_t side = 0; side < 4; ++side) {
+        const auto begin = corners[side];
+        const auto end = side + 1 < corners.size() ? corners[side + 1] : count + corners.front();
+        const auto cumulativeAt = [&](const std::size_t position) {
+            return position <= count
+                ? cumulative[position]
+                : cumulative.back() + cumulative[position - count];
+        };
+        const auto length = cumulativeAt(end) - cumulativeAt(begin);
+        if (length <= 1.0e-12) {
+            message = "A local parameter-domain side has degenerate physical length.";
+            return false;
+        }
+        for (auto position = begin; position <= end; ++position) {
+            const auto loopPosition = position % count;
+            const auto vertex = boundaryLoop[loopPosition];
+            const auto parameter = std::clamp(
+                (cumulativeAt(position) - cumulativeAt(begin)) / length,
+                0.0,
+                1.0);
+            result.parameters[localIndex.at(vertex)] = squarePoint(side, parameter);
+            result.boundarySides[side].push_back(vertex);
+        }
+    }
+    return true;
+}
+
 bool parameterizePatch(
     const RegionReferenceMesh& mesh,
     const std::vector<int>& assignments,
@@ -594,11 +670,136 @@ bool parameterizePatch(
         return false;
     }
     std::set<std::size_t> boundaryLocal;
-    for (std::size_t index = 0; index < result.boundaryLoop.size(); ++index) {
-        const auto local = localIndex.at(result.boundaryLoop[index]);
-        boundaryLocal.insert(local);
-        const auto angle = 2.0 * kPi * cumulative[index] / cumulative.back();
-        result.parameters[local] = {std::cos(angle), std::sin(angle)};
+    for (const auto vertex : result.boundaryLoop) boundaryLocal.insert(localIndex.at(vertex));
+    std::unordered_map<std::size_t, std::size_t> boundaryPosition;
+    boundaryPosition.reserve(result.boundaryLoop.size());
+    for (std::size_t position = 0; position < result.boundaryLoop.size(); ++position) {
+        boundaryPosition.emplace(result.boundaryLoop[position], position);
+    }
+    std::vector<std::size_t> requiredCorners;
+    std::map<MeshEdge, std::vector<int>> globalEdgePatches;
+    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        for (int edge = 0; edge < 3; ++edge) {
+            globalEdgePatches[orderedEdge(
+                triangle.vertices[static_cast<std::size_t>(edge)],
+                triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)])]
+                .push_back(assignments[triangleIndex]);
+        }
+    }
+    std::vector<int> boundaryLabels(result.boundaryLoop.size(), -1);
+    for (std::size_t position = 0; position < result.boundaryLoop.size(); ++position) {
+        const auto edge = orderedEdge(
+            result.boundaryLoop[position],
+            result.boundaryLoop[(position + 1) % result.boundaryLoop.size()]);
+        const auto& uses = globalEdgePatches.at(edge);
+        if (uses.size() > 1) {
+            const auto other = std::find_if(uses.begin(), uses.end(), [&](const auto owner) {
+                return owner != patch;
+            });
+            if (other != uses.end()) boundaryLabels[position] = *other;
+        }
+    }
+    std::map<int, int> chainCounts;
+    for (std::size_t position = 0; position < boundaryLabels.size(); ++position) {
+        const auto previous = boundaryLabels[
+            (position + boundaryLabels.size() - 1) % boundaryLabels.size()];
+        const auto current = boundaryLabels[position];
+        if (current != previous || boundaryLabels.size() == 1) {
+            ++chainCounts[current];
+            if (current != previous) requiredCorners.push_back(position);
+        }
+    }
+    if (chainCounts.empty() && !boundaryLabels.empty()) chainCounts[boundaryLabels.front()] = 1;
+    if (!chainCounts.contains(-1) || chainCounts[-1] != 1 ||
+        std::any_of(chainCounts.begin(), chainCounts.end(), [](const auto& entry) {
+            return entry.first >= 0 && entry.second != 1;
+        })) {
+        message = "Each patch must own one continuous outer-boundary arc and conformal seam chains.";
+        return false;
+    }
+    for (const auto triangleIndex : result.triangleIndices) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        if (!boundaryPosition.contains(triangle.vertices[0]) ||
+            !boundaryPosition.contains(triangle.vertices[1]) ||
+            !boundaryPosition.contains(triangle.vertices[2])) {
+            continue;
+        }
+        for (const auto vertex : triangle.vertices) {
+            const auto position = boundaryPosition.at(vertex);
+            const auto previous = result.boundaryLoop[
+                (position + result.boundaryLoop.size() - 1) % result.boundaryLoop.size()];
+            const auto next = result.boundaryLoop[(position + 1) % result.boundaryLoop.size()];
+            const auto contains = [&](const std::size_t candidate) {
+                return std::find(triangle.vertices.begin(), triangle.vertices.end(), candidate) !=
+                    triangle.vertices.end();
+            };
+            if (contains(previous) && contains(next)) requiredCorners.push_back(position);
+        }
+    }
+    std::sort(requiredCorners.begin(), requiredCorners.end());
+    requiredCorners.erase(std::unique(requiredCorners.begin(), requiredCorners.end()), requiredCorners.end());
+    std::vector<std::pair<double, std::size_t>> outerTurningCorners;
+    for (std::size_t position = 0; position < result.boundaryLoop.size(); ++position) {
+        const auto previousPosition =
+            (position + result.boundaryLoop.size() - 1) % result.boundaryLoop.size();
+        if (boundaryLabels[previousPosition] != -1 || boundaryLabels[position] != -1) continue;
+        const auto& previous = mesh.vertices[result.boundaryLoop[previousPosition]].point;
+        const auto& current = mesh.vertices[result.boundaryLoop[position]].point;
+        const auto& next = mesh.vertices[
+            result.boundaryLoop[(position + 1) % result.boundaryLoop.size()]].point;
+        gp_Vec incoming(previous, current);
+        gp_Vec outgoing(current, next);
+        if (incoming.SquareMagnitude() <= 1.0e-24 || outgoing.SquareMagnitude() <= 1.0e-24) continue;
+        incoming.Normalize();
+        outgoing.Normalize();
+        const auto turning = 1.0 - std::clamp(incoming.Dot(outgoing), -1.0, 1.0);
+        if (turning > 1.0e-4) outerTurningCorners.emplace_back(turning, position);
+    }
+    std::sort(outerTurningCorners.begin(), outerTurningCorners.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.first != rhs.first ? lhs.first > rhs.first : lhs.second < rhs.second;
+    });
+    for (const auto& [turning, position] : outerTurningCorners) {
+        (void)turning;
+        if (requiredCorners.size() >= 4) break;
+        if (std::find(requiredCorners.begin(), requiredCorners.end(), position) == requiredCorners.end()) {
+            requiredCorners.push_back(position);
+        }
+    }
+    std::sort(requiredCorners.begin(), requiredCorners.end());
+    requiredCorners.erase(std::unique(requiredCorners.begin(), requiredCorners.end()), requiredCorners.end());
+    while (requiredCorners.size() < 4) {
+        std::size_t best = result.boundaryLoop.size();
+        double bestDistance = -1.0;
+        for (std::size_t candidate = 0; candidate < result.boundaryLoop.size(); ++candidate) {
+            const auto previousEdge =
+                (candidate + result.boundaryLoop.size() - 1) % result.boundaryLoop.size();
+            if (boundaryLabels[candidate] != -1 && boundaryLabels[previousEdge] != -1) continue;
+            if (std::find(requiredCorners.begin(), requiredCorners.end(), candidate) !=
+                requiredCorners.end()) continue;
+            auto nearest = cumulative.back();
+            for (const auto corner : requiredCorners) {
+                const auto direct = std::abs(cumulative[candidate] - cumulative[corner]);
+                nearest = std::min(nearest, std::min(direct, cumulative.back() - direct));
+            }
+            if (requiredCorners.empty()) nearest = cumulative[candidate];
+            if (nearest > bestDistance) {
+                bestDistance = nearest;
+                best = candidate;
+            }
+        }
+        if (best == result.boundaryLoop.size()) break;
+        requiredCorners.push_back(best);
+        std::sort(requiredCorners.begin(), requiredCorners.end());
+    }
+    if (!mapBoundaryToSquare(
+            result.boundaryLoop,
+            cumulative,
+            requiredCorners,
+            localIndex,
+            result,
+            message)) {
+        return false;
     }
     std::vector<std::size_t> interior;
     std::vector<int> interiorIndex(result.vertexIndices.size(), -1);
@@ -650,18 +851,24 @@ bool parameterizePatch(
                     maximumProjection[static_cast<std::size_t>(axis)], result.parameters[local][static_cast<std::size_t>(axis)]);
             }
         }
-        const auto projectionScale = 1.5 / std::max({
+        const auto projectionScale = 0.75 / std::max({
             maximumProjection[0] - minimumProjection[0],
             maximumProjection[1] - minimumProjection[1],
             1.0e-12});
         for (auto& parameter : result.parameters) {
-            parameter[0] = (parameter[0] - (minimumProjection[0] + maximumProjection[0]) * 0.5) * projectionScale;
-            parameter[1] = (parameter[1] - (minimumProjection[1] + maximumProjection[1]) * 0.5) * projectionScale;
+            parameter[0] = 0.5 +
+                (parameter[0] - (minimumProjection[0] + maximumProjection[0]) * 0.5) * projectionScale;
+            parameter[1] = 0.5 +
+                (parameter[1] - (minimumProjection[1] + maximumProjection[1]) * 0.5) * projectionScale;
         }
-        for (std::size_t index = 0; index < result.boundaryLoop.size(); ++index) {
-            const auto local = localIndex.at(result.boundaryLoop[index]);
-            const auto angle = 2.0 * kPi * cumulative[index] / cumulative.back();
-            result.parameters[local] = {std::cos(angle), std::sin(angle)};
+        if (!mapBoundaryToSquare(
+                result.boundaryLoop,
+                cumulative,
+                requiredCorners,
+                localIndex,
+                result,
+                message)) {
+            return false;
         }
 
         if (std::chrono::steady_clock::now() >= deadline) {
@@ -746,8 +953,13 @@ bool parameterizePatch(
     }
     if (negative > positive) {
         for (auto& parameter : result.parameters) {
-            parameter[1] = -parameter[1];
+            parameter[1] = 1.0 - parameter[1];
         }
+        std::swap(result.boundarySides[0], result.boundarySides[2]);
+        std::reverse(result.boundarySides[0].begin(), result.boundarySides[0].end());
+        std::reverse(result.boundarySides[1].begin(), result.boundarySides[1].end());
+        std::reverse(result.boundarySides[2].begin(), result.boundarySides[2].end());
+        std::reverse(result.boundarySides[3].begin(), result.boundarySides[3].end());
         std::swap(positive, negative);
     }
     result.flippedTriangleCount += negative;
@@ -851,18 +1063,83 @@ std::uint64_t estimateSolverBytes(
 }
 
 std::vector<std::size_t> paretoSelection(const std::vector<RegionPatchLayout>& candidates) {
+    const auto maximumDistortion = [](const RegionPatchLayout& layout) {
+        auto value = 0.0;
+        for (const auto& patch : layout.patches) value = std::max(value, patch.maximumDistortion);
+        return value;
+    };
     std::vector<std::size_t> frontier;
-    double bestError = std::numeric_limits<double>::infinity();
     for (std::size_t index = 0; index < candidates.size(); ++index) {
-        if (candidates[index].proxyError < bestError - 1.0e-15) {
-            frontier.push_back(index);
-            bestError = candidates[index].proxyError;
+        bool dominated = false;
+        for (std::size_t other = 0; other < candidates.size() && !dominated; ++other) {
+            if (other == index) continue;
+            const auto& lhs = candidates[other];
+            const auto& rhs = candidates[index];
+            const auto noWorse = lhs.patchCount <= rhs.patchCount &&
+                lhs.proxyError <= rhs.proxyError &&
+                maximumDistortion(lhs) <= maximumDistortion(rhs) &&
+                lhs.estimatedSolverBytes <= rhs.estimatedSolverBytes &&
+                lhs.estimatedOutputEntities <= rhs.estimatedOutputEntities;
+            const auto strictlyBetter = lhs.patchCount < rhs.patchCount ||
+                lhs.proxyError < rhs.proxyError - 1.0e-15 ||
+                maximumDistortion(lhs) < maximumDistortion(rhs) - 1.0e-15 ||
+                lhs.estimatedSolverBytes < rhs.estimatedSolverBytes ||
+                lhs.estimatedOutputEntities < rhs.estimatedOutputEntities;
+            dominated = noWorse && strictlyBetter;
         }
+        if (!dominated) frontier.push_back(index);
     }
     if (frontier.size() <= 3) {
         return frontier;
     }
-    return {frontier.front(), frontier[frontier.size() / 2], frontier.back()};
+    const auto minimumPatch = *std::min_element(frontier.begin(), frontier.end(), [&](const auto lhs, const auto rhs) {
+        return candidates[lhs].patchCount < candidates[rhs].patchCount;
+    });
+    const auto minimumError = *std::min_element(frontier.begin(), frontier.end(), [&](const auto lhs, const auto rhs) {
+        return candidates[lhs].proxyError < candidates[rhs].proxyError;
+    });
+    auto knee = minimumPatch;
+    auto bestImprovement = -std::numeric_limits<double>::infinity();
+    std::vector<std::size_t> ordered = frontier;
+    std::sort(ordered.begin(), ordered.end(), [&](const auto lhs, const auto rhs) {
+        return candidates[lhs].patchCount < candidates[rhs].patchCount;
+    });
+    for (std::size_t index = 1; index < ordered.size(); ++index) {
+        const auto previous = candidates[ordered[index - 1]].proxyError;
+        const auto current = candidates[ordered[index]].proxyError;
+        const auto patchDelta = std::max(
+            1,
+            candidates[ordered[index]].patchCount - candidates[ordered[index - 1]].patchCount);
+        const auto improvement = (previous - current) / static_cast<double>(patchDelta);
+        if (improvement > bestImprovement) {
+            bestImprovement = improvement;
+            knee = ordered[index];
+        }
+    }
+    std::vector<std::size_t> selected {minimumPatch, knee, minimumError};
+    std::sort(selected.begin(), selected.end());
+    selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+    return selected;
+}
+
+std::vector<int> requestedPatchCounts(
+    const RegionRefitLayoutMode mode,
+    const RegionRefitOptions& options) {
+    if (mode == RegionRefitLayoutMode::FixedPatchCount) return {options.fixedPatchCount};
+    if (mode == RegionRefitLayoutMode::Adaptive) {
+        std::vector<int> counts(static_cast<std::size_t>(options.maximumAdaptivePatchCount));
+        std::iota(counts.begin(), counts.end(), 1);
+        return counts;
+    }
+    std::vector<int> counts;
+    counts.push_back(options.requestedPatchCount);
+    for (int offset = 1; offset <= options.patchCountSearchRadius; ++offset) {
+        if (options.requestedPatchCount - offset > 0) {
+            counts.push_back(options.requestedPatchCount - offset);
+        }
+        counts.push_back(options.requestedPatchCount + offset);
+    }
+    return counts;
 }
 
 }
@@ -888,28 +1165,28 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
         result.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
         return result;
     }
-    const int firstPatchCount = mode == RegionRefitLayoutMode::FixedPatchCount
-        ? options.fixedPatchCount : 1;
-    const int lastPatchCount = mode == RegionRefitLayoutMode::FixedPatchCount
-        ? options.fixedPatchCount : options.maximumAdaptivePatchCount;
-    if (firstPatchCount <= 0 || lastPatchCount <= 0 ||
-        static_cast<std::size_t>(lastPatchCount) > mesh.triangles.size()) {
+    const auto patchCounts = requestedPatchCounts(mode, options);
+    const auto maximumPatchCount = patchCounts.empty()
+        ? 0
+        : *std::max_element(patchCounts.begin(), patchCounts.end());
+    if (patchCounts.empty() || patchCounts.front() <= 0 || maximumPatchCount <= 0 ||
+        static_cast<std::size_t>(maximumPatchCount) > mesh.triangles.size()) {
         result.status = RegionRefitStatus::InvalidRequest;
         result.message = "Requested patch count is not valid for the reference mesh.";
         return result;
     }
-    const auto seeds = deterministicSeeds(graph, lastPatchCount);
-    if (static_cast<int>(seeds.size()) != lastPatchCount) {
+    const auto seeds = deterministicSeeds(graph, maximumPatchCount);
+    if (static_cast<int>(seeds.size()) != maximumPatchCount) {
         result.message = "Could not generate the deterministic layout seed family.";
         return result;
     }
 
     std::vector<RegionPatchLayout> accepted;
-    for (int patchCount = firstPatchCount; patchCount <= lastPatchCount; ++patchCount) {
+    bool deadlineReached = false;
+    for (const int patchCount : patchCounts) {
         if (expired()) {
-            result.status = RegionRefitStatus::TimeBudgetExceeded;
-            result.message = "Layout generation exceeded its wall-clock budget.";
-            return result;
+            deadlineReached = true;
+            break;
         }
         const auto candidateStarted = std::chrono::steady_clock::now();
         RegionLayoutCandidateReport report;
@@ -963,9 +1240,8 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
         report.topologyPassed = report.topologyPassed && std::isfinite(layout.proxyError);
         if (expired()) {
             result.candidates.push_back(std::move(report));
-            result.status = RegionRefitStatus::TimeBudgetExceeded;
-            result.message = "Layout generation exceeded its wall-clock budget.";
-            return result;
+            deadlineReached = true;
+            break;
         }
         if (parameterized && report.topologyPassed && report.rejectionReason.empty()) {
             report.parameterizationPassed = true;
@@ -979,6 +1255,9 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             std::size_t fitRows = 0;
             std::size_t fitNonZeros = 0;
             layout.estimatedSolverBytes = estimateSolverBytes(layout, mesh, fitRows, fitNonZeros);
+            layout.estimatedOutputEntities = static_cast<std::uint64_t>(patchCount) * 64ull +
+                static_cast<std::uint64_t>(layout.seams.size()) * 24ull;
+            report.estimatedOutputEntities = layout.estimatedOutputEntities;
             report.matrixRows += fitRows;
             report.matrixNonZeros += fitNonZeros;
             report.estimatedSolverBytes = layout.estimatedSolverBytes;
@@ -1003,7 +1282,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
         result.message = "No deterministic layout passed topology, parameterization, and memory preflight.";
         return result;
     }
-    const auto selection = mode == RegionRefitLayoutMode::FixedPatchCount
+    const auto selection = mode != RegionRefitLayoutMode::Adaptive
         ? std::vector<std::size_t> {0}
         : paretoSelection(accepted);
     for (const auto index : selection) {
@@ -1016,11 +1295,15 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             found->selectedForFullFit = true;
         }
     }
-    std::sort(result.selectedCandidates.begin(), result.selectedCandidates.end(), [](const auto& lhs, const auto& rhs) {
-        return lhs.patchCount < rhs.patchCount;
-    });
+    if (mode == RegionRefitLayoutMode::Adaptive) {
+        std::sort(result.selectedCandidates.begin(), result.selectedCandidates.end(), [](const auto& lhs, const auto& rhs) {
+            return lhs.patchCount < rhs.patchCount;
+        });
+    }
     result.status = RegionRefitStatus::Success;
-    result.message = "Deterministic layouts passed coarse screening.";
+    result.message = deadlineReached
+        ? "Layout deadline reached after retaining the coarse-screened candidate prefix."
+        : "Deterministic layouts passed coarse screening.";
     return result;
 }
 

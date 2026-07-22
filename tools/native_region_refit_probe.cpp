@@ -19,6 +19,7 @@
 #include <QThread>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -42,6 +43,119 @@ std::string sha256File(const std::filesystem::path& path) {
     QCryptographicHash hash(QCryptographicHash::Sha256);
     if (!hash.addData(&file)) return {};
     return hash.result().toHex().toStdString();
+}
+
+struct StepFileComplexity {
+    bool present = false;
+    std::uint64_t bytes = 0;
+    std::uint64_t entityCount = 0;
+    std::uint64_t edgeCurveCount = 0;
+    std::uint64_t surfaceCount = 0;
+    std::string sha256;
+};
+
+StepFileComplexity measureStepFile(const std::filesystem::path& path) {
+    StepFileComplexity result;
+    QFile file(QString::fromStdWString(path.wstring()));
+    if (!file.open(QIODevice::ReadOnly)) return result;
+    result.present = true;
+    result.bytes = static_cast<std::uint64_t>(file.size());
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    while (!file.atEnd()) {
+        const auto line = file.readLine();
+        hash.addData(line);
+        const auto trimmed = line.trimmed();
+        if (trimmed.startsWith('#') && trimmed.contains('=')) {
+            ++result.entityCount;
+            if (trimmed.contains("=EDGE_CURVE(")) ++result.edgeCurveCount;
+            static const std::array<QByteArray, 10> surfaceTokens {
+                "=PLANE(", "=CYLINDRICAL_SURFACE(", "=CONICAL_SURFACE(",
+                "=SPHERICAL_SURFACE(", "=TOROIDAL_SURFACE(",
+                "=B_SPLINE_SURFACE_WITH_KNOTS(", "=BEZIER_SURFACE(",
+                "=SURFACE_OF_REVOLUTION(", "=SURFACE_OF_LINEAR_EXTRUSION(",
+                "=OFFSET_SURFACE("};
+            if (std::any_of(surfaceTokens.begin(), surfaceTokens.end(), [&](const auto& token) {
+                    return trimmed.contains(token);
+                })) {
+                ++result.surfaceCount;
+            }
+        }
+    }
+    result.sha256 = hash.result().toHex().toStdString();
+    return result;
+}
+
+QJsonObject outputComplexityToJson(
+    const StepFileComplexity& baseline,
+    const StepFileComplexity& candidate,
+    const spo::RegionRefitResult& result,
+    const int maximumControlPointsPerSide) {
+    const auto byteIncrease = baseline.bytes > 0 && candidate.present
+        ? (static_cast<double>(candidate.bytes) - static_cast<double>(baseline.bytes)) /
+            static_cast<double>(baseline.bytes)
+        : 0.0;
+    const auto entityIncrease = baseline.entityCount > 0 && candidate.present
+        ? (static_cast<double>(candidate.entityCount) - static_cast<double>(baseline.entityCount)) /
+            static_cast<double>(baseline.entityCount)
+        : 0.0;
+    auto observedMaximumControlSide = 0;
+    for (const auto& attempt : result.report.fitAttempts) {
+        for (const auto& iteration : attempt.iterations) {
+            observedMaximumControlSide = std::max({
+                observedMaximumControlSide,
+                iteration.uControlCount,
+                iteration.vControlCount});
+        }
+    }
+    const auto replacementFaceCountMatches = result.report.selectedPatchCount > 0 &&
+        result.report.retrimReplacementFaceCount == result.report.selectedPatchCount;
+    const auto duplicateTopology = std::any_of(
+        result.report.edgeConsistency.begin(), result.report.edgeConsistency.end(), [](const auto& edge) {
+            return edge.multipleEdge || edge.actualFaceUseCount > edge.expectedFaceUseCount;
+        });
+    const auto edgeEntityIncrease = candidate.edgeCurveCount > baseline.edgeCurveCount
+        ? candidate.edgeCurveCount - baseline.edgeCurveCount
+        : 0;
+    const auto surfaceEntityIncrease = candidate.surfaceCount > baseline.surfaceCount
+        ? candidate.surfaceCount - baseline.surfaceCount
+        : 0;
+    const auto unexpectedEntityDuplication = edgeEntityIncrease >
+            static_cast<std::uint64_t>(std::max(0, result.report.selectedPatchCount)) * 8ull ||
+        surfaceEntityIncrease >
+            static_cast<std::uint64_t>(std::max(0, result.report.selectedPatchCount));
+    const auto passed = baseline.present && candidate.present &&
+        byteIncrease <= 0.10 && entityIncrease <= 0.10 &&
+        replacementFaceCountMatches && !duplicateTopology && !unexpectedEntityDuplication &&
+        observedMaximumControlSide <= maximumControlPointsPerSide;
+    return {
+        {"schema_version", 1},
+        {"baseline_role", "NoModificationStepRoundtripWithSameWriter"},
+        {"baseline_temporary_file_deleted", true},
+        {"baseline", QJsonObject {
+            {"present", baseline.present},
+            {"bytes", QString::number(baseline.bytes)},
+            {"step_entity_count", QString::number(baseline.entityCount)},
+            {"edge_curve_count", QString::number(baseline.edgeCurveCount)},
+            {"surface_count", QString::number(baseline.surfaceCount)},
+            {"sha256", QString::fromStdString(baseline.sha256)}}},
+        {"candidate", QJsonObject {
+            {"present", candidate.present},
+            {"bytes", QString::number(candidate.bytes)},
+            {"step_entity_count", QString::number(candidate.entityCount)},
+            {"edge_curve_count", QString::number(candidate.edgeCurveCount)},
+            {"surface_count", QString::number(candidate.surfaceCount)},
+            {"sha256", QString::fromStdString(candidate.sha256)}}},
+        {"byte_increase_ratio", byteIncrease},
+        {"entity_increase_ratio", entityIncrease},
+        {"replacement_face_count", result.report.retrimReplacementFaceCount},
+        {"actual_patch_count", result.report.selectedPatchCount},
+        {"replacement_face_count_matches", replacementFaceCountMatches},
+        {"edge_curve_count_increase", QString::number(edgeEntityIncrease)},
+        {"surface_count_increase", QString::number(surfaceEntityIncrease)},
+        {"unexpected_duplicate_edges_or_surfaces", duplicateTopology || unexpectedEntityDuplication},
+        {"observed_maximum_control_points_per_side", observedMaximumControlSide},
+        {"maximum_control_points_per_side", maximumControlPointsPerSide},
+        {"passed", passed}};
 }
 
 std::vector<std::size_t> parseIds(std::string value) {
@@ -117,13 +231,21 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
             {"matrix_rows", QString::number(candidate.matrixRows)},
             {"matrix_nonzeros", QString::number(candidate.matrixNonZeros)},
             {"estimated_solver_bytes", QString::number(candidate.estimatedSolverBytes)},
+            {"estimated_output_entities", QString::number(candidate.estimatedOutputEntities)},
             {"wall_ms", candidate.wallMilliseconds},
             {"layout_hash", QString::fromStdString(candidate.layoutHash)},
             {"rejection_reason", QString::fromStdString(candidate.rejectionReason)}});
     }
     return {
         {"status", result.selectedLayout ? "Success" : spo::toString(result.report.status)},
+        {"requested_patch_count", result.report.requestedPatchCount},
         {"selected_patch_count", result.report.selectedPatchCount},
+        {"actual_patch_count", result.report.selectedPatchCount},
+        {"patch_count_deviation", result.report.patchCountDeviation},
+        {"exact_target_reached", result.report.exactTargetReached},
+        {"minimum_qualified_proven", result.report.minimumQualifiedProven},
+        {"selection_outcome", QString::fromStdString(result.report.selectionOutcome)},
+        {"unattainable_reason", QString::fromStdString(result.report.unattainableReason)},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"candidates", candidates}};
 }
@@ -140,11 +262,18 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
         for (const auto vertex : patch.boundaryLoop) {
             boundary.append(QString::number(vertex));
         }
+        QJsonArray boundarySides;
+        for (const auto& side : patch.boundarySides) {
+            QJsonArray sideVertices;
+            for (const auto vertex : side) sideVertices.append(QString::number(vertex));
+            boundarySides.append(sideVertices);
+        }
         patches.append(QJsonObject {
             {"patch", static_cast<int>(patchIndex)},
             {"triangles", QString::number(patch.triangleIndices.size())},
             {"vertices", QString::number(patch.vertexIndices.size())},
             {"boundary_loop", boundary},
+            {"boundary_sides", boundarySides},
             {"matrix_rows", QString::number(patch.matrixRows)},
             {"matrix_nonzeros", QString::number(patch.matrixNonZeros)},
             {"flipped_triangles", patch.flippedTriangleCount},
@@ -163,6 +292,7 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
         {"layout_hash", QString::fromStdString(layout.hash)},
         {"proxy_error", layout.proxyError},
         {"estimated_solver_bytes", QString::number(layout.estimatedSolverBytes)},
+        {"estimated_output_entities", QString::number(layout.estimatedOutputEntities)},
         {"triangle_patches", assignments},
         {"patches", patches},
         {"seams", seams}};
@@ -232,11 +362,66 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
         {"internal_seams", result.report.retrimInternalSeamCount},
         {"reused_original_boundary_edges", result.report.retrimReusedBoundaryEdgeCount},
         {"split_boundary_segments", result.report.retrimSplitBoundarySegmentCount},
-        {"pcurve_projections", result.report.retrimPcurveProjectionCount},
+        {"pcurve_constructions", result.report.retrimPcurveProjectionCount},
+        {"legacy_pcurve_projection_count", result.report.retrimPcurveProjectionCount},
         {"same_parameter_checks", result.report.retrimSameParameterCheckCount},
         {"same_parameter_failures", result.report.retrimSameParameterFailureCount},
         {"maximum_same_parameter_deviation", result.report.retrimMaximumSameParameterDeviation},
         {"assembly_passed", result.report.assemblyPassed}};
+}
+
+QJsonObject edgeConsistencyToJson(
+    const spo::RegionRefitResult& result,
+    const double curveOnSurfaceTolerance) {
+    QJsonArray edges;
+    for (const auto& edge : result.report.edgeConsistency) {
+        QJsonArray deflections;
+        for (const auto value : edge.triangulationDeflections) deflections.append(value);
+        QJsonArray separations;
+        for (const auto value : edge.triangulationPolylineSeparations) separations.append(value);
+        edges.append(QJsonObject {
+            {"edge_index", edge.edgeIndex},
+            {"internal_seam", edge.internalSeam},
+            {"shared_same_edge", edge.sharedSameEdge},
+            {"expected_face_use_count", edge.expectedFaceUseCount},
+            {"actual_face_use_count", edge.actualFaceUseCount},
+            {"free_edge", edge.freeEdge},
+            {"multiple_edge", edge.multipleEdge},
+            {"same_range", edge.sameRange},
+            {"same_parameter", edge.sameParameter},
+            {"curve_on_surface_maximum_deviation", edge.curveOnSurfaceMaximumDeviation},
+            {"curve_on_surface_p95_deviation", edge.curveOnSurfaceP95Deviation},
+            {"curve_on_surface_rms_deviation", edge.curveOnSurfaceRmsDeviation},
+            {"adjacent_surface_maximum_separation", edge.adjacentSurfaceMaximumSeparation},
+            {"adjacent_surface_maximum_normal_degrees", edge.adjacentSurfaceMaximumNormalDegrees},
+            {"worst_parameter", edge.worstParameter},
+            {"triangulation_deflections", deflections},
+            {"triangulation_polyline_separations", separations},
+            {"classification", QString::fromStdString(edge.classification)}});
+    }
+    return {
+        {"schema_version", 1},
+        {"curve_on_surface_tolerance", curveOnSurfaceTolerance},
+        {"edges", edges}};
+}
+
+QJsonObject triangulationToJson(const spo::RegionRefitResult& result) {
+    QJsonArray edges;
+    for (const auto& edge : result.report.edgeConsistency) {
+        QJsonArray samples;
+        const auto count = std::min(
+            edge.triangulationDeflections.size(), edge.triangulationPolylineSeparations.size());
+        for (std::size_t index = 0; index < count; ++index) {
+            samples.append(QJsonObject {
+                {"deflection", edge.triangulationDeflections[index]},
+                {"polyline_separation", edge.triangulationPolylineSeparations[index]}});
+        }
+        edges.append(QJsonObject {
+            {"edge_index", edge.edgeIndex},
+            {"classification", QString::fromStdString(edge.classification)},
+            {"samples", samples}});
+    }
+    return {{"schema_version", 1}, {"edges", edges}};
 }
 
 QJsonObject sewingReportToJson(const spo::RegionRefitResult& result) {
@@ -466,7 +651,14 @@ QJsonObject performanceToJson(
         {"status", spo::toString(result.report.status)},
         {"failure_stage", spo::toString(result.report.failureStage)},
         {"layout_mode", spo::toString(request.layoutMode)},
+        {"adaptive_objective", spo::toString(request.options.adaptiveObjective)},
+        {"requested_patch_count", result.report.requestedPatchCount},
+        {"actual_patch_count", result.report.selectedPatchCount},
+        {"patch_count_deviation", result.report.patchCountDeviation},
+        {"selection_outcome", QString::fromStdString(result.report.selectionOutcome)},
+        {"minimum_qualified_proven", result.report.minimumQualifiedProven},
         {"sampling_mode", spo::toString(request.options.samplingMode)},
+        {"layout_carrier_sampling_mode", spo::toString(request.options.layoutCarrierSamplingMode)},
         {"execution_mode", spo::toString(request.executionMode)},
         {"fit_gate_passed", result.report.fitGatePassed},
         {"best_effort_used", result.report.bestEffortUsed},
@@ -497,6 +689,7 @@ QJsonObject performanceToJson(
         {"welded_internal_seam_vertices", QString::number(result.report.weldedInternalSeamVertexCount)},
         {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
         {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
+        {"layout_carrier_mesh_fingerprint", QString::fromStdString(result.report.layoutCarrierMeshFingerprint)},
         {"sampling_quality", QJsonObject {
             {"geometric_limits_passed", result.report.samplingGeometricLimitsPassed},
             {"edge_length_p01", result.report.samplingEdgeLengthP01},
@@ -544,7 +737,8 @@ QJsonObject performanceToJson(
 }
 
 QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
-    return {
+    const QJsonObject fittingReference {
+        {"role", "FittingReference"},
         {"status", result.referenceMesh ? "Success" : spo::toString(result.report.status)},
         {"vertices", QString::number(result.report.sampleVertexCount)},
         {"triangles", QString::number(result.report.sampleTriangleCount)},
@@ -573,6 +767,25 @@ QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
         {"remesh_flips", QString::number(result.report.samplingRemeshFlipCount)},
         {"remesh_relocations", QString::number(result.report.samplingRemeshRelocationCount)},
         {"mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)}};
+    const QJsonObject layoutCarrier {
+        {"role", "LayoutCarrier"},
+        {"status", result.layoutCarrierMesh ? "Success" : spo::toString(result.report.status)},
+        {"vertices", QString::number(result.report.layoutCarrierVertexCount)},
+        {"triangles", QString::number(result.report.layoutCarrierTriangleCount)},
+        {"boundary_samples", QString::number(result.report.layoutCarrierBoundarySampleCount)},
+        {"minimum_angle_p05_degrees", result.report.layoutCarrierMinimumAngleP05Degrees},
+        {"aspect_ratio_p95", result.report.layoutCarrierAspectRatioP95},
+        {"zero_area_triangles", QString::number(result.report.layoutCarrierZeroAreaTriangleCount)},
+        {"non_manifold_edges", QString::number(result.report.layoutCarrierNonManifoldEdgeCount)},
+        {"hard_gates_passed", result.report.layoutCarrierZeroAreaTriangleCount == 0 &&
+            result.report.layoutCarrierNonManifoldEdgeCount == 0},
+        {"mesh_fingerprint", QString::fromStdString(result.report.layoutCarrierMeshFingerprint)}};
+    return {
+        {"schema_version", 2},
+        {"step_truth", "OriginalFaceIdUvAndBRepEdges"},
+        {"reference_stl_quality_is_diagnostic_only", true},
+        {"fitting_reference", fittingReference},
+        {"layout_carrier", layoutCarrier}};
 }
 
 }
@@ -582,10 +795,14 @@ int main(int argc, char* argv[]) {
     if (argc < 5) {
         std::cerr << "用法：native_region_refit_probe <输入.step> <输出目录> "
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
-                     "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
-                     "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
+                     "[--locked-edges <编号,编号,...>] [--patch-mode <adaptive|target>] "
+                     "[--requested-patch-count <数量>] [--patch-count-search-radius <数量>] "
+                     "[--adaptive-objective <minimum-qualified>] [--adaptive-safety-cap <数量>] "
+                     "[--layout <adaptive|fixed>] [--patch-count <数量>] [--wall-time-ms <毫秒>] "
                      "[--sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
+                     "[--layout-carrier-sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
                      "[--target-sample-triangles <数量>] [--maximum-full-fit-count <数量>] "
+                     "[--target-layout-carrier-triangles <数量>] "
                      "[--best-effort-through-sewing] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
                      "[--input-read-budget-ms <毫秒>] "
@@ -608,7 +825,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v15";
+    request.options.algorithmFingerprint = "native-regional-refit-v18-local-domains";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -627,9 +844,27 @@ int main(int argc, char* argv[]) {
                 if (value == "adaptive") request.layoutMode = spo::RegionRefitLayoutMode::Adaptive;
                 else if (value == "fixed") request.layoutMode = spo::RegionRefitLayoutMode::FixedPatchCount;
                 else return 2;
+            } else if (argument == "--patch-mode") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "adaptive") request.layoutMode = spo::RegionRefitLayoutMode::Adaptive;
+                else if (value == "target") request.layoutMode = spo::RegionRefitLayoutMode::TargetPatchCount;
+                else return 2;
             } else if (argument == "--patch-count") {
                 if (++index >= argc) return 2;
                 request.options.fixedPatchCount = std::stoi(argv[index]);
+            } else if (argument == "--requested-patch-count") {
+                if (++index >= argc) return 2;
+                request.options.requestedPatchCount = std::stoi(argv[index]);
+            } else if (argument == "--patch-count-search-radius") {
+                if (++index >= argc) return 2;
+                request.options.patchCountSearchRadius = std::stoi(argv[index]);
+            } else if (argument == "--adaptive-objective") {
+                if (++index >= argc || std::string(argv[index]) != "minimum-qualified") return 2;
+                request.options.adaptiveObjective = spo::RegionRefitAdaptiveObjective::MinimumQualified;
+            } else if (argument == "--adaptive-safety-cap") {
+                if (++index >= argc) return 2;
+                request.options.maximumAdaptivePatchCount = std::stoi(argv[index]);
             } else if (argument == "--sampling-mode") {
                 if (++index >= argc) return 2;
                 const std::string value = argv[index];
@@ -642,9 +877,24 @@ int main(int argc, char* argv[]) {
                 } else {
                     return 2;
                 }
+            } else if (argument == "--layout-carrier-sampling-mode") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "adaptive-occt") {
+                    request.options.layoutCarrierSamplingMode = spo::RegionRefitSamplingMode::AdaptiveOcct;
+                } else if (value == "quality-balanced") {
+                    request.options.layoutCarrierSamplingMode = spo::RegionRefitSamplingMode::QualityBalanced;
+                } else if (value == "uv-uniform") {
+                    request.options.layoutCarrierSamplingMode = spo::RegionRefitSamplingMode::UniformUv;
+                } else {
+                    return 2;
+                }
             } else if (argument == "--target-sample-triangles") {
                 if (++index >= argc) return 2;
                 request.options.targetSampleTriangles = std::stoull(argv[index]);
+            } else if (argument == "--target-layout-carrier-triangles") {
+                if (++index >= argc) return 2;
+                request.options.targetLayoutCarrierTriangles = std::stoull(argv[index]);
             } else if (argument == "--maximum-full-fit-count") {
                 if (++index >= argc) return 2;
                 request.options.maximumFullFitCount = std::stoi(argv[index]);
@@ -707,12 +957,11 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    if (!algorithmFingerprintSpecified &&
-        request.options.samplingMode == spo::RegionRefitSamplingMode::QualityBalanced) {
-        request.options.algorithmFingerprint = "native-regional-refit-v16-quality-balanced";
-    } else if (!algorithmFingerprintSpecified &&
-        request.options.samplingMode == spo::RegionRefitSamplingMode::UniformUv) {
-        request.options.algorithmFingerprint = "native-regional-refit-v17-uniform-uv";
+    if (!algorithmFingerprintSpecified) {
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v18-local-domains-") +
+            spo::toString(request.options.samplingMode) + "-" +
+            spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
+            spo::toString(request.layoutMode);
     }
 
     if ((candidateId >= 0) == !request.selectedFaces.empty()) {
@@ -727,6 +976,11 @@ int main(int argc, char* argv[]) {
     if (request.layoutMode == spo::RegionRefitLayoutMode::FixedPatchCount &&
         request.options.fixedPatchCount <= 0) {
         std::cerr << "固定布局必须指定正数 --patch-count。\n";
+        return 2;
+    }
+    if (request.layoutMode == spo::RegionRefitLayoutMode::TargetPatchCount &&
+        (request.options.requestedPatchCount <= 0 || request.options.patchCountSearchRadius < 0)) {
+        std::cerr << "指定面数模式必须提供正数 --requested-patch-count 和非负搜索半径。\n";
         return 2;
     }
 
@@ -814,6 +1068,10 @@ int main(int argc, char* argv[]) {
         writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) &&
         writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) &&
         writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) &&
+        writeJson(
+            diagnostics / "edge_consistency_report.json",
+            edgeConsistencyToJson(result, request.options.curveOnSurfaceTolerance)) &&
+        writeJson(diagnostics / "triangulation_report.json", triangulationToJson(result)) &&
         writeJson(diagnostics / "retrim_report.json", retrimReportToJson(result)) &&
         writeJson(diagnostics / "sewing_report.json", sewingReportToJson(result)) &&
         writeJson(diagnostics / "strict_topology_report.json", strictTopologyReportToJson(result)));
@@ -831,12 +1089,21 @@ int main(int argc, char* argv[]) {
             std::cerr << write.message << '\n';
             return 1;
         }
+        if (result.layoutCarrierMesh) {
+            const auto carrierWrite = spo::StlWriter().write(
+                result.layoutCarrierMesh->toStlMesh(),
+                samplingDirectory / "layout_carrier.stl");
+            if (!carrierWrite.success) {
+                std::cerr << carrierWrite.message << '\n';
+                return 1;
+            }
+        }
     }
-    if (!performanceOnly && result.referenceMesh && result.selectedLayout) {
+    if (!performanceOnly && result.layoutCarrierMesh && result.selectedLayout) {
         const auto layoutDirectory = outputDirectory / "artifacts" / "layout";
         if (!writeJson(layoutDirectory / "selected_layout.json", selectedLayoutToJson(*result.selectedLayout)) ||
-            !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.referenceMesh, *result.selectedLayout)) ||
-            !writeText(layoutDirectory / "selected_layout.svg", layoutSvg(*result.referenceMesh, *result.selectedLayout))) {
+            !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.layoutCarrierMesh, *result.selectedLayout)) ||
+            !writeText(layoutDirectory / "selected_layout.svg", layoutSvg(*result.layoutCarrierMesh, *result.selectedLayout))) {
             std::cerr << "无法写入布局证据。\n";
             return 1;
         }
@@ -855,20 +1122,85 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+    std::filesystem::path assemblyOutputPath;
     if (!performanceOnly && (result.canApply() || !result.diagnosticSewnShape.IsNull())) {
         const auto assemblyDirectory = outputDirectory / "artifacts" / "assembly";
         std::filesystem::create_directories(assemblyDirectory);
         const auto assemblyName = result.canApply()
-            ? std::filesystem::path("final_sewn.step")
+            ? std::filesystem::path("cad_check_candidate.step")
             : std::filesystem::path("sewn_attempt.step");
+        assemblyOutputPath = assemblyDirectory / assemblyName;
         const auto& assemblyShape = result.canApply()
             ? result.finalShape
             : result.diagnosticSewnShape;
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(assemblyShape, {}),
-            assemblyDirectory / assemblyName);
+            assemblyOutputPath);
         if (!write.success()) {
             std::cerr << write.message() << '\n';
+            return 1;
+        }
+    }
+    auto outputComplexityPassed = performanceOnly;
+    if (!performanceOnly) {
+        const auto noOpPath = diagnostics / ".no_op_roundtrip.step";
+        const auto noOpWrite = spo::StepWriter().write(read.document, noOpPath);
+        const auto baselineComplexity = noOpWrite.success()
+            ? measureStepFile(noOpPath)
+            : StepFileComplexity {};
+        const auto candidateComplexity = assemblyOutputPath.empty()
+            ? StepFileComplexity {}
+            : measureStepFile(assemblyOutputPath);
+        const auto complexityReport = outputComplexityToJson(
+            baselineComplexity,
+            candidateComplexity,
+            result,
+            request.options.maximumControlPointsPerSide);
+        outputComplexityPassed = complexityReport.value("passed").toBool();
+        if (!writeJson(diagnostics / "output_complexity_report.json", complexityReport)) {
+            std::cerr << "无法写入输出复杂度报告。\n";
+            return 1;
+        }
+        std::error_code removeError;
+        std::filesystem::remove(noOpPath, removeError);
+        if (removeError) {
+            std::cerr << "无法删除临时无修改往返 STEP。\n";
+            return 1;
+        }
+        if (result.canApply() && !outputComplexityPassed && !assemblyOutputPath.empty()) {
+            const auto diagnosticPath = assemblyOutputPath.parent_path() / "sewn_attempt.step";
+            std::error_code renameError;
+            std::filesystem::rename(assemblyOutputPath, diagnosticPath, renameError);
+            if (renameError) {
+                std::cerr << "无法把复杂度门失败结果降级为诊断产物。\n";
+                return 1;
+            }
+            assemblyOutputPath = diagnosticPath;
+            result.report.status = spo::RegionRefitStatus::Failed;
+            result.report.failureStage = spo::RegionRefitStage::StepRoundtrip;
+            result.report.selectionOutcome = "NoProductValidatedResult";
+            result.report.unattainableReason =
+                "The sewn candidate failed the output-complexity product gate.";
+            result.report.message =
+                "The sewn candidate passed geometry and topology gates but failed output complexity.";
+            result.finalShape.Nullify();
+            if (!writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) ||
+                !writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) ||
+                !writeJson(diagnostics / "edge_consistency_report.json",
+                    edgeConsistencyToJson(result, request.options.curveOnSurfaceTolerance)) ||
+                !writeJson(diagnostics / "triangulation_report.json", triangulationToJson(result)) ||
+                !writeJson(diagnostics / "retrim_report.json", retrimReportToJson(result)) ||
+                !writeJson(diagnostics / "sewing_report.json", sewingReportToJson(result)) ||
+                !writeJson(diagnostics / "strict_topology_report.json", strictTopologyReportToJson(result))) {
+                std::cerr << "无法把复杂度门失败写回最终诊断。\n";
+                return 1;
+            }
+        }
+        auto finalPerformance = performanceToJson(result, request, timing, runIdentity, commit);
+        finalPerformance.insert("output_complexity_passed", outputComplexityPassed);
+        finalPerformance.insert("product_validated", result.canApply() && outputComplexityPassed);
+        if (!writeJson(diagnostics / performanceName, finalPerformance)) {
+            std::cerr << "无法更新最终性能与产品门状态。\n";
             return 1;
         }
     }
@@ -899,5 +1231,5 @@ int main(int argc, char* argv[]) {
     if (fitOnly) {
         return result.fittedNetwork && !result.fittedPatchNetwork.IsNull() ? 0 : 1;
     }
-    return result.canApply() ? 0 : 1;
+    return result.canApply() && outputComplexityPassed ? 0 : 1;
 }

@@ -3,15 +3,22 @@ param(
     [Parameter(Mandatory = $true)][string]$SourceStep,
     [Parameter(Mandatory = $true, ParameterSetName = "Candidate")][int]$CandidateId,
     [Parameter(Mandatory = $true, ParameterSetName = "Faces")][long[]]$FaceIds,
+    [ValidateSet("legacy", "target", "adaptive")][string]$PatchMode = "legacy",
+    [int]$RequestedPatchCount = 0,
+    [int]$PatchCountSearchRadius = 0,
+    [ValidateSet("minimum-qualified")][string]$AdaptiveObjective = "minimum-qualified",
+    [int]$AdaptiveSafetyCap = 12,
     [ValidateSet("adaptive", "fixed")][string]$Layout = "adaptive",
     [int]$PatchCount = 0,
     [ValidateSet("adaptive-occt", "quality-balanced", "uv-uniform")][string]$SamplingMode = "adaptive-occt",
     [long]$TargetSampleTriangles = 80000,
+    [ValidateSet("adaptive-occt", "quality-balanced", "uv-uniform")][string]$LayoutCarrierSamplingMode = "quality-balanced",
+    [long]$TargetLayoutCarrierTriangles = 80000,
     [int]$MaximumFullFitCount = 3,
     [switch]$BestEffortThroughSewing,
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
-    [long]$InputReadBudgetMilliseconds = 10000,
+    [long]$InputReadBudgetMilliseconds = 60000,
     [long]$MaximumMemoryMiB = 8192,
     [ValidateSet("disabled", "read-write", "read-only", "refresh")][string]$CachePolicy = "disabled",
     [string]$CacheDir = "",
@@ -31,8 +38,14 @@ $sourcePath = [System.IO.Path]::GetFullPath($SourceStep)
 if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
     throw "STEP source does not exist: $sourcePath"
 }
-if ($Layout -eq "fixed" -and $PatchCount -le 0) {
+if ($PatchMode -eq "legacy" -and $Layout -eq "fixed" -and $PatchCount -le 0) {
     throw "Fixed layout requires -PatchCount greater than zero."
+}
+if ($PatchMode -eq "target" -and ($RequestedPatchCount -le 0 -or $PatchCountSearchRadius -lt 0)) {
+    throw "Target patch mode requires positive -RequestedPatchCount and non-negative -PatchCountSearchRadius."
+}
+if ($PatchMode -eq "adaptive" -and $AdaptiveSafetyCap -le 0) {
+    throw "Adaptive patch mode requires positive -AdaptiveSafetyCap."
 }
 if ($TargetSampleTriangles -le 0 -or $MaximumFullFitCount -le 0) {
     throw "Sampling target and maximum full fit count must be positive."
@@ -43,7 +56,7 @@ if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent +
 }
 
 $candidateToken = if ($PSCmdlet.ParameterSetName -eq "Candidate") { [string]$CandidateId } else { "faces" }
-$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } elseif ($LayoutOnly) { "layout" } elseif ($FitOnly) { "fit" } else { $Layout }
+$variant = if ($ConstraintsOnly) { "constraints" } elseif ($SamplingOnly) { "sampling" } elseif ($LayoutOnly) { "layout" } elseif ($FitOnly) { "fit" } elseif ($PatchMode -ne "legacy") { $PatchMode } else { $Layout }
 $context = New-SpoRunContext `
     -RepoRoot $repoRoot `
     -Workflow "native-region-refit" `
@@ -65,8 +78,20 @@ if ($PSCmdlet.ParameterSetName -eq "Candidate") {
 } else {
     $baseArguments += @("--faces", ($FaceIds -join ","))
 }
-$baseArguments += @("--layout", $Layout)
-if ($PatchCount -gt 0) {
+$baseArguments += if ($PatchMode -eq "legacy") {
+    @("--layout", $Layout)
+} else {
+    @("--patch-mode", $PatchMode)
+}
+if ($PatchMode -eq "target") {
+    $baseArguments += @(
+        "--requested-patch-count", [string]$RequestedPatchCount,
+        "--patch-count-search-radius", [string]$PatchCountSearchRadius)
+} elseif ($PatchMode -eq "adaptive") {
+    $baseArguments += @(
+        "--adaptive-objective", $AdaptiveObjective,
+        "--adaptive-safety-cap", [string]$AdaptiveSafetyCap)
+} elseif ($PatchCount -gt 0) {
     $baseArguments += @("--patch-count", [string]$PatchCount)
 }
 if ($LockedEdgeIds.Count -gt 0) {
@@ -75,6 +100,8 @@ if ($LockedEdgeIds.Count -gt 0) {
 $baseArguments += @(
     "--sampling-mode", $SamplingMode,
     "--target-sample-triangles", [string]$TargetSampleTriangles,
+    "--layout-carrier-sampling-mode", $LayoutCarrierSamplingMode,
+    "--target-layout-carrier-triangles", [string]$TargetLayoutCarrierTriangles,
     "--maximum-full-fit-count", [string]$MaximumFullFitCount,
     "--wall-time-ms", [string]$WallTimeMilliseconds,
     "--input-read-budget-ms", [string]$InputReadBudgetMilliseconds,
@@ -310,6 +337,10 @@ $samplingStl = Join-Path $context.directories.artifacts "sampling\adaptive_refer
 if (Test-Path -LiteralPath $samplingStl -PathType Leaf) {
     $artifacts["adaptive_sampling_stl"] = $samplingStl
 }
+$layoutCarrierStl = Join-Path $context.directories.artifacts "sampling\layout_carrier.stl"
+if (Test-Path -LiteralPath $layoutCarrierStl -PathType Leaf) {
+    $artifacts["layout_carrier_stl"] = $layoutCarrierStl
+}
 $layoutJson = Join-Path $context.directories.artifacts "layout\selected_layout.json"
 $layoutPly = Join-Path $context.directories.artifacts "layout\selected_layout.ply"
 $layoutSvg = Join-Path $context.directories.artifacts "layout\selected_layout.svg"
@@ -330,9 +361,9 @@ $bestEffortPatchNetwork = Join-Path $context.directories.artifacts "fit\best_eff
 if (Test-Path -LiteralPath $bestEffortPatchNetwork -PathType Leaf) {
     $artifacts["best_effort_fitted_patch_network_step"] = $bestEffortPatchNetwork
 }
-$finalSewn = Join-Path $context.directories.artifacts "assembly\final_sewn.step"
-if (Test-Path -LiteralPath $finalSewn -PathType Leaf) {
-    $artifacts["final_sewn_step"] = $finalSewn
+$cadCheckCandidate = Join-Path $context.directories.artifacts "assembly\cad_check_candidate.step"
+if (Test-Path -LiteralPath $cadCheckCandidate -PathType Leaf) {
+    $artifacts["cad_check_candidate_step"] = $cadCheckCandidate
 }
 $sewnAttempt = Join-Path $context.directories.artifacts "assembly\sewn_attempt.step"
 if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
@@ -341,11 +372,22 @@ if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
 
 $evidenceDefinitions = @(
     [ordered]@{ name = "adaptive_sampling_stl"; path = $samplingStl; stage = "Sampling"; required = $true; validated = (Test-Path -LiteralPath $samplingStl -PathType Leaf) },
+    [ordered]@{ name = "layout_carrier_stl"; path = $layoutCarrierStl; stage = "Sampling"; required = $true; validated = (Test-Path -LiteralPath $layoutCarrierStl -PathType Leaf) },
     [ordered]@{ name = "selected_layout_visualization"; path = $layoutSvg; stage = "Layout"; required = $true; validated = (Test-Path -LiteralPath $layoutSvg -PathType Leaf) },
     [ordered]@{ name = "fitted_patch_network_step"; path = $fittedPatchNetwork; stage = "Fitting"; required = $false; validated = ($primaryRun.exit_code -eq 0) },
     [ordered]@{ name = "best_effort_fitted_patch_network_step"; path = $bestEffortPatchNetwork; stage = "Fitting"; required = $false; validated = $false },
-    [ordered]@{ name = "final_sewn_step"; path = $finalSewn; stage = "StepRoundtrip"; required = ($primaryRun.exit_code -eq 0); validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "sewn_attempt_step"; path = $sewnAttempt; stage = "StepRoundtrip"; required = $false; validated = $false }
+    [ordered]@{ name = "cad_check_candidate_step"; path = $cadCheckCandidate; stage = "StepRoundtrip"; required = ($primaryRun.exit_code -eq 0); validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "sewn_attempt_step"; path = $sewnAttempt; stage = "StepRoundtrip"; required = $false; validated = $false },
+    [ordered]@{ name = "sampling_report"; path = (Join-Path $context.directories.diagnostics "sampling_report.json"); stage = "Sampling"; required = $true; validated = $true },
+    [ordered]@{ name = "layout_report"; path = (Join-Path $context.directories.diagnostics "layout_report.json"); stage = "Layout"; required = $true; validated = $true },
+    [ordered]@{ name = "fit_report"; path = (Join-Path $context.directories.diagnostics "fit_report.json"); stage = "Fitting"; required = $true; validated = $true },
+    [ordered]@{ name = "edge_consistency_report"; path = (Join-Path $context.directories.diagnostics "edge_consistency_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "triangulation_report"; path = (Join-Path $context.directories.diagnostics "triangulation_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "retrim_report"; path = (Join-Path $context.directories.diagnostics "retrim_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "sewing_report"; path = (Join-Path $context.directories.diagnostics "sewing_report.json"); stage = "Sewing"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "strict_topology_report"; path = (Join-Path $context.directories.diagnostics "strict_topology_report.json"); stage = "StrictTopology"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "output_complexity_report"; path = (Join-Path $context.directories.diagnostics "output_complexity_report.json"); stage = "StepRoundtrip"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "performance_report"; path = (Join-Path $context.directories.diagnostics "performance_report.json"); stage = "ExternalCad"; required = $true; validated = $true }
 )
 $evidence = @()
 foreach ($definition in $evidenceDefinitions) {

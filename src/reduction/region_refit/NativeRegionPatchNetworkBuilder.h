@@ -25,6 +25,7 @@ struct NativeRegionPatchNetworkBuildResult {
     int sameParameterFailureCount = 0;
     int brepValidationFailureCount = 0;
     double maximumSameParameterDeviation = 0.0;
+    std::vector<RegionEdgeConsistencyReport> edgeConsistency;
 
     bool success() const;
     bool constructible() const;

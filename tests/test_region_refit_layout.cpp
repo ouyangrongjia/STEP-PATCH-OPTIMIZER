@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <map>
 #include <set>
 
 namespace {
@@ -70,6 +71,42 @@ void test_fixed_layout_has_exact_patch_count_and_disk_parameterizations() {
         return !patch.triangleIndices.empty() && !patch.boundaryLoop.empty() &&
             patch.flippedTriangleCount == 0;
     }));
+    for (const auto& patch : layout.patches) {
+        assert(std::all_of(patch.parameters.begin(), patch.parameters.end(), [](const auto& uv) {
+            return uv[0] >= 0.0 && uv[0] <= 1.0 && uv[1] >= 0.0 && uv[1] <= 1.0;
+        }));
+        std::map<std::size_t, std::array<double, 2>> parameters;
+        for (std::size_t index = 0; index < patch.vertexIndices.size(); ++index) {
+            parameters.emplace(patch.vertexIndices[index], patch.parameters[index]);
+        }
+        for (std::size_t side = 0; side < patch.boundarySides.size(); ++side) {
+            assert(patch.boundarySides[side].size() >= 2);
+            for (const auto vertex : patch.boundarySides[side]) {
+                const auto uv = parameters.at(vertex);
+                if (side == 0) assert(std::abs(uv[1]) <= 1.0e-12);
+                if (side == 1) assert(std::abs(uv[0] - 1.0) <= 1.0e-12);
+                if (side == 2) assert(std::abs(uv[1] - 1.0) <= 1.0e-12);
+                if (side == 3) assert(std::abs(uv[0]) <= 1.0e-12);
+            }
+        }
+    }
+}
+
+void test_target_layout_uses_requested_first_then_alternating_deviation_order() {
+    const auto mesh = makeGrid(18, 14);
+    spo::RegionRefitOptions options;
+    options.requestedPatchCount = 4;
+    options.patchCountSearchRadius = 2;
+    options.maximumParameterDistortion = 1000.0;
+    const auto generated = spo::RegionPatchLayoutGenerator().generate(
+        mesh, spo::RegionRefitLayoutMode::TargetPatchCount, options);
+
+    assert(generated.success());
+    assert(generated.selectedCandidates.size() == 1);
+    assert(generated.selectedCandidates.front().patchCount == 4);
+    std::vector<int> counts;
+    for (const auto& candidate : generated.candidates) counts.push_back(candidate.patchCount);
+    assert(counts == std::vector<int>({4, 3, 5, 2, 6}));
 }
 
 void test_adaptive_layout_is_deterministic_and_screens_at_most_three() {
@@ -121,6 +158,7 @@ void test_layout_rejects_disconnected_reference_mesh() {
 
 void run_region_refit_layout_tests() {
     test_fixed_layout_has_exact_patch_count_and_disk_parameterizations();
+    test_target_layout_uses_requested_first_then_alternating_deviation_order();
     test_adaptive_layout_is_deterministic_and_screens_at_most_three();
     test_layout_rejects_disconnected_reference_mesh();
 }

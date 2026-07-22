@@ -23,7 +23,12 @@ struct RegionFittedPatchNetwork;
 
 enum class RegionRefitLayoutMode {
     FixedPatchCount,
+    TargetPatchCount,
     Adaptive
+};
+
+enum class RegionRefitAdaptiveObjective {
+    MinimumQualified
 };
 
 enum class RegionRefitSamplingMode {
@@ -77,6 +82,7 @@ enum class RegionRefitCachePolicy {
 };
 
 const char* toString(RegionRefitLayoutMode mode);
+const char* toString(RegionRefitAdaptiveObjective objective);
 const char* toString(RegionRefitSamplingMode mode);
 const char* toString(RegionRefitExecutionMode mode);
 const char* toString(RegionRefitStatus status);
@@ -86,29 +92,35 @@ const char* toString(RegionRefitCachePolicy policy);
 
 struct RegionRefitOptions {
     RegionRefitSamplingMode samplingMode = RegionRefitSamplingMode::AdaptiveOcct;
+    RegionRefitSamplingMode layoutCarrierSamplingMode = RegionRefitSamplingMode::QualityBalanced;
     double tolerance3d = 0.03;
     double normalToleranceDegrees = 15.0;
     double curveOnSurfaceTolerance = 0.001;
     std::size_t maximumSampleTriangles = 200000;
     std::size_t targetSampleTriangles = 80000;
+    std::size_t targetLayoutCarrierTriangles = 80000;
     int maximumRemeshSweeps = 8;
     double maximumLocalSizeRatio = 1.5;
     int fixedPatchCount = 0;
+    int requestedPatchCount = 0;
+    int patchCountSearchRadius = 0;
+    RegionRefitAdaptiveObjective adaptiveObjective = RegionRefitAdaptiveObjective::MinimumQualified;
     int maximumAdaptivePatchCount = 12;
     int maximumFullFitCount = 3;
     int maximumFitIterations = 20;
     std::int64_t maximumWallClockMilliseconds = 900000;
-    std::int64_t inputReadBudgetMilliseconds = 10000;
+    std::int64_t inputReadBudgetMilliseconds = 60000;
     std::int64_t constraintsBudgetMilliseconds = 10000;
-    std::int64_t samplingBudgetMilliseconds = 90000;
+    std::int64_t samplingBudgetMilliseconds = 30000;
     std::int64_t layoutBudgetMilliseconds = 60000;
-    std::int64_t singleFitBudgetMilliseconds = 180000;
-    std::int64_t totalFitBudgetMilliseconds = 450000;
-    std::int64_t retrimBudgetMilliseconds = 90000;
-    std::int64_t finalValidationBudgetMilliseconds = 180000;
+    std::int64_t singleFitBudgetMilliseconds = 90000;
+    std::int64_t totalFitBudgetMilliseconds = 270000;
+    std::int64_t retrimBudgetMilliseconds = 45000;
+    std::int64_t finalValidationBudgetMilliseconds = 210000;
     std::size_t maximumMemoryMiB = 8192;
     std::size_t solverMemoryPreflightMiB = 7168;
     double maximumParameterDistortion = 100.0;
+    int maximumControlPointsPerSide = 25;
     RegionRefitCachePolicy cachePolicy = RegionRefitCachePolicy::Disabled;
     std::filesystem::path cacheDirectory;
     std::string inputStepSha256;
@@ -174,6 +186,7 @@ struct RegionLayoutCandidateReport {
     std::size_t matrixRows = 0;
     std::size_t matrixNonZeros = 0;
     std::uint64_t estimatedSolverBytes = 0;
+    std::uint64_t estimatedOutputEntities = 0;
     double wallMilliseconds = 0.0;
     std::string layoutHash;
     std::string rejectionReason;
@@ -218,6 +231,31 @@ struct RegionFitAttemptReport {
     std::vector<RegionFitIterationReport> iterations;
 };
 
+struct RegionEdgeConsistencyReport {
+    int edgeIndex = -1;
+    bool internalSeam = false;
+    bool sharedSameEdge = false;
+    int expectedFaceUseCount = 0;
+    int actualFaceUseCount = 0;
+    bool freeEdge = false;
+    bool multipleEdge = false;
+    bool sameRange = false;
+    bool sameParameter = false;
+    double curveOnSurfaceMaximumDeviation = 0.0;
+    double curveOnSurfaceP95Deviation = 0.0;
+    double curveOnSurfaceRmsDeviation = 0.0;
+    double adjacentSurfaceMaximumSeparation = 0.0;
+    double adjacentSurfaceMaximumNormalDegrees = 0.0;
+    double worstParameter = 0.0;
+    std::vector<double> triangulationDeflections;
+    std::vector<double> triangulationPolylineSeparations;
+    std::string classification;
+};
+
+std::string classifyRegionEdgeConsistency(
+    const RegionEdgeConsistencyReport& report,
+    double tolerance);
+
 struct RegionRefitCacheEvent {
     std::string layer;
     bool hit = false;
@@ -234,6 +272,12 @@ struct RegionRefitReport {
     int inputFaceCount = 0;
     int outputFaceCount = 0;
     int selectedPatchCount = 0;
+    int requestedPatchCount = 0;
+    int patchCountDeviation = 0;
+    bool exactTargetReached = false;
+    bool minimumQualifiedProven = false;
+    std::string selectionOutcome;
+    std::string unattainableReason;
     int fullFitCount = 0;
     int cachedFitAttemptCount = 0;
     std::string selectedLayoutHash;
@@ -264,6 +308,14 @@ struct RegionRefitReport {
     std::size_t samplingRemeshFlipCount = 0;
     std::size_t samplingRemeshRelocationCount = 0;
     std::string referenceMeshFingerprint;
+    std::size_t layoutCarrierVertexCount = 0;
+    std::size_t layoutCarrierTriangleCount = 0;
+    std::size_t layoutCarrierBoundarySampleCount = 0;
+    std::size_t layoutCarrierZeroAreaTriangleCount = 0;
+    std::size_t layoutCarrierNonManifoldEdgeCount = 0;
+    double layoutCarrierMinimumAngleP05Degrees = 0.0;
+    double layoutCarrierAspectRatioP95 = 0.0;
+    std::string layoutCarrierMeshFingerprint;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
     bool fitGatePassed = false;
@@ -280,6 +332,7 @@ struct RegionRefitReport {
     int retrimSameParameterCheckCount = 0;
     int retrimSameParameterFailureCount = 0;
     double retrimMaximumSameParameterDeviation = 0.0;
+    std::vector<RegionEdgeConsistencyReport> edgeConsistency;
     bool assemblyPassed = false;
     bool repairPassed = false;
     bool sewingAttempted = false;
@@ -320,6 +373,7 @@ struct RegionRefitResult {
     RegionRefitReport report;
     RegionTopologyConstraints constraints;
     std::shared_ptr<RegionReferenceMesh> referenceMesh;
+    std::shared_ptr<RegionReferenceMesh> layoutCarrierMesh;
     std::shared_ptr<RegionPatchLayout> selectedLayout;
     std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;

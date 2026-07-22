@@ -1,13 +1,45 @@
 #include "reduction/region_refit/RegionalSurfaceRefitTypes.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace spo {
+
+std::string classifyRegionEdgeConsistency(
+    const RegionEdgeConsistencyReport& report,
+    const double tolerance) {
+    const auto triangulationMismatch = std::any_of(
+        report.triangulationPolylineSeparations.begin(),
+        report.triangulationPolylineSeparations.end(),
+        [&](const auto separation) { return separation > tolerance; });
+    if (report.freeEdge || report.multipleEdge || !report.sharedSameEdge) {
+        return "TopologicalOpening";
+    }
+    if (!std::isfinite(report.curveOnSurfaceMaximumDeviation) ||
+        report.curveOnSurfaceMaximumDeviation > tolerance ||
+        !report.sameRange || !report.sameParameter) {
+        return "CurveOnSurfaceMismatch";
+    }
+    if (report.adjacentSurfaceMaximumSeparation > tolerance) {
+        return "AdjacentSurfaceSeparation";
+    }
+    return triangulationMismatch ? "TriangulationArtifact" : "Passed";
+}
 
 const char* toString(const RegionRefitLayoutMode mode) {
     switch (mode) {
     case RegionRefitLayoutMode::FixedPatchCount: return "FixedPatchCount";
+    case RegionRefitLayoutMode::TargetPatchCount: return "TargetPatchCount";
     case RegionRefitLayoutMode::Adaptive: return "Adaptive";
     }
     return "Adaptive";
+}
+
+const char* toString(const RegionRefitAdaptiveObjective objective) {
+    switch (objective) {
+    case RegionRefitAdaptiveObjective::MinimumQualified: return "MinimumQualified";
+    }
+    return "MinimumQualified";
 }
 
 const char* toString(const RegionRefitSamplingMode mode) {
