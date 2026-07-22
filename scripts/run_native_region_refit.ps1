@@ -116,8 +116,13 @@ function Invoke-NativeRegionRefitProbe {
     $stdout = Join-Path $LogDirectory "probe.stdout.log"
     $stderr = Join-Path $LogDirectory "probe.stderr.log"
     $arguments = @($baseArguments) + @("--run-identity", $Identity)
+    $runWallBudgetMilliseconds = $WallTimeMilliseconds
     if ($PerformanceOnly) {
         $arguments += "--performance-only"
+        if ($PerformanceAcceptance) {
+            $runWallBudgetMilliseconds = [Math]::Min($runWallBudgetMilliseconds, 300000L)
+            $arguments += @("--wall-time-ms", [string]$runWallBudgetMilliseconds)
+        }
     }
     $started = Get-Date
     $process = Start-Process `
@@ -130,7 +135,7 @@ function Invoke-NativeRegionRefitProbe {
         -RedirectStandardError $stderr
     $timeoutMilliseconds = [Math]::Min(
         [int]::MaxValue,
-        [long]$WallTimeMilliseconds + 30000L)
+        [long]$runWallBudgetMilliseconds + 30000L)
     $completed = $process.WaitForExit([int]$timeoutMilliseconds)
     if (-not $completed) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
