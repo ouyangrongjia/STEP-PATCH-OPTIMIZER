@@ -492,7 +492,8 @@ ValidationMetrics validateNetwork(
             }
             if (bucket < 9) {
                 metrics.selectionMaximumDistance = std::max(metrics.selectionMaximumDistance, distance);
-                metrics.selectionResiduals.push_back({static_cast<int>(patch), uv[0], uv[1], distance});
+                metrics.selectionResiduals.push_back({
+                    static_cast<int>(patch), projection.u, projection.v, distance});
             } else {
                 metrics.holdoutDistances.push_back(distance);
                 if (distance > metrics.holdoutMaximumDistance) {
@@ -543,6 +544,38 @@ ValidationMetrics validateNetwork(
     metrics.holdout95Distance = percentile95(metrics.holdoutDistances);
     metrics.holdout95NormalDegrees = percentile95(metrics.holdoutNormalDegrees);
     return metrics;
+}
+
+struct ParameterUpdateStats {
+    std::size_t projectionCount = 0;
+    std::size_t uvIterationCount = 0;
+    std::size_t projectionFallbackCount = 0;
+};
+
+ParameterUpdateStats updateClosestPointParameters(
+    const RegionReferenceMesh& mesh,
+    RegionPatchLayout& layout,
+    const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
+    ParameterUpdateStats stats;
+    for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
+        auto& parameterization = layout.patches[patch];
+        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
+            const auto initial = normalizedParameter(parameterization.parameters[local]);
+            const auto projection = projectToSurface(
+                surfaces[patch],
+                mesh.vertices[parameterization.vertexIndices[local]].point,
+                initial);
+            ++stats.projectionCount;
+            stats.uvIterationCount += projection.iterationCount;
+            stats.projectionFallbackCount += projection.fallbackCount;
+            if (std::isfinite(projection.u) && std::isfinite(projection.v)) {
+                parameterization.parameters[local] = {
+                    projection.u * 2.0 - 1.0,
+                    projection.v * 2.0 - 1.0};
+            }
+        }
+    }
+    return stats;
 }
 
 bool insertResidualKnot(
@@ -652,11 +685,12 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         const auto attemptDeadline = std::min(
             deadline,
             attemptStarted + std::chrono::milliseconds(options.singleFitBudgetMilliseconds));
+        RegionPatchLayout workingLayout = candidates[candidateIndex];
         const auto& layout = candidates[candidateIndex];
         RegionFitAttemptReport attempt;
         attempt.patchCount = layout.patchCount;
         attempt.layoutHash = layout.hash;
-        const auto lookups = buildLookups(layout);
+        const auto lookups = buildLookups(workingLayout);
         std::vector<KnotConfiguration> knots(static_cast<std::size_t>(layout.patchCount));
         double previousSelection = std::numeric_limits<double>::infinity();
         int lowImprovementRounds = 0;
@@ -688,11 +722,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 const auto& patchKnots = knots[static_cast<std::size_t>(patch)];
                 controlVariableCount += patchKnots.uControlCount() * patchKnots.vControlCount();
             }
-            const auto seamSamples = buildSeamSamples(layout);
+            const auto seamSamples = buildSeamSamples(workingLayout);
             const auto variableCount = controlVariableCount;
             const auto rows = buildSystemRows(
                 mesh,
-                layout,
+                workingLayout,
                 knots,
                 variableOffsets,
                 lookups,
@@ -783,7 +817,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         solution,
                         variableOffsets[static_cast<std::size_t>(patch)]));
                 }
-                const auto metrics = validateNetwork(mesh, layout, lookups, surfaces);
+                const auto metrics = validateNetwork(mesh, workingLayout, lookups, surfaces);
                 linearizationSurfaces = surfaces;
                 iterationReport.trainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.projectionCount = metrics.projectionCount;
@@ -821,7 +855,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         std::chrono::steady_clock::now() - attemptStarted).count();
                     result.attempts.push_back(attempt);
                     auto network = std::make_shared<RegionFittedPatchNetwork>();
-                    network->layout = layout;
+                    network->layout = workingLayout;
                     network->surfaces = std::move(surfaces);
                     network->inspectionShape = inspectionShape(network->surfaces);
                     network->holdoutMaximumDistance = metrics.holdoutMaximumDistance;
@@ -839,6 +873,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 lowImprovementRounds = iteration >= maximumIterations - 3 && improvement < 0.01
                     ? lowImprovementRounds + 1 : 0;
                 previousSelection = metrics.selectionMaximumDistance;
+                const auto parameterUpdate = updateClosestPointParameters(
+                    mesh, workingLayout, surfaces);
+                iterationReport.projectionCount += parameterUpdate.projectionCount;
+                iterationReport.uvIterationCount += parameterUpdate.uvIterationCount;
+                iterationReport.projectionFallbackCount += parameterUpdate.projectionFallbackCount;
                 if (lowImprovementRounds >= 2) {
                     iterationReport.stopReason = "Two consecutive mature-grid rounds improved less than 1%.";
                     attempt.stopReason = iterationReport.stopReason;

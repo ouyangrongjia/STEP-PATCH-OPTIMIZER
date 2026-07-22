@@ -335,19 +335,6 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
-    const auto reservedMilliseconds = request.options.retrimBudgetMilliseconds +
-        request.options.finalValidationBudgetMilliseconds;
-    const auto fitBudgetMilliseconds = std::min(
-        request.options.totalFitBudgetMilliseconds,
-        request.options.maximumWallClockMilliseconds -
-            static_cast<std::int64_t>(result.report.totalWallMilliseconds) -
-            reservedMilliseconds);
-    if (fitBudgetMilliseconds <= 0) {
-        result.report.status = RegionRefitStatus::TimeBudgetExceeded;
-        result.report.failureStage = RegionRefitStage::Fitting;
-        result.report.message = "Insufficient wall-clock budget remains for fitting and reserved final validation.";
-        return result;
-    }
     const auto fittingResources = captureRegionProcessResources();
     const auto fittingStarted = std::chrono::steady_clock::now();
     JointBSplineNetworkFitResult fitted;
@@ -355,18 +342,30 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto fitCacheHit = cache.loadFit(
         layouts.selectedCandidates, fitted, fitCacheEvent);
     if (!fitCacheHit) {
-        fitted = JointBSplineNetworkFitter().fit(
-            *result.referenceMesh,
-            result.constraints,
-            layouts.selectedCandidates,
-            request.options,
-            fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
-        if (cache.enabled()) {
-            const auto writeEvent = cache.saveFit(fitted);
-            fitCacheEvent.negativeEntry = writeEvent.negativeEntry;
-            fitCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
-            if (!writeEvent.message.empty()) {
-                fitCacheEvent.message += " " + writeEvent.message;
+        const auto reservedMilliseconds = request.options.retrimBudgetMilliseconds +
+            request.options.finalValidationBudgetMilliseconds;
+        const auto fitBudgetMilliseconds = std::min(
+            request.options.totalFitBudgetMilliseconds,
+            request.options.maximumWallClockMilliseconds -
+                static_cast<std::int64_t>(result.report.totalWallMilliseconds) -
+                reservedMilliseconds);
+        if (fitBudgetMilliseconds <= 0) {
+            fitted.status = RegionRefitStatus::TimeBudgetExceeded;
+            fitted.message = "Insufficient wall-clock budget remains for fitting and reserved final validation.";
+        } else {
+            fitted = JointBSplineNetworkFitter().fit(
+                *result.referenceMesh,
+                result.constraints,
+                layouts.selectedCandidates,
+                request.options,
+                fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
+            if (cache.enabled()) {
+                const auto writeEvent = cache.saveFit(fitted);
+                fitCacheEvent.negativeEntry = writeEvent.negativeEntry;
+                fitCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
+                if (!writeEvent.message.empty()) {
+                    fitCacheEvent.message += " " + writeEvent.message;
+                }
             }
         }
     }
