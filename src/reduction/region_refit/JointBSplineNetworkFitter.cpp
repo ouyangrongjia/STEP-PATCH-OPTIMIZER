@@ -84,6 +84,9 @@ struct ValidationMetrics {
     std::vector<ResidualSample> selectionResiduals;
     std::vector<double> holdoutDistances;
     std::vector<double> holdoutNormalDegrees;
+    std::size_t projectionCount = 0;
+    std::size_t uvIterationCount = 0;
+    std::size_t projectionFallbackCount = 0;
 };
 
 std::vector<double> fullKnotVector(const std::vector<double>& unique) {
@@ -403,6 +406,8 @@ struct SurfaceProjection {
     double u = 0.0;
     double v = 0.0;
     double distance = std::numeric_limits<double>::infinity();
+    std::size_t iterationCount = 0;
+    std::size_t fallbackCount = 0;
 };
 
 SurfaceProjection projectToSurface(
@@ -415,6 +420,7 @@ SurfaceProjection projectToSurface(
     surface->D1(best.u, best.v, best.point, best.du, best.dv);
     best.distance = best.point.Distance(target);
     for (int iteration = 0; iteration < 12; ++iteration) {
+        ++best.iterationCount;
         const gp_Vec residual(target, best.point);
         const auto first = best.du.SquareMagnitude();
         const auto mixed = best.du.Dot(best.dv);
@@ -430,6 +436,7 @@ SurfaceProjection projectToSurface(
         }
         bool accepted = false;
         for (int lineSearch = 0; lineSearch < 8; ++lineSearch) {
+            if (lineSearch > 0) ++best.fallbackCount;
             const auto candidateU = std::clamp(best.u + deltaU, 0.0, 1.0);
             const auto candidateV = std::clamp(best.v + deltaV, 0.0, 1.0);
             gp_Pnt candidatePoint;
@@ -475,6 +482,9 @@ ValidationMetrics validateNetwork(
                 continue;
             }
             const auto projection = projectToSurface(surfaces[patch], vertex.point, uv);
+            ++metrics.projectionCount;
+            metrics.uvIterationCount += projection.iterationCount;
+            metrics.projectionFallbackCount += projection.fallbackCount;
             const auto distance = projection.distance;
             if (vertex.boundary) {
                 metrics.boundaryMaximumDistance = std::max(metrics.boundaryMaximumDistance, distance);
@@ -754,7 +764,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             }
             const Eigen::MatrixXd normalTargets = scaledMatrix.transpose() * targets;
             Eigen::MatrixXd solution = solver.solve(normalTargets);
-            iterationReport.symbolicFactorizationReuseCount = 2;
+                iterationReport.symbolicFactorizationReuseCount = 2;
             if (solver.info() != Eigen::Success || !solution.allFinite()) {
                 iterationReport.stopReason = "Joint-fit solve failed.";
                 attempt.iterations.push_back(iterationReport);
@@ -776,6 +786,9 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 const auto metrics = validateNetwork(mesh, layout, lookups, surfaces);
                 linearizationSurfaces = surfaces;
                 iterationReport.trainingMaximumDistance = metrics.trainingMaximumDistance;
+                iterationReport.projectionCount = metrics.projectionCount;
+                iterationReport.uvIterationCount = metrics.uvIterationCount;
+                iterationReport.projectionFallbackCount = metrics.projectionFallbackCount;
                 iterationReport.selectionMaximumDistance = metrics.selectionMaximumDistance;
                 iterationReport.holdoutMaximumDistance = metrics.holdoutMaximumDistance;
                 iterationReport.holdoutMaximumNormalDegrees = metrics.holdoutMaximumNormalDegrees;

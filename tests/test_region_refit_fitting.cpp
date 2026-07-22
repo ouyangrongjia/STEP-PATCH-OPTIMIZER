@@ -1,5 +1,6 @@
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/NativeRegionPatchNetworkBuilder.h"
+#include "reduction/region_refit/RegionalSurfaceRefitCache.h"
 
 #include "brep/ShapeDocument.h"
 
@@ -17,6 +18,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <filesystem>
 
 namespace {
 
@@ -203,6 +205,76 @@ void test_native_patch_network_reuses_shared_edges_and_builds_two_faces() {
     assert(commonFaceEdgeCount == 1);
 }
 
+void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
+    const auto token = std::to_string(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto cacheDirectory = std::filesystem::temp_directory_path() /
+        ("spo-region-refit-cache-" + token);
+    spo::RegionRefitRequest request;
+    request.selectedFaces = {4, 2};
+    request.layoutMode = spo::RegionRefitLayoutMode::FixedPatchCount;
+    request.options.fixedPatchCount = 2;
+    request.options.maximumParameterDistortion = 1000.0;
+    request.options.inputStepSha256 = std::string(64, 'a');
+    request.options.algorithmFingerprint = "cache-unit-test";
+    request.options.cachePolicy = spo::RegionRefitCachePolicy::ReadWrite;
+    request.options.cacheDirectory = cacheDirectory;
+    const spo::RegionalSurfaceRefitCache cache(request);
+    assert(cache.enabled());
+    assert(!cache.key().empty());
+
+    spo::StepAdaptiveRegionSamplingResult sampling;
+    sampling.mesh = makePlanarFitMesh(10);
+    sampling.report.status = spo::RegionRefitStatus::Success;
+    sampling.report.message = "Synthetic sampling.";
+    sampling.report.vertexCount = sampling.mesh.vertices.size();
+    sampling.report.triangleCount = sampling.mesh.triangles.size();
+    sampling.report.meshFingerprint = sampling.mesh.deterministicFingerprint();
+    const auto samplingWrite = cache.saveSampling(sampling);
+    assert(samplingWrite.writeMilliseconds >= 0.0);
+    spo::StepAdaptiveRegionSamplingResult loadedSampling;
+    spo::RegionRefitCacheEvent samplingRead;
+    assert(cache.loadSampling(loadedSampling, samplingRead));
+    assert(samplingRead.hit);
+    assert(loadedSampling.report.meshFingerprint == sampling.report.meshFingerprint);
+
+    auto layouts = spo::RegionPatchLayoutGenerator().generate(
+        sampling.mesh,
+        request.layoutMode,
+        request.options);
+    assert(layouts.success());
+    cache.saveLayouts(layouts);
+    spo::RegionPatchLayoutGenerationResult loadedLayouts;
+    spo::RegionRefitCacheEvent layoutRead;
+    assert(cache.loadLayouts(loadedLayouts, layoutRead));
+    assert(layoutRead.hit);
+    assert(loadedLayouts.selectedCandidates.front().hash == layouts.selectedCandidates.front().hash);
+
+    spo::RegionRefitOptions fitOptions = request.options;
+    fitOptions.tolerance3d = 0.05;
+    fitOptions.curveOnSurfaceTolerance = 0.02;
+    fitOptions.normalToleranceDegrees = 1.0;
+    fitOptions.maximumFitIterations = 8;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        sampling.mesh,
+        {},
+        layouts.selectedCandidates,
+        fitOptions,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+    assert(fitted.success());
+    cache.saveFit(fitted);
+    spo::JointBSplineNetworkFitResult loadedFit;
+    spo::RegionRefitCacheEvent fitRead;
+    assert(cache.loadFit(layouts.selectedCandidates, loadedFit, fitRead));
+    assert(fitRead.hit);
+    assert(!fitRead.negativeEntry);
+    assert(loadedFit.success());
+    assert(loadedFit.network->surfaces.size() == fitted.network->surfaces.size());
+    assert(loadedFit.network->layout.hash == fitted.network->layout.hash);
+
+    std::filesystem::remove_all(cacheDirectory);
+}
+
 }
 
 void run_region_refit_fitting_tests() {
@@ -210,4 +282,5 @@ void run_region_refit_fitting_tests() {
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();
     test_native_patch_network_reuses_shared_edges_and_builds_two_faces();
+    test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit();
 }

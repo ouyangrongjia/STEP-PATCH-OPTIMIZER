@@ -8,7 +8,10 @@ param(
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
     [long]$MaximumMemoryMiB = 8192,
+    [ValidateSet("disabled", "read-write", "read-only", "refresh")][string]$CachePolicy = "disabled",
+    [string]$CacheDir = "",
     [string]$OutputDir = "",
+    [switch]$PerformanceAcceptance,
     [switch]$ConstraintsOnly,
     [switch]$SamplingOnly,
     [switch]$LayoutOnly,
@@ -48,49 +51,180 @@ if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) {
     throw "Probe is not built: $probe"
 }
 
-$arguments = @($sourcePath, $context.output_dir)
+$baseArguments = @($sourcePath, $context.output_dir)
 if ($PSCmdlet.ParameterSetName -eq "Candidate") {
-    $arguments += @("--candidate-id", [string]$CandidateId)
+    $baseArguments += @("--candidate-id", [string]$CandidateId)
 } else {
-    $arguments += @("--faces", ($FaceIds -join ","))
+    $baseArguments += @("--faces", ($FaceIds -join ","))
 }
-$arguments += @("--layout", $Layout)
+$baseArguments += @("--layout", $Layout)
 if ($PatchCount -gt 0) {
-    $arguments += @("--patch-count", [string]$PatchCount)
+    $baseArguments += @("--patch-count", [string]$PatchCount)
 }
 if ($LockedEdgeIds.Count -gt 0) {
-    $arguments += @("--locked-edges", ($LockedEdgeIds -join ","))
+    $baseArguments += @("--locked-edges", ($LockedEdgeIds -join ","))
 }
-$arguments += @(
+$baseArguments += @(
     "--wall-time-ms", [string]$WallTimeMilliseconds,
     "--max-memory-mib", [string]$MaximumMemoryMiB)
 if ($ConstraintsOnly) {
-    $arguments += "--constraints-only"
+    $baseArguments += "--constraints-only"
 } elseif ($SamplingOnly) {
-    $arguments += "--sampling-only"
+    $baseArguments += "--sampling-only"
 } elseif ($LayoutOnly) {
-    $arguments += "--layout-only"
+    $baseArguments += "--layout-only"
 } elseif ($FitOnly) {
-    $arguments += "--fit-only"
+    $baseArguments += "--fit-only"
 }
 
-$stdout = Join-Path $context.directories.logs "probe.stdout.log"
-$stderr = Join-Path $context.directories.logs "probe.stderr.log"
-$process = Start-Process `
-    -FilePath $probe `
-    -ArgumentList $arguments `
-    -WorkingDirectory $repoRoot `
-    -NoNewWindow `
-    -Wait `
-    -PassThru `
-    -RedirectStandardOutput $stdout `
-    -RedirectStandardError $stderr
+if ($PerformanceAcceptance) {
+    if ($CachePolicy -notin @("disabled", "read-write")) {
+        throw "Performance acceptance requires a writable cold/warm cache."
+    }
+    $CachePolicy = "read-write"
+    if (-not $CacheDir) {
+        $CacheDir = Join-Path $repoRoot "data\cache\native-region-refit\$($context.run_id)"
+    }
+    $CacheDir = [System.IO.Path]::GetFullPath($CacheDir)
+    if (Test-Path -LiteralPath $CacheDir) {
+        if (@(Get-ChildItem -LiteralPath $CacheDir -Force).Count -gt 0) {
+            throw "Cold performance cache directory must be uniquely empty: $CacheDir"
+        }
+    } else {
+        New-Item -ItemType Directory -Path $CacheDir -Force | Out-Null
+    }
+} elseif ($CachePolicy -ne "disabled") {
+    if (-not $CacheDir) {
+        throw "Non-disabled cache policy requires -CacheDir."
+    }
+    $CacheDir = [System.IO.Path]::GetFullPath($CacheDir)
+}
 
-$status = if ($process.ExitCode -eq 0) { "succeeded" } else { "failed" }
-$message = if ($process.ExitCode -eq 0) {
-    "Native regional refit probe completed."
+if ($CachePolicy -ne "disabled") {
+    $baseArguments += @("--cache-dir", $CacheDir, "--cache-policy", $CachePolicy)
+}
+$baseArguments += @("--commit", [string]$context.git.commit)
+
+function Invoke-NativeRegionRefitProbe {
+    param(
+        [Parameter(Mandatory = $true)][string]$Identity,
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [switch]$PerformanceOnly
+    )
+
+    New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+    $stdout = Join-Path $LogDirectory "probe.stdout.log"
+    $stderr = Join-Path $LogDirectory "probe.stderr.log"
+    $arguments = @($baseArguments) + @("--run-identity", $Identity)
+    if ($PerformanceOnly) {
+        $arguments += "--performance-only"
+    }
+    $started = Get-Date
+    $process = Start-Process `
+        -FilePath $probe `
+        -ArgumentList $arguments `
+        -WorkingDirectory $repoRoot `
+        -NoNewWindow `
+        -PassThru `
+        -RedirectStandardOutput $stdout `
+        -RedirectStandardError $stderr
+    $timeoutMilliseconds = [Math]::Min(
+        [int]::MaxValue,
+        [long]$WallTimeMilliseconds + 30000L)
+    $completed = $process.WaitForExit([int]$timeoutMilliseconds)
+    if (-not $completed) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        $exitCode = 124
+        Add-Content -LiteralPath $stderr -Encoding UTF8 -Value "Probe process exceeded the hard script timeout."
+    } else {
+        $process.WaitForExit()
+        $process.Refresh()
+        $exitCode = $process.ExitCode
+    }
+    return [pscustomobject]@{
+        identity = $Identity
+        exit_code = $exitCode
+        wall_ms = [long](((Get-Date) - $started).TotalMilliseconds)
+        stdout = $stdout
+        stderr = $stderr
+    }
+}
+
+$runs = @()
+if ($PerformanceAcceptance) {
+    $runs += Invoke-NativeRegionRefitProbe `
+        -Identity "cold" `
+        -LogDirectory (Join-Path $context.directories.logs "cold")
+    $runs += Invoke-NativeRegionRefitProbe `
+        -Identity "warm-1" `
+        -LogDirectory (Join-Path $context.directories.logs "warm\1") `
+        -PerformanceOnly
+    $runs += Invoke-NativeRegionRefitProbe `
+        -Identity "warm-2" `
+        -LogDirectory (Join-Path $context.directories.logs "warm\2") `
+        -PerformanceOnly
+
+    $performanceRuns = @()
+    foreach ($run in $runs) {
+        $path = Join-Path $context.directories.diagnostics "performance_$($run.identity).json"
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $performanceRuns += Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+    }
+    $cold = @($performanceRuns | Where-Object run_identity -eq "cold") | Select-Object -First 1
+    $warm = @($performanceRuns | Where-Object { $_.run_identity -like "warm-*" })
+    $signatures = @($performanceRuns | ForEach-Object {
+        "$($_.status)|$($_.selected_layout_hash)|$($_.selected_patch_count)|$($_.geometry_metrics | ConvertTo-Json -Compress)"
+    } | Select-Object -Unique)
+    $consistencyPassed = $performanceRuns.Count -eq 3 -and $signatures.Count -eq 1
+    $coldBudgetPassed = $null -ne $cold -and [double]$cold.core_total_ms -le 900000.0
+    $warmBudgetPassed = $warm.Count -eq 2 -and @($warm | Where-Object { [double]$_.core_total_ms -gt 300000.0 }).Count -eq 0
+    $memoryBudgetBytes = [uint64]$MaximumMemoryMiB * [uint64]1024 * [uint64]1024
+    $memoryPassed = $performanceRuns.Count -eq 3 -and @($performanceRuns | Where-Object {
+        [uint64]$_.peak_working_set_bytes -gt $memoryBudgetBytes -or
+        [uint64]$_.peak_private_bytes -gt $memoryBudgetBytes
+    }).Count -eq 0
+    $fitCountPassed = $performanceRuns.Count -eq 3 -and @($performanceRuns | Where-Object {
+        [int]$_.full_fit_count -gt 3
+    }).Count -eq 0
+    $algorithmPassed = $runs.Count -eq 3 -and @($runs | Where-Object exit_code -ne 0).Count -eq 0
+    $performancePassed = $algorithmPassed -and $coldBudgetPassed -and $warmBudgetPassed -and
+        $memoryPassed -and $fitCountPassed -and $consistencyPassed
+    [ordered]@{
+        schema_version = 1
+        passed = $performancePassed
+        cold_definition = "Fresh unique algorithm cache; operating-system file cache is not cleared."
+        limits = [ordered]@{
+            cold_wall_ms = 900000
+            warm_wall_ms = 300000
+            memory_bytes = $memoryBudgetBytes
+            maximum_full_fits = 3
+        }
+        gates = [ordered]@{
+            algorithm = $algorithmPassed
+            cold_wall = $coldBudgetPassed
+            warm_wall = $warmBudgetPassed
+            memory = $memoryPassed
+            full_fit_count = $fitCountPassed
+            deterministic_consistency = $consistencyPassed
+        }
+        runs = $performanceRuns
+    } | ConvertTo-Json -Depth 100 | Set-Content `
+        -LiteralPath (Join-Path $context.directories.diagnostics "performance_report.json") `
+        -Encoding UTF8
 } else {
-    "Native regional refit probe failed with exit code $($process.ExitCode)."
+    $runs += Invoke-NativeRegionRefitProbe `
+        -Identity "single" `
+        -LogDirectory $context.directories.logs
+    $performancePassed = $runs[0].exit_code -eq 0
+}
+
+$primaryRun = $runs[0]
+$status = if ($primaryRun.exit_code -eq 0 -and $performancePassed) { "succeeded" } else { "failed" }
+$message = if ($status -eq "succeeded") {
+    "Native regional refit probe and requested performance gates completed."
+} else {
+    "Native regional refit or performance acceptance failed; inspect diagnostics and logs."
 }
 $artifacts = [ordered]@{}
 $samplingStl = Join-Path $context.directories.artifacts "sampling\adaptive_reference.stl"
@@ -113,6 +247,36 @@ $fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch
 if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
     $artifacts["fitted_patch_network_step"] = $fittedPatchNetwork
 }
+$finalSewn = Join-Path $context.directories.artifacts "assembly\final_sewn.step"
+if (Test-Path -LiteralPath $finalSewn -PathType Leaf) {
+    $artifacts["final_sewn_step"] = $finalSewn
+}
+
+$evidenceDefinitions = @(
+    [ordered]@{ name = "adaptive_sampling_stl"; path = $samplingStl; stage = "Sampling"; required = $true },
+    [ordered]@{ name = "selected_layout_visualization"; path = $layoutSvg; stage = "Layout"; required = $true },
+    [ordered]@{ name = "final_sewn_step"; path = $finalSewn; stage = "StepRoundtrip"; required = $true }
+)
+$evidence = @()
+foreach ($definition in $evidenceDefinitions) {
+    $exists = Test-Path -LiteralPath $definition.path -PathType Leaf
+    $evidence += [ordered]@{
+        name = $definition.name
+        path = if ($exists) { [System.IO.Path]::GetRelativePath($context.output_dir, $definition.path) } else { "" }
+        sha256 = if ($exists) { (Get-FileHash -LiteralPath $definition.path -Algorithm SHA256).Hash } else { "" }
+        generated_stage = $definition.stage
+        required = $definition.required
+        validated = $exists -and ($definition.name -ne "final_sewn_step" -or $primaryRun.exit_code -eq 0)
+    }
+}
+[ordered]@{
+    schema_version = 1
+    run_id = $context.run_id
+    evidence = $evidence
+} | ConvertTo-Json -Depth 10 | Set-Content `
+    -LiteralPath (Join-Path $context.directories.diagnostics "evidence_manifest.json") `
+    -Encoding UTF8
+
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
 Write-Output $context.output_dir
-exit $process.ExitCode
+exit $(if ($status -eq "succeeded") { 0 } else { 1 })

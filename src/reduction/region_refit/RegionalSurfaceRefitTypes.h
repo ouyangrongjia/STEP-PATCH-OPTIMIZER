@@ -81,7 +81,7 @@ struct RegionRefitOptions {
     int maximumFullFitCount = 3;
     int maximumFitIterations = 20;
     std::int64_t maximumWallClockMilliseconds = 900000;
-    std::int64_t inputReadBudgetMilliseconds = 60000;
+    std::int64_t inputReadBudgetMilliseconds = 10000;
     std::int64_t constraintsBudgetMilliseconds = 10000;
     std::int64_t samplingBudgetMilliseconds = 90000;
     std::int64_t layoutBudgetMilliseconds = 60000;
@@ -94,6 +94,7 @@ struct RegionRefitOptions {
     double maximumParameterDistortion = 100.0;
     RegionRefitCachePolicy cachePolicy = RegionRefitCachePolicy::Disabled;
     std::filesystem::path cacheDirectory;
+    std::string inputStepSha256;
     std::string algorithmFingerprint;
 };
 
@@ -169,6 +170,9 @@ struct RegionFitIterationReport {
     std::size_t matrixNonZeros = 0;
     std::uint64_t estimatedSolverBytes = 0;
     int symbolicFactorizationReuseCount = 0;
+    std::size_t projectionCount = 0;
+    std::size_t uvIterationCount = 0;
+    std::size_t projectionFallbackCount = 0;
     double trainingMaximumDistance = 0.0;
     double selectionMaximumDistance = 0.0;
     double holdoutMaximumDistance = 0.0;
@@ -196,6 +200,15 @@ struct RegionFitAttemptReport {
     std::vector<RegionFitIterationReport> iterations;
 };
 
+struct RegionRefitCacheEvent {
+    std::string layer;
+    bool hit = false;
+    bool negativeEntry = false;
+    double readMilliseconds = 0.0;
+    double writeMilliseconds = 0.0;
+    std::string message;
+};
+
 struct RegionRefitReport {
     RegionRefitStatus status = RegionRefitStatus::NotStarted;
     RegionRefitStage failureStage = RegionRefitStage::None;
@@ -204,6 +217,7 @@ struct RegionRefitReport {
     int outputFaceCount = 0;
     int selectedPatchCount = 0;
     int fullFitCount = 0;
+    int cachedFitAttemptCount = 0;
     std::string selectedLayoutHash;
     std::size_t sampleVertexCount = 0;
     std::size_t sampleTriangleCount = 0;
@@ -216,6 +230,8 @@ struct RegionRefitReport {
     std::string referenceMeshFingerprint;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
+    std::string cacheKey;
+    std::vector<RegionRefitCacheEvent> cacheEvents;
     int retrimReplacementFaceCount = 0;
     int retrimInternalSeamCount = 0;
     int retrimReusedBoundaryEdgeCount = 0;

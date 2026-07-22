@@ -11,8 +11,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QCryptographicHash>
+#include <QFile>
 #include <QSaveFile>
+#include <QSysInfo>
 #include <QTextStream>
+#include <QThread>
 
 #include <algorithm>
 #include <chrono>
@@ -25,11 +29,20 @@
 namespace {
 
 struct ProbeTiming {
+    std::int64_t requestedWallBudgetMilliseconds = 0;
     double inputReadMilliseconds = 0.0;
     double candidateResolutionMilliseconds = 0.0;
     double engineMilliseconds = 0.0;
     double coreTotalMilliseconds = 0.0;
 };
+
+std::string sha256File(const std::filesystem::path& path) {
+    QFile file(QString::fromStdWString(path.wstring()));
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!hash.addData(&file)) return {};
+    return hash.result().toHex().toStdString();
+}
 
 std::vector<std::size_t> parseIds(std::string value) {
     std::replace(value.begin(), value.end(), ';', ',');
@@ -169,6 +182,9 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"matrix_nonzeros", QString::number(iteration.matrixNonZeros)},
                 {"estimated_solver_bytes", QString::number(iteration.estimatedSolverBytes)},
                 {"symbolic_factorization_reuse_count", iteration.symbolicFactorizationReuseCount},
+                {"projection_count", QString::number(iteration.projectionCount)},
+                {"uv_iteration_count", QString::number(iteration.uvIterationCount)},
+                {"projection_fallback_count", QString::number(iteration.projectionFallbackCount)},
                 {"training_maximum_distance", iteration.trainingMaximumDistance},
                 {"selection_maximum_distance", iteration.selectionMaximumDistance},
                 {"holdout_maximum_distance", iteration.holdoutMaximumDistance},
@@ -197,6 +213,7 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
     return {
         {"status", result.fittedNetwork ? "Success" : spo::toString(result.report.status)},
         {"full_fit_count", result.report.fullFitCount},
+        {"cached_fit_attempt_count", result.report.cachedFitAttemptCount},
         {"selected_patch_count", result.report.selectedPatchCount},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"attempts", attempts}};
@@ -405,19 +422,48 @@ QJsonObject constraintsToJson(const spo::RegionRefitResult& result) {
 QJsonObject performanceToJson(
     const spo::RegionRefitResult& result,
     const spo::RegionRefitRequest& request,
-    const ProbeTiming& timing) {
+    const ProbeTiming& timing,
+    const std::string& runIdentity,
+    const std::string& commit) {
     QJsonArray stages;
     for (const auto& stage : result.report.stages) {
         stages.append(stageToJson(stage));
     }
+    QJsonArray cacheEvents;
+    for (const auto& event : result.report.cacheEvents) {
+        cacheEvents.append(QJsonObject {
+            {"layer", QString::fromStdString(event.layer)},
+            {"hit", event.hit},
+            {"negative_entry", event.negativeEntry},
+            {"read_ms", event.readMilliseconds},
+            {"write_ms", event.writeMilliseconds},
+            {"message", QString::fromStdString(event.message)}});
+    }
     return {
         {"schema_version", 1},
+        {"run_identity", QString::fromStdString(runIdentity)},
+        {"input_step_sha256", QString::fromStdString(request.options.inputStepSha256)},
+        {"selected_faces", idsToJson(request.selectedFaces)},
+        {"commit", QString::fromStdString(commit)},
+#ifdef NDEBUG
+        {"build_configuration", "Release"},
+#else
+        {"build_configuration", "Debug"},
+#endif
+        {"hardware", QJsonObject {
+            {"cpu_architecture", QSysInfo::currentCpuArchitecture()},
+            {"logical_threads", QThread::idealThreadCount()},
+            {"operating_system", QSysInfo::prettyProductName()}}},
+        {"algorithm_fingerprint", QString::fromStdString(request.options.algorithmFingerprint)},
         {"status", spo::toString(result.report.status)},
         {"failure_stage", spo::toString(result.report.failureStage)},
         {"layout_mode", spo::toString(request.layoutMode)},
-        {"wall_budget_ms", QString::number(request.options.maximumWallClockMilliseconds)},
+        {"wall_budget_ms", QString::number(timing.requestedWallBudgetMilliseconds)},
+        {"engine_wall_budget_ms", QString::number(request.options.maximumWallClockMilliseconds)},
         {"input_read_budget_ms", QString::number(request.options.inputReadBudgetMilliseconds)},
         {"memory_budget_mib", QString::number(request.options.maximumMemoryMiB)},
+        {"cache_policy", spo::toString(request.options.cachePolicy)},
+        {"cache_key", QString::fromStdString(result.report.cacheKey)},
         {"input_read_ms", timing.inputReadMilliseconds},
         {"candidate_resolution_ms", timing.candidateResolutionMilliseconds},
         {"engine_ms", timing.engineMilliseconds},
@@ -426,6 +472,7 @@ QJsonObject performanceToJson(
         {"peak_working_set_bytes", QString::number(result.report.peakWorkingSetBytes)},
         {"peak_private_bytes", QString::number(result.report.peakPrivateBytes)},
         {"full_fit_count", result.report.fullFitCount},
+        {"cached_fit_attempt_count", result.report.cachedFitAttemptCount},
         {"sample_vertices", QString::number(result.report.sampleVertexCount)},
         {"sample_triangles", QString::number(result.report.sampleTriangleCount)},
         {"boundary_samples", QString::number(result.report.boundarySampleCount)},
@@ -434,7 +481,28 @@ QJsonObject performanceToJson(
         {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
         {"selected_patch_count", result.report.selectedPatchCount},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
+        {"geometry_metrics", QJsonObject {
+            {"holdout_maximum_distance", result.fittedNetwork
+                ? result.fittedNetwork->holdoutMaximumDistance : 0.0},
+            {"holdout_maximum_normal_degrees", result.fittedNetwork
+                ? result.fittedNetwork->holdoutMaximumNormalDegrees : 0.0},
+            {"boundary_maximum_distance", result.fittedNetwork
+                ? result.fittedNetwork->boundaryMaximumDistance : 0.0},
+            {"seam_maximum_distance", result.fittedNetwork
+                ? result.fittedNetwork->seamMaximumDistance : 0.0},
+            {"output_faces", result.report.outputFaceCount},
+            {"after_solids", result.report.afterSolidCount},
+            {"after_free_edges", result.report.afterFreeEdgeCount},
+            {"after_multiple_edges", result.report.afterMultipleEdgeCount},
+            {"step_roundtrip_ok", result.report.stepRoundtripOk}}},
+        {"remaining_wall_budget_ms", std::max(
+            0.0,
+            static_cast<double>(request.options.maximumWallClockMilliseconds) -
+                result.report.totalWallMilliseconds)},
         {"stop_reason", QString::fromStdString(result.report.message)},
+        {"layout", layoutReportToJson(result)},
+        {"fit", fitReportToJson(result)},
+        {"cache", cacheEvents},
         {"stages", stages}};
 }
 
@@ -461,7 +529,10 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
-                     "[--max-memory-mib <MiB>] [--constraints-only | --sampling-only | --layout-only | --fit-only]\n";
+                     "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
+                     "[--cache-policy <disabled|read-write|read-only|refresh>] "
+                     "[--run-identity <名称>] [--commit <提交>] "
+                     "[--constraints-only | --sampling-only | --layout-only | --fit-only]\n";
         return 2;
     }
 
@@ -472,7 +543,12 @@ int main(int argc, char* argv[]) {
     bool samplingOnly = false;
     bool layoutOnly = false;
     bool fitOnly = false;
+    bool performanceOnly = false;
+    bool cachePolicySpecified = false;
+    std::string runIdentity = "single";
+    std::string commit;
     spo::RegionRefitRequest request;
+    request.options.algorithmFingerprint = "native-regional-refit-v1";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -500,6 +576,33 @@ int main(int argc, char* argv[]) {
             } else if (argument == "--max-memory-mib") {
                 if (++index >= argc) return 2;
                 request.options.maximumMemoryMiB = std::stoull(argv[index]);
+                request.options.solverMemoryPreflightMiB = request.options.maximumMemoryMiB > 1024
+                    ? request.options.maximumMemoryMiB - 1024
+                    : request.options.maximumMemoryMiB;
+            } else if (argument == "--cache-dir") {
+                if (++index >= argc) return 2;
+                request.options.cacheDirectory = std::filesystem::path(argv[index]);
+                if (!cachePolicySpecified) {
+                    request.options.cachePolicy = spo::RegionRefitCachePolicy::ReadWrite;
+                }
+            } else if (argument == "--cache-policy") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "disabled") request.options.cachePolicy = spo::RegionRefitCachePolicy::Disabled;
+                else if (value == "read-write") request.options.cachePolicy = spo::RegionRefitCachePolicy::ReadWrite;
+                else if (value == "read-only") request.options.cachePolicy = spo::RegionRefitCachePolicy::ReadOnly;
+                else if (value == "refresh") request.options.cachePolicy = spo::RegionRefitCachePolicy::Refresh;
+                else return 2;
+                cachePolicySpecified = true;
+            } else if (argument == "--algorithm-fingerprint") {
+                if (++index >= argc) return 2;
+                request.options.algorithmFingerprint = argv[index];
+            } else if (argument == "--run-identity") {
+                if (++index >= argc) return 2;
+                runIdentity = argv[index];
+            } else if (argument == "--commit") {
+                if (++index >= argc) return 2;
+                commit = argv[index];
             } else if (argument == "--constraints-only") {
                 constraintsOnly = true;
             } else if (argument == "--sampling-only") {
@@ -508,6 +611,8 @@ int main(int argc, char* argv[]) {
                 layoutOnly = true;
             } else if (argument == "--fit-only") {
                 fitOnly = true;
+            } else if (argument == "--performance-only") {
+                performanceOnly = true;
             } else {
                 std::cerr << "未知参数：" << argument << '\n';
                 return 2;
@@ -534,6 +639,17 @@ int main(int argc, char* argv[]) {
     }
 
     ProbeTiming timing;
+    timing.requestedWallBudgetMilliseconds = request.options.maximumWallClockMilliseconds;
+    request.options.inputStepSha256 = sha256File(input);
+    if (request.options.inputStepSha256.empty()) {
+        std::cerr << "无法计算输入 STEP 的 SHA-256。\n";
+        return 1;
+    }
+    if (request.options.cachePolicy != spo::RegionRefitCachePolicy::Disabled &&
+        request.options.cacheDirectory.empty()) {
+        std::cerr << "启用缓存时必须指定 --cache-dir。\n";
+        return 2;
+    }
     const auto readStarted = std::chrono::steady_clock::now();
     const auto read = spo::StepReader().read(input);
     timing.inputReadMilliseconds = std::chrono::duration<double, std::milli>(
@@ -542,7 +658,9 @@ int main(int argc, char* argv[]) {
         std::cerr << read.status.message() << '\n';
         return 1;
     }
-    if (candidateId >= 0) {
+    const auto inputReadBudgetExceeded = timing.inputReadMilliseconds >
+        static_cast<double>(request.options.inputReadBudgetMilliseconds);
+    if (candidateId >= 0 && !inputReadBudgetExceeded) {
         const auto candidateStarted = std::chrono::steady_clock::now();
         spo::MergePlannerOptions options;
         options.enable_feature_bounded_refit_candidates = true;
@@ -572,24 +690,46 @@ int main(int argc, char* argv[]) {
     } else if (fitOnly) {
         request.diagnosticStopAfterStage = spo::RegionRefitStage::Fitting;
     }
-    const auto result = spo::RegionalSurfaceRefitEngine().run(read.document, request);
+    const auto spentBeforeEngine = std::chrono::duration_cast<std::chrono::milliseconds>(
+        engineStarted - coreStarted).count();
+    spo::RegionRefitResult result;
+    if (inputReadBudgetExceeded) {
+        result.report.status = spo::RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = spo::RegionRefitStage::Constraints;
+        result.report.message = "STEP input read exceeded its wall-clock budget.";
+    } else if (spentBeforeEngine >= timing.requestedWallBudgetMilliseconds) {
+        result.report.status = spo::RegionRefitStatus::TimeBudgetExceeded;
+        result.report.failureStage = spo::RegionRefitStage::Constraints;
+        result.report.message = "STEP read and candidate resolution exhausted the total wall-clock budget.";
+    } else {
+        request.options.maximumWallClockMilliseconds =
+            timing.requestedWallBudgetMilliseconds - spentBeforeEngine;
+        result = spo::RegionalSurfaceRefitEngine().run(read.document, request);
+    }
     timing.engineMilliseconds = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - engineStarted).count();
     timing.coreTotalMilliseconds = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - coreStarted).count();
     const auto diagnostics = outputDirectory / "diagnostics";
-    if (!writeJson(diagnostics / "constraints.json", constraintsToJson(result)) ||
-        !writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) ||
-        !writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) ||
-        !writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) ||
-        !writeJson(diagnostics / "retrim_report.json", retrimReportToJson(result)) ||
-        !writeJson(diagnostics / "sewing_report.json", sewingReportToJson(result)) ||
-        !writeJson(diagnostics / "strict_topology_report.json", strictTopologyReportToJson(result)) ||
-        !writeJson(diagnostics / "performance_report.json", performanceToJson(result, request, timing))) {
+    const auto performanceName = runIdentity == "single"
+        ? std::filesystem::path("performance_report.json")
+        : std::filesystem::path("performance_" + runIdentity + ".json");
+    const auto performanceWritten = writeJson(
+        diagnostics / performanceName,
+        performanceToJson(result, request, timing, runIdentity, commit));
+    const auto diagnosticsWritten = performanceOnly || (
+        writeJson(diagnostics / "constraints.json", constraintsToJson(result)) &&
+        writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) &&
+        writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) &&
+        writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) &&
+        writeJson(diagnostics / "retrim_report.json", retrimReportToJson(result)) &&
+        writeJson(diagnostics / "sewing_report.json", sewingReportToJson(result)) &&
+        writeJson(diagnostics / "strict_topology_report.json", strictTopologyReportToJson(result)));
+    if (!performanceWritten || !diagnosticsWritten) {
         std::cerr << "无法写入区域重拟合诊断。\n";
         return 1;
     }
-    if (result.referenceMesh) {
+    if (!performanceOnly && result.referenceMesh) {
         const auto samplingDirectory = outputDirectory / "artifacts" / "sampling";
         std::filesystem::create_directories(samplingDirectory);
         const auto write = spo::StlWriter().write(
@@ -600,7 +740,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
-    if (result.referenceMesh && result.selectedLayout) {
+    if (!performanceOnly && result.referenceMesh && result.selectedLayout) {
         const auto layoutDirectory = outputDirectory / "artifacts" / "layout";
         if (!writeJson(layoutDirectory / "selected_layout.json", selectedLayoutToJson(*result.selectedLayout)) ||
             !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.referenceMesh, *result.selectedLayout)) ||
@@ -609,7 +749,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
-    if (result.fittedNetwork && !result.fittedPatchNetwork.IsNull()) {
+    if (!performanceOnly && result.fittedNetwork && !result.fittedPatchNetwork.IsNull()) {
         const auto fitDirectory = outputDirectory / "artifacts" / "fit";
         std::filesystem::create_directories(fitDirectory);
         const auto write = spo::StepWriter().write(
@@ -620,7 +760,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
-    if (result.canApply()) {
+    if (!performanceOnly && result.canApply()) {
         const auto assemblyDirectory = outputDirectory / "artifacts" / "assembly";
         std::filesystem::create_directories(assemblyDirectory);
         const auto write = spo::StepWriter().write(

@@ -6,6 +6,7 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionRefitResourceMonitor.h"
+#include "reduction/region_refit/RegionalSurfaceRefitCache.h"
 #include "reduction/region_refit/StepAdaptiveRegionSampler.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/PatchReplacementAssembler.h"
@@ -158,6 +159,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         failMemoryBudget(result, RegionRefitStage::Constraints);
         return result;
     }
+    const RegionalSurfaceRefitCache cache(request);
+    result.report.cacheKey = cache.key();
 
     const auto constraintResources = captureRegionProcessResources();
     const auto started = std::chrono::steady_clock::now();
@@ -172,6 +175,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         stage, constraintResources, result.report, request.options);
     result.report.stages.push_back(stage);
     result.report.totalWallMilliseconds = stage.wallMilliseconds;
+    if (cache.enabled()) {
+        result.report.cacheEvents.push_back(cache.recordConstraintResult(extraction.success()));
+    }
 
     if (!extraction.success()) {
         result.report.status = extraction.status;
@@ -202,17 +208,31 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
 
     const auto samplingResources = captureRegionProcessResources();
     const auto samplingStarted = std::chrono::steady_clock::now();
-    auto sampling = StepAdaptiveRegionSampler().sample(
-        document,
-        result.constraints,
-        request.options);
+    StepAdaptiveRegionSamplingResult sampling;
+    RegionRefitCacheEvent samplingCacheEvent;
+    const auto samplingCacheHit = cache.loadSampling(sampling, samplingCacheEvent);
+    if (!samplingCacheHit) {
+        sampling = StepAdaptiveRegionSampler().sample(
+            document,
+            result.constraints,
+            request.options);
+        if (sampling.report.success() && cache.enabled()) {
+            const auto writeEvent = cache.saveSampling(sampling);
+            samplingCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
+            if (!writeEvent.message.empty()) {
+                samplingCacheEvent.message += " " + writeEvent.message;
+            }
+        }
+    }
     const auto samplingEnded = std::chrono::steady_clock::now();
     RegionRefitStageReport samplingStage;
     samplingStage.stage = RegionRefitStage::Sampling;
     samplingStage.success = sampling.report.success();
     samplingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         samplingEnded - samplingStarted).count();
-    samplingStage.message = sampling.report.message;
+    samplingStage.message = samplingCacheHit
+        ? "Loaded the rich STEP reference mesh from algorithm cache."
+        : sampling.report.message;
     const auto samplingMemoryExceeded = finishStageResources(
         samplingStage, samplingResources, result.report, request.options);
     result.report.stages.push_back(samplingStage);
@@ -226,6 +246,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.maximumSamplingNormalErrorDegrees = sampling.report.maximumInteriorNormalErrorDegrees;
     result.report.maximumBoundaryChordError = sampling.report.maximumBoundaryChordError;
     result.report.referenceMeshFingerprint = sampling.report.meshFingerprint;
+    if (cache.enabled()) result.report.cacheEvents.push_back(samplingCacheEvent);
 
     if (!sampling.report.success()) {
         result.report.status = sampling.report.status;
@@ -255,22 +276,37 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
 
     const auto layoutResources = captureRegionProcessResources();
     const auto layoutStarted = std::chrono::steady_clock::now();
-    auto layouts = RegionPatchLayoutGenerator().generate(
-        *result.referenceMesh,
-        request.layoutMode,
-        request.options);
+    RegionPatchLayoutGenerationResult layouts;
+    RegionRefitCacheEvent layoutCacheEvent;
+    const auto layoutCacheHit = cache.loadLayouts(layouts, layoutCacheEvent);
+    if (!layoutCacheHit) {
+        layouts = RegionPatchLayoutGenerator().generate(
+            *result.referenceMesh,
+            request.layoutMode,
+            request.options);
+        if (layouts.success() && cache.enabled()) {
+            const auto writeEvent = cache.saveLayouts(layouts);
+            layoutCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
+            if (!writeEvent.message.empty()) {
+                layoutCacheEvent.message += " " + writeEvent.message;
+            }
+        }
+    }
     const auto layoutEnded = std::chrono::steady_clock::now();
     RegionRefitStageReport layoutStage;
     layoutStage.stage = RegionRefitStage::Layout;
     layoutStage.success = layouts.success();
     layoutStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         layoutEnded - layoutStarted).count();
-    layoutStage.message = layouts.message;
+    layoutStage.message = layoutCacheHit
+        ? "Loaded deterministic regional layouts from algorithm cache."
+        : layouts.message;
     const auto layoutMemoryExceeded = finishStageResources(
         layoutStage, layoutResources, result.report, request.options);
     result.report.stages.push_back(layoutStage);
     result.report.totalWallMilliseconds += layoutStage.wallMilliseconds;
     result.report.layoutCandidates = layouts.candidates;
+    if (cache.enabled()) result.report.cacheEvents.push_back(layoutCacheEvent);
     if (!layouts.success()) {
         result.report.status = layouts.status;
         result.report.failureStage = RegionRefitStage::Layout;
@@ -314,25 +350,49 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     }
     const auto fittingResources = captureRegionProcessResources();
     const auto fittingStarted = std::chrono::steady_clock::now();
-    auto fitted = JointBSplineNetworkFitter().fit(
-        *result.referenceMesh,
-        result.constraints,
-        layouts.selectedCandidates,
-        request.options,
-        fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
+    JointBSplineNetworkFitResult fitted;
+    RegionRefitCacheEvent fitCacheEvent;
+    const auto fitCacheHit = cache.loadFit(
+        layouts.selectedCandidates, fitted, fitCacheEvent);
+    if (!fitCacheHit) {
+        fitted = JointBSplineNetworkFitter().fit(
+            *result.referenceMesh,
+            result.constraints,
+            layouts.selectedCandidates,
+            request.options,
+            fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
+        if (cache.enabled()) {
+            const auto writeEvent = cache.saveFit(fitted);
+            fitCacheEvent.negativeEntry = writeEvent.negativeEntry;
+            fitCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
+            if (!writeEvent.message.empty()) {
+                fitCacheEvent.message += " " + writeEvent.message;
+            }
+        }
+    }
     const auto fittingEnded = std::chrono::steady_clock::now();
     RegionRefitStageReport fittingStage;
     fittingStage.stage = RegionRefitStage::Fitting;
     fittingStage.success = fitted.success();
     fittingStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         fittingEnded - fittingStarted).count();
-    fittingStage.message = fitted.message;
+    fittingStage.message = fitCacheHit
+        ? (fitCacheEvent.negativeEntry
+            ? "Loaded a validated negative joint-fit cache entry."
+            : "Loaded a fitted B-spline network from algorithm cache.")
+        : fitted.message;
     const auto fittingMemoryExceeded = finishStageResources(
         fittingStage, fittingResources, result.report, request.options);
     result.report.stages.push_back(fittingStage);
     result.report.totalWallMilliseconds += fittingStage.wallMilliseconds;
     result.report.fitAttempts = fitted.attempts;
-    result.report.fullFitCount = static_cast<int>(fitted.attempts.size());
+    result.report.fullFitCount = fitCacheHit
+        ? 0
+        : static_cast<int>(fitted.attempts.size());
+    result.report.cachedFitAttemptCount = fitCacheHit
+        ? static_cast<int>(fitted.attempts.size())
+        : 0;
+    if (cache.enabled()) result.report.cacheEvents.push_back(fitCacheEvent);
     if (!fitted.success()) {
         result.report.status = fitted.status;
         result.report.failureStage = RegionRefitStage::Fitting;
