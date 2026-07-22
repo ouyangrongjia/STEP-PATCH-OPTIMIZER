@@ -2,6 +2,7 @@
 
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
+#include <Eigen/SparseLU>
 
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRep_Builder.hxx>
@@ -49,6 +50,7 @@ struct PatchLookup {
 };
 
 struct SeamSample {
+    int seamIndex = -1;
     int firstPatch = -1;
     int secondPatch = -1;
     std::size_t vertex = 0;
@@ -74,6 +76,7 @@ struct ResidualSample {
 struct ValidationMetrics {
     double trainingMaximumDistance = 0.0;
     double selectionMaximumDistance = 0.0;
+    double selectionMaximumScore = 0.0;
     double holdoutMaximumDistance = 0.0;
     double holdoutMaximumNormalDegrees = 0.0;
     double holdout95Distance = 0.0;
@@ -220,17 +223,75 @@ std::vector<std::pair<int, double>> surfaceDerivativeCoefficients(
 std::vector<SeamSample> buildSeamSamples(
     const RegionPatchLayout& layout) {
     std::vector<SeamSample> result;
-    for (const auto& seam : layout.seams) {
+    for (std::size_t seamIndex = 0; seamIndex < layout.seams.size(); ++seamIndex) {
+        const auto& seam = layout.seams[seamIndex];
         std::set<std::size_t> vertices;
         for (const auto& edge : seam.meshEdges) {
             vertices.insert(edge[0]);
             vertices.insert(edge[1]);
         }
         for (const auto vertex : vertices) {
-            result.push_back({seam.firstPatch, seam.secondPatch, vertex});
+            result.push_back({
+                static_cast<int>(seamIndex), seam.firstPatch, seam.secondPatch, vertex});
         }
     }
     return result;
+}
+
+std::vector<SeamSample> selectSeamConstraintSamples(
+    const RegionPatchLayout& layout,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<PatchLookup>& lookups,
+    const std::vector<SeamSample>& seamSamples) {
+    std::map<int, std::vector<const SeamSample*>> bySeam;
+    for (const auto& seam : seamSamples) bySeam[seam.seamIndex].push_back(&seam);
+    std::vector<SeamSample> selectedSamples;
+    for (const auto& [seamIndex, samples] : bySeam) {
+        (void)seamIndex;
+        if (samples.empty()) continue;
+        const auto firstPatch = static_cast<std::size_t>(samples.front()->firstPatch);
+        const auto secondPatch = static_cast<std::size_t>(samples.front()->secondPatch);
+        const auto maximumControlSide = std::max({
+            knots[firstPatch].uControlCount(),
+            knots[firstPatch].vControlCount(),
+            knots[secondPatch].uControlCount(),
+            knots[secondPatch].vControlCount()});
+        const auto sampleBudget = std::max<std::size_t>(
+            16, static_cast<std::size_t>(maximumControlSide) * 4);
+        if (samples.size() <= sampleBudget) {
+            for (const auto* sample : samples) selectedSamples.push_back(*sample);
+            continue;
+        }
+
+        std::vector<std::size_t> selected {0};
+        std::vector<double> minimumDistances(samples.size(), std::numeric_limits<double>::infinity());
+        while (selected.size() < sampleBudget) {
+            const auto selectedSample = samples[selected.back()];
+            const auto selectedLocal = lookups[firstPatch].localByGlobal.at(selectedSample->vertex);
+            const auto selectedUv = normalizedParameter(
+                layout.patches[firstPatch].parameters[selectedLocal]);
+            auto next = samples.size();
+            auto maximumDistance = -1.0;
+            for (std::size_t index = 0; index < samples.size(); ++index) {
+                const auto local = lookups[firstPatch].localByGlobal.at(samples[index]->vertex);
+                const auto uv = normalizedParameter(layout.patches[firstPatch].parameters[local]);
+                const auto du = uv[0] - selectedUv[0];
+                const auto dv = uv[1] - selectedUv[1];
+                minimumDistances[index] = std::min(minimumDistances[index], du * du + dv * dv);
+                if (minimumDistances[index] > maximumDistance ||
+                    (minimumDistances[index] == maximumDistance && next < samples.size() &&
+                        samples[index]->vertex < samples[next]->vertex)) {
+                    maximumDistance = minimumDistances[index];
+                    next = index;
+                }
+            }
+            if (next >= samples.size() || maximumDistance <= 1.0e-20) break;
+            selected.push_back(next);
+        }
+        std::sort(selected.begin(), selected.end());
+        for (const auto index : selected) selectedSamples.push_back(*samples[index]);
+    }
+    return selectedSamples;
 }
 
 void appendWeightedRow(
@@ -256,6 +317,18 @@ std::vector<LinearRow> buildSystemRows(
         const auto& parameterization = layout.patches[patch];
         const auto& patchKnots = knots[patch];
         const auto variableOffset = variableOffsets[patch];
+        std::vector<std::set<std::size_t>> neighbors(parameterization.vertexIndices.size());
+        for (const auto triangleIndex : parameterization.triangleIndices) {
+            const auto& triangle = mesh.triangles[triangleIndex];
+            for (int edge = 0; edge < 3; ++edge) {
+                const auto first = lookups[patch].localByGlobal.at(
+                    triangle.vertices[static_cast<std::size_t>(edge)]);
+                const auto second = lookups[patch].localByGlobal.at(
+                    triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)]);
+                neighbors[first].insert(second);
+                neighbors[second].insert(first);
+            }
+        }
         for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
             const auto vertexIndex = parameterization.vertexIndices[local];
             const auto& vertex = mesh.vertices[vertexIndex];
@@ -267,6 +340,45 @@ std::vector<LinearRow> buildSystemRows(
                 surfaceCoefficients(uv, patchKnots, variableOffset),
                 vertex.point,
                 vertex.boundary ? 100.0 : 1.0);
+            const auto tangentBucket = static_cast<int>(
+                (vertexIndex * 11400714819323198485ull + patch * 14029467366897019727ull) % 4ull);
+            if (!vertex.boundary && tangentBucket != 0) continue;
+            double uu = 0.0;
+            double uvMoment = 0.0;
+            double vv = 0.0;
+            gp_Vec uPosition;
+            gp_Vec vPosition;
+            for (const auto neighbor : neighbors[local]) {
+                const auto neighborUv = normalizedParameter(parameterization.parameters[neighbor]);
+                const auto du = neighborUv[0] - uv[0];
+                const auto dv = neighborUv[1] - uv[1];
+                const gp_Vec displacement(
+                    vertex.point,
+                    mesh.vertices[parameterization.vertexIndices[neighbor]].point);
+                uu += du * du;
+                uvMoment += du * dv;
+                vv += dv * dv;
+                uPosition += displacement * du;
+                vPosition += displacement * dv;
+            }
+            const auto tangentDeterminant = uu * vv - uvMoment * uvMoment;
+            if (tangentDeterminant > 1.0e-16) {
+                const auto targetU = (uPosition * vv - vPosition * uvMoment) /
+                    tangentDeterminant;
+                const auto targetV = (vPosition * uu - uPosition * uvMoment) /
+                    tangentDeterminant;
+                constexpr double tangentWeight = 0.02;
+                appendWeightedRow(
+                    rows,
+                    surfaceDerivativeCoefficients(uv, patchKnots, variableOffset, 0),
+                    gp_Pnt(targetU.X(), targetU.Y(), targetU.Z()),
+                    tangentWeight);
+                appendWeightedRow(
+                    rows,
+                    surfaceDerivativeCoefficients(uv, patchKnots, variableOffset, 1),
+                    gp_Pnt(targetV.X(), targetV.Y(), targetV.Z()),
+                    tangentWeight);
+            }
         }
     }
     for (const auto& seam : seamSamples) {
@@ -364,6 +476,53 @@ std::vector<NormalRow> buildNormalRows(
                     vertex.normal});
             }
         }
+    }
+    return rows;
+}
+
+std::vector<LinearRow> buildSeamEqualityRows(
+    const RegionPatchLayout& layout,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets,
+    const std::vector<PatchLookup>& lookups,
+    const std::vector<SeamSample>& seamSamples) {
+    std::vector<LinearRow> rows;
+    std::map<std::size_t, std::vector<int>> parents;
+    for (const auto& seam : seamSamples) {
+        const auto firstPatch = static_cast<std::size_t>(seam.firstPatch);
+        const auto secondPatch = static_cast<std::size_t>(seam.secondPatch);
+        const auto firstFound = lookups[firstPatch].localByGlobal.find(seam.vertex);
+        const auto secondFound = lookups[secondPatch].localByGlobal.find(seam.vertex);
+        if (firstFound == lookups[firstPatch].localByGlobal.end() ||
+            secondFound == lookups[secondPatch].localByGlobal.end()) {
+            continue;
+        }
+        auto [parentFound, inserted] = parents.try_emplace(seam.vertex, layout.patchCount);
+        auto& parent = parentFound->second;
+        if (inserted) std::iota(parent.begin(), parent.end(), 0);
+        const auto findRoot = [&](int patch) {
+            while (parent[static_cast<std::size_t>(patch)] != patch) {
+                patch = parent[static_cast<std::size_t>(patch)];
+            }
+            return patch;
+        };
+        const auto firstRoot = findRoot(seam.firstPatch);
+        const auto secondRoot = findRoot(seam.secondPatch);
+        if (firstRoot == secondRoot) continue;
+        parent[static_cast<std::size_t>(secondRoot)] = firstRoot;
+
+        auto coefficients = surfaceCoefficients(
+            normalizedParameter(layout.patches[firstPatch].parameters[firstFound->second]),
+            knots[firstPatch],
+            variableOffsets[firstPatch]);
+        const auto secondCoefficients = surfaceCoefficients(
+            normalizedParameter(layout.patches[secondPatch].parameters[secondFound->second]),
+            knots[secondPatch],
+            variableOffsets[secondPatch]);
+        for (const auto& [column, value] : secondCoefficients) {
+            coefficients.emplace_back(column, -value);
+        }
+        rows.push_back({std::move(coefficients), gp_Pnt(0.0, 0.0, 0.0)});
     }
     return rows;
 }
@@ -479,7 +638,8 @@ ValidationMetrics validateNetwork(
     const RegionReferenceMesh& mesh,
     const RegionPatchLayout& layout,
     const std::vector<PatchLookup>& lookups,
-    const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
+    const std::vector<Handle(Geom_BSplineSurface)>& surfaces,
+    const RegionRefitOptions& options) {
     ValidationMetrics metrics;
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
         const auto& parameterization = layout.patches[patch];
@@ -504,8 +664,15 @@ ValidationMetrics validateNetwork(
                 continue;
             }
             if (bucket < 9) {
+                const auto fittedNormal = projection.du.Crossed(projection.dv);
+                const auto normalDegrees = normalAngleDegrees(fittedNormal, vertex.normal);
+                const auto score = std::max(
+                    distance,
+                    options.tolerance3d * normalDegrees /
+                        std::max(options.normalToleranceDegrees, 1.0e-9));
                 metrics.selectionMaximumDistance = std::max(metrics.selectionMaximumDistance, distance);
-                metrics.selectionResiduals.push_back({static_cast<int>(patch), uv[0], uv[1], distance});
+                metrics.selectionMaximumScore = std::max(metrics.selectionMaximumScore, score);
+                metrics.selectionResiduals.push_back({static_cast<int>(patch), uv[0], uv[1], score});
             } else {
                 metrics.holdoutDistances.push_back(distance);
                 if (distance > metrics.holdoutMaximumDistance) {
@@ -514,6 +681,7 @@ ValidationMetrics validateNetwork(
                     metrics.holdoutWorstDistancePatch = static_cast<int>(patch);
                     metrics.holdoutWorstDistanceInternalSeam = vertex.internalSeam;
                 }
+                if (vertex.internalSeam) continue;
                 auto fittedNormal = projection.du.Crossed(projection.dv);
                 const auto normalDegrees = normalAngleDegrees(fittedNormal, vertex.normal);
                 metrics.holdoutNormalDegrees.push_back(normalDegrees);
@@ -687,6 +855,18 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 iterationReport.vControlCount = std::max(
                     iterationReport.vControlCount, patchKnots.vControlCount());
             }
+            if (!attempt.iterations.empty()) {
+                const auto forecastMilliseconds = static_cast<long long>(std::ceil(
+                    std::max(1.0, attempt.iterations.back().wallMilliseconds) * 1.25));
+                if (std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(forecastMilliseconds) >= attemptDeadline) {
+                    iterationReport.stopReason =
+                        "Single-fit deadline reserve is insufficient for another iteration.";
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
+            }
             if (std::chrono::steady_clock::now() >= attemptDeadline) {
                 iterationReport.stopReason = "Single-fit deadline reached before starting the iteration.";
                 attempt.iterations.push_back(iterationReport);
@@ -701,18 +881,29 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 controlVariableCount += patchKnots.uControlCount() * patchKnots.vControlCount();
             }
             const auto seamSamples = buildSeamSamples(layout);
+            const auto seamConstraintSamples = selectSeamConstraintSamples(
+                layout,
+                knots,
+                lookups,
+                seamSamples);
             const auto rows = buildSystemRows(
                 mesh,
                 layout,
                 knots,
                 variableOffsets,
                 lookups,
-                seamSamples);
+                seamConstraintSamples);
             const auto normalRows = buildNormalRows(
                 mesh,
                 layout,
                 knots,
                 variableOffsets);
+            const auto equalityRows = buildSeamEqualityRows(
+                layout,
+                knots,
+                variableOffsets,
+                lookups,
+                seamConstraintSamples);
             std::vector<Eigen::Triplet<double>> triplets;
             std::size_t nonZeros = 0;
             for (const auto& row : rows) nonZeros += row.coefficients.size() * 3;
@@ -769,13 +960,79 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 normalMatrix.coeffRef(diagonal, diagonal) += 1.0e-8;
             }
             normalMatrix.makeCompressed();
-            iterationReport.matrixRows = scalarRowCount;
+            const auto equalityScalarRowCount = equalityRows.size() * 3;
+            iterationReport.matrixRows = scalarRowCount + equalityScalarRowCount;
             iterationReport.matrixColumns = static_cast<std::size_t>(coupledVariableCount);
-            iterationReport.matrixNonZeros = static_cast<std::size_t>(matrix.nonZeros());
+            Eigen::SparseMatrix<double> equalityMatrix;
+            Eigen::SparseMatrix<double> augmentedMatrix;
+            auto augmentedSize = coupledVariableCount;
+            if (!equalityRows.empty()) {
+                std::vector<Eigen::Triplet<double>> equalityTriplets;
+                std::size_t equalityNonZeros = 0;
+                for (const auto& row : equalityRows) equalityNonZeros += row.coefficients.size() * 3;
+                equalityTriplets.reserve(equalityNonZeros);
+                auto equalityRow = 0;
+                for (const auto& row : equalityRows) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        for (const auto& [column, value] : row.coefficients) {
+                            const auto coupledColumn = column * 3 + axis;
+                            equalityTriplets.emplace_back(
+                                equalityRow,
+                                coupledColumn,
+                                value / columnScales[coupledColumn]);
+                        }
+                        ++equalityRow;
+                    }
+                }
+                equalityMatrix.resize(static_cast<int>(equalityScalarRowCount), coupledVariableCount);
+                equalityMatrix.setFromTriplets(equalityTriplets.begin(), equalityTriplets.end());
+                equalityMatrix.makeCompressed();
+
+                std::vector<Eigen::Triplet<double>> augmentedTriplets;
+                augmentedTriplets.reserve(
+                    static_cast<std::size_t>(normalMatrix.nonZeros()) +
+                    static_cast<std::size_t>(equalityMatrix.nonZeros()) * 2 +
+                    equalityScalarRowCount);
+                for (int column = 0; column < normalMatrix.outerSize(); ++column) {
+                    for (Eigen::SparseMatrix<double>::InnerIterator value(normalMatrix, column); value; ++value) {
+                        augmentedTriplets.emplace_back(
+                            static_cast<int>(value.row()),
+                            static_cast<int>(value.col()),
+                            value.value());
+                    }
+                }
+                for (int column = 0; column < equalityMatrix.outerSize(); ++column) {
+                    for (Eigen::SparseMatrix<double>::InnerIterator value(equalityMatrix, column); value; ++value) {
+                        augmentedTriplets.emplace_back(
+                            static_cast<int>(value.col()),
+                            coupledVariableCount + static_cast<int>(value.row()),
+                            value.value());
+                        augmentedTriplets.emplace_back(
+                            coupledVariableCount + static_cast<int>(value.row()),
+                            static_cast<int>(value.col()),
+                            value.value());
+                    }
+                }
+                constexpr double multiplierRegularization = -1.0e-12;
+                for (std::size_t row = 0; row < equalityScalarRowCount; ++row) {
+                    augmentedTriplets.emplace_back(
+                        coupledVariableCount + static_cast<int>(row),
+                        coupledVariableCount + static_cast<int>(row),
+                        multiplierRegularization);
+                }
+                augmentedSize += static_cast<int>(equalityScalarRowCount);
+                augmentedMatrix.resize(augmentedSize, augmentedSize);
+                augmentedMatrix.setFromTriplets(augmentedTriplets.begin(), augmentedTriplets.end());
+                augmentedMatrix.makeCompressed();
+            }
+            iterationReport.matrixNonZeros = static_cast<std::size_t>(
+                matrix.nonZeros() + equalityMatrix.nonZeros());
             iterationReport.estimatedSolverBytes =
-                static_cast<std::uint64_t>(matrix.nonZeros()) * 16ull +
-                static_cast<std::uint64_t>(normalMatrix.nonZeros()) * 16ull * 8ull +
-                static_cast<std::uint64_t>(coupledVariableCount) * 256ull;
+                static_cast<std::uint64_t>(matrix.nonZeros() + equalityMatrix.nonZeros()) * 16ull +
+                static_cast<std::uint64_t>(
+                    equalityRows.empty() ? normalMatrix.nonZeros() : augmentedMatrix.nonZeros()) * 16ull *
+                    (equalityRows.empty() ? 8ull : 12ull) +
+                static_cast<std::uint64_t>(augmentedSize) * 256ull;
             const auto preflightLimit = static_cast<std::uint64_t>(options.solverMemoryPreflightMiB) * 1024ull * 1024ull;
             if (iterationReport.estimatedSolverBytes > preflightLimit) {
                 iterationReport.stopReason = "Joint-fit matrix exceeds the memory preflight limit.";
@@ -792,22 +1049,45 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 attempt.stopReason = iterationReport.stopReason;
                 break;
             }
-            Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
-            solver.compute(normalMatrix);
-            if (solver.info() != Eigen::Success) {
-                iterationReport.stopReason = "Joint-fit symbolic or numeric factorization failed.";
-                attempt.iterations.push_back(iterationReport);
-                attempt.stopReason = iterationReport.stopReason;
-                break;
-            }
             const Eigen::VectorXd normalTargets = scaledMatrix.transpose() * targets;
-            Eigen::VectorXd coupledSolution = solver.solve(normalTargets);
+            Eigen::VectorXd coupledSolution(coupledVariableCount);
             iterationReport.symbolicFactorizationReuseCount = 0;
-            if (solver.info() != Eigen::Success || !coupledSolution.allFinite()) {
-                iterationReport.stopReason = "Joint-fit solve failed.";
-                attempt.iterations.push_back(iterationReport);
-                attempt.stopReason = iterationReport.stopReason;
-                break;
+            if (equalityRows.empty()) {
+                Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+                solver.compute(normalMatrix);
+                if (solver.info() != Eigen::Success) {
+                    iterationReport.stopReason = "Joint-fit symbolic or numeric factorization failed.";
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
+                coupledSolution = solver.solve(normalTargets);
+                if (solver.info() != Eigen::Success || !coupledSolution.allFinite()) {
+                    iterationReport.stopReason = "Joint-fit solve failed.";
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
+            } else {
+                Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+                solver.analyzePattern(augmentedMatrix);
+                solver.factorize(augmentedMatrix);
+                if (solver.info() != Eigen::Success) {
+                    iterationReport.stopReason = "Constrained joint-fit factorization failed.";
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
+                Eigen::VectorXd augmentedTargets = Eigen::VectorXd::Zero(augmentedSize);
+                augmentedTargets.head(coupledVariableCount) = normalTargets;
+                const auto augmentedSolution = solver.solve(augmentedTargets);
+                if (solver.info() != Eigen::Success || !augmentedSolution.allFinite()) {
+                    iterationReport.stopReason = "Constrained joint-fit solve failed.";
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
+                coupledSolution = augmentedSolution.head(coupledVariableCount);
             }
             for (int variable = 0; variable < coupledVariableCount; ++variable) {
                 coupledSolution[variable] /= columnScales[variable];
@@ -827,7 +1107,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         solution,
                         variableOffsets[static_cast<std::size_t>(patch)]));
                 }
-                const auto metrics = validateNetwork(mesh, layout, lookups, surfaces);
+                const auto metrics = validateNetwork(mesh, layout, lookups, surfaces, options);
                 iterationReport.trainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.projectionCount = metrics.projectionCount;
                 iterationReport.uvIterationCount = metrics.uvIterationCount;
@@ -849,7 +1129,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     metrics.holdoutMaximumNormalDegrees <= options.normalToleranceDegrees &&
                     metrics.boundaryMaximumDistance <= options.curveOnSurfaceTolerance &&
                     metrics.seamMaximumDistance <= options.curveOnSurfaceTolerance;
-                if (bestSurfaces.empty() || metrics.selectionMaximumDistance < bestMetrics.selectionMaximumDistance) {
+                if (bestSurfaces.empty() || metrics.selectionMaximumScore < bestMetrics.selectionMaximumScore) {
                     bestSurfaces = surfaces;
                     bestMetrics = metrics;
                 }
@@ -877,11 +1157,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     return result;
                 }
                 const auto improvement = std::isfinite(previousSelection) && previousSelection > 0.0
-                    ? (previousSelection - metrics.selectionMaximumDistance) / previousSelection
+                    ? (previousSelection - metrics.selectionMaximumScore) / previousSelection
                     : 1.0;
                 lowImprovementRounds = iteration >= maximumIterations - 3 && improvement < 0.01
                     ? lowImprovementRounds + 1 : 0;
-                previousSelection = metrics.selectionMaximumDistance;
+                previousSelection = metrics.selectionMaximumScore;
                 if (lowImprovementRounds >= 2) {
                     iterationReport.stopReason = "Two consecutive mature-grid rounds improved less than 1%.";
                     attempt.stopReason = iterationReport.stopReason;
