@@ -549,7 +549,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v2";
+    request.options.algorithmFingerprint = "native-regional-refit-v4";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];

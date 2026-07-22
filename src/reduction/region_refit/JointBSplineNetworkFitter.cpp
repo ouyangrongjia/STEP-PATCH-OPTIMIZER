@@ -59,6 +59,11 @@ struct LinearRow {
     gp_Pnt target;
 };
 
+struct NormalRow {
+    std::vector<std::pair<int, double>> coefficients;
+    gp_Dir normal {0.0, 0.0, 1.0};
+};
+
 struct ResidualSample {
     int patch = -1;
     double u = 0.0;
@@ -244,8 +249,7 @@ std::vector<LinearRow> buildSystemRows(
     const std::vector<KnotConfiguration>& knots,
     const std::vector<int>& variableOffsets,
     const std::vector<PatchLookup>& lookups,
-    const std::vector<SeamSample>& seamSamples,
-    const std::vector<Handle(Geom_BSplineSurface)>& linearizationSurfaces) {
+    const std::vector<SeamSample>& seamSamples) {
     std::vector<LinearRow> rows;
     rows.reserve(mesh.vertices.size() * 3 + mesh.boundarySamples.size() + seamSamples.size());
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
@@ -263,26 +267,6 @@ std::vector<LinearRow> buildSystemRows(
                 surfaceCoefficients(uv, patchKnots, variableOffset),
                 vertex.point,
                 vertex.boundary ? 100.0 : 1.0);
-            if (linearizationSurfaces.size() == layout.patches.size()) {
-                gp_Pnt fittedPoint;
-                gp_Vec tangentU;
-                gp_Vec tangentV;
-                linearizationSurfaces[patch]->D1(uv[0], uv[1], fittedPoint, tangentU, tangentV);
-                const gp_Vec referenceNormal(vertex.normal);
-                tangentU -= referenceNormal * tangentU.Dot(referenceNormal);
-                tangentV -= referenceNormal * tangentV.Dot(referenceNormal);
-                const auto tangentWeight = vertex.boundary ? 0.05 : 0.01;
-                appendWeightedRow(
-                    rows,
-                    surfaceDerivativeCoefficients(uv, patchKnots, variableOffset, 0),
-                    gp_Pnt(tangentU.X(), tangentU.Y(), tangentU.Z()),
-                    tangentWeight);
-                appendWeightedRow(
-                    rows,
-                    surfaceDerivativeCoefficients(uv, patchKnots, variableOffset, 1),
-                    gp_Pnt(tangentV.X(), tangentV.Y(), tangentV.Z()),
-                    tangentWeight);
-            }
         }
     }
     for (const auto& seam : seamSamples) {
@@ -349,6 +333,35 @@ std::vector<LinearRow> buildSystemRows(
                     {offset + u * vCount + v, -2.0},
                     {offset + u * vCount + v + 1, 1.0}},
                     gp_Pnt(0.0, 0.0, 0.0), fairnessWeight);
+            }
+        }
+    }
+    return rows;
+}
+
+std::vector<NormalRow> buildNormalRows(
+    const RegionReferenceMesh& mesh,
+    const RegionPatchLayout& layout,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets) {
+    std::vector<NormalRow> rows;
+    rows.reserve(mesh.vertices.size() * 2);
+    for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
+        const auto& parameterization = layout.patches[patch];
+        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
+            const auto vertexIndex = parameterization.vertexIndices[local];
+            const auto& vertex = mesh.vertices[vertexIndex];
+            const auto bucket = static_cast<int>((vertexIndex * 2654435761ull + patch * 40503ull) % 10ull);
+            if (vertex.boundary || bucket >= 7) continue;
+            const auto uv = normalizedParameter(parameterization.parameters[local]);
+            for (int axis = 0; axis < 2; ++axis) {
+                rows.push_back({
+                    surfaceDerivativeCoefficients(
+                        uv,
+                        knots[patch],
+                        variableOffsets[patch],
+                        axis),
+                    vertex.normal});
             }
         }
     }
@@ -492,8 +505,7 @@ ValidationMetrics validateNetwork(
             }
             if (bucket < 9) {
                 metrics.selectionMaximumDistance = std::max(metrics.selectionMaximumDistance, distance);
-                metrics.selectionResiduals.push_back({
-                    static_cast<int>(patch), projection.u, projection.v, distance});
+                metrics.selectionResiduals.push_back({static_cast<int>(patch), uv[0], uv[1], distance});
             } else {
                 metrics.holdoutDistances.push_back(distance);
                 if (distance > metrics.holdoutMaximumDistance) {
@@ -544,38 +556,6 @@ ValidationMetrics validateNetwork(
     metrics.holdout95Distance = percentile95(metrics.holdoutDistances);
     metrics.holdout95NormalDegrees = percentile95(metrics.holdoutNormalDegrees);
     return metrics;
-}
-
-struct ParameterUpdateStats {
-    std::size_t projectionCount = 0;
-    std::size_t uvIterationCount = 0;
-    std::size_t projectionFallbackCount = 0;
-};
-
-ParameterUpdateStats updateClosestPointParameters(
-    const RegionReferenceMesh& mesh,
-    RegionPatchLayout& layout,
-    const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
-    ParameterUpdateStats stats;
-    for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
-        auto& parameterization = layout.patches[patch];
-        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
-            const auto initial = normalizedParameter(parameterization.parameters[local]);
-            const auto projection = projectToSurface(
-                surfaces[patch],
-                mesh.vertices[parameterization.vertexIndices[local]].point,
-                initial);
-            ++stats.projectionCount;
-            stats.uvIterationCount += projection.iterationCount;
-            stats.projectionFallbackCount += projection.fallbackCount;
-            if (std::isfinite(projection.u) && std::isfinite(projection.v)) {
-                parameterization.parameters[local] = {
-                    projection.u * 2.0 - 1.0,
-                    projection.v * 2.0 - 1.0};
-            }
-        }
-    }
-    return stats;
 }
 
 bool insertResidualKnot(
@@ -685,17 +665,15 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         const auto attemptDeadline = std::min(
             deadline,
             attemptStarted + std::chrono::milliseconds(options.singleFitBudgetMilliseconds));
-        RegionPatchLayout workingLayout = candidates[candidateIndex];
         const auto& layout = candidates[candidateIndex];
         RegionFitAttemptReport attempt;
         attempt.patchCount = layout.patchCount;
         attempt.layoutHash = layout.hash;
-        const auto lookups = buildLookups(workingLayout);
+        const auto lookups = buildLookups(layout);
         std::vector<KnotConfiguration> knots(static_cast<std::size_t>(layout.patchCount));
         double previousSelection = std::numeric_limits<double>::infinity();
         int lowImprovementRounds = 0;
         std::vector<Handle(Geom_BSplineSurface)> bestSurfaces;
-        std::vector<Handle(Geom_BSplineSurface)> linearizationSurfaces;
         ValidationMetrics bestMetrics;
 
         const auto maximumIterations = std::min(options.maximumFitIterations, 20);
@@ -722,32 +700,58 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 const auto& patchKnots = knots[static_cast<std::size_t>(patch)];
                 controlVariableCount += patchKnots.uControlCount() * patchKnots.vControlCount();
             }
-            const auto seamSamples = buildSeamSamples(workingLayout);
-            const auto variableCount = controlVariableCount;
+            const auto seamSamples = buildSeamSamples(layout);
             const auto rows = buildSystemRows(
                 mesh,
-                workingLayout,
+                layout,
                 knots,
                 variableOffsets,
                 lookups,
-                seamSamples,
-                linearizationSurfaces);
+                seamSamples);
+            const auto normalRows = buildNormalRows(
+                mesh,
+                layout,
+                knots,
+                variableOffsets);
             std::vector<Eigen::Triplet<double>> triplets;
             std::size_t nonZeros = 0;
-            for (const auto& row : rows) nonZeros += row.coefficients.size();
+            for (const auto& row : rows) nonZeros += row.coefficients.size() * 3;
+            for (const auto& row : normalRows) nonZeros += row.coefficients.size() * 3;
             triplets.reserve(nonZeros);
-            Eigen::MatrixXd targets(static_cast<int>(rows.size()), 3);
-            for (std::size_t row = 0; row < rows.size(); ++row) {
-                for (const auto& [column, value] : rows[row].coefficients) {
-                    triplets.emplace_back(static_cast<int>(row), column, value);
+            const auto scalarRowCount = rows.size() * 3 + normalRows.size();
+            const auto coupledVariableCount = controlVariableCount * 3;
+            Eigen::VectorXd targets(static_cast<int>(scalarRowCount));
+            int scalarRow = 0;
+            for (const auto& row : rows) {
+                const std::array<double, 3> target {
+                    row.target.X(), row.target.Y(), row.target.Z()};
+                for (int axis = 0; axis < 3; ++axis) {
+                    for (const auto& [column, value] : row.coefficients) {
+                        triplets.emplace_back(scalarRow, column * 3 + axis, value);
+                    }
+                    targets[scalarRow] = target[static_cast<std::size_t>(axis)];
+                    ++scalarRow;
                 }
-                targets(static_cast<int>(row), 0) = rows[row].target.X();
-                targets(static_cast<int>(row), 1) = rows[row].target.Y();
-                targets(static_cast<int>(row), 2) = rows[row].target.Z();
             }
-            Eigen::SparseMatrix<double> matrix(static_cast<int>(rows.size()), variableCount);
+            constexpr double normalWeight = 0.25;
+            for (const auto& row : normalRows) {
+                const std::array<double, 3> normal {
+                    row.normal.X(), row.normal.Y(), row.normal.Z()};
+                for (const auto& [column, value] : row.coefficients) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        triplets.emplace_back(
+                            scalarRow,
+                            column * 3 + axis,
+                            value * normal[static_cast<std::size_t>(axis)] * normalWeight);
+                    }
+                }
+                targets[scalarRow] = 0.0;
+                ++scalarRow;
+            }
+            Eigen::SparseMatrix<double> matrix(
+                static_cast<int>(scalarRowCount), coupledVariableCount);
             matrix.setFromTriplets(triplets.begin(), triplets.end());
-            Eigen::VectorXd columnScales = Eigen::VectorXd::Zero(variableCount);
+            Eigen::VectorXd columnScales = Eigen::VectorXd::Zero(coupledVariableCount);
             for (int column = 0; column < matrix.outerSize(); ++column) {
                 for (Eigen::SparseMatrix<double>::InnerIterator value(matrix, column); value; ++value) {
                     columnScales[column] += value.value() * value.value();
@@ -761,17 +765,17 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 }
             }
             Eigen::SparseMatrix<double> normalMatrix = scaledMatrix.transpose() * scaledMatrix;
-            for (int diagonal = 0; diagonal < variableCount; ++diagonal) {
+            for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
                 normalMatrix.coeffRef(diagonal, diagonal) += 1.0e-8;
             }
             normalMatrix.makeCompressed();
-            iterationReport.matrixRows = rows.size();
-            iterationReport.matrixColumns = static_cast<std::size_t>(variableCount);
+            iterationReport.matrixRows = scalarRowCount;
+            iterationReport.matrixColumns = static_cast<std::size_t>(coupledVariableCount);
             iterationReport.matrixNonZeros = static_cast<std::size_t>(matrix.nonZeros());
             iterationReport.estimatedSolverBytes =
                 static_cast<std::uint64_t>(matrix.nonZeros()) * 16ull +
                 static_cast<std::uint64_t>(normalMatrix.nonZeros()) * 16ull * 8ull +
-                static_cast<std::uint64_t>(variableCount) * 256ull;
+                static_cast<std::uint64_t>(coupledVariableCount) * 256ull;
             const auto preflightLimit = static_cast<std::uint64_t>(options.solverMemoryPreflightMiB) * 1024ull * 1024ull;
             if (iterationReport.estimatedSolverBytes > preflightLimit) {
                 iterationReport.stopReason = "Joint-fit matrix exceeds the memory preflight limit.";
@@ -796,17 +800,23 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 attempt.stopReason = iterationReport.stopReason;
                 break;
             }
-            const Eigen::MatrixXd normalTargets = scaledMatrix.transpose() * targets;
-            Eigen::MatrixXd solution = solver.solve(normalTargets);
-                iterationReport.symbolicFactorizationReuseCount = 2;
-            if (solver.info() != Eigen::Success || !solution.allFinite()) {
+            const Eigen::VectorXd normalTargets = scaledMatrix.transpose() * targets;
+            Eigen::VectorXd coupledSolution = solver.solve(normalTargets);
+            iterationReport.symbolicFactorizationReuseCount = 0;
+            if (solver.info() != Eigen::Success || !coupledSolution.allFinite()) {
                 iterationReport.stopReason = "Joint-fit solve failed.";
                 attempt.iterations.push_back(iterationReport);
                 attempt.stopReason = iterationReport.stopReason;
                 break;
             }
-            for (int variable = 0; variable < variableCount; ++variable) {
-                solution.row(variable) /= columnScales[variable];
+            for (int variable = 0; variable < coupledVariableCount; ++variable) {
+                coupledSolution[variable] /= columnScales[variable];
+            }
+            Eigen::MatrixXd solution(controlVariableCount, 3);
+            for (int variable = 0; variable < controlVariableCount; ++variable) {
+                for (int axis = 0; axis < 3; ++axis) {
+                    solution(variable, axis) = coupledSolution[variable * 3 + axis];
+                }
             }
             std::vector<Handle(Geom_BSplineSurface)> surfaces;
             surfaces.reserve(static_cast<std::size_t>(layout.patchCount));
@@ -817,8 +827,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         solution,
                         variableOffsets[static_cast<std::size_t>(patch)]));
                 }
-                const auto metrics = validateNetwork(mesh, workingLayout, lookups, surfaces);
-                linearizationSurfaces = surfaces;
+                const auto metrics = validateNetwork(mesh, layout, lookups, surfaces);
                 iterationReport.trainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.projectionCount = metrics.projectionCount;
                 iterationReport.uvIterationCount = metrics.uvIterationCount;
@@ -855,7 +864,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         std::chrono::steady_clock::now() - attemptStarted).count();
                     result.attempts.push_back(attempt);
                     auto network = std::make_shared<RegionFittedPatchNetwork>();
-                    network->layout = workingLayout;
+                    network->layout = layout;
                     network->surfaces = std::move(surfaces);
                     network->inspectionShape = inspectionShape(network->surfaces);
                     network->holdoutMaximumDistance = metrics.holdoutMaximumDistance;
@@ -873,11 +882,6 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 lowImprovementRounds = iteration >= maximumIterations - 3 && improvement < 0.01
                     ? lowImprovementRounds + 1 : 0;
                 previousSelection = metrics.selectionMaximumDistance;
-                const auto parameterUpdate = updateClosestPointParameters(
-                    mesh, workingLayout, surfaces);
-                iterationReport.projectionCount += parameterUpdate.projectionCount;
-                iterationReport.uvIterationCount += parameterUpdate.uvIterationCount;
-                iterationReport.projectionFallbackCount += parameterUpdate.projectionFallbackCount;
                 if (lowImprovementRounds >= 2) {
                     iterationReport.stopReason = "Two consecutive mature-grid rounds improved less than 1%.";
                     attempt.stopReason = iterationReport.stopReason;

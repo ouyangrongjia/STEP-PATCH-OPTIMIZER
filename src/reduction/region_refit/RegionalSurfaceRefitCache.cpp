@@ -424,7 +424,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v1|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v2"
+                ? "native-regional-refit-v4"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode) << '|';
     for (const auto face : faces) text << face << ',';
