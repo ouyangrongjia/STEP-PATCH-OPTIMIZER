@@ -78,6 +78,7 @@ add_library(spo_core STATIC
     src/reduction/region_refit/RegionRefitResourceMonitor.cpp
     src/reduction/region_refit/RegionalSurfaceRefitCache.cpp
     src/reduction/region_refit/RegionReferenceMesh.cpp
+    src/reduction/region_refit/QualityBalancedRegionRemesher.cpp
     src/reduction/region_refit/RegionPatchLayout.cpp
     src/reduction/region_refit/JointBSplineNetworkFitter.cpp
     src/reduction/region_refit/NativeRegionPatchNetworkBuilder.cpp

@@ -231,11 +231,16 @@ bool NativeRegionPatchNetworkBuildResult::success() const {
         !replacementFaces.empty();
 }
 
+bool NativeRegionPatchNetworkBuildResult::constructible() const {
+    return !replacementShape.IsNull() && !replacementFaces.empty();
+}
+
 NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     const RegionReferenceMesh& mesh,
     const RegionTopologyConstraints& constraints,
     const RegionFittedPatchNetwork& network,
-    const double curveOnSurfaceTolerance) const {
+    const double curveOnSurfaceTolerance,
+    const bool allowUnvalidatedFaces) const {
     NativeRegionPatchNetworkBuildResult result;
     if (mesh.empty() || network.surfaces.size() != network.layout.patches.size() ||
         network.layout.patchCount != static_cast<int>(network.surfaces.size()) ||
@@ -488,7 +493,9 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                 topologyBuilder.SameParameter(edge, Standard_True);
             }
         }
-        if (result.sameParameterFailureCount > 0 || !BRepCheck_Analyzer(face).IsValid()) {
+        const auto faceValid = BRepCheck_Analyzer(face).IsValid();
+        if (!faceValid) ++result.brepValidationFailureCount;
+        if ((result.sameParameterFailureCount > 0 || !faceValid) && !allowUnvalidatedFaces) {
             result.message = "A trimmed fitted patch failed dense SameParameter or BRep validation.";
             return result;
         }
@@ -504,8 +511,12 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     builder.MakeCompound(compound);
     for (const auto& face : result.replacementFaces) builder.Add(compound, face);
     result.replacementShape = compound;
-    result.status = RegionRefitStatus::Success;
-    result.message = "Built a native trimmed multi-surface patch network with shared B-rep edges.";
+    const auto validated = result.sameParameterFailureCount == 0 &&
+        result.brepValidationFailureCount == 0;
+    result.status = validated ? RegionRefitStatus::Success : RegionRefitStatus::Failed;
+    result.message = validated
+        ? "Built a native trimmed multi-surface patch network with shared B-rep edges."
+        : "Built a diagnostic patch network that failed SameParameter or BRep validation.";
     return result;
 }
 

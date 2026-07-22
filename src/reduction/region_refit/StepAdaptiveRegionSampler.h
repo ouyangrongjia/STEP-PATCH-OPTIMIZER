@@ -5,6 +5,7 @@
 #include "reduction/region_refit/RegionalSurfaceRefitTypes.h"
 
 #include <cstddef>
+#include <chrono>
 #include <string>
 
 namespace spo {
@@ -30,6 +31,24 @@ struct StepAdaptiveRegionSamplingReport {
     FaceId maximumInteriorNormalFaceId = 0;
     std::size_t maximumInteriorNormalTriangleIndex = 0;
     double maximumBoundaryChordError = 0.0;
+    bool geometricLimitsPassed = false;
+    double edgeLengthP01 = 0.0;
+    double edgeLengthP50 = 0.0;
+    double edgeLengthP99 = 0.0;
+    double edgeLengthP99P01Ratio = 0.0;
+    double minimumAngleP05Degrees = 0.0;
+    double minimumAngleP50Degrees = 0.0;
+    double aspectRatioP50 = 0.0;
+    double aspectRatioP95 = 0.0;
+    double aspectRatioP99 = 0.0;
+    double normalizedQualityP05 = 0.0;
+    double normalizedQualityP50 = 0.0;
+    std::size_t zeroAreaTriangleCount = 0;
+    std::size_t nonManifoldEdgeCount = 0;
+    std::size_t remeshSplitCount = 0;
+    std::size_t remeshCollapseCount = 0;
+    std::size_t remeshFlipCount = 0;
+    std::size_t remeshRelocationCount = 0;
     std::string meshFingerprint;
 
     bool success() const;
@@ -45,7 +64,9 @@ public:
     StepAdaptiveRegionSamplingResult sample(
         const ShapeDocument& document,
         const RegionTopologyConstraints& constraints,
-        const RegionRefitOptions& options) const;
+        const RegionRefitOptions& options,
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::time_point::max()) const;
 };
 
 }

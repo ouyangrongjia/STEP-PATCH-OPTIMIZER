@@ -699,6 +699,24 @@ void test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs() {
     assert(toolkitProbe.find("short_edges_diagnostic_only") != std::string::npos);
 }
 
+void test_native_region_refit_best_effort_artifact_contract() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_native_region_refit.ps1");
+    const auto probe = read_text_file(root / "tools" / "native_region_refit_probe.cpp");
+
+    assert(script.find("quality-balanced") != std::string::npos);
+    assert(script.find("BestEffortThroughSewing") != std::string::npos);
+    assert(script.find("MaximumFullFitCount") != std::string::npos);
+    assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(script.find("sewn_attempt.step") != std::string::npos);
+    assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
+    assert(probe.find("native-regional-refit-v16-quality-balanced") != std::string::npos);
+    assert(probe.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(probe.find("sewn_attempt.step") != std::string::npos);
+    assert(probe.find("result.canApply()") != std::string::npos);
+    assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
+}
+
 }
 
 void run_scripted_baseline_gate_tests() {
@@ -726,4 +744,5 @@ void run_scripted_baseline_gate_tests() {
     test_creo_toolkit_baseline_probe_contract_is_optional();
     test_creo_modelcheck_parse_only_handles_toolkit_xml_shape();
     test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs();
+    test_native_region_refit_best_effort_artifact_contract();
 }

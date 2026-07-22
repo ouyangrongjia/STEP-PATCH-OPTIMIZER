@@ -10,6 +10,22 @@ const char* toString(const RegionRefitLayoutMode mode) {
     return "Adaptive";
 }
 
+const char* toString(const RegionRefitSamplingMode mode) {
+    switch (mode) {
+    case RegionRefitSamplingMode::AdaptiveOcct: return "AdaptiveOcct";
+    case RegionRefitSamplingMode::QualityBalanced: return "QualityBalanced";
+    }
+    return "AdaptiveOcct";
+}
+
+const char* toString(const RegionRefitExecutionMode mode) {
+    switch (mode) {
+    case RegionRefitExecutionMode::ValidatedOnly: return "ValidatedOnly";
+    case RegionRefitExecutionMode::BestEffortThroughSewing: return "BestEffortThroughSewing";
+    }
+    return "ValidatedOnly";
+}
+
 const char* toString(const RegionRefitStatus status) {
     switch (status) {
     case RegionRefitStatus::NotStarted: return "NotStarted";

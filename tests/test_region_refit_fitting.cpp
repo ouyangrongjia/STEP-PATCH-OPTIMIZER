@@ -7,6 +7,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRep_Tool.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Curve.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopExp_Explorer.hxx>
@@ -56,12 +57,15 @@ spo::RegionReferenceMesh makePlanarFitMesh(const int resolution) {
             mesh.triangles.push_back({{lowerLeft, upperRight, upperLeft}, 1});
         }
     }
+    mesh.updateIntegrationWeights();
     return mesh;
 }
 
-std::vector<spo::RegionPatchLayout> planarLayouts(const spo::RegionReferenceMesh& mesh) {
+std::vector<spo::RegionPatchLayout> planarLayouts(
+    const spo::RegionReferenceMesh& mesh,
+    const int patchCount = 2) {
     spo::RegionRefitOptions options;
-    options.fixedPatchCount = 2;
+    options.fixedPatchCount = patchCount;
     options.maximumParameterDistortion = 1000.0;
     const auto generated = spo::RegionPatchLayoutGenerator().generate(
         mesh, spo::RegionRefitLayoutMode::FixedPatchCount, options);
@@ -123,6 +127,69 @@ void test_joint_fitter_honors_expired_deadline() {
     assert(!fitted.success());
     assert(fitted.status == spo::RegionRefitStatus::TimeBudgetExceeded);
     assert(fitted.attempts.empty());
+}
+
+void test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails() {
+    auto mesh = makePlanarFitMesh(8);
+    for (auto& vertex : mesh.vertices) {
+        vertex.normal = gp_Dir(1.0, 0.0, 0.0);
+        for (auto& source : vertex.sources) source.normal = vertex.normal;
+    }
+    const auto layouts = planarLayouts(mesh, 1);
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.05;
+    options.curveOnSurfaceTolerance = 0.05;
+    options.normalToleranceDegrees = 0.01;
+    options.maximumFitIterations = 3;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        mesh,
+        {},
+        layouts,
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+
+    assert(!fitted.success());
+    assert(!fitted.network);
+    assert(fitted.bestEffortNetwork);
+    assert(!fitted.bestEffortNetwork->fitGatePassed);
+    assert(fitted.bestEffortNetwork->normalizedViolationScore > 1.0);
+}
+
+void test_area_weighting_is_invariant_to_planar_sampling_density() {
+    const auto coarse = makePlanarFitMesh(6);
+    const auto dense = makePlanarFitMesh(18);
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.05;
+    options.curveOnSurfaceTolerance = 0.05;
+    options.normalToleranceDegrees = 1.0;
+    options.maximumFitIterations = 4;
+    const auto coarseFit = spo::JointBSplineNetworkFitter().fit(
+        coarse,
+        {},
+        planarLayouts(coarse, 1),
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+    const auto denseFit = spo::JointBSplineNetworkFitter().fit(
+        dense,
+        {},
+        planarLayouts(dense, 1),
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+
+    assert(coarseFit.success());
+    assert(denseFit.success());
+    const auto coarsePoint = coarseFit.network->surfaces.front()->Value(0.5, 0.5);
+    const auto densePoint = denseFit.network->surfaces.front()->Value(0.5, 0.5);
+    const GeomAPI_ProjectPointOnSurf coarseOnDense(
+        coarsePoint,
+        denseFit.network->surfaces.front());
+    const GeomAPI_ProjectPointOnSurf denseOnCoarse(
+        densePoint,
+        coarseFit.network->surfaces.front());
+    assert(coarseOnDense.NbPoints() > 0);
+    assert(denseOnCoarse.NbPoints() > 0);
+    assert(coarseOnDense.LowerDistance() <= 1.0e-6);
+    assert(denseOnCoarse.LowerDistance() <= 1.0e-6);
 }
 
 void test_native_patch_network_reuses_shared_edges_and_builds_two_faces() {
@@ -281,6 +348,8 @@ void run_region_refit_fitting_tests() {
     test_joint_fitter_passes_planar_two_patch_network();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();
+    test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails();
+    test_area_weighting_is_invariant_to_planar_sampling_density();
     test_native_patch_network_reuses_shared_edges_and_builds_two_faces();
     test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit();
 }

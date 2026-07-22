@@ -26,6 +26,16 @@ enum class RegionRefitLayoutMode {
     Adaptive
 };
 
+enum class RegionRefitSamplingMode {
+    AdaptiveOcct,
+    QualityBalanced
+};
+
+enum class RegionRefitExecutionMode {
+    ValidatedOnly,
+    BestEffortThroughSewing
+};
+
 enum class RegionRefitStatus {
     NotStarted,
     Success,
@@ -66,16 +76,22 @@ enum class RegionRefitCachePolicy {
 };
 
 const char* toString(RegionRefitLayoutMode mode);
+const char* toString(RegionRefitSamplingMode mode);
+const char* toString(RegionRefitExecutionMode mode);
 const char* toString(RegionRefitStatus status);
 const char* toString(RegionRefitStage stage);
 const char* toString(RegionBoundaryContinuity continuity);
 const char* toString(RegionRefitCachePolicy policy);
 
 struct RegionRefitOptions {
+    RegionRefitSamplingMode samplingMode = RegionRefitSamplingMode::AdaptiveOcct;
     double tolerance3d = 0.03;
     double normalToleranceDegrees = 15.0;
     double curveOnSurfaceTolerance = 0.001;
     std::size_t maximumSampleTriangles = 200000;
+    std::size_t targetSampleTriangles = 80000;
+    int maximumRemeshSweeps = 8;
+    double maximumLocalSizeRatio = 1.5;
     int fixedPatchCount = 0;
     int maximumAdaptivePatchCount = 12;
     int maximumFullFitCount = 3;
@@ -102,6 +118,7 @@ struct RegionRefitRequest {
     std::vector<FaceId> selectedFaces;
     std::vector<EdgeId> lockedEdges;
     RegionRefitLayoutMode layoutMode = RegionRefitLayoutMode::Adaptive;
+    RegionRefitExecutionMode executionMode = RegionRefitExecutionMode::ValidatedOnly;
     RegionRefitStage diagnosticStopAfterStage = RegionRefitStage::ExternalCad;
     RegionRefitOptions options;
 };
@@ -227,12 +244,34 @@ struct RegionRefitReport {
     double maximumSamplingChordError = 0.0;
     double maximumSamplingNormalErrorDegrees = 0.0;
     double maximumBoundaryChordError = 0.0;
+    bool samplingGeometricLimitsPassed = false;
+    double samplingEdgeLengthP01 = 0.0;
+    double samplingEdgeLengthP50 = 0.0;
+    double samplingEdgeLengthP99 = 0.0;
+    double samplingEdgeLengthP99P01Ratio = 0.0;
+    double samplingMinimumAngleP05Degrees = 0.0;
+    double samplingMinimumAngleP50Degrees = 0.0;
+    double samplingAspectRatioP50 = 0.0;
+    double samplingAspectRatioP95 = 0.0;
+    double samplingAspectRatioP99 = 0.0;
+    double samplingNormalizedQualityP05 = 0.0;
+    double samplingNormalizedQualityP50 = 0.0;
+    std::size_t samplingZeroAreaTriangleCount = 0;
+    std::size_t samplingNonManifoldEdgeCount = 0;
+    std::size_t samplingRemeshSplitCount = 0;
+    std::size_t samplingRemeshCollapseCount = 0;
+    std::size_t samplingRemeshFlipCount = 0;
+    std::size_t samplingRemeshRelocationCount = 0;
     std::string referenceMeshFingerprint;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
+    bool fitGatePassed = false;
+    bool bestEffortUsed = false;
     std::string cacheKey;
     std::vector<RegionRefitCacheEvent> cacheEvents;
     int retrimReplacementFaceCount = 0;
+    bool retrimAttempted = false;
+    bool retrimValidationPassed = false;
     int retrimInternalSeamCount = 0;
     int retrimReusedBoundaryEdgeCount = 0;
     int retrimSplitBoundarySegmentCount = 0;
@@ -242,6 +281,10 @@ struct RegionRefitReport {
     double retrimMaximumSameParameterDeviation = 0.0;
     bool assemblyPassed = false;
     bool repairPassed = false;
+    bool sewingAttempted = false;
+    bool sewingConstructedShape = false;
+    bool diagnosticPipelineCompleted = false;
+    std::string continuationStopReason;
     double selectedSewingTolerance = 0.0;
     int sewingAttemptCount = 0;
     int freeEdgesBeforeRepair = 0;
@@ -279,6 +322,7 @@ struct RegionRefitResult {
     std::shared_ptr<RegionPatchLayout> selectedLayout;
     std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;
+    TopoDS_Shape diagnosticSewnShape;
     TopoDS_Shape finalShape;
 
     bool canApply() const;

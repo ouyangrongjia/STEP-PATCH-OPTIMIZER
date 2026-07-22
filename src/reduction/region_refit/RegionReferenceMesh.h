@@ -36,6 +36,8 @@ struct RegionReferenceVertex {
     bool hardCorner = false;
     bool internalSeam = false;
     bool normalDiscontinuity = false;
+    double areaWeight = 1.0;
+    double boundaryLengthWeight = 1.0;
 };
 
 struct RegionReferenceTriangle {
@@ -56,6 +58,7 @@ public:
     bool empty() const;
     StlMesh toStlMesh() const;
     std::string deterministicFingerprint() const;
+    void updateIntegrationWeights();
 
     std::vector<RegionReferenceVertex> vertices;
     std::vector<RegionReferenceTriangle> triangles;

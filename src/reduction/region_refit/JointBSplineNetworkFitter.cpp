@@ -304,6 +304,20 @@ void appendWeightedRow(
         target.X() * weight, target.Y() * weight, target.Z() * weight)});
 }
 
+double positiveMedian(std::vector<double> values) {
+    values.erase(std::remove_if(values.begin(), values.end(), [](const double value) {
+        return !std::isfinite(value) || value <= 0.0;
+    }), values.end());
+    if (values.empty()) return 1.0;
+    const auto middle = values.size() / 2;
+    std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(middle), values.end());
+    return std::max(values[middle], 1.0e-18);
+}
+
+double integrationWeight(const double value, const double median) {
+    return std::clamp(std::sqrt(std::max(value, 1.0e-18) / std::max(median, 1.0e-18)), 0.1, 10.0);
+}
+
 std::vector<LinearRow> buildSystemRows(
     const RegionReferenceMesh& mesh,
     const RegionPatchLayout& layout,
@@ -313,6 +327,16 @@ std::vector<LinearRow> buildSystemRows(
     const std::vector<SeamSample>& seamSamples) {
     std::vector<LinearRow> rows;
     rows.reserve(mesh.vertices.size() * 3 + mesh.boundarySamples.size() + seamSamples.size());
+    std::vector<double> areaWeights;
+    std::vector<double> boundaryWeights;
+    areaWeights.reserve(mesh.vertices.size());
+    boundaryWeights.reserve(mesh.boundarySamples.size());
+    for (const auto& vertex : mesh.vertices) {
+        if (vertex.boundary) boundaryWeights.push_back(vertex.boundaryLengthWeight);
+        else areaWeights.push_back(vertex.areaWeight);
+    }
+    const auto medianAreaWeight = positiveMedian(std::move(areaWeights));
+    const auto medianBoundaryWeight = positiveMedian(std::move(boundaryWeights));
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
         const auto& parameterization = layout.patches[patch];
         const auto& patchKnots = knots[patch];
@@ -335,11 +359,14 @@ std::vector<LinearRow> buildSystemRows(
             const auto bucket = static_cast<int>((vertexIndex * 2654435761ull + patch * 40503ull) % 10ull);
             if (!vertex.boundary && bucket >= 7) continue;
             const auto uv = normalizedParameter(parameterization.parameters[local]);
+            const auto sampleWeight = vertex.boundary
+                ? 100.0 * integrationWeight(vertex.boundaryLengthWeight, medianBoundaryWeight)
+                : integrationWeight(vertex.areaWeight, medianAreaWeight);
             appendWeightedRow(
                 rows,
                 surfaceCoefficients(uv, patchKnots, variableOffset),
                 vertex.point,
-                vertex.boundary ? 100.0 : 1.0);
+                sampleWeight);
             const auto tangentBucket = static_cast<int>(
                 (vertexIndex * 11400714819323198485ull + patch * 14029467366897019727ull) % 4ull);
             if (!vertex.boundary && tangentBucket != 0) continue;
@@ -458,6 +485,10 @@ std::vector<NormalRow> buildNormalRows(
     const std::vector<int>& variableOffsets) {
     std::vector<NormalRow> rows;
     rows.reserve(mesh.vertices.size() * 2);
+    std::vector<double> areaWeights;
+    areaWeights.reserve(mesh.vertices.size());
+    for (const auto& vertex : mesh.vertices) if (!vertex.boundary) areaWeights.push_back(vertex.areaWeight);
+    const auto medianAreaWeight = positiveMedian(std::move(areaWeights));
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
         const auto& parameterization = layout.patches[patch];
         for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
@@ -466,13 +497,16 @@ std::vector<NormalRow> buildNormalRows(
             const auto bucket = static_cast<int>((vertexIndex * 2654435761ull + patch * 40503ull) % 10ull);
             if (vertex.boundary || bucket >= 7) continue;
             const auto uv = normalizedParameter(parameterization.parameters[local]);
+            const auto weight = integrationWeight(vertex.areaWeight, medianAreaWeight);
             for (int axis = 0; axis < 2; ++axis) {
+                auto coefficients = surfaceDerivativeCoefficients(
+                    uv,
+                    knots[patch],
+                    variableOffsets[patch],
+                    axis);
+                for (auto& coefficient : coefficients) coefficient.second *= weight;
                 rows.push_back({
-                    surfaceDerivativeCoefficients(
-                        uv,
-                        knots[patch],
-                        variableOffsets[patch],
-                        axis),
+                    std::move(coefficients),
                     vertex.normal});
             }
         }
@@ -813,6 +847,35 @@ bool JointBSplineNetworkFitResult::success() const {
     return status == RegionRefitStatus::Success && network != nullptr;
 }
 
+double normalizedViolationScore(
+    const ValidationMetrics& metrics,
+    const RegionRefitOptions& options) {
+    return std::max({
+        metrics.holdoutMaximumDistance / std::max(options.tolerance3d, 1.0e-12),
+        metrics.holdoutMaximumNormalDegrees / std::max(options.normalToleranceDegrees, 1.0e-12),
+        metrics.boundaryMaximumDistance / std::max(options.curveOnSurfaceTolerance, 1.0e-12),
+        metrics.seamMaximumDistance / std::max(options.curveOnSurfaceTolerance, 1.0e-12)});
+}
+
+std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
+    const RegionPatchLayout& layout,
+    std::vector<Handle(Geom_BSplineSurface)> surfaces,
+    const ValidationMetrics& metrics,
+    const RegionRefitOptions& options,
+    const bool gatePassed) {
+    auto network = std::make_shared<RegionFittedPatchNetwork>();
+    network->layout = layout;
+    network->surfaces = std::move(surfaces);
+    network->inspectionShape = inspectionShape(network->surfaces);
+    network->holdoutMaximumDistance = metrics.holdoutMaximumDistance;
+    network->holdoutMaximumNormalDegrees = metrics.holdoutMaximumNormalDegrees;
+    network->boundaryMaximumDistance = metrics.boundaryMaximumDistance;
+    network->seamMaximumDistance = metrics.seamMaximumDistance;
+    network->normalizedViolationScore = normalizedViolationScore(metrics, options);
+    network->fitGatePassed = gatePassed;
+    return network;
+}
+
 JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const RegionReferenceMesh& mesh,
     const RegionTopologyConstraints& constraints,
@@ -821,6 +884,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const std::chrono::steady_clock::time_point deadline) const {
     (void)constraints;
     JointBSplineNetworkFitResult result;
+    double bestEffortScore = std::numeric_limits<double>::infinity();
     const auto maximumAttempts = std::min<std::size_t>(
         candidates.size(), static_cast<std::size_t>(options.maximumFullFitCount));
     for (std::size_t candidateIndex = 0; candidateIndex < maximumAttempts; ++candidateIndex) {
@@ -1129,7 +1193,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     metrics.holdoutMaximumNormalDegrees <= options.normalToleranceDegrees &&
                     metrics.boundaryMaximumDistance <= options.curveOnSurfaceTolerance &&
                     metrics.seamMaximumDistance <= options.curveOnSurfaceTolerance;
-                if (bestSurfaces.empty() || metrics.selectionMaximumScore < bestMetrics.selectionMaximumScore) {
+                if (bestSurfaces.empty() || normalizedViolationScore(metrics, options) <
+                        normalizedViolationScore(bestMetrics, options)) {
                     bestSurfaces = surfaces;
                     bestMetrics = metrics;
                 }
@@ -1143,15 +1208,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     attempt.wallMilliseconds = std::chrono::duration<double, std::milli>(
                         std::chrono::steady_clock::now() - attemptStarted).count();
                     result.attempts.push_back(attempt);
-                    auto network = std::make_shared<RegionFittedPatchNetwork>();
-                    network->layout = layout;
-                    network->surfaces = std::move(surfaces);
-                    network->inspectionShape = inspectionShape(network->surfaces);
-                    network->holdoutMaximumDistance = metrics.holdoutMaximumDistance;
-                    network->holdoutMaximumNormalDegrees = metrics.holdoutMaximumNormalDegrees;
-                    network->boundaryMaximumDistance = metrics.boundaryMaximumDistance;
-                    network->seamMaximumDistance = metrics.seamMaximumDistance;
-                    result.network = std::move(network);
+                    result.network = fittedNetwork(layout, std::move(surfaces), metrics, options, true);
                     result.status = RegionRefitStatus::Success;
                     result.message = "The smallest fully fitted layout passed all fitting gates.";
                     return result;
@@ -1190,6 +1247,13 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             std::chrono::steady_clock::now() - attemptStarted).count();
         if (attempt.stopReason.empty()) {
             attempt.stopReason = "Fit iteration budget exhausted without passing all gates.";
+        }
+        if (!bestSurfaces.empty()) {
+            auto candidate = fittedNetwork(layout, std::move(bestSurfaces), bestMetrics, options, false);
+            if (candidate->normalizedViolationScore < bestEffortScore) {
+                bestEffortScore = candidate->normalizedViolationScore;
+                result.bestEffortNetwork = std::move(candidate);
+            }
         }
         result.attempts.push_back(std::move(attempt));
     }

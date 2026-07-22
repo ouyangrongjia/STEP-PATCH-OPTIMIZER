@@ -28,7 +28,7 @@ namespace {
 constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 1;
+constexpr quint32 kVersion = 2;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -70,7 +70,15 @@ void writeSamplingReport(QDataStream& stream, const StepAdaptiveRegionSamplingRe
            << report.maximumInteriorNormalErrorDegrees
            << quint64(report.maximumInteriorNormalFaceId)
            << quint64(report.maximumInteriorNormalTriangleIndex)
-           << report.maximumBoundaryChordError;
+           << report.maximumBoundaryChordError << report.geometricLimitsPassed
+           << report.edgeLengthP01 << report.edgeLengthP50 << report.edgeLengthP99
+           << report.edgeLengthP99P01Ratio << report.minimumAngleP05Degrees
+           << report.minimumAngleP50Degrees << report.aspectRatioP50
+           << report.aspectRatioP95 << report.aspectRatioP99
+           << report.normalizedQualityP05 << report.normalizedQualityP50
+           << quint64(report.zeroAreaTriangleCount) << quint64(report.nonManifoldEdgeCount)
+           << quint64(report.remeshSplitCount) << quint64(report.remeshCollapseCount)
+           << quint64(report.remeshFlipCount) << quint64(report.remeshRelocationCount);
     writeString(stream, report.meshFingerprint);
 }
 
@@ -88,6 +96,12 @@ bool readSamplingReport(QDataStream& stream, StepAdaptiveRegionSamplingReport& r
     quint64 discontinuities = 0;
     quint64 maximumNormalFace = 0;
     quint64 maximumNormalTriangle = 0;
+    quint64 zeroAreaTriangles = 0;
+    quint64 nonManifoldEdges = 0;
+    quint64 remeshSplits = 0;
+    quint64 remeshCollapses = 0;
+    quint64 remeshFlips = 0;
+    quint64 remeshRelocations = 0;
     stream >> status;
     if (!readString(stream, report.message)) return false;
     stream >> sourceFaces >> vertices >> triangles >> boundarySamples >> endpoints
@@ -95,7 +109,14 @@ bool readSamplingReport(QDataStream& stream, StepAdaptiveRegionSamplingReport& r
            >> report.linearDeflection >> report.angularDeflectionDegrees
            >> report.boundaryChordTolerance >> report.maximumInteriorChordError
            >> report.maximumInteriorNormalErrorDegrees >> maximumNormalFace
-           >> maximumNormalTriangle >> report.maximumBoundaryChordError;
+           >> maximumNormalTriangle >> report.maximumBoundaryChordError
+           >> report.geometricLimitsPassed >> report.edgeLengthP01 >> report.edgeLengthP50
+           >> report.edgeLengthP99 >> report.edgeLengthP99P01Ratio
+           >> report.minimumAngleP05Degrees >> report.minimumAngleP50Degrees
+           >> report.aspectRatioP50 >> report.aspectRatioP95 >> report.aspectRatioP99
+           >> report.normalizedQualityP05 >> report.normalizedQualityP50
+           >> zeroAreaTriangles >> nonManifoldEdges >> remeshSplits >> remeshCollapses
+           >> remeshFlips >> remeshRelocations;
     if (!readString(stream, report.meshFingerprint) || stream.status() != QDataStream::Ok) return false;
     report.status = static_cast<RegionRefitStatus>(status);
     report.sourceFaceCount = static_cast<std::size_t>(sourceFaces);
@@ -110,6 +131,12 @@ bool readSamplingReport(QDataStream& stream, StepAdaptiveRegionSamplingReport& r
     report.normalDiscontinuityVertexCount = static_cast<std::size_t>(discontinuities);
     report.maximumInteriorNormalFaceId = static_cast<FaceId>(maximumNormalFace);
     report.maximumInteriorNormalTriangleIndex = static_cast<std::size_t>(maximumNormalTriangle);
+    report.zeroAreaTriangleCount = static_cast<std::size_t>(zeroAreaTriangles);
+    report.nonManifoldEdgeCount = static_cast<std::size_t>(nonManifoldEdges);
+    report.remeshSplitCount = static_cast<std::size_t>(remeshSplits);
+    report.remeshCollapseCount = static_cast<std::size_t>(remeshCollapses);
+    report.remeshFlipCount = static_cast<std::size_t>(remeshFlips);
+    report.remeshRelocationCount = static_cast<std::size_t>(remeshRelocations);
     return true;
 }
 
@@ -119,7 +146,8 @@ void writeMesh(QDataStream& stream, const RegionReferenceMesh& mesh) {
         stream << vertex.point.X() << vertex.point.Y() << vertex.point.Z()
                << vertex.normal.X() << vertex.normal.Y() << vertex.normal.Z()
                << vertex.boundary << vertex.hardBoundary << vertex.boundaryEndpoint
-               << vertex.hardCorner << vertex.internalSeam << vertex.normalDiscontinuity;
+               << vertex.hardCorner << vertex.internalSeam << vertex.normalDiscontinuity
+               << vertex.areaWeight << vertex.boundaryLengthWeight;
         stream << quint64(vertex.boundaryEdgeIds.size());
         for (const auto edgeId : vertex.boundaryEdgeIds) stream << quint64(edgeId);
         stream << quint64(vertex.sources.size());
@@ -155,7 +183,8 @@ bool readMesh(QDataStream& stream, RegionReferenceMesh& mesh) {
         double nz = 1.0;
         stream >> x >> y >> z >> nx >> ny >> nz
                >> vertex.boundary >> vertex.hardBoundary >> vertex.boundaryEndpoint
-               >> vertex.hardCorner >> vertex.internalSeam >> vertex.normalDiscontinuity;
+               >> vertex.hardCorner >> vertex.internalSeam >> vertex.normalDiscontinuity
+               >> vertex.areaWeight >> vertex.boundaryLengthWeight;
         if (stream.status() != QDataStream::Ok || nx * nx + ny * ny + nz * nz <= 1.0e-24) return false;
         vertex.point = gp_Pnt(x, y, z);
         vertex.normal = gp_Dir(nx, ny, nz);
@@ -434,6 +463,10 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.normalToleranceDegrees
          << '|' << request.options.curveOnSurfaceTolerance
          << '|' << request.options.maximumSampleTriangles
+         << '|' << static_cast<int>(request.options.samplingMode)
+         << '|' << request.options.targetSampleTriangles
+         << '|' << request.options.maximumRemeshSweeps
+         << '|' << request.options.maximumLocalSizeRatio
          << '|' << request.options.fixedPatchCount
          << '|' << request.options.maximumAdaptivePatchCount
          << '|' << request.options.maximumFullFitCount

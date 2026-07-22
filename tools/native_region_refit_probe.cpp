@@ -211,7 +211,9 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             {"iterations", iterations}});
     }
     return {
-        {"status", result.fittedNetwork ? "Success" : spo::toString(result.report.status)},
+        {"status", result.report.fitGatePassed ? "Success" : spo::toString(result.report.status)},
+        {"fit_gate_passed", result.report.fitGatePassed},
+        {"best_effort_used", result.report.bestEffortUsed},
         {"full_fit_count", result.report.fullFitCount},
         {"cached_fit_attempt_count", result.report.cachedFitAttemptCount},
         {"selected_patch_count", result.report.selectedPatchCount},
@@ -221,9 +223,11 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
 
 QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
     return {
-        {"status", result.report.retrimReplacementFaceCount > 0
+        {"status", result.report.retrimValidationPassed
             ? "Success"
             : spo::toString(result.report.status)},
+        {"attempted", result.report.retrimAttempted},
+        {"validation_passed", result.report.retrimValidationPassed},
         {"replacement_faces", result.report.retrimReplacementFaceCount},
         {"internal_seams", result.report.retrimInternalSeamCount},
         {"reused_original_boundary_edges", result.report.retrimReusedBoundaryEdgeCount},
@@ -238,6 +242,10 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
 QJsonObject sewingReportToJson(const spo::RegionRefitResult& result) {
     return {
         {"status", result.report.repairPassed ? "Success" : spo::toString(result.report.status)},
+        {"attempted", result.report.sewingAttempted},
+        {"constructed_shape", result.report.sewingConstructedShape},
+        {"diagnostic_pipeline_completed", result.report.diagnosticPipelineCompleted},
+        {"continuation_stop_reason", QString::fromStdString(result.report.continuationStopReason)},
         {"repair_passed", result.report.repairPassed},
         {"selected_sewing_tolerance", result.report.selectedSewingTolerance},
         {"sewing_attempts", result.report.sewingAttemptCount},
@@ -458,6 +466,16 @@ QJsonObject performanceToJson(
         {"status", spo::toString(result.report.status)},
         {"failure_stage", spo::toString(result.report.failureStage)},
         {"layout_mode", spo::toString(request.layoutMode)},
+        {"sampling_mode", spo::toString(request.options.samplingMode)},
+        {"execution_mode", spo::toString(request.executionMode)},
+        {"fit_gate_passed", result.report.fitGatePassed},
+        {"best_effort_used", result.report.bestEffortUsed},
+        {"retrim_attempted", result.report.retrimAttempted},
+        {"sewing_attempted", result.report.sewingAttempted},
+        {"sewing_constructed_shape", result.report.sewingConstructedShape},
+        {"diagnostic_pipeline_completed", result.report.diagnosticPipelineCompleted},
+        {"continuation_stop_reason", QString::fromStdString(result.report.continuationStopReason)},
+        {"can_apply", result.canApply()},
         {"wall_budget_ms", QString::number(timing.requestedWallBudgetMilliseconds)},
         {"engine_wall_budget_ms", QString::number(request.options.maximumWallClockMilliseconds)},
         {"input_read_budget_ms", QString::number(request.options.inputReadBudgetMilliseconds)},
@@ -479,6 +497,25 @@ QJsonObject performanceToJson(
         {"welded_internal_seam_vertices", QString::number(result.report.weldedInternalSeamVertexCount)},
         {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
         {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
+        {"sampling_quality", QJsonObject {
+            {"geometric_limits_passed", result.report.samplingGeometricLimitsPassed},
+            {"edge_length_p01", result.report.samplingEdgeLengthP01},
+            {"edge_length_p50", result.report.samplingEdgeLengthP50},
+            {"edge_length_p99", result.report.samplingEdgeLengthP99},
+            {"edge_length_p99_p01_ratio", result.report.samplingEdgeLengthP99P01Ratio},
+            {"minimum_angle_p05_degrees", result.report.samplingMinimumAngleP05Degrees},
+            {"minimum_angle_p50_degrees", result.report.samplingMinimumAngleP50Degrees},
+            {"aspect_ratio_p50", result.report.samplingAspectRatioP50},
+            {"aspect_ratio_p95", result.report.samplingAspectRatioP95},
+            {"aspect_ratio_p99", result.report.samplingAspectRatioP99},
+            {"normalized_quality_p05", result.report.samplingNormalizedQualityP05},
+            {"normalized_quality_p50", result.report.samplingNormalizedQualityP50},
+            {"zero_area_triangles", QString::number(result.report.samplingZeroAreaTriangleCount)},
+            {"non_manifold_edges", QString::number(result.report.samplingNonManifoldEdgeCount)},
+            {"remesh_splits", QString::number(result.report.samplingRemeshSplitCount)},
+            {"remesh_collapses", QString::number(result.report.samplingRemeshCollapseCount)},
+            {"remesh_flips", QString::number(result.report.samplingRemeshFlipCount)},
+            {"remesh_relocations", QString::number(result.report.samplingRemeshRelocationCount)}}},
         {"selected_patch_count", result.report.selectedPatchCount},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"geometry_metrics", QJsonObject {
@@ -517,6 +554,24 @@ QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
         {"maximum_interior_chord_error", result.report.maximumSamplingChordError},
         {"maximum_interior_normal_error_degrees", result.report.maximumSamplingNormalErrorDegrees},
         {"maximum_boundary_chord_error", result.report.maximumBoundaryChordError},
+        {"geometric_limits_passed", result.report.samplingGeometricLimitsPassed},
+        {"edge_length_p01", result.report.samplingEdgeLengthP01},
+        {"edge_length_p50", result.report.samplingEdgeLengthP50},
+        {"edge_length_p99", result.report.samplingEdgeLengthP99},
+        {"edge_length_p99_p01_ratio", result.report.samplingEdgeLengthP99P01Ratio},
+        {"minimum_angle_p05_degrees", result.report.samplingMinimumAngleP05Degrees},
+        {"minimum_angle_p50_degrees", result.report.samplingMinimumAngleP50Degrees},
+        {"aspect_ratio_p50", result.report.samplingAspectRatioP50},
+        {"aspect_ratio_p95", result.report.samplingAspectRatioP95},
+        {"aspect_ratio_p99", result.report.samplingAspectRatioP99},
+        {"normalized_quality_p05", result.report.samplingNormalizedQualityP05},
+        {"normalized_quality_p50", result.report.samplingNormalizedQualityP50},
+        {"zero_area_triangles", QString::number(result.report.samplingZeroAreaTriangleCount)},
+        {"non_manifold_edges", QString::number(result.report.samplingNonManifoldEdgeCount)},
+        {"remesh_splits", QString::number(result.report.samplingRemeshSplitCount)},
+        {"remesh_collapses", QString::number(result.report.samplingRemeshCollapseCount)},
+        {"remesh_flips", QString::number(result.report.samplingRemeshFlipCount)},
+        {"remesh_relocations", QString::number(result.report.samplingRemeshRelocationCount)},
         {"mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)}};
 }
 
@@ -529,6 +584,9 @@ int main(int argc, char* argv[]) {
                      "(--candidate-id <编号> | --faces <编号,编号,...>) "
                      "[--locked-edges <编号,编号,...>] [--layout <adaptive|fixed>] "
                      "[--patch-count <数量>] [--wall-time-ms <毫秒>] "
+                     "[--sampling-mode <adaptive-occt|quality-balanced>] "
+                     "[--target-sample-triangles <数量>] [--maximum-full-fit-count <数量>] "
+                     "[--best-effort-through-sewing] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
                      "[--input-read-budget-ms <毫秒>] "
                      "[--cache-policy <disabled|read-write|read-only|refresh>] "
@@ -546,6 +604,7 @@ int main(int argc, char* argv[]) {
     bool fitOnly = false;
     bool performanceOnly = false;
     bool cachePolicySpecified = false;
+    bool algorithmFingerprintSpecified = false;
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
@@ -571,6 +630,24 @@ int main(int argc, char* argv[]) {
             } else if (argument == "--patch-count") {
                 if (++index >= argc) return 2;
                 request.options.fixedPatchCount = std::stoi(argv[index]);
+            } else if (argument == "--sampling-mode") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "adaptive-occt") {
+                    request.options.samplingMode = spo::RegionRefitSamplingMode::AdaptiveOcct;
+                } else if (value == "quality-balanced") {
+                    request.options.samplingMode = spo::RegionRefitSamplingMode::QualityBalanced;
+                } else {
+                    return 2;
+                }
+            } else if (argument == "--target-sample-triangles") {
+                if (++index >= argc) return 2;
+                request.options.targetSampleTriangles = std::stoull(argv[index]);
+            } else if (argument == "--maximum-full-fit-count") {
+                if (++index >= argc) return 2;
+                request.options.maximumFullFitCount = std::stoi(argv[index]);
+            } else if (argument == "--best-effort-through-sewing") {
+                request.executionMode = spo::RegionRefitExecutionMode::BestEffortThroughSewing;
             } else if (argument == "--wall-time-ms") {
                 if (++index >= argc) return 2;
                 request.options.maximumWallClockMilliseconds = std::stoll(argv[index]);
@@ -601,6 +678,7 @@ int main(int argc, char* argv[]) {
             } else if (argument == "--algorithm-fingerprint") {
                 if (++index >= argc) return 2;
                 request.options.algorithmFingerprint = argv[index];
+                algorithmFingerprintSpecified = true;
             } else if (argument == "--run-identity") {
                 if (++index >= argc) return 2;
                 runIdentity = argv[index];
@@ -625,6 +703,11 @@ int main(int argc, char* argv[]) {
     } catch (...) {
         std::cerr << "编号和预算参数必须是有效非负整数。\n";
         return 2;
+    }
+
+    if (!algorithmFingerprintSpecified &&
+        request.options.samplingMode == spo::RegionRefitSamplingMode::QualityBalanced) {
+        request.options.algorithmFingerprint = "native-regional-refit-v16-quality-balanced";
     }
 
     if ((candidateId >= 0) == !request.selectedFaces.empty()) {
@@ -756,20 +839,29 @@ int main(int argc, char* argv[]) {
     if (!performanceOnly && result.fittedNetwork && !result.fittedPatchNetwork.IsNull()) {
         const auto fitDirectory = outputDirectory / "artifacts" / "fit";
         std::filesystem::create_directories(fitDirectory);
+        const auto fitName = result.report.fitGatePassed
+            ? std::filesystem::path("fitted_patch_network.step")
+            : std::filesystem::path("best_effort_fitted_patch_network.step");
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(result.fittedPatchNetwork, {}),
-            fitDirectory / "fitted_patch_network.step");
+            fitDirectory / fitName);
         if (!write.success()) {
             std::cerr << write.message() << '\n';
             return 1;
         }
     }
-    if (!performanceOnly && result.canApply()) {
+    if (!performanceOnly && (result.canApply() || !result.diagnosticSewnShape.IsNull())) {
         const auto assemblyDirectory = outputDirectory / "artifacts" / "assembly";
         std::filesystem::create_directories(assemblyDirectory);
+        const auto assemblyName = result.canApply()
+            ? std::filesystem::path("final_sewn.step")
+            : std::filesystem::path("sewn_attempt.step");
+        const auto& assemblyShape = result.canApply()
+            ? result.finalShape
+            : result.diagnosticSewnShape;
         const auto write = spo::StepWriter().write(
-            spo::ShapeDocument(result.finalShape, {}),
-            assemblyDirectory / "final_sewn.step");
+            spo::ShapeDocument(assemblyShape, {}),
+            assemblyDirectory / assemblyName);
         if (!write.success()) {
             std::cerr << write.message() << '\n';
             return 1;

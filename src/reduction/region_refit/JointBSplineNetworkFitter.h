@@ -20,6 +20,8 @@ struct RegionFittedPatchNetwork {
     double holdoutMaximumNormalDegrees = 0.0;
     double boundaryMaximumDistance = 0.0;
     double seamMaximumDistance = 0.0;
+    double normalizedViolationScore = 0.0;
+    bool fitGatePassed = false;
 };
 
 struct JointBSplineNetworkFitResult {
@@ -27,6 +29,7 @@ struct JointBSplineNetworkFitResult {
     std::string message;
     std::vector<RegionFitAttemptReport> attempts;
     std::shared_ptr<RegionFittedPatchNetwork> network;
+    std::shared_ptr<RegionFittedPatchNetwork> bestEffortNetwork;
 
     bool success() const;
 };

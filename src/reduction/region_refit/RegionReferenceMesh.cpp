@@ -33,6 +33,12 @@ std::uint64_t quantized(const double value) {
     return static_cast<std::uint64_t>(std::llround(value * 1.0e9));
 }
 
+double cotangent(const gp_Vec& first, const gp_Vec& second) {
+    gp_Vec cross = first.Crossed(second);
+    const auto denominator = cross.Magnitude();
+    return denominator > 1.0e-24 ? first.Dot(second) / denominator : 0.0;
+}
+
 }
 
 bool RegionReferenceMesh::empty() const {
@@ -91,6 +97,64 @@ std::string RegionReferenceMesh::deterministicFingerprint() const {
     std::ostringstream stream;
     stream << std::hex << std::setw(16) << std::setfill('0') << hash;
     return stream.str();
+}
+
+void RegionReferenceMesh::updateIntegrationWeights() {
+    for (auto& vertex : vertices) {
+        vertex.areaWeight = 0.0;
+        vertex.boundaryLengthWeight = 0.0;
+    }
+
+    for (const auto& triangle : triangles) {
+        const auto ia = triangle.vertices[0];
+        const auto ib = triangle.vertices[1];
+        const auto ic = triangle.vertices[2];
+        if (ia >= vertices.size() || ib >= vertices.size() || ic >= vertices.size()) continue;
+        const auto& a = vertices[ia].point;
+        const auto& b = vertices[ib].point;
+        const auto& c = vertices[ic].point;
+        const gp_Vec ab(a, b);
+        const gp_Vec ac(a, c);
+        const gp_Vec ba(b, a);
+        const gp_Vec bc(b, c);
+        const gp_Vec ca(c, a);
+        const gp_Vec cb(c, b);
+        const auto doubledArea = ab.Crossed(ac).Magnitude();
+        if (doubledArea <= 1.0e-24) continue;
+        const auto area = doubledArea * 0.5;
+        const bool obtuseA = ab.Dot(ac) < 0.0;
+        const bool obtuseB = ba.Dot(bc) < 0.0;
+        const bool obtuseC = ca.Dot(cb) < 0.0;
+        if (obtuseA || obtuseB || obtuseC) {
+            vertices[ia].areaWeight += obtuseA ? area * 0.5 : area * 0.25;
+            vertices[ib].areaWeight += obtuseB ? area * 0.5 : area * 0.25;
+            vertices[ic].areaWeight += obtuseC ? area * 0.5 : area * 0.25;
+            continue;
+        }
+        const auto cotA = cotangent(ab, ac);
+        const auto cotB = cotangent(ba, bc);
+        const auto cotC = cotangent(ca, cb);
+        vertices[ia].areaWeight += (a.SquareDistance(b) * cotC + a.SquareDistance(c) * cotB) / 8.0;
+        vertices[ib].areaWeight += (b.SquareDistance(a) * cotC + b.SquareDistance(c) * cotA) / 8.0;
+        vertices[ic].areaWeight += (c.SquareDistance(a) * cotB + c.SquareDistance(b) * cotA) / 8.0;
+    }
+
+    for (std::size_t index = 1; index < boundarySamples.size(); ++index) {
+        const auto& previous = boundarySamples[index - 1];
+        const auto& current = boundarySamples[index];
+        if (previous.edgeId != current.edgeId ||
+            previous.vertexIndex >= vertices.size() || current.vertexIndex >= vertices.size()) {
+            continue;
+        }
+        const auto length = vertices[previous.vertexIndex].point.Distance(vertices[current.vertexIndex].point);
+        vertices[previous.vertexIndex].boundaryLengthWeight += length * 0.5;
+        vertices[current.vertexIndex].boundaryLengthWeight += length * 0.5;
+    }
+
+    for (auto& vertex : vertices) {
+        vertex.areaWeight = std::max(vertex.areaWeight, 1.0e-18);
+        vertex.boundaryLengthWeight = std::max(vertex.boundaryLengthWeight, 1.0e-18);
+    }
 }
 
 }

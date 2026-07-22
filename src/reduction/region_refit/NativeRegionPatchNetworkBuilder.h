@@ -23,9 +23,11 @@ struct NativeRegionPatchNetworkBuildResult {
     int pcurveProjectionCount = 0;
     int sameParameterCheckCount = 0;
     int sameParameterFailureCount = 0;
+    int brepValidationFailureCount = 0;
     double maximumSameParameterDeviation = 0.0;
 
     bool success() const;
+    bool constructible() const;
 };
 
 class NativeRegionPatchNetworkBuilder {
@@ -34,7 +36,8 @@ public:
         const RegionReferenceMesh& mesh,
         const RegionTopologyConstraints& constraints,
         const RegionFittedPatchNetwork& network,
-        double curveOnSurfaceTolerance) const;
+        double curveOnSurfaceTolerance,
+        bool allowUnvalidatedFaces = false) const;
 };
 
 }

@@ -1,4 +1,5 @@
 #include "reduction/region_refit/StepAdaptiveRegionSampler.h"
+#include "reduction/region_refit/QualityBalancedRegionRemesher.h"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -913,7 +914,8 @@ bool StepAdaptiveRegionSamplingReport::success() const {
 StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     const ShapeDocument& document,
     const RegionTopologyConstraints& constraints,
-    const RegionRefitOptions& options) const {
+    const RegionRefitOptions& options,
+    const std::chrono::steady_clock::time_point deadline) const {
     if (!document.hasShape() || constraints.selectedFaces.empty() || constraints.boundaryEdges.empty()) {
         return fail(RegionRefitStatus::InvalidRequest, "Adaptive sampling requires validated region constraints.");
     }
@@ -924,6 +926,9 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     report.linearDeflection = std::min(options.tolerance3d / 4.0, 0.01);
     report.angularDeflectionDegrees = std::min(options.normalToleranceDegrees / 3.0, 5.0);
     report.boundaryChordTolerance = options.curveOnSurfaceTolerance * 0.5;
+    if (std::chrono::steady_clock::now() >= deadline) {
+        return fail(RegionRefitStatus::TimeBudgetExceeded, "Adaptive sampling deadline was already exhausted.");
+    }
     if (report.linearDeflection <= 0.0 || report.angularDeflectionDegrees <= 0.0 ||
         report.boundaryChordTolerance <= 0.0 || options.maximumSampleTriangles == 0) {
         return fail(RegionRefitStatus::InvalidRequest, "Adaptive sampling tolerances and budgets must be positive.");
@@ -957,6 +962,9 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     mesher.Perform();
     if (!mesher.IsDone()) {
         return fail(RegionRefitStatus::Failed, "Open CASCADE adaptive meshing did not complete.");
+    }
+    if (std::chrono::steady_clock::now() >= deadline) {
+        return fail(RegionRefitStatus::TimeBudgetExceeded, "Open CASCADE adaptive meshing exhausted the sampling deadline.");
     }
 
     const std::set<EdgeId> internalEdges(
@@ -1195,6 +1203,57 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
         vertex.hardBoundary = true;
     }
 
+    if (options.samplingMode == RegionRefitSamplingMode::QualityBalanced) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            report.status = RegionRefitStatus::TimeBudgetExceeded;
+            report.message = "STEP reference construction exhausted the sampling deadline before remeshing.";
+            report.vertexCount = result.mesh.vertices.size();
+            report.triangleCount = result.mesh.triangles.size();
+            report.boundarySampleCount = result.mesh.boundarySamples.size();
+            if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
+            return result;
+        }
+        auto balanced = QualityBalancedRegionRemesher().remesh(
+            document,
+            constraints,
+            options,
+            result.mesh,
+            deadline);
+        result.mesh = std::move(balanced.mesh);
+        report.edgeLengthP01 = balanced.report.edgeLengthP01;
+        report.edgeLengthP50 = balanced.report.edgeLengthP50;
+        report.edgeLengthP99 = balanced.report.edgeLengthP99;
+        report.edgeLengthP99P01Ratio = balanced.report.edgeLengthP99P01Ratio;
+        report.minimumAngleP05Degrees = balanced.report.minimumAngleP05Degrees;
+        report.minimumAngleP50Degrees = balanced.report.minimumAngleP50Degrees;
+        report.aspectRatioP50 = balanced.report.aspectRatioP50;
+        report.aspectRatioP95 = balanced.report.aspectRatioP95;
+        report.aspectRatioP99 = balanced.report.aspectRatioP99;
+        report.normalizedQualityP05 = balanced.report.normalizedQualityP05;
+        report.normalizedQualityP50 = balanced.report.normalizedQualityP50;
+        report.zeroAreaTriangleCount = balanced.report.zeroAreaTriangleCount;
+        report.nonManifoldEdgeCount = balanced.report.nonManifoldEdgeCount;
+        report.remeshSplitCount = balanced.report.splitCount;
+        report.remeshCollapseCount = balanced.report.collapseCount;
+        report.remeshFlipCount = balanced.report.flipCount;
+        report.remeshRelocationCount = balanced.report.relocationCount;
+        if (!balanced.report.success) {
+            report.status = balanced.report.timeBudgetExceeded
+                ? RegionRefitStatus::TimeBudgetExceeded
+                : RegionRefitStatus::Failed;
+            report.message = balanced.report.message;
+            report.vertexCount = result.mesh.vertices.size();
+            report.triangleCount = result.mesh.triangles.size();
+            report.boundarySampleCount = result.mesh.boundarySamples.size();
+            if (!result.mesh.empty()) report.meshFingerprint = result.mesh.deterministicFingerprint();
+            return result;
+        }
+    } else {
+        result.mesh.updateIntegrationWeights();
+    }
+
+    report.maximumInteriorChordError = 0.0;
+    report.maximumInteriorNormalErrorDegrees = 0.0;
     validateInterior(document, report, result.mesh);
     report.vertexCount = result.mesh.vertices.size();
     report.triangleCount = result.mesh.triangles.size();
@@ -1203,9 +1262,10 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     if (result.mesh.empty()) {
         return fail(RegionRefitStatus::Failed, "Adaptive sampling produced an empty mesh.");
     }
-    if (report.maximumInteriorChordError > report.linearDeflection * 1.5 ||
-        report.maximumInteriorNormalErrorDegrees > report.angularDeflectionDegrees * 1.5 ||
-        report.maximumBoundaryChordError > report.boundaryChordTolerance * 1.01) {
+    report.geometricLimitsPassed = report.maximumInteriorChordError <= report.linearDeflection * 1.5 &&
+        report.maximumInteriorNormalErrorDegrees <= report.angularDeflectionDegrees * 1.5 &&
+        report.maximumBoundaryChordError <= report.boundaryChordTolerance * 1.01;
+    if (!report.geometricLimitsPassed && options.samplingMode == RegionRefitSamplingMode::AdaptiveOcct) {
         report.status = RegionRefitStatus::Failed;
         std::ostringstream message;
         message << "Adaptive reference mesh exceeded a geometric limit: interior_chord="
@@ -1219,7 +1279,9 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
     }
 
     report.status = RegionRefitStatus::Success;
-    report.message = "Adaptive STEP reference mesh satisfies its sampling limits.";
+    report.message = report.geometricLimitsPassed
+        ? "STEP reference mesh satisfies its sampling limits."
+        : "Quality-balanced STEP reference mesh is structurally valid; geometric sampling limits are recorded as diagnostic failures.";
     return result;
 }
 

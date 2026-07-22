@@ -5,6 +5,10 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Faces")][long[]]$FaceIds,
     [ValidateSet("adaptive", "fixed")][string]$Layout = "adaptive",
     [int]$PatchCount = 0,
+    [ValidateSet("adaptive-occt", "quality-balanced")][string]$SamplingMode = "adaptive-occt",
+    [long]$TargetSampleTriangles = 80000,
+    [int]$MaximumFullFitCount = 3,
+    [switch]$BestEffortThroughSewing,
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
     [long]$InputReadBudgetMilliseconds = 10000,
@@ -29,6 +33,9 @@ if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
 }
 if ($Layout -eq "fixed" -and $PatchCount -le 0) {
     throw "Fixed layout requires -PatchCount greater than zero."
+}
+if ($TargetSampleTriangles -le 0 -or $MaximumFullFitCount -le 0) {
+    throw "Sampling target and maximum full fit count must be positive."
 }
 if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent +
         [int]$LayoutOnly.IsPresent + [int]$FitOnly.IsPresent -gt 1) {
@@ -66,9 +73,15 @@ if ($LockedEdgeIds.Count -gt 0) {
     $baseArguments += @("--locked-edges", ($LockedEdgeIds -join ","))
 }
 $baseArguments += @(
+    "--sampling-mode", $SamplingMode,
+    "--target-sample-triangles", [string]$TargetSampleTriangles,
+    "--maximum-full-fit-count", [string]$MaximumFullFitCount,
     "--wall-time-ms", [string]$WallTimeMilliseconds,
     "--input-read-budget-ms", [string]$InputReadBudgetMilliseconds,
     "--max-memory-mib", [string]$MaximumMemoryMiB)
+if ($BestEffortThroughSewing) {
+    $baseArguments += "--best-effort-through-sewing"
+}
 if ($ConstraintsOnly) {
     $baseArguments += "--constraints-only"
 } elseif ($SamplingOnly) {
@@ -313,15 +326,26 @@ $fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch
 if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
     $artifacts["fitted_patch_network_step"] = $fittedPatchNetwork
 }
+$bestEffortPatchNetwork = Join-Path $context.directories.artifacts "fit\best_effort_fitted_patch_network.step"
+if (Test-Path -LiteralPath $bestEffortPatchNetwork -PathType Leaf) {
+    $artifacts["best_effort_fitted_patch_network_step"] = $bestEffortPatchNetwork
+}
 $finalSewn = Join-Path $context.directories.artifacts "assembly\final_sewn.step"
 if (Test-Path -LiteralPath $finalSewn -PathType Leaf) {
     $artifacts["final_sewn_step"] = $finalSewn
 }
+$sewnAttempt = Join-Path $context.directories.artifacts "assembly\sewn_attempt.step"
+if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
+    $artifacts["sewn_attempt_step"] = $sewnAttempt
+}
 
 $evidenceDefinitions = @(
-    [ordered]@{ name = "adaptive_sampling_stl"; path = $samplingStl; stage = "Sampling"; required = $true },
-    [ordered]@{ name = "selected_layout_visualization"; path = $layoutSvg; stage = "Layout"; required = $true },
-    [ordered]@{ name = "final_sewn_step"; path = $finalSewn; stage = "StepRoundtrip"; required = $true }
+    [ordered]@{ name = "adaptive_sampling_stl"; path = $samplingStl; stage = "Sampling"; required = $true; validated = (Test-Path -LiteralPath $samplingStl -PathType Leaf) },
+    [ordered]@{ name = "selected_layout_visualization"; path = $layoutSvg; stage = "Layout"; required = $true; validated = (Test-Path -LiteralPath $layoutSvg -PathType Leaf) },
+    [ordered]@{ name = "fitted_patch_network_step"; path = $fittedPatchNetwork; stage = "Fitting"; required = $false; validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "best_effort_fitted_patch_network_step"; path = $bestEffortPatchNetwork; stage = "Fitting"; required = $false; validated = $false },
+    [ordered]@{ name = "final_sewn_step"; path = $finalSewn; stage = "StepRoundtrip"; required = ($primaryRun.exit_code -eq 0); validated = ($primaryRun.exit_code -eq 0) },
+    [ordered]@{ name = "sewn_attempt_step"; path = $sewnAttempt; stage = "StepRoundtrip"; required = $false; validated = $false }
 )
 $evidence = @()
 foreach ($definition in $evidenceDefinitions) {
@@ -332,7 +356,7 @@ foreach ($definition in $evidenceDefinitions) {
         sha256 = if ($exists) { (Get-FileHash -LiteralPath $definition.path -Algorithm SHA256).Hash } else { "" }
         generated_stage = $definition.stage
         required = $definition.required
-        validated = $exists -and ($definition.name -ne "final_sewn_step" -or $primaryRun.exit_code -eq 0)
+        validated = $exists -and $definition.validated
     }
 }
 [ordered]@{
@@ -344,5 +368,15 @@ foreach ($definition in $evidenceDefinitions) {
     -Encoding UTF8
 
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
+$performancePath = Join-Path $context.directories.diagnostics "performance_report.json"
+$runJsonPath = Join-Path $context.output_dir "run.json"
+if ((Test-Path -LiteralPath $performancePath -PathType Leaf) -and
+    (Test-Path -LiteralPath $runJsonPath -PathType Leaf)) {
+    $performance = Get-Content -LiteralPath $performancePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $runJson = Get-Content -LiteralPath $runJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $runJson | Add-Member -NotePropertyName diagnostic_pipeline_completed `
+        -NotePropertyValue ([bool]$performance.diagnostic_pipeline_completed) -Force
+    $runJson | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $runJsonPath -Encoding UTF8
+}
 Write-Output $context.output_dir
 exit $(if ($status -eq "succeeded") { 0 } else { 1 })
