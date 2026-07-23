@@ -235,6 +235,10 @@ struct RegionFitIterationReport {
     std::string hardConstraintStatus = "NotEvaluated";
     double initialControlPriorScale = 0.0;
     double constraintCorrectionAnchorScale = 0.0;
+    double affineBaselineTrainingMaximumDistance = 0.0;
+    double affineBaselineBoundaryMaximumDistance = 0.0;
+    double initialSupportBlendAlpha = 0.0;
+    double constraintCorrectionBlendAlpha = 0.0;
     double initialTrainingMaximumDistance = 0.0;
     double initialBoundaryMaximumDistance = 0.0;
     double correctedTrainingMaximumDistance = 0.0;

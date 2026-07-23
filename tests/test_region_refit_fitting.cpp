@@ -190,6 +190,12 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(iteration.hardConstraintStatus == "InfeasibleHardBoundaryConstraints");
     assert(iteration.minimumFullHardConstraintResidual > options.curveOnSurfaceTolerance);
     assert(iteration.initialControlPriorScale > 0.0);
+    assert(iteration.initialSupportBlendAlpha >= 0.0);
+    assert(iteration.initialSupportBlendAlpha <= 1.0);
+    assert(iteration.constraintCorrectionBlendAlpha >= 0.0);
+    assert(iteration.constraintCorrectionBlendAlpha <= 1.0);
+    assert(std::isfinite(iteration.affineBaselineTrainingMaximumDistance));
+    assert(std::isfinite(iteration.affineBaselineBoundaryMaximumDistance));
     assert(fitted.bestEffortNetwork);
     assert(!fitted.bestEffortNetwork->fitGatePassed);
 }

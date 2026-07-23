@@ -437,6 +437,10 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.hardConstraintFeasible
            << report.initialControlPriorScale
            << report.constraintCorrectionAnchorScale
+           << report.affineBaselineTrainingMaximumDistance
+           << report.affineBaselineBoundaryMaximumDistance
+           << report.initialSupportBlendAlpha
+           << report.constraintCorrectionBlendAlpha
            << report.initialTrainingMaximumDistance
            << report.initialBoundaryMaximumDistance
            << report.correctedTrainingMaximumDistance
@@ -484,6 +488,10 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.hardConstraintFeasible
            >> report.initialControlPriorScale
            >> report.constraintCorrectionAnchorScale
+           >> report.affineBaselineTrainingMaximumDistance
+           >> report.affineBaselineBoundaryMaximumDistance
+           >> report.initialSupportBlendAlpha
+           >> report.constraintCorrectionBlendAlpha
            >> report.initialTrainingMaximumDistance
            >> report.initialBoundaryMaximumDistance
            >> report.correctedTrainingMaximumDistance

@@ -1,5 +1,6 @@
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
 
+#include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseLU>
@@ -395,6 +396,172 @@ Eigen::VectorXd buildInitialControlPrior(
         }
     }
     return prior;
+}
+
+std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout,
+    const std::vector<MappedReferenceSample>& representativeSamples,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets,
+    const int controlVariableCount) {
+    Eigen::MatrixXd solution = Eigen::MatrixXd::Zero(controlVariableCount, 3);
+    std::vector<std::vector<const MappedReferenceSample*>> samplesByPatch(knots.size());
+    for (const auto& sample : representativeSamples) {
+        if (sample.patch >= 0 &&
+            static_cast<std::size_t>(sample.patch) < samplesByPatch.size()) {
+            samplesByPatch[static_cast<std::size_t>(sample.patch)].push_back(&sample);
+        }
+    }
+    for (std::size_t patch = 0; patch < knots.size(); ++patch) {
+        if (samplesByPatch[patch].size() < 3) return std::nullopt;
+        Eigen::Matrix3d gram = Eigen::Matrix3d::Zero();
+        Eigen::Matrix3d targets = Eigen::Matrix3d::Zero();
+        std::array<double, 3> minimum {
+            std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity()};
+        std::array<double, 3> maximum {
+            -std::numeric_limits<double>::infinity(),
+            -std::numeric_limits<double>::infinity(),
+            -std::numeric_limits<double>::infinity()};
+        Eigen::Vector2d meanUv = Eigen::Vector2d::Zero();
+        Eigen::Vector3d meanPoint = Eigen::Vector3d::Zero();
+        for (const auto* sample : samplesByPatch[patch]) {
+            const Eigen::Vector3d row(1.0, sample->uv[0], sample->uv[1]);
+            const auto& point =
+                fittingReference.vertices[sample->referenceVertex].point;
+            const Eigen::Vector3d target(point.X(), point.Y(), point.Z());
+            gram += row * row.transpose();
+            targets += row * target.transpose();
+            meanUv += Eigen::Vector2d(sample->uv[0], sample->uv[1]);
+            meanPoint += target;
+            for (std::size_t axis = 0; axis < minimum.size(); ++axis) {
+                minimum[axis] = std::min(minimum[axis], target[static_cast<int>(axis)]);
+                maximum[axis] = std::max(maximum[axis], target[static_cast<int>(axis)]);
+            }
+        }
+        Eigen::FullPivLU<Eigen::Matrix3d> decomposition(gram);
+        if (decomposition.rank() < 3) return std::nullopt;
+        const Eigen::Matrix3d coefficients = decomposition.solve(targets);
+        if (!coefficients.allFinite()) return std::nullopt;
+        meanUv /= static_cast<double>(samplesByPatch[patch].size());
+        meanPoint /= static_cast<double>(samplesByPatch[patch].size());
+
+        gp_Vec referenceNormal;
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        const auto& parameterization = layout.patches[patch];
+        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
+            localByGlobal.emplace(parameterization.vertexIndices[local], local);
+        }
+        for (const auto triangleIndex : parameterization.triangleIndices) {
+            if (triangleIndex >= layoutCarrier.triangles.size()) return std::nullopt;
+            const auto& triangle = layoutCarrier.triangles[triangleIndex];
+            std::array<std::array<double, 2>, 3> uv;
+            for (std::size_t corner = 0; corner < triangle.vertices.size(); ++corner) {
+                const auto found = localByGlobal.find(triangle.vertices[corner]);
+                if (found == localByGlobal.end()) return std::nullopt;
+                uv[corner] = parameterization.parameters[found->second];
+            }
+            const auto signedUvArea =
+                (uv[1][0] - uv[0][0]) * (uv[2][1] - uv[0][1]) -
+                (uv[1][1] - uv[0][1]) * (uv[2][0] - uv[0][0]);
+            gp_Vec first(
+                layoutCarrier.vertices[triangle.vertices[0]].point,
+                layoutCarrier.vertices[triangle.vertices[1]].point);
+            gp_Vec second(
+                layoutCarrier.vertices[triangle.vertices[0]].point,
+                layoutCarrier.vertices[triangle.vertices[2]].point);
+            auto triangleNormal = first.Crossed(second);
+            if (signedUvArea < 0.0) triangleNormal.Reverse();
+            referenceNormal += triangleNormal;
+        }
+        if (referenceNormal.SquareMagnitude() <= 1.0e-24) return std::nullopt;
+        referenceNormal.Normalize();
+
+        gp_Vec tangentU(
+            coefficients(1, 0), coefficients(1, 1), coefficients(1, 2));
+        gp_Vec tangentV(
+            coefficients(2, 0), coefficients(2, 1), coefficients(2, 2));
+        if (tangentU.SquareMagnitude() <= 1.0e-24 ||
+            tangentV.SquareMagnitude() <= 1.0e-24 ||
+            tangentU.Crossed(tangentV).Dot(referenceNormal) <= 0.0) {
+            const auto uMagnitude = std::sqrt(std::max(
+                tangentU.SquareMagnitude(), tangentV.SquareMagnitude()));
+            const auto vMagnitude = std::sqrt(std::max(
+                tangentV.SquareMagnitude(), tangentU.SquareMagnitude()));
+            tangentU -= referenceNormal * tangentU.Dot(referenceNormal);
+            if (tangentU.SquareMagnitude() <= 1.0e-24) {
+                const gp_Vec axis =
+                    std::abs(referenceNormal.X()) < std::abs(referenceNormal.Y())
+                    ? gp_Vec(1.0, 0.0, 0.0)
+                    : gp_Vec(0.0, 1.0, 0.0);
+                tangentU = referenceNormal.Crossed(axis);
+            }
+            if (tangentU.SquareMagnitude() <= 1.0e-24) return std::nullopt;
+            tangentU.Normalize();
+            tangentU *= std::max(uMagnitude, 1.0e-12);
+            tangentV = referenceNormal.Crossed(tangentU);
+            if (tangentV.SquareMagnitude() <= 1.0e-24) return std::nullopt;
+            tangentV.Normalize();
+            tangentV *= std::max(vMagnitude, 1.0e-12);
+        }
+        if (tangentU.Crossed(tangentV).Dot(referenceNormal) <= 0.0) {
+            tangentV.Reverse();
+        }
+
+        auto envelopeScale = 1.0;
+        const auto uParameters = grevilleParameters(knots[patch].u);
+        const auto vParameters = grevilleParameters(knots[patch].v);
+        for (const auto u : uParameters) {
+            for (const auto v : vParameters) {
+                const gp_Vec delta =
+                    tangentU * (u - meanUv.x()) +
+                    tangentV * (v - meanUv.y());
+                const std::array<double, 3> components {
+                    delta.X(), delta.Y(), delta.Z()};
+                for (std::size_t axis = 0; axis < components.size(); ++axis) {
+                    if (components[axis] > 0.0) {
+                        envelopeScale = std::min(
+                            envelopeScale,
+                            (maximum[axis] - meanPoint[static_cast<int>(axis)]) /
+                                components[axis]);
+                    } else if (components[axis] < 0.0) {
+                        envelopeScale = std::min(
+                            envelopeScale,
+                            (minimum[axis] - meanPoint[static_cast<int>(axis)]) /
+                                components[axis]);
+                    }
+                }
+            }
+        }
+        if (!std::isfinite(envelopeScale) || envelopeScale <= 1.0e-12) {
+            return std::nullopt;
+        }
+        tangentU *= std::min(1.0, envelopeScale);
+        tangentV *= std::min(1.0, envelopeScale);
+        for (int u = 0; u < knots[patch].uControlCount(); ++u) {
+            for (int v = 0; v < knots[patch].vControlCount(); ++v) {
+                const gp_Pnt point(
+                    meanPoint.x() +
+                        tangentU.X() * (uParameters[static_cast<std::size_t>(u)] - meanUv.x()) +
+                        tangentV.X() * (vParameters[static_cast<std::size_t>(v)] - meanUv.y()),
+                    meanPoint.y() +
+                        tangentU.Y() * (uParameters[static_cast<std::size_t>(u)] - meanUv.x()) +
+                        tangentV.Y() * (vParameters[static_cast<std::size_t>(v)] - meanUv.y()),
+                    meanPoint.z() +
+                        tangentU.Z() * (uParameters[static_cast<std::size_t>(u)] - meanUv.x()) +
+                        tangentV.Z() * (vParameters[static_cast<std::size_t>(v)] - meanUv.y()));
+                const auto variable = variableOffsets[patch] +
+                    u * knots[patch].vControlCount() + v;
+                solution(variable, 0) = point.X();
+                solution(variable, 1) = point.Y();
+                solution(variable, 2) = point.Z();
+            }
+        }
+    }
+    return solution;
 }
 
 std::vector<std::pair<int, double>> surfaceCoefficients(
@@ -1310,6 +1477,7 @@ bool evaluateLocalSupportDomain(
     };
     std::vector<TrimTriangle> trimTriangles;
     trimTriangles.reserve(parameterization.triangleIndices.size());
+    gp_Vec patchReferenceNormal;
     for (const auto triangleIndex : parameterization.triangleIndices) {
         if (triangleIndex >= carrier.triangles.size()) {
             reason = "A local support domain references an invalid trim triangle.";
@@ -1347,11 +1515,19 @@ bool evaluateLocalSupportDomain(
             reason = "A local support domain has no stable trim-triangle reference normal.";
             return false;
         }
+        patchReferenceNormal += trimTriangle.referenceNormal;
         trimTriangles.push_back(std::move(trimTriangle));
     }
     if (trimTriangles.empty()) {
         reason = "A local support domain has no trim triangles for its Jacobian gate.";
         return false;
+    }
+    if (patchReferenceNormal.SquareMagnitude() <= 1.0e-24) {
+        reason = "A local support domain has no stable patch reference normal.";
+        return false;
+    }
+    for (auto& triangle : trimTriangles) {
+        triangle.referenceNormal = patchReferenceNormal;
     }
 
     constexpr double minimumOrientationCosine =
@@ -1475,6 +1651,95 @@ bool evaluateLocalSupportDomain(
         }
     }
     return true;
+}
+
+struct ConstructibleBlendResult {
+    bool available = false;
+    double alpha = 0.0;
+    Eigen::MatrixXd solution;
+    std::vector<Handle(Geom_BSplineSurface)> surfaces;
+    std::string failure;
+};
+
+ConstructibleBlendResult largestConstructibleBlend(
+    const Eigen::MatrixXd& baseline,
+    const Eigen::MatrixXd& target,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout,
+    const RegionRefitOptions& options) {
+    ConstructibleBlendResult result;
+    if (baseline.rows() != target.rows() ||
+        baseline.cols() != 3 ||
+        target.cols() != 3 ||
+        !baseline.allFinite() ||
+        !target.allFinite()) {
+        result.failure = "Constructibility line search received an invalid control network.";
+        return result;
+    }
+    const auto evaluate = [&](const Eigen::MatrixXd& solution,
+                              std::vector<Handle(Geom_BSplineSurface)>& surfaces,
+                              std::string& failure) {
+        surfaces.clear();
+        surfaces.reserve(static_cast<std::size_t>(layout.patchCount));
+        try {
+            for (int patch = 0; patch < layout.patchCount; ++patch) {
+                surfaces.push_back(makeSurface(
+                    knots[static_cast<std::size_t>(patch)],
+                    solution,
+                    variableOffsets[static_cast<std::size_t>(patch)]));
+            }
+            for (std::size_t patch = 0; patch < surfaces.size(); ++patch) {
+                if (!evaluateLocalSupportDomain(
+                        surfaces[patch],
+                        layoutCarrier,
+                        layout.patches[patch],
+                        options,
+                        failure)) {
+                    return false;
+                }
+            }
+        } catch (const Standard_Failure&) {
+            failure = "Open CASCADE rejected a constructibility line-search surface.";
+            return false;
+        }
+        return true;
+    };
+
+    if (!evaluate(baseline, result.surfaces, result.failure)) return result;
+    result.available = true;
+    result.solution = baseline;
+    std::vector<Handle(Geom_BSplineSurface)> targetSurfaces;
+    std::string targetFailure;
+    if (evaluate(target, targetSurfaces, targetFailure)) {
+        result.alpha = 1.0;
+        result.solution = target;
+        result.surfaces = std::move(targetSurfaces);
+        return result;
+    }
+    result.failure = targetFailure;
+    auto lower = 0.0;
+    auto upper = 1.0;
+    for (int iteration = 0;
+         iteration < std::numeric_limits<float>::digits;
+         ++iteration) {
+        const auto alpha = (lower + upper) * 0.5;
+        const Eigen::MatrixXd candidate =
+            baseline + alpha * (target - baseline);
+        std::vector<Handle(Geom_BSplineSurface)> candidateSurfaces;
+        std::string candidateFailure;
+        if (evaluate(candidate, candidateSurfaces, candidateFailure)) {
+            lower = alpha;
+            result.alpha = alpha;
+            result.solution = candidate;
+            result.surfaces = std::move(candidateSurfaces);
+        } else {
+            upper = alpha;
+            result.failure = candidateFailure;
+        }
+    }
+    return result;
 }
 
 double normalAngleDegrees(const gp_Vec& first, const gp_Dir& second) {
@@ -2099,6 +2364,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             std::vector<Handle(Geom_BSplineSurface)> initialDiagnosticSurfaces;
             ValidationMetrics initialDiagnosticMetrics;
             std::string initialDiagnosticFailure;
+            std::optional<Eigen::MatrixXd> initialConstructibleSolution;
             if (!equalityRows.empty()) {
                 auto initialNormalMatrix = normalMatrix;
                 auto initialNormalTargets = normalTargets;
@@ -2120,52 +2386,6 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     knots,
                     variableOffsets,
                     columnScales);
-                try {
-                    Eigen::MatrixXd priorSolution(controlVariableCount, 3);
-                    for (int variable = 0; variable < controlVariableCount; ++variable) {
-                        for (int axis = 0; axis < 3; ++axis) {
-                            const auto coupled = variable * 3 + axis;
-                            priorSolution(variable, axis) =
-                                initialControlPrior[coupled] /
-                                columnScales[coupled];
-                        }
-                    }
-                    std::vector<Handle(Geom_BSplineSurface)> priorSurfaces;
-                    priorSurfaces.reserve(static_cast<std::size_t>(layout.patchCount));
-                    for (int patch = 0; patch < layout.patchCount; ++patch) {
-                        priorSurfaces.push_back(makeSurface(
-                            knots[static_cast<std::size_t>(patch)],
-                            priorSolution,
-                            variableOffsets[static_cast<std::size_t>(patch)]));
-                    }
-                    std::string priorSupportFailure;
-                    for (std::size_t patch = 0;
-                         patch < priorSurfaces.size();
-                         ++patch) {
-                        if (!regionLocalSupportDomainPassed(
-                                priorSurfaces[patch],
-                                layoutCarrier,
-                                layout.patches[patch],
-                                options,
-                                priorSupportFailure)) {
-                            break;
-                        }
-                    }
-                    if (priorSupportFailure.empty()) {
-                        initialDiagnosticMetrics = validateNetwork(
-                            fittingReference,
-                            layoutCarrier,
-                            layout,
-                            lookups,
-                            priorSurfaces,
-                            options,
-                            mappedSamples);
-                        initialDiagnosticSurfaces = std::move(priorSurfaces);
-                    } else {
-                        initialDiagnosticFailure = priorSupportFailure;
-                    }
-                } catch (const Standard_Failure&) {
-                }
                 for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
                     initialNormalMatrix.coeffRef(diagonal, diagonal) +=
                         iterationReport.initialControlPriorScale;
@@ -2192,62 +2412,74 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     attempt.stopReason = iterationReport.stopReason;
                     break;
                 }
-                try {
-                    Eigen::MatrixXd initialSolution(controlVariableCount, 3);
-                    for (int variable = 0; variable < controlVariableCount; ++variable) {
-                        for (int axis = 0; axis < 3; ++axis) {
-                            const auto coupled = variable * 3 + axis;
-                            initialSolution(variable, axis) =
-                                initialScaledSolution[coupled] / columnScales[coupled];
-                        }
+                Eigen::MatrixXd initialFitSolution(controlVariableCount, 3);
+                for (int variable = 0; variable < controlVariableCount; ++variable) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        const auto coupled = variable * 3 + axis;
+                        initialFitSolution(variable, axis) =
+                            initialScaledSolution[coupled] / columnScales[coupled];
                     }
-                    std::vector<Handle(Geom_BSplineSurface)> initialSurfaces;
-                    initialSurfaces.reserve(static_cast<std::size_t>(layout.patchCount));
-                    for (int patch = 0; patch < layout.patchCount; ++patch) {
-                        initialSurfaces.push_back(makeSurface(
-                            knots[static_cast<std::size_t>(patch)],
-                            initialSolution,
-                            variableOffsets[static_cast<std::size_t>(patch)]));
-                    }
-                    const auto initialMetrics = validateNetwork(
-                        fittingReference,
+                }
+                const auto affineBaseline = buildAffineControlBaseline(
+                    fittingReference,
+                    layoutCarrier,
+                    layout,
+                    representativeFitSamples,
+                    knots,
+                    variableOffsets,
+                    controlVariableCount);
+                if (affineBaseline) {
+                    const auto baseline = largestConstructibleBlend(
+                        *affineBaseline,
+                        *affineBaseline,
+                        knots,
+                        variableOffsets,
                         layoutCarrier,
                         layout,
-                        lookups,
-                        initialSurfaces,
-                        options,
-                        mappedSamples);
-                    iterationReport.initialTrainingMaximumDistance =
-                        initialMetrics.trainingMaximumDistance;
-                    iterationReport.initialBoundaryMaximumDistance =
-                        initialMetrics.boundaryMaximumDistance;
-                    std::string initialSupportFailure;
-                    for (std::size_t patch = 0;
-                         patch < initialSurfaces.size();
-                         ++patch) {
-                        if (!regionLocalSupportDomainPassed(
-                                initialSurfaces[patch],
-                                layoutCarrier,
-                                layout.patches[patch],
-                                options,
-                                initialSupportFailure)) {
-                            break;
-                        }
+                        options);
+                    if (baseline.available) {
+                        const auto baselineMetrics = validateNetwork(
+                            fittingReference,
+                            layoutCarrier,
+                            layout,
+                            lookups,
+                            baseline.surfaces,
+                            options,
+                            mappedSamples);
+                        iterationReport.affineBaselineTrainingMaximumDistance =
+                            baselineMetrics.trainingMaximumDistance;
+                        iterationReport.affineBaselineBoundaryMaximumDistance =
+                            baselineMetrics.boundaryMaximumDistance;
                     }
-                    if (initialSupportFailure.empty()) {
-                        if (initialDiagnosticSurfaces.empty() ||
-                            normalizedViolationScore(initialMetrics, options) <
-                                normalizedViolationScore(
-                                    initialDiagnosticMetrics, options)) {
-                            initialDiagnosticSurfaces = std::move(initialSurfaces);
-                            initialDiagnosticMetrics = initialMetrics;
-                        }
-                    } else if (initialDiagnosticFailure.empty()) {
-                        initialDiagnosticFailure = initialSupportFailure;
+                    auto initialBlend = largestConstructibleBlend(
+                        *affineBaseline,
+                        initialFitSolution,
+                        knots,
+                        variableOffsets,
+                        layoutCarrier,
+                        layout,
+                        options);
+                    if (initialBlend.available) {
+                        iterationReport.initialSupportBlendAlpha = initialBlend.alpha;
+                        initialDiagnosticMetrics = validateNetwork(
+                            fittingReference,
+                            layoutCarrier,
+                            layout,
+                            lookups,
+                            initialBlend.surfaces,
+                            options,
+                            mappedSamples);
+                        initialConstructibleSolution = std::move(initialBlend.solution);
+                        initialDiagnosticSurfaces = std::move(initialBlend.surfaces);
+                        initialDiagnosticFailure = initialBlend.failure;
+                    } else {
+                        initialDiagnosticFailure = initialBlend.failure;
                     }
-                } catch (const Standard_Failure&) {
+                } else {
+                    initialDiagnosticFailure =
+                        "Could not construct a non-degenerate affine local support baseline.";
                 }
-                if (!initialDiagnosticSurfaces.empty()) {
+                if (initialConstructibleSolution) {
                     iterationReport.initialTrainingMaximumDistance =
                         initialDiagnosticMetrics.trainingMaximumDistance;
                     iterationReport.initialBoundaryMaximumDistance =
@@ -2262,12 +2494,23 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 diagonalScale /= static_cast<double>(std::max(1, coupledVariableCount));
                 iterationReport.constraintCorrectionAnchorScale =
                     options.constraintCorrectionAnchorRelativeWeight * diagonalScale;
+                Eigen::VectorXd correctionAnchor = initialScaledSolution;
+                if (initialConstructibleSolution) {
+                    for (int variable = 0; variable < controlVariableCount; ++variable) {
+                        for (int axis = 0; axis < 3; ++axis) {
+                            const auto coupled = variable * 3 + axis;
+                            correctionAnchor[coupled] =
+                                (*initialConstructibleSolution)(variable, axis) *
+                                columnScales[coupled];
+                        }
+                    }
+                }
                 for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
                     normalMatrix.coeffRef(diagonal, diagonal) +=
                         iterationReport.constraintCorrectionAnchorScale;
                     normalTargets[diagonal] +=
                         iterationReport.constraintCorrectionAnchorScale *
-                        initialScaledSolution[diagonal];
+                        correctionAnchor[diagonal];
                 }
                 normalMatrix.makeCompressed();
             }
@@ -2388,7 +2631,18 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 solver.analyzePattern(augmentedMatrix);
                 solver.factorize(augmentedMatrix);
                 if (solver.info() != Eigen::Success) {
-                    iterationReport.stopReason = "Constrained joint-fit factorization failed.";
+                    if (!iterationReport.hardConstraintFeasible &&
+                        !initialDiagnosticSurfaces.empty()) {
+                        bestSurfaces = initialDiagnosticSurfaces;
+                        bestMetrics = initialDiagnosticMetrics;
+                        iterationReport.constraintCorrectionBlendAlpha = 0.0;
+                        iterationReport.stopReason =
+                            iterationReport.hardConstraintStatus +
+                            "; constrained factorization failed, so the constructible initial network was retained for diagnostic sewing.";
+                    } else {
+                        iterationReport.stopReason =
+                            "Constrained joint-fit factorization failed.";
+                    }
                     attempt.iterations.push_back(iterationReport);
                     attempt.stopReason = iterationReport.stopReason;
                     break;
@@ -2408,7 +2662,18 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 }
                 Eigen::VectorXd augmentedSolution = solver.solve(augmentedTargets);
                 if (solver.info() != Eigen::Success || !augmentedSolution.allFinite()) {
-                    iterationReport.stopReason = "Constrained joint-fit solve failed.";
+                    if (!iterationReport.hardConstraintFeasible &&
+                        !initialDiagnosticSurfaces.empty()) {
+                        bestSurfaces = initialDiagnosticSurfaces;
+                        bestMetrics = initialDiagnosticMetrics;
+                        iterationReport.constraintCorrectionBlendAlpha = 0.0;
+                        iterationReport.stopReason =
+                            iterationReport.hardConstraintStatus +
+                            "; constrained solve failed, so the constructible initial network was retained for diagnostic sewing.";
+                    } else {
+                        iterationReport.stopReason =
+                            "Constrained joint-fit solve failed.";
+                    }
                     attempt.iterations.push_back(iterationReport);
                     attempt.stopReason = iterationReport.stopReason;
                     break;
@@ -2422,6 +2687,27 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             for (int variable = 0; variable < controlVariableCount; ++variable) {
                 for (int axis = 0; axis < 3; ++axis) {
                     solution(variable, axis) = coupledSolution[variable * 3 + axis];
+                }
+            }
+            std::vector<Handle(Geom_BSplineSurface)> surfaces;
+            std::string supportFailure;
+            if (initialConstructibleSolution) {
+                auto correctedBlend = largestConstructibleBlend(
+                    *initialConstructibleSolution,
+                    solution,
+                    knots,
+                    variableOffsets,
+                    layoutCarrier,
+                    layout,
+                    options);
+                if (correctedBlend.available) {
+                    iterationReport.constraintCorrectionBlendAlpha =
+                        correctedBlend.alpha;
+                    solution = std::move(correctedBlend.solution);
+                    surfaces = std::move(correctedBlend.surfaces);
+                    supportFailure = correctedBlend.failure;
+                } else {
+                    supportFailure = correctedBlend.failure;
                 }
             }
             for (const auto& row : equalityRows) {
@@ -2443,44 +2729,47 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 iterationReport.hardConstraintStatus =
                     "InfeasibleHardBoundaryConstraints";
             }
-            std::vector<Handle(Geom_BSplineSurface)> surfaces;
-            surfaces.reserve(static_cast<std::size_t>(layout.patchCount));
             try {
-                for (int patch = 0; patch < layout.patchCount; ++patch) {
-                    surfaces.push_back(makeSurface(
-                        knots[static_cast<std::size_t>(patch)],
-                        solution,
-                        variableOffsets[static_cast<std::size_t>(patch)]));
-                }
-                std::string supportFailure;
-                for (std::size_t patch = 0; patch < surfaces.size(); ++patch) {
-                    if (!regionLocalSupportDomainPassed(
-                            surfaces[patch],
-                            layoutCarrier,
-                            layout.patches[patch],
-                            options,
-                            supportFailure)) {
-                        if (!iterationReport.hardConstraintFeasible &&
-                            !initialDiagnosticSurfaces.empty()) {
-                            bestSurfaces = std::move(initialDiagnosticSurfaces);
-                            bestMetrics = initialDiagnosticMetrics;
-                            iterationReport.stopReason =
-                                iterationReport.hardConstraintStatus +
-                                "; retained the finite initial support network for diagnostic sewing.";
-                        } else {
-                            iterationReport.stopReason = supportFailure;
-                            if (!initialDiagnosticFailure.empty()) {
-                                iterationReport.stopReason +=
-                                    " Initial support: " +
-                                    initialDiagnosticFailure;
-                            }
+                if (surfaces.empty()) {
+                    surfaces.reserve(static_cast<std::size_t>(layout.patchCount));
+                    for (int patch = 0; patch < layout.patchCount; ++patch) {
+                        surfaces.push_back(makeSurface(
+                            knots[static_cast<std::size_t>(patch)],
+                            solution,
+                            variableOffsets[static_cast<std::size_t>(patch)]));
+                    }
+                    for (std::size_t patch = 0; patch < surfaces.size(); ++patch) {
+                        if (!regionLocalSupportDomainPassed(
+                                surfaces[patch],
+                                layoutCarrier,
+                                layout.patches[patch],
+                                options,
+                                supportFailure)) {
+                            surfaces.clear();
+                            break;
                         }
-                        attempt.iterations.push_back(iterationReport);
-                        attempt.stopReason = iterationReport.stopReason;
-                        break;
                     }
                 }
-                if (!supportFailure.empty()) break;
+                if (surfaces.empty()) {
+                    if (!iterationReport.hardConstraintFeasible &&
+                        !initialDiagnosticSurfaces.empty()) {
+                        bestSurfaces = initialDiagnosticSurfaces;
+                        bestMetrics = initialDiagnosticMetrics;
+                        iterationReport.stopReason =
+                            iterationReport.hardConstraintStatus +
+                            "; retained the constructible initial support network for diagnostic sewing.";
+                    } else {
+                        iterationReport.stopReason = supportFailure;
+                        if (!initialDiagnosticFailure.empty()) {
+                            iterationReport.stopReason +=
+                                " Initial support: " +
+                                initialDiagnosticFailure;
+                        }
+                    }
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason = iterationReport.stopReason;
+                    break;
+                }
                 const auto metrics = validateNetwork(
                     fittingReference,
                     layoutCarrier,
@@ -2537,24 +2826,31 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     result.message = "The smallest fully fitted layout passed all fitting gates.";
                     return result;
                 }
-                const auto improvement = std::isfinite(previousSelection) && previousSelection > 0.0
-                    ? (previousSelection - metrics.selectionMaximumScore) / previousSelection
-                    : 1.0;
-                lowImprovementRounds = iteration >= maximumIterations - 3 && improvement < 0.01
-                    ? lowImprovementRounds + 1 : 0;
-                previousSelection = metrics.selectionMaximumScore;
-                if (lowImprovementRounds >= 2) {
-                    iterationReport.stopReason = "Two consecutive mature-grid rounds improved less than 1%.";
-                    attempt.stopReason = iterationReport.stopReason;
-                } else if (!insertResidualKnot(
-                        metrics.selectionResiduals,
-                        knots,
-                        options.tolerance3d * 0.5,
-                        options.maximumControlPointsPerSide)) {
-                    iterationReport.stopReason = "No additional residual-driven knot could be inserted.";
+                if (!iterationReport.hardConstraintFeasible) {
+                    iterationReport.stopReason =
+                        iterationReport.hardConstraintStatus +
+                        "; retained the maximum constructible correction blend for diagnostic sewing.";
                     attempt.stopReason = iterationReport.stopReason;
                 } else {
-                    iterationReport.stopReason = "Inserted one knot at the concentrated selection residual.";
+                    const auto improvement = std::isfinite(previousSelection) && previousSelection > 0.0
+                        ? (previousSelection - metrics.selectionMaximumScore) / previousSelection
+                        : 1.0;
+                    lowImprovementRounds = iteration >= maximumIterations - 3 && improvement < 0.01
+                        ? lowImprovementRounds + 1 : 0;
+                    previousSelection = metrics.selectionMaximumScore;
+                    if (lowImprovementRounds >= 2) {
+                        iterationReport.stopReason = "Two consecutive mature-grid rounds improved less than 1%.";
+                        attempt.stopReason = iterationReport.stopReason;
+                    } else if (!insertResidualKnot(
+                            metrics.selectionResiduals,
+                            knots,
+                            options.tolerance3d * 0.5,
+                            options.maximumControlPointsPerSide)) {
+                        iterationReport.stopReason = "No additional residual-driven knot could be inserted.";
+                        attempt.stopReason = iterationReport.stopReason;
+                    } else {
+                        iterationReport.stopReason = "Inserted one knot at the concentrated selection residual.";
+                    }
                 }
             } catch (const Standard_Failure&) {
                 iterationReport.stopReason = "Open CASCADE rejected the fitted B-spline network.";

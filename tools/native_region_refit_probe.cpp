@@ -365,6 +365,10 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"hard_constraint_status", QString::fromStdString(iteration.hardConstraintStatus)},
                 {"initial_control_prior_scale", iteration.initialControlPriorScale},
                 {"constraint_correction_anchor_scale", iteration.constraintCorrectionAnchorScale},
+                {"affine_baseline_training_maximum_distance", iteration.affineBaselineTrainingMaximumDistance},
+                {"affine_baseline_boundary_maximum_distance", iteration.affineBaselineBoundaryMaximumDistance},
+                {"initial_support_blend_alpha", iteration.initialSupportBlendAlpha},
+                {"constraint_correction_blend_alpha", iteration.constraintCorrectionBlendAlpha},
                 {"initial_training_maximum_distance", iteration.initialTrainingMaximumDistance},
                 {"initial_boundary_maximum_distance", iteration.initialBoundaryMaximumDistance},
                 {"corrected_training_maximum_distance", iteration.correctedTrainingMaximumDistance},
@@ -948,7 +952,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v26-trim-domain-jacobian";
+    request.options.algorithmFingerprint = "native-regional-refit-v27-constructible-line-search";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1083,7 +1087,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v26-trim-domain-jacobian-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v27-constructible-line-search-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
