@@ -170,6 +170,28 @@ void test_joint_fitter_honors_expired_deadline() {
     assert(fitted.attempts.empty());
 }
 
+void test_single_selected_fit_receives_unused_cumulative_budget() {
+    const auto mesh = makePlanarFitMesh(4);
+    const auto layouts = planarLayouts(mesh, 1);
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.1;
+    options.curveOnSurfaceTolerance = 0.03;
+    options.normalToleranceDegrees = 1.0;
+    options.maximumFullFitCount = 1;
+    options.maximumFitIterations = 2;
+    options.singleFitBudgetMilliseconds = 0;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        mesh,
+        {},
+        layouts,
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+
+    assert(fitted.success());
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front().iterations.empty());
+}
+
 void test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails() {
     auto mesh = makePlanarFitMesh(8);
     for (auto& vertex : mesh.vertices) {
@@ -332,6 +354,7 @@ void run_region_refit_fitting_tests() {
     test_joint_fitter_passes_planar_two_patch_network();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();
+    test_single_selected_fit_receives_unused_cumulative_budget();
     test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails();
     test_edge_consistency_classifies_geometry_and_display_cracks();
     test_area_weighting_is_invariant_to_planar_sampling_density();

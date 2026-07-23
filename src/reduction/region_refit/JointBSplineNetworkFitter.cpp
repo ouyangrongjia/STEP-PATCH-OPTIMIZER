@@ -1398,9 +1398,15 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             return result;
         }
         const auto attemptStarted = std::chrono::steady_clock::now();
+        const auto remainingAttemptCount = maximumAttempts - candidateIndex;
+        const auto fairAttemptBudget = std::chrono::duration_cast<std::chrono::milliseconds>(
+            (deadline - attemptStarted) / static_cast<std::int64_t>(remainingAttemptCount));
+        const auto attemptBudget = std::max(
+            std::chrono::milliseconds(options.singleFitBudgetMilliseconds),
+            fairAttemptBudget);
         const auto attemptDeadline = std::min(
             deadline,
-            attemptStarted + std::chrono::milliseconds(options.singleFitBudgetMilliseconds));
+            attemptStarted + attemptBudget);
         const auto& layout = candidates[candidateIndex];
         RegionFitAttemptReport attempt;
         attempt.patchCount = layout.patchCount;
