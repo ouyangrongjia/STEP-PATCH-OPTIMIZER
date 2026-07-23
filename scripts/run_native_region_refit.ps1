@@ -380,6 +380,9 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
     (Get-Item -LiteralPath $sewnAttempt).Length -gt 0 -and
     (Test-Path -LiteralPath $creoScript -PathType Leaf)) {
     New-Item -ItemType Directory -Path $creoOutput -Force | Out-Null
+    $nmsdBefore = @(
+        Get-Process -Name "nmsd" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Id)
     $powershellExecutable = (Get-Process -Id $PID).Path
     $creoProcess = Start-Process `
         -FilePath $powershellExecutable `
@@ -398,6 +401,20 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
     $creoProcess.Dispose()
     $artifacts["creo_diagnostic_directory"] = $creoOutput
     $artifacts["creo_diagnostic_exit_code"] = $creoExitCode
+    $newNmsdIds = @(
+        Get-Process -Name "nmsd" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -notin $nmsdBefore } |
+            Select-Object -ExpandProperty Id)
+    if ($newNmsdIds.Count -gt 0) {
+        $creoDescendantDrainTimeoutSeconds = 330
+        try {
+            Wait-Process -Id $newNmsdIds `
+                -Timeout $creoDescendantDrainTimeoutSeconds `
+                -ErrorAction Stop
+        } catch {
+            Write-Warning "Creo name-server descendants did not exit before evidence finalization."
+        }
+    }
 }
 
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
