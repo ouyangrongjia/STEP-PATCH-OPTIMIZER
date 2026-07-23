@@ -377,6 +377,7 @@ struct RegionRefitReport {
     int retrimReusedBoundaryEdgeCount = 0;
     int retrimSplitBoundarySegmentCount = 0;
     int retrimPcurveProjectionCount = 0;
+    int retrimDiagnosticPcurveFallbackCount = 0;
     int retrimSameParameterCheckCount = 0;
     int retrimSameParameterFailureCount = 0;
     double retrimMaximumSameParameterDeviation = 0.0;

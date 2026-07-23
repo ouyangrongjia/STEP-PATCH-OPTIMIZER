@@ -21,6 +21,7 @@ struct NativeRegionPatchNetworkBuildResult {
     int splitBoundarySegmentCount = 0;
     int internalSeamCount = 0;
     int pcurveProjectionCount = 0;
+    int diagnosticPcurveFallbackCount = 0;
     int sameParameterCheckCount = 0;
     int sameParameterFailureCount = 0;
     int brepValidationFailureCount = 0;

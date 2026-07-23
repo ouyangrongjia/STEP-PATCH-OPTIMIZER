@@ -233,6 +233,52 @@ Handle(Geom2d_Curve) parameterPcurve(
     }
 }
 
+Handle(Geom2d_Curve) diagnosticOrderedPcurve(
+    const TopoDS_Edge& edge,
+    const std::vector<std::pair<gp_Pnt, gp_Pnt2d>>& points,
+    double& first,
+    double& last,
+    const double tolerance) {
+    const auto curve = BRep_Tool::Curve(edge, first, last);
+    if (curve.IsNull() || points.size() < 2 || std::abs(last - first) <= 1.0e-14) {
+        return {};
+    }
+    const auto rangeFirst = std::min(first, last);
+    const auto rangeLast = std::max(first, last);
+    const auto forward =
+        curve->Value(rangeFirst).SquareDistance(points.front().first) +
+        curve->Value(rangeLast).SquareDistance(points.back().first);
+    const auto reversed =
+        curve->Value(rangeFirst).SquareDistance(points.back().first) +
+        curve->Value(rangeLast).SquareDistance(points.front().first);
+    const auto reversePoints = reversed < forward;
+    Handle(TColgp_HArray1OfPnt2d) interpolationPoints =
+        new TColgp_HArray1OfPnt2d(1, static_cast<int>(points.size()));
+    Handle(TColStd_HArray1OfReal) parameters =
+        new TColStd_HArray1OfReal(1, static_cast<int>(points.size()));
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const auto pointIndex = reversePoints ? points.size() - 1 - index : index;
+        const auto parameter = rangeFirst +
+            (rangeLast - rangeFirst) * static_cast<double>(index) /
+                static_cast<double>(points.size() - 1);
+        interpolationPoints->SetValue(
+            static_cast<int>(index + 1), points[pointIndex].second);
+        parameters->SetValue(static_cast<int>(index + 1), parameter);
+    }
+    try {
+        Geom2dAPI_Interpolate interpolate(
+            interpolationPoints, parameters, Standard_False, tolerance * 0.1);
+        interpolate.Perform();
+        if (!interpolate.IsDone()) return {};
+        first = rangeFirst;
+        last = rangeLast;
+        Handle(Geom2d_Curve) result = interpolate.Curve();
+        return result;
+    } catch (const Standard_Failure&) {
+        return {};
+    }
+}
+
 TopoDS_Edge orientedForPair(
     TopoDS_Edge edge,
     const gp_Pnt& firstPoint,
@@ -721,8 +767,17 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
             }
             double pcurveFirst = 0.0;
             double pcurveLast = 0.0;
-            const auto pcurve = parameterPcurve(
+            auto pcurve = parameterPcurve(
                 edge, pcurvePoints, pcurveFirst, pcurveLast, curveOnSurfaceTolerance);
+            if (pcurve.IsNull() && allowUnvalidatedFaces) {
+                pcurve = diagnosticOrderedPcurve(
+                    edge,
+                    pcurvePoints,
+                    pcurveFirst,
+                    pcurveLast,
+                    curveOnSurfaceTolerance);
+                if (!pcurve.IsNull()) ++result.diagnosticPcurveFallbackCount;
+            }
             if (!attachPcurve(
                     edge,
                     network.surfaces[patch],
@@ -730,7 +785,10 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                     pcurveFirst,
                     pcurveLast,
                     curveOnSurfaceTolerance)) {
-                result.message = "Could not construct a parameter-aligned pcurve for a shared B-rep edge.";
+                result.message =
+                    "Could not construct a parameter-aligned pcurve for patch " +
+                    std::to_string(patch) + " boundary run " +
+                    std::to_string(offset) + ".";
                 return result;
             }
             ++result.pcurveProjectionCount;

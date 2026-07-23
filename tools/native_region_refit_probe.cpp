@@ -428,6 +428,8 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
         {"split_boundary_segments", result.report.retrimSplitBoundarySegmentCount},
         {"pcurve_constructions", result.report.retrimPcurveProjectionCount},
         {"legacy_pcurve_projection_count", result.report.retrimPcurveProjectionCount},
+        {"diagnostic_parameter_pcurve_fallback_count",
+            result.report.retrimDiagnosticPcurveFallbackCount},
         {"same_parameter_checks", result.report.retrimSameParameterCheckCount},
         {"same_parameter_failures", result.report.retrimSameParameterFailureCount},
         {"maximum_same_parameter_deviation", result.report.retrimMaximumSameParameterDeviation},
@@ -952,7 +954,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v27-constructible-line-search";
+    request.options.algorithmFingerprint = "native-regional-refit-v28-diagnostic-pcurve-fallback";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1087,7 +1089,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v27-constructible-line-search-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v28-diagnostic-pcurve-fallback-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);

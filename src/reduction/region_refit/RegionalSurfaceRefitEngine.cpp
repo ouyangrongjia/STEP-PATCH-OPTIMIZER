@@ -662,6 +662,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.retrimReusedBoundaryEdgeCount = nativeBuild.reusedOriginalBoundaryEdgeCount;
     result.report.retrimSplitBoundarySegmentCount = nativeBuild.splitBoundarySegmentCount;
     result.report.retrimPcurveProjectionCount = nativeBuild.pcurveProjectionCount;
+    result.report.retrimDiagnosticPcurveFallbackCount =
+        nativeBuild.diagnosticPcurveFallbackCount;
     result.report.retrimSameParameterCheckCount = nativeBuild.sameParameterCheckCount;
     result.report.retrimSameParameterFailureCount = nativeBuild.sameParameterFailureCount;
     result.report.retrimMaximumSameParameterDeviation = nativeBuild.maximumSameParameterDeviation;
