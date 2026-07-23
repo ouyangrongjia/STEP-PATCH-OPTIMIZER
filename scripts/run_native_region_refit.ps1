@@ -423,6 +423,23 @@ $requiredDiagnosticNames = @(
     "strict_topology_report.json",
     "output_complexity_report.json",
     "performance_report.json")
+function Get-SharedFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.FileStream]::new(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::ReadWrite)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [System.BitConverter]::ToString(
+            $sha256.ComputeHash($stream)).Replace("-", "")
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
 $evidence = @(
     Get-ChildItem -LiteralPath $context.output_dir -Recurse -File |
         Where-Object { $_.FullName -ne $manifestPath } |
@@ -432,7 +449,7 @@ $evidence = @(
             [ordered]@{
                 name = $relativePath.Replace("\", "/")
                 path = $relativePath
-                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                sha256 = Get-SharedFileSha256 -Path $_.FullName
                 generated_stage = if ($relativePath -like "external_cad*") {
                     "ExternalCad"
                 } elseif ($relativePath -like "artifacts*") {

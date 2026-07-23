@@ -722,6 +722,8 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("$creoProcess.Dispose()") != std::string::npos);
     assert(script.find("-RedirectStandardOutput $creoStdout") == std::string::npos);
     assert(script.find("-RedirectStandardError $creoStderr") == std::string::npos);
+    assert(script.find("Get-SharedFileSha256") != std::string::npos);
+    assert(script.find("[System.IO.FileShare]::ReadWrite") != std::string::npos);
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find("native-regional-refit-v31-iccg-harmonic-layout") != std::string::npos);
