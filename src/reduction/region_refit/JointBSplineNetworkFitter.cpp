@@ -352,6 +352,8 @@ Eigen::VectorXd buildInitialControlPrior(
             for (int v = 0; v < knots[patch].vControlCount(); ++v) {
                 const MappedReferenceSample* closest = nullptr;
                 auto minimumDistance = std::numeric_limits<double>::infinity();
+                auto totalWeight = 0.0;
+                gp_XYZ weightedPoint;
                 for (const auto* sample : samplesByPatch[patch]) {
                     const auto du = sample->uv[0] - uParameters[static_cast<std::size_t>(u)];
                     const auto dv = sample->uv[1] - vParameters[static_cast<std::size_t>(v)];
@@ -363,10 +365,22 @@ Eigen::VectorXd buildInitialControlPrior(
                         minimumDistance = distance;
                         closest = sample;
                     }
+                    const auto uBasis = basisValues(knots[patch].u, sample->uv[0]);
+                    const auto vBasis = basisValues(knots[patch].v, sample->uv[1]);
+                    const auto weight =
+                        uBasis[static_cast<std::size_t>(u)] *
+                        vBasis[static_cast<std::size_t>(v)];
+                    if (weight > 0.0) {
+                        weightedPoint +=
+                            fittingReference.vertices[sample->referenceVertex]
+                                .point.XYZ() * weight;
+                        totalWeight += weight;
+                    }
                 }
                 if (closest == nullptr) continue;
-                const auto& point =
-                    fittingReference.vertices[closest->referenceVertex].point;
+                const auto point = totalWeight > 0.0
+                    ? gp_Pnt(weightedPoint / totalWeight)
+                    : fittingReference.vertices[closest->referenceVertex].point;
                 const std::array<double, 3> coordinates {
                     point.X(), point.Y(), point.Z()};
                 const auto variable = variableOffsets[patch] +
@@ -1939,6 +1953,50 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     knots,
                     variableOffsets,
                     columnScales);
+                try {
+                    Eigen::MatrixXd priorSolution(controlVariableCount, 3);
+                    for (int variable = 0; variable < controlVariableCount; ++variable) {
+                        for (int axis = 0; axis < 3; ++axis) {
+                            const auto coupled = variable * 3 + axis;
+                            priorSolution(variable, axis) =
+                                initialControlPrior[coupled] /
+                                columnScales[coupled];
+                        }
+                    }
+                    std::vector<Handle(Geom_BSplineSurface)> priorSurfaces;
+                    priorSurfaces.reserve(static_cast<std::size_t>(layout.patchCount));
+                    for (int patch = 0; patch < layout.patchCount; ++patch) {
+                        priorSurfaces.push_back(makeSurface(
+                            knots[static_cast<std::size_t>(patch)],
+                            priorSolution,
+                            variableOffsets[static_cast<std::size_t>(patch)]));
+                    }
+                    std::string priorSupportFailure;
+                    for (std::size_t patch = 0;
+                         patch < priorSurfaces.size();
+                         ++patch) {
+                        if (!localSupportDomainPassed(
+                                priorSurfaces[patch],
+                                layoutCarrier,
+                                layout.patches[patch],
+                                options,
+                                priorSupportFailure)) {
+                            break;
+                        }
+                    }
+                    if (priorSupportFailure.empty()) {
+                        initialDiagnosticMetrics = validateNetwork(
+                            fittingReference,
+                            layoutCarrier,
+                            layout,
+                            lookups,
+                            priorSurfaces,
+                            options,
+                            mappedSamples);
+                        initialDiagnosticSurfaces = std::move(priorSurfaces);
+                    }
+                } catch (const Standard_Failure&) {
+                }
                 for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
                     initialNormalMatrix.coeffRef(diagonal, diagonal) +=
                         iterationReport.initialControlPriorScale;
@@ -2008,10 +2066,21 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         }
                     }
                     if (initialSupportFailure.empty()) {
-                        initialDiagnosticSurfaces = std::move(initialSurfaces);
-                        initialDiagnosticMetrics = initialMetrics;
+                        if (initialDiagnosticSurfaces.empty() ||
+                            normalizedViolationScore(initialMetrics, options) <
+                                normalizedViolationScore(
+                                    initialDiagnosticMetrics, options)) {
+                            initialDiagnosticSurfaces = std::move(initialSurfaces);
+                            initialDiagnosticMetrics = initialMetrics;
+                        }
                     }
                 } catch (const Standard_Failure&) {
+                }
+                if (!initialDiagnosticSurfaces.empty()) {
+                    iterationReport.initialTrainingMaximumDistance =
+                        initialDiagnosticMetrics.trainingMaximumDistance;
+                    iterationReport.initialBoundaryMaximumDistance =
+                        initialDiagnosticMetrics.boundaryMaximumDistance;
                 }
 
                 auto diagonalScale = 0.0;
