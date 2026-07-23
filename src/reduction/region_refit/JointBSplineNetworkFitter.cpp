@@ -261,8 +261,7 @@ std::vector<MappedReferenceSample> selectRepresentativeFitSamples(
     std::vector<std::vector<const MappedReferenceSample*>> samplesByPatch(knots.size());
     for (const auto& sample : mappedSamples) {
         if (sample.patch < 0 ||
-            static_cast<std::size_t>(sample.patch) >= samplesByPatch.size() ||
-            fittingReference.vertices[sample.referenceVertex].boundary) {
+            static_cast<std::size_t>(sample.patch) >= samplesByPatch.size()) {
             continue;
         }
         samplesByPatch[static_cast<std::size_t>(sample.patch)].push_back(&sample);
@@ -481,14 +480,21 @@ std::vector<LinearRow> buildSystemRows(
     std::vector<LinearRow> rows;
     rows.reserve(mappedSamples.size() + seamSamples.size() * 3);
     std::vector<double> fittingAreaWeights;
+    std::vector<double> fittingBoundaryWeights;
     fittingAreaWeights.reserve(fittingReference.vertices.size());
+    fittingBoundaryWeights.reserve(fittingReference.boundarySamples.size());
     for (const auto& vertex : fittingReference.vertices) {
-        if (!vertex.boundary) fittingAreaWeights.push_back(vertex.areaWeight);
+        if (vertex.boundary) {
+            fittingBoundaryWeights.push_back(vertex.boundaryLengthWeight);
+        } else {
+            fittingAreaWeights.push_back(vertex.areaWeight);
+        }
     }
     const auto fittingMedianAreaWeight = positiveMedian(std::move(fittingAreaWeights));
+    const auto fittingMedianBoundaryWeight = positiveMedian(
+        std::move(fittingBoundaryWeights));
     for (const auto& sample : mappedSamples) {
         const auto& vertex = fittingReference.vertices[sample.referenceVertex];
-        if (vertex.boundary) continue;
         appendWeightedRow(
             rows,
             surfaceCoefficients(
@@ -496,7 +502,11 @@ std::vector<LinearRow> buildSystemRows(
                 knots[static_cast<std::size_t>(sample.patch)],
                 variableOffsets[static_cast<std::size_t>(sample.patch)]),
             vertex.point,
-            integrationWeight(vertex.areaWeight, fittingMedianAreaWeight));
+            vertex.boundary
+                ? integrationWeight(
+                    vertex.boundaryLengthWeight,
+                    fittingMedianBoundaryWeight)
+                : integrationWeight(vertex.areaWeight, fittingMedianAreaWeight));
     }
     for (const auto& seam : seamSamples) {
         const auto firstFound = lookups[static_cast<std::size_t>(seam.firstPatch)].localByGlobal.find(seam.vertex);
@@ -1838,6 +1848,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             }
             normalMatrix.makeCompressed();
             Eigen::VectorXd normalTargets = scaledMatrix.transpose() * targets;
+            std::vector<Handle(Geom_BSplineSurface)> initialDiagnosticSurfaces;
+            ValidationMetrics initialDiagnosticMetrics;
             if (!equalityRows.empty()) {
                 Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> initialSolver;
                 initialSolver.compute(normalMatrix);
@@ -1886,6 +1898,23 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         initialMetrics.trainingMaximumDistance;
                     iterationReport.initialBoundaryMaximumDistance =
                         initialMetrics.boundaryMaximumDistance;
+                    std::string initialSupportFailure;
+                    for (std::size_t patch = 0;
+                         patch < initialSurfaces.size();
+                         ++patch) {
+                        if (!localSupportDomainPassed(
+                                initialSurfaces[patch],
+                                layoutCarrier,
+                                layout.patches[patch],
+                                options,
+                                initialSupportFailure)) {
+                            break;
+                        }
+                    }
+                    if (initialSupportFailure.empty()) {
+                        initialDiagnosticSurfaces = std::move(initialSurfaces);
+                        initialDiagnosticMetrics = initialMetrics;
+                    }
                 } catch (const Standard_Failure&) {
                 }
 
@@ -2095,9 +2124,18 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                             layout.patches[patch],
                             options,
                             supportFailure)) {
-                        iterationReport.stopReason = supportFailure;
+                        if (!iterationReport.hardConstraintFeasible &&
+                            !initialDiagnosticSurfaces.empty()) {
+                            bestSurfaces = std::move(initialDiagnosticSurfaces);
+                            bestMetrics = initialDiagnosticMetrics;
+                            iterationReport.stopReason =
+                                iterationReport.hardConstraintStatus +
+                                "; retained the finite initial support network for diagnostic sewing.";
+                        } else {
+                            iterationReport.stopReason = supportFailure;
+                        }
                         attempt.iterations.push_back(iterationReport);
-                        attempt.stopReason = supportFailure;
+                        attempt.stopReason = iterationReport.stopReason;
                         break;
                     }
                 }

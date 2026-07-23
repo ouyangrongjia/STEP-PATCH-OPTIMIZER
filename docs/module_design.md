@@ -196,7 +196,7 @@ src/reduction 实现当前原生曲面缩减产品合同。
 
 构造顺序是稳定合同：先完成局部曲面和任意闭合 UV trim loop，再复用外边界三维 Edge、为每条内部缝线生成唯一共享三维 Curve、附着双侧 pcurve，随后执行 `SameRange`、数值 `SameParameter`、wire/face 构造及至少 97 点逐边稠密检查。逐边报告必须区分拓扑开口、Curve-on-Surface 偏差、相邻曲面分离和三档显示三角化裂纹。
 
-缝合且拓扑水密只表示诊断链完成。`forceDiagnosticSewing` 只允许有限、无翻转且可构造的单个候选越过产品质量门继续装配、缝合、修复和 STEP 往返诊断；它不提高容差，也不改变 `BestEffortThroughSewing` 或产品选择语义。距离、法向、外边界、内部接缝、Curve-on-Surface、输出复杂度或 STEP 往返任一产品门失败时，只能保留 `sewn_attempt.step`，并强制不可 Apply。
+缝合且拓扑水密只表示诊断链完成。`forceDiagnosticSewing` 只允许有限、无翻转且可构造的单个候选越过产品质量门继续装配、缝合、修复和 STEP 往返诊断；它不提高容差，也不改变 `BestEffortThroughSewing` 或产品选择语义。若完整硬约束已明确不相容且受约束修正破坏局部构造性，可保留已经通过有限性、控制网包络和 Jacobian 检查的第一阶段多 patch 支撑网，仅用于诊断缝合，并明确记录约束失败；该路径永远不是产品拟合成功。距离、法向、外边界、内部接缝、Curve-on-Surface、输出复杂度或 STEP 往返任一产品门失败时，只能保留 `sewn_attempt.step`，并强制不可 Apply。
 
 ## patch：边界约束替换
 

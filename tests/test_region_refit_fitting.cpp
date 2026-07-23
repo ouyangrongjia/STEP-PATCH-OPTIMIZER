@@ -184,6 +184,8 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(!iteration.hardConstraintFeasible);
     assert(iteration.hardConstraintStatus == "InfeasibleHardBoundaryConstraints");
     assert(iteration.minimumFullHardConstraintResidual > options.curveOnSurfaceTolerance);
+    assert(fitted.bestEffortNetwork);
+    assert(!fitted.bestEffortNetwork->fitGatePassed);
 }
 
 void test_joint_fitter_honors_preflight_memory_budget() {

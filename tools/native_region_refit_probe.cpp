@@ -947,7 +947,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v21-scaled-constraint-rank";
+    request.options.algorithmFingerprint = "native-regional-refit-v22-initial-diagnostic-fallback";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1082,7 +1082,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v21-scaled-constraint-rank-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v22-initial-diagnostic-fallback-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
