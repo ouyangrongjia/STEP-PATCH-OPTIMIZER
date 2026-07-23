@@ -702,6 +702,7 @@ void test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs() {
 void test_native_region_refit_best_effort_artifact_contract() {
     const auto root = source_root();
     const auto script = read_text_file(root / "scripts" / "run_native_region_refit.ps1");
+    const auto creoScript = read_text_file(root / "scripts" / "run_creo_step_diagnostic.ps1");
     const auto probe = read_text_file(root / "tools" / "native_region_refit_probe.cpp");
 
     assert(script.find("quality-balanced") != std::string::npos);
@@ -717,6 +718,10 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("edge_consistency_report.json") != std::string::npos);
     assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
+    assert(script.find("$creoProcess.WaitForExit()") != std::string::npos);
+    assert(script.find("$creoProcess.Dispose()") != std::string::npos);
+    assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
+    assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find("native-regional-refit-v29-diagnostic-polyline-pcurve") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);

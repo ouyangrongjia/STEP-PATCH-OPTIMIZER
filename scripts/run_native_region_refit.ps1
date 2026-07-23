@@ -393,12 +393,15 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
             "-OutputDir", $creoOutput) `
         -WorkingDirectory $repoRoot `
         -WindowStyle Hidden `
-        -Wait `
         -PassThru `
         -RedirectStandardOutput $creoStdout `
         -RedirectStandardError $creoStderr
+    $creoProcess.WaitForExit()
+    $creoProcess.Refresh()
+    $creoExitCode = [int]$creoProcess.ExitCode
+    $creoProcess.Dispose()
     $artifacts["creo_diagnostic_directory"] = $creoOutput
-    $artifacts["creo_diagnostic_exit_code"] = [int]$creoProcess.ExitCode
+    $artifacts["creo_diagnostic_exit_code"] = $creoExitCode
 }
 
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts

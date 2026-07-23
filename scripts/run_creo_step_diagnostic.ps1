@@ -197,8 +197,12 @@ function Invoke-ProcessWithTimeout {
     if ($timedOut) {
         try {
             $process.Kill()
+            $process.WaitForExit()
         } catch {
         }
+    } else {
+        $process.WaitForExit()
+        $process.Refresh()
     }
 
     $endedAt = Get-Date
@@ -206,6 +210,7 @@ function Invoke-ProcessWithTimeout {
     if (-not $timedOut) {
         $exitCode = $process.ExitCode
     }
+    $process.Dispose()
 
     return [ordered]@{
         file_path = $FilePath
