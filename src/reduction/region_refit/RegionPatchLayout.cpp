@@ -933,7 +933,7 @@ bool parameterizePatch(
         Eigen::ConjugateGradient<
             SparseMatrix,
             Eigen::Lower | Eigen::Upper,
-            Eigen::DiagonalPreconditioner<double>> solver;
+            Eigen::IncompleteCholesky<double>> solver;
         solver.setMaxIterations(static_cast<Eigen::Index>(interior.size()));
         solver.setTolerance(std::sqrt(std::numeric_limits<double>::epsilon()));
         solver.compute(matrix);
