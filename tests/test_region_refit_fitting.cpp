@@ -2,11 +2,16 @@
 #include "reduction/region_refit/RegionalSurfaceRefitCache.h"
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array2OfPnt.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 
 namespace {
@@ -187,6 +192,71 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(iteration.initialControlPriorScale > 0.0);
     assert(fitted.bestEffortNetwork);
     assert(!fitted.bestEffortNetwork->fitGatePassed);
+}
+
+void test_trimmed_disk_jacobian_ignores_unused_rectangular_corners() {
+    auto mesh = makePlanarFitMesh(8);
+    auto layouts = planarLayouts(mesh, 1);
+    auto& patch = layouts.front().patches.front();
+    for (std::size_t local = 0; local < patch.parameters.size(); ++local) {
+        auto& parameter = patch.parameters[local];
+        parameter[0] = 0.5 + 0.5 * (parameter[0] - 0.5);
+        parameter[1] = 0.5 + 0.5 * (parameter[1] - 0.5);
+        const auto u = parameter[0];
+        const auto x = 0.09 * u - std::pow(u - 0.5, 3.0) / 3.0;
+        mesh.vertices[patch.vertexIndices[local]].point =
+            gp_Pnt(x, parameter[1], 0.0);
+    }
+    mesh.updateIntegrationWeights();
+
+    const std::array<double, 4> xControls {
+        1.0 / 24.0,
+        -7.0 / 600.0,
+        61.0 / 600.0,
+        29.0 / 600.0};
+    TColgp_Array2OfPnt poles(1, 4, 1, 4);
+    for (int u = 1; u <= 4; ++u) {
+        for (int v = 1; v <= 4; ++v) {
+            poles.SetValue(
+                u, v, gp_Pnt(xControls[static_cast<std::size_t>(u - 1)],
+                             static_cast<double>(v - 1) / 3.0,
+                             0.0));
+        }
+    }
+    TColStd_Array1OfReal knots(1, 2);
+    knots.SetValue(1, 0.0);
+    knots.SetValue(2, 1.0);
+    TColStd_Array1OfInteger multiplicities(1, 2);
+    multiplicities.SetValue(1, 4);
+    multiplicities.SetValue(2, 4);
+    const Handle(Geom_BSplineSurface) surface = new Geom_BSplineSurface(
+        poles,
+        knots,
+        knots,
+        multiplicities,
+        multiplicities,
+        3,
+        3,
+        false,
+        false);
+
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.1;
+    std::string reason;
+    assert(spo::regionLocalSupportDomainPassed(
+        surface, mesh, patch, options, reason));
+    gp_Pnt unusedPoint;
+    gp_Vec unusedU;
+    gp_Vec unusedV;
+    surface->D1(0.0, 0.5, unusedPoint, unusedU, unusedV);
+    assert(unusedU.Crossed(unusedV).Dot(gp_Vec(0.0, 0.0, 1.0)) < 0.0);
+    for (const auto& parameter : patch.parameters) {
+        gp_Pnt trimPoint;
+        gp_Vec trimU;
+        gp_Vec trimV;
+        surface->D1(parameter[0], parameter[1], trimPoint, trimU, trimV);
+        assert(trimU.Crossed(trimV).Dot(gp_Vec(0.0, 0.0, 1.0)) > 0.0);
+    }
 }
 
 void test_joint_fitter_honors_preflight_memory_budget() {
@@ -381,6 +451,7 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
 void run_region_refit_fitting_tests() {
     test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs();
     test_inconsistent_dense_hard_constraints_are_reported_explicitly();
+    test_trimmed_disk_jacobian_ignores_unused_rectangular_corners();
     test_joint_fitter_passes_planar_two_patch_network();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();

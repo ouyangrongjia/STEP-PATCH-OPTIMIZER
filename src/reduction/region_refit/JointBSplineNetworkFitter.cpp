@@ -1235,12 +1235,18 @@ Handle(Geom_BSplineSurface) makeSurface(
         false);
 }
 
-bool localSupportDomainPassed(
+bool evaluateLocalSupportDomain(
     const Handle(Geom_BSplineSurface)& surface,
     const RegionReferenceMesh& carrier,
     const RegionPatchParameterization& parameterization,
     const RegionRefitOptions& options,
     std::string& reason) {
+    if (surface.IsNull() ||
+        parameterization.vertexIndices.empty() ||
+        parameterization.vertexIndices.size() != parameterization.parameters.size()) {
+        reason = "A local support domain has incomplete surface or parameterization data.";
+        return false;
+    }
     std::array<double, 3> minimum {
         std::numeric_limits<double>::infinity(),
         std::numeric_limits<double>::infinity(),
@@ -1249,24 +1255,29 @@ bool localSupportDomainPassed(
         -std::numeric_limits<double>::infinity(),
         -std::numeric_limits<double>::infinity(),
         -std::numeric_limits<double>::infinity()};
-    gp_Vec referenceNormal;
-    for (const auto vertexIndex : parameterization.vertexIndices) {
+    std::unordered_map<std::size_t, std::size_t> localByGlobal;
+    localByGlobal.reserve(parameterization.vertexIndices.size());
+    for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
+        const auto vertexIndex = parameterization.vertexIndices[local];
+        if (vertexIndex >= carrier.vertices.size() ||
+            !std::isfinite(parameterization.parameters[local][0]) ||
+            !std::isfinite(parameterization.parameters[local][1])) {
+            reason = "A local support domain contains non-finite or invalid parameterization data.";
+            return false;
+        }
+        localByGlobal.emplace(vertexIndex, local);
         const auto& vertex = carrier.vertices[vertexIndex];
         const std::array<double, 3> coordinate {vertex.point.X(), vertex.point.Y(), vertex.point.Z()};
+        if (!std::all_of(coordinate.begin(), coordinate.end(), [](const auto value) {
+                return std::isfinite(value);
+            })) {
+            reason = "A local support domain contains a non-finite reference point.";
+            return false;
+        }
         for (std::size_t axis = 0; axis < coordinate.size(); ++axis) {
             minimum[axis] = std::min(minimum[axis], coordinate[axis]);
             maximum[axis] = std::max(maximum[axis], coordinate[axis]);
         }
-    }
-    for (const auto triangleIndex : parameterization.triangleIndices) {
-        const auto& triangle = carrier.triangles[triangleIndex];
-        gp_Vec first(
-            carrier.vertices[triangle.vertices[0]].point,
-            carrier.vertices[triangle.vertices[1]].point);
-        gp_Vec second(
-            carrier.vertices[triangle.vertices[0]].point,
-            carrier.vertices[triangle.vertices[2]].point);
-        referenceNormal += first.Crossed(second);
     }
     const auto diagonal = std::sqrt(
         std::pow(maximum[0] - minimum[0], 2.0) +
@@ -1276,6 +1287,12 @@ bool localSupportDomainPassed(
     for (int u = 1; u <= surface->NbUPoles(); ++u) {
         for (int v = 1; v <= surface->NbVPoles(); ++v) {
             const auto pole = surface->Pole(u, v);
+            if (!std::isfinite(pole.X()) ||
+                !std::isfinite(pole.Y()) ||
+                !std::isfinite(pole.Z())) {
+                reason = "A fitted control net contains a non-finite pole.";
+                return false;
+            }
             if (pole.X() < minimum[0] - margin || pole.X() > maximum[0] + margin ||
                 pole.Y() < minimum[1] - margin || pole.Y() > maximum[1] + margin ||
                 pole.Z() < minimum[2] - margin || pole.Z() > maximum[2] + margin) {
@@ -1284,38 +1301,177 @@ bool localSupportDomainPassed(
             }
         }
     }
-    if (referenceNormal.SquareMagnitude() <= 1.0e-24) {
-        reason = "A local support domain has no stable reference normal.";
+
+    using ParameterPoint = std::array<double, 2>;
+    struct TrimTriangle {
+        std::array<ParameterPoint, 3> parameters;
+        gp_Vec referenceNormal;
+        std::array<std::size_t, 3> vertices;
+    };
+    std::vector<TrimTriangle> trimTriangles;
+    trimTriangles.reserve(parameterization.triangleIndices.size());
+    for (const auto triangleIndex : parameterization.triangleIndices) {
+        if (triangleIndex >= carrier.triangles.size()) {
+            reason = "A local support domain references an invalid trim triangle.";
+            return false;
+        }
+        const auto& triangle = carrier.triangles[triangleIndex];
+        TrimTriangle trimTriangle;
+        trimTriangle.vertices = triangle.vertices;
+        for (std::size_t corner = 0; corner < triangle.vertices.size(); ++corner) {
+            const auto found = localByGlobal.find(triangle.vertices[corner]);
+            if (found == localByGlobal.end()) {
+                reason = "A trim triangle references a vertex outside its patch parameterization.";
+                return false;
+            }
+            trimTriangle.parameters[corner] = parameterization.parameters[found->second];
+        }
+        const auto signedUvArea =
+            (trimTriangle.parameters[1][0] - trimTriangle.parameters[0][0]) *
+                (trimTriangle.parameters[2][1] - trimTriangle.parameters[0][1]) -
+            (trimTriangle.parameters[1][1] - trimTriangle.parameters[0][1]) *
+                (trimTriangle.parameters[2][0] - trimTriangle.parameters[0][0]);
+        if (!std::isfinite(signedUvArea) || std::abs(signedUvArea) <= 1.0e-14) {
+            reason = "A local support domain contains a degenerate trim triangle.";
+            return false;
+        }
+        gp_Vec first(
+            carrier.vertices[triangle.vertices[0]].point,
+            carrier.vertices[triangle.vertices[1]].point);
+        gp_Vec second(
+            carrier.vertices[triangle.vertices[0]].point,
+            carrier.vertices[triangle.vertices[2]].point);
+        trimTriangle.referenceNormal = first.Crossed(second);
+        if (signedUvArea < 0.0) trimTriangle.referenceNormal.Reverse();
+        if (trimTriangle.referenceNormal.SquareMagnitude() <= 1.0e-24) {
+            reason = "A local support domain has no stable trim-triangle reference normal.";
+            return false;
+        }
+        trimTriangles.push_back(std::move(trimTriangle));
+    }
+    if (trimTriangles.empty()) {
+        reason = "A local support domain has no trim triangles for its Jacobian gate.";
         return false;
     }
-    referenceNormal.Normalize();
-    auto orientation = 0.0;
-    for (int uIndex = 0; uIndex <= 10; ++uIndex) {
-        for (int vIndex = 0; vIndex <= 10; ++vIndex) {
-            gp_Pnt point;
-            gp_Vec derivativeU;
-            gp_Vec derivativeV;
-            surface->D1(
-                static_cast<double>(uIndex) / 10.0,
-                static_cast<double>(vIndex) / 10.0,
-                point,
-                derivativeU,
-                derivativeV);
-            const auto jacobian = derivativeU.Crossed(derivativeV);
-            if (jacobian.SquareMagnitude() <= 1.0e-20) {
-                reason = "A fitted local support domain has a collapsed Jacobian.";
-                return false;
+
+    constexpr double minimumOrientationCosine =
+        1.4901161193847656e-8; // sqrt(machine epsilon)
+    const auto evaluateJacobian = [&](const ParameterPoint& parameter,
+                                      const gp_Vec& referenceNormal) {
+        gp_Pnt point;
+        gp_Vec derivativeU;
+        gp_Vec derivativeV;
+        surface->D1(parameter[0], parameter[1], point, derivativeU, derivativeV);
+        const std::array<double, 9> values {
+            point.X(), point.Y(), point.Z(),
+            derivativeU.X(), derivativeU.Y(), derivativeU.Z(),
+            derivativeV.X(), derivativeV.Y(), derivativeV.Z()};
+        if (!std::all_of(values.begin(), values.end(), [](const auto value) {
+                return std::isfinite(value);
+            })) {
+            reason = "A fitted local support domain has non-finite trim-domain derivatives.";
+            return false;
+        }
+        const auto jacobian = derivativeU.Crossed(derivativeV);
+        if (jacobian.SquareMagnitude() <= 1.0e-20) {
+            reason = "A fitted local support domain has a collapsed Jacobian inside its trim domain.";
+            return false;
+        }
+        const auto orientationScale = std::sqrt(
+            jacobian.SquareMagnitude() * referenceNormal.SquareMagnitude());
+        const auto orientationCosine = jacobian.Dot(referenceNormal) / orientationScale;
+        if (!std::isfinite(orientationCosine) ||
+            std::abs(orientationCosine) <= minimumOrientationCosine) {
+            reason = "A fitted local support domain has an unstable Jacobian orientation inside its trim domain.";
+            return false;
+        }
+        if (orientationCosine < 0.0) {
+            reason = "A fitted local support domain contains a Jacobian flip inside its trim domain.";
+            return false;
+        }
+        return true;
+    };
+
+    const auto barycentricResolution = std::max(
+        surface->UDegree() + surface->VDegree() + 1,
+        surface->NbUKnots() + surface->NbVKnots() - 1);
+    for (const auto& triangle : trimTriangles) {
+        for (int firstWeight = 0; firstWeight <= barycentricResolution; ++firstWeight) {
+            for (int secondWeight = 0;
+                 secondWeight <= barycentricResolution - firstWeight;
+                 ++secondWeight) {
+                const auto first =
+                    static_cast<double>(firstWeight) / barycentricResolution;
+                const auto second =
+                    static_cast<double>(secondWeight) / barycentricResolution;
+                const auto third = 1.0 - first - second;
+                const ParameterPoint parameter {
+                    first * triangle.parameters[0][0] +
+                        second * triangle.parameters[1][0] +
+                        third * triangle.parameters[2][0],
+                    first * triangle.parameters[0][1] +
+                        second * triangle.parameters[1][1] +
+                        third * triangle.parameters[2][1]};
+                if (!evaluateJacobian(parameter, triangle.referenceNormal)) return false;
             }
-            const auto signedJacobian = jacobian.Dot(referenceNormal);
-            if (std::abs(signedJacobian) <= 1.0e-12) {
-                reason = "A fitted local support domain has an unstable Jacobian orientation.";
-                return false;
-            }
-            if (orientation == 0.0) orientation = signedJacobian > 0.0 ? 1.0 : -1.0;
-            if (orientation * signedJacobian <= 0.0) {
-                reason = "A fitted local support domain contains a Jacobian flip.";
-                return false;
-            }
+        }
+    }
+
+    std::map<std::array<std::size_t, 2>, const TrimTriangle*> boundaryTriangles;
+    for (const auto& triangle : trimTriangles) {
+        for (std::size_t edge = 0; edge < triangle.vertices.size(); ++edge) {
+            const std::array<std::size_t, 2> key {
+                std::min(
+                    triangle.vertices[edge],
+                    triangle.vertices[(edge + 1) % triangle.vertices.size()]),
+                std::max(
+                    triangle.vertices[edge],
+                    triangle.vertices[(edge + 1) % triangle.vertices.size()])};
+            boundaryTriangles.emplace(key, &triangle);
+        }
+    }
+    constexpr double safetyBandFractionOfSampleSpacing = 0.25;
+    const auto safetyBandBarycentricOffset =
+        safetyBandFractionOfSampleSpacing / barycentricResolution;
+    for (std::size_t boundary = 0;
+         boundary < parameterization.boundaryLoop.size();
+         ++boundary) {
+        const auto firstVertex = parameterization.boundaryLoop[boundary];
+        const auto secondVertex = parameterization.boundaryLoop[
+            (boundary + 1) % parameterization.boundaryLoop.size()];
+        const std::array<std::size_t, 2> key {
+            std::min(firstVertex, secondVertex),
+            std::max(firstVertex, secondVertex)};
+        const auto found = boundaryTriangles.find(key);
+        if (found == boundaryTriangles.end()) {
+            reason = "A trim boundary edge has no incident parameterization triangle.";
+            return false;
+        }
+        const auto& triangle = *found->second;
+        std::size_t firstCorner = 0;
+        std::size_t secondCorner = 0;
+        std::size_t interiorCorner = 0;
+        for (std::size_t corner = 0; corner < triangle.vertices.size(); ++corner) {
+            if (triangle.vertices[corner] == firstVertex) firstCorner = corner;
+            else if (triangle.vertices[corner] == secondVertex) secondCorner = corner;
+            else interiorCorner = corner;
+        }
+        for (int sample = 0; sample <= barycentricResolution; ++sample) {
+            const auto edgeWeight =
+                static_cast<double>(sample) / barycentricResolution;
+            const auto expandedWeight = 1.0 + safetyBandBarycentricOffset;
+            const ParameterPoint parameter {
+                expandedWeight * (
+                    (1.0 - edgeWeight) * triangle.parameters[firstCorner][0] +
+                    edgeWeight * triangle.parameters[secondCorner][0]) -
+                    safetyBandBarycentricOffset *
+                        triangle.parameters[interiorCorner][0],
+                expandedWeight * (
+                    (1.0 - edgeWeight) * triangle.parameters[firstCorner][1] +
+                    edgeWeight * triangle.parameters[secondCorner][1]) -
+                    safetyBandBarycentricOffset *
+                        triangle.parameters[interiorCorner][1]};
+            if (!evaluateJacobian(parameter, triangle.referenceNormal)) return false;
         }
     }
     return true;
@@ -1588,6 +1744,16 @@ TopoDS_Shape inspectionShape(const std::vector<Handle(Geom_BSplineSurface)>& sur
     return compound;
 }
 
+}
+
+bool regionLocalSupportDomainPassed(
+    const Handle(Geom_BSplineSurface)& surface,
+    const RegionReferenceMesh& carrier,
+    const RegionPatchParameterization& parameterization,
+    const RegionRefitOptions& options,
+    std::string& reason) {
+    return evaluateLocalSupportDomain(
+        surface, carrier, parameterization, options, reason);
 }
 
 bool JointBSplineNetworkFitResult::success() const {
@@ -1976,7 +2142,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     for (std::size_t patch = 0;
                          patch < priorSurfaces.size();
                          ++patch) {
-                        if (!localSupportDomainPassed(
+                        if (!regionLocalSupportDomainPassed(
                                 priorSurfaces[patch],
                                 layoutCarrier,
                                 layout.patches[patch],
@@ -2059,7 +2225,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     for (std::size_t patch = 0;
                          patch < initialSurfaces.size();
                          ++patch) {
-                        if (!localSupportDomainPassed(
+                        if (!regionLocalSupportDomainPassed(
                                 initialSurfaces[patch],
                                 layoutCarrier,
                                 layout.patches[patch],
@@ -2288,7 +2454,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 }
                 std::string supportFailure;
                 for (std::size_t patch = 0; patch < surfaces.size(); ++patch) {
-                    if (!localSupportDomainPassed(
+                    if (!regionLocalSupportDomainPassed(
                             surfaces[patch],
                             layoutCarrier,
                             layout.patches[patch],

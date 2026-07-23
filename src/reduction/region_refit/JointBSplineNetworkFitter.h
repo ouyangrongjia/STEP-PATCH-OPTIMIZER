@@ -34,6 +34,13 @@ struct JointBSplineNetworkFitResult {
     bool success() const;
 };
 
+bool regionLocalSupportDomainPassed(
+    const Handle(Geom_BSplineSurface)& surface,
+    const RegionReferenceMesh& carrier,
+    const RegionPatchParameterization& parameterization,
+    const RegionRefitOptions& options,
+    std::string& reason);
+
 class JointBSplineNetworkFitter {
 public:
     JointBSplineNetworkFitResult fit(
