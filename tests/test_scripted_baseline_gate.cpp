@@ -717,7 +717,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("edge_consistency_report.json") != std::string::npos);
     assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
-    assert(probe.find("native-regional-refit-v18-local-domains") != std::string::npos);
+    assert(probe.find("native-regional-refit-v19-trimmed-domains") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
@@ -729,6 +729,25 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(probe.find("final_sewn.step") == std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
+}
+
+void test_native_region_refit_force_diagnostic_contract() {
+    const auto root = source_root();
+    const auto script = read_text_file(root / "scripts" / "run_native_region_refit.ps1");
+    const auto probe = read_text_file(root / "tools" / "native_region_refit_probe.cpp");
+    const auto engine = read_text_file(
+        root / "src" / "reduction" / "region_refit" / "RegionalSurfaceRefitEngine.cpp");
+
+    assert(script.find("ForceDiagnosticSewing") != std::string::npos);
+    assert(script.find("--force-diagnostic-sewing") != std::string::npos);
+    assert(script.find("run_creo_step_diagnostic.ps1") != std::string::npos);
+    assert(script.find("external_cad\\creo") != std::string::npos);
+    assert(probe.find("--force-diagnostic-sewing") != std::string::npos);
+    assert(probe.find("forceDiagnosticSewing") != std::string::npos);
+    assert(probe.find("force_diagnostic_sewing_requested") != std::string::npos);
+    assert(probe.find("product_validated") != std::string::npos);
+    assert(engine.find("NoSewableGeometry") != std::string::npos);
+    assert(engine.find("diagnosticSewingCandidateCount") != std::string::npos);
 }
 
 }
@@ -759,4 +778,5 @@ void run_scripted_baseline_gate_tests() {
     test_creo_modelcheck_parse_only_handles_toolkit_xml_shape();
     test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs();
     test_native_region_refit_best_effort_artifact_contract();
+    test_native_region_refit_force_diagnostic_contract();
 }

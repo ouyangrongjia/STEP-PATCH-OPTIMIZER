@@ -350,6 +350,7 @@ RegionConstraintExtractionResult RegionConstraintExtractor::extract(
         constraint.originalEdge = topology.edge(ordered.edgeId);
         constraint.loopOrientation = ordered.orientation;
         const auto& selectedFace = topology.face(*selectedFaceId);
+        constraint.selectedFace = selectedFace;
         constraint.selectedFaceOrientation = edgeOrientationInFace(constraint.originalEdge, selectedFace);
         constraint.selectedPcurve = BRep_Tool::CurveOnSurface(
             constraint.originalEdge,
@@ -363,6 +364,7 @@ RegionConstraintExtractionResult RegionConstraintExtractor::extract(
         TopoDS_Face adjacentFace;
         if (adjacentFaceId.has_value()) {
             adjacentFace = topology.face(*adjacentFaceId);
+            constraint.adjacentFace = adjacentFace;
             constraint.adjacentFaceOrientation = edgeOrientationInFace(constraint.originalEdge, adjacentFace);
             constraint.adjacentPcurve = BRep_Tool::CurveOnSurface(
                 constraint.originalEdge,

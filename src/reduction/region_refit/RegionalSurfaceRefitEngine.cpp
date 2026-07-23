@@ -184,6 +184,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const RegionRefitRequest& request) const {
     RegionRefitResult result;
     result.report.inputFaceCount = static_cast<int>(request.selectedFaces.size());
+    result.report.forceDiagnosticSewingRequested = request.forceDiagnosticSewing;
     result.report.requestedPatchCount = request.layoutMode == RegionRefitLayoutMode::TargetPatchCount
         ? request.options.requestedPatchCount
         : (request.layoutMode == RegionRefitLayoutMode::FixedPatchCount
@@ -207,6 +208,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         request.options.maximumAdaptivePatchCount <= 0 ||
         request.options.maximumParameterDistortion <= 0.0 ||
         request.options.maximumControlPointsPerSide < 6 ||
+        request.options.constraintCorrectionAnchorRelativeWeight <= 0.0 ||
         (request.layoutMode == RegionRefitLayoutMode::FixedPatchCount &&
             request.options.fixedPatchCount <= 0) ||
         (request.layoutMode == RegionRefitLayoutMode::TargetPatchCount &&
@@ -414,7 +416,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         layouts = RegionPatchLayoutGenerator().generate(
             *result.layoutCarrierMesh,
             request.layoutMode,
-            request.options);
+            request.options,
+            request.forceDiagnosticSewing);
         if (layouts.success() && cache.enabled()) {
             const auto writeEvent = cache.saveLayouts(layouts);
             layoutCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
@@ -439,12 +442,18 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.layoutCandidates = layouts.candidates;
     if (cache.enabled()) result.report.cacheEvents.push_back(layoutCacheEvent);
     if (!layouts.success()) {
-        result.report.status = layouts.status;
+        result.report.status = request.forceDiagnosticSewing
+            ? RegionRefitStatus::NoSewableGeometry
+            : layouts.status;
         result.report.failureStage = RegionRefitStage::Layout;
         result.report.message = layouts.message;
-        result.report.selectionOutcome = "NoValidatedLayout";
+        result.report.selectionOutcome = request.forceDiagnosticSewing
+            ? "NoSewableGeometry" : "NoValidatedLayout";
         result.report.unattainableReason = layouts.message;
         return result;
+    }
+    for (const auto& layout : layouts.constructibleCandidates) {
+        result.generatedLayouts.push_back(std::make_shared<RegionPatchLayout>(layout));
     }
     if (layoutMemoryExceeded) {
         failMemoryBudget(result, RegionRefitStage::Layout);
@@ -454,6 +463,20 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         layouts.selectedCandidates.front());
     result.report.selectedPatchCount = result.selectedLayout->patchCount;
     result.report.selectedLayoutHash = result.selectedLayout->hash;
+    const auto selectedLayoutReport = std::find_if(
+        result.report.layoutCandidates.begin(),
+        result.report.layoutCandidates.end(),
+        [&](const auto& candidate) {
+            return candidate.layoutHash == result.report.selectedLayoutHash;
+        });
+    result.report.layoutGatePassed =
+        selectedLayoutReport != result.report.layoutCandidates.end() &&
+        selectedLayoutReport->topologyPassed &&
+        selectedLayoutReport->parameterizationPassed &&
+        selectedLayoutReport->coarseFitPassed;
+    if (!result.report.layoutGatePassed && request.forceDiagnosticSewing) {
+        result.report.firstProductFailureGate = "Layout";
+    }
     if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
         result.report.failureStage = RegionRefitStage::Layout;
@@ -528,11 +551,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.fitGatePassed = fitted.success();
     const auto useBestEffort = !fitted.success() &&
         fitted.status == RegionRefitStatus::NoValidatedLayoutWithinBudget &&
-        request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing &&
+        (request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing ||
+            request.forceDiagnosticSewing) &&
         fitted.bestEffortNetwork != nullptr;
     result.report.bestEffortUsed = useBestEffort;
     if (!fitted.success() && !useBestEffort) {
-        result.report.status = fitted.status;
+        result.report.status = request.forceDiagnosticSewing
+            ? RegionRefitStatus::NoSewableGeometry
+            : fitted.status;
         result.report.failureStage = RegionRefitStage::Fitting;
         result.report.message = fitted.message;
         result.report.patchCountDeviation = result.report.requestedPatchCount > 0
@@ -540,7 +566,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             : 0;
         result.report.exactTargetReached = result.report.requestedPatchCount > 0 &&
             result.report.patchCountDeviation == 0;
-        markNoProductResult(result, fitted.message);
+        if (request.forceDiagnosticSewing) {
+            result.report.selectionOutcome = "NoSewableGeometry";
+            result.report.unattainableReason =
+                "No finite, non-flipped fitted support-surface network was available for B-rep construction.";
+            result.report.firstProductFailureGate = "Fitting";
+        } else {
+            markNoProductResult(result, fitted.message);
+        }
         return result;
     }
     if (fittingMemoryExceeded) {
@@ -548,6 +581,11 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
     result.fittedNetwork = fitted.success() ? fitted.network : fitted.bestEffortNetwork;
+    result.report.sewableGeometryAvailable = result.fittedNetwork != nullptr;
+    result.report.diagnosticCandidatePatchCount = result.fittedNetwork->layout.patchCount;
+    result.report.diagnosticSelectionReason =
+        "Selected the constructible fitted network by hard-gate count, normalized product-gate violation, patch count, proxy error, and stable hash.";
+    result.report.diagnosticSewingCandidateCount = 1;
     result.selectedLayout = std::make_shared<RegionPatchLayout>(result.fittedNetwork->layout);
     result.fittedPatchNetwork = result.fittedNetwork->inspectionShape;
     result.report.selectedPatchCount = result.fittedNetwork->layout.patchCount;
@@ -557,6 +595,22 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.exactTargetReached = result.report.requestedPatchCount > 0 &&
         result.report.patchCountDeviation == 0;
     result.report.selectedLayoutHash = result.fittedNetwork->layout.hash;
+    const auto fittedLayoutReport = std::find_if(
+        result.report.layoutCandidates.begin(),
+        result.report.layoutCandidates.end(),
+        [&](const auto& candidate) {
+            return candidate.layoutHash == result.report.selectedLayoutHash;
+        });
+    result.report.layoutGatePassed =
+        fittedLayoutReport != result.report.layoutCandidates.end() &&
+        fittedLayoutReport->topologyPassed &&
+        fittedLayoutReport->parameterizationPassed &&
+        fittedLayoutReport->coarseFitPassed;
+    if (!result.report.layoutGatePassed) {
+        result.report.firstProductFailureGate = "Layout";
+    } else if (!fitted.success()) {
+        result.report.firstProductFailureGate = "Fitting";
+    }
     if (request.diagnosticStopAfterStage == RegionRefitStage::Fitting) {
         result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
         result.report.failureStage = RegionRefitStage::Retrim;
@@ -567,12 +621,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto retrimResources = captureRegionProcessResources();
     const auto retrimStarted = std::chrono::steady_clock::now();
     result.report.retrimAttempted = true;
+    result.report.forceDiagnosticSewingAttempted = request.forceDiagnosticSewing;
     const auto nativeBuild = NativeRegionPatchNetworkBuilder().build(
         *result.layoutCarrierMesh,
         result.constraints,
         *result.fittedNetwork,
         request.options.curveOnSurfaceTolerance,
-        request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing);
+        request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing ||
+            request.forceDiagnosticSewing);
     const auto boundary = boundaryAnalysisFromConstraints(result.constraints);
     PatchReplacementAssemblyResult assembly;
     if (nativeBuild.constructible() && boundary.valid) {
@@ -612,11 +668,23 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto retrimConstructed = nativeBuild.constructible() && boundary.valid && assembly.success &&
         !assembly.shape.IsNull();
     if (!retrimConstructed) {
-        result.report.status = RegionRefitStatus::Failed;
+        result.report.status = request.forceDiagnosticSewing
+            ? RegionRefitStatus::NoSewableGeometry
+            : RegionRefitStatus::Failed;
         result.report.failureStage = RegionRefitStage::Retrim;
         result.report.message = retrimStage.message;
         result.report.continuationStopReason = retrimStage.message;
-        markNoProductResult(result, retrimStage.message);
+        if (result.report.firstProductFailureGate.empty()) {
+            result.report.firstProductFailureGate = "Retrim";
+        }
+        if (request.forceDiagnosticSewing) {
+            result.report.selectionOutcome = "NoSewableGeometry";
+            result.report.sewableGeometryAvailable = false;
+            result.report.unattainableReason =
+                "The fitted surfaces could not be constructed as a patch-network B-rep.";
+        } else {
+            markNoProductResult(result, retrimStage.message);
+        }
         return result;
     }
     if (retrimMemoryExceeded) {
@@ -728,7 +796,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.stages.push_back(strictStage);
     result.report.totalWallMilliseconds += strictStage.wallMilliseconds;
     copyStrictTopologyReport(result.report, strictReport);
-    if (!strictReport.passed && request.executionMode == RegionRefitExecutionMode::ValidatedOnly) {
+    if (!strictReport.passed &&
+        request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::Failed;
         result.report.failureStage = RegionRefitStage::StrictTopology;
         result.report.message = strictReport.message;
@@ -762,7 +832,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.stages.push_back(roundtripStage);
     result.report.totalWallMilliseconds += roundtripStage.wallMilliseconds;
     copyStrictTopologyReport(result.report, roundtripReport);
-    if (!roundtripReport.passed && request.executionMode == RegionRefitExecutionMode::ValidatedOnly) {
+    if (!roundtripReport.passed &&
+        request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::Failed;
         result.report.failureStage = RegionRefitStage::StepRoundtrip;
         result.report.message = roundtripReport.message;
@@ -785,8 +857,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
-    const auto fullyValidated = result.report.fitGatePassed && result.report.retrimValidationPassed &&
+    const auto fullyValidated = result.report.layoutGatePassed &&
+        result.report.fitGatePassed && result.report.retrimValidationPassed &&
         result.report.repairPassed && strictReport.passed && roundtripReport.passed;
+    result.report.productValidated = fullyValidated;
     result.report.outputFaceCount = roundtripReport.afterStats.faces;
     if (fullyValidated) {
         if (request.layoutMode == RegionRefitLayoutMode::TargetPatchCount) {
@@ -828,16 +902,25 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.failureStage = RegionRefitStage::None;
         result.report.message = "Native regional multi-surface refit passed retrimming, sewing, strict topology, and STEP roundtrip gates.";
     } else {
+        if (result.report.firstProductFailureGate.empty()) {
+            result.report.firstProductFailureGate = !result.report.retrimValidationPassed
+                ? "Retrim"
+                : (!result.report.repairPassed
+                    ? "Sewing"
+                    : (!strictReport.passed ? "StrictTopology" : "StepRoundtrip"));
+        }
         result.report.selectionOutcome = "NoProductValidatedResult";
         result.report.unattainableReason = "A fitted or sewn diagnostic candidate did not pass every product geometry and topology gate.";
         result.report.status = RegionRefitStatus::Failed;
-        result.report.failureStage = !result.report.fitGatePassed
-            ? RegionRefitStage::Fitting
-            : (!result.report.retrimValidationPassed
-                ? RegionRefitStage::Retrim
-                : (!result.report.repairPassed
-                    ? RegionRefitStage::Sewing
-                    : (!strictReport.passed ? RegionRefitStage::StrictTopology : RegionRefitStage::StepRoundtrip)));
+        result.report.failureStage = !result.report.layoutGatePassed
+            ? RegionRefitStage::Layout
+            : (!result.report.fitGatePassed
+                ? RegionRefitStage::Fitting
+                : (!result.report.retrimValidationPassed
+                    ? RegionRefitStage::Retrim
+                    : (!result.report.repairPassed
+                        ? RegionRefitStage::Sewing
+                        : (!strictReport.passed ? RegionRefitStage::StrictTopology : RegionRefitStage::StepRoundtrip))));
         result.report.message = "Best-effort regional refit completed through sewing and validation but did not pass all product gates.";
         result.report.continuationStopReason = result.report.message;
     }

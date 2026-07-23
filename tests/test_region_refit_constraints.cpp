@@ -118,6 +118,7 @@ void test_constraint_extractor_preserves_external_neighbor_constraint() {
     assert(adjacent != result.constraints.boundaryEdges.end());
     assert(adjacent->edgeId == fixture.sharedEdge);
     assert(!adjacent->adjacentPcurve.IsNull());
+    assert(!adjacent->adjacentFace.IsNull());
 }
 
 void test_constraint_extractor_retains_locked_internal_edge() {
@@ -202,6 +203,45 @@ void test_engine_records_constraint_stage_before_unimplemented_layout() {
     assert(!result.canApply());
 }
 
+void test_force_diagnostic_reports_no_sewable_geometry_when_layout_is_not_constructible() {
+    const auto fixture = make_two_face_fixture();
+    spo::RegionRefitRequest request;
+    request.selectedFaces = {0, 1};
+    request.forceDiagnosticSewing = true;
+    request.options.solverMemoryPreflightMiB = 0;
+
+    const auto result = spo::RegionalSurfaceRefitEngine().run(fixture.document, request);
+
+    assert(result.report.status == spo::RegionRefitStatus::NoSewableGeometry);
+    assert(!result.report.forceDiagnosticSewingAttempted);
+    assert(!result.report.sewableGeometryAvailable);
+    assert(!result.report.productValidated);
+    assert(result.report.selectionOutcome == "NoSewableGeometry");
+    assert(result.finalShape.IsNull());
+    assert(!result.canApply());
+}
+
+void test_force_diagnostic_never_applies_layout_gate_failure() {
+    const auto fixture = make_two_face_fixture();
+    spo::RegionRefitRequest request;
+    request.selectedFaces = {0, 1};
+    request.layoutMode = spo::RegionRefitLayoutMode::FixedPatchCount;
+    request.forceDiagnosticSewing = true;
+    request.options.fixedPatchCount = 1;
+    request.options.maximumParameterDistortion = 1.0e-12;
+    request.options.maximumFitIterations = 4;
+
+    const auto result = spo::RegionalSurfaceRefitEngine().run(fixture.document, request);
+
+    assert(result.report.forceDiagnosticSewingRequested);
+    assert(!result.report.layoutGatePassed);
+    assert(!result.report.productValidated);
+    assert(result.report.firstProductFailureGate == "Layout");
+    assert(result.finalShape.IsNull());
+    assert(!result.canApply());
+    assert(result.report.diagnosticSewingCandidateCount <= 1);
+}
+
 }
 
 void run_region_refit_constraint_tests() {
@@ -213,4 +253,6 @@ void run_region_refit_constraint_tests() {
     test_engine_rejects_invalid_resource_budget_without_mutating_shape();
     test_engine_stops_before_work_when_process_exceeds_memory_budget();
     test_engine_records_constraint_stage_before_unimplemented_layout();
+    test_force_diagnostic_reports_no_sewable_geometry_when_layout_is_not_constructible();
+    test_force_diagnostic_never_applies_layout_gate_failure();
 }

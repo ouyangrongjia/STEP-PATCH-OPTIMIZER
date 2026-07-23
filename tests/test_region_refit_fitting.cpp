@@ -1,5 +1,6 @@
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/RegionalSurfaceRefitCache.h"
+#include <BRepBuilderAPI_MakeEdge.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
@@ -82,6 +83,58 @@ void test_joint_fitter_passes_planar_two_patch_network() {
     assert(fitted.network->holdoutMaximumDistance <= options.tolerance3d);
     assert(fitted.network->boundaryMaximumDistance <= options.curveOnSurfaceTolerance);
     assert(fitted.network->seamMaximumDistance <= options.curveOnSurfaceTolerance);
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front().iterations.empty());
+    const auto& iteration = fitted.attempts.front().iterations.back();
+    assert(iteration.seamG0ConstraintCount > 0);
+    assert(iteration.seamG1SoftConstraintCount > 0);
+}
+
+void test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs() {
+    auto mesh = makePlanarFitMesh(1);
+    const gp_Vec translation(120.0, -75.0, 42.0);
+    for (auto& vertex : mesh.vertices) {
+        vertex.point.Translate(translation);
+    }
+    mesh.updateIntegrationWeights();
+    const auto layouts = planarLayouts(mesh, 1);
+    spo::RegionTopologyConstraints constraints;
+    const std::array<std::pair<gp_Pnt, gp_Pnt>, 1> edges {{
+        {gp_Pnt(120.0, -75.0, 42.0), gp_Pnt(121.0, -75.0, 42.0)}}};
+    for (std::size_t index = 0; index < edges.size(); ++index) {
+        spo::RegionBoundaryEdgeConstraint constraint;
+        constraint.edgeId = index;
+        constraint.originalEdge = BRepBuilderAPI_MakeEdge(
+            edges[index].first, edges[index].second).Edge();
+        constraint.hardPositionConstraint = true;
+        constraints.boundaryEdges.push_back(constraint);
+        constraints.orderedBoundaryEdges.push_back(index);
+    }
+    for (auto& vertex : mesh.vertices) {
+        if (!vertex.boundary) continue;
+        const auto y = vertex.point.Y() + 75.0;
+        if (std::abs(y) <= 1.0e-12) vertex.boundaryEdgeIds.push_back(0);
+    }
+
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.05;
+    options.curveOnSurfaceTolerance = 0.01;
+    options.normalToleranceDegrees = 1.0;
+    options.maximumFitIterations = 4;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        mesh,
+        constraints,
+        layouts,
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front().iterations.empty());
+    const auto& iteration = fitted.attempts.front().iterations.back();
+    assert(iteration.nonZeroBoundaryRhsCount > 0);
+    assert(iteration.boundaryTargetMinimum[0] >= 119.9);
+    assert(iteration.boundaryTargetMaximum[2] >= 41.9);
+    assert(iteration.maximumHardConstraintResidual <= 1.0e-4);
 }
 
 void test_joint_fitter_honors_preflight_memory_budget() {
@@ -274,6 +327,7 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
 }
 
 void run_region_refit_fitting_tests() {
+    test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs();
     test_joint_fitter_passes_planar_two_patch_network();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();

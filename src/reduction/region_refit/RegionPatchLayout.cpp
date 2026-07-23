@@ -457,80 +457,98 @@ double signedArea2d(
         (second[1] - first[1]) * (third[0] - first[0]);
 }
 
-bool mapBoundaryToSquare(
+bool mapBoundaryToConvexLoop(
+    const RegionReferenceMesh& mesh,
     const std::vector<std::size_t>& boundaryLoop,
     const std::vector<double>& cumulative,
-    std::vector<std::size_t> corners,
     const std::unordered_map<std::size_t, std::size_t>& localIndex,
     RegionPatchParameterization& result,
     std::string& message) {
     for (auto& side : result.boundarySides) side.clear();
     const auto count = boundaryLoop.size();
-    if (count < 4 || cumulative.size() != count + 1 || cumulative.back() <= 1.0e-12) {
-        message = "A four-sided local parameter domain needs at least four non-degenerate boundary vertices.";
+    if (count < 3 || cumulative.size() != count + 1 || cumulative.back() <= 1.0e-12) {
+        message = "A trimmed-disk parameter domain needs at least three non-degenerate boundary vertices.";
         return false;
     }
-    std::sort(corners.begin(), corners.end());
-    corners.erase(std::unique(corners.begin(), corners.end()), corners.end());
-    if (corners.size() > 4) {
-        message = "A stable four-sided parameter domain would require more than four boundary corners.";
-        return false;
+    Eigen::Vector3d center = Eigen::Vector3d::Zero();
+    for (const auto vertex : boundaryLoop) {
+        const auto& point = mesh.vertices[vertex].point;
+        center += Eigen::Vector3d(point.X(), point.Y(), point.Z());
     }
-    if (corners.empty()) corners.push_back(0);
-    while (corners.size() < 4) {
-        std::size_t best = count;
-        double bestDistance = -1.0;
-        for (std::size_t candidate = 0; candidate < count; ++candidate) {
-            if (std::find(corners.begin(), corners.end(), candidate) != corners.end()) continue;
-            double nearest = cumulative.back();
-            for (const auto corner : corners) {
-                const auto direct = std::abs(cumulative[candidate] - cumulative[corner]);
-                nearest = std::min(nearest, std::min(direct, cumulative.back() - direct));
-            }
-            if (nearest > bestDistance) {
-                bestDistance = nearest;
-                best = candidate;
+    center /= static_cast<double>(boundaryLoop.size());
+    Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+    for (const auto vertex : boundaryLoop) {
+        const auto& point = mesh.vertices[vertex].point;
+        const Eigen::Vector3d offset(
+            point.X() - center.x(), point.Y() - center.y(), point.Z() - center.z());
+        covariance += offset * offset.transpose();
+    }
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigensolver(covariance);
+    std::vector<std::array<double, 2>> projected(count);
+    auto convexProjection = eigensolver.info() == Eigen::Success;
+    if (convexProjection) {
+        const auto firstAxis = eigensolver.eigenvectors().col(2);
+        const auto secondAxis = eigensolver.eigenvectors().col(1);
+        std::array<double, 2> minimum {
+            std::numeric_limits<double>::infinity(),
+            std::numeric_limits<double>::infinity()};
+        std::array<double, 2> maximum {
+            -std::numeric_limits<double>::infinity(),
+            -std::numeric_limits<double>::infinity()};
+        for (std::size_t position = 0; position < count; ++position) {
+            const auto& point = mesh.vertices[boundaryLoop[position]].point;
+            const Eigen::Vector3d offset(
+                point.X() - center.x(), point.Y() - center.y(), point.Z() - center.z());
+            projected[position] = {offset.dot(firstAxis), offset.dot(secondAxis)};
+            for (std::size_t axis = 0; axis < 2; ++axis) {
+                minimum[axis] = std::min(minimum[axis], projected[position][axis]);
+                maximum[axis] = std::max(maximum[axis], projected[position][axis]);
             }
         }
-        if (best == count) {
-            message = "A four-sided parameter domain could not select four distinct corners.";
-            return false;
+        constexpr double crossTolerance = 1.0e-12;
+        auto orientation = 0;
+        for (std::size_t position = 0; position < count; ++position) {
+            const auto cross = signedArea2d(
+                projected[position],
+                projected[(position + 1) % count],
+                projected[(position + 2) % count]);
+            if (std::abs(cross) <= crossTolerance) continue;
+            const auto sign = cross > 0.0 ? 1 : -1;
+            if (orientation == 0) orientation = sign;
+            else if (orientation != sign) convexProjection = false;
         }
-        corners.push_back(best);
-        std::sort(corners.begin(), corners.end());
+        convexProjection = convexProjection && orientation != 0 &&
+            maximum[0] - minimum[0] > 1.0e-12 &&
+            maximum[1] - minimum[1] > 1.0e-12;
+        if (convexProjection) {
+            constexpr double inset = 0.05;
+            constexpr double span = 1.0 - 2.0 * inset;
+            for (std::size_t position = 0; position < count; ++position) {
+                for (std::size_t axis = 0; axis < 2; ++axis) {
+                    projected[position][axis] = inset + span *
+                        (projected[position][axis] - minimum[axis]) /
+                        (maximum[axis] - minimum[axis]);
+                }
+            }
+        }
     }
 
-    const auto squarePoint = [](const std::size_t side, const double parameter) {
-        switch (side) {
-        case 0: return std::array<double, 2> {parameter, 0.0};
-        case 1: return std::array<double, 2> {1.0, parameter};
-        case 2: return std::array<double, 2> {1.0 - parameter, 1.0};
-        default: return std::array<double, 2> {0.0, 1.0 - parameter};
+    constexpr double radius = 0.45;
+    constexpr double pi = 3.14159265358979323846;
+    for (std::size_t position = 0; position < count; ++position) {
+        const auto vertex = boundaryLoop[position];
+        const auto parameter = cumulative[position] / cumulative.back();
+        if (convexProjection) {
+            result.parameters[localIndex.at(vertex)] = projected[position];
+        } else {
+            const auto angle = 2.0 * pi * parameter;
+            result.parameters[localIndex.at(vertex)] = {
+                0.5 + radius * std::cos(angle),
+                0.5 + radius * std::sin(angle)};
         }
-    };
-    for (std::size_t side = 0; side < 4; ++side) {
-        const auto begin = corners[side];
-        const auto end = side + 1 < corners.size() ? corners[side + 1] : count + corners.front();
-        const auto cumulativeAt = [&](const std::size_t position) {
-            return position <= count
-                ? cumulative[position]
-                : cumulative.back() + cumulative[position - count];
-        };
-        const auto length = cumulativeAt(end) - cumulativeAt(begin);
-        if (length <= 1.0e-12) {
-            message = "A local parameter-domain side has degenerate physical length.";
-            return false;
-        }
-        for (auto position = begin; position <= end; ++position) {
-            const auto loopPosition = position % count;
-            const auto vertex = boundaryLoop[loopPosition];
-            const auto parameter = std::clamp(
-                (cumulativeAt(position) - cumulativeAt(begin)) / length,
-                0.0,
-                1.0);
-            result.parameters[localIndex.at(vertex)] = squarePoint(side, parameter);
-            result.boundarySides[side].push_back(vertex);
-        }
+        const auto side = std::min<std::size_t>(
+            3, static_cast<std::size_t>(std::floor(parameter * 4.0)));
+        result.boundarySides[side].push_back(vertex);
     }
     return true;
 }
@@ -540,6 +558,7 @@ bool parameterizePatch(
     const std::vector<int>& assignments,
     const int patch,
     const double maximumDistortion,
+    const bool allowDistortionViolation,
     const std::chrono::steady_clock::time_point deadline,
     RegionPatchParameterization& result,
     std::string& message) {
@@ -644,6 +663,7 @@ bool parameterizePatch(
         message = "Layout patch is not a single-boundary disk.";
         return false;
     }
+    result.diskTopologyPassed = true;
 
     result.vertexIndices.assign(vertices.begin(), vertices.end());
     result.parameters.resize(result.vertexIndices.size());
@@ -711,13 +731,41 @@ bool parameterizePatch(
         }
     }
     if (chainCounts.empty() && !boundaryLabels.empty()) chainCounts[boundaryLabels.front()] = 1;
-    if (!chainCounts.contains(-1) || chainCounts[-1] != 1 ||
-        std::any_of(chainCounts.begin(), chainCounts.end(), [](const auto& entry) {
-            return entry.first >= 0 && entry.second != 1;
-        })) {
-        message = "Each patch must own one continuous outer-boundary arc and conformal seam chains.";
-        return false;
+    std::vector<std::size_t> chainStarts;
+    for (std::size_t position = 0; position < boundaryLabels.size(); ++position) {
+        const auto previous = boundaryLabels[
+            (position + boundaryLabels.size() - 1) % boundaryLabels.size()];
+        if (position == 0 && std::all_of(
+                boundaryLabels.begin(), boundaryLabels.end(),
+                [&](const auto label) { return label == boundaryLabels.front(); })) {
+            chainStarts.push_back(0);
+            break;
+        }
+        if (boundaryLabels[position] != previous) chainStarts.push_back(position);
     }
+    for (const auto start : chainStarts) {
+        RegionBoundaryChain chain;
+        chain.adjacentPatch = boundaryLabels[start];
+        chain.originalBoundary = chain.adjacentPatch < 0;
+        auto position = start;
+        do {
+            const auto vertex = result.boundaryLoop[position];
+            chain.vertices.push_back(vertex);
+            if (chain.originalBoundary) {
+                const auto& edgeIds = mesh.vertices[vertex].boundaryEdgeIds;
+                chain.originalEdgeIds.insert(
+                    chain.originalEdgeIds.end(), edgeIds.begin(), edgeIds.end());
+            }
+            position = (position + 1) % boundaryLabels.size();
+        } while (position != start && boundaryLabels[position] == chain.adjacentPatch);
+        chain.vertices.push_back(result.boundaryLoop[position]);
+        std::sort(chain.originalEdgeIds.begin(), chain.originalEdgeIds.end());
+        chain.originalEdgeIds.erase(
+            std::unique(chain.originalEdgeIds.begin(), chain.originalEdgeIds.end()),
+            chain.originalEdgeIds.end());
+        result.boundaryChains.push_back(std::move(chain));
+    }
+    result.boundaryChainCount = result.boundaryChains.size();
     for (const auto triangleIndex : result.triangleIndices) {
         const auto& triangle = mesh.triangles[triangleIndex];
         if (!boundaryPosition.contains(triangle.vertices[0]) ||
@@ -761,41 +809,25 @@ bool parameterizePatch(
     });
     for (const auto& [turning, position] : outerTurningCorners) {
         (void)turning;
-        if (requiredCorners.size() >= 4) break;
         if (std::find(requiredCorners.begin(), requiredCorners.end(), position) == requiredCorners.end()) {
             requiredCorners.push_back(position);
         }
     }
+    for (std::size_t position = 0; position < result.boundaryLoop.size(); ++position) {
+        const auto& vertex = mesh.vertices[result.boundaryLoop[position]];
+        if (vertex.hardCorner || vertex.boundaryEndpoint) requiredCorners.push_back(position);
+    }
     std::sort(requiredCorners.begin(), requiredCorners.end());
     requiredCorners.erase(std::unique(requiredCorners.begin(), requiredCorners.end()), requiredCorners.end());
-    while (requiredCorners.size() < 4) {
-        std::size_t best = result.boundaryLoop.size();
-        double bestDistance = -1.0;
-        for (std::size_t candidate = 0; candidate < result.boundaryLoop.size(); ++candidate) {
-            const auto previousEdge =
-                (candidate + result.boundaryLoop.size() - 1) % result.boundaryLoop.size();
-            if (boundaryLabels[candidate] != -1 && boundaryLabels[previousEdge] != -1) continue;
-            if (std::find(requiredCorners.begin(), requiredCorners.end(), candidate) !=
-                requiredCorners.end()) continue;
-            auto nearest = cumulative.back();
-            for (const auto corner : requiredCorners) {
-                const auto direct = std::abs(cumulative[candidate] - cumulative[corner]);
-                nearest = std::min(nearest, std::min(direct, cumulative.back() - direct));
-            }
-            if (requiredCorners.empty()) nearest = cumulative[candidate];
-            if (nearest > bestDistance) {
-                bestDistance = nearest;
-                best = candidate;
-            }
-        }
-        if (best == result.boundaryLoop.size()) break;
-        requiredCorners.push_back(best);
-        std::sort(requiredCorners.begin(), requiredCorners.end());
+    result.trimCorners.reserve(requiredCorners.size());
+    for (const auto corner : requiredCorners) {
+        result.trimCorners.push_back(result.boundaryLoop[corner]);
     }
-    if (!mapBoundaryToSquare(
+    result.trimCornerCount = static_cast<int>(result.trimCorners.size());
+    if (!mapBoundaryToConvexLoop(
+            mesh,
             result.boundaryLoop,
             cumulative,
-            requiredCorners,
             localIndex,
             result,
             message)) {
@@ -861,10 +893,10 @@ bool parameterizePatch(
             parameter[1] = 0.5 +
                 (parameter[1] - (minimumProjection[1] + maximumProjection[1]) * 0.5) * projectionScale;
         }
-        if (!mapBoundaryToSquare(
+        if (!mapBoundaryToConvexLoop(
+                mesh,
                 result.boundaryLoop,
                 cumulative,
-                requiredCorners,
                 localIndex,
                 result,
                 message)) {
@@ -967,6 +999,7 @@ bool parameterizePatch(
         message = "Harmonic parameterization contains flipped or collapsed triangles.";
         return false;
     }
+    result.minimumSignedUvArea = std::numeric_limits<double>::infinity();
     for (const auto triangleIndex : result.triangleIndices) {
         const auto& triangle = mesh.triangles[triangleIndex];
         const auto first = localIndex.at(triangle.vertices[0]);
@@ -980,6 +1013,9 @@ bool parameterizePatch(
         const gp_Pnt uvSecond(result.parameters[second][0], result.parameters[second][1], 0.0);
         const gp_Pnt uvThird(result.parameters[third][0], result.parameters[third][1], 0.0);
         const auto quality2d = normalizedTriangleQuality(uvFirst, uvSecond, uvThird);
+        const auto signedArea = static_cast<double>(triangleOrientation[triangleIndex]) * signedArea2d(
+            result.parameters[first], result.parameters[second], result.parameters[third]);
+        result.minimumSignedUvArea = std::min(result.minimumSignedUvArea, signedArea);
         if (quality3d <= 1.0e-14 || quality2d <= 1.0e-14) {
             message = "Harmonic parameterization contains a degenerate triangle.";
             return false;
@@ -1001,7 +1037,7 @@ bool parameterizePatch(
         stream << "Harmonic parameterization 99.5th-percentile distortion "
                << result.maximumDistortion << " exceeds the limit " << maximumDistortion << '.';
         message = stream.str();
-        return false;
+        if (!allowDistortionViolation) return false;
     }
     return true;
 }
@@ -1043,8 +1079,41 @@ void buildSeams(const MeshGraph& graph, RegionPatchLayout& layout) {
         grouped[{std::min(first, second), std::max(first, second)}].push_back(edge);
     }
     for (auto& [patches, edges] : grouped) {
-        layout.seams.push_back({patches.first, patches.second, std::move(edges)});
+        std::set<std::size_t> remaining;
+        for (std::size_t index = 0; index < edges.size(); ++index) remaining.insert(index);
+        while (!remaining.empty()) {
+            std::vector<MeshEdge> component;
+            std::queue<std::size_t> pending;
+            pending.push(*remaining.begin());
+            remaining.erase(remaining.begin());
+            while (!pending.empty()) {
+                const auto index = pending.front();
+                pending.pop();
+                component.push_back(edges[index]);
+                for (auto found = remaining.begin(); found != remaining.end();) {
+                    const auto& candidate = edges[*found];
+                    const auto connected =
+                        candidate[0] == edges[index][0] ||
+                        candidate[0] == edges[index][1] ||
+                        candidate[1] == edges[index][0] ||
+                        candidate[1] == edges[index][1];
+                    if (connected) {
+                        pending.push(*found);
+                        found = remaining.erase(found);
+                    } else {
+                        ++found;
+                    }
+                }
+            }
+            std::sort(component.begin(), component.end());
+            layout.seams.push_back({
+                patches.first, patches.second, std::move(component)});
+        }
     }
+    std::sort(layout.seams.begin(), layout.seams.end(), [](const auto& lhs, const auto& rhs) {
+        return std::tie(lhs.firstPatch, lhs.secondPatch, lhs.meshEdges) <
+            std::tie(rhs.firstPatch, rhs.secondPatch, rhs.meshEdges);
+    });
 }
 
 std::uint64_t estimateSolverBytes(
@@ -1151,7 +1220,8 @@ bool RegionPatchLayoutGenerationResult::success() const {
 RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     const RegionReferenceMesh& mesh,
     const RegionRefitLayoutMode mode,
-    const RegionRefitOptions& options) const {
+    const RegionRefitOptions& options,
+    const bool allowDiagnosticCandidates) const {
     RegionPatchLayoutGenerationResult result;
     const auto started = std::chrono::steady_clock::now();
     const auto deadline = started + std::chrono::milliseconds(options.layoutBudgetMilliseconds);
@@ -1182,6 +1252,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     }
 
     std::vector<RegionPatchLayout> accepted;
+    std::vector<RegionPatchLayout> constructible;
     bool deadlineReached = false;
     for (const int patchCount : patchCounts) {
         if (expired()) {
@@ -1214,6 +1285,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                         layout.trianglePatches,
                         patch,
                         options.maximumParameterDistortion,
+                        allowDiagnosticCandidates,
                         deadline,
                         layout.patches[static_cast<std::size_t>(patch)],
                         failure)) {
@@ -1243,13 +1315,29 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             deadlineReached = true;
             break;
         }
-        if (parameterized && report.topologyPassed && report.rejectionReason.empty()) {
-            report.parameterizationPassed = true;
+        if (parameterized && report.topologyPassed) {
+            report.constructibleParameterization = true;
             for (const auto& patch : layout.patches) {
                 report.maximumDistortion = std::max(report.maximumDistortion, patch.maximumDistortion);
                 report.flippedTriangleCount += patch.flippedTriangleCount;
+                report.boundaryChainCount += patch.boundaryChainCount;
+                report.trimCornerCount += patch.trimCornerCount;
+                report.minimumSignedUvArea = report.minimumSignedUvArea == 0.0
+                    ? patch.minimumSignedUvArea
+                    : std::min(report.minimumSignedUvArea, patch.minimumSignedUvArea);
+                if (report.domainType.empty()) report.domainType = patch.domainType;
                 report.matrixRows += patch.matrixRows;
                 report.matrixNonZeros += patch.matrixNonZeros;
+            }
+            report.parameterizationPassed =
+                report.flippedTriangleCount == 0 &&
+                report.maximumDistortion <= options.maximumParameterDistortion;
+            if (!report.parameterizationPassed) {
+                std::ostringstream stream;
+                stream << "Trimmed-disk parameterization distortion "
+                       << report.maximumDistortion << " exceeds the product limit "
+                       << options.maximumParameterDistortion << '.';
+                report.rejectionReason = stream.str();
             }
             buildSeams(graph, layout);
             std::size_t fitRows = 0;
@@ -1268,7 +1356,9 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             } else {
                 layout.hash = layoutHash(layout);
                 report.layoutHash = layout.hash;
-                accepted.push_back(std::move(layout));
+                constructible.push_back(layout);
+                result.constructibleCandidates.push_back(layout);
+                if (report.parameterizationPassed) accepted.push_back(std::move(layout));
             }
         } else if (report.rejectionReason.empty()) {
             report.rejectionReason = "Layout did not cover the reference mesh.";
@@ -1277,17 +1367,60 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             std::chrono::steady_clock::now() - candidateStarted).count();
         result.candidates.push_back(std::move(report));
     }
-    if (accepted.empty()) {
+    if (accepted.empty() && (!allowDiagnosticCandidates || constructible.empty())) {
         result.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
         result.message = "No deterministic layout passed topology, parameterization, and memory preflight.";
         return result;
     }
-    const auto selection = mode != RegionRefitLayoutMode::Adaptive
-        ? std::vector<std::size_t> {0}
-        : paretoSelection(accepted);
-    for (const auto index : selection) {
-        result.selectedCandidates.push_back(accepted[index]);
-        const auto patchCount = accepted[index].patchCount;
+    if (allowDiagnosticCandidates) {
+        std::sort(constructible.begin(), constructible.end(), [&](const auto& lhs, const auto& rhs) {
+            const auto reportFor = [&](const int patchCount) -> const RegionLayoutCandidateReport& {
+                return *std::find_if(result.candidates.begin(), result.candidates.end(), [&](const auto& candidate) {
+                    return candidate.patchCount == patchCount;
+                });
+            };
+            const auto& lhsReport = reportFor(lhs.patchCount);
+            const auto& rhsReport = reportFor(rhs.patchCount);
+            const auto hardGateCount = [](const auto& report) {
+                return static_cast<int>(report.topologyPassed) +
+                    static_cast<int>(report.constructibleParameterization) +
+                    static_cast<int>(report.coarseFitPassed);
+            };
+            const auto lhsViolation = lhsReport.maximumDistortion /
+                std::max(options.maximumParameterDistortion, 1.0e-12);
+            const auto rhsViolation = rhsReport.maximumDistortion /
+                std::max(options.maximumParameterDistortion, 1.0e-12);
+            return std::tuple {
+                -hardGateCount(lhsReport),
+                lhsViolation,
+                lhs.patchCount,
+                lhs.proxyError,
+                lhs.hash} <
+                std::tuple {
+                -hardGateCount(rhsReport),
+                rhsViolation,
+                rhs.patchCount,
+                rhs.proxyError,
+                rhs.hash};
+        });
+        const auto selectedCount = mode == RegionRefitLayoutMode::Adaptive
+            ? std::min<std::size_t>(
+                constructible.size(),
+                static_cast<std::size_t>(options.maximumFullFitCount))
+            : std::size_t {1};
+        result.selectedCandidates.assign(
+            constructible.begin(),
+            constructible.begin() + static_cast<std::ptrdiff_t>(selectedCount));
+    } else if (!accepted.empty()) {
+        const auto selection = mode != RegionRefitLayoutMode::Adaptive
+            ? std::vector<std::size_t> {0}
+            : paretoSelection(accepted);
+        for (const auto index : selection) {
+            result.selectedCandidates.push_back(accepted[index]);
+        }
+    }
+    for (const auto& selected : result.selectedCandidates) {
+        const auto patchCount = selected.patchCount;
         const auto found = std::find_if(result.candidates.begin(), result.candidates.end(), [&](const auto& report) {
             return report.patchCount == patchCount;
         });
@@ -1303,7 +1436,9 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     result.status = RegionRefitStatus::Success;
     result.message = deadlineReached
         ? "Layout deadline reached after retaining the coarse-screened candidate prefix."
-        : "Deterministic layouts passed coarse screening.";
+        : (accepted.empty()
+            ? "Retained constructible trimmed-disk layouts for forced diagnostic fitting."
+            : "Deterministic layouts passed coarse screening.");
     return result;
 }
 

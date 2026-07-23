@@ -223,11 +223,16 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
             {"patch_count", candidate.patchCount},
             {"topology_passed", candidate.topologyPassed},
             {"parameterization_passed", candidate.parameterizationPassed},
+            {"constructible_parameterization", candidate.constructibleParameterization},
             {"coarse_fit_passed", candidate.coarseFitPassed},
             {"selected_for_full_fit", candidate.selectedForFullFit},
             {"proxy_error", candidate.proxyError},
             {"maximum_distortion", candidate.maximumDistortion},
             {"flipped_triangles", candidate.flippedTriangleCount},
+            {"domain_type", QString::fromStdString(candidate.domainType)},
+            {"boundary_chain_count", QString::number(candidate.boundaryChainCount)},
+            {"trim_corner_count", candidate.trimCornerCount},
+            {"minimum_signed_uv_area", candidate.minimumSignedUvArea},
             {"matrix_rows", QString::number(candidate.matrixRows)},
             {"matrix_nonzeros", QString::number(candidate.matrixNonZeros)},
             {"estimated_solver_bytes", QString::number(candidate.estimatedSolverBytes)},
@@ -247,6 +252,8 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
         {"selection_outcome", QString::fromStdString(result.report.selectionOutcome)},
         {"unattainable_reason", QString::fromStdString(result.report.unattainableReason)},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
+        {"diagnostic_candidate_patch_count", result.report.diagnosticCandidatePatchCount},
+        {"diagnostic_selection_reason", QString::fromStdString(result.report.diagnosticSelectionReason)},
         {"candidates", candidates}};
 }
 
@@ -268,15 +275,36 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
             for (const auto vertex : side) sideVertices.append(QString::number(vertex));
             boundarySides.append(sideVertices);
         }
+        QJsonArray boundaryChains;
+        for (const auto& chain : patch.boundaryChains) {
+            QJsonArray vertices;
+            for (const auto vertex : chain.vertices) vertices.append(QString::number(vertex));
+            QJsonArray edgeIds;
+            for (const auto edgeId : chain.originalEdgeIds) edgeIds.append(QString::number(edgeId));
+            boundaryChains.append(QJsonObject {
+                {"adjacent_patch", chain.adjacentPatch},
+                {"original_boundary", chain.originalBoundary},
+                {"vertices", vertices},
+                {"original_edge_ids", edgeIds}});
+        }
+        QJsonArray trimCorners;
+        for (const auto corner : patch.trimCorners) trimCorners.append(QString::number(corner));
         patches.append(QJsonObject {
             {"patch", static_cast<int>(patchIndex)},
             {"triangles", QString::number(patch.triangleIndices.size())},
             {"vertices", QString::number(patch.vertexIndices.size())},
             {"boundary_loop", boundary},
             {"boundary_sides", boundarySides},
+            {"boundary_chains", boundaryChains},
+            {"boundary_chain_count", QString::number(patch.boundaryChainCount)},
+            {"trim_corners", trimCorners},
+            {"trim_corner_count", patch.trimCornerCount},
+            {"domain_type", QString::fromStdString(patch.domainType)},
+            {"disk_topology_passed", patch.diskTopologyPassed},
             {"matrix_rows", QString::number(patch.matrixRows)},
             {"matrix_nonzeros", QString::number(patch.matrixNonZeros)},
             {"flipped_triangles", patch.flippedTriangleCount},
+            {"minimum_signed_uv_area", patch.minimumSignedUvArea},
             {"maximum_distortion", patch.maximumDistortion}});
     }
     QJsonArray seams;
@@ -315,6 +343,25 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"projection_count", QString::number(iteration.projectionCount)},
                 {"uv_iteration_count", QString::number(iteration.uvIterationCount)},
                 {"projection_fallback_count", QString::number(iteration.projectionFallbackCount)},
+                {"boundary_hard_constraint_count", QString::number(iteration.boundaryHardConstraintCount)},
+                {"seam_g0_constraint_count", QString::number(iteration.seamG0ConstraintCount)},
+                {"seam_g1_soft_constraint_count", QString::number(iteration.seamG1SoftConstraintCount)},
+                {"adjacent_normal_soft_constraint_count", QString::number(iteration.adjacentNormalSoftConstraintCount)},
+                {"nonzero_boundary_rhs_count", QString::number(iteration.nonZeroBoundaryRhsCount)},
+                {"boundary_target_minimum", QJsonArray {
+                    iteration.boundaryTargetMinimum[0],
+                    iteration.boundaryTargetMinimum[1],
+                    iteration.boundaryTargetMinimum[2]}},
+                {"boundary_target_maximum", QJsonArray {
+                    iteration.boundaryTargetMaximum[0],
+                    iteration.boundaryTargetMaximum[1],
+                    iteration.boundaryTargetMaximum[2]}},
+                {"maximum_hard_constraint_residual", iteration.maximumHardConstraintResidual},
+                {"constraint_correction_anchor_scale", iteration.constraintCorrectionAnchorScale},
+                {"initial_training_maximum_distance", iteration.initialTrainingMaximumDistance},
+                {"initial_boundary_maximum_distance", iteration.initialBoundaryMaximumDistance},
+                {"corrected_training_maximum_distance", iteration.correctedTrainingMaximumDistance},
+                {"corrected_boundary_maximum_distance", iteration.correctedBoundaryMaximumDistance},
                 {"training_maximum_distance", iteration.trainingMaximumDistance},
                 {"selection_maximum_distance", iteration.selectionMaximumDistance},
                 {"holdout_maximum_distance", iteration.holdoutMaximumDistance},
@@ -342,8 +389,14 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
     }
     return {
         {"status", result.report.fitGatePassed ? "Success" : spo::toString(result.report.status)},
+        {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
         {"best_effort_used", result.report.bestEffortUsed},
+        {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
+        {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
+        {"sewable_geometry_available", result.report.sewableGeometryAvailable},
+        {"product_validated", result.report.productValidated},
+        {"first_product_failure_gate", QString::fromStdString(result.report.firstProductFailureGate)},
         {"full_fit_count", result.report.fullFitCount},
         {"cached_fit_attempt_count", result.report.cachedFitAttemptCount},
         {"selected_patch_count", result.report.selectedPatchCount},
@@ -428,6 +481,14 @@ QJsonObject sewingReportToJson(const spo::RegionRefitResult& result) {
     return {
         {"status", result.report.repairPassed ? "Success" : spo::toString(result.report.status)},
         {"attempted", result.report.sewingAttempted},
+        {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
+        {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
+        {"diagnostic_candidate_count", result.report.diagnosticSewingCandidateCount},
+        {"diagnostic_candidate_patch_count", result.report.diagnosticCandidatePatchCount},
+        {"diagnostic_selection_reason", QString::fromStdString(result.report.diagnosticSelectionReason)},
+        {"sewable_geometry_available", result.report.sewableGeometryAvailable},
+        {"product_validated", result.report.productValidated},
+        {"first_product_failure_gate", QString::fromStdString(result.report.firstProductFailureGate)},
         {"constructed_shape", result.report.sewingConstructedShape},
         {"diagnostic_pipeline_completed", result.report.diagnosticPipelineCompleted},
         {"continuation_stop_reason", QString::fromStdString(result.report.continuationStopReason)},
@@ -555,10 +616,27 @@ QByteArray layoutSvg(
         if (!outer && !seam) continue;
         const auto first = project(mesh.vertices[edge[0]].point);
         const auto second = project(mesh.vertices[edge[1]].point);
+        std::set<spo::EdgeId> originalEdgeIds;
+        if (outer) {
+            originalEdgeIds.insert(
+                mesh.vertices[edge[0]].boundaryEdgeIds.begin(),
+                mesh.vertices[edge[0]].boundaryEdgeIds.end());
+            originalEdgeIds.insert(
+                mesh.vertices[edge[1]].boundaryEdgeIds.begin(),
+                mesh.vertices[edge[1]].boundaryEdgeIds.end());
+        }
         stream << "<line x1=\"" << first[0] << "\" y1=\"" << first[1]
-               << "\" x2=\"" << second[0] << "\" y2=\"" << second[1]
-               << "\" stroke=\"" << (outer ? "#000000" : "#ffffff")
-               << "\" stroke-width=\"" << (outer ? "2.2" : "1.4") << "\"/>\n";
+                << "\" x2=\"" << second[0] << "\" y2=\"" << second[1]
+                << "\" stroke=\"" << (outer ? "#000000" : "#ffffff")
+                << "\" stroke-width=\"" << (outer ? "2.2" : "1.4")
+                << "\" data-kind=\"" << (outer ? "original-step-boundary" : "internal-seam")
+                << "\">";
+        if (outer) {
+            stream << "<title>Original STEP EdgeId ownership:";
+            for (const auto edgeId : originalEdgeIds) stream << ' ' << edgeId;
+            stream << "</title>";
+        }
+        stream << "</line>\n";
     }
     std::vector<std::array<double, 2>> centers(static_cast<std::size_t>(layout.patchCount));
     std::vector<std::size_t> counts(static_cast<std::size_t>(layout.patchCount));
@@ -582,6 +660,28 @@ QByteArray layoutSvg(
                   " font-weight=\"bold\" fill=\"#111\" stroke=\"white\" stroke-width=\"3\" paint-order=\"stroke\">"
                << patch << "</text>\n";
     }
+    for (std::size_t patchIndex = 0; patchIndex < layout.patches.size(); ++patchIndex) {
+        for (const auto vertex : layout.patches[patchIndex].trimCorners) {
+            const auto point = project(mesh.vertices[vertex].point);
+            stream << "<circle cx=\"" << point[0] << "\" cy=\"" << point[1]
+                   << "\" r=\"3.2\" fill=\"#ff00aa\" stroke=\"white\" stroke-width=\"0.8\">"
+                   << "<title>trim turn, patch " << patchIndex << "</title></circle>\n";
+        }
+    }
+    auto totalFlips = 0;
+    auto maximumDistortion = 0.0;
+    auto trimTurns = 0;
+    for (const auto& patch : layout.patches) {
+        totalFlips += patch.flippedTriangleCount;
+        maximumDistortion = std::max(maximumDistortion, patch.maximumDistortion);
+        trimTurns += patch.trimCornerCount;
+    }
+    stream << "<rect x=\"8\" y=\"8\" width=\"470\" height=\"28\" fill=\"white\" fill-opacity=\"0.86\"/>"
+           << "<text x=\"14\" y=\"28\" font-family=\"sans-serif\" font-size=\"14\" fill=\"#111\">"
+           << "domain=trimmed-disk; trim turns=" << trimTurns
+           << "; UV flips=" << totalFlips
+           << "; max distortion=" << maximumDistortion
+           << "</text>\n";
     stream << "</svg>\n";
     return output;
 }
@@ -660,6 +760,13 @@ QJsonObject performanceToJson(
         {"sampling_mode", spo::toString(request.options.samplingMode)},
         {"layout_carrier_sampling_mode", spo::toString(request.options.layoutCarrierSamplingMode)},
         {"execution_mode", spo::toString(request.executionMode)},
+        {"force_diagnostic_sewing", request.forceDiagnosticSewing},
+        {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
+        {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
+        {"sewable_geometry_available", result.report.sewableGeometryAvailable},
+        {"product_validated", result.report.productValidated},
+        {"first_product_failure_gate", QString::fromStdString(result.report.firstProductFailureGate)},
+        {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
         {"best_effort_used", result.report.bestEffortUsed},
         {"retrim_attempted", result.report.retrimAttempted},
@@ -812,7 +919,7 @@ int main(int argc, char* argv[]) {
                      "[--layout-carrier-sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
                      "[--target-sample-triangles <数量>] [--maximum-full-fit-count <数量>] "
                      "[--target-layout-carrier-triangles <数量>] "
-                     "[--best-effort-through-sewing] "
+                     "[--best-effort-through-sewing] [--force-diagnostic-sewing] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
                      "[--input-read-budget-ms <毫秒>] "
                      "[--cache-policy <disabled|read-write|read-only|refresh>] "
@@ -834,7 +941,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v18-local-domains";
+    request.options.algorithmFingerprint = "native-regional-refit-v19-trimmed-domains";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -909,6 +1016,8 @@ int main(int argc, char* argv[]) {
                 request.options.maximumFullFitCount = std::stoi(argv[index]);
             } else if (argument == "--best-effort-through-sewing") {
                 request.executionMode = spo::RegionRefitExecutionMode::BestEffortThroughSewing;
+            } else if (argument == "--force-diagnostic-sewing") {
+                request.forceDiagnosticSewing = true;
             } else if (argument == "--wall-time-ms") {
                 if (++index >= argc) return 2;
                 request.options.maximumWallClockMilliseconds = std::stoll(argv[index]);
@@ -967,7 +1076,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v18-local-domains-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v19-trimmed-domains-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
@@ -1108,6 +1217,23 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    if (!performanceOnly && result.layoutCarrierMesh && !result.generatedLayouts.empty()) {
+        const auto candidateDirectory =
+            outputDirectory / "artifacts" / "layout" / "candidates";
+        for (const auto& layout : result.generatedLayouts) {
+            if (!layout) continue;
+            const auto stem = std::string("k_") + std::to_string(layout->patchCount);
+            if (!writeJson(
+                    candidateDirectory / (stem + ".json"),
+                    selectedLayoutToJson(*layout)) ||
+                !writeText(
+                    candidateDirectory / (stem + ".svg"),
+                    layoutSvg(*result.layoutCarrierMesh, *layout))) {
+                std::cerr << "无法写入布局候选证据。\n";
+                return 1;
+            }
+        }
+    }
     if (!performanceOnly && result.layoutCarrierMesh && result.selectedLayout) {
         const auto layoutDirectory = outputDirectory / "artifacts" / "layout";
         if (!writeJson(layoutDirectory / "selected_layout.json", selectedLayoutToJson(*result.selectedLayout)) ||
@@ -1188,6 +1314,8 @@ int main(int argc, char* argv[]) {
             result.report.status = spo::RegionRefitStatus::Failed;
             result.report.failureStage = spo::RegionRefitStage::StepRoundtrip;
             result.report.selectionOutcome = "NoProductValidatedResult";
+            result.report.productValidated = false;
+            result.report.firstProductFailureGate = "OutputComplexity";
             result.report.unattainableReason =
                 "The sewn candidate failed the output-complexity product gate.";
             result.report.message =

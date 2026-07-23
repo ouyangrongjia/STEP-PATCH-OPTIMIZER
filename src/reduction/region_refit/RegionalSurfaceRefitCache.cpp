@@ -28,7 +28,7 @@ namespace {
 constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 2;
+constexpr quint32 kVersion = 3;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -235,13 +235,17 @@ bool readMesh(QDataStream& stream, RegionReferenceMesh& mesh) {
 
 void writeCandidateReport(QDataStream& stream, const RegionLayoutCandidateReport& report) {
     stream << report.patchCount << report.topologyPassed << report.parameterizationPassed
-           << report.coarseFitPassed << report.selectedForFullFit << report.proxyError
+           << report.constructibleParameterization << report.coarseFitPassed
+           << report.selectedForFullFit << report.proxyError
            << report.maximumDistortion << report.flippedTriangleCount
+           << quint64(report.boundaryChainCount) << report.trimCornerCount
+           << report.minimumSignedUvArea
            << quint64(report.matrixRows) << quint64(report.matrixNonZeros)
            << quint64(report.estimatedSolverBytes)
            << quint64(report.estimatedOutputEntities) << report.wallMilliseconds;
     writeString(stream, report.layoutHash);
     writeString(stream, report.rejectionReason);
+    writeString(stream, report.domainType);
 }
 
 bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& report) {
@@ -249,11 +253,18 @@ bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& repor
     quint64 nonZeros = 0;
     quint64 bytes = 0;
     quint64 outputEntities = 0;
+    quint64 boundaryChains = 0;
     stream >> report.patchCount >> report.topologyPassed >> report.parameterizationPassed
-           >> report.coarseFitPassed >> report.selectedForFullFit >> report.proxyError
-           >> report.maximumDistortion >> report.flippedTriangleCount >> rows >> nonZeros
+           >> report.constructibleParameterization >> report.coarseFitPassed
+           >> report.selectedForFullFit >> report.proxyError
+           >> report.maximumDistortion >> report.flippedTriangleCount
+           >> boundaryChains >> report.trimCornerCount >> report.minimumSignedUvArea
+           >> rows >> nonZeros
            >> bytes >> outputEntities >> report.wallMilliseconds;
-    if (!readString(stream, report.layoutHash) || !readString(stream, report.rejectionReason)) return false;
+    if (!readString(stream, report.layoutHash) ||
+        !readString(stream, report.rejectionReason) ||
+        !readString(stream, report.domainType)) return false;
+    report.boundaryChainCount = static_cast<std::size_t>(boundaryChains);
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     report.estimatedSolverBytes = bytes;
@@ -278,8 +289,22 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
             stream << quint64(side.size());
             for (const auto index : side) stream << quint64(index);
         }
+        stream << quint64(patch.boundaryChains.size());
+        for (const auto& chain : patch.boundaryChains) {
+            stream << chain.adjacentPatch << chain.originalBoundary
+                   << quint64(chain.vertices.size());
+            for (const auto vertex : chain.vertices) stream << quint64(vertex);
+            stream << quint64(chain.originalEdgeIds.size());
+            for (const auto edgeId : chain.originalEdgeIds) stream << quint64(edgeId);
+        }
+        stream << quint64(patch.trimCorners.size());
+        for (const auto corner : patch.trimCorners) stream << quint64(corner);
+        writeString(stream, patch.domainType);
+        stream << patch.diskTopologyPassed << quint64(patch.boundaryChainCount)
+               << patch.trimCornerCount;
         stream << quint64(patch.matrixRows) << quint64(patch.matrixNonZeros)
-               << patch.flippedTriangleCount << patch.maximumDistortion;
+               << patch.flippedTriangleCount << patch.minimumSignedUvArea
+               << patch.maximumDistortion;
     }
     stream << quint64(layout.seams.size());
     for (const auto& seam : layout.seams) {
@@ -333,9 +358,40 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
                 index = static_cast<std::size_t>(value);
             }
         }
+        if (!readCount(stream, count)) return false;
+        patch.boundaryChains.resize(count);
+        for (auto& chain : patch.boundaryChains) {
+            stream >> chain.adjacentPatch >> chain.originalBoundary;
+            if (!readCount(stream, count)) return false;
+            chain.vertices.resize(count);
+            for (auto& vertex : chain.vertices) {
+                quint64 value = 0;
+                stream >> value;
+                vertex = static_cast<std::size_t>(value);
+            }
+            if (!readCount(stream, count)) return false;
+            chain.originalEdgeIds.resize(count);
+            for (auto& edgeId : chain.originalEdgeIds) {
+                quint64 value = 0;
+                stream >> value;
+                edgeId = static_cast<EdgeId>(value);
+            }
+        }
+        if (!readCount(stream, count)) return false;
+        patch.trimCorners.resize(count);
+        for (auto& corner : patch.trimCorners) {
+            quint64 value = 0;
+            stream >> value;
+            corner = static_cast<std::size_t>(value);
+        }
+        if (!readString(stream, patch.domainType)) return false;
+        quint64 boundaryChainCount = 0;
+        stream >> patch.diskTopologyPassed >> boundaryChainCount >> patch.trimCornerCount;
+        patch.boundaryChainCount = static_cast<std::size_t>(boundaryChainCount);
         quint64 rows = 0;
         quint64 nonZeros = 0;
-        stream >> rows >> nonZeros >> patch.flippedTriangleCount >> patch.maximumDistortion;
+        stream >> rows >> nonZeros >> patch.flippedTriangleCount
+               >> patch.minimumSignedUvArea >> patch.maximumDistortion;
         patch.matrixRows = static_cast<std::size_t>(rows);
         patch.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     }
@@ -366,6 +422,19 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << quint64(report.matrixNonZeros) << quint64(report.estimatedSolverBytes)
            << report.symbolicFactorizationReuseCount << quint64(report.projectionCount)
            << quint64(report.uvIterationCount) << quint64(report.projectionFallbackCount)
+           << quint64(report.boundaryHardConstraintCount)
+           << quint64(report.seamG0ConstraintCount)
+           << quint64(report.seamG1SoftConstraintCount)
+           << quint64(report.adjacentNormalSoftConstraintCount)
+           << quint64(report.nonZeroBoundaryRhsCount);
+    for (const auto value : report.boundaryTargetMinimum) stream << value;
+    for (const auto value : report.boundaryTargetMaximum) stream << value;
+    stream << report.maximumHardConstraintResidual
+           << report.constraintCorrectionAnchorScale
+           << report.initialTrainingMaximumDistance
+           << report.initialBoundaryMaximumDistance
+           << report.correctedTrainingMaximumDistance
+           << report.correctedBoundaryMaximumDistance
            << report.trainingMaximumDistance
            << report.selectionMaximumDistance << report.holdoutMaximumDistance
            << report.holdoutMaximumNormalDegrees << report.holdout95Distance
@@ -387,9 +456,24 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     quint64 projectionCount = 0;
     quint64 uvIterations = 0;
     quint64 projectionFallbacks = 0;
+    quint64 boundaryConstraints = 0;
+    quint64 seamG0 = 0;
+    quint64 seamG1 = 0;
+    quint64 adjacentNormal = 0;
+    quint64 nonZeroBoundaryRhs = 0;
     stream >> report.iteration >> report.uControlCount >> report.vControlCount
            >> rows >> columns >> nonZeros >> bytes >> report.symbolicFactorizationReuseCount
            >> projectionCount >> uvIterations >> projectionFallbacks
+           >> boundaryConstraints >> seamG0 >> seamG1 >> adjacentNormal
+           >> nonZeroBoundaryRhs;
+    for (auto& value : report.boundaryTargetMinimum) stream >> value;
+    for (auto& value : report.boundaryTargetMaximum) stream >> value;
+    stream >> report.maximumHardConstraintResidual
+           >> report.constraintCorrectionAnchorScale
+           >> report.initialTrainingMaximumDistance
+           >> report.initialBoundaryMaximumDistance
+           >> report.correctedTrainingMaximumDistance
+           >> report.correctedBoundaryMaximumDistance
            >> report.trainingMaximumDistance >> report.selectionMaximumDistance
            >> report.holdoutMaximumDistance >> report.holdoutMaximumNormalDegrees
            >> report.holdout95Distance >> report.holdout95NormalDegrees
@@ -404,6 +488,11 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.projectionCount = static_cast<std::size_t>(projectionCount);
     report.uvIterationCount = static_cast<std::size_t>(uvIterations);
     report.projectionFallbackCount = static_cast<std::size_t>(projectionFallbacks);
+    report.boundaryHardConstraintCount = static_cast<std::size_t>(boundaryConstraints);
+    report.seamG0ConstraintCount = static_cast<std::size_t>(seamG0);
+    report.seamG1SoftConstraintCount = static_cast<std::size_t>(seamG1);
+    report.adjacentNormalSoftConstraintCount = static_cast<std::size_t>(adjacentNormal);
+    report.nonZeroBoundaryRhsCount = static_cast<std::size_t>(nonZeroBoundaryRhs);
     report.holdoutWorstDistanceVertex = static_cast<std::size_t>(worstDistance);
     report.holdoutWorstNormalVertex = static_cast<std::size_t>(worstNormal);
     return readString(stream, report.stopReason) && stream.status() == QDataStream::Ok;
@@ -474,7 +563,8 @@ std::string makeKey(const RegionRefitRequest& request) {
          << (request.options.algorithmFingerprint.empty()
                 ? "native-regional-refit-v15"
                 : request.options.algorithmFingerprint)
-         << '|' << static_cast<int>(request.layoutMode) << '|';
+         << '|' << static_cast<int>(request.layoutMode)
+         << '|' << request.forceDiagnosticSewing << '|';
     for (const auto face : faces) text << face << ',';
     text << '|';
     for (const auto edge : edges) text << edge << ',';
@@ -499,7 +589,8 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.totalFitBudgetMilliseconds
          << '|' << request.options.solverMemoryPreflightMiB
          << '|' << request.options.maximumParameterDistortion
-         << '|' << request.options.maximumControlPointsPerSide;
+         << '|' << request.options.maximumControlPointsPerSide
+         << '|' << request.options.constraintCorrectionAnchorRelativeWeight;
     const auto digest = QCryptographicHash::hash(
         QByteArray::fromStdString(text.str()), QCryptographicHash::Sha256);
     return digest.toHex().toStdString();
@@ -635,6 +726,11 @@ bool RegionalSurfaceRefitCache::loadLayouts(
             if (!readCandidateReport(stream, candidate)) return false;
         }
         if (!readCount(stream, count)) return false;
+        result.constructibleCandidates.resize(count);
+        for (auto& layout : result.constructibleCandidates) {
+            if (!readLayout(stream, layout)) return false;
+        }
+        if (!readCount(stream, count)) return false;
         result.selectedCandidates.resize(count);
         for (auto& layout : result.selectedCandidates) {
             if (!readLayout(stream, layout)) return false;
@@ -659,6 +755,8 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveLayouts(
         writeString(stream, result.message);
         stream << quint64(result.candidates.size());
         for (const auto& candidate : result.candidates) writeCandidateReport(stream, candidate);
+        stream << quint64(result.constructibleCandidates.size());
+        for (const auto& layout : result.constructibleCandidates) writeLayout(stream, layout);
         stream << quint64(result.selectedCandidates.size());
         for (const auto& layout : result.selectedCandidates) writeLayout(stream, layout);
     });

@@ -69,6 +69,7 @@ const char* toString(const RegionRefitStatus status) {
     case RegionRefitStatus::MemoryBudgetExceeded: return "MemoryBudgetExceeded";
     case RegionRefitStatus::SamplingBudgetExceeded: return "SamplingBudgetExceeded";
     case RegionRefitStatus::NoValidatedLayoutWithinBudget: return "NoValidatedLayoutWithinBudget";
+    case RegionRefitStatus::NoSewableGeometry: return "NoSewableGeometry";
     case RegionRefitStatus::Failed: return "Failed";
     }
     return "Failed";

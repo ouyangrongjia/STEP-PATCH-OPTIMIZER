@@ -5,9 +5,11 @@
 #include <Geom2d_Curve.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopoDS_Edge.hxx>
+#include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -51,6 +53,7 @@ enum class RegionRefitStatus {
     MemoryBudgetExceeded,
     SamplingBudgetExceeded,
     NoValidatedLayoutWithinBudget,
+    NoSewableGeometry,
     Failed
 };
 
@@ -121,6 +124,8 @@ struct RegionRefitOptions {
     std::size_t solverMemoryPreflightMiB = 7168;
     double maximumParameterDistortion = 100.0;
     int maximumControlPointsPerSide = 25;
+    // Relative to the mean data-and-fairness normal-matrix diagonal.
+    double constraintCorrectionAnchorRelativeWeight = 0.25;
     RegionRefitCachePolicy cachePolicy = RegionRefitCachePolicy::Disabled;
     std::filesystem::path cacheDirectory;
     std::string inputStepSha256;
@@ -132,6 +137,7 @@ struct RegionRefitRequest {
     std::vector<EdgeId> lockedEdges;
     RegionRefitLayoutMode layoutMode = RegionRefitLayoutMode::Adaptive;
     RegionRefitExecutionMode executionMode = RegionRefitExecutionMode::ValidatedOnly;
+    bool forceDiagnosticSewing = false;
     RegionRefitStage diagnosticStopAfterStage = RegionRefitStage::ExternalCad;
     RegionRefitOptions options;
 };
@@ -141,6 +147,8 @@ struct RegionBoundaryEdgeConstraint {
     FaceId selectedFaceId = 0;
     std::optional<FaceId> adjacentFaceId;
     TopoDS_Edge originalEdge;
+    TopoDS_Face selectedFace;
+    TopoDS_Face adjacentFace;
     TopAbs_Orientation loopOrientation = TopAbs_FORWARD;
     TopAbs_Orientation selectedFaceOrientation = TopAbs_FORWARD;
     TopAbs_Orientation adjacentFaceOrientation = TopAbs_FORWARD;
@@ -178,11 +186,16 @@ struct RegionLayoutCandidateReport {
     int patchCount = 0;
     bool topologyPassed = false;
     bool parameterizationPassed = false;
+    bool constructibleParameterization = false;
     bool coarseFitPassed = false;
     bool selectedForFullFit = false;
     double proxyError = 0.0;
     double maximumDistortion = 0.0;
     int flippedTriangleCount = 0;
+    std::size_t boundaryChainCount = 0;
+    int trimCornerCount = 0;
+    double minimumSignedUvArea = 0.0;
+    std::string domainType;
     std::size_t matrixRows = 0;
     std::size_t matrixNonZeros = 0;
     std::uint64_t estimatedSolverBytes = 0;
@@ -204,6 +217,19 @@ struct RegionFitIterationReport {
     std::size_t projectionCount = 0;
     std::size_t uvIterationCount = 0;
     std::size_t projectionFallbackCount = 0;
+    std::size_t boundaryHardConstraintCount = 0;
+    std::size_t seamG0ConstraintCount = 0;
+    std::size_t seamG1SoftConstraintCount = 0;
+    std::size_t adjacentNormalSoftConstraintCount = 0;
+    std::size_t nonZeroBoundaryRhsCount = 0;
+    std::array<double, 3> boundaryTargetMinimum {};
+    std::array<double, 3> boundaryTargetMaximum {};
+    double maximumHardConstraintResidual = 0.0;
+    double constraintCorrectionAnchorScale = 0.0;
+    double initialTrainingMaximumDistance = 0.0;
+    double initialBoundaryMaximumDistance = 0.0;
+    double correctedTrainingMaximumDistance = 0.0;
+    double correctedBoundaryMaximumDistance = 0.0;
     double trainingMaximumDistance = 0.0;
     double selectionMaximumDistance = 0.0;
     double holdoutMaximumDistance = 0.0;
@@ -318,8 +344,17 @@ struct RegionRefitReport {
     std::string layoutCarrierMeshFingerprint;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
+    bool layoutGatePassed = false;
     bool fitGatePassed = false;
     bool bestEffortUsed = false;
+    bool forceDiagnosticSewingRequested = false;
+    bool forceDiagnosticSewingAttempted = false;
+    bool sewableGeometryAvailable = false;
+    bool productValidated = false;
+    int diagnosticSewingCandidateCount = 0;
+    int diagnosticCandidatePatchCount = 0;
+    std::string diagnosticSelectionReason;
+    std::string firstProductFailureGate;
     std::string cacheKey;
     std::vector<RegionRefitCacheEvent> cacheEvents;
     int retrimReplacementFaceCount = 0;
@@ -375,6 +410,7 @@ struct RegionRefitResult {
     std::shared_ptr<RegionReferenceMesh> referenceMesh;
     std::shared_ptr<RegionReferenceMesh> layoutCarrierMesh;
     std::shared_ptr<RegionPatchLayout> selectedLayout;
+    std::vector<std::shared_ptr<RegionPatchLayout>> generatedLayouts;
     std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;
     TopoDS_Shape diagnosticSewnShape;

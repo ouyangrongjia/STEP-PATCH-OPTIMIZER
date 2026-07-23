@@ -16,6 +16,7 @@ param(
     [long]$TargetLayoutCarrierTriangles = 80000,
     [int]$MaximumFullFitCount = 3,
     [switch]$BestEffortThroughSewing,
+    [switch]$ForceDiagnosticSewing,
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
     [long]$InputReadBudgetMilliseconds = 60000,
@@ -108,6 +109,9 @@ $baseArguments += @(
     "--max-memory-mib", [string]$MaximumMemoryMiB)
 if ($BestEffortThroughSewing) {
     $baseArguments += "--best-effort-through-sewing"
+}
+if ($ForceDiagnosticSewing) {
+    $baseArguments += "--force-diagnostic-sewing"
 }
 if ($ConstraintsOnly) {
     $baseArguments += "--constraints-only"
@@ -370,44 +374,32 @@ if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
     $artifacts["sewn_attempt_step"] = $sewnAttempt
 }
 
-$evidenceDefinitions = @(
-    [ordered]@{ name = "adaptive_sampling_stl"; path = $samplingStl; stage = "Sampling"; required = $true; validated = (Test-Path -LiteralPath $samplingStl -PathType Leaf) },
-    [ordered]@{ name = "layout_carrier_stl"; path = $layoutCarrierStl; stage = "Sampling"; required = $true; validated = (Test-Path -LiteralPath $layoutCarrierStl -PathType Leaf) },
-    [ordered]@{ name = "selected_layout_visualization"; path = $layoutSvg; stage = "Layout"; required = $true; validated = (Test-Path -LiteralPath $layoutSvg -PathType Leaf) },
-    [ordered]@{ name = "fitted_patch_network_step"; path = $fittedPatchNetwork; stage = "Fitting"; required = $false; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "best_effort_fitted_patch_network_step"; path = $bestEffortPatchNetwork; stage = "Fitting"; required = $false; validated = $false },
-    [ordered]@{ name = "cad_check_candidate_step"; path = $cadCheckCandidate; stage = "StepRoundtrip"; required = ($primaryRun.exit_code -eq 0); validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "sewn_attempt_step"; path = $sewnAttempt; stage = "StepRoundtrip"; required = $false; validated = $false },
-    [ordered]@{ name = "sampling_report"; path = (Join-Path $context.directories.diagnostics "sampling_report.json"); stage = "Sampling"; required = $true; validated = $true },
-    [ordered]@{ name = "layout_report"; path = (Join-Path $context.directories.diagnostics "layout_report.json"); stage = "Layout"; required = $true; validated = $true },
-    [ordered]@{ name = "fit_report"; path = (Join-Path $context.directories.diagnostics "fit_report.json"); stage = "Fitting"; required = $true; validated = $true },
-    [ordered]@{ name = "edge_consistency_report"; path = (Join-Path $context.directories.diagnostics "edge_consistency_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "triangulation_report"; path = (Join-Path $context.directories.diagnostics "triangulation_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "retrim_report"; path = (Join-Path $context.directories.diagnostics "retrim_report.json"); stage = "Retrim"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "sewing_report"; path = (Join-Path $context.directories.diagnostics "sewing_report.json"); stage = "Sewing"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "strict_topology_report"; path = (Join-Path $context.directories.diagnostics "strict_topology_report.json"); stage = "StrictTopology"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "output_complexity_report"; path = (Join-Path $context.directories.diagnostics "output_complexity_report.json"); stage = "StepRoundtrip"; required = $true; validated = ($primaryRun.exit_code -eq 0) },
-    [ordered]@{ name = "performance_report"; path = (Join-Path $context.directories.diagnostics "performance_report.json"); stage = "ExternalCad"; required = $true; validated = $true }
-)
-$evidence = @()
-foreach ($definition in $evidenceDefinitions) {
-    $exists = Test-Path -LiteralPath $definition.path -PathType Leaf
-    $evidence += [ordered]@{
-        name = $definition.name
-        path = if ($exists) { [System.IO.Path]::GetRelativePath($context.output_dir, $definition.path) } else { "" }
-        sha256 = if ($exists) { (Get-FileHash -LiteralPath $definition.path -Algorithm SHA256).Hash } else { "" }
-        generated_stage = $definition.stage
-        required = $definition.required
-        validated = $exists -and $definition.validated
-    }
+$creoScript = Join-Path $PSScriptRoot "run_creo_step_diagnostic.ps1"
+$creoOutput = Join-Path $context.output_dir "external_cad\creo"
+if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
+    (Get-Item -LiteralPath $sewnAttempt).Length -gt 0 -and
+    (Test-Path -LiteralPath $creoScript -PathType Leaf)) {
+    New-Item -ItemType Directory -Path $creoOutput -Force | Out-Null
+    $creoStdout = Join-Path $creoOutput "launcher.stdout.log"
+    $creoStderr = Join-Path $creoOutput "launcher.stderr.log"
+    $powershellExecutable = (Get-Process -Id $PID).Path
+    $creoProcess = Start-Process `
+        -FilePath $powershellExecutable `
+        -ArgumentList @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $creoScript,
+            "-StepPath", $sewnAttempt,
+            "-OutputDir", $creoOutput) `
+        -WorkingDirectory $repoRoot `
+        -WindowStyle Hidden `
+        -Wait `
+        -PassThru `
+        -RedirectStandardOutput $creoStdout `
+        -RedirectStandardError $creoStderr
+    $artifacts["creo_diagnostic_directory"] = $creoOutput
+    $artifacts["creo_diagnostic_exit_code"] = [int]$creoProcess.ExitCode
 }
-[ordered]@{
-    schema_version = 1
-    run_id = $context.run_id
-    evidence = $evidence
-} | ConvertTo-Json -Depth 10 | Set-Content `
-    -LiteralPath (Join-Path $context.directories.diagnostics "evidence_manifest.json") `
-    -Encoding UTF8
 
 Complete-SpoRun -Context $context -Status $status -Message $message -Artifacts $artifacts
 $performancePath = Join-Path $context.directories.diagnostics "performance_report.json"
@@ -420,5 +412,48 @@ if ((Test-Path -LiteralPath $performancePath -PathType Leaf) -and
         -NotePropertyValue ([bool]$performance.diagnostic_pipeline_completed) -Force
     $runJson | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $runJsonPath -Encoding UTF8
 }
+$manifestPath = Join-Path $context.directories.diagnostics "evidence_manifest.json"
+$requiredDiagnosticNames = @(
+    "sampling_report.json",
+    "layout_report.json",
+    "fit_report.json",
+    "edge_consistency_report.json",
+    "triangulation_report.json",
+    "retrim_report.json",
+    "sewing_report.json",
+    "strict_topology_report.json",
+    "output_complexity_report.json",
+    "performance_report.json")
+$evidence = @(
+    Get-ChildItem -LiteralPath $context.output_dir -Recurse -File |
+        Where-Object { $_.FullName -ne $manifestPath } |
+        Sort-Object FullName |
+        ForEach-Object {
+            $relativePath = [System.IO.Path]::GetRelativePath($context.output_dir, $_.FullName)
+            [ordered]@{
+                name = $relativePath.Replace("\", "/")
+                path = $relativePath
+                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                generated_stage = if ($relativePath -like "external_cad*") {
+                    "ExternalCad"
+                } elseif ($relativePath -like "artifacts*") {
+                    "Artifact"
+                } elseif ($relativePath -like "logs*") {
+                    "Log"
+                } else {
+                    "Run"
+                }
+                required = $false
+                validated = ($status -eq "succeeded")
+            }
+        }
+)
+[ordered]@{
+    schema_version = 2
+    run_id = $context.run_id
+    manifest_self_excluded = $true
+    expected_diagnostics = $requiredDiagnosticNames
+    evidence = $evidence
+} | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 Write-Output $context.output_dir
 exit $(if ($status -eq "succeeded") { 0 } else { 1 })
