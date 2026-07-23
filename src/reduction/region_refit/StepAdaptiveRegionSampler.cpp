@@ -1142,7 +1142,7 @@ StepAdaptiveRegionSamplingResult StepAdaptiveRegionSampler::sample(
         mesherLinearDeflection,
         false,
         mesherAngularDeflectionDegrees * kPi / 180.0,
-        true);
+        false);
     mesher.Perform();
     if (!mesher.IsDone()) {
         return fail(RegionRefitStatus::Failed, "Open CASCADE adaptive meshing did not complete.");
