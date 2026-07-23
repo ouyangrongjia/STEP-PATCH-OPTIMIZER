@@ -347,6 +347,9 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"seam_g0_constraint_count", QString::number(iteration.seamG0ConstraintCount)},
                 {"seam_g1_soft_constraint_count", QString::number(iteration.seamG1SoftConstraintCount)},
                 {"adjacent_normal_soft_constraint_count", QString::number(iteration.adjacentNormalSoftConstraintCount)},
+                {"constraint_rows_before", QString::number(iteration.constraintRowsBefore)},
+                {"constraint_rows_after", QString::number(iteration.constraintRowsAfter)},
+                {"constraint_estimated_rank", QString::number(iteration.constraintEstimatedRank)},
                 {"nonzero_boundary_rhs_count", QString::number(iteration.nonZeroBoundaryRhsCount)},
                 {"boundary_target_minimum", QJsonArray {
                     iteration.boundaryTargetMinimum[0],
@@ -357,6 +360,9 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                     iteration.boundaryTargetMaximum[1],
                     iteration.boundaryTargetMaximum[2]}},
                 {"maximum_hard_constraint_residual", iteration.maximumHardConstraintResidual},
+                {"minimum_full_hard_constraint_residual", iteration.minimumFullHardConstraintResidual},
+                {"hard_constraint_feasible", iteration.hardConstraintFeasible},
+                {"hard_constraint_status", QString::fromStdString(iteration.hardConstraintStatus)},
                 {"constraint_correction_anchor_scale", iteration.constraintCorrectionAnchorScale},
                 {"initial_training_maximum_distance", iteration.initialTrainingMaximumDistance},
                 {"initial_boundary_maximum_distance", iteration.initialBoundaryMaximumDistance},
@@ -941,7 +947,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v19-trimmed-domains";
+    request.options.algorithmFingerprint = "native-regional-refit-v20-ranked-constraints";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1076,7 +1082,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v19-trimmed-domains-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v20-ranked-constraints-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);

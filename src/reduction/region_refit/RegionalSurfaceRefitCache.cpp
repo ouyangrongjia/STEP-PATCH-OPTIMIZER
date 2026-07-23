@@ -28,7 +28,7 @@ namespace {
 constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 3;
+constexpr quint32 kVersion = 4;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -426,10 +426,15 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << quint64(report.seamG0ConstraintCount)
            << quint64(report.seamG1SoftConstraintCount)
            << quint64(report.adjacentNormalSoftConstraintCount)
+           << quint64(report.constraintRowsBefore)
+           << quint64(report.constraintRowsAfter)
+           << quint64(report.constraintEstimatedRank)
            << quint64(report.nonZeroBoundaryRhsCount);
     for (const auto value : report.boundaryTargetMinimum) stream << value;
     for (const auto value : report.boundaryTargetMaximum) stream << value;
     stream << report.maximumHardConstraintResidual
+           << report.minimumFullHardConstraintResidual
+           << report.hardConstraintFeasible
            << report.constraintCorrectionAnchorScale
            << report.initialTrainingMaximumDistance
            << report.initialBoundaryMaximumDistance
@@ -443,6 +448,7 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.holdoutWorstNormalPatch << report.holdoutWorstDistanceInternalSeam
            << report.holdoutWorstNormalInternalSeam << report.boundaryMaximumDistance
            << report.seamMaximumDistance << report.wallMilliseconds;
+    writeString(stream, report.hardConstraintStatus);
     writeString(stream, report.stopReason);
 }
 
@@ -460,15 +466,21 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     quint64 seamG0 = 0;
     quint64 seamG1 = 0;
     quint64 adjacentNormal = 0;
+    quint64 constraintRowsBefore = 0;
+    quint64 constraintRowsAfter = 0;
+    quint64 constraintEstimatedRank = 0;
     quint64 nonZeroBoundaryRhs = 0;
     stream >> report.iteration >> report.uControlCount >> report.vControlCount
            >> rows >> columns >> nonZeros >> bytes >> report.symbolicFactorizationReuseCount
            >> projectionCount >> uvIterations >> projectionFallbacks
            >> boundaryConstraints >> seamG0 >> seamG1 >> adjacentNormal
+           >> constraintRowsBefore >> constraintRowsAfter >> constraintEstimatedRank
            >> nonZeroBoundaryRhs;
     for (auto& value : report.boundaryTargetMinimum) stream >> value;
     for (auto& value : report.boundaryTargetMaximum) stream >> value;
     stream >> report.maximumHardConstraintResidual
+           >> report.minimumFullHardConstraintResidual
+           >> report.hardConstraintFeasible
            >> report.constraintCorrectionAnchorScale
            >> report.initialTrainingMaximumDistance
            >> report.initialBoundaryMaximumDistance
@@ -492,10 +504,15 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.seamG0ConstraintCount = static_cast<std::size_t>(seamG0);
     report.seamG1SoftConstraintCount = static_cast<std::size_t>(seamG1);
     report.adjacentNormalSoftConstraintCount = static_cast<std::size_t>(adjacentNormal);
+    report.constraintRowsBefore = static_cast<std::size_t>(constraintRowsBefore);
+    report.constraintRowsAfter = static_cast<std::size_t>(constraintRowsAfter);
+    report.constraintEstimatedRank = static_cast<std::size_t>(constraintEstimatedRank);
     report.nonZeroBoundaryRhsCount = static_cast<std::size_t>(nonZeroBoundaryRhs);
     report.holdoutWorstDistanceVertex = static_cast<std::size_t>(worstDistance);
     report.holdoutWorstNormalVertex = static_cast<std::size_t>(worstNormal);
-    return readString(stream, report.stopReason) && stream.status() == QDataStream::Ok;
+    return readString(stream, report.hardConstraintStatus) &&
+        readString(stream, report.stopReason) &&
+        stream.status() == QDataStream::Ok;
 }
 
 void writeAttempts(QDataStream& stream, const std::vector<RegionFitAttemptReport>& attempts) {

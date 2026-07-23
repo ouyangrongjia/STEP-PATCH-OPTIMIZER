@@ -221,10 +221,16 @@ struct RegionFitIterationReport {
     std::size_t seamG0ConstraintCount = 0;
     std::size_t seamG1SoftConstraintCount = 0;
     std::size_t adjacentNormalSoftConstraintCount = 0;
+    std::size_t constraintRowsBefore = 0;
+    std::size_t constraintRowsAfter = 0;
+    std::size_t constraintEstimatedRank = 0;
     std::size_t nonZeroBoundaryRhsCount = 0;
     std::array<double, 3> boundaryTargetMinimum {};
     std::array<double, 3> boundaryTargetMaximum {};
     double maximumHardConstraintResidual = 0.0;
+    double minimumFullHardConstraintResidual = 0.0;
+    bool hardConstraintFeasible = true;
+    std::string hardConstraintStatus = "NotEvaluated";
     double constraintCorrectionAnchorScale = 0.0;
     double initialTrainingMaximumDistance = 0.0;
     double initialBoundaryMaximumDistance = 0.0;

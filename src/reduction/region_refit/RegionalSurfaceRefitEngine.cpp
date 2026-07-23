@@ -570,7 +570,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             result.report.selectionOutcome = "NoSewableGeometry";
             result.report.unattainableReason =
                 "No finite, non-flipped fitted support-surface network was available for B-rep construction.";
-            result.report.firstProductFailureGate = "Fitting";
+            if (result.report.firstProductFailureGate.empty()) {
+                result.report.firstProductFailureGate = "Fitting";
+            }
         } else {
             markNoProductResult(result, fitted.message);
         }

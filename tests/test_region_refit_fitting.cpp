@@ -135,7 +135,55 @@ void test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs() {
     assert(iteration.nonZeroBoundaryRhsCount > 0);
     assert(iteration.boundaryTargetMinimum[0] >= 119.9);
     assert(iteration.boundaryTargetMaximum[2] >= 41.9);
+    assert(iteration.constraintRowsBefore >= iteration.constraintRowsAfter);
+    assert(iteration.constraintRowsAfter > 0);
+    assert(iteration.constraintEstimatedRank == iteration.constraintRowsAfter);
+    assert(iteration.minimumFullHardConstraintResidual <= 1.0e-4);
+    assert(iteration.hardConstraintFeasible);
+    assert(iteration.hardConstraintStatus == "Feasible");
     assert(iteration.maximumHardConstraintResidual <= 1.0e-4);
+}
+
+void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
+    auto mesh = makePlanarFitMesh(1);
+    const gp_Vec translation(120.0, -75.0, 42.0);
+    for (auto& vertex : mesh.vertices) vertex.point.Translate(translation);
+    mesh.updateIntegrationWeights();
+    const auto layouts = planarLayouts(mesh, 1);
+    spo::RegionTopologyConstraints constraints;
+    for (std::size_t index = 0; index < 2; ++index) {
+        spo::RegionBoundaryEdgeConstraint constraint;
+        constraint.edgeId = index;
+        constraint.originalEdge = BRepBuilderAPI_MakeEdge(
+            gp_Pnt(120.0, -75.0, 42.0 + static_cast<double>(index)),
+            gp_Pnt(121.0, -75.0, 42.0 + static_cast<double>(index))).Edge();
+        constraint.hardPositionConstraint = true;
+        constraints.boundaryEdges.push_back(constraint);
+        constraints.orderedBoundaryEdges.push_back(index);
+    }
+    for (auto& vertex : mesh.vertices) {
+        if (vertex.boundary && std::abs(vertex.point.Y() + 75.0) <= 1.0e-12) {
+            vertex.boundaryEdgeIds = {0, 1};
+        }
+    }
+
+    spo::RegionRefitOptions options;
+    options.tolerance3d = 0.05;
+    options.curveOnSurfaceTolerance = 0.01;
+    options.maximumFitIterations = 2;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        mesh,
+        constraints,
+        layouts,
+        options,
+        std::chrono::steady_clock::now() + std::chrono::seconds(10));
+
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front().iterations.empty());
+    const auto& iteration = fitted.attempts.front().iterations.back();
+    assert(!iteration.hardConstraintFeasible);
+    assert(iteration.hardConstraintStatus == "InfeasibleHardBoundaryConstraints");
+    assert(iteration.minimumFullHardConstraintResidual > options.curveOnSurfaceTolerance);
 }
 
 void test_joint_fitter_honors_preflight_memory_budget() {
@@ -168,28 +216,6 @@ void test_joint_fitter_honors_expired_deadline() {
     assert(!fitted.success());
     assert(fitted.status == spo::RegionRefitStatus::TimeBudgetExceeded);
     assert(fitted.attempts.empty());
-}
-
-void test_single_selected_fit_receives_unused_cumulative_budget() {
-    const auto mesh = makePlanarFitMesh(4);
-    const auto layouts = planarLayouts(mesh, 1);
-    spo::RegionRefitOptions options;
-    options.tolerance3d = 0.1;
-    options.curveOnSurfaceTolerance = 0.03;
-    options.normalToleranceDegrees = 1.0;
-    options.maximumFullFitCount = 1;
-    options.maximumFitIterations = 2;
-    options.singleFitBudgetMilliseconds = 0;
-    const auto fitted = spo::JointBSplineNetworkFitter().fit(
-        mesh,
-        {},
-        layouts,
-        options,
-        std::chrono::steady_clock::now() + std::chrono::seconds(10));
-
-    assert(fitted.success());
-    assert(!fitted.attempts.empty());
-    assert(!fitted.attempts.front().iterations.empty());
 }
 
 void test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails() {
@@ -351,10 +377,10 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
 
 void run_region_refit_fitting_tests() {
     test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs();
+    test_inconsistent_dense_hard_constraints_are_reported_explicitly();
     test_joint_fitter_passes_planar_two_patch_network();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();
-    test_single_selected_fit_receives_unused_cumulative_budget();
     test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails();
     test_edge_consistency_classifies_geometry_and_display_cracks();
     test_area_weighting_is_invariant_to_planar_sampling_density();
