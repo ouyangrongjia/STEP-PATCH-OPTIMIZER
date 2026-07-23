@@ -803,10 +803,18 @@ std::vector<LinearRow> buildBoundaryEqualityRows(
                 (position + 1) % parameterization.boundaryLoop.size()];
             const auto& nextVertex = layoutCarrier.vertices[nextVertexIndex];
             std::vector<EdgeId> sharedEdgeIds;
-            std::set_intersection(
-                vertex.boundaryEdgeIds.begin(), vertex.boundaryEdgeIds.end(),
-                nextVertex.boundaryEdgeIds.begin(), nextVertex.boundaryEdgeIds.end(),
-                std::back_inserter(sharedEdgeIds));
+            for (const auto edgeId : vertex.boundaryEdgeIds) {
+                if (std::find(
+                        nextVertex.boundaryEdgeIds.begin(),
+                        nextVertex.boundaryEdgeIds.end(),
+                        edgeId) != nextVertex.boundaryEdgeIds.end()) {
+                    sharedEdgeIds.push_back(edgeId);
+                }
+            }
+            std::sort(sharedEdgeIds.begin(), sharedEdgeIds.end());
+            sharedEdgeIds.erase(
+                std::unique(sharedEdgeIds.begin(), sharedEdgeIds.end()),
+                sharedEdgeIds.end());
             const auto nextLocal = localByGlobal.at(nextVertexIndex);
             for (const auto edgeId : sharedEdgeIds) {
                 gp_Pnt firstTarget;

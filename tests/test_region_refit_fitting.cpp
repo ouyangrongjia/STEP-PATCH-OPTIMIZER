@@ -99,7 +99,8 @@ void test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs() {
     mesh.updateIntegrationWeights();
     const auto layouts = planarLayouts(mesh, 1);
     spo::RegionTopologyConstraints constraints;
-    const std::array<std::pair<gp_Pnt, gp_Pnt>, 1> edges {{
+    const std::array<std::pair<gp_Pnt, gp_Pnt>, 2> edges {{
+        {gp_Pnt(120.0, -75.0, 42.0), gp_Pnt(121.0, -75.0, 42.0)},
         {gp_Pnt(120.0, -75.0, 42.0), gp_Pnt(121.0, -75.0, 42.0)}}};
     for (std::size_t index = 0; index < edges.size(); ++index) {
         spo::RegionBoundaryEdgeConstraint constraint;
@@ -113,7 +114,7 @@ void test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs() {
     for (auto& vertex : mesh.vertices) {
         if (!vertex.boundary) continue;
         const auto y = vertex.point.Y() + 75.0;
-        if (std::abs(y) <= 1.0e-12) vertex.boundaryEdgeIds.push_back(0);
+        if (std::abs(y) <= 1.0e-12) vertex.boundaryEdgeIds = {1, 0};
     }
 
     spo::RegionRefitOptions options;
