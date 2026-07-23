@@ -19,14 +19,16 @@
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：指定目标面数与自适应多曲面两个入口、拟合参考与布局载体解耦、局部四边参数域、逐边一致性分类和输出复杂度报告已进入命令行探针，旧 `fixed` 入口继续保留。candidate-179 的 K=1 历史证据仍是已缝合且拓扑水密、但几何门禁失败的诊断实体，不能作为产品成功。
+当前阶段：指定目标面数与自适应多曲面两个入口、拟合参考与布局载体解耦、任意闭合边界的 trimmed-disk 调和参数域、两阶段保方向拟合、硬约束秩压缩、逐边一致性分类和强制诊断缝合均已进入命令行探针，旧 `fixed` 与 `BestEffortThroughSewing` 入口继续保留。KKT 三坐标右端已写入真实非零 STEP 目标，并由整体远离原点的回归测试锁定；拟合仍使用尺度归一化权重和 90 秒单次预算。
 
-同一干净提交 `588daa0` 的两次冷运行已经完成并完整保留失败证据：
+同一干净提交 `91f67392e8f40fef610bf96b239f382a2ffc0404` 的两次最终冷运行已经完成：
 
-- 指定 K=4：`data/runs/20260723_020003_candidate_0179_target_k4_local_domains/`。结构采样通过，但 K=4 布局无法形成稳定四边参数域，未进入完整拟合，结果为 `NoValidatedLayout`。
-- 自适应最小合格：`data/runs/20260723_020217_candidate_0179_adaptive_minimum_qualified/`。算法生成 K=1 至 K=12；K=2 至 K=12 在四边参数域预检失败，K=1 进入完整拟合后因控制网超出局部支撑包络失败，结果为 `NoProductValidatedResult`，未证明 `MinimumQualified`。
+- 指定 K=4：`data/runs/20260724_063850_candidate_0179_target_k4_trimmed_domains/`。trimmed-disk 布局无翻转，初拟合保方向系数为 `0.176127254962921`；硬约束由 956 行压缩为 79 行、估计秩 79，但全量约束最小残差仍为 `0.0604825724729707 mm`，因此第一产品失败门为 `Fitting`。强制诊断只缝合该候选并写出 `sewn_attempt.step`；严格拓扑检查仍有 33 条自由边且 BRepCheck 失败。
+- 自适应最小合格：`data/runs/20260724_064446_candidate_0179_adaptive_trimmed_minimum_qualified/`。布局在 60 秒预算内生成 K=1 至 K=12 的全部轻量 JSON/SVG，只对 K=1、2、4 做三次完整拟合并只缝合排序最优的 K=1；硬约束由 832 行压缩为 36 行、估计秩 36，全量约束最小残差为 `0.0465027802085629 mm`。诊断实体修复后为 0 条自由边、1 个 solid 且 BRepCheck 有效，但 STEP 严格往返失败。
 
-两种模式均未通过全部自动门，因此未运行 Creo，也没有 `cad_check_candidate.step` 或 `final_sewn.step`。下一验收点是改进外边界所有权、内部缝线与四边角点构造，使多 patch 候选能够进入完整拟合，同时改善布局载体质量；不得放宽现有几何和拓扑门禁。GUI 接入仍不在本轮范围内，本任务保持未完成。
+两个目录均记录 `git.dirty=false`、`product_validated=false`、`can_apply=false` 和完整 `evidence_manifest.json`；manifest 分别覆盖 76 与 98 个文件，复核无遗漏且 SHA-256 全部匹配。两者都完成 Creo 自动导入并生成 PRT，但 ModelCHECK 为 `diagnostic_passed=false`、`PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`，不能登记 `cad_check_candidate.step` 或 `final_sewn.step`。
+
+下一验收点是降低完整 STEP 外边界硬约束不相容性，修复逐边 Curve-on-Surface/`SameParameter` 失败和 STEP 往返失败，并在 Creo 高质量显示下人工检查可疑缝线截面、局部褶皱与镶边；人工截图和结论写入各自 `external_cad/creo/`。在全部自动门与人工检查通过前，本任务保持未完成，GUI 接入仍不在本轮范围内。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 
