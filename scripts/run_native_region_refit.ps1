@@ -406,13 +406,15 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
             Where-Object { $_.Id -notin $nmsdBefore } |
             Select-Object -ExpandProperty Id)
     if ($newNmsdIds.Count -gt 0) {
-        $creoDescendantDrainTimeoutSeconds = 330
+        $creoDescendantStopTimeoutSeconds = 10
         try {
-            Wait-Process -Id $newNmsdIds `
-                -Timeout $creoDescendantDrainTimeoutSeconds `
+            $newNmsdProcesses = @(Get-Process -Id $newNmsdIds -ErrorAction Stop)
+            $newNmsdProcesses | Stop-Process -Force -ErrorAction Stop
+            $newNmsdProcesses | Wait-Process `
+                -Timeout $creoDescendantStopTimeoutSeconds `
                 -ErrorAction Stop
         } catch {
-            Write-Warning "Creo name-server descendants did not exit before evidence finalization."
+            Write-Warning "Creo name-server descendants could not be stopped before evidence finalization."
         }
     }
 }
