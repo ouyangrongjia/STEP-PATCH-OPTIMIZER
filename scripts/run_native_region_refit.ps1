@@ -380,8 +380,6 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
     (Get-Item -LiteralPath $sewnAttempt).Length -gt 0 -and
     (Test-Path -LiteralPath $creoScript -PathType Leaf)) {
     New-Item -ItemType Directory -Path $creoOutput -Force | Out-Null
-    $creoStdout = Join-Path $creoOutput "launcher.stdout.log"
-    $creoStderr = Join-Path $creoOutput "launcher.stderr.log"
     $powershellExecutable = (Get-Process -Id $PID).Path
     $creoProcess = Start-Process `
         -FilePath $powershellExecutable `
@@ -393,9 +391,7 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
             "-OutputDir", $creoOutput) `
         -WorkingDirectory $repoRoot `
         -WindowStyle Hidden `
-        -PassThru `
-        -RedirectStandardOutput $creoStdout `
-        -RedirectStandardError $creoStderr
+        -PassThru
     $creoProcess.WaitForExit()
     $creoProcess.Refresh()
     $creoExitCode = [int]$creoProcess.ExitCode
