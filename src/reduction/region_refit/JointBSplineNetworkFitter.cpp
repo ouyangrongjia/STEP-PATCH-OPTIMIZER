@@ -1728,8 +1728,30 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 Eigen::SparseQR<
                     Eigen::SparseMatrix<double>,
                     Eigen::COLAMDOrdering<int>> rankRevealingQr;
-                rankRevealingQr.setPivotThreshold(
-                    std::sqrt(std::numeric_limits<double>::epsilon()));
+                auto independentRowTolerance =
+                    std::sqrt(std::numeric_limits<double>::epsilon());
+                if (boundaryEqualityRowCount > 0) {
+                    const auto boundaryTargetDiagonal = std::sqrt(
+                        std::pow(
+                            iterationReport.boundaryTargetMaximum[0] -
+                                iterationReport.boundaryTargetMinimum[0],
+                            2.0) +
+                        std::pow(
+                            iterationReport.boundaryTargetMaximum[1] -
+                                iterationReport.boundaryTargetMinimum[1],
+                            2.0) +
+                        std::pow(
+                            iterationReport.boundaryTargetMaximum[2] -
+                                iterationReport.boundaryTargetMinimum[2],
+                            2.0));
+                    independentRowTolerance = std::max(
+                        independentRowTolerance,
+                        options.curveOnSurfaceTolerance /
+                            std::max(
+                                boundaryTargetDiagonal,
+                                options.curveOnSurfaceTolerance));
+                }
+                rankRevealingQr.setPivotThreshold(independentRowTolerance);
                 rankRevealingQr.compute(equalityTranspose);
                 iterationReport.constraintEstimatedRank =
                     rankRevealingQr.info() == Eigen::Success
