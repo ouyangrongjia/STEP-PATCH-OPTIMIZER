@@ -28,7 +28,7 @@ namespace {
 constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 4;
+constexpr quint32 kVersion = 5;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -435,6 +435,7 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
     stream << report.maximumHardConstraintResidual
            << report.minimumFullHardConstraintResidual
            << report.hardConstraintFeasible
+           << report.initialControlPriorScale
            << report.constraintCorrectionAnchorScale
            << report.initialTrainingMaximumDistance
            << report.initialBoundaryMaximumDistance
@@ -481,6 +482,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     stream >> report.maximumHardConstraintResidual
            >> report.minimumFullHardConstraintResidual
            >> report.hardConstraintFeasible
+           >> report.initialControlPriorScale
            >> report.constraintCorrectionAnchorScale
            >> report.initialTrainingMaximumDistance
            >> report.initialBoundaryMaximumDistance
@@ -607,6 +609,7 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.solverMemoryPreflightMiB
          << '|' << request.options.maximumParameterDistortion
          << '|' << request.options.maximumControlPointsPerSide
+         << '|' << request.options.initialControlPriorRelativeWeight
          << '|' << request.options.constraintCorrectionAnchorRelativeWeight;
     const auto digest = QCryptographicHash::hash(
         QByteArray::fromStdString(text.str()), QCryptographicHash::Sha256);

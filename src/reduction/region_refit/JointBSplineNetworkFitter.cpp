@@ -170,6 +170,20 @@ std::vector<double> basisValues(
     return result;
 }
 
+std::vector<double> grevilleParameters(const std::vector<double>& unique) {
+    const auto knots = fullKnotVector(unique);
+    const auto controlCount = static_cast<int>(unique.size()) + kDegree - 1;
+    std::vector<double> parameters(static_cast<std::size_t>(controlCount), 0.0);
+    for (int control = 0; control < controlCount; ++control) {
+        for (int offset = 1; offset <= kDegree; ++offset) {
+            parameters[static_cast<std::size_t>(control)] +=
+                knots[static_cast<std::size_t>(control + offset)];
+        }
+        parameters[static_cast<std::size_t>(control)] /= static_cast<double>(kDegree);
+    }
+    return parameters;
+}
+
 std::array<double, 2> normalizedParameter(const std::array<double, 2>& uv) {
     return {
         std::clamp(uv[0], 0.0, 1.0),
@@ -313,6 +327,60 @@ std::vector<MappedReferenceSample> selectRepresentativeFitSamples(
         for (const auto index : selected) selectedSamples.push_back(*samples[index]);
     }
     return selectedSamples;
+}
+
+Eigen::VectorXd buildInitialControlPrior(
+    const RegionReferenceMesh& fittingReference,
+    const std::vector<MappedReferenceSample>& representativeSamples,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets,
+    const Eigen::VectorXd& columnScales) {
+    const auto coupledVariableCount = columnScales.size();
+    Eigen::VectorXd prior = Eigen::VectorXd::Zero(coupledVariableCount);
+    std::vector<std::vector<const MappedReferenceSample*>> samplesByPatch(knots.size());
+    for (const auto& sample : representativeSamples) {
+        if (sample.patch >= 0 &&
+            static_cast<std::size_t>(sample.patch) < samplesByPatch.size()) {
+            samplesByPatch[static_cast<std::size_t>(sample.patch)].push_back(&sample);
+        }
+    }
+    for (std::size_t patch = 0; patch < knots.size(); ++patch) {
+        if (samplesByPatch[patch].empty()) continue;
+        const auto uParameters = grevilleParameters(knots[patch].u);
+        const auto vParameters = grevilleParameters(knots[patch].v);
+        for (int u = 0; u < knots[patch].uControlCount(); ++u) {
+            for (int v = 0; v < knots[patch].vControlCount(); ++v) {
+                const MappedReferenceSample* closest = nullptr;
+                auto minimumDistance = std::numeric_limits<double>::infinity();
+                for (const auto* sample : samplesByPatch[patch]) {
+                    const auto du = sample->uv[0] - uParameters[static_cast<std::size_t>(u)];
+                    const auto dv = sample->uv[1] - vParameters[static_cast<std::size_t>(v)];
+                    const auto distance = du * du + dv * dv;
+                    if (distance < minimumDistance ||
+                        (distance == minimumDistance &&
+                            closest != nullptr &&
+                            sample->referenceVertex < closest->referenceVertex)) {
+                        minimumDistance = distance;
+                        closest = sample;
+                    }
+                }
+                if (closest == nullptr) continue;
+                const auto& point =
+                    fittingReference.vertices[closest->referenceVertex].point;
+                const std::array<double, 3> coordinates {
+                    point.X(), point.Y(), point.Z()};
+                const auto variable = variableOffsets[patch] +
+                    u * knots[patch].vControlCount() + v;
+                for (int axis = 0; axis < 3; ++axis) {
+                    const auto coupled = variable * 3 + axis;
+                    prior[coupled] =
+                        coordinates[static_cast<std::size_t>(axis)] *
+                        columnScales[coupled];
+                }
+            }
+        }
+    }
+    return prior;
 }
 
 std::vector<std::pair<int, double>> surfaceCoefficients(
@@ -1851,8 +1919,36 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             std::vector<Handle(Geom_BSplineSurface)> initialDiagnosticSurfaces;
             ValidationMetrics initialDiagnosticMetrics;
             if (!equalityRows.empty()) {
+                auto initialNormalMatrix = normalMatrix;
+                auto initialNormalTargets = normalTargets;
+                auto initialDiagonalScale = 0.0;
+                for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
+                    initialDiagonalScale += std::max(
+                        0.0, normalMatrix.coeff(diagonal, diagonal) - 1.0e-8);
+                }
+                initialDiagonalScale /=
+                    static_cast<double>(std::max(1, coupledVariableCount));
+                iterationReport.initialControlPriorScale =
+                    iterationReport.hardConstraintFeasible
+                        ? 0.0
+                        : options.initialControlPriorRelativeWeight *
+                            initialDiagonalScale;
+                const auto initialControlPrior = buildInitialControlPrior(
+                    fittingReference,
+                    representativeFitSamples,
+                    knots,
+                    variableOffsets,
+                    columnScales);
+                for (int diagonal = 0; diagonal < coupledVariableCount; ++diagonal) {
+                    initialNormalMatrix.coeffRef(diagonal, diagonal) +=
+                        iterationReport.initialControlPriorScale;
+                    initialNormalTargets[diagonal] +=
+                        iterationReport.initialControlPriorScale *
+                        initialControlPrior[diagonal];
+                }
+                initialNormalMatrix.makeCompressed();
                 Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> initialSolver;
-                initialSolver.compute(normalMatrix);
+                initialSolver.compute(initialNormalMatrix);
                 if (initialSolver.info() != Eigen::Success) {
                     iterationReport.stopReason =
                         "Initial local support fit factorization failed.";
@@ -1861,7 +1957,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     break;
                 }
                 const Eigen::VectorXd initialScaledSolution =
-                    initialSolver.solve(normalTargets);
+                    initialSolver.solve(initialNormalTargets);
                 if (initialSolver.info() != Eigen::Success ||
                     !initialScaledSolution.allFinite()) {
                     iterationReport.stopReason = "Initial local support fit solve failed.";

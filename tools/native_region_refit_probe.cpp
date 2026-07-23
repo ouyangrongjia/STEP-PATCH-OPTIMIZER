@@ -363,6 +363,7 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"minimum_full_hard_constraint_residual", iteration.minimumFullHardConstraintResidual},
                 {"hard_constraint_feasible", iteration.hardConstraintFeasible},
                 {"hard_constraint_status", QString::fromStdString(iteration.hardConstraintStatus)},
+                {"initial_control_prior_scale", iteration.initialControlPriorScale},
                 {"constraint_correction_anchor_scale", iteration.constraintCorrectionAnchorScale},
                 {"initial_training_maximum_distance", iteration.initialTrainingMaximumDistance},
                 {"initial_boundary_maximum_distance", iteration.initialBoundaryMaximumDistance},
@@ -947,7 +948,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v22-initial-diagnostic-fallback";
+    request.options.algorithmFingerprint = "native-regional-refit-v23-scaled-initial-prior";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1082,7 +1083,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v22-initial-diagnostic-fallback-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v23-scaled-initial-prior-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);

@@ -208,6 +208,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         request.options.maximumAdaptivePatchCount <= 0 ||
         request.options.maximumParameterDistortion <= 0.0 ||
         request.options.maximumControlPointsPerSide < 6 ||
+        request.options.initialControlPriorRelativeWeight <= 0.0 ||
         request.options.constraintCorrectionAnchorRelativeWeight <= 0.0 ||
         (request.layoutMode == RegionRefitLayoutMode::FixedPatchCount &&
             request.options.fixedPatchCount <= 0) ||

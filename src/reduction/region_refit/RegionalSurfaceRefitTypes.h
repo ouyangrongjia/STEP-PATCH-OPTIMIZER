@@ -125,6 +125,8 @@ struct RegionRefitOptions {
     double maximumParameterDistortion = 100.0;
     int maximumControlPointsPerSide = 25;
     // Relative to the mean data-and-fairness normal-matrix diagonal.
+    double initialControlPriorRelativeWeight = 1.0;
+    // Relative to the mean data-and-fairness normal-matrix diagonal.
     double constraintCorrectionAnchorRelativeWeight = 0.25;
     RegionRefitCachePolicy cachePolicy = RegionRefitCachePolicy::Disabled;
     std::filesystem::path cacheDirectory;
@@ -231,6 +233,7 @@ struct RegionFitIterationReport {
     double minimumFullHardConstraintResidual = 0.0;
     bool hardConstraintFeasible = true;
     std::string hardConstraintStatus = "NotEvaluated";
+    double initialControlPriorScale = 0.0;
     double constraintCorrectionAnchorScale = 0.0;
     double initialTrainingMaximumDistance = 0.0;
     double initialBoundaryMaximumDistance = 0.0;

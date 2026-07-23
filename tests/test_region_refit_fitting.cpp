@@ -184,6 +184,7 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(!iteration.hardConstraintFeasible);
     assert(iteration.hardConstraintStatus == "InfeasibleHardBoundaryConstraints");
     assert(iteration.minimumFullHardConstraintResidual > options.curveOnSurfaceTolerance);
+    assert(iteration.initialControlPriorScale > 0.0);
     assert(fitted.bestEffortNetwork);
     assert(!fitted.bestEffortNetwork->fitGatePassed);
 }
