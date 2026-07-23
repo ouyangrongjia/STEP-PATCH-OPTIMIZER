@@ -162,6 +162,8 @@ void test_adaptive_layout_is_deterministic_and_screens_at_most_three() {
 
     assert(first.success());
     assert(second.success());
+    assert(first.candidates.size() == 6);
+    assert(second.candidates.size() == 6);
     assert(!first.selectedCandidates.empty());
     assert(first.selectedCandidates.size() <= 3);
     assert(first.selectedCandidates.size() == second.selectedCandidates.size());

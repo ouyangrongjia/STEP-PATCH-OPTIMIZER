@@ -1,7 +1,7 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
 
 #include <Eigen/Eigenvalues>
-#include <Eigen/SparseCholesky>
+#include <Eigen/IterativeLinearSolvers>
 #include <Eigen/SparseCore>
 
 #include <gp_Vec.hxx>
@@ -930,18 +930,23 @@ bool parameterizePatch(
             static_cast<Eigen::Index>(interior.size()));
         matrix.setFromTriplets(coefficients.begin(), coefficients.end());
         matrix.makeCompressed();
-        Eigen::SimplicialLDLT<SparseMatrix> solver;
+        Eigen::ConjugateGradient<
+            SparseMatrix,
+            Eigen::Lower | Eigen::Upper,
+            Eigen::DiagonalPreconditioner<double>> solver;
+        solver.setMaxIterations(static_cast<Eigen::Index>(interior.size()));
+        solver.setTolerance(std::sqrt(std::numeric_limits<double>::epsilon()));
         solver.compute(matrix);
         if (solver.info() != Eigen::Success) {
-            message = "Harmonic parameterization sparse factor setup failed.";
+            message = "Harmonic parameterization iterative solver setup failed.";
             return false;
         }
-        const auto solutionU = solver.solve(rightU);
+        const Eigen::VectorXd solutionU = solver.solve(rightU);
         if (solver.info() != Eigen::Success) {
             message = "Harmonic parameterization U solve did not converge.";
             return false;
         }
-        const auto solutionV = solver.solve(rightV);
+        const Eigen::VectorXd solutionV = solver.solve(rightV);
         if (solver.info() != Eigen::Success) {
             message = "Harmonic parameterization V solve did not converge.";
             return false;
