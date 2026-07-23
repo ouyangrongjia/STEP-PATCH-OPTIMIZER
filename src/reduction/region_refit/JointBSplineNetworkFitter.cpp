@@ -1932,6 +1932,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             Eigen::VectorXd normalTargets = scaledMatrix.transpose() * targets;
             std::vector<Handle(Geom_BSplineSurface)> initialDiagnosticSurfaces;
             ValidationMetrics initialDiagnosticMetrics;
+            std::string initialDiagnosticFailure;
             if (!equalityRows.empty()) {
                 auto initialNormalMatrix = normalMatrix;
                 auto initialNormalTargets = normalTargets;
@@ -1994,6 +1995,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                             options,
                             mappedSamples);
                         initialDiagnosticSurfaces = std::move(priorSurfaces);
+                    } else {
+                        initialDiagnosticFailure = priorSupportFailure;
                     }
                 } catch (const Standard_Failure&) {
                 }
@@ -2073,6 +2076,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                             initialDiagnosticSurfaces = std::move(initialSurfaces);
                             initialDiagnosticMetrics = initialMetrics;
                         }
+                    } else if (initialDiagnosticFailure.empty()) {
+                        initialDiagnosticFailure = initialSupportFailure;
                     }
                 } catch (const Standard_Failure&) {
                 }
@@ -2298,6 +2303,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                                 "; retained the finite initial support network for diagnostic sewing.";
                         } else {
                             iterationReport.stopReason = supportFailure;
+                            if (!initialDiagnosticFailure.empty()) {
+                                iterationReport.stopReason +=
+                                    " Initial support: " +
+                                    initialDiagnosticFailure;
+                            }
                         }
                         attempt.iterations.push_back(iterationReport);
                         attempt.stopReason = iterationReport.stopReason;

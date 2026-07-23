@@ -717,7 +717,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("edge_consistency_report.json") != std::string::npos);
     assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
-    assert(probe.find("native-regional-refit-v24-local-convex-prior") != std::string::npos);
+    assert(probe.find("native-regional-refit-v25-initial-support-reason") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
