@@ -21,8 +21,11 @@
 #include <Poly_Triangulation.hxx>
 #include <ShapeAnalysis_Edge.hxx>
 #include <Standard_Failure.hxx>
+#include <TColgp_Array1OfPnt2d.hxx>
 #include <TColgp_HArray1OfPnt.hxx>
 #include <TColgp_HArray1OfPnt2d.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
 #include <TColStd_HArray1OfReal.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
@@ -238,7 +241,7 @@ Handle(Geom2d_Curve) diagnosticOrderedPcurve(
     const std::vector<std::pair<gp_Pnt, gp_Pnt2d>>& points,
     double& first,
     double& last,
-    const double tolerance) {
+    const double /*tolerance*/) {
     const auto curve = BRep_Tool::Curve(edge, first, last);
     if (curve.IsNull() || points.size() < 2 || std::abs(last - first) <= 1.0e-14) {
         return {};
@@ -252,28 +255,30 @@ Handle(Geom2d_Curve) diagnosticOrderedPcurve(
         curve->Value(rangeFirst).SquareDistance(points.back().first) +
         curve->Value(rangeLast).SquareDistance(points.front().first);
     const auto reversePoints = reversed < forward;
-    Handle(TColgp_HArray1OfPnt2d) interpolationPoints =
-        new TColgp_HArray1OfPnt2d(1, static_cast<int>(points.size()));
-    Handle(TColStd_HArray1OfReal) parameters =
-        new TColStd_HArray1OfReal(1, static_cast<int>(points.size()));
+    TColgp_Array1OfPnt2d poles(1, static_cast<int>(points.size()));
+    TColStd_Array1OfReal knots(1, static_cast<int>(points.size()));
+    TColStd_Array1OfInteger multiplicities(1, static_cast<int>(points.size()));
     for (std::size_t index = 0; index < points.size(); ++index) {
         const auto pointIndex = reversePoints ? points.size() - 1 - index : index;
         const auto parameter = rangeFirst +
             (rangeLast - rangeFirst) * static_cast<double>(index) /
                 static_cast<double>(points.size() - 1);
-        interpolationPoints->SetValue(
-            static_cast<int>(index + 1), points[pointIndex].second);
-        parameters->SetValue(static_cast<int>(index + 1), parameter);
+        const auto arrayIndex = static_cast<int>(index + 1);
+        poles.SetValue(arrayIndex, points[pointIndex].second);
+        knots.SetValue(arrayIndex, parameter);
+        multiplicities.SetValue(
+            arrayIndex,
+            index == 0 || index + 1 == points.size() ? 2 : 1);
     }
     try {
-        Geom2dAPI_Interpolate interpolate(
-            interpolationPoints, parameters, Standard_False, tolerance * 0.1);
-        interpolate.Perform();
-        if (!interpolate.IsDone()) return {};
         first = rangeFirst;
         last = rangeLast;
-        Handle(Geom2d_Curve) result = interpolate.Curve();
-        return result;
+        return new Geom2d_BSplineCurve(
+            poles,
+            knots,
+            multiplicities,
+            1,
+            Standard_False);
     } catch (const Standard_Failure&) {
         return {};
     }
