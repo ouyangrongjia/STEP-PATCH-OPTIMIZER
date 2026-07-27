@@ -141,9 +141,6 @@ bool projectToOriginalRegion(
             });
         if (preferred != constraints.selectedFaceGeometry.end()) {
             evaluate(preferred->second);
-            if (std::isfinite(distance)) {
-                return finitePoint(projected);
-            }
         }
     }
     for (const auto& [faceId, face] : constraints.selectedFaceGeometry) {
@@ -158,6 +155,67 @@ std::optional<FaceId> preferredFace(
     return vertex.sources.empty()
         ? std::nullopt
         : std::optional<FaceId>(vertex.sources.front().faceId);
+}
+
+RegionCurveContinuity internalContinuity(
+    const RegionReferenceMesh& mesh,
+    const std::vector<std::size_t>& vertices,
+    const RegionRefitOptions& options) {
+    for (const auto vertexIndex : vertices) {
+        const auto& vertex = mesh.vertices[vertexIndex];
+        if (vertex.normalDiscontinuity) {
+            return RegionCurveContinuity::G0;
+        }
+        for (std::size_t first = 0; first < vertex.sources.size(); ++first) {
+            if (!vertex.sources[first].normalDefined) continue;
+            for (std::size_t second = first + 1;
+                 second < vertex.sources.size(); ++second) {
+                if (!vertex.sources[second].normalDefined) continue;
+                const auto dot = std::clamp(
+                    vertex.sources[first].normal.Dot(
+                        vertex.sources[second].normal),
+                    -1.0,
+                    1.0);
+                const auto degrees =
+                    std::acos(dot) * 180.0 / 3.14159265358979323846;
+                if (degrees > options.g1ToleranceDegrees) {
+                    return RegionCurveContinuity::G0;
+                }
+            }
+        }
+    }
+    if (!options.enableInternalSeamG2) {
+        return RegionCurveContinuity::G1;
+    }
+    for (const auto vertexIndex : vertices) {
+        const auto& sources = mesh.vertices[vertexIndex].sources;
+        if (sources.empty()) {
+            return RegionCurveContinuity::G1;
+        }
+        for (const auto& source : sources) {
+            if (!source.curvatureDefined ||
+                !std::isfinite(source.minimumCurvature) ||
+                !std::isfinite(source.maximumCurvature)) {
+                return RegionCurveContinuity::G1;
+            }
+        }
+        for (std::size_t first = 0; first < sources.size(); ++first) {
+            for (std::size_t second = first + 1;
+                 second < sources.size(); ++second) {
+                if (std::abs(
+                        sources[first].minimumCurvature -
+                        sources[second].minimumCurvature) >
+                        options.g2CurvatureTolerance ||
+                    std::abs(
+                        sources[first].maximumCurvature -
+                        sources[second].maximumCurvature) >
+                        options.g2CurvatureTolerance) {
+                    return RegionCurveContinuity::G1;
+                }
+            }
+        }
+    }
+    return RegionCurveContinuity::G2;
 }
 
 bool curveParameter(
@@ -637,7 +695,7 @@ bool buildNetwork(
         edge.endNode = end;
         edge.firstPatch = seam.firstPatch;
         edge.secondPatch = seam.secondPatch;
-        edge.continuity = RegionCurveContinuity::G2;
+        edge.continuity = internalContinuity(mesh, vertices, options);
         edge.curve = curve;
         edge.firstParameter = curve->FirstParameter();
         edge.lastParameter = curve->LastParameter();

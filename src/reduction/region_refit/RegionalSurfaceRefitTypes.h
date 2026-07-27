@@ -108,6 +108,7 @@ struct RegionRefitOptions {
     double curveFairingWeight = 0.25;
     double g1ToleranceDegrees = 5.0;
     double g2CurvatureTolerance = 0.1;
+    bool enableInternalSeamG2 = false;
     double seamG1RelativeWeight = 0.1;
     double seamG2RelativeWeight = 0.01;
     std::size_t maximumSampleTriangles = 200000;

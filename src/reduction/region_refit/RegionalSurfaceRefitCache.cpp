@@ -806,7 +806,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v32-curve-network"
+                ? "native-regional-refit-v33-curve-network"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << request.forceDiagnosticSewing << '|';
@@ -822,6 +822,7 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.curveFairingWeight
          << '|' << request.options.g1ToleranceDegrees
          << '|' << request.options.g2CurvatureTolerance
+         << '|' << request.options.enableInternalSeamG2
          << '|' << request.options.seamG1RelativeWeight
          << '|' << request.options.seamG2RelativeWeight
          << '|' << request.options.maximumSampleTriangles

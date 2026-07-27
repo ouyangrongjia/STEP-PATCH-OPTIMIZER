@@ -1173,7 +1173,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v32-curve-network";
+    request.options.algorithmFingerprint = "native-regional-refit-v33-curve-network";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1308,7 +1308,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v32-curve-network-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v33-curve-network-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
