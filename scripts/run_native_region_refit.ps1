@@ -255,7 +255,8 @@ if ($PerformanceAcceptance) {
         $stageMeasurements["input_and_constraints_ms"] = [double]$cold.input_read_ms +
             [double]$cold.candidate_resolution_ms + (Get-ColdStageWallMilliseconds @("Constraints"))
         $stageMeasurements["sampling_ms"] = Get-ColdStageWallMilliseconds @("Sampling")
-        $stageMeasurements["layout_ms"] = Get-ColdStageWallMilliseconds @("Layout")
+        $stageMeasurements["layout_ms"] = Get-ColdStageWallMilliseconds @(
+            "CurveNetwork", "Layout")
         $fitAttemptWalls = @($cold.fit.attempts | ForEach-Object { [double]$_.wall_ms })
         $stageMeasurements["maximum_single_fit_ms"] = if ($fitAttemptWalls.Count -gt 0) {
             [double](($fitAttemptWalls | Measure-Object -Maximum).Maximum)
@@ -357,6 +358,14 @@ if (Test-Path -LiteralPath $layoutPly -PathType Leaf) {
 if (Test-Path -LiteralPath $layoutSvg -PathType Leaf) {
     $artifacts["selected_layout_svg"] = $layoutSvg
 }
+$curveNetworkJson = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.json"
+$curveNetworkPly = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.ply"
+if (Test-Path -LiteralPath $curveNetworkJson -PathType Leaf) {
+    $artifacts["selected_curve_network_json"] = $curveNetworkJson
+}
+if (Test-Path -LiteralPath $curveNetworkPly -PathType Leaf) {
+    $artifacts["selected_curve_network_ply"] = $curveNetworkPly
+}
 $fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch_network.step"
 if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
     $artifacts["fitted_patch_network_step"] = $fittedPatchNetwork
@@ -373,11 +382,30 @@ $sewnAttempt = Join-Path $context.directories.artifacts "assembly\sewn_attempt.s
 if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
     $artifacts["sewn_attempt_step"] = $sewnAttempt
 }
+$finalArtifactStatus = Join-Path $context.directories.artifacts "final\artifact_status.json"
+$finalSewn = Join-Path $context.directories.artifacts "final\final_sewn.step"
+$diagnosticSewn = Join-Path $context.directories.artifacts "final\diagnostic_sewn.step"
+if (Test-Path -LiteralPath $finalArtifactStatus -PathType Leaf) {
+    $artifacts["final_artifact_status_json"] = $finalArtifactStatus
+}
+if (Test-Path -LiteralPath $finalSewn -PathType Leaf) {
+    $artifacts["final_sewn_step"] = $finalSewn
+}
+if (Test-Path -LiteralPath $diagnosticSewn -PathType Leaf) {
+    $artifacts["diagnostic_sewn_step"] = $diagnosticSewn
+}
 
 $creoScript = Join-Path $PSScriptRoot "run_creo_step_diagnostic.ps1"
 $creoOutput = Join-Path $context.output_dir "external_cad\creo"
-if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
-    (Get-Item -LiteralPath $sewnAttempt).Length -gt 0 -and
+$externalCadStep = if (Test-Path -LiteralPath $finalSewn -PathType Leaf) {
+    $finalSewn
+} elseif (Test-Path -LiteralPath $diagnosticSewn -PathType Leaf) {
+    $diagnosticSewn
+} else {
+    $null
+}
+if ($null -ne $externalCadStep -and
+    (Get-Item -LiteralPath $externalCadStep).Length -gt 0 -and
     (Test-Path -LiteralPath $creoScript -PathType Leaf)) {
     New-Item -ItemType Directory -Path $creoOutput -Force | Out-Null
     $nmsdBefore = @(
@@ -390,7 +418,7 @@ if ((Test-Path -LiteralPath $sewnAttempt -PathType Leaf) -and
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
             "-File", $creoScript,
-            "-StepPath", $sewnAttempt,
+            "-StepPath", $externalCadStep,
             "-OutputDir", $creoOutput) `
         -WorkingDirectory $repoRoot `
         -WindowStyle Hidden `
@@ -433,6 +461,7 @@ if ((Test-Path -LiteralPath $performancePath -PathType Leaf) -and
 $manifestPath = Join-Path $context.directories.diagnostics "evidence_manifest.json"
 $requiredDiagnosticNames = @(
     "sampling_report.json",
+    "curve_network.json",
     "layout_report.json",
     "fit_report.json",
     "edge_consistency_report.json",

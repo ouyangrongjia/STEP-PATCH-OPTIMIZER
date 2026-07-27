@@ -22,6 +22,12 @@ public:
         RegionRefitCacheEvent& event) const;
     RegionRefitCacheEvent saveSampling(
         const StepAdaptiveRegionSamplingResult& result) const;
+    bool loadCurveNetworks(
+        const RegionTopologyConstraints& constraints,
+        RegionCurveNetworkGenerationResult& result,
+        RegionRefitCacheEvent& event) const;
+    RegionRefitCacheEvent saveCurveNetworks(
+        const RegionCurveNetworkGenerationResult& result) const;
     bool loadLayouts(
         RegionPatchLayoutGenerationResult& result,
         RegionRefitCacheEvent& event) const;

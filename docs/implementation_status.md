@@ -163,6 +163,14 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 拓扑分析、四边布局和多图参数化实验提供了失败边界，但没有建立稳定产品能力。结论与重启条件见 native_autosurface_guide.md。
 
+### 原生区域级多曲面重拟合
+
+状态：独立实验分支，命令行纵向链已改为曲线网络先行，尚未产品验收。
+
+当前实现先生成并冻结显式 `RegionCurveNetwork`，再由布局、联合拟合和原生 B-Rep builder 通过稳定 network hash 消费。内部双侧轨迹硬约束到唯一三维曲线，G1/G2 采用软目标并作至少 97 点解后验收；每条内部曲线只生成一个共享 Edge，双侧 pcurve 全部附着后再统一执行 `SameRange`/`SameParameter`。缓存格式已升级并增加曲线网络层，旧二进制条目不兼容。命令行运行总是生成 `artifacts/final/artifact_status.json`，并按门禁结果区分 `final_sewn.step`、`diagnostic_sewn.step` 或无伪造 STEP 的 `Unavailable`。
+
+合成平面双 patch、四向节点、网络拒绝、冻结曲线不随载体扰动、硬 G0/G1/G2 解后门、唯一共享 Edge、双侧 pcurve、`SameParameter` 和缓存确定性已进入测试。candidate-179 的当前独立诊断在 `CurveNetwork` 投影门失败，未进入拟合、B-Rep 或缝合，因此只证明失败闭环和永久 `Unavailable` 产物合同，不构成产品成功。
+
 ## 当前限制
 
 - MinimizeFaceCount 是预算搜索；除非达到可证明下界，否则不证明全局最优。

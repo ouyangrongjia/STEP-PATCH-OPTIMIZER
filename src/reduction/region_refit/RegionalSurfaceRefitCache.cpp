@@ -3,6 +3,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
+#include <GeomAPI_Interpolate.hxx>
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QFile>
@@ -11,6 +12,8 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TColStd_HArray1OfReal.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
 
 #include <algorithm>
 #include <chrono>
@@ -26,9 +29,10 @@ namespace spo {
 namespace {
 
 constexpr quint32 kSamplingMagic = 0x52534653u;
+constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 5;
+constexpr quint32 kVersion = 6;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -314,6 +318,7 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
     stream << layout.proxyError << quint64(layout.estimatedSolverBytes)
            << quint64(layout.estimatedOutputEntities);
     writeString(stream, layout.hash);
+    writeString(stream, layout.curveNetworkHash);
 }
 
 bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
@@ -413,7 +418,207 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
     stream >> layout.proxyError >> bytes >> outputEntities;
     layout.estimatedSolverBytes = bytes;
     layout.estimatedOutputEntities = outputEntities;
-    return readString(stream, layout.hash) && stream.status() == QDataStream::Ok;
+    return readString(stream, layout.hash) &&
+        readString(stream, layout.curveNetworkHash) &&
+        stream.status() == QDataStream::Ok;
+}
+
+const RegionBoundaryEdgeConstraint* cachedConstraintFor(
+    const RegionTopologyConstraints& constraints,
+    const EdgeId edgeId) {
+    const auto found = std::find_if(
+        constraints.boundaryEdges.begin(),
+        constraints.boundaryEdges.end(),
+        [&](const auto& constraint) { return constraint.edgeId == edgeId; });
+    return found == constraints.boundaryEdges.end() ? nullptr : &*found;
+}
+
+void writeCurveNetwork(
+    QDataStream& stream,
+    const RegionCurveNetwork& network) {
+    stream << network.patchCount << quint64(network.trianglePatches.size());
+    for (const auto patch : network.trianglePatches) stream << patch;
+    stream << quint64(network.nodes.size());
+    for (const auto& node : network.nodes) {
+        stream << quint64(node.id) << quint64(node.meshVertex)
+               << node.point.X() << node.point.Y() << node.point.Z()
+               << node.originalBoundary << quint64(node.incidentEdges.size());
+        for (const auto edge : node.incidentEdges) stream << quint64(edge);
+    }
+    stream << quint64(network.edges.size());
+    for (const auto& edge : network.edges) {
+        stream << quint64(edge.id) << quint64(edge.startNode)
+               << quint64(edge.endNode) << edge.firstPatch << edge.secondPatch
+               << qint32(edge.continuity) << edge.originalBoundary
+               << edge.hasOriginalEdge << quint64(edge.originalEdgeId)
+               << edge.firstParameter << edge.lastParameter
+               << edge.reusesOriginalEdge << edge.splitsOriginalEdge
+               << edge.frozen << edge.maximumProjectionError
+               << quint64(edge.meshVertices.size());
+        for (const auto vertex : edge.meshVertices) stream << quint64(vertex);
+        stream << quint64(edge.meshParameters.size());
+        for (const auto parameter : edge.meshParameters) stream << parameter;
+        stream << quint64(edge.meshParameters.size());
+        for (const auto parameter : edge.meshParameters) {
+            const auto point = edge.curve->Value(parameter);
+            stream << point.X() << point.Y() << point.Z();
+        }
+    }
+    stream << quint64(network.patchLoops.size());
+    for (const auto& loop : network.patchLoops) {
+        stream << loop.patch << quint64(loop.edges.size());
+        for (const auto& use : loop.edges) {
+            stream << quint64(use.edgeIndex) << use.forward;
+        }
+    }
+    writeString(stream, network.partitionLayoutHash);
+    writeString(stream, network.hash);
+}
+
+bool readCurveNetwork(
+    QDataStream& stream,
+    const RegionTopologyConstraints& constraints,
+    RegionCurveNetwork& network) {
+    std::size_t count = 0;
+    stream >> network.patchCount;
+    if (!readCount(stream, count)) return false;
+    network.trianglePatches.resize(count);
+    for (auto& patch : network.trianglePatches) stream >> patch;
+    if (!readCount(stream, count)) return false;
+    network.nodes.resize(count);
+    for (auto& node : network.nodes) {
+        quint64 id = 0;
+        quint64 meshVertex = 0;
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
+        stream >> id >> meshVertex >> x >> y >> z >> node.originalBoundary;
+        node.id = static_cast<std::size_t>(id);
+        node.meshVertex = static_cast<std::size_t>(meshVertex);
+        node.point = gp_Pnt(x, y, z);
+        if (!readCount(stream, count)) return false;
+        node.incidentEdges.resize(count);
+        for (auto& edge : node.incidentEdges) {
+            quint64 value = 0;
+            stream >> value;
+            edge = static_cast<std::size_t>(value);
+        }
+    }
+    if (!readCount(stream, count)) return false;
+    network.edges.resize(count);
+    for (auto& edge : network.edges) {
+        quint64 id = 0;
+        quint64 startNode = 0;
+        quint64 endNode = 0;
+        qint32 continuity = 0;
+        quint64 originalEdgeId = 0;
+        stream >> id >> startNode >> endNode
+               >> edge.firstPatch >> edge.secondPatch >> continuity
+               >> edge.originalBoundary >> edge.hasOriginalEdge
+               >> originalEdgeId >> edge.firstParameter >> edge.lastParameter
+               >> edge.reusesOriginalEdge >> edge.splitsOriginalEdge
+               >> edge.frozen >> edge.maximumProjectionError;
+        edge.id = static_cast<std::size_t>(id);
+        edge.startNode = static_cast<std::size_t>(startNode);
+        edge.endNode = static_cast<std::size_t>(endNode);
+        edge.continuity = static_cast<RegionCurveContinuity>(continuity);
+        edge.originalEdgeId = static_cast<EdgeId>(originalEdgeId);
+        if (!readCount(stream, count)) return false;
+        edge.meshVertices.resize(count);
+        for (auto& vertex : edge.meshVertices) {
+            quint64 value = 0;
+            stream >> value;
+            vertex = static_cast<std::size_t>(value);
+        }
+        if (!readCount(stream, count)) return false;
+        edge.meshParameters.resize(count);
+        for (auto& parameter : edge.meshParameters) stream >> parameter;
+        std::size_t pointCount = 0;
+        if (!readCount(stream, pointCount) ||
+            pointCount != edge.meshParameters.size() || pointCount < 2) {
+            return false;
+        }
+        Handle(TColgp_HArray1OfPnt) points =
+            new TColgp_HArray1OfPnt(1, static_cast<int>(pointCount));
+        Handle(TColStd_HArray1OfReal) parameters =
+            new TColStd_HArray1OfReal(1, static_cast<int>(pointCount));
+        for (std::size_t index = 0; index < pointCount; ++index) {
+            double x = 0.0;
+            double y = 0.0;
+            double z = 0.0;
+            stream >> x >> y >> z;
+            points->SetValue(
+                static_cast<int>(index + 1), gp_Pnt(x, y, z));
+            parameters->SetValue(
+                static_cast<int>(index + 1),
+                edge.meshParameters[index]);
+        }
+        if (edge.originalBoundary) {
+            const auto* constraint = cachedConstraintFor(
+                constraints, edge.originalEdgeId);
+            if (constraint == nullptr || constraint->originalEdge.IsNull()) {
+                return false;
+            }
+            edge.originalEdge = constraint->originalEdge;
+            double first = 0.0;
+            double last = 0.0;
+            edge.curve = BRep_Tool::Curve(
+                edge.originalEdge, first, last);
+        } else {
+            try {
+                GeomAPI_Interpolate interpolation(
+                    points, parameters, Standard_False, 1.0e-9);
+                interpolation.Perform();
+                if (!interpolation.IsDone()) return false;
+                edge.curve = interpolation.Curve();
+            } catch (...) {
+                return false;
+            }
+        }
+        if (edge.curve.IsNull()) return false;
+    }
+    if (!readCount(stream, count)) return false;
+    network.patchLoops.resize(count);
+    for (auto& loop : network.patchLoops) {
+        stream >> loop.patch;
+        if (!readCount(stream, count)) return false;
+        loop.edges.resize(count);
+        for (auto& use : loop.edges) {
+            quint64 edgeIndex = 0;
+            stream >> edgeIndex >> use.forward;
+            use.edgeIndex = static_cast<std::size_t>(edgeIndex);
+        }
+    }
+    std::string storedHash;
+    if (!readString(stream, network.partitionLayoutHash) ||
+        !readString(stream, storedHash)) {
+        return false;
+    }
+    std::string message;
+    if (!validateRegionCurveNetwork(
+            network,
+            std::numeric_limits<double>::infinity(),
+            97,
+            message)) {
+        return false;
+    }
+    return network.hash == storedHash &&
+        stream.status() == QDataStream::Ok;
+}
+
+void writeCurveNetworkCandidate(
+    QDataStream& stream,
+    const RegionCurveNetworkCandidate& candidate) {
+    writeCurveNetwork(stream, candidate.network);
+    writeLayout(stream, candidate.partitionLayout);
+}
+
+bool readCurveNetworkCandidate(
+    QDataStream& stream,
+    const RegionTopologyConstraints& constraints,
+    RegionCurveNetworkCandidate& candidate) {
+    return readCurveNetwork(stream, constraints, candidate.network) &&
+        readLayout(stream, candidate.partitionLayout);
 }
 
 void writeIteration(QDataStream& stream, const RegionFitIterationReport& report) {
@@ -425,6 +630,7 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << quint64(report.boundaryHardConstraintCount)
            << quint64(report.seamG0ConstraintCount)
            << quint64(report.seamG1SoftConstraintCount)
+           << quint64(report.seamG2SoftConstraintCount)
            << quint64(report.adjacentNormalSoftConstraintCount)
            << quint64(report.constraintRowsBefore)
            << quint64(report.constraintRowsAfter)
@@ -452,7 +658,12 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << quint64(report.holdoutWorstNormalVertex) << report.holdoutWorstDistancePatch
            << report.holdoutWorstNormalPatch << report.holdoutWorstDistanceInternalSeam
            << report.holdoutWorstNormalInternalSeam << report.boundaryMaximumDistance
-           << report.seamMaximumDistance << report.wallMilliseconds;
+           << report.seamMaximumDistance
+           << report.seamMaximumCurveDeviation
+           << report.seamMaximumNormalDegrees
+           << report.seamMaximumCurvatureDifference
+           << report.seamContinuityGatePassed
+           << report.wallMilliseconds;
     writeString(stream, report.hardConstraintStatus);
     writeString(stream, report.stopReason);
 }
@@ -470,6 +681,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     quint64 boundaryConstraints = 0;
     quint64 seamG0 = 0;
     quint64 seamG1 = 0;
+    quint64 seamG2 = 0;
     quint64 adjacentNormal = 0;
     quint64 constraintRowsBefore = 0;
     quint64 constraintRowsAfter = 0;
@@ -478,7 +690,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     stream >> report.iteration >> report.uControlCount >> report.vControlCount
            >> rows >> columns >> nonZeros >> bytes >> report.symbolicFactorizationReuseCount
            >> projectionCount >> uvIterations >> projectionFallbacks
-           >> boundaryConstraints >> seamG0 >> seamG1 >> adjacentNormal
+           >> boundaryConstraints >> seamG0 >> seamG1 >> seamG2 >> adjacentNormal
            >> constraintRowsBefore >> constraintRowsAfter >> constraintEstimatedRank
            >> nonZeroBoundaryRhs;
     for (auto& value : report.boundaryTargetMinimum) stream >> value;
@@ -502,7 +714,12 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> worstDistance >> worstNormal >> report.holdoutWorstDistancePatch
            >> report.holdoutWorstNormalPatch >> report.holdoutWorstDistanceInternalSeam
            >> report.holdoutWorstNormalInternalSeam >> report.boundaryMaximumDistance
-           >> report.seamMaximumDistance >> report.wallMilliseconds;
+           >> report.seamMaximumDistance
+           >> report.seamMaximumCurveDeviation
+           >> report.seamMaximumNormalDegrees
+           >> report.seamMaximumCurvatureDifference
+           >> report.seamContinuityGatePassed
+           >> report.wallMilliseconds;
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixColumns = static_cast<std::size_t>(columns);
     report.matrixNonZeros = static_cast<std::size_t>(nonZeros);
@@ -513,6 +730,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.boundaryHardConstraintCount = static_cast<std::size_t>(boundaryConstraints);
     report.seamG0ConstraintCount = static_cast<std::size_t>(seamG0);
     report.seamG1SoftConstraintCount = static_cast<std::size_t>(seamG1);
+    report.seamG2SoftConstraintCount = static_cast<std::size_t>(seamG2);
     report.adjacentNormalSoftConstraintCount = static_cast<std::size_t>(adjacentNormal);
     report.constraintRowsBefore = static_cast<std::size_t>(constraintRowsBefore);
     report.constraintRowsAfter = static_cast<std::size_t>(constraintRowsAfter);
@@ -586,9 +804,9 @@ std::string makeKey(const RegionRefitRequest& request) {
     edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
     std::ostringstream text;
     text << std::setprecision(17)
-         << "native-regional-refit-cache-v1|" << request.options.inputStepSha256 << '|'
+         << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v15"
+                ? "native-regional-refit-v32-curve-network"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << request.forceDiagnosticSewing << '|';
@@ -598,6 +816,14 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << '|' << request.options.tolerance3d
          << '|' << request.options.normalToleranceDegrees
          << '|' << request.options.curveOnSurfaceTolerance
+         << '|' << request.options.curveProjectionTolerance
+         << '|' << request.options.curveValidationSampleCount
+         << '|' << request.options.curveFairingIterations
+         << '|' << request.options.curveFairingWeight
+         << '|' << request.options.g1ToleranceDegrees
+         << '|' << request.options.g2CurvatureTolerance
+         << '|' << request.options.seamG1RelativeWeight
+         << '|' << request.options.seamG2RelativeWeight
          << '|' << request.options.maximumSampleTriangles
          << '|' << static_cast<int>(request.options.samplingMode)
          << '|' << static_cast<int>(request.options.layoutCarrierSamplingMode)
@@ -731,6 +957,94 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveSampling(
     return event;
 }
 
+bool RegionalSurfaceRefitCache::loadCurveNetworks(
+    const RegionTopologyConstraints& constraints,
+    RegionCurveNetworkGenerationResult& result,
+    RegionRefitCacheEvent& event) const {
+    event.layer = "CurveNetworkCache";
+    if (!mayRead()) {
+        event = disabledEvent("CurveNetworkCache");
+        return false;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    const auto loaded = openDataFile(
+        cacheFile("curve_networks.bin"),
+        [&](QDataStream& stream) {
+            quint32 magic = 0;
+            quint32 version = 0;
+            qint32 status = 0;
+            stream >> magic >> version >> status;
+            if (magic != kCurveNetworkMagic || version != kVersion ||
+                !readString(stream, result.message)) {
+                return false;
+            }
+            result.status = static_cast<RegionRefitStatus>(status);
+            std::size_t count = 0;
+            if (!readCount(stream, count)) return false;
+            result.layoutReports.resize(count);
+            for (auto& report : result.layoutReports) {
+                if (!readCandidateReport(stream, report)) return false;
+            }
+            if (!readCount(stream, count)) return false;
+            result.constructibleCandidates.resize(count);
+            for (auto& candidate : result.constructibleCandidates) {
+                if (!readCurveNetworkCandidate(
+                        stream, constraints, candidate)) {
+                    return false;
+                }
+            }
+            if (!readCount(stream, count)) return false;
+            result.selectedCandidates.resize(count);
+            for (auto& candidate : result.selectedCandidates) {
+                if (!readCurveNetworkCandidate(
+                        stream, constraints, candidate)) {
+                    return false;
+                }
+            }
+            return result.success();
+        });
+    event.readMilliseconds = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    event.hit = loaded;
+    event.message = loaded
+        ? "Frozen curve-network cache hit."
+        : "Frozen curve-network cache miss or incompatible binary version.";
+    return loaded;
+}
+
+RegionRefitCacheEvent RegionalSurfaceRefitCache::saveCurveNetworks(
+    const RegionCurveNetworkGenerationResult& result) const {
+    RegionRefitCacheEvent event;
+    event.layer = "CurveNetworkCache";
+    if (!mayWrite()) return disabledEvent("CurveNetworkCache");
+    const auto started = std::chrono::steady_clock::now();
+    const auto saved = saveDataFile(
+        cacheFile("curve_networks.bin"),
+        [&](QDataStream& stream) {
+            stream << kCurveNetworkMagic << kVersion
+                   << qint32(result.status);
+            writeString(stream, result.message);
+            stream << quint64(result.layoutReports.size());
+            for (const auto& report : result.layoutReports) {
+                writeCandidateReport(stream, report);
+            }
+            stream << quint64(result.constructibleCandidates.size());
+            for (const auto& candidate : result.constructibleCandidates) {
+                writeCurveNetworkCandidate(stream, candidate);
+            }
+            stream << quint64(result.selectedCandidates.size());
+            for (const auto& candidate : result.selectedCandidates) {
+                writeCurveNetworkCandidate(stream, candidate);
+            }
+        });
+    event.writeMilliseconds = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    event.message = saved
+        ? "Stored frozen curve-network cache."
+        : "Failed to store frozen curve-network cache.";
+    return event;
+}
+
 bool RegionalSurfaceRefitCache::loadLayouts(
     RegionPatchLayoutGenerationResult& result,
     RegionRefitCacheEvent& event) const {
@@ -809,6 +1123,10 @@ bool RegionalSurfaceRefitCache::loadFit(
     double holdoutNormal = 0.0;
     double boundaryDistance = 0.0;
     double seamDistance = 0.0;
+    double seamCurveDeviation = 0.0;
+    double seamNormalDegrees = 0.0;
+    double seamCurvatureDifference = 0.0;
+    bool seamContinuityGatePassed = false;
     const auto started = std::chrono::steady_clock::now();
     const auto metadataLoaded = openDataFile(cacheFile("fit.bin"), [&](QDataStream& stream) {
         quint32 magic = 0;
@@ -819,7 +1137,9 @@ bool RegionalSurfaceRefitCache::loadFit(
             !readAttempts(stream, result.attempts)) return false;
         stream >> hasNetwork;
         if (!readString(stream, layoutHash)) return false;
-        stream >> holdoutDistance >> holdoutNormal >> boundaryDistance >> seamDistance;
+        stream >> holdoutDistance >> holdoutNormal >> boundaryDistance
+               >> seamDistance >> seamCurveDeviation >> seamNormalDegrees
+               >> seamCurvatureDifference >> seamContinuityGatePassed;
         result.status = static_cast<RegionRefitStatus>(status);
         return stream.status() == QDataStream::Ok;
     });
@@ -867,6 +1187,11 @@ bool RegionalSurfaceRefitCache::loadFit(
     network->holdoutMaximumNormalDegrees = holdoutNormal;
     network->boundaryMaximumDistance = boundaryDistance;
     network->seamMaximumDistance = seamDistance;
+    network->seamMaximumCurveDeviation = seamCurveDeviation;
+    network->seamMaximumNormalDegrees = seamNormalDegrees;
+    network->seamMaximumCurvatureDifference = seamCurvatureDifference;
+    network->seamContinuityGatePassed = seamContinuityGatePassed;
+    network->fitGatePassed = true;
     result.network = std::move(network);
     event.hit = true;
     event.readMilliseconds = std::chrono::duration<double, std::milli>(
@@ -911,7 +1236,11 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
         stream << (result.success() ? result.network->holdoutMaximumDistance : 0.0)
                << (result.success() ? result.network->holdoutMaximumNormalDegrees : 0.0)
                << (result.success() ? result.network->boundaryMaximumDistance : 0.0)
-               << (result.success() ? result.network->seamMaximumDistance : 0.0);
+               << (result.success() ? result.network->seamMaximumDistance : 0.0)
+               << (result.success() ? result.network->seamMaximumCurveDeviation : 0.0)
+               << (result.success() ? result.network->seamMaximumNormalDegrees : 0.0)
+               << (result.success() ? result.network->seamMaximumCurvatureDifference : 0.0)
+               << (result.success() && result.network->seamContinuityGatePassed);
     });
     event.writeMilliseconds = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();

@@ -19,16 +19,13 @@
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：指定目标面数与自适应多曲面两个入口、拟合参考与布局载体解耦、任意闭合边界的 trimmed-disk 调和参数域、两阶段保方向拟合、硬约束秩压缩、逐边一致性分类和强制诊断缝合均已进入命令行探针，旧 `fixed` 与 `BestEffortThroughSewing` 入口继续保留。KKT 三坐标右端已写入真实非零 STEP 目标，并由整体远离原点的回归测试锁定；拟合仍使用尺度归一化权重和 90 秒单次预算。
+当前阶段：命令行纵向链已重构为显式 `RegionCurveNetwork` 先行。原 STEP 外边界在网络中精确引用或受控切分；内部曲线在支撑面拟合前生成、投影、公平化、验收并冻结。布局和联合拟合通过 network hash 消费该网络，双侧轨迹以共同参数硬约束到唯一三维曲线；G1/G2 进入软目标并作至少 97 点解后门。原生 builder 为每个节点只创建一个 Vertex、每条内部曲线只创建一个 Edge，双侧 pcurve 附着完成后统一执行 `SameRange`/`SameParameter`。只要有可构造曲面网络就继续固定容差诊断缝合，产品门失败时 `canApply=false`。
 
-同一干净提交 `91f67392e8f40fef610bf96b239f382a2ffc0404` 的两次最终冷运行已经完成：
+永久产物合同已经进入探针和运行脚本：每次运行均创建 `artifacts/final/artifact_status.json`；产品通过写 `final_sewn.step`，仅诊断缝合成功写 `diagnostic_sewn.step`，无可构造几何时记录 `Unavailable` 且不伪造 STEP。诊断增加 `curve_network.json`、曲线/节点 PLY、连续性计数、投影门、逐边 Curve-on-Surface/`SameParameter`/双侧分离/法向和曲率结果。缓存增加 curve-network 层并升级为不接受旧二进制的版本。
 
-- 指定 K=4：`data/runs/20260724_063850_candidate_0179_target_k4_trimmed_domains/`。trimmed-disk 布局无翻转，初拟合保方向系数为 `0.176127254962921`；硬约束由 956 行压缩为 79 行、估计秩 79，但全量约束最小残差仍为 `0.0604825724729707 mm`，因此第一产品失败门为 `Fitting`。强制诊断只缝合该候选并写出 `sewn_attempt.step`；严格拓扑检查仍有 33 条自由边且 BRepCheck 失败。
-- 自适应最小合格：`data/runs/20260724_064446_candidate_0179_adaptive_trimmed_minimum_qualified/`。布局在 60 秒预算内生成 K=1 至 K=12 的全部轻量 JSON/SVG，只对 K=1、2、4 做三次完整拟合并只缝合排序最优的 K=1；硬约束由 832 行压缩为 36 行、估计秩 36，全量约束最小残差为 `0.0465027802085629 mm`。诊断实体修复后为 0 条自由边、1 个 solid 且 BRepCheck 有效，但 STEP 严格往返失败。
+当前 candidate-179 独立运行 `data/runs/20260727_candidate_0179_curve_network_layout_probe_v8/` 在 `CurveNetwork` 投影门失败，报告最大投影偏差 `42272.5 mm`、门限 `0.03 mm`。该目录包含 `run.json`、`RUN.md`、完整 `evidence_manifest.json`、`diagnostics/curve_network.json` 和 `artifacts/final/artifact_status.json`；最终状态为 `Unavailable`，没有伪造 STEP。该失败只完成诊断闭环，不证明曲线网络、布局、拟合、B-Rep、缝合或产品质量在 candidate-179 上通过。
 
-两个目录均记录 `git.dirty=false`、`product_validated=false`、`can_apply=false` 和完整 `evidence_manifest.json`；manifest 分别覆盖 76 与 98 个文件，复核无遗漏且 SHA-256 全部匹配。两者都完成 Creo 自动导入并生成 PRT，但 ModelCHECK 为 `diagnostic_passed=false`、`PTC_VAL_IMP_PART_STATUS=SOLID_FAILED`、`PTC_VAL_IMP_SCORE=FAIL`，不能登记 `cad_check_candidate.step` 或 `final_sewn.step`。
-
-下一验收点是降低完整 STEP 外边界硬约束不相容性，修复逐边 Curve-on-Surface/`SameParameter` 失败和 STEP 往返失败，并在 Creo 高质量显示下人工检查可疑缝线截面、局部褶皱与镶边；人工截图和结论写入各自 `external_cad/creo/`。在全部自动门与人工检查通过前，本任务保持未完成，GUI 接入仍不在本轮范围内。
+下一验收点是查明 candidate-179 内部曲线近似出现巨幅离面偏差的几何原因，并在不放宽投影门的前提下让冻结网络通过；之后才能继续验证真实候选上的 G0/G1/G2、双侧 pcurve、`SameParameter`、固定容差缝合、StrictTopologyGate、STEP 往返和 Creo。旧 candidate-179 49→46 与 12 区域 Surface Reduction 回归仍是独立前置验收，不能由合成测试或本次 `Unavailable` 诊断替代。GUI 接入仍不在本轮范围内。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

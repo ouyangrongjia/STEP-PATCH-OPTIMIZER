@@ -3,8 +3,9 @@
 #include "io/StepWriter.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
-#include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
+#include "reduction/region_refit/RegionCurveNetwork.h"
+#include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
@@ -216,6 +217,170 @@ bool writeText(const std::filesystem::path& path, const QByteArray& contents) {
     return file.commit();
 }
 
+QJsonArray pointToJson(const gp_Pnt& point) {
+    return {point.X(), point.Y(), point.Z()};
+}
+
+QJsonObject curveNetworkToJson(
+    const spo::RegionRefitResult& result,
+    const int sampleCount) {
+    QJsonArray nodes;
+    QJsonArray edges;
+    QJsonArray loops;
+    if (result.selectedCurveNetwork) {
+        const auto& network = *result.selectedCurveNetwork;
+        for (const auto& node : network.nodes) {
+            QJsonArray incidentEdges;
+            for (const auto edge : node.incidentEdges) {
+                incidentEdges.append(QString::number(edge));
+            }
+            nodes.append(QJsonObject {
+                {"id", QString::number(node.id)},
+                {"mesh_vertex", QString::number(node.meshVertex)},
+                {"point", pointToJson(node.point)},
+                {"original_boundary", node.originalBoundary},
+                {"incident_edges", incidentEdges}});
+        }
+        for (const auto& edge : network.edges) {
+            QJsonArray curveSamples;
+            const auto count = std::max(2, sampleCount);
+            for (int sample = 0; sample < count; ++sample) {
+                const auto alpha = static_cast<double>(sample) /
+                    static_cast<double>(count - 1);
+                const auto parameter = edge.firstParameter +
+                    alpha * (edge.lastParameter - edge.firstParameter);
+                curveSamples.append(QJsonObject {
+                    {"t", parameter},
+                    {"point", pointToJson(edge.curve->Value(parameter))}});
+            }
+            QJsonArray meshVertices;
+            for (const auto vertex : edge.meshVertices) {
+                meshVertices.append(QString::number(vertex));
+            }
+            QJsonArray meshParameters;
+            for (const auto parameter : edge.meshParameters) {
+                meshParameters.append(parameter);
+            }
+            edges.append(QJsonObject {
+                {"id", QString::number(edge.id)},
+                {"start_node", QString::number(edge.startNode)},
+                {"end_node", QString::number(edge.endNode)},
+                {"first_patch", edge.firstPatch},
+                {"second_patch", edge.secondPatch},
+                {"continuity", spo::toString(edge.continuity)},
+                {"original_boundary", edge.originalBoundary},
+                {"has_original_edge", edge.hasOriginalEdge},
+                {"original_edge_id", edge.hasOriginalEdge
+                    ? QString::number(edge.originalEdgeId) : QString()},
+                {"first_parameter", edge.firstParameter},
+                {"last_parameter", edge.lastParameter},
+                {"mesh_vertices", meshVertices},
+                {"mesh_parameters", meshParameters},
+                {"reuses_original_edge", edge.reusesOriginalEdge},
+                {"splits_original_edge", edge.splitsOriginalEdge},
+                {"frozen", edge.frozen},
+                {"maximum_projection_error", edge.maximumProjectionError},
+                {"samples", curveSamples}});
+        }
+        for (const auto& loop : network.patchLoops) {
+            QJsonArray uses;
+            for (const auto& use : loop.edges) {
+                uses.append(QJsonObject {
+                    {"edge", QString::number(use.edgeIndex)},
+                    {"forward", use.forward}});
+            }
+            loops.append(QJsonObject {
+                {"patch", loop.patch},
+                {"closed", network.report.closurePassed},
+                {"edges", uses}});
+        }
+    }
+    return {
+        {"schema_version", 1},
+        {"status", result.selectedCurveNetwork &&
+                result.selectedCurveNetwork->valid()
+            ? "Success" : spo::toString(result.report.status)},
+        {"hash", QString::fromStdString(result.report.selectedCurveNetworkHash)},
+        {"node_count", QString::number(result.report.curveNetworkNodeCount)},
+        {"edge_count", QString::number(result.report.curveNetworkEdgeCount)},
+        {"internal_edge_count", QString::number(result.report.curveNetworkInternalEdgeCount)},
+        {"boundary_edge_count", QString::number(result.report.curveNetworkBoundaryEdgeCount)},
+        {"g0_edge_count", QString::number(result.report.curveNetworkG0EdgeCount)},
+        {"g1_edge_count", QString::number(result.report.curveNetworkG1EdgeCount)},
+        {"g2_edge_count", QString::number(result.report.curveNetworkG2EdgeCount)},
+        {"maximum_projection_error", result.report.curveNetworkMaximumProjectionError},
+        {"closure_passed", result.report.curveNetworkClosurePassed},
+        {"ownership_passed", result.report.curveNetworkOwnershipPassed},
+        {"projection_passed", result.report.curveNetworkProjectionPassed},
+        {"frozen", result.report.curveNetworkFrozen},
+        {"nodes", nodes},
+        {"edges", edges},
+        {"patch_loops", loops}};
+}
+
+QByteArray curveNetworkPly(
+    const spo::RegionCurveNetwork& network,
+    const int sampleCount) {
+    struct ColoredPoint {
+        gp_Pnt point;
+        std::array<int, 3> color;
+    };
+    struct ColoredLine {
+        std::size_t first = 0;
+        std::size_t second = 0;
+        std::array<int, 3> color;
+    };
+    std::vector<ColoredPoint> points;
+    std::vector<ColoredLine> lines;
+    points.reserve(network.nodes.size() +
+        network.edges.size() * static_cast<std::size_t>(sampleCount));
+    for (const auto& node : network.nodes) {
+        points.push_back({node.point, {220, 30, 30}});
+    }
+    const auto count = std::max(2, sampleCount);
+    for (const auto& edge : network.edges) {
+        const auto color = edge.originalBoundary
+            ? std::array<int, 3> {20, 20, 20}
+            : std::array<int, 3> {0, 130, 210};
+        const auto begin = points.size();
+        for (int sample = 0; sample < count; ++sample) {
+            const auto alpha = static_cast<double>(sample) /
+                static_cast<double>(count - 1);
+            const auto parameter = edge.firstParameter +
+                alpha * (edge.lastParameter - edge.firstParameter);
+            points.push_back({edge.curve->Value(parameter), color});
+            if (sample > 0) {
+                lines.push_back({
+                    begin + static_cast<std::size_t>(sample - 1),
+                    begin + static_cast<std::size_t>(sample),
+                    color});
+            }
+        }
+    }
+    QByteArray output;
+    QTextStream stream(&output, QIODevice::WriteOnly);
+    stream << "ply\nformat ascii 1.0\n"
+           << "element vertex " << points.size() << "\n"
+           << "property double x\nproperty double y\nproperty double z\n"
+           << "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+           << "element edge " << lines.size() << "\n"
+           << "property int vertex1\nproperty int vertex2\n"
+           << "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+           << "end_header\n";
+    stream.setRealNumberPrecision(17);
+    for (const auto& point : points) {
+        stream << point.point.X() << ' ' << point.point.Y() << ' '
+               << point.point.Z() << ' ' << point.color[0] << ' '
+               << point.color[1] << ' ' << point.color[2] << '\n';
+    }
+    for (const auto& line : lines) {
+        stream << line.first << ' ' << line.second << ' '
+               << line.color[0] << ' ' << line.color[1] << ' '
+               << line.color[2] << '\n';
+    }
+    return output;
+}
+
 QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
     QJsonArray candidates;
     for (const auto& candidate : result.report.layoutCandidates) {
@@ -251,6 +416,10 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
         {"minimum_qualified_proven", result.report.minimumQualifiedProven},
         {"selection_outcome", QString::fromStdString(result.report.selectionOutcome)},
         {"unattainable_reason", QString::fromStdString(result.report.unattainableReason)},
+        {"selected_curve_network_hash",
+            QString::fromStdString(result.report.selectedCurveNetworkHash)},
+        {"curve_network_gate_passed", result.selectedCurveNetwork &&
+            result.selectedCurveNetwork->valid()},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"diagnostic_candidate_patch_count", result.report.diagnosticCandidatePatchCount},
         {"diagnostic_selection_reason", QString::fromStdString(result.report.diagnosticSelectionReason)},
@@ -346,6 +515,7 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"boundary_hard_constraint_count", QString::number(iteration.boundaryHardConstraintCount)},
                 {"seam_g0_constraint_count", QString::number(iteration.seamG0ConstraintCount)},
                 {"seam_g1_soft_constraint_count", QString::number(iteration.seamG1SoftConstraintCount)},
+                {"seam_g2_soft_constraint_count", QString::number(iteration.seamG2SoftConstraintCount)},
                 {"adjacent_normal_soft_constraint_count", QString::number(iteration.adjacentNormalSoftConstraintCount)},
                 {"constraint_rows_before", QString::number(iteration.constraintRowsBefore)},
                 {"constraint_rows_after", QString::number(iteration.constraintRowsAfter)},
@@ -387,6 +557,11 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"holdout_worst_normal_internal_seam", iteration.holdoutWorstNormalInternalSeam},
                 {"boundary_maximum_distance", iteration.boundaryMaximumDistance},
                 {"seam_maximum_distance", iteration.seamMaximumDistance},
+                {"seam_maximum_curve_deviation", iteration.seamMaximumCurveDeviation},
+                {"seam_maximum_normal_degrees", iteration.seamMaximumNormalDegrees},
+                {"seam_maximum_curvature_difference",
+                    iteration.seamMaximumCurvatureDifference},
+                {"seam_continuity_gate_passed", iteration.seamContinuityGatePassed},
                 {"wall_ms", iteration.wallMilliseconds},
                 {"stop_reason", QString::fromStdString(iteration.stopReason)}});
         }
@@ -411,6 +586,8 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
         {"full_fit_count", result.report.fullFitCount},
         {"cached_fit_attempt_count", result.report.cachedFitAttemptCount},
         {"selected_patch_count", result.report.selectedPatchCount},
+        {"selected_curve_network_hash",
+            QString::fromStdString(result.report.selectedCurveNetworkHash)},
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"attempts", attempts}};
 }
@@ -810,6 +987,9 @@ QJsonObject performanceToJson(
         {"normal_discontinuity_vertices", QString::number(result.report.normalDiscontinuityVertexCount)},
         {"reference_mesh_fingerprint", QString::fromStdString(result.report.referenceMeshFingerprint)},
         {"layout_carrier_mesh_fingerprint", QString::fromStdString(result.report.layoutCarrierMeshFingerprint)},
+        {"curve_network_hash", QString::fromStdString(result.report.selectedCurveNetworkHash)},
+        {"curve_network", curveNetworkToJson(
+            result, request.options.curveValidationSampleCount)},
         {"sampling_quality", QJsonObject {
             {"geometric_limits_passed", result.report.samplingGeometricLimitsPassed},
             {"edge_length_p01", result.report.samplingEdgeLengthP01},
@@ -840,6 +1020,14 @@ QJsonObject performanceToJson(
                 ? result.fittedNetwork->boundaryMaximumDistance : 0.0},
             {"seam_maximum_distance", result.fittedNetwork
                 ? result.fittedNetwork->seamMaximumDistance : 0.0},
+            {"seam_maximum_curve_deviation", result.fittedNetwork
+                ? result.fittedNetwork->seamMaximumCurveDeviation : 0.0},
+            {"seam_maximum_normal_degrees", result.fittedNetwork
+                ? result.fittedNetwork->seamMaximumNormalDegrees : 0.0},
+            {"seam_maximum_curvature_difference", result.fittedNetwork
+                ? result.fittedNetwork->seamMaximumCurvatureDifference : 0.0},
+            {"seam_continuity_gate_passed", result.fittedNetwork
+                ? result.fittedNetwork->seamContinuityGatePassed : false},
             {"output_faces", result.report.outputFaceCount},
             {"after_solids", result.report.afterSolidCount},
             {"after_free_edges", result.report.afterFreeEdgeCount},
@@ -943,6 +1131,25 @@ int main(int argc, char* argv[]) {
 
     const std::filesystem::path input = argv[1];
     const std::filesystem::path outputDirectory = argv[2];
+    const auto finalDirectory = outputDirectory / "artifacts" / "final";
+    const auto artifactStatusPath = finalDirectory / "artifact_status.json";
+    std::filesystem::create_directories(finalDirectory);
+    if (!std::filesystem::exists(artifactStatusPath) &&
+        !writeJson(artifactStatusPath, QJsonObject {
+            {"schema_version", 1},
+            {"status", "Unavailable"},
+            {"product_validated", false},
+            {"diagnostic_only", false},
+            {"can_apply", false},
+            {"constructible_geometry", false},
+            {"sewn_step", QJsonValue::Null},
+            {"sha256", QJsonValue::Null},
+            {"first_product_failure_gate", QJsonValue::Null},
+            {"unavailable_reason",
+                "The run has not produced constructible sewn geometry."}})) {
+        std::cerr << "无法初始化永久产物状态目录。\n";
+        return 1;
+    }
     int candidateId = -1;
     bool constraintsOnly = false;
     bool samplingOnly = false;
@@ -954,7 +1161,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v31-iccg-harmonic-layout";
+    request.options.algorithmFingerprint = "native-regional-refit-v32-curve-network";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1089,7 +1296,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v31-iccg-harmonic-layout-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v32-curve-network-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
@@ -1197,6 +1404,9 @@ int main(int argc, char* argv[]) {
     const auto diagnosticsWritten = performanceOnly || (
         writeJson(diagnostics / "constraints.json", constraintsToJson(result)) &&
         writeJson(diagnostics / "sampling_report.json", samplingToJson(result)) &&
+        writeJson(
+            diagnostics / "curve_network.json",
+            curveNetworkToJson(result, request.options.curveValidationSampleCount)) &&
         writeJson(diagnostics / "layout_report.json", layoutReportToJson(result)) &&
         writeJson(diagnostics / "fit_report.json", fitReportToJson(result)) &&
         writeJson(
@@ -1245,6 +1455,22 @@ int main(int argc, char* argv[]) {
                 std::cerr << "无法写入布局候选证据。\n";
                 return 1;
             }
+        }
+    }
+    if (!performanceOnly && result.selectedCurveNetwork) {
+        const auto curveNetworkDirectory =
+            outputDirectory / "artifacts" / "curve_network";
+        if (!writeJson(
+                curveNetworkDirectory / "selected_curve_network.json",
+                curveNetworkToJson(
+                    result, request.options.curveValidationSampleCount)) ||
+            !writeText(
+                curveNetworkDirectory / "selected_curve_network.ply",
+                curveNetworkPly(
+                    *result.selectedCurveNetwork,
+                    request.options.curveValidationSampleCount))) {
+            std::cerr << "无法写入冻结曲线网络证据。\n";
+            return 1;
         }
     }
     if (!performanceOnly && result.layoutCarrierMesh && result.selectedLayout) {
@@ -1351,6 +1577,66 @@ int main(int argc, char* argv[]) {
         finalPerformance.insert("product_validated", result.canApply() && outputComplexityPassed);
         if (!writeJson(diagnostics / performanceName, finalPerformance)) {
             std::cerr << "无法更新最终性能与产品门状态。\n";
+            return 1;
+        }
+    }
+
+    if (!performanceOnly) {
+        const auto productValidated = result.canApply() && outputComplexityPassed;
+        const auto constructible = productValidated ||
+            !result.diagnosticSewnShape.IsNull();
+        auto finalStatus = QString("Unavailable");
+        auto finalStepName = std::filesystem::path {};
+        auto finalSha256 = std::string {};
+        if (constructible) {
+            finalStatus = productValidated ? "ProductValidated" : "DiagnosticOnly";
+            finalStepName = productValidated
+                ? std::filesystem::path("final_sewn.step")
+                : std::filesystem::path("diagnostic_sewn.step");
+            const auto& shape = productValidated
+                ? result.finalShape : result.diagnosticSewnShape;
+            const auto finalWrite = spo::StepWriter().write(
+                spo::ShapeDocument(shape, {}),
+                finalDirectory / finalStepName);
+            if (!finalWrite.success()) {
+                std::cerr << finalWrite.message() << '\n';
+                return 1;
+            }
+            finalSha256 = sha256File(finalDirectory / finalStepName);
+            if (finalSha256.empty()) {
+                std::cerr << "无法计算永久 STEP 产物的 SHA-256。\n";
+                return 1;
+            }
+        }
+        const auto unavailableReason = constructible
+            ? QString()
+            : QString::fromStdString(
+                result.report.continuationStopReason.empty()
+                    ? result.report.message
+                    : result.report.continuationStopReason);
+        if (!writeJson(artifactStatusPath, QJsonObject {
+                {"schema_version", 1},
+                {"status", finalStatus},
+                {"product_validated", productValidated},
+                {"diagnostic_only", constructible && !productValidated},
+                {"can_apply", productValidated},
+                {"constructible_geometry", constructible},
+                {"sewn_step", constructible
+                    ? QJsonValue(QString::fromStdWString(finalStepName.wstring()))
+                    : QJsonValue(QJsonValue::Null)},
+                {"sha256", constructible
+                    ? QJsonValue(QString::fromStdString(finalSha256))
+                    : QJsonValue(QJsonValue::Null)},
+                {"first_product_failure_gate",
+                    result.report.firstProductFailureGate.empty()
+                        ? QJsonValue(QJsonValue::Null)
+                        : QJsonValue(QString::fromStdString(
+                            result.report.firstProductFailureGate))},
+                {"unavailable_reason", constructible
+                    ? QJsonValue(QJsonValue::Null)
+                    : QJsonValue(unavailableReason)},
+                {"message", QString::fromStdString(result.report.message)}})) {
+            std::cerr << "无法写入永久产物状态。\n";
             return 1;
         }
     }

@@ -239,6 +239,10 @@ RegionConstraintExtractionResult RegionConstraintExtractor::extract(
 
     RegionTopologyConstraints constraints;
     constraints.selectedFaces = selectedVector;
+    constraints.selectedFaceGeometry.reserve(selectedVector.size());
+    for (const auto faceId : selectedVector) {
+        constraints.selectedFaceGeometry.emplace_back(faceId, topology.face(faceId));
+    }
     std::vector<EdgeId> boundaryEdgeIds;
     for (EdgeId edgeId = 0; edgeId < topology.edgeCount(); ++edgeId) {
         const auto* adjacency = topology.adjacencyForEdge(edgeId);

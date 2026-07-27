@@ -1,6 +1,7 @@
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
 #include "reduction/region_refit/RegionConstraintExtractor.h"
+#include "reduction/region_refit/RegionCurveNetwork.h"
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
 #include "reduction/region_refit/NativeRegionPatchNetworkBuilder.h"
 #include "reduction/region_refit/QualityBalancedRegionRemesher.h"
@@ -207,6 +208,15 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         request.options.maximumFullFitCount <= 0 ||
         request.options.maximumAdaptivePatchCount <= 0 ||
         request.options.maximumParameterDistortion <= 0.0 ||
+        request.options.curveProjectionTolerance <= 0.0 ||
+        request.options.curveValidationSampleCount < 97 ||
+        request.options.curveFairingIterations < 0 ||
+        request.options.curveFairingWeight < 0.0 ||
+        request.options.curveFairingWeight > 1.0 ||
+        request.options.g1ToleranceDegrees <= 0.0 ||
+        request.options.g2CurvatureTolerance <= 0.0 ||
+        request.options.seamG1RelativeWeight <= 0.0 ||
+        request.options.seamG2RelativeWeight <= 0.0 ||
         request.options.maximumControlPointsPerSide < 6 ||
         request.options.initialControlPriorRelativeWeight <= 0.0 ||
         request.options.constraintCorrectionAnchorRelativeWeight <= 0.0 ||
@@ -403,8 +413,103 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
 
     if (request.diagnosticStopAfterStage == RegionRefitStage::Sampling) {
         result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
-        result.report.failureStage = RegionRefitStage::Layout;
+        result.report.failureStage = RegionRefitStage::CurveNetwork;
         result.report.message = "Sampling-only diagnostic completed.";
+        return result;
+    }
+
+    const auto curveNetworkResources = captureRegionProcessResources();
+    const auto curveNetworkStarted = std::chrono::steady_clock::now();
+    RegionCurveNetworkGenerationResult curveNetworks;
+    RegionRefitCacheEvent curveNetworkCacheEvent;
+    const auto curveNetworkCacheHit = cache.loadCurveNetworks(
+        result.constraints,
+        curveNetworks,
+        curveNetworkCacheEvent);
+    if (!curveNetworkCacheHit) {
+        curveNetworks = RegionCurveNetworkGenerator().generate(
+            *result.layoutCarrierMesh,
+            result.constraints,
+            request.layoutMode,
+            request.options,
+            true);
+        if (curveNetworks.success() && cache.enabled()) {
+            const auto writeEvent = cache.saveCurveNetworks(curveNetworks);
+            curveNetworkCacheEvent.writeMilliseconds =
+                writeEvent.writeMilliseconds;
+            if (!writeEvent.message.empty()) {
+                curveNetworkCacheEvent.message += " " + writeEvent.message;
+            }
+        }
+    }
+    const auto curveNetworkEnded = std::chrono::steady_clock::now();
+    RegionRefitStageReport curveNetworkStage;
+    curveNetworkStage.stage = RegionRefitStage::CurveNetwork;
+    curveNetworkStage.success = curveNetworks.success();
+    curveNetworkStage.wallMilliseconds =
+        std::chrono::duration<double, std::milli>(
+            curveNetworkEnded - curveNetworkStarted).count();
+    curveNetworkStage.message = curveNetworkCacheHit
+        ? "Loaded frozen regional curve networks from algorithm cache."
+        : curveNetworks.message;
+    const auto curveNetworkMemoryExceeded = finishStageResources(
+        curveNetworkStage,
+        curveNetworkResources,
+        result.report,
+        request.options);
+    result.report.stages.push_back(curveNetworkStage);
+    result.report.totalWallMilliseconds +=
+        curveNetworkStage.wallMilliseconds;
+    result.report.layoutCandidates = curveNetworks.layoutReports;
+    if (cache.enabled()) {
+        result.report.cacheEvents.push_back(curveNetworkCacheEvent);
+    }
+    for (const auto& candidate : curveNetworks.constructibleCandidates) {
+        result.generatedCurveNetworks.push_back(
+            std::make_shared<RegionCurveNetwork>(candidate.network));
+    }
+    if (!curveNetworks.success()) {
+        result.report.status = RegionRefitStatus::NoSewableGeometry;
+        result.report.failureStage = RegionRefitStage::CurveNetwork;
+        result.report.firstProductFailureGate = "CurveNetwork";
+        result.report.selectionOutcome = "NoSewableGeometry";
+        result.report.unattainableReason = curveNetworks.message;
+        result.report.message = curveNetworks.message;
+        return result;
+    }
+    result.selectedCurveNetwork = std::make_shared<RegionCurveNetwork>(
+        curveNetworks.selectedCandidates.front().network);
+    const auto& selectedCurveReport =
+        result.selectedCurveNetwork->report;
+    result.report.selectedCurveNetworkHash =
+        result.selectedCurveNetwork->hash;
+    result.report.curveNetworkNodeCount = selectedCurveReport.nodeCount;
+    result.report.curveNetworkEdgeCount = selectedCurveReport.edgeCount;
+    result.report.curveNetworkInternalEdgeCount =
+        selectedCurveReport.internalEdgeCount;
+    result.report.curveNetworkBoundaryEdgeCount =
+        selectedCurveReport.boundaryEdgeCount;
+    result.report.curveNetworkG0EdgeCount = selectedCurveReport.g0EdgeCount;
+    result.report.curveNetworkG1EdgeCount = selectedCurveReport.g1EdgeCount;
+    result.report.curveNetworkG2EdgeCount = selectedCurveReport.g2EdgeCount;
+    result.report.curveNetworkMaximumProjectionError =
+        selectedCurveReport.maximumProjectionError;
+    result.report.curveNetworkClosurePassed =
+        selectedCurveReport.closurePassed;
+    result.report.curveNetworkOwnershipPassed =
+        selectedCurveReport.ownershipPassed;
+    result.report.curveNetworkProjectionPassed =
+        selectedCurveReport.projectionPassed;
+    result.report.curveNetworkFrozen = selectedCurveReport.frozen;
+    if (curveNetworkMemoryExceeded) {
+        failMemoryBudget(result, RegionRefitStage::CurveNetwork);
+        return result;
+    }
+    if (request.diagnosticStopAfterStage == RegionRefitStage::CurveNetwork) {
+        result.report.status =
+            RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.report.failureStage = RegionRefitStage::Layout;
+        result.report.message = "Curve-network-only diagnostic completed.";
         return result;
     }
 
@@ -416,9 +521,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     if (!layoutCacheHit) {
         layouts = RegionPatchLayoutGenerator().generate(
             *result.layoutCarrierMesh,
-            request.layoutMode,
-            request.options,
-            request.forceDiagnosticSewing);
+            curveNetworks,
+            request.options);
         if (layouts.success() && cache.enabled()) {
             const auto writeEvent = cache.saveLayouts(layouts);
             layoutCacheEvent.writeMilliseconds = writeEvent.writeMilliseconds;
@@ -443,13 +547,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.layoutCandidates = layouts.candidates;
     if (cache.enabled()) result.report.cacheEvents.push_back(layoutCacheEvent);
     if (!layouts.success()) {
-        result.report.status = request.forceDiagnosticSewing
-            ? RegionRefitStatus::NoSewableGeometry
-            : layouts.status;
+        result.report.status = RegionRefitStatus::NoSewableGeometry;
         result.report.failureStage = RegionRefitStage::Layout;
         result.report.message = layouts.message;
-        result.report.selectionOutcome = request.forceDiagnosticSewing
-            ? "NoSewableGeometry" : "NoValidatedLayout";
+        result.report.selectionOutcome = "NoSewableGeometry";
         result.report.unattainableReason = layouts.message;
         return result;
     }
@@ -475,7 +576,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         selectedLayoutReport->topologyPassed &&
         selectedLayoutReport->parameterizationPassed &&
         selectedLayoutReport->coarseFitPassed;
-    if (!result.report.layoutGatePassed && request.forceDiagnosticSewing) {
+    if (!result.report.layoutGatePassed) {
         result.report.firstProductFailureGate = "Layout";
     }
     if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
@@ -493,10 +594,17 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
 
     const auto fittingResources = captureRegionProcessResources();
     const auto fittingStarted = std::chrono::steady_clock::now();
+    std::vector<RegionCurveNetwork> fitCurveNetworks;
+    fitCurveNetworks.reserve(curveNetworks.constructibleCandidates.size());
+    for (const auto& candidate : curveNetworks.constructibleCandidates) {
+        fitCurveNetworks.push_back(candidate.network);
+    }
     JointBSplineNetworkFitResult fitted;
     RegionRefitCacheEvent fitCacheEvent;
-    const auto fitCacheHit = request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
+    const auto fitCacheLoaded =
+        request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
         cache.loadFit(layouts.selectedCandidates, fitted, fitCacheEvent);
+    const auto fitCacheHit = fitCacheLoaded && fitted.success();
     if (!fitCacheHit) {
         const auto reservedMilliseconds = request.options.retrimBudgetMilliseconds +
             request.options.finalValidationBudgetMilliseconds;
@@ -514,6 +622,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
                 *result.layoutCarrierMesh,
                 result.constraints,
                 layouts.selectedCandidates,
+                fitCurveNetworks,
                 request.options,
                 fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
             if (cache.enabled() && request.executionMode == RegionRefitExecutionMode::ValidatedOnly) {
@@ -551,15 +660,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     if (cache.enabled()) result.report.cacheEvents.push_back(fitCacheEvent);
     result.report.fitGatePassed = fitted.success();
     const auto useBestEffort = !fitted.success() &&
-        fitted.status == RegionRefitStatus::NoValidatedLayoutWithinBudget &&
-        (request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing ||
-            request.forceDiagnosticSewing) &&
         fitted.bestEffortNetwork != nullptr;
     result.report.bestEffortUsed = useBestEffort;
     if (!fitted.success() && !useBestEffort) {
-        result.report.status = request.forceDiagnosticSewing
-            ? RegionRefitStatus::NoSewableGeometry
-            : fitted.status;
+        result.report.status = RegionRefitStatus::NoSewableGeometry;
         result.report.failureStage = RegionRefitStage::Fitting;
         result.report.message = fitted.message;
         result.report.patchCountDeviation = result.report.requestedPatchCount > 0
@@ -567,15 +671,11 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             : 0;
         result.report.exactTargetReached = result.report.requestedPatchCount > 0 &&
             result.report.patchCountDeviation == 0;
-        if (request.forceDiagnosticSewing) {
-            result.report.selectionOutcome = "NoSewableGeometry";
-            result.report.unattainableReason =
-                "No finite, non-flipped fitted support-surface network was available for B-rep construction.";
-            if (result.report.firstProductFailureGate.empty()) {
-                result.report.firstProductFailureGate = "Fitting";
-            }
-        } else {
-            markNoProductResult(result, fitted.message);
+        result.report.selectionOutcome = "NoSewableGeometry";
+        result.report.unattainableReason =
+            "No finite, non-flipped fitted support-surface network was available for B-rep construction.";
+        if (result.report.firstProductFailureGate.empty()) {
+            result.report.firstProductFailureGate = "Fitting";
         }
         return result;
     }
@@ -598,6 +698,46 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.exactTargetReached = result.report.requestedPatchCount > 0 &&
         result.report.patchCountDeviation == 0;
     result.report.selectedLayoutHash = result.fittedNetwork->layout.hash;
+    const auto fittedCurveNetwork = std::find_if(
+        fitCurveNetworks.begin(),
+        fitCurveNetworks.end(),
+        [&](const auto& candidate) {
+            return candidate.hash ==
+                result.fittedNetwork->layout.curveNetworkHash;
+        });
+    if (fittedCurveNetwork == fitCurveNetworks.end()) {
+        result.report.status = RegionRefitStatus::NoSewableGeometry;
+        result.report.failureStage = RegionRefitStage::CurveNetwork;
+        result.report.firstProductFailureGate = "CurveNetwork";
+        result.report.selectionOutcome = "NoSewableGeometry";
+        result.report.unattainableReason =
+            "The fitted layout lost its frozen curve-network identity.";
+        result.report.message = result.report.unattainableReason;
+        return result;
+    }
+    result.selectedCurveNetwork =
+        std::make_shared<RegionCurveNetwork>(*fittedCurveNetwork);
+    result.report.selectedCurveNetworkHash =
+        result.selectedCurveNetwork->hash;
+    const auto& fittedCurveReport = result.selectedCurveNetwork->report;
+    result.report.curveNetworkNodeCount = fittedCurveReport.nodeCount;
+    result.report.curveNetworkEdgeCount = fittedCurveReport.edgeCount;
+    result.report.curveNetworkInternalEdgeCount =
+        fittedCurveReport.internalEdgeCount;
+    result.report.curveNetworkBoundaryEdgeCount =
+        fittedCurveReport.boundaryEdgeCount;
+    result.report.curveNetworkG0EdgeCount = fittedCurveReport.g0EdgeCount;
+    result.report.curveNetworkG1EdgeCount = fittedCurveReport.g1EdgeCount;
+    result.report.curveNetworkG2EdgeCount = fittedCurveReport.g2EdgeCount;
+    result.report.curveNetworkMaximumProjectionError =
+        fittedCurveReport.maximumProjectionError;
+    result.report.curveNetworkClosurePassed =
+        fittedCurveReport.closurePassed;
+    result.report.curveNetworkOwnershipPassed =
+        fittedCurveReport.ownershipPassed;
+    result.report.curveNetworkProjectionPassed =
+        fittedCurveReport.projectionPassed;
+    result.report.curveNetworkFrozen = fittedCurveReport.frozen;
     const auto fittedLayoutReport = std::find_if(
         result.report.layoutCandidates.begin(),
         result.report.layoutCandidates.end(),
@@ -624,14 +764,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto retrimResources = captureRegionProcessResources();
     const auto retrimStarted = std::chrono::steady_clock::now();
     result.report.retrimAttempted = true;
-    result.report.forceDiagnosticSewingAttempted = request.forceDiagnosticSewing;
+    result.report.forceDiagnosticSewingAttempted = true;
     const auto nativeBuild = NativeRegionPatchNetworkBuilder().build(
         *result.layoutCarrierMesh,
         result.constraints,
         *result.fittedNetwork,
+        *result.selectedCurveNetwork,
         request.options.curveOnSurfaceTolerance,
-        request.executionMode == RegionRefitExecutionMode::BestEffortThroughSewing ||
-            request.forceDiagnosticSewing);
+        true);
     const auto boundary = boundaryAnalysisFromConstraints(result.constraints);
     PatchReplacementAssemblyResult assembly;
     if (nativeBuild.constructible() && boundary.valid) {
@@ -673,23 +813,17 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto retrimConstructed = nativeBuild.constructible() && boundary.valid && assembly.success &&
         !assembly.shape.IsNull();
     if (!retrimConstructed) {
-        result.report.status = request.forceDiagnosticSewing
-            ? RegionRefitStatus::NoSewableGeometry
-            : RegionRefitStatus::Failed;
+        result.report.status = RegionRefitStatus::NoSewableGeometry;
         result.report.failureStage = RegionRefitStage::Retrim;
         result.report.message = retrimStage.message;
         result.report.continuationStopReason = retrimStage.message;
         if (result.report.firstProductFailureGate.empty()) {
             result.report.firstProductFailureGate = "Retrim";
         }
-        if (request.forceDiagnosticSewing) {
-            result.report.selectionOutcome = "NoSewableGeometry";
-            result.report.sewableGeometryAvailable = false;
-            result.report.unattainableReason =
-                "The fitted surfaces could not be constructed as a patch-network B-rep.";
-        } else {
-            markNoProductResult(result, retrimStage.message);
-        }
+        result.report.selectionOutcome = "NoSewableGeometry";
+        result.report.sewableGeometryAvailable = false;
+        result.report.unattainableReason =
+            "The fitted surfaces could not be constructed as a patch-network B-rep.";
         return result;
     }
     if (retrimMemoryExceeded) {
@@ -801,15 +935,6 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.stages.push_back(strictStage);
     result.report.totalWallMilliseconds += strictStage.wallMilliseconds;
     copyStrictTopologyReport(result.report, strictReport);
-    if (!strictReport.passed &&
-        request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
-        !request.forceDiagnosticSewing) {
-        result.report.status = RegionRefitStatus::Failed;
-        result.report.failureStage = RegionRefitStage::StrictTopology;
-        result.report.message = strictReport.message;
-        markNoProductResult(result, strictReport.message);
-        return result;
-    }
     if (strictMemoryExceeded) {
         failMemoryBudget(result, RegionRefitStage::StrictTopology);
         return result;
@@ -837,15 +962,6 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.stages.push_back(roundtripStage);
     result.report.totalWallMilliseconds += roundtripStage.wallMilliseconds;
     copyStrictTopologyReport(result.report, roundtripReport);
-    if (!roundtripReport.passed &&
-        request.executionMode == RegionRefitExecutionMode::ValidatedOnly &&
-        !request.forceDiagnosticSewing) {
-        result.report.status = RegionRefitStatus::Failed;
-        result.report.failureStage = RegionRefitStage::StepRoundtrip;
-        result.report.message = roundtripReport.message;
-        markNoProductResult(result, roundtripReport.message);
-        return result;
-    }
     if (roundtripMemoryExceeded) {
         failMemoryBudget(result, RegionRefitStage::StepRoundtrip);
         return result;

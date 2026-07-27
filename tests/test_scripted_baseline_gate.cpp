@@ -715,6 +715,10 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
     assert(script.find("sewn_attempt.step") != std::string::npos);
     assert(script.find("cad_check_candidate.step") != std::string::npos);
+    assert(script.find("curve_network.json") != std::string::npos);
+    assert(script.find("artifact_status.json") != std::string::npos);
+    assert(script.find("final_sewn.step") != std::string::npos);
+    assert(script.find("diagnostic_sewn.step") != std::string::npos);
     assert(script.find("edge_consistency_report.json") != std::string::npos);
     assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
@@ -730,7 +734,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("$newNmsdProcesses | Wait-Process") != std::string::npos);
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
-    assert(probe.find("native-regional-refit-v31-iccg-harmonic-layout") != std::string::npos);
+    assert(probe.find("native-regional-refit-v32-curve-network") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
@@ -739,7 +743,13 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(probe.find("cad_check_candidate.step") != std::string::npos);
     assert(probe.find("edge_consistency_report.json") != std::string::npos);
     assert(probe.find("output_complexity_report.json") != std::string::npos);
-    assert(probe.find("final_sewn.step") == std::string::npos);
+    assert(probe.find("curve_network.json") != std::string::npos);
+    assert(probe.find("artifact_status.json") != std::string::npos);
+    assert(probe.find("ProductValidated") != std::string::npos);
+    assert(probe.find("DiagnosticOnly") != std::string::npos);
+    assert(probe.find("Unavailable") != std::string::npos);
+    assert(probe.find("final_sewn.step") != std::string::npos);
+    assert(probe.find("diagnostic_sewn.step") != std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
 }

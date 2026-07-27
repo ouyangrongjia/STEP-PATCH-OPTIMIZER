@@ -38,6 +38,7 @@ public:
         const RegionReferenceMesh& mesh,
         const RegionTopologyConstraints& constraints,
         const RegionFittedPatchNetwork& network,
+        const RegionCurveNetwork& curveNetwork,
         double curveOnSurfaceTolerance,
         bool allowUnvalidatedFaces = false) const;
 };

@@ -11,6 +11,8 @@
 
 namespace spo {
 
+struct RegionCurveNetworkGenerationResult;
+
 struct RegionBoundaryChain {
     int adjacentPatch = -1;
     bool originalBoundary = false;
@@ -52,6 +54,7 @@ struct RegionPatchLayout {
     std::uint64_t estimatedSolverBytes = 0;
     std::uint64_t estimatedOutputEntities = 0;
     std::string hash;
+    std::string curveNetworkHash;
 };
 
 struct RegionPatchLayoutGenerationResult {
@@ -71,6 +74,11 @@ public:
         RegionRefitLayoutMode mode,
         const RegionRefitOptions& options,
         bool allowDiagnosticCandidates = false) const;
+
+    RegionPatchLayoutGenerationResult generate(
+        const RegionReferenceMesh& mesh,
+        const RegionCurveNetworkGenerationResult& curveNetworks,
+        const RegionRefitOptions& options) const;
 };
 
 }

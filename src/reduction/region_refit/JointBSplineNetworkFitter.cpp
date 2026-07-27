@@ -10,6 +10,8 @@
 #include <BRep_Tool.hxx>
 #include <BRep_Builder.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomLProp_SLProps.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
 #include <Standard_Failure.hxx>
@@ -107,6 +109,10 @@ struct ValidationMetrics {
     bool holdoutWorstNormalInternalSeam = false;
     double boundaryMaximumDistance = 0.0;
     double seamMaximumDistance = 0.0;
+    double seamMaximumCurveDeviation = 0.0;
+    double seamMaximumNormalDegrees = 0.0;
+    double seamMaximumCurvatureDifference = 0.0;
+    bool seamContinuityGatePassed = true;
     std::vector<ResidualSample> selectionResiduals;
     std::vector<double> holdoutDistances;
     std::vector<double> holdoutNormalDegrees;
@@ -201,6 +207,69 @@ std::vector<PatchLookup> buildLookups(const RegionPatchLayout& layout) {
         }
     }
     return lookups;
+}
+
+const RegionCurveNetwork* curveNetworkFor(
+    const RegionPatchLayout& layout,
+    const std::vector<RegionCurveNetwork>& networks) {
+    const auto found = std::find_if(
+        networks.begin(), networks.end(),
+        [&](const auto& network) {
+            return !layout.curveNetworkHash.empty() &&
+                network.hash == layout.curveNetworkHash;
+        });
+    return found == networks.end() ? nullptr : &*found;
+}
+
+std::optional<std::array<double, 2>> curveParameterOnPatch(
+    const RegionPatchLayout& layout,
+    const RegionCurveNetworkEdge& edge,
+    const int patch,
+    const double parameter) {
+    if (patch < 0 || patch >= layout.patchCount ||
+        edge.meshVertices.size() < 2 ||
+        edge.meshParameters.size() != edge.meshVertices.size()) {
+        return std::nullopt;
+    }
+    const auto& parameterization =
+        layout.patches[static_cast<std::size_t>(patch)];
+    std::unordered_map<std::size_t, std::size_t> localByGlobal;
+    localByGlobal.reserve(parameterization.vertexIndices.size());
+    for (std::size_t local = 0;
+         local < parameterization.vertexIndices.size(); ++local) {
+        localByGlobal.emplace(parameterization.vertexIndices[local], local);
+    }
+    const auto clamped = std::clamp(
+        parameter, edge.meshParameters.front(), edge.meshParameters.back());
+    const auto upper = std::upper_bound(
+        edge.meshParameters.begin(), edge.meshParameters.end(), clamped);
+    const auto second = upper == edge.meshParameters.begin()
+        ? std::size_t {1}
+        : upper == edge.meshParameters.end()
+        ? edge.meshParameters.size() - 1
+        : static_cast<std::size_t>(
+            std::distance(edge.meshParameters.begin(), upper));
+    const auto first = second - 1;
+    const auto firstFound = localByGlobal.find(edge.meshVertices[first]);
+    const auto secondFound = localByGlobal.find(edge.meshVertices[second]);
+    if (firstFound == localByGlobal.end() ||
+        secondFound == localByGlobal.end()) {
+        return std::nullopt;
+    }
+    const auto denominator =
+        edge.meshParameters[second] - edge.meshParameters[first];
+    const auto alpha = denominator > 1.0e-14
+        ? std::clamp(
+            (clamped - edge.meshParameters[first]) / denominator,
+            0.0, 1.0)
+        : 0.0;
+    const auto firstUv = normalizedParameter(
+        parameterization.parameters[firstFound->second]);
+    const auto secondUv = normalizedParameter(
+        parameterization.parameters[secondFound->second]);
+    return std::array<double, 2> {
+        firstUv[0] + alpha * (secondUv[0] - firstUv[0]),
+        firstUv[1] + alpha * (secondUv[1] - firstUv[1])};
 }
 
 std::vector<MappedReferenceSample> mapReferenceSamples(
@@ -613,6 +682,53 @@ std::vector<std::pair<int, double>> surfaceDerivativeCoefficients(
     return result;
 }
 
+std::vector<std::pair<int, double>> surfaceDirectionalSecondDerivativeCoefficients(
+    const std::array<double, 2>& uv,
+    const KnotConfiguration& knots,
+    const int variableOffset) {
+    auto du = 0.5 - uv[0];
+    auto dv = 0.5 - uv[1];
+    const auto length = std::hypot(du, dv);
+    if (length <= 1.0e-12) return {};
+    du /= length;
+    dv /= length;
+    constexpr double step = 1.0e-3;
+    const std::array<double, 2> first {
+        std::clamp(uv[0], 0.0, 1.0),
+        std::clamp(uv[1], 0.0, 1.0)};
+    const std::array<double, 2> second {
+        std::clamp(uv[0] + du * step, 0.0, 1.0),
+        std::clamp(uv[1] + dv * step, 0.0, 1.0)};
+    const std::array<double, 2> third {
+        std::clamp(uv[0] + du * step * 2.0, 0.0, 1.0),
+        std::clamp(uv[1] + dv * step * 2.0, 0.0, 1.0)};
+    if (std::hypot(second[0] - first[0], second[1] - first[1]) <= 1.0e-12 ||
+        std::hypot(third[0] - second[0], third[1] - second[1]) <= 1.0e-12) {
+        return {};
+    }
+    std::map<int, double> combined;
+    for (const auto& [column, value] :
+            surfaceCoefficients(first, knots, variableOffset)) {
+        combined[column] += value / (step * step);
+    }
+    for (const auto& [column, value] :
+            surfaceCoefficients(second, knots, variableOffset)) {
+        combined[column] -= 2.0 * value / (step * step);
+    }
+    for (const auto& [column, value] :
+            surfaceCoefficients(third, knots, variableOffset)) {
+        combined[column] += value / (step * step);
+    }
+    std::vector<std::pair<int, double>> result;
+    result.reserve(combined.size());
+    for (const auto& [column, value] : combined) {
+        if (std::abs(value) > 1.0e-14) {
+            result.emplace_back(column, value);
+        }
+    }
+    return result;
+}
+
 std::vector<SeamSample> buildSeamSamples(
     const RegionPatchLayout& layout) {
     std::vector<SeamSample> result;
@@ -724,7 +840,10 @@ std::vector<LinearRow> buildSystemRows(
     const std::vector<PatchLookup>& lookups,
     const std::vector<SeamSample>& seamSamples,
     const std::vector<MappedReferenceSample>& mappedSamples,
-    std::size_t& seamG1RowCount) {
+    const RegionCurveNetwork* curveNetwork,
+    const RegionRefitOptions& options,
+    std::size_t& seamG1RowCount,
+    std::size_t& seamG2RowCount) {
     const auto& mesh = layoutCarrier;
     std::vector<LinearRow> rows;
     rows.reserve(mappedSamples.size() + seamSamples.size() * 3);
@@ -768,6 +887,25 @@ std::vector<LinearRow> buildSystemRows(
             layout.patches[static_cast<std::size_t>(seam.firstPatch)].parameters[firstFound->second]);
         const auto secondUv = normalizedParameter(
             layout.patches[static_cast<std::size_t>(seam.secondPatch)].parameters[secondFound->second]);
+        const RegionCurveNetworkEdge* frozenEdge = nullptr;
+        if (curveNetwork != nullptr) {
+            const auto found = std::find_if(
+                curveNetwork->edges.begin(), curveNetwork->edges.end(),
+                [&](const auto& edge) {
+                    return !edge.originalBoundary &&
+                        std::min(edge.firstPatch, edge.secondPatch) ==
+                            std::min(seam.firstPatch, seam.secondPatch) &&
+                        std::max(edge.firstPatch, edge.secondPatch) ==
+                            std::max(seam.firstPatch, seam.secondPatch) &&
+                        std::find(
+                            edge.meshVertices.begin(),
+                            edge.meshVertices.end(),
+                            seam.vertex) != edge.meshVertices.end();
+                });
+            if (found != curveNetwork->edges.end()) {
+                frozenEdge = &*found;
+            }
+        }
         auto coefficients = surfaceCoefficients(
             firstUv,
             knots[static_cast<std::size_t>(seam.firstPatch)],
@@ -834,15 +972,48 @@ std::vector<LinearRow> buildSystemRows(
             secondUv,
             knots[static_cast<std::size_t>(seam.secondPatch)],
             variableOffsets[static_cast<std::size_t>(seam.secondPatch)]);
-        if (!firstDerivative.empty() && !secondDerivative.empty()) {
+        const auto requireG1 = frozenEdge == nullptr ||
+            frozenEdge->continuity == RegionCurveContinuity::G1 ||
+            frozenEdge->continuity == RegionCurveContinuity::G2;
+        if (requireG1 &&
+            !firstDerivative.empty() && !secondDerivative.empty()) {
             firstDerivative.insert(
                 firstDerivative.end(), secondDerivative.begin(), secondDerivative.end());
             appendWeightedRow(
                 rows,
                 std::move(firstDerivative),
                 gp_Pnt(0.0, 0.0, 0.0),
-                0.1);
+                options.seamG1RelativeWeight);
             ++seamG1RowCount;
+        }
+        if (frozenEdge != nullptr &&
+            frozenEdge->continuity == RegionCurveContinuity::G2) {
+            auto firstSecondDerivative =
+                surfaceDirectionalSecondDerivativeCoefficients(
+                    firstUv,
+                    knots[static_cast<std::size_t>(seam.firstPatch)],
+                    variableOffsets[static_cast<std::size_t>(seam.firstPatch)]);
+            auto secondSecondDerivative =
+                surfaceDirectionalSecondDerivativeCoefficients(
+                    secondUv,
+                    knots[static_cast<std::size_t>(seam.secondPatch)],
+                    variableOffsets[static_cast<std::size_t>(seam.secondPatch)]);
+            if (!firstSecondDerivative.empty() &&
+                !secondSecondDerivative.empty()) {
+                for (auto& coefficient : secondSecondDerivative) {
+                    coefficient.second = -coefficient.second;
+                }
+                firstSecondDerivative.insert(
+                    firstSecondDerivative.end(),
+                    secondSecondDerivative.begin(),
+                    secondSecondDerivative.end());
+                appendWeightedRow(
+                    rows,
+                    std::move(firstSecondDerivative),
+                    gp_Pnt(0.0, 0.0, 0.0),
+                    options.seamG2RelativeWeight);
+                ++seamG2RowCount;
+            }
         }
     }
     constexpr double fairnessWeight = 1.0;
@@ -1113,6 +1284,53 @@ std::vector<LinearRow> buildBoundaryEqualityRows(
                     static_cast<std::uint64_t>(edgeId),
                     (firstNormalizedParameter + secondNormalizedParameter) * 0.5,
                     false});
+            }
+        }
+    }
+    return rows;
+}
+
+std::vector<LinearRow> buildFrozenCurveEqualityRows(
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets) {
+    constexpr std::uint64_t curveConstraintGroupMask =
+        std::uint64_t {1} << 62;
+    std::vector<LinearRow> rows;
+    for (const auto& edge : network.edges) {
+        if (edge.originalBoundary || edge.curve.IsNull() ||
+            edge.firstPatch < 0 || edge.secondPatch < 0) {
+            continue;
+        }
+        const auto maximumControlSide = std::max({
+            knots[static_cast<std::size_t>(edge.firstPatch)].uControlCount(),
+            knots[static_cast<std::size_t>(edge.firstPatch)].vControlCount(),
+            knots[static_cast<std::size_t>(edge.secondPatch)].uControlCount(),
+            knots[static_cast<std::size_t>(edge.secondPatch)].vControlCount()});
+        const auto sampleCount = std::max(16, maximumControlSide * 4);
+        for (int sample = 0; sample < sampleCount; ++sample) {
+            const auto alpha = sampleCount > 1
+                ? static_cast<double>(sample) /
+                    static_cast<double>(sampleCount - 1)
+                : 0.0;
+            const auto parameter = edge.firstParameter +
+                alpha * (edge.lastParameter - edge.firstParameter);
+            const auto target = edge.curve->Value(parameter);
+            for (const auto patch : {edge.firstPatch, edge.secondPatch}) {
+                const auto uv = curveParameterOnPatch(
+                    layout, edge, patch, parameter);
+                if (!uv.has_value()) continue;
+                rows.push_back({
+                    surfaceCoefficients(
+                        *uv,
+                        knots[static_cast<std::size_t>(patch)],
+                        variableOffsets[static_cast<std::size_t>(patch)]),
+                    target,
+                    curveConstraintGroupMask |
+                        static_cast<std::uint64_t>(edge.id),
+                    alpha,
+                    sample == 0 || sample + 1 == sampleCount});
             }
         }
     }
@@ -1916,6 +2134,116 @@ ValidationMetrics validateNetwork(
     return metrics;
 }
 
+void validateFrozenCurveContinuity(
+    ValidationMetrics& metrics,
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const std::vector<Handle(Geom_BSplineSurface)>& surfaces,
+    const RegionRefitOptions& options) {
+    metrics.seamContinuityGatePassed = true;
+    const auto sampleCount = std::max(97, options.curveValidationSampleCount);
+    for (const auto& edge : network.edges) {
+        if (edge.originalBoundary || edge.curve.IsNull() ||
+            edge.firstPatch < 0 || edge.secondPatch < 0 ||
+            edge.firstPatch >= static_cast<int>(surfaces.size()) ||
+            edge.secondPatch >= static_cast<int>(surfaces.size())) {
+            continue;
+        }
+        for (int sample = 0; sample < sampleCount; ++sample) {
+            const auto alpha = static_cast<double>(sample) /
+                static_cast<double>(sampleCount - 1);
+            const auto parameter = edge.firstParameter +
+                alpha * (edge.lastParameter - edge.firstParameter);
+            const auto curvePoint = edge.curve->Value(parameter);
+            const auto firstUv = curveParameterOnPatch(
+                layout, edge, edge.firstPatch, parameter);
+            const auto secondUv = curveParameterOnPatch(
+                layout, edge, edge.secondPatch, parameter);
+            if (!firstUv.has_value() || !secondUv.has_value()) {
+                metrics.seamContinuityGatePassed = false;
+                metrics.seamMaximumCurveDeviation =
+                    std::numeric_limits<double>::infinity();
+                continue;
+            }
+            const auto firstProjection = projectToSurface(
+                surfaces[static_cast<std::size_t>(edge.firstPatch)],
+                curvePoint,
+                *firstUv);
+            const auto secondProjection = projectToSurface(
+                surfaces[static_cast<std::size_t>(edge.secondPatch)],
+                curvePoint,
+                *secondUv);
+            metrics.projectionCount += 2;
+            metrics.uvIterationCount += firstProjection.iterationCount +
+                secondProjection.iterationCount;
+            metrics.projectionFallbackCount += firstProjection.fallbackCount +
+                secondProjection.fallbackCount;
+            metrics.seamMaximumCurveDeviation = std::max({
+                metrics.seamMaximumCurveDeviation,
+                firstProjection.distance,
+                secondProjection.distance});
+            metrics.seamMaximumDistance = std::max(
+                metrics.seamMaximumDistance,
+                firstProjection.point.Distance(secondProjection.point));
+            const auto firstNormal =
+                firstProjection.du.Crossed(firstProjection.dv);
+            const auto secondNormal =
+                secondProjection.du.Crossed(secondProjection.dv);
+            const auto normalDegrees = normalAngleDegrees(
+                firstNormal,
+                secondNormal.SquareMagnitude() > 1.0e-24
+                    ? gp_Dir(secondNormal)
+                    : gp_Dir(0.0, 0.0, 1.0));
+            metrics.seamMaximumNormalDegrees = std::max(
+                metrics.seamMaximumNormalDegrees, normalDegrees);
+            if (edge.continuity == RegionCurveContinuity::G2) {
+                try {
+                    GeomLProp_SLProps firstProperties(
+                        surfaces[static_cast<std::size_t>(edge.firstPatch)],
+                        firstProjection.u,
+                        firstProjection.v,
+                        2,
+                        1.0e-9);
+                    GeomLProp_SLProps secondProperties(
+                        surfaces[static_cast<std::size_t>(edge.secondPatch)],
+                        secondProjection.u,
+                        secondProjection.v,
+                        2,
+                        1.0e-9);
+                    if (!firstProperties.IsCurvatureDefined() ||
+                        !secondProperties.IsCurvatureDefined()) {
+                        metrics.seamMaximumCurvatureDifference =
+                            std::numeric_limits<double>::infinity();
+                    } else {
+                        metrics.seamMaximumCurvatureDifference = std::max(
+                            metrics.seamMaximumCurvatureDifference,
+                            std::abs(
+                                firstProperties.MeanCurvature() -
+                                secondProperties.MeanCurvature()));
+                    }
+                } catch (const Standard_Failure&) {
+                    metrics.seamMaximumCurvatureDifference =
+                        std::numeric_limits<double>::infinity();
+                }
+            }
+        }
+        const auto positionPassed =
+            metrics.seamMaximumCurveDeviation <=
+                options.curveOnSurfaceTolerance &&
+            metrics.seamMaximumDistance <= options.curveOnSurfaceTolerance;
+        const auto g1Passed =
+            edge.continuity == RegionCurveContinuity::G0 ||
+            metrics.seamMaximumNormalDegrees <= options.g1ToleranceDegrees;
+        const auto g2Passed =
+            edge.continuity != RegionCurveContinuity::G2 ||
+            metrics.seamMaximumCurvatureDifference <=
+                options.g2CurvatureTolerance;
+        metrics.seamContinuityGatePassed =
+            metrics.seamContinuityGatePassed &&
+            positionPassed && g1Passed && g2Passed;
+    }
+}
+
 bool insertResidualKnot(
     const std::vector<ResidualSample>& residuals,
     std::vector<KnotConfiguration>& knots,
@@ -2032,7 +2360,10 @@ double normalizedViolationScore(
         metrics.holdoutMaximumDistance / std::max(options.tolerance3d, 1.0e-12),
         metrics.holdoutMaximumNormalDegrees / std::max(options.normalToleranceDegrees, 1.0e-12),
         metrics.boundaryMaximumDistance / std::max(options.curveOnSurfaceTolerance, 1.0e-12),
-        metrics.seamMaximumDistance / std::max(options.curveOnSurfaceTolerance, 1.0e-12)});
+        metrics.seamMaximumDistance / std::max(options.curveOnSurfaceTolerance, 1.0e-12),
+        metrics.seamMaximumCurveDeviation / std::max(options.curveOnSurfaceTolerance, 1.0e-12),
+        metrics.seamMaximumNormalDegrees / std::max(options.g1ToleranceDegrees, 1.0e-12),
+        metrics.seamMaximumCurvatureDifference / std::max(options.g2CurvatureTolerance, 1.0e-12)});
 }
 
 std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
@@ -2049,6 +2380,11 @@ std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
     network->holdoutMaximumNormalDegrees = metrics.holdoutMaximumNormalDegrees;
     network->boundaryMaximumDistance = metrics.boundaryMaximumDistance;
     network->seamMaximumDistance = metrics.seamMaximumDistance;
+    network->seamMaximumCurveDeviation = metrics.seamMaximumCurveDeviation;
+    network->seamMaximumNormalDegrees = metrics.seamMaximumNormalDegrees;
+    network->seamMaximumCurvatureDifference =
+        metrics.seamMaximumCurvatureDifference;
+    network->seamContinuityGatePassed = metrics.seamContinuityGatePassed;
     network->normalizedViolationScore = normalizedViolationScore(metrics, options);
     network->fitGatePassed = gatePassed;
     return network;
@@ -2059,6 +2395,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const RegionReferenceMesh& layoutCarrier,
     const RegionTopologyConstraints& constraints,
     const std::vector<RegionPatchLayout>& candidates,
+    const std::vector<RegionCurveNetwork>& curveNetworks,
     const RegionRefitOptions& options,
     const std::chrono::steady_clock::time_point deadline) const {
     JointBSplineNetworkFitResult result;
@@ -2076,9 +2413,17 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             deadline,
             attemptStarted + std::chrono::milliseconds(options.singleFitBudgetMilliseconds));
         const auto& layout = candidates[candidateIndex];
+        const auto* curveNetwork = curveNetworkFor(layout, curveNetworks);
         RegionFitAttemptReport attempt;
         attempt.patchCount = layout.patchCount;
         attempt.layoutHash = layout.hash;
+        if (!layout.curveNetworkHash.empty() &&
+            (curveNetwork == nullptr || !curveNetwork->valid())) {
+            attempt.stopReason =
+                "The layout has no matching validated frozen curve network.";
+            result.attempts.push_back(std::move(attempt));
+            continue;
+        }
         const auto lookups = buildLookups(layout);
         const auto mappedSamples = mapReferenceSamples(
             fittingReference, layoutCarrier, layout, lookups);
@@ -2140,6 +2485,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 mappedSamples,
                 knots);
             std::size_t seamG1RowCount = 0;
+            std::size_t seamG2RowCount = 0;
             const auto rows = buildSystemRows(
                 fittingReference,
                 layoutCarrier,
@@ -2149,7 +2495,10 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 lookups,
                 seamConstraintSamples,
                 representativeFitSamples,
-                seamG1RowCount);
+                curveNetwork,
+                options,
+                seamG1RowCount,
+                seamG2RowCount);
             std::size_t adjacentNormalRowCount = 0;
             const auto normalRows = buildNormalRows(
                 fittingReference,
@@ -2168,15 +2517,22 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 knots,
                 variableOffsets);
             const auto boundaryEqualityRowCount = equalityRows.size();
-            auto seamEqualityRows = buildSeamEqualityRows(
-                layout,
-                knots,
-                variableOffsets,
-                lookups,
-                seamConstraintSamples);
+            auto seamEqualityRows = curveNetwork != nullptr
+                ? buildFrozenCurveEqualityRows(
+                    layout,
+                    *curveNetwork,
+                    knots,
+                    variableOffsets)
+                : buildSeamEqualityRows(
+                    layout,
+                    knots,
+                    variableOffsets,
+                    lookups,
+                    seamConstraintSamples);
             iterationReport.boundaryHardConstraintCount = boundaryEqualityRowCount;
             iterationReport.seamG0ConstraintCount = seamEqualityRows.size();
             iterationReport.seamG1SoftConstraintCount = seamG1RowCount;
+            iterationReport.seamG2SoftConstraintCount = seamG2RowCount;
             if (boundaryEqualityRowCount > 0) {
                 iterationReport.boundaryTargetMinimum = {
                     std::numeric_limits<double>::infinity(),
@@ -2438,7 +2794,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         layout,
                         options);
                     if (baseline.available) {
-                        const auto baselineMetrics = validateNetwork(
+                        auto baselineMetrics = validateNetwork(
                             fittingReference,
                             layoutCarrier,
                             layout,
@@ -2446,6 +2802,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                             baseline.surfaces,
                             options,
                             mappedSamples);
+                        if (curveNetwork != nullptr) {
+                            validateFrozenCurveContinuity(
+                                baselineMetrics,
+                                layout,
+                                *curveNetwork,
+                                baseline.surfaces,
+                                options);
+                        }
                         iterationReport.affineBaselineTrainingMaximumDistance =
                             baselineMetrics.trainingMaximumDistance;
                         iterationReport.affineBaselineBoundaryMaximumDistance =
@@ -2469,6 +2833,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                             initialBlend.surfaces,
                             options,
                             mappedSamples);
+                        if (curveNetwork != nullptr) {
+                            validateFrozenCurveContinuity(
+                                initialDiagnosticMetrics,
+                                layout,
+                                *curveNetwork,
+                                initialDiagnosticSurfaces,
+                                options);
+                        }
                         initialConstructibleSolution = std::move(initialBlend.solution);
                         initialDiagnosticSurfaces = std::move(initialBlend.surfaces);
                         initialDiagnosticFailure = initialBlend.failure;
@@ -2770,7 +3142,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     attempt.stopReason = iterationReport.stopReason;
                     break;
                 }
-                const auto metrics = validateNetwork(
+                auto metrics = validateNetwork(
                     fittingReference,
                     layoutCarrier,
                     layout,
@@ -2778,6 +3150,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     surfaces,
                     options,
                     mappedSamples);
+                if (curveNetwork != nullptr) {
+                    validateFrozenCurveContinuity(
+                        metrics,
+                        layout,
+                        *curveNetwork,
+                        surfaces,
+                        options);
+                }
                 iterationReport.trainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.projectionCount = metrics.projectionCount;
                 iterationReport.uvIterationCount = metrics.uvIterationCount;
@@ -2795,6 +3175,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 iterationReport.holdoutWorstNormalInternalSeam = metrics.holdoutWorstNormalInternalSeam;
                 iterationReport.boundaryMaximumDistance = metrics.boundaryMaximumDistance;
                 iterationReport.seamMaximumDistance = metrics.seamMaximumDistance;
+                iterationReport.seamMaximumCurveDeviation =
+                    metrics.seamMaximumCurveDeviation;
+                iterationReport.seamMaximumNormalDegrees =
+                    metrics.seamMaximumNormalDegrees;
+                iterationReport.seamMaximumCurvatureDifference =
+                    metrics.seamMaximumCurvatureDifference;
+                iterationReport.seamContinuityGatePassed =
+                    metrics.seamContinuityGatePassed;
                 if (equalityRows.empty()) {
                     iterationReport.initialTrainingMaximumDistance = metrics.trainingMaximumDistance;
                     iterationReport.initialBoundaryMaximumDistance = metrics.boundaryMaximumDistance;
@@ -2805,6 +3193,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     metrics.holdoutMaximumNormalDegrees <= options.normalToleranceDegrees &&
                     metrics.boundaryMaximumDistance <= options.curveOnSurfaceTolerance &&
                     metrics.seamMaximumDistance <= options.curveOnSurfaceTolerance &&
+                    metrics.seamContinuityGatePassed &&
                     iterationReport.hardConstraintFeasible;
                 if (bestSurfaces.empty() || normalizedViolationScore(metrics, options) <
                         normalizedViolationScore(bestMetrics, options)) {
@@ -2888,12 +3277,36 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
 }
 
 JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionTopologyConstraints& constraints,
+    const std::vector<RegionPatchLayout>& candidates,
+    const RegionRefitOptions& options,
+    const std::chrono::steady_clock::time_point deadline) const {
+    return fit(
+        fittingReference,
+        layoutCarrier,
+        constraints,
+        candidates,
+        {},
+        options,
+        deadline);
+}
+
+JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const RegionReferenceMesh& mesh,
     const RegionTopologyConstraints& constraints,
     const std::vector<RegionPatchLayout>& candidates,
     const RegionRefitOptions& options,
     const std::chrono::steady_clock::time_point deadline) const {
-    return fit(mesh, mesh, constraints, candidates, options, deadline);
+    return fit(
+        mesh,
+        mesh,
+        constraints,
+        candidates,
+        {},
+        options,
+        deadline);
 }
 
 }

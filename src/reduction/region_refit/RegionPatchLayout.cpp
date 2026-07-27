@@ -1,4 +1,5 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
+#include "reduction/region_refit/RegionCurveNetwork.h"
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/IterativeLinearSolvers>
@@ -14,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <queue>
 #include <set>
 #include <sstream>
@@ -1065,6 +1067,10 @@ std::string layoutHash(const RegionPatchLayout& layout) {
             append(static_cast<std::uint64_t>(std::llround(uv[1] * 1.0e12)));
         }
     }
+    for (const auto character : layout.curveNetworkHash) {
+        append(static_cast<std::uint64_t>(
+            static_cast<unsigned char>(character)));
+    }
     std::ostringstream stream;
     stream << std::hex << std::setfill('0') << std::setw(16) << hash;
     return stream.str();
@@ -1444,6 +1450,64 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
         : (accepted.empty()
             ? "Retained constructible trimmed-disk layouts for forced diagnostic fitting."
             : "Deterministic layouts passed coarse screening.");
+    return result;
+}
+
+RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
+    const RegionReferenceMesh& mesh,
+    const RegionCurveNetworkGenerationResult& curveNetworks,
+    const RegionRefitOptions& options) const {
+    (void)mesh;
+    (void)options;
+    RegionPatchLayoutGenerationResult result;
+    result.candidates = curveNetworks.layoutReports;
+    if (!curveNetworks.success()) {
+        result.status = curveNetworks.status;
+        result.message = curveNetworks.message;
+        return result;
+    }
+    const auto bind = [&](const RegionCurveNetworkCandidate& candidate) {
+        if (!candidate.network.valid() ||
+            candidate.partitionLayout.patchCount != candidate.network.patchCount ||
+            candidate.partitionLayout.trianglePatches !=
+                candidate.network.trianglePatches ||
+            candidate.network.patchLoops.size() !=
+                candidate.partitionLayout.patches.size()) {
+            return std::optional<RegionPatchLayout> {};
+        }
+        auto layout = candidate.partitionLayout;
+        const auto partitionHash = layout.hash;
+        layout.curveNetworkHash = candidate.network.hash;
+        layout.hash = layoutHash(layout);
+        const auto report = std::find_if(
+            result.candidates.begin(), result.candidates.end(),
+            [&](const auto& item) { return item.layoutHash == partitionHash; });
+        if (report != result.candidates.end()) {
+            report->layoutHash = layout.hash;
+        }
+        return std::optional<RegionPatchLayout> {std::move(layout)};
+    };
+    for (const auto& candidate : curveNetworks.constructibleCandidates) {
+        auto layout = bind(candidate);
+        if (layout.has_value()) {
+            result.constructibleCandidates.push_back(std::move(*layout));
+        }
+    }
+    for (const auto& candidate : curveNetworks.selectedCandidates) {
+        auto layout = bind(candidate);
+        if (layout.has_value()) {
+            result.selectedCandidates.push_back(std::move(*layout));
+        }
+    }
+    if (result.selectedCandidates.empty()) {
+        result.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
+        result.message =
+            "No frozen curve network could be bound to its trimmed-disk layout.";
+        return result;
+    }
+    result.status = RegionRefitStatus::Success;
+    result.message =
+        "Bound trimmed-disk parameterizations to frozen curve-network hashes.";
     return result;
 }
 

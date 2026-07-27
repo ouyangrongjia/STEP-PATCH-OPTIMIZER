@@ -12,9 +12,7 @@
 #include <Geom2dAPI_Interpolate.hxx>
 #include <Geom2d_BSplineCurve.hxx>
 #include <Geom2d_Curve.hxx>
-#include <GeomAPI_Interpolate.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
-#include <Geom_BSplineCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
 #include <Poly_PolygonOnTriangulation.hxx>
@@ -22,7 +20,6 @@
 #include <ShapeAnalysis_Edge.hxx>
 #include <Standard_Failure.hxx>
 #include <TColgp_Array1OfPnt2d.hxx>
-#include <TColgp_HArray1OfPnt.hxx>
 #include <TColgp_HArray1OfPnt2d.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
@@ -36,12 +33,8 @@
 #include <gp_Vec.hxx>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
-#include <map>
-#include <optional>
-#include <set>
 #include <utility>
 #include <unordered_map>
 #include <vector>
@@ -49,103 +42,6 @@
 namespace spo {
 
 namespace {
-
-using MeshEdge = std::array<std::size_t, 2>;
-
-MeshEdge orderedEdge(const std::size_t first, const std::size_t second) {
-    return {std::min(first, second), std::max(first, second)};
-}
-
-std::vector<std::vector<std::size_t>> orderedComponents(
-    const std::vector<MeshEdge>& edges,
-    bool& valid) {
-    valid = true;
-    std::map<std::size_t, std::vector<std::size_t>> adjacency;
-    std::set<MeshEdge> remaining;
-    for (const auto& edge : edges) {
-        if (edge[0] == edge[1]) continue;
-        adjacency[edge[0]].push_back(edge[1]);
-        adjacency[edge[1]].push_back(edge[0]);
-        remaining.insert(orderedEdge(edge[0], edge[1]));
-    }
-    for (auto& [vertex, neighbors] : adjacency) {
-        (void)vertex;
-        std::sort(neighbors.begin(), neighbors.end());
-        neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
-        if (neighbors.size() > 2) {
-            valid = false;
-            return {};
-        }
-    }
-
-    std::vector<std::vector<std::size_t>> components;
-    while (!remaining.empty()) {
-        const auto seed = *remaining.begin();
-        std::set<std::size_t> componentVertices;
-        std::vector<std::size_t> stack {seed[0], seed[1]};
-        while (!stack.empty()) {
-            const auto current = stack.back();
-            stack.pop_back();
-            if (!componentVertices.insert(current).second) continue;
-            for (const auto neighbor : adjacency[current]) stack.push_back(neighbor);
-        }
-        std::vector<std::size_t> endpoints;
-        for (const auto vertex : componentVertices) {
-            const auto degree = std::count_if(adjacency[vertex].begin(), adjacency[vertex].end(),
-                [&](const auto neighbor) { return componentVertices.contains(neighbor); });
-            if (degree == 1) endpoints.push_back(vertex);
-        }
-        if (endpoints.size() != 2) {
-            valid = false;
-            return {};
-        }
-        std::sort(endpoints.begin(), endpoints.end());
-        std::vector<std::size_t> ordered {endpoints.front()};
-        std::optional<std::size_t> previous;
-        auto current = endpoints.front();
-        while (current != endpoints.back()) {
-            std::optional<std::size_t> next;
-            for (const auto neighbor : adjacency[current]) {
-                const auto edge = orderedEdge(current, neighbor);
-                if (remaining.contains(edge) && (!previous.has_value() || neighbor != *previous)) {
-                    next = neighbor;
-                    break;
-                }
-            }
-            if (!next.has_value()) {
-                valid = false;
-                return {};
-            }
-            remaining.erase(orderedEdge(current, *next));
-            previous = current;
-            current = *next;
-            ordered.push_back(current);
-        }
-        components.push_back(std::move(ordered));
-    }
-    return components;
-}
-
-std::optional<EdgeId> commonBoundaryEdgeId(
-    const RegionReferenceVertex& first,
-    const RegionReferenceVertex& second) {
-    std::optional<EdgeId> result;
-    for (const auto edgeId : first.boundaryEdgeIds) {
-        if (std::find(second.boundaryEdgeIds.begin(), second.boundaryEdgeIds.end(), edgeId) !=
-            second.boundaryEdgeIds.end() && (!result.has_value() || edgeId < *result)) {
-            result = edgeId;
-        }
-    }
-    return result;
-}
-
-const RegionBoundaryEdgeConstraint* constraintFor(
-    const RegionTopologyConstraints& constraints,
-    const EdgeId edgeId) {
-    const auto found = std::find_if(constraints.boundaryEdges.begin(), constraints.boundaryEdges.end(),
-        [&](const auto& constraint) { return constraint.edgeId == edgeId; });
-    return found == constraints.boundaryEdges.end() ? nullptr : &*found;
-}
 
 bool curveParameter(
     const Handle(Geom_Curve)& curve,
@@ -187,8 +83,6 @@ bool attachPcurve(
     builder.SameRange(edge, Standard_False);
     builder.SameParameter(edge, Standard_False);
     builder.UpdateEdge(edge, tolerance);
-    BRepLib::SameRange(edge, tolerance);
-    BRepLib::SameParameter(edge, tolerance);
     return true;
 }
 
@@ -298,34 +192,6 @@ TopoDS_Edge orientedForPair(
         BRep_Tool::Pnt(lastVertex).SquareDistance(firstPoint);
     edge.Orientation(reversed < forward ? TopAbs_REVERSED : TopAbs_FORWARD);
     return edge;
-}
-
-TopoDS_Edge interpolatedSeamEdge(
-    const RegionReferenceMesh& mesh,
-    const std::vector<std::size_t>& vertices,
-    const TopoDS_Vertex& firstVertex,
-    const TopoDS_Vertex& lastVertex,
-    const double tolerance) {
-    if (vertices.size() < 2) return {};
-    Handle(TColgp_HArray1OfPnt) points = new TColgp_HArray1OfPnt(1, static_cast<int>(vertices.size()));
-    for (std::size_t index = 0; index < vertices.size(); ++index) {
-        points->SetValue(static_cast<int>(index + 1), mesh.vertices[vertices[index]].point);
-    }
-    try {
-        GeomAPI_Interpolate interpolate(points, Standard_False, tolerance);
-        interpolate.Perform();
-        if (!interpolate.IsDone() || interpolate.Curve().IsNull()) return {};
-        const auto curve = interpolate.Curve();
-        BRepBuilderAPI_MakeEdge edgeBuilder(
-            curve,
-            firstVertex,
-            lastVertex,
-            curve->FirstParameter(),
-            curve->LastParameter());
-        return edgeBuilder.IsDone() ? edgeBuilder.Edge() : TopoDS_Edge {};
-    } catch (const Standard_Failure&) {
-        return {};
-    }
 }
 
 double percentile95(std::vector<double> values) {
@@ -552,228 +418,155 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     const RegionReferenceMesh& mesh,
     const RegionTopologyConstraints& constraints,
     const RegionFittedPatchNetwork& network,
+    const RegionCurveNetwork& curveNetwork,
     const double curveOnSurfaceTolerance,
     const bool allowUnvalidatedFaces) const {
     NativeRegionPatchNetworkBuildResult result;
     if (mesh.empty() || network.surfaces.size() != network.layout.patches.size() ||
         network.layout.patchCount != static_cast<int>(network.surfaces.size()) ||
+        !curveNetwork.valid() ||
+        curveNetwork.hash != network.layout.curveNetworkHash ||
+        curveNetwork.patchCount != network.layout.patchCount ||
         curveOnSurfaceTolerance <= 0.0) {
         result.status = RegionRefitStatus::InvalidRequest;
         result.message = "Native patch-network construction received inconsistent geometry.";
         return result;
     }
 
-    std::map<MeshEdge, TopoDS_Edge> edgeByMeshEdge;
-    std::map<std::size_t, TopoDS_Vertex> sharedVertices;
-    const auto rememberOriginalVertex = [&](const TopoDS_Vertex& vertex) {
-        if (vertex.IsNull()) return;
-        const auto point = BRep_Tool::Pnt(vertex);
-        auto closest = mesh.vertices.size();
-        auto squaredDistance = std::numeric_limits<double>::infinity();
-        for (std::size_t index = 0; index < mesh.vertices.size(); ++index) {
-            if (!mesh.vertices[index].boundary) continue;
-            const auto candidate = point.SquareDistance(mesh.vertices[index].point);
-            if (candidate < squaredDistance) {
-                closest = index;
-                squaredDistance = candidate;
+    std::vector<TopoDS_Vertex> vertices(curveNetwork.nodes.size());
+    for (const auto& node : curveNetwork.nodes) {
+        if (node.id >= vertices.size()) {
+            result.message = "A curve-network node id is out of range.";
+            return result;
+        }
+        if (node.originalBoundary) {
+            for (const auto& curveEdge : curveNetwork.edges) {
+                if (!curveEdge.originalBoundary ||
+                    curveEdge.originalEdge.IsNull() ||
+                    (curveEdge.startNode != node.id &&
+                        curveEdge.endNode != node.id)) {
+                    continue;
+                }
+                TopoDS_Vertex first;
+                TopoDS_Vertex last;
+                TopExp::Vertices(
+                    curveEdge.originalEdge, first, last, Standard_True);
+                if (!first.IsNull() &&
+                    BRep_Tool::Pnt(first).Distance(node.point) <=
+                        curveOnSurfaceTolerance) {
+                    vertices[node.id] = first;
+                    break;
+                }
+                if (!last.IsNull() &&
+                    BRep_Tool::Pnt(last).Distance(node.point) <=
+                        curveOnSurfaceTolerance) {
+                    vertices[node.id] = last;
+                    break;
+                }
             }
         }
-        if (closest < mesh.vertices.size() &&
-            squaredDistance <= curveOnSurfaceTolerance * curveOnSurfaceTolerance) {
-            sharedVertices[closest] = vertex;
-        }
-    };
-    for (const auto& constraint : constraints.boundaryEdges) {
-        TopoDS_Vertex firstVertex;
-        TopoDS_Vertex lastVertex;
-        TopExp::Vertices(constraint.originalEdge, firstVertex, lastVertex, Standard_True);
-        rememberOriginalVertex(firstVertex);
-        rememberOriginalVertex(lastVertex);
-    }
-    const auto sharedVertex = [&](const std::size_t meshVertex, const gp_Pnt& point) {
-        const auto found = sharedVertices.find(meshVertex);
-        if (found != sharedVertices.end()) return found->second;
-        auto vertex = BRepBuilderAPI_MakeVertex(point).Vertex();
-        BRep_Builder builder;
-        builder.UpdateVertex(vertex, curveOnSurfaceTolerance);
-        sharedVertices.emplace(meshVertex, vertex);
-        return vertex;
-    };
-    std::map<std::pair<EdgeId, int>, std::vector<MeshEdge>> boundaryEdgesByOwner;
-    for (std::size_t patch = 0; patch < network.layout.patches.size(); ++patch) {
-        const auto& loop = network.layout.patches[patch].boundaryLoop;
-        for (std::size_t index = 0; index < loop.size(); ++index) {
-            const auto first = loop[index];
-            const auto second = loop[(index + 1) % loop.size()];
-            const auto edgeId = commonBoundaryEdgeId(mesh.vertices[first], mesh.vertices[second]);
-            if (edgeId.has_value()) {
-                boundaryEdgesByOwner[{*edgeId, static_cast<int>(patch)}].push_back(orderedEdge(first, second));
-            }
+        if (vertices[node.id].IsNull()) {
+            vertices[node.id] = BRepBuilderAPI_MakeVertex(node.point).Vertex();
+            BRep_Builder vertexBuilder;
+            vertexBuilder.UpdateVertex(
+                vertices[node.id], curveOnSurfaceTolerance);
         }
     }
 
-    std::map<EdgeId, int> boundarySegmentCounts;
-    for (const auto& [owner, meshEdges] : boundaryEdgesByOwner) {
-        bool valid = false;
-        const auto components = orderedComponents(meshEdges, valid);
-        if (!valid) {
-            result.message = "An original boundary edge has a branched patch ownership chain.";
+    std::vector<TopoDS_Edge> edges(curveNetwork.edges.size());
+    for (const auto& curveEdge : curveNetwork.edges) {
+        if (curveEdge.id >= edges.size() ||
+            curveEdge.startNode >= vertices.size() ||
+            curveEdge.endNode >= vertices.size() ||
+            curveEdge.curve.IsNull()) {
+            result.message = "A frozen curve-network edge is incomplete.";
             return result;
         }
-        boundarySegmentCounts[owner.first] += static_cast<int>(components.size());
-    }
-
-    for (const auto& [owner, meshEdges] : boundaryEdgesByOwner) {
-        const auto* constraint = constraintFor(constraints, owner.first);
-        if (constraint == nullptr || constraint->originalEdge.IsNull()) {
-            result.message = "A patch boundary segment has no original STEP edge constraint.";
-            return result;
-        }
-        double originalFirst = 0.0;
-        double originalLast = 0.0;
-        const auto originalCurve = BRep_Tool::Curve(
-            constraint->originalEdge, originalFirst, originalLast);
-        if (originalCurve.IsNull()) {
-            result.message = "An original STEP boundary edge has no three-dimensional curve.";
-            return result;
-        }
-        bool valid = false;
-        const auto components = orderedComponents(meshEdges, valid);
-        if (!valid) {
-            result.message = "An original boundary segment could not be ordered.";
-            return result;
-        }
-        for (const auto& vertices : components) {
-            double firstParameter = 0.0;
-            double lastParameter = 0.0;
-            if (!curveParameter(originalCurve, mesh.vertices[vertices.front()].point,
-                    originalFirst, originalLast, firstParameter) ||
-                !curveParameter(originalCurve, mesh.vertices[vertices.back()].point,
-                    originalFirst, originalLast, lastParameter)) {
-                result.message = "Could not recover an original boundary segment parameter range.";
+        if (curveEdge.originalBoundary && curveEdge.reusesOriginalEdge &&
+            !curveEdge.originalEdge.IsNull()) {
+            edges[curveEdge.id] = curveEdge.originalEdge;
+            ++result.reusedOriginalBoundaryEdgeCount;
+        } else {
+            BRepBuilderAPI_MakeEdge edgeBuilder(
+                curveEdge.curve,
+                vertices[curveEdge.startNode],
+                vertices[curveEdge.endNode],
+                curveEdge.firstParameter,
+                curveEdge.lastParameter);
+            if (!edgeBuilder.IsDone()) {
+                result.message =
+                    "Could not construct one frozen curve-network edge.";
                 return result;
             }
-            const auto minimum = std::min(firstParameter, lastParameter);
-            const auto maximum = std::max(firstParameter, lastParameter);
-            const auto parameterTolerance = std::max(1.0e-10, std::abs(originalLast - originalFirst) * 1.0e-9);
-            TopoDS_Edge edge;
-            const auto fullRange = boundarySegmentCounts[owner.first] == 1 &&
-                std::abs(minimum - std::min(originalFirst, originalLast)) <= parameterTolerance &&
-                std::abs(maximum - std::max(originalFirst, originalLast)) <= parameterTolerance;
-            if (fullRange) {
-                edge = constraint->originalEdge;
-                ++result.reusedOriginalBoundaryEdgeCount;
-            } else {
-                const auto minimumVertexIndex = firstParameter <= lastParameter
-                    ? vertices.front()
-                    : vertices.back();
-                const auto maximumVertexIndex = firstParameter <= lastParameter
-                    ? vertices.back()
-                    : vertices.front();
-                const auto minimumVertex = sharedVertex(
-                    minimumVertexIndex, originalCurve->Value(minimum));
-                const auto maximumVertex = sharedVertex(
-                    maximumVertexIndex, originalCurve->Value(maximum));
-                BRepBuilderAPI_MakeEdge edgeBuilder(
-                    originalCurve, minimumVertex, maximumVertex, minimum, maximum);
-                if (!edgeBuilder.IsDone()) {
-                    result.message = "Could not split an original STEP boundary edge.";
-                    return result;
-                }
-                edge = edgeBuilder.Edge();
+            edges[curveEdge.id] = edgeBuilder.Edge();
+            if (curveEdge.originalBoundary) {
                 result.splitBoundarySegments.push_back({
-                    owner.first, minimum, maximum, edge, owner.second});
+                    curveEdge.originalEdgeId,
+                    curveEdge.firstParameter,
+                    curveEdge.lastParameter,
+                    edges[curveEdge.id],
+                    curveEdge.firstPatch});
                 ++result.splitBoundarySegmentCount;
             }
-            for (std::size_t index = 0; index + 1 < vertices.size(); ++index) {
-                edgeByMeshEdge[orderedEdge(vertices[index], vertices[index + 1])] = edge;
-            }
+        }
+        if (!curveEdge.originalBoundary) {
+            result.internalSeamEdges.push_back(edges[curveEdge.id]);
+            ++result.internalSeamCount;
         }
     }
 
-    for (const auto& seam : network.layout.seams) {
-        bool valid = false;
-        const auto components = orderedComponents(seam.meshEdges, valid);
-        if (!valid || components.size() != 1) {
-            result.message = "A layout seam is not one unbranched connected chain.";
+    struct PatchEdges {
+        std::vector<TopoDS_Edge> oriented;
+        std::vector<std::size_t> indices;
+    };
+    std::vector<PatchEdges> patchEdges(
+        static_cast<std::size_t>(curveNetwork.patchCount));
+    for (const auto& loop : curveNetwork.patchLoops) {
+        if (loop.patch < 0 || loop.patch >= curveNetwork.patchCount ||
+            loop.edges.size() < 2) {
+            result.message = "A curve-network patch loop is invalid.";
             return result;
         }
-        const auto& vertices = components.front();
-        const auto firstVertex = sharedVertex(vertices.front(), mesh.vertices[vertices.front()].point);
-        const auto lastVertex = sharedVertex(vertices.back(), mesh.vertices[vertices.back()].point);
-        auto edge = interpolatedSeamEdge(
-            mesh,
-            vertices,
-            firstVertex,
-            lastVertex,
-            curveOnSurfaceTolerance * 0.5);
-        if (edge.IsNull()) {
-            result.message = "Could not interpolate a shared three-dimensional layout seam.";
-            return result;
-        }
-        result.internalSeamEdges.push_back(edge);
-        ++result.internalSeamCount;
-        for (std::size_t index = 0; index + 1 < vertices.size(); ++index) {
-            edgeByMeshEdge[orderedEdge(vertices[index], vertices[index + 1])] = edge;
-        }
-    }
-
-    result.replacementFaces.reserve(network.layout.patches.size());
-    for (std::size_t patch = 0; patch < network.layout.patches.size(); ++patch) {
+        const auto patch = static_cast<std::size_t>(loop.patch);
         const auto& parameterization = network.layout.patches[patch];
-        const auto& loop = parameterization.boundaryLoop;
-        if (loop.size() < 3) {
-            result.message = "A fitted patch has a degenerate boundary loop.";
-            return result;
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        for (std::size_t local = 0;
+             local < parameterization.vertexIndices.size(); ++local) {
+            localByGlobal.emplace(
+                parameterization.vertexIndices[local], local);
         }
-        std::vector<TopoDS_Edge> loopEdges;
-        loopEdges.reserve(loop.size());
-        for (std::size_t index = 0; index < loop.size(); ++index) {
-            const auto found = edgeByMeshEdge.find(orderedEdge(loop[index], loop[(index + 1) % loop.size()]));
-            if (found == edgeByMeshEdge.end()) {
-                result.message = "A fitted patch boundary mesh edge has no shared B-rep edge.";
+        for (const auto& use : loop.edges) {
+            if (use.edgeIndex >= curveNetwork.edges.size()) {
+                result.message = "A patch loop references a missing curve edge.";
                 return result;
             }
-            loopEdges.push_back(found->second);
-        }
-        std::size_t start = 0;
-        while (start < loopEdges.size() && loopEdges[start].IsSame(
-                loopEdges[(start + loopEdges.size() - 1) % loopEdges.size()])) {
-            ++start;
-        }
-        if (start == loopEdges.size()) {
-            result.message = "A fitted patch boundary collapsed to one B-rep edge.";
-            return result;
-        }
-        BRepBuilderAPI_MakeWire wireBuilder;
-        std::vector<TopoDS_Edge> distinctEdges;
-        std::unordered_map<std::size_t, std::size_t> localByGlobal;
-        for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
-            localByGlobal.emplace(parameterization.vertexIndices[local], local);
-        }
-        std::size_t offset = 0;
-        while (offset < loopEdges.size()) {
-            const auto index = (start + offset) % loopEdges.size();
-            auto runLength = std::size_t {1};
-            while (offset + runLength < loopEdges.size() &&
-                loopEdges[(start + offset + runLength) % loopEdges.size()].IsSame(loopEdges[index])) {
-                ++runLength;
-            }
-            auto edge = loopEdges[index];
+            const auto& curveEdge = curveNetwork.edges[use.edgeIndex];
+            auto edge = edges[use.edgeIndex];
             std::vector<std::pair<gp_Pnt, gp_Pnt2d>> pcurvePoints;
-            pcurvePoints.reserve(runLength + 1);
-            for (std::size_t run = 0; run <= runLength; ++run) {
-                const auto vertex = loop[(start + offset + run) % loop.size()];
-                const auto local = localByGlobal.at(vertex);
-                const auto uv = parameterization.parameters[local];
+            pcurvePoints.reserve(curveEdge.meshVertices.size());
+            for (std::size_t sample = 0;
+                 sample < curveEdge.meshVertices.size(); ++sample) {
+                const auto found = localByGlobal.find(
+                    curveEdge.meshVertices[sample]);
+                if (found == localByGlobal.end()) {
+                    result.message =
+                        "A curve edge sample is absent from its patch parameterization.";
+                    return result;
+                }
+                const auto& uv = parameterization.parameters[found->second];
                 pcurvePoints.emplace_back(
-                    mesh.vertices[vertex].point,
+                    curveEdge.curve->Value(
+                        curveEdge.meshParameters[sample]),
                     gp_Pnt2d(uv[0], uv[1]));
             }
             double pcurveFirst = 0.0;
             double pcurveLast = 0.0;
             auto pcurve = parameterPcurve(
-                edge, pcurvePoints, pcurveFirst, pcurveLast, curveOnSurfaceTolerance);
+                edge,
+                pcurvePoints,
+                pcurveFirst,
+                pcurveLast,
+                curveOnSurfaceTolerance);
             if (pcurve.IsNull() && allowUnvalidatedFaces) {
                 pcurve = diagnosticOrderedPcurve(
                     edge,
@@ -781,7 +574,9 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                     pcurveFirst,
                     pcurveLast,
                     curveOnSurfaceTolerance);
-                if (!pcurve.IsNull()) ++result.diagnosticPcurveFallbackCount;
+                if (!pcurve.IsNull()) {
+                    ++result.diagnosticPcurveFallbackCount;
+                }
             }
             if (!attachPcurve(
                     edge,
@@ -791,31 +586,50 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                     pcurveLast,
                     curveOnSurfaceTolerance)) {
                 result.message =
-                    "Could not construct a parameter-aligned pcurve for patch " +
-                    std::to_string(patch) + " boundary run " +
-                    std::to_string(offset) + ".";
+                    "Could not attach a parameter-aligned pcurve to both sides of the frozen edge network.";
                 return result;
             }
             ++result.pcurveProjectionCount;
-            edge = orientedForPair(
+            const auto firstNode = use.forward
+                ? curveEdge.startNode : curveEdge.endNode;
+            const auto secondNode = use.forward
+                ? curveEdge.endNode : curveEdge.startNode;
+            patchEdges[patch].oriented.push_back(orientedForPair(
                 edge,
-                mesh.vertices[loop[index]].point,
-                mesh.vertices[loop[(start + offset + runLength) % loop.size()]].point);
+                curveNetwork.nodes[firstNode].point,
+                curveNetwork.nodes[secondNode].point));
+            patchEdges[patch].indices.push_back(use.edgeIndex);
+        }
+    }
+
+    for (auto& edge : edges) {
+        BRepLib::SameRange(edge, curveOnSurfaceTolerance);
+        BRepLib::SameParameter(edge, curveOnSurfaceTolerance);
+    }
+
+    result.replacementFaces.reserve(network.layout.patches.size());
+    for (std::size_t patch = 0;
+         patch < network.layout.patches.size(); ++patch) {
+        BRepBuilderAPI_MakeWire wireBuilder;
+        for (const auto& edge : patchEdges[patch].oriented) {
             wireBuilder.Add(edge);
-            distinctEdges.push_back(edge);
-            offset += runLength;
         }
         if (!wireBuilder.IsDone()) {
-            result.message = "Could not assemble a closed fitted patch wire.";
+            result.message =
+                "Could not assemble a closed fitted patch wire from the frozen curve network.";
             return result;
         }
         BRep_Builder faceBuilder;
         TopoDS_Face face;
-        faceBuilder.MakeFace(face, network.surfaces[patch], TopLoc_Location {}, curveOnSurfaceTolerance);
+        faceBuilder.MakeFace(
+            face,
+            network.surfaces[patch],
+            TopLoc_Location {},
+            curveOnSurfaceTolerance);
         faceBuilder.Add(face, wireBuilder.Wire());
+        const auto& parameterization = network.layout.patches[patch];
         if (!parameterization.vertexIndices.empty()) {
-            const auto local = std::size_t {0};
-            const auto uv = parameterization.parameters[local];
+            const auto uv = parameterization.parameters.front();
             gp_Pnt point;
             gp_Vec du;
             gp_Vec dv;
@@ -827,30 +641,38 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                 dv);
             du.Cross(dv);
             if (du.SquareMagnitude() > 1.0e-24 &&
-                gp_Dir(du).Dot(mesh.vertices[parameterization.vertexIndices[local]].normal) < 0.0) {
+                gp_Dir(du).Dot(
+                    mesh.vertices[
+                        parameterization.vertexIndices.front()].normal) < 0.0) {
                 face.Reverse();
             }
         }
         ShapeAnalysis_Edge edgeAnalyzer;
         BRep_Builder topologyBuilder;
-        for (const auto& edge : distinctEdges) {
+        for (const auto edgeIndex : patchEdges[patch].indices) {
             Standard_Real deviation = 0.0;
             ++result.sameParameterCheckCount;
-            edgeAnalyzer.CheckSameParameter(edge, face, deviation, 97);
+            edgeAnalyzer.CheckSameParameter(
+                edges[edgeIndex], face, deviation, 97);
             result.maximumSameParameterDeviation = std::max(
                 result.maximumSameParameterDeviation,
-                std::isfinite(deviation) ? static_cast<double>(deviation) :
-                    std::numeric_limits<double>::infinity());
-            if (!std::isfinite(deviation) || deviation > curveOnSurfaceTolerance) {
+                std::isfinite(deviation)
+                    ? static_cast<double>(deviation)
+                    : std::numeric_limits<double>::infinity());
+            if (!std::isfinite(deviation) ||
+                deviation > curveOnSurfaceTolerance) {
                 ++result.sameParameterFailureCount;
             } else {
-                topologyBuilder.SameParameter(edge, Standard_True);
+                topologyBuilder.SameParameter(
+                    edges[edgeIndex], Standard_True);
             }
         }
         const auto faceValid = BRepCheck_Analyzer(face).IsValid();
         if (!faceValid) ++result.brepValidationFailureCount;
-        if ((result.sameParameterFailureCount > 0 || !faceValid) && !allowUnvalidatedFaces) {
-            result.message = "A trimmed fitted patch failed dense SameParameter or BRep validation.";
+        if ((result.sameParameterFailureCount > 0 || !faceValid) &&
+            !allowUnvalidatedFaces) {
+            result.message =
+                "A trimmed fitted patch failed dense SameParameter or BRep validation.";
             return result;
         }
         result.replacementFaces.push_back(face);

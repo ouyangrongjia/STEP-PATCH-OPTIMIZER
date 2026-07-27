@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace spo {
@@ -22,6 +23,7 @@ namespace spo {
 class RegionReferenceMesh;
 struct RegionPatchLayout;
 struct RegionFittedPatchNetwork;
+struct RegionCurveNetwork;
 
 enum class RegionRefitLayoutMode {
     FixedPatchCount,
@@ -61,6 +63,7 @@ enum class RegionRefitStage {
     None,
     Constraints,
     Sampling,
+    CurveNetwork,
     Layout,
     Fitting,
     Retrim,
@@ -99,6 +102,14 @@ struct RegionRefitOptions {
     double tolerance3d = 0.03;
     double normalToleranceDegrees = 15.0;
     double curveOnSurfaceTolerance = 0.001;
+    double curveProjectionTolerance = 0.03;
+    int curveValidationSampleCount = 97;
+    int curveFairingIterations = 3;
+    double curveFairingWeight = 0.25;
+    double g1ToleranceDegrees = 5.0;
+    double g2CurvatureTolerance = 0.1;
+    double seamG1RelativeWeight = 0.1;
+    double seamG2RelativeWeight = 0.01;
     std::size_t maximumSampleTriangles = 200000;
     std::size_t targetSampleTriangles = 80000;
     std::size_t targetLayoutCarrierTriangles = 80000;
@@ -167,6 +178,7 @@ struct RegionBoundaryEdgeConstraint {
 
 struct RegionTopologyConstraints {
     std::vector<FaceId> selectedFaces;
+    std::vector<std::pair<FaceId, TopoDS_Face>> selectedFaceGeometry;
     std::vector<EdgeId> internalEdges;
     std::vector<EdgeId> lockedInternalEdges;
     std::vector<EdgeId> orderedBoundaryEdges;
@@ -222,6 +234,7 @@ struct RegionFitIterationReport {
     std::size_t boundaryHardConstraintCount = 0;
     std::size_t seamG0ConstraintCount = 0;
     std::size_t seamG1SoftConstraintCount = 0;
+    std::size_t seamG2SoftConstraintCount = 0;
     std::size_t adjacentNormalSoftConstraintCount = 0;
     std::size_t constraintRowsBefore = 0;
     std::size_t constraintRowsAfter = 0;
@@ -257,6 +270,10 @@ struct RegionFitIterationReport {
     bool holdoutWorstNormalInternalSeam = false;
     double boundaryMaximumDistance = 0.0;
     double seamMaximumDistance = 0.0;
+    double seamMaximumCurveDeviation = 0.0;
+    double seamMaximumNormalDegrees = 0.0;
+    double seamMaximumCurvatureDifference = 0.0;
+    bool seamContinuityGatePassed = false;
     double wallMilliseconds = 0.0;
     std::string stopReason;
 };
@@ -355,6 +372,19 @@ struct RegionRefitReport {
     double layoutCarrierMinimumAngleP05Degrees = 0.0;
     double layoutCarrierAspectRatioP95 = 0.0;
     std::string layoutCarrierMeshFingerprint;
+    std::string selectedCurveNetworkHash;
+    std::size_t curveNetworkNodeCount = 0;
+    std::size_t curveNetworkEdgeCount = 0;
+    std::size_t curveNetworkInternalEdgeCount = 0;
+    std::size_t curveNetworkBoundaryEdgeCount = 0;
+    std::size_t curveNetworkG0EdgeCount = 0;
+    std::size_t curveNetworkG1EdgeCount = 0;
+    std::size_t curveNetworkG2EdgeCount = 0;
+    double curveNetworkMaximumProjectionError = 0.0;
+    bool curveNetworkClosurePassed = false;
+    bool curveNetworkOwnershipPassed = false;
+    bool curveNetworkProjectionPassed = false;
+    bool curveNetworkFrozen = false;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
     bool layoutGatePassed = false;
@@ -425,6 +455,8 @@ struct RegionRefitResult {
     std::shared_ptr<RegionReferenceMesh> layoutCarrierMesh;
     std::shared_ptr<RegionPatchLayout> selectedLayout;
     std::vector<std::shared_ptr<RegionPatchLayout>> generatedLayouts;
+    std::shared_ptr<RegionCurveNetwork> selectedCurveNetwork;
+    std::vector<std::shared_ptr<RegionCurveNetwork>> generatedCurveNetworks;
     std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;
     TopoDS_Shape diagnosticSewnShape;

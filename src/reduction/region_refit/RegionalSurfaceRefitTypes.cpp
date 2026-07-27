@@ -80,6 +80,7 @@ const char* toString(const RegionRefitStage stage) {
     case RegionRefitStage::None: return "None";
     case RegionRefitStage::Constraints: return "Constraints";
     case RegionRefitStage::Sampling: return "Sampling";
+    case RegionRefitStage::CurveNetwork: return "CurveNetwork";
     case RegionRefitStage::Layout: return "Layout";
     case RegionRefitStage::Fitting: return "Fitting";
     case RegionRefitStage::Retrim: return "Retrim";
@@ -112,7 +113,9 @@ const char* toString(const RegionRefitCachePolicy policy) {
 }
 
 bool RegionRefitResult::canApply() const {
-    return report.status == RegionRefitStatus::Success && !finalShape.IsNull();
+    return report.status == RegionRefitStatus::Success &&
+        report.productValidated &&
+        !finalShape.IsNull();
 }
 
 }

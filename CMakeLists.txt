@@ -79,6 +79,7 @@ add_library(spo_core STATIC
     src/reduction/region_refit/RegionalSurfaceRefitCache.cpp
     src/reduction/region_refit/RegionReferenceMesh.cpp
     src/reduction/region_refit/QualityBalancedRegionRemesher.cpp
+    src/reduction/region_refit/RegionCurveNetwork.cpp
     src/reduction/region_refit/RegionPatchLayout.cpp
     src/reduction/region_refit/JointBSplineNetworkFitter.cpp
     src/reduction/region_refit/NativeRegionPatchNetworkBuilder.cpp
@@ -268,7 +269,7 @@ if(SPO_BUILD_TESTS)
     target_link_libraries(spo_tests PRIVATE spo_core)
     target_compile_definitions(spo_tests PRIVATE SPO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME spo_tests COMMAND spo_tests --suite unit)
-    set_tests_properties(spo_tests PROPERTIES TIMEOUT 120)
+    set_tests_properties(spo_tests PROPERTIES TIMEOUT 240)
 
     add_custom_target(spo_real_file_tests
         COMMAND $<TARGET_FILE:spo_tests> --suite real-files

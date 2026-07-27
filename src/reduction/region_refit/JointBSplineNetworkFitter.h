@@ -1,5 +1,6 @@
 #pragma once
 
+#include "reduction/region_refit/RegionCurveNetwork.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
 
 #include <Geom_BSplineSurface.hxx>
@@ -20,6 +21,10 @@ struct RegionFittedPatchNetwork {
     double holdoutMaximumNormalDegrees = 0.0;
     double boundaryMaximumDistance = 0.0;
     double seamMaximumDistance = 0.0;
+    double seamMaximumCurveDeviation = 0.0;
+    double seamMaximumNormalDegrees = 0.0;
+    double seamMaximumCurvatureDifference = 0.0;
+    bool seamContinuityGatePassed = false;
     double normalizedViolationScore = 0.0;
     bool fitGatePassed = false;
 };
@@ -43,6 +48,15 @@ bool regionLocalSupportDomainPassed(
 
 class JointBSplineNetworkFitter {
 public:
+    JointBSplineNetworkFitResult fit(
+        const RegionReferenceMesh& fittingReference,
+        const RegionReferenceMesh& layoutCarrier,
+        const RegionTopologyConstraints& constraints,
+        const std::vector<RegionPatchLayout>& candidates,
+        const std::vector<RegionCurveNetwork>& curveNetworks,
+        const RegionRefitOptions& options,
+        std::chrono::steady_clock::time_point deadline) const;
+
     JointBSplineNetworkFitResult fit(
         const RegionReferenceMesh& fittingReference,
         const RegionReferenceMesh& layoutCarrier,
