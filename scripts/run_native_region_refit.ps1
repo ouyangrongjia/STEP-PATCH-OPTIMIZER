@@ -374,11 +374,11 @@ $bestEffortPatchNetwork = Join-Path $context.directories.artifacts "fit\best_eff
 if (Test-Path -LiteralPath $bestEffortPatchNetwork -PathType Leaf) {
     $artifacts["best_effort_fitted_patch_network_step"] = $bestEffortPatchNetwork
 }
-$cadCheckCandidate = Join-Path $context.directories.artifacts "assembly\cad_check_candidate.step"
+$cadCheckCandidate = Join-Path $context.directories.artifacts "brep\cad_check_candidate.step"
 if (Test-Path -LiteralPath $cadCheckCandidate -PathType Leaf) {
     $artifacts["cad_check_candidate_step"] = $cadCheckCandidate
 }
-$sewnAttempt = Join-Path $context.directories.artifacts "assembly\sewn_attempt.step"
+$sewnAttempt = Join-Path $context.directories.artifacts "brep\sewn_attempt.step"
 if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {
     $artifacts["sewn_attempt_step"] = $sewnAttempt
 }
@@ -458,7 +458,7 @@ if ((Test-Path -LiteralPath $performancePath -PathType Leaf) -and
         -NotePropertyValue ([bool]$performance.diagnostic_pipeline_completed) -Force
     $runJson | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $runJsonPath -Encoding UTF8
 }
-$manifestPath = Join-Path $context.directories.diagnostics "evidence_manifest.json"
+$manifestPath = Join-Path $context.output_dir "evidence_manifest.json"
 $requiredDiagnosticNames = @(
     "sampling_report.json",
     "curve_network.json",

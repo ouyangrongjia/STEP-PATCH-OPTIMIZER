@@ -728,6 +728,16 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("-RedirectStandardError $creoStderr") == std::string::npos);
     assert(script.find("Get-SharedFileSha256") != std::string::npos);
     assert(script.find("[System.IO.FileShare]::ReadWrite") != std::string::npos);
+    assert(script.find(
+        "$manifestPath = Join-Path $context.output_dir \"evidence_manifest.json\"") !=
+        std::string::npos);
+    assert(script.find(
+        "$context.directories.diagnostics \"evidence_manifest.json\"") ==
+        std::string::npos);
+    assert(script.find("brep\\cad_check_candidate.step") != std::string::npos);
+    assert(script.find("brep\\sewn_attempt.step") != std::string::npos);
+    assert(script.find("assembly\\cad_check_candidate.step") == std::string::npos);
+    assert(script.find("assembly\\sewn_attempt.step") == std::string::npos);
     assert(script.find("Get-Process -Name \"nmsd\"") != std::string::npos);
     assert(script.find("$newNmsdProcesses | Stop-Process -Force") != std::string::npos);
     assert(script.find("$creoDescendantStopTimeoutSeconds = 10") != std::string::npos);
@@ -750,6 +760,18 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(probe.find("Unavailable") != std::string::npos);
     assert(probe.find("final_sewn.step") != std::string::npos);
     assert(probe.find("diagnostic_sewn.step") != std::string::npos);
+    assert(probe.find("outputDirectory / \"artifacts\" / \"curve_network\"") !=
+        std::string::npos);
+    assert(probe.find("outputDirectory / \"artifacts\" / \"layout\"") !=
+        std::string::npos);
+    assert(probe.find("outputDirectory / \"artifacts\" / \"fit\"") !=
+        std::string::npos);
+    assert(probe.find("outputDirectory / \"artifacts\" / \"brep\"") !=
+        std::string::npos);
+    assert(probe.find("outputDirectory / \"validation\"") != std::string::npos);
+    assert(probe.find("outputDirectory / \"external_cad\"") != std::string::npos);
+    assert(probe.find("outputDirectory / \"artifacts\" / \"assembly\"") ==
+        std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
 }

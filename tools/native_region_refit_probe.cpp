@@ -1133,7 +1133,19 @@ int main(int argc, char* argv[]) {
     const std::filesystem::path outputDirectory = argv[2];
     const auto finalDirectory = outputDirectory / "artifacts" / "final";
     const auto artifactStatusPath = finalDirectory / "artifact_status.json";
-    std::filesystem::create_directories(finalDirectory);
+    for (const auto& directory : {
+            outputDirectory / "artifacts" / "curve_network",
+            outputDirectory / "artifacts" / "layout",
+            outputDirectory / "artifacts" / "fit",
+            outputDirectory / "artifacts" / "brep",
+            finalDirectory,
+            outputDirectory / "artifacts" / "sampling",
+            outputDirectory / "diagnostics",
+            outputDirectory / "logs",
+            outputDirectory / "validation",
+            outputDirectory / "external_cad"}) {
+        std::filesystem::create_directories(directory);
+    }
     if (!std::filesystem::exists(artifactStatusPath) &&
         !writeJson(artifactStatusPath, QJsonObject {
             {"schema_version", 1},
@@ -1498,12 +1510,11 @@ int main(int argc, char* argv[]) {
     }
     std::filesystem::path assemblyOutputPath;
     if (!performanceOnly && (result.canApply() || !result.diagnosticSewnShape.IsNull())) {
-        const auto assemblyDirectory = outputDirectory / "artifacts" / "assembly";
-        std::filesystem::create_directories(assemblyDirectory);
+        const auto brepDirectory = outputDirectory / "artifacts" / "brep";
         const auto assemblyName = result.canApply()
             ? std::filesystem::path("cad_check_candidate.step")
             : std::filesystem::path("sewn_attempt.step");
-        assemblyOutputPath = assemblyDirectory / assemblyName;
+        assemblyOutputPath = brepDirectory / assemblyName;
         const auto& assemblyShape = result.canApply()
             ? result.finalShape
             : result.diagnosticSewnShape;
