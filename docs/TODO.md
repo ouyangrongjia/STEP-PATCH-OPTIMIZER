@@ -21,11 +21,11 @@
 
 当前阶段：命令行纵向链已重构为显式 `RegionCurveNetwork` 先行。原 STEP 外边界在网络中精确引用或受控切分；内部曲线在支撑面拟合前生成、投影、公平化、验收并冻结。布局和联合拟合通过 network hash 消费该网络，双侧轨迹以共同参数硬约束到唯一三维曲线；G1/G2 进入软目标并作至少 97 点解后门。原生 builder 为每个节点只创建一个 Vertex、每条内部曲线只创建一个 Edge，双侧 pcurve 附着完成后统一执行 `SameRange`/`SameParameter`。只要有可构造曲面网络就继续固定容差诊断缝合，产品门失败时 `canApply=false`。
 
-永久产物合同已经进入探针和运行脚本：每次运行均创建 `artifacts/final/artifact_status.json`；产品通过写 `final_sewn.step`，仅诊断缝合成功写 `diagnostic_sewn.step`，无可构造几何时记录 `Unavailable` 且不伪造 STEP。诊断增加 `curve_network.json`、曲线/节点 PLY、连续性计数、投影门、逐边 Curve-on-Surface/`SameParameter`/双侧分离/法向和曲率结果。缓存增加 curve-network 层并升级为不接受旧二进制的版本。
+永久产物合同已经进入探针和运行脚本：每次运行均在根目录写 `evidence_manifest.json`，并创建 `artifacts/curve_network/`、`artifacts/layout/`、`artifacts/fit/`、`artifacts/brep/`、`artifacts/final/`、`validation/` 和 `external_cad/`。`artifacts/final/artifact_status.json` 始终存在；产品通过写 `final_sewn.step`，仅诊断缝合成功写 `diagnostic_sewn.step`，无可构造几何时记录 `Unavailable` 且不伪造 STEP。诊断增加 `curve_network.json`、曲线/节点 PLY、连续性计数、投影门、逐边 Curve-on-Surface/`SameParameter`/双侧分离/法向和曲率结果。缓存增加 curve-network 层并升级为不接受旧二进制的版本。
 
-当前 candidate-179 独立运行 `data/runs/20260727_candidate_0179_curve_network_layout_probe_v8/` 在 `CurveNetwork` 投影门失败，报告最大投影偏差 `42272.5 mm`、门限 `0.03 mm`。该目录包含 `run.json`、`RUN.md`、完整 `evidence_manifest.json`、`diagnostics/curve_network.json` 和 `artifacts/final/artifact_status.json`；最终状态为 `Unavailable`，没有伪造 STEP。该失败只完成诊断闭环，不证明曲线网络、布局、拟合、B-Rep、缝合或产品质量在 candidate-179 上通过。
+修复前历史运行 `data/runs/20260727_candidate_0179_curve_network_layout_probe_v8/` 曾在 `CurveNetwork` 投影门报告最大偏差 `42272.5 mm`。当前 candidate-179 基线为 `data/runs/20260727_candidate_0179_curve_network_layout_probe_v12/`：总运行约 `211.7 s`，核心 `total_ms=85078.6`；K=4 候选的布局拓扑、参数化和 coarse fit 均通过，翻转三角形为 0，但 `CurveNetwork` 最大投影偏差仍为 `31.0338 mm`，超过 `0.03 mm` 门限。运行以 `NoSewableGeometry` 结束，永久产物状态为 `Unavailable`，未进入联合拟合、B-Rep 或缝合，也没有伪造 STEP。该基线只证明投影异常显著缩小以及失败闭环、目录合同有效，不证明 candidate-179 产品成功。
 
-下一验收点是查明 candidate-179 内部曲线近似出现巨幅离面偏差的几何原因，并在不放宽投影门的前提下让冻结网络通过；之后才能继续验证真实候选上的 G0/G1/G2、双侧 pcurve、`SameParameter`、固定容差缝合、StrictTopologyGate、STEP 往返和 Creo。旧 candidate-179 49→46 与 12 区域 Surface Reduction 回归仍是独立前置验收，不能由合成测试或本次 `Unavailable` 诊断替代。GUI 接入仍不在本轮范围内。
+下一验收点是查明 candidate-179 内部曲线仍有 `31.0338 mm` 离面偏差的几何原因，并在不放宽投影门的前提下让冻结网络通过；之后才能继续验证真实候选上的 G0/G1/G2、双侧 pcurve、`SameParameter`、固定容差缝合、StrictTopologyGate、STEP 往返和 Creo。旧 candidate-179 49→46 与 12 区域 Surface Reduction 回归仍是独立前置验收，不能由合成测试或本次 `Unavailable` 诊断替代。GUI 接入仍不在本轮范围内。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 
