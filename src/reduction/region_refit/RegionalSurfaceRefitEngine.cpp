@@ -492,6 +492,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.curveNetworkG0EdgeCount = selectedCurveReport.g0EdgeCount;
     result.report.curveNetworkG1EdgeCount = selectedCurveReport.g1EdgeCount;
     result.report.curveNetworkG2EdgeCount = selectedCurveReport.g2EdgeCount;
+    result.report.curveNetworkLocalCubicEdgeCount =
+        selectedCurveReport.localCubicEdgeCount;
+    result.report.curveNetworkDiagnosticPolylineEdgeCount =
+        selectedCurveReport.diagnosticPolylineEdgeCount;
+    result.report.curveNetworkContinuityDowngradeCount =
+        selectedCurveReport.continuityDowngradeCount;
     result.report.curveNetworkMaximumProjectionError =
         selectedCurveReport.maximumProjectionError;
     result.report.curveNetworkClosurePassed =
@@ -500,7 +506,13 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         selectedCurveReport.ownershipPassed;
     result.report.curveNetworkProjectionPassed =
         selectedCurveReport.projectionPassed;
+    result.report.curveNetworkProductQualityPassed =
+        selectedCurveReport.productQualityPassed;
     result.report.curveNetworkFrozen = selectedCurveReport.frozen;
+    if (!selectedCurveReport.productQualityPassed) {
+        result.report.firstProductFailureGate =
+            "CurveNetworkQuality";
+    }
     if (curveNetworkMemoryExceeded) {
         failMemoryBudget(result, RegionRefitStage::CurveNetwork);
         return result;
@@ -576,7 +588,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         selectedLayoutReport->topologyPassed &&
         selectedLayoutReport->parameterizationPassed &&
         selectedLayoutReport->coarseFitPassed;
-    if (!result.report.layoutGatePassed) {
+    if (!result.report.layoutGatePassed &&
+        result.report.firstProductFailureGate.empty()) {
         result.report.firstProductFailureGate = "Layout";
     }
     if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
@@ -729,6 +742,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.curveNetworkG0EdgeCount = fittedCurveReport.g0EdgeCount;
     result.report.curveNetworkG1EdgeCount = fittedCurveReport.g1EdgeCount;
     result.report.curveNetworkG2EdgeCount = fittedCurveReport.g2EdgeCount;
+    result.report.curveNetworkLocalCubicEdgeCount =
+        fittedCurveReport.localCubicEdgeCount;
+    result.report.curveNetworkDiagnosticPolylineEdgeCount =
+        fittedCurveReport.diagnosticPolylineEdgeCount;
+    result.report.curveNetworkContinuityDowngradeCount =
+        fittedCurveReport.continuityDowngradeCount;
     result.report.curveNetworkMaximumProjectionError =
         fittedCurveReport.maximumProjectionError;
     result.report.curveNetworkClosurePassed =
@@ -737,7 +756,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         fittedCurveReport.ownershipPassed;
     result.report.curveNetworkProjectionPassed =
         fittedCurveReport.projectionPassed;
+    result.report.curveNetworkProductQualityPassed =
+        fittedCurveReport.productQualityPassed;
     result.report.curveNetworkFrozen = fittedCurveReport.frozen;
+    if (!fittedCurveReport.productQualityPassed &&
+        result.report.firstProductFailureGate.empty()) {
+        result.report.firstProductFailureGate =
+            "CurveNetworkQuality";
+    }
     const auto fittedLayoutReport = std::find_if(
         result.report.layoutCandidates.begin(),
         result.report.layoutCandidates.end(),
@@ -749,9 +775,11 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         fittedLayoutReport->topologyPassed &&
         fittedLayoutReport->parameterizationPassed &&
         fittedLayoutReport->coarseFitPassed;
-    if (!result.report.layoutGatePassed) {
+    if (!result.report.layoutGatePassed &&
+        result.report.firstProductFailureGate.empty()) {
         result.report.firstProductFailureGate = "Layout";
-    } else if (!fitted.success()) {
+    } else if (!fitted.success() &&
+        result.report.firstProductFailureGate.empty()) {
         result.report.firstProductFailureGate = "Fitting";
     }
     if (request.diagnosticStopAfterStage == RegionRefitStage::Fitting) {
@@ -772,6 +800,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         *result.selectedCurveNetwork,
         request.options.curveOnSurfaceTolerance,
         true);
+    if (nativeBuild.constructible()) {
+        result.replacementQuilt = nativeBuild.replacementShape;
+    }
     const auto boundary = boundaryAnalysisFromConstraints(result.constraints);
     PatchReplacementAssemblyResult assembly;
     if (nativeBuild.constructible() && boundary.valid) {
@@ -978,7 +1009,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         return result;
     }
 
-    const auto fullyValidated = result.report.layoutGatePassed &&
+    const auto fullyValidated =
+        result.report.curveNetworkProductQualityPassed &&
+        result.report.layoutGatePassed &&
         result.report.fitGatePassed && result.report.retrimValidationPassed &&
         result.report.repairPassed && strictReport.passed && roundtripReport.passed;
     result.report.productValidated = fullyValidated;
@@ -1033,15 +1066,20 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.selectionOutcome = "NoProductValidatedResult";
         result.report.unattainableReason = "A fitted or sewn diagnostic candidate did not pass every product geometry and topology gate.";
         result.report.status = RegionRefitStatus::Failed;
-        result.report.failureStage = !result.report.layoutGatePassed
-            ? RegionRefitStage::Layout
-            : (!result.report.fitGatePassed
+        result.report.failureStage =
+            !result.report.curveNetworkProductQualityPassed
+            ? RegionRefitStage::CurveNetwork
+            : (!result.report.layoutGatePassed
+                ? RegionRefitStage::Layout
+                : (!result.report.fitGatePassed
                 ? RegionRefitStage::Fitting
                 : (!result.report.retrimValidationPassed
                     ? RegionRefitStage::Retrim
                     : (!result.report.repairPassed
                         ? RegionRefitStage::Sewing
-                        : (!strictReport.passed ? RegionRefitStage::StrictTopology : RegionRefitStage::StepRoundtrip))));
+                        : (!strictReport.passed
+                            ? RegionRefitStage::StrictTopology
+                            : RegionRefitStage::StepRoundtrip)))));
         result.report.message = "Best-effort regional refit completed through sewing and validation but did not pass all product gates.";
         result.report.continuationStopReason = result.report.message;
     }

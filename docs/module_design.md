@@ -189,7 +189,7 @@ src/reduction 实现当前原生曲面缩减产品合同。
 
 - `UniformUv` 等 STEP 参考采样提供拟合点、法向、曲率和原始 `FaceId/UV`；其 STL 只用于形状参考和诊断。
 - 独立 `QualityBalanced` 载体只用于临时分区和局部参数化；载体必须通过连通、可定向、无孔单外环圆盘、零翻转和内存预检，不能成为最终内部共享曲线的几何真值。
-- `RegionCurveNetwork` 在支撑面拟合前显式冻结节点、唯一三维曲线边、相邻 patch、连续性等级、原边界来源、方向化 patch 闭环和稳定 hash。外边界直接引用或受控切分原 STEP Edge；内部界面先由临时分区提出，再投影到原 STEP 连续几何并公平化。闭环、所有权、投影、非流形和冻结门通过后，布局与拟合只能按 network hash 消费该网络。
+- `RegionCurveNetwork` 在支撑面拟合前显式冻结节点、唯一三维曲线边、相邻 patch、期望与实际连续性、构造模式、原边界来源、方向化 patch 闭环和稳定 hash。外边界直接引用或受控切分原 STEP Edge；内部界面先由临时分区提出并投影到原 STEP，再以端点固定、局部弦切向和不超过相邻最短弦长三分之一的手柄构造三次复合 B-spline。手柄缩放按 `1/0.5/0.25` 验收，每条曲线至少检查 `max(97, 8×段数)` 个样本。三次曲线仍超出投影门时，只允许用通过投影点的一级 B-spline 继续诊断，并把实际连续性降为 G0、永久取消产品资格。闭环、所有权、投影、非流形和冻结门通过后，布局与拟合只能按包含构造模式和实际连续性的 network hash 消费该网络。
 - 每张 patch 使用 trimmed-disk 局部域：完整边界单调映射到 `[0,1]²` 内的凸边界，再以确定性的 Tutte/调和方法求内部参数。边界可有多于四个转折；不能形成合法圆盘或出现 UV 翻转时直接拒绝，不回退到巨大单面后裁剪。支撑曲面的 Jacobian 构造性硬门按布局 UV 三角形作稠密重心采样，并覆盖 trim 外侧的小安全带，以载体三角形法向确定一致朝向；未被 trim 使用的矩形角点不参与判定，但 trim 域及安全带内任一点塌缩或翻转仍立即拒绝。
 - 原始 STEP 三维边、相邻保留面及 `FaceId` 始终是边界和拓扑真值。
 
@@ -197,7 +197,7 @@ src/reduction 实现当前原生曲面缩减产品合同。
 
 构造顺序是稳定合同：每个曲线节点只创建一个拓扑 Vertex，每条内部曲线只创建一个三维 Edge；先为两侧支撑面附着各自 pcurve，再统一执行 `SameRange` 与 `SameParameter`，最后严格按方向化 patch 闭环构造 Wire 与 Face，并作至少 97 点逐边稠密检查。外边界优先复用原 STEP Edge，只有范围不完整时才受控切分。若三维曲线投影不能产生单调 pcurve 参数，可按共享 Edge 的既有参数范围和 trim 链顺序构造有序诊断 pcurve；该回退必须单独计数，仍接受完整 Curve-on-Surface 与 `SameParameter` 失败事实，不能成为产品通过依据。逐边报告必须区分拓扑开口、Curve-on-Surface 偏差、相邻曲面分离、法向/曲率连续性和三档显示三角化裂纹。
 
-缝合且拓扑水密只表示诊断链完成。只要存在有限、无翻转且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定容差诊断缝合；产品门失败不会中止该诊断链，也不会提高容差。若完整硬约束已明确不相容且受约束修正破坏局部构造性，可保留已经通过有限性、控制网包络和 Jacobian 检查的第一阶段多 patch 支撑网，仅用于诊断缝合，并明确记录约束失败；该路径永远不是产品拟合成功。每次探针运行都创建 `artifacts/final/`：产品通过时写 `final_sewn.step`，未通过但成功缝合时写 `diagnostic_sewn.step`，根本没有可构造几何时不伪造 STEP；`artifact_status.json` 始终记录 `ProductValidated`、`DiagnosticOnly` 或 `Unavailable`。任一产品门失败时 `canApply` 必须为 false。
+缝合且拓扑水密只表示诊断链完成。只要存在有限、无翻转且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定容差诊断缝合；产品门失败不会中止该诊断链，也不会提高容差。若完整硬约束已明确不相容且受约束修正破坏局部构造性，可保留已经通过有限性、控制网包络和 Jacobian 检查的第一阶段多 patch 支撑网，仅用于诊断缝合，并明确记录约束失败；该路径永远不是产品拟合成功。每次探针运行都按可达阶段保留 `selected_curve_network.step`、拟合 patch network、`replacement_quilt.step`、`sewn_attempt.step` 和最终整件 STEP，并在 manifest 中登记 SHA-256。产品通过时写 `final_sewn.step`，未通过但成功缝合时写 `diagnostic_sewn.step`，根本没有可构造几何时不伪造 STEP；`artifact_status.json` 始终记录 `ProductValidated`、`DiagnosticOnly` 或 `Unavailable`。任一产品门失败时 `canApply` 必须为 false。
 
 ## patch：边界约束替换
 

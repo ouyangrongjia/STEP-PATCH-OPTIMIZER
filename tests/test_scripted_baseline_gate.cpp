@@ -724,6 +724,8 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("AdaptiveSafetyCap") != std::string::npos);
     assert(script.find("LayoutCarrierSamplingMode") != std::string::npos);
     assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(script.find("selected_curve_network.step") != std::string::npos);
+    assert(script.find("replacement_quilt.step") != std::string::npos);
     assert(script.find("sewn_attempt.step") != std::string::npos);
     assert(script.find("cad_check_candidate.step") != std::string::npos);
     assert(script.find("curve_network.json") != std::string::npos);
@@ -755,11 +757,13 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("$newNmsdProcesses | Wait-Process") != std::string::npos);
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
-    assert(probe.find("native-regional-refit-v34-curve-network") != std::string::npos);
+    assert(probe.find("native-regional-refit-v35-local-curve") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
     assert(probe.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(probe.find("selected_curve_network.step") != std::string::npos);
+    assert(probe.find("replacement_quilt.step") != std::string::npos);
     assert(probe.find("sewn_attempt.step") != std::string::npos);
     assert(probe.find("cad_check_candidate.step") != std::string::npos);
     assert(probe.find("edge_consistency_report.json") != std::string::npos);
@@ -785,7 +789,13 @@ void test_native_region_refit_best_effort_artifact_contract() {
         std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
-    assert(curveNetwork.find("fit_method=GeomAPI_PointsToBSpline") !=
+    assert(curveNetwork.find("GeomAPI_PointsToBSpline") ==
+        std::string::npos);
+    assert(curveNetwork.find(
+        "RegionInternalCurveConstructionMode::LocalCubic") !=
+        std::string::npos);
+    assert(curveNetwork.find(
+        "RegionInternalCurveConstructionMode::DiagnosticPolyline") !=
         std::string::npos);
     assert(curveNetwork.find("max_projected_input_gap=") != std::string::npos);
     assert(curveNetwork.find("validation_sample=") != std::string::npos);

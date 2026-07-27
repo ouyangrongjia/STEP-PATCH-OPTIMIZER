@@ -9,6 +9,9 @@
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
 
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRep_Builder.hxx>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,6 +21,8 @@
 #include <QSysInfo>
 #include <QTextStream>
 #include <QThread>
+#include <Standard_Failure.hxx>
+#include <TopoDS_Compound.hxx>
 
 #include <algorithm>
 #include <array>
@@ -267,7 +272,15 @@ QJsonObject curveNetworkToJson(
                 {"end_node", QString::number(edge.endNode)},
                 {"first_patch", edge.firstPatch},
                 {"second_patch", edge.secondPatch},
+                {"requested_continuity",
+                    spo::toString(edge.requestedContinuity)},
                 {"continuity", spo::toString(edge.continuity)},
+                {"construction_mode",
+                    spo::toString(edge.constructionMode)},
+                {"product_quality_passed",
+                    edge.productQualityPassed},
+                {"validation_sample_count",
+                    edge.validationSampleCount},
                 {"original_boundary", edge.originalBoundary},
                 {"has_original_edge", edge.hasOriginalEdge},
                 {"original_edge_id", edge.hasOriginalEdge
@@ -308,10 +321,20 @@ QJsonObject curveNetworkToJson(
         {"g0_edge_count", QString::number(result.report.curveNetworkG0EdgeCount)},
         {"g1_edge_count", QString::number(result.report.curveNetworkG1EdgeCount)},
         {"g2_edge_count", QString::number(result.report.curveNetworkG2EdgeCount)},
+        {"local_cubic_edge_count",
+            QString::number(result.report.curveNetworkLocalCubicEdgeCount)},
+        {"diagnostic_polyline_edge_count",
+            QString::number(
+                result.report.curveNetworkDiagnosticPolylineEdgeCount)},
+        {"continuity_downgrade_count",
+            QString::number(
+                result.report.curveNetworkContinuityDowngradeCount)},
         {"maximum_projection_error", result.report.curveNetworkMaximumProjectionError},
         {"closure_passed", result.report.curveNetworkClosurePassed},
         {"ownership_passed", result.report.curveNetworkOwnershipPassed},
         {"projection_passed", result.report.curveNetworkProjectionPassed},
+        {"product_quality_passed",
+            result.report.curveNetworkProductQualityPassed},
         {"frozen", result.report.curveNetworkFrozen},
         {"nodes", nodes},
         {"edges", edges},
@@ -379,6 +402,40 @@ QByteArray curveNetworkPly(
                << line.color[2] << '\n';
     }
     return output;
+}
+
+TopoDS_Shape curveNetworkShape(const spo::RegionCurveNetwork& network) {
+    try {
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+        for (const auto& node : network.nodes) {
+            builder.Add(
+                compound,
+                BRepBuilderAPI_MakeVertex(node.point).Vertex());
+        }
+        for (const auto& edge : network.edges) {
+            if (edge.hasOriginalEdge &&
+                edge.reusesOriginalEdge &&
+                !edge.originalEdge.IsNull()) {
+                builder.Add(compound, edge.originalEdge);
+                continue;
+            }
+            if (edge.curve.IsNull() ||
+                !(edge.lastParameter > edge.firstParameter)) {
+                return {};
+            }
+            auto curveEdge = BRepBuilderAPI_MakeEdge(
+                edge.curve,
+                edge.firstParameter,
+                edge.lastParameter);
+            if (!curveEdge.IsDone()) return {};
+            builder.Add(compound, curveEdge.Edge());
+        }
+        return compound;
+    } catch (const Standard_Failure&) {
+        return {};
+    }
 }
 
 QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
@@ -1173,7 +1230,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v34-curve-network";
+    request.options.algorithmFingerprint = "native-regional-refit-v35-local-curve";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1308,7 +1365,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v34-curve-network-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v35-local-curve-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
@@ -1472,6 +1529,12 @@ int main(int argc, char* argv[]) {
     if (!performanceOnly && result.selectedCurveNetwork) {
         const auto curveNetworkDirectory =
             outputDirectory / "artifacts" / "curve_network";
+        const auto curveShape =
+            curveNetworkShape(*result.selectedCurveNetwork);
+        if (curveShape.IsNull()) {
+            std::cerr << "无法构造冻结曲线网络 STEP compound。\n";
+            return 1;
+        }
         if (!writeJson(
                 curveNetworkDirectory / "selected_curve_network.json",
                 curveNetworkToJson(
@@ -1482,6 +1545,13 @@ int main(int argc, char* argv[]) {
                     *result.selectedCurveNetwork,
                     request.options.curveValidationSampleCount))) {
             std::cerr << "无法写入冻结曲线网络证据。\n";
+            return 1;
+        }
+        const auto curveWrite = spo::StepWriter().write(
+            spo::ShapeDocument(curveShape, {}),
+            curveNetworkDirectory / "selected_curve_network.step");
+        if (!curveWrite.success()) {
+            std::cerr << curveWrite.message() << '\n';
             return 1;
         }
     }
@@ -1503,6 +1573,17 @@ int main(int argc, char* argv[]) {
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(result.fittedPatchNetwork, {}),
             fitDirectory / fitName);
+        if (!write.success()) {
+            std::cerr << write.message() << '\n';
+            return 1;
+        }
+    }
+    if (!performanceOnly && !result.replacementQuilt.IsNull()) {
+        const auto quiltPath =
+            outputDirectory / "artifacts" / "brep" / "replacement_quilt.step";
+        const auto write = spo::StepWriter().write(
+            spo::ShapeDocument(result.replacementQuilt, {}),
+            quiltPath);
         if (!write.success()) {
             std::cerr << write.message() << '\n';
             return 1;

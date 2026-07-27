@@ -381,10 +381,14 @@ struct RegionRefitReport {
     std::size_t curveNetworkG0EdgeCount = 0;
     std::size_t curveNetworkG1EdgeCount = 0;
     std::size_t curveNetworkG2EdgeCount = 0;
+    std::size_t curveNetworkLocalCubicEdgeCount = 0;
+    std::size_t curveNetworkDiagnosticPolylineEdgeCount = 0;
+    std::size_t curveNetworkContinuityDowngradeCount = 0;
     double curveNetworkMaximumProjectionError = 0.0;
     bool curveNetworkClosurePassed = false;
     bool curveNetworkOwnershipPassed = false;
     bool curveNetworkProjectionPassed = false;
+    bool curveNetworkProductQualityPassed = false;
     bool curveNetworkFrozen = false;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;
     std::vector<RegionFitAttemptReport> fitAttempts;
@@ -460,6 +464,7 @@ struct RegionRefitResult {
     std::vector<std::shared_ptr<RegionCurveNetwork>> generatedCurveNetworks;
     std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork;
     TopoDS_Shape fittedPatchNetwork;
+    TopoDS_Shape replacementQuilt;
     TopoDS_Shape diagnosticSewnShape;
     TopoDS_Shape finalShape;
 

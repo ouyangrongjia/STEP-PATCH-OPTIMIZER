@@ -22,6 +22,13 @@ enum class RegionCurveContinuity {
 
 const char* toString(RegionCurveContinuity continuity);
 
+enum class RegionInternalCurveConstructionMode {
+    LocalCubic,
+    DiagnosticPolyline
+};
+
+const char* toString(RegionInternalCurveConstructionMode mode);
+
 struct RegionCurveNetworkNode {
     std::size_t id = 0;
     std::size_t meshVertex = 0;
@@ -36,7 +43,12 @@ struct RegionCurveNetworkEdge {
     std::size_t endNode = 0;
     int firstPatch = -1;
     int secondPatch = -1;
+    RegionCurveContinuity requestedContinuity = RegionCurveContinuity::G0;
     RegionCurveContinuity continuity = RegionCurveContinuity::G0;
+    RegionInternalCurveConstructionMode constructionMode =
+        RegionInternalCurveConstructionMode::LocalCubic;
+    bool productQualityPassed = true;
+    int validationSampleCount = 0;
     bool originalBoundary = false;
     bool hasOriginalEdge = false;
     EdgeId originalEdgeId = 0;
@@ -76,7 +88,11 @@ struct RegionCurveNetworkReport {
     std::size_t g0EdgeCount = 0;
     std::size_t g1EdgeCount = 0;
     std::size_t g2EdgeCount = 0;
+    std::size_t localCubicEdgeCount = 0;
+    std::size_t diagnosticPolylineEdgeCount = 0;
+    std::size_t continuityDowngradeCount = 0;
     double maximumProjectionError = 0.0;
+    bool productQualityPassed = false;
     std::string rejectionReason;
 };
 

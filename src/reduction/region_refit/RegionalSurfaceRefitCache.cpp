@@ -3,7 +3,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
-#include <GeomAPI_Interpolate.hxx>
+#include <Geom_BSplineCurve.hxx>
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QFile>
@@ -12,8 +12,9 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
-#include <TColStd_HArray1OfReal.hxx>
-#include <TColgp_HArray1OfPnt.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt.hxx>
 
 #include <algorithm>
 #include <chrono>
@@ -32,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 6;
+constexpr quint32 kVersion = 7;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -449,7 +450,12 @@ void writeCurveNetwork(
     for (const auto& edge : network.edges) {
         stream << quint64(edge.id) << quint64(edge.startNode)
                << quint64(edge.endNode) << edge.firstPatch << edge.secondPatch
-               << qint32(edge.continuity) << edge.originalBoundary
+               << qint32(edge.requestedContinuity)
+               << qint32(edge.continuity)
+               << qint32(edge.constructionMode)
+               << edge.productQualityPassed
+               << edge.validationSampleCount
+               << edge.originalBoundary
                << edge.hasOriginalEdge << quint64(edge.originalEdgeId)
                << edge.firstParameter << edge.lastParameter
                << edge.reusesOriginalEdge << edge.splitsOriginalEdge
@@ -458,10 +464,24 @@ void writeCurveNetwork(
         for (const auto vertex : edge.meshVertices) stream << quint64(vertex);
         stream << quint64(edge.meshParameters.size());
         for (const auto parameter : edge.meshParameters) stream << parameter;
-        stream << quint64(edge.meshParameters.size());
-        for (const auto parameter : edge.meshParameters) {
-            const auto point = edge.curve->Value(parameter);
-            stream << point.X() << point.Y() << point.Z();
+        const auto bspline =
+            Handle(Geom_BSplineCurve)::DownCast(edge.curve);
+        if (edge.originalBoundary || bspline.IsNull()) {
+            stream << quint64(0);
+            continue;
+        }
+        stream << quint64(bspline->NbPoles())
+               << quint64(bspline->NbKnots())
+               << qint32(bspline->Degree())
+               << bspline->IsPeriodic();
+        for (int pole = 1; pole <= bspline->NbPoles(); ++pole) {
+            const auto point = bspline->Pole(pole);
+            stream << point.X() << point.Y() << point.Z()
+                   << bspline->Weight(pole);
+        }
+        for (int knot = 1; knot <= bspline->NbKnots(); ++knot) {
+            stream << bspline->Knot(knot)
+                   << qint32(bspline->Multiplicity(knot));
         }
     }
     stream << quint64(network.patchLoops.size());
@@ -510,10 +530,15 @@ bool readCurveNetwork(
         quint64 id = 0;
         quint64 startNode = 0;
         quint64 endNode = 0;
+        qint32 requestedContinuity = 0;
         qint32 continuity = 0;
+        qint32 constructionMode = 0;
         quint64 originalEdgeId = 0;
         stream >> id >> startNode >> endNode
-               >> edge.firstPatch >> edge.secondPatch >> continuity
+               >> edge.firstPatch >> edge.secondPatch
+               >> requestedContinuity >> continuity >> constructionMode
+               >> edge.productQualityPassed
+               >> edge.validationSampleCount
                >> edge.originalBoundary >> edge.hasOriginalEdge
                >> originalEdgeId >> edge.firstParameter >> edge.lastParameter
                >> edge.reusesOriginalEdge >> edge.splitsOriginalEdge
@@ -521,7 +546,12 @@ bool readCurveNetwork(
         edge.id = static_cast<std::size_t>(id);
         edge.startNode = static_cast<std::size_t>(startNode);
         edge.endNode = static_cast<std::size_t>(endNode);
+        edge.requestedContinuity =
+            static_cast<RegionCurveContinuity>(requestedContinuity);
         edge.continuity = static_cast<RegionCurveContinuity>(continuity);
+        edge.constructionMode =
+            static_cast<RegionInternalCurveConstructionMode>(
+                constructionMode);
         edge.originalEdgeId = static_cast<EdgeId>(originalEdgeId);
         if (!readCount(stream, count)) return false;
         edge.meshVertices.resize(count);
@@ -533,27 +563,10 @@ bool readCurveNetwork(
         if (!readCount(stream, count)) return false;
         edge.meshParameters.resize(count);
         for (auto& parameter : edge.meshParameters) stream >> parameter;
-        std::size_t pointCount = 0;
-        if (!readCount(stream, pointCount) ||
-            pointCount != edge.meshParameters.size() || pointCount < 2) {
-            return false;
-        }
-        Handle(TColgp_HArray1OfPnt) points =
-            new TColgp_HArray1OfPnt(1, static_cast<int>(pointCount));
-        Handle(TColStd_HArray1OfReal) parameters =
-            new TColStd_HArray1OfReal(1, static_cast<int>(pointCount));
-        for (std::size_t index = 0; index < pointCount; ++index) {
-            double x = 0.0;
-            double y = 0.0;
-            double z = 0.0;
-            stream >> x >> y >> z;
-            points->SetValue(
-                static_cast<int>(index + 1), gp_Pnt(x, y, z));
-            parameters->SetValue(
-                static_cast<int>(index + 1),
-                edge.meshParameters[index]);
-        }
+        std::size_t poleCount = 0;
+        if (!readCount(stream, poleCount)) return false;
         if (edge.originalBoundary) {
+            if (poleCount != 0) return false;
             const auto* constraint = cachedConstraintFor(
                 constraints, edge.originalEdgeId);
             if (constraint == nullptr || constraint->originalEdge.IsNull()) {
@@ -565,12 +578,58 @@ bool readCurveNetwork(
             edge.curve = BRep_Tool::Curve(
                 edge.originalEdge, first, last);
         } else {
+            std::size_t knotCount = 0;
+            qint32 degree = 0;
+            bool periodic = false;
+            if (poleCount < 2 || !readCount(stream, knotCount) ||
+                knotCount < 2) {
+                return false;
+            }
+            stream >> degree >> periodic;
+            if (degree < 1 ||
+                poleCount > static_cast<std::size_t>(
+                    std::numeric_limits<int>::max()) ||
+                knotCount > static_cast<std::size_t>(
+                    std::numeric_limits<int>::max())) {
+                return false;
+            }
+            TColgp_Array1OfPnt poles(
+                1, static_cast<int>(poleCount));
+            TColStd_Array1OfReal weights(
+                1, static_cast<int>(poleCount));
+            for (std::size_t index = 0; index < poleCount; ++index) {
+                double x = 0.0;
+                double y = 0.0;
+                double z = 0.0;
+                double weight = 1.0;
+                stream >> x >> y >> z >> weight;
+                poles.SetValue(
+                    static_cast<int>(index + 1), gp_Pnt(x, y, z));
+                weights.SetValue(
+                    static_cast<int>(index + 1), weight);
+            }
+            TColStd_Array1OfReal knots(
+                1, static_cast<int>(knotCount));
+            TColStd_Array1OfInteger multiplicities(
+                1, static_cast<int>(knotCount));
+            for (std::size_t index = 0; index < knotCount; ++index) {
+                double knot = 0.0;
+                qint32 multiplicity = 0;
+                stream >> knot >> multiplicity;
+                knots.SetValue(
+                    static_cast<int>(index + 1), knot);
+                multiplicities.SetValue(
+                    static_cast<int>(index + 1), multiplicity);
+            }
             try {
-                GeomAPI_Interpolate interpolation(
-                    points, parameters, Standard_False, 1.0e-9);
-                interpolation.Perform();
-                if (!interpolation.IsDone()) return false;
-                edge.curve = interpolation.Curve();
+                edge.curve = new Geom_BSplineCurve(
+                    poles,
+                    weights,
+                    knots,
+                    multiplicities,
+                    degree,
+                    periodic,
+                    Standard_True);
             } catch (...) {
                 return false;
             }

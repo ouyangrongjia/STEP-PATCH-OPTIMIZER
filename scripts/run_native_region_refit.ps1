@@ -363,11 +363,15 @@ if (Test-Path -LiteralPath $layoutSvg -PathType Leaf) {
 }
 $curveNetworkJson = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.json"
 $curveNetworkPly = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.ply"
+$curveNetworkStep = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.step"
 if (Test-Path -LiteralPath $curveNetworkJson -PathType Leaf) {
     $artifacts["selected_curve_network_json"] = $curveNetworkJson
 }
 if (Test-Path -LiteralPath $curveNetworkPly -PathType Leaf) {
     $artifacts["selected_curve_network_ply"] = $curveNetworkPly
+}
+if (Test-Path -LiteralPath $curveNetworkStep -PathType Leaf) {
+    $artifacts["selected_curve_network_step"] = $curveNetworkStep
 }
 $fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch_network.step"
 if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
@@ -380,6 +384,10 @@ if (Test-Path -LiteralPath $bestEffortPatchNetwork -PathType Leaf) {
 $cadCheckCandidate = Join-Path $context.directories.artifacts "brep\cad_check_candidate.step"
 if (Test-Path -LiteralPath $cadCheckCandidate -PathType Leaf) {
     $artifacts["cad_check_candidate_step"] = $cadCheckCandidate
+}
+$replacementQuilt = Join-Path $context.directories.artifacts "brep\replacement_quilt.step"
+if (Test-Path -LiteralPath $replacementQuilt -PathType Leaf) {
+    $artifacts["replacement_quilt_step"] = $replacementQuilt
 }
 $sewnAttempt = Join-Path $context.directories.artifacts "brep\sewn_attempt.step"
 if (Test-Path -LiteralPath $sewnAttempt -PathType Leaf) {

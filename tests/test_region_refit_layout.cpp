@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 
@@ -142,6 +143,98 @@ PlanarCurveFixture makePlanarCurveFixture(const int resolution) {
         constraint.selectedFace = face;
         constraint.hardPositionConstraint = true;
         fixture.constraints.boundaryEdges.push_back(std::move(constraint));
+    }
+    fixture.mesh.updateIntegrationWeights();
+    return fixture;
+}
+
+PlanarCurveFixture makeTriangulatedCurveFixture(const int resolution) {
+    PlanarCurveFixture fixture;
+    fixture.mesh = makeGrid(resolution, resolution);
+    for (auto& vertex : fixture.mesh.vertices) {
+        const auto x = vertex.point.X();
+        const auto y = vertex.point.Y();
+        vertex.point.SetZ(
+            0.12 * std::sin(8.0 * x) * std::sin(7.0 * y));
+        vertex.sources.clear();
+        vertex.boundaryEdgeIds.clear();
+    }
+    for (std::size_t index = 0;
+         index < fixture.mesh.triangles.size(); ++index) {
+        auto& triangle = fixture.mesh.triangles[index];
+        const auto faceId = static_cast<spo::FaceId>(index + 1);
+        triangle.faceId = faceId;
+        BRepBuilderAPI_MakeWire wire;
+        for (int side = 0; side < 3; ++side) {
+            wire.Add(BRepBuilderAPI_MakeEdge(
+                fixture.mesh.vertices[
+                    triangle.vertices[side]].point,
+                fixture.mesh.vertices[
+                    triangle.vertices[(side + 1) % 3]].point).Edge());
+        }
+        const auto face = BRepBuilderAPI_MakeFace(wire.Wire()).Face();
+        fixture.constraints.selectedFaces.push_back(faceId);
+        fixture.constraints.selectedFaceGeometry.push_back(
+            {faceId, face});
+        for (const auto vertexIndex : triangle.vertices) {
+            auto& vertex = fixture.mesh.vertices[vertexIndex];
+            if (vertex.sources.empty()) {
+                spo::RegionReferenceSourceSample source;
+                source.faceId = faceId;
+                source.normal = vertex.normal;
+                source.normalDefined = true;
+                vertex.sources.push_back(source);
+            }
+        }
+    }
+    const auto index = [resolution](const int column, const int row) {
+        return static_cast<std::size_t>(
+            row * (resolution + 1) + column);
+    };
+    std::vector<std::array<std::size_t, 2>> boundarySegments;
+    for (int column = 0; column < resolution; ++column) {
+        boundarySegments.push_back(
+            {index(column, 0), index(column + 1, 0)});
+    }
+    for (int row = 0; row < resolution; ++row) {
+        boundarySegments.push_back(
+            {index(resolution, row), index(resolution, row + 1)});
+    }
+    for (int column = resolution; column > 0; --column) {
+        boundarySegments.push_back(
+            {index(column, resolution), index(column - 1, resolution)});
+    }
+    for (int row = resolution; row > 0; --row) {
+        boundarySegments.push_back(
+            {index(0, row), index(0, row - 1)});
+    }
+    for (std::size_t edgeId = 0;
+         edgeId < boundarySegments.size(); ++edgeId) {
+        const auto segment = boundarySegments[edgeId];
+        const auto edge = BRepBuilderAPI_MakeEdge(
+            fixture.mesh.vertices[segment[0]].point,
+            fixture.mesh.vertices[segment[1]].point).Edge();
+        fixture.mesh.vertices[segment[0]].boundaryEdgeIds.push_back(
+            static_cast<spo::EdgeId>(edgeId));
+        fixture.mesh.vertices[segment[1]].boundaryEdgeIds.push_back(
+            static_cast<spo::EdgeId>(edgeId));
+        spo::RegionBoundaryEdgeConstraint constraint;
+        constraint.edgeId = static_cast<spo::EdgeId>(edgeId);
+        constraint.selectedFaceId =
+            fixture.mesh.vertices[segment[0]].sources.front().faceId;
+        constraint.originalEdge = edge;
+        constraint.selectedFace =
+            fixture.constraints.selectedFaceGeometry[
+                static_cast<std::size_t>(
+                    constraint.selectedFaceId - 1)].second;
+        constraint.hardPositionConstraint = true;
+        fixture.constraints.boundaryEdges.push_back(
+            std::move(constraint));
+    }
+    for (auto& vertex : fixture.mesh.vertices) {
+        vertex.boundaryEndpoint =
+            vertex.boundaryEdgeIds.size() > 1;
+        vertex.hardCorner = vertex.boundaryEndpoint;
     }
     fixture.mesh.updateIntegrationWeights();
     return fixture;
@@ -474,11 +567,19 @@ void test_curve_network_freezes_one_shared_internal_curve_before_layout_binding(
     assert(network.report.ownershipPassed);
     assert(network.report.closurePassed);
     assert(network.report.projectionPassed);
+    assert(network.report.productQualityPassed);
+    assert(network.report.localCubicEdgeCount == 1);
+    assert(network.report.diagnosticPolylineEdgeCount == 0);
+    assert(network.report.continuityDowngradeCount == 0);
     const auto internal = std::find_if(
         network.edges.begin(),
         network.edges.end(),
         [](const auto& edge) { return !edge.originalBoundary; });
     assert(internal != network.edges.end());
+    assert(internal->constructionMode ==
+        spo::RegionInternalCurveConstructionMode::LocalCubic);
+    assert(internal->productQualityPassed);
+    assert(internal->validationSampleCount >= 97);
     const auto parameter =
         (internal->firstParameter + internal->lastParameter) * 0.5;
     const auto frozenPoint = internal->curve->Value(parameter);
@@ -494,6 +595,41 @@ void test_curve_network_freezes_one_shared_internal_curve_before_layout_binding(
         network.hash);
     assert(layouts.selectedCandidates.front().hash !=
         network.partitionLayoutHash);
+}
+
+void test_triangulated_curve_network_uses_diagnostic_polyline_without_blocking_topology() {
+    const auto fixture = makeTriangulatedCurveFixture(10);
+    spo::RegionRefitOptions options;
+    options.fixedPatchCount = 2;
+    options.maximumParameterDistortion = 1000.0;
+    options.curveProjectionTolerance = 1.0e-7;
+    options.curveFairingIterations = 0;
+    const auto generated = spo::RegionCurveNetworkGenerator().generate(
+        fixture.mesh,
+        fixture.constraints,
+        spo::RegionRefitLayoutMode::FixedPatchCount,
+        options);
+
+    assert(generated.success());
+    const auto& network = generated.selectedCandidates.front().network;
+    assert(network.valid());
+    assert(network.report.projectionPassed);
+    assert(network.report.diagnosticPolylineEdgeCount >= 1);
+    assert(network.report.continuityDowngradeCount >= 1);
+    assert(!network.report.productQualityPassed);
+    assert(std::any_of(
+        network.edges.begin(),
+        network.edges.end(),
+        [](const auto& edge) {
+            return !edge.originalBoundary &&
+                edge.constructionMode ==
+                    spo::RegionInternalCurveConstructionMode::
+                        DiagnosticPolyline &&
+                edge.requestedContinuity !=
+                    spo::RegionCurveContinuity::G0 &&
+                edge.continuity == spo::RegionCurveContinuity::G0 &&
+                !edge.productQualityPassed;
+        }));
 }
 
 void test_curve_network_rejects_open_misoriented_and_multiple_use_loops() {
@@ -675,6 +811,63 @@ void test_curve_network_cache_roundtrip_is_deterministic() {
     assert(loaded.selectedCandidates.front().network.hash ==
         first.selectedCandidates.front().network.hash);
     assert(loaded.selectedCandidates.front().network.valid());
+    const auto& originalNetwork =
+        first.selectedCandidates.front().network;
+    const auto& cachedNetwork =
+        loaded.selectedCandidates.front().network;
+    assert(cachedNetwork.report.localCubicEdgeCount ==
+        originalNetwork.report.localCubicEdgeCount);
+    assert(cachedNetwork.report.diagnosticPolylineEdgeCount ==
+        originalNetwork.report.diagnosticPolylineEdgeCount);
+    assert(cachedNetwork.report.productQualityPassed ==
+        originalNetwork.report.productQualityPassed);
+    assert(cachedNetwork.edges.size() == originalNetwork.edges.size());
+    for (std::size_t index = 0;
+         index < cachedNetwork.edges.size(); ++index) {
+        const auto& cached = cachedNetwork.edges[index];
+        const auto& original = originalNetwork.edges[index];
+        assert(cached.requestedContinuity ==
+            original.requestedContinuity);
+        assert(cached.continuity == original.continuity);
+        assert(cached.constructionMode ==
+            original.constructionMode);
+        assert(cached.productQualityPassed ==
+            original.productQualityPassed);
+        for (int sample = 0; sample < 17; ++sample) {
+            const auto alpha = static_cast<double>(sample) / 16.0;
+            const auto cachedParameter = cached.firstParameter +
+                alpha * (cached.lastParameter - cached.firstParameter);
+            const auto originalParameter = original.firstParameter +
+                alpha * (original.lastParameter - original.firstParameter);
+            assert(cached.curve->Value(cachedParameter).Distance(
+                original.curve->Value(originalParameter)) <= 1.0e-12);
+        }
+    }
+    const auto cacheFile =
+        cacheDirectory / cache.key() / "curve_networks.bin";
+    {
+        std::fstream stream(
+            cacheFile,
+            std::ios::in | std::ios::out | std::ios::binary);
+        assert(stream);
+        const std::array<char, 4> oldVersion {
+            static_cast<char>(0),
+            static_cast<char>(0),
+            static_cast<char>(0),
+            static_cast<char>(6)};
+        stream.seekp(4);
+        stream.write(oldVersion.data(), oldVersion.size());
+        assert(stream);
+    }
+    spo::RegionCurveNetworkGenerationResult incompatible;
+    spo::RegionRefitCacheEvent incompatibleEvent;
+    assert(!cache.loadCurveNetworks(
+        fixture.constraints,
+        incompatible,
+        incompatibleEvent));
+    assert(!incompatibleEvent.hit);
+    assert(incompatibleEvent.message.find("incompatible") !=
+        std::string::npos);
     std::filesystem::remove_all(cacheDirectory);
 }
 
@@ -691,6 +884,7 @@ void run_region_refit_layout_tests() {
     test_curve_network_accepts_near_preferred_face_projection();
     test_curve_network_classifies_internal_continuity_from_evidence();
     test_curve_network_freezes_one_shared_internal_curve_before_layout_binding();
+    test_triangulated_curve_network_uses_diagnostic_polyline_without_blocking_topology();
     test_curve_network_rejects_open_misoriented_and_multiple_use_loops();
     test_four_patch_curve_network_keeps_closed_oriented_patch_loops();
     test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge();
