@@ -806,7 +806,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v33-curve-network"
+                ? "native-regional-refit-v34-curve-network"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << request.forceDiagnosticSewing << '|';

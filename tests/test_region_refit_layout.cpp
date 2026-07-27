@@ -147,6 +147,25 @@ PlanarCurveFixture makePlanarCurveFixture(const int resolution) {
     return fixture;
 }
 
+TopoDS_Face makeUnitSquareFace(const double z) {
+    const std::array<TopoDS_Edge, 4> edges {
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(0.0, 0.0, z),
+            gp_Pnt(1.0, 0.0, z)).Edge(),
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(1.0, 0.0, z),
+            gp_Pnt(1.0, 1.0, z)).Edge(),
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(1.0, 1.0, z),
+            gp_Pnt(0.0, 1.0, z)).Edge(),
+        BRepBuilderAPI_MakeEdge(
+            gp_Pnt(0.0, 1.0, z),
+            gp_Pnt(0.0, 0.0, z)).Edge()};
+    BRepBuilderAPI_MakeWire wire;
+    for (const auto& edge : edges) wire.Add(edge);
+    return BRepBuilderAPI_MakeFace(wire.Wire()).Face();
+}
+
 void test_fixed_layout_has_exact_patch_count_and_trimmed_disk_parameterizations() {
     const auto mesh = makeGrid(16, 12);
     spo::RegionRefitOptions options;
@@ -307,26 +326,10 @@ void test_layout_rejects_disconnected_reference_mesh() {
 void test_curve_network_uses_global_nearest_selected_face_projection() {
     auto fixture = makePlanarCurveFixture(8);
     constexpr double farZ = 25.0;
-    const std::array<TopoDS_Edge, 4> farEdges {
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(0.0, 0.0, farZ),
-            gp_Pnt(1.0, 0.0, farZ)).Edge(),
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(1.0, 0.0, farZ),
-            gp_Pnt(1.0, 1.0, farZ)).Edge(),
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(1.0, 1.0, farZ),
-            gp_Pnt(0.0, 1.0, farZ)).Edge(),
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(0.0, 1.0, farZ),
-            gp_Pnt(0.0, 0.0, farZ)).Edge()};
-    BRepBuilderAPI_MakeWire farWire;
-    for (const auto& edge : farEdges) farWire.Add(edge);
-    const auto farFace = BRepBuilderAPI_MakeFace(farWire.Wire()).Face();
     fixture.constraints.selectedFaces = {2, 1};
     fixture.constraints.selectedFaceGeometry.insert(
         fixture.constraints.selectedFaceGeometry.begin(),
-        {2, farFace});
+        {2, makeUnitSquareFace(farZ)});
     for (auto& vertex : fixture.mesh.vertices) {
         vertex.sources.front().faceId = 2;
     }
@@ -351,6 +354,41 @@ void test_curve_network_uses_global_nearest_selected_face_projection() {
     const auto middle = internal->curve->Value(
         (internal->firstParameter + internal->lastParameter) * 0.5);
     assert(std::abs(middle.Z()) <= options.curveProjectionTolerance);
+    assert(internal->maximumProjectionError <=
+        options.curveProjectionTolerance);
+}
+
+void test_curve_network_accepts_near_preferred_face_projection() {
+    auto fixture = makePlanarCurveFixture(8);
+    constexpr double preferredZ = 0.005;
+    fixture.constraints.selectedFaces = {2, 1};
+    fixture.constraints.selectedFaceGeometry.insert(
+        fixture.constraints.selectedFaceGeometry.begin(),
+        {2, makeUnitSquareFace(preferredZ)});
+    for (auto& vertex : fixture.mesh.vertices) {
+        vertex.sources.front().faceId = 2;
+    }
+
+    spo::RegionRefitOptions options;
+    options.fixedPatchCount = 2;
+    options.maximumParameterDistortion = 1000.0;
+    options.curveProjectionTolerance = 0.01;
+    const auto generated = spo::RegionCurveNetworkGenerator().generate(
+        fixture.mesh,
+        fixture.constraints,
+        spo::RegionRefitLayoutMode::FixedPatchCount,
+        options);
+
+    assert(generated.success());
+    const auto& network = generated.selectedCandidates.front().network;
+    const auto internal = std::find_if(
+        network.edges.begin(),
+        network.edges.end(),
+        [](const auto& edge) { return !edge.originalBoundary; });
+    assert(internal != network.edges.end());
+    const auto middle = internal->curve->Value(
+        (internal->firstParameter + internal->lastParameter) * 0.5);
+    assert(middle.Z() > preferredZ * 0.5);
     assert(internal->maximumProjectionError <=
         options.curveProjectionTolerance);
 }
@@ -650,6 +688,7 @@ void run_region_refit_layout_tests() {
     test_forced_diagnostic_layout_selection_is_bounded_and_deterministic();
     test_layout_rejects_disconnected_reference_mesh();
     test_curve_network_uses_global_nearest_selected_face_projection();
+    test_curve_network_accepts_near_preferred_face_projection();
     test_curve_network_classifies_internal_continuity_from_evidence();
     test_curve_network_freezes_one_shared_internal_curve_before_layout_binding();
     test_curve_network_rejects_open_misoriented_and_multiple_use_loops();

@@ -115,7 +115,8 @@ bool projectToOriginalRegion(
     const RegionTopologyConstraints& constraints,
     gp_Pnt& projected,
     double& distance,
-    const std::optional<FaceId> preferredFaceId = std::nullopt) {
+    const double acceptablePreferredDistance,
+    const std::optional<FaceId> preferredFaceId) {
     distance = std::numeric_limits<double>::infinity();
     const auto evaluate = [&](const TopoDS_Face& face) {
         if (face.IsNull()) return;
@@ -141,6 +142,10 @@ bool projectToOriginalRegion(
             });
         if (preferred != constraints.selectedFaceGeometry.end()) {
             evaluate(preferred->second);
+            if (std::isfinite(distance) &&
+                distance <= acceptablePreferredDistance) {
+                return finitePoint(projected);
+            }
         }
     }
     for (const auto& [faceId, face] : constraints.selectedFaceGeometry) {
@@ -299,6 +304,7 @@ bool makeInternalCurve(
                 constraints,
                 projected,
                 distance,
+                options.curveProjectionTolerance,
                 preferredFace(mesh.vertices[vertex]))) {
             message = "An internal curve sample could not be projected to the original STEP region.";
             return false;
@@ -328,6 +334,7 @@ bool makeInternalCurve(
                     constraints,
                     projected,
                     distance,
+                    options.curveProjectionTolerance,
                     preferredFace(mesh.vertices[vertices[index]]))) {
                 message = "A fairing iterate could not be projected to the original STEP region.";
                 return false;
@@ -453,20 +460,10 @@ bool makeInternalCurve(
                 constraints,
                 projected,
                 distance,
+                options.curveProjectionTolerance,
                 preferredFace(mesh.vertices[vertices[carrierSample]]))) {
             message = "A frozen internal curve validation sample could not be projected.";
             return false;
-        }
-        if (distance > options.curveProjectionTolerance) {
-            gp_Pnt nearest;
-            double nearestDistance = 0.0;
-            if (!projectToOriginalRegion(
-                    point, constraints, nearest, nearestDistance)) {
-                message =
-                    "A frozen internal curve validation sample could not be projected.";
-                return false;
-            }
-            distance = nearestDistance;
         }
         maximumProjectionError = std::max(maximumProjectionError, distance);
     }
@@ -664,12 +661,14 @@ bool buildNetwork(
                 constraints,
                 firstProjected,
                 firstDistance,
+                options.curveProjectionTolerance,
                 preferredFace(mesh.vertices[vertices.front()])) ||
             !projectToOriginalRegion(
                 mesh.vertices[vertices.back()].point,
                 constraints,
                 lastProjected,
                 lastDistance,
+                options.curveProjectionTolerance,
                 preferredFace(mesh.vertices[vertices.back()]))) {
             message = "An internal curve endpoint could not be projected.";
             return false;
