@@ -33,6 +33,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$nativeRegionalRefitRunRoot =
+    "D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs"
 . (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 $sourcePath = [System.IO.Path]::GetFullPath($SourceStep)
@@ -65,6 +67,7 @@ $context = New-SpoRunContext `
     -CandidateId $candidateToken `
     -Variant $variant `
     -OutputDir $OutputDir `
+    -DefaultRunRoot $nativeRegionalRefitRunRoot `
     -ScriptPath $PSCommandPath `
     -Parameters $PSBoundParameters
 

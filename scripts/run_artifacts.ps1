@@ -188,6 +188,7 @@ function New-SpoRunContext {
         [AllowEmptyString()][string]$CandidateId = "na",
         [AllowEmptyString()][string]$Variant = "default",
         [AllowEmptyString()][string]$OutputDir = "",
+        [AllowEmptyString()][string]$DefaultRunRoot = "",
         [Parameter(Mandatory = $true)][string]$ScriptPath,
         [System.Collections.IDictionary]$Parameters
     )
@@ -210,6 +211,9 @@ function New-SpoRunContext {
         } else {
             [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
         }
+    } elseif ($DefaultRunRoot) {
+        $resolvedOutputDir = Join-Path (
+            [System.IO.Path]::GetFullPath($DefaultRunRoot)) $runId
     } else {
         $resolvedOutputDir = Join-Path $RepoRoot "data\runs\$runId"
     }

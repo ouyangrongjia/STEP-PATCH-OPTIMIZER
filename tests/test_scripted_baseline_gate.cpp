@@ -702,9 +702,20 @@ void test_creo_toolkit_phase1_repair_contract_uses_fresh_dual_inputs() {
 void test_native_region_refit_best_effort_artifact_contract() {
     const auto root = source_root();
     const auto script = read_text_file(root / "scripts" / "run_native_region_refit.ps1");
+    const auto artifactScript = read_text_file(root / "scripts" / "run_artifacts.ps1");
     const auto creoScript = read_text_file(root / "scripts" / "run_creo_step_diagnostic.ps1");
     const auto probe = read_text_file(root / "tools" / "native_region_refit_probe.cpp");
+    const auto curveNetwork = read_text_file(
+        root / "src" / "reduction" / "region_refit" / "RegionCurveNetwork.cpp");
 
+    assert(script.find(
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs") !=
+        std::string::npos);
+    assert(script.find("-DefaultRunRoot $nativeRegionalRefitRunRoot") !=
+        std::string::npos);
+    assert(artifactScript.find(
+        "[AllowEmptyString()][string]$DefaultRunRoot = \"\"") !=
+        std::string::npos);
     assert(script.find("quality-balanced") != std::string::npos);
     assert(script.find("uv-uniform") != std::string::npos);
     assert(script.find("BestEffortThroughSewing") != std::string::npos);
@@ -774,6 +785,12 @@ void test_native_region_refit_best_effort_artifact_contract() {
         std::string::npos);
     assert(probe.find("result.canApply()") != std::string::npos);
     assert(probe.find("result.diagnosticSewnShape") != std::string::npos);
+    assert(curveNetwork.find("fit_method=GeomAPI_PointsToBSpline") !=
+        std::string::npos);
+    assert(curveNetwork.find("max_projected_input_gap=") != std::string::npos);
+    assert(curveNetwork.find("validation_sample=") != std::string::npos);
+    assert(curveNetwork.find("curve_point=(") != std::string::npos);
+    assert(curveNetwork.find("projected_point=(") != std::string::npos);
 }
 
 void test_native_region_refit_force_diagnostic_contract() {

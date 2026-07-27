@@ -167,9 +167,9 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 状态：独立实验分支，命令行纵向链已改为曲线网络先行，尚未产品验收。
 
-当前实现先生成并冻结显式 `RegionCurveNetwork`，再由布局、联合拟合和原生 B-Rep builder 通过稳定 network hash 消费。内部双侧轨迹硬约束到唯一三维曲线，G1/G2 采用软目标并作至少 97 点解后验收；每条内部曲线只生成一个共享 Edge，双侧 pcurve 全部附着后再统一执行 `SameRange`/`SameParameter`。缓存格式已升级并增加曲线网络层，旧二进制条目不兼容。命令行运行总是在根目录写 `evidence_manifest.json`，创建 `artifacts/curve_network/`、`artifacts/layout/`、`artifacts/fit/`、`artifacts/brep/`、`artifacts/final/`、`validation/` 和 `external_cad/`，并通过 `artifacts/final/artifact_status.json` 区分 `final_sewn.step`、`diagnostic_sewn.step` 或无伪造 STEP 的 `Unavailable`。
+当前实现先生成并冻结显式 `RegionCurveNetwork`，再由布局、联合拟合和原生 B-Rep builder 通过稳定 network hash 消费。内部双侧轨迹硬约束到唯一三维曲线，G1/G2 采用软目标并作至少 97 点解后验收；每条内部曲线只生成一个共享 Edge，双侧 pcurve 全部附着后再统一执行 `SameRange`/`SameParameter`。缓存格式已升级并增加曲线网络层，旧二进制条目不兼容。区域重拟合未显式传入 `-OutputDir` 时，运行目录固定建立在 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\<run-id>\`；显式输出目录仍优先。命令行运行总是在根目录写 `evidence_manifest.json`，创建 `artifacts/curve_network/`、`artifacts/layout/`、`artifacts/fit/`、`artifacts/brep/`、`artifacts/final/`、`validation/` 和 `external_cad/`，并通过 `artifacts/final/artifact_status.json` 区分 `final_sewn.step`、`diagnostic_sewn.step` 或无伪造 STEP 的 `Unavailable`。
 
-合成平面双 patch、四向节点、网络拒绝、冻结曲线不随载体扰动、硬 G0/G1/G2 解后门、唯一共享 Edge、双侧 pcurve、`SameParameter` 和缓存确定性已进入测试。修复前的 candidate-179 v8 历史运行曾报告 `42272.5 mm` 最大投影偏差；当前基线 `data/runs/20260727_candidate_0179_curve_network_layout_probe_v12/` 总运行约 `211.7 s`、核心 `total_ms=85078.6`。其中 K=4 布局拓扑、参数化和 coarse fit 均通过且翻转三角形为 0，但 `CurveNetwork` 最大投影偏差仍为 `31.0338 mm`，超过 `0.03 mm` 门限；最终状态为 `NoSewableGeometry`/`Unavailable`，未进入联合拟合、B-Rep 或缝合，也未伪造 STEP。该基线不构成产品成功。
+合成平面双 patch、四向节点、网络拒绝、冻结曲线不随载体扰动、硬 G0/G1/G2 解后门、唯一共享 Edge、双侧 pcurve、`SameParameter` 和缓存确定性已进入测试。当前 candidate-179 诊断基线为 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260727_172707_717__native-region-refit__03_配件_Clay__cand-0179__layout\`，总运行约 `201.5 s`、核心 `total_ms=82155.5`。K=4 布局拓扑、参数化和 coarse fit 均通过且翻转三角形为 0；内部曲线 30 的 24 个输入点已落在原 STEP 上，相邻点最大间距仅 `0.435194 mm`，公平化迭代投影也未超过 `0.03 mm`，但无曲面约束的 `GeomAPI_PointsToBSpline` 连续曲线在样本间离原 STEP 达 `31.0338 mm`。最终状态为 `NoSewableGeometry`/`Unavailable`，未进入联合拟合、B-Rep 或缝合，也未伪造 STEP。该基线不构成产品成功。
 
 ## 当前限制
 

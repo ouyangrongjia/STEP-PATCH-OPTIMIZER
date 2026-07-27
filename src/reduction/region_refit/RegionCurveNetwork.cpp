@@ -289,6 +289,7 @@ bool makeInternalCurve(
     Handle(Geom_Curve)& curve,
     std::vector<double>& meshParameters,
     double& maximumProjectionError,
+    std::string& diagnostic,
     std::string& message) {
     if (vertices.size() < 2) {
         message = "An internal curve needs at least two carrier vertices.";
@@ -296,6 +297,7 @@ bool makeInternalCurve(
     }
     std::vector<gp_Pnt> points;
     points.reserve(vertices.size());
+    double maximumCarrierProjectionDistance = 0.0;
     for (const auto vertex : vertices) {
         gp_Pnt projected;
         double distance = 0.0;
@@ -309,10 +311,13 @@ bool makeInternalCurve(
             message = "An internal curve sample could not be projected to the original STEP region.";
             return false;
         }
+        maximumCarrierProjectionDistance =
+            std::max(maximumCarrierProjectionDistance, distance);
         points.push_back(projected);
     }
     points.front() = startPoint;
     points.back() = endPoint;
+    double maximumFairingProjectionDistance = 0.0;
     for (int iteration = 0; iteration < options.curveFairingIterations; ++iteration) {
         auto faired = points;
         for (std::size_t index = 1; index + 1 < points.size(); ++index) {
@@ -339,6 +344,8 @@ bool makeInternalCurve(
                 message = "A fairing iterate could not be projected to the original STEP region.";
                 return false;
             }
+            maximumFairingProjectionDistance =
+                std::max(maximumFairingProjectionDistance, distance);
             faired[index] = projected;
         }
         points = std::move(faired);
@@ -380,6 +387,12 @@ bool makeInternalCurve(
         }
         uniquePoints = std::move(reduced);
     }
+    double maximumProjectedInputGap = 0.0;
+    for (std::size_t index = 1; index < uniquePoints.size(); ++index) {
+        maximumProjectedInputGap = std::max(
+            maximumProjectedInputGap,
+            uniquePoints[index - 1].Distance(uniquePoints[index]));
+    }
     TColgp_Array1OfPnt approximationPoints(
         1, static_cast<int>(uniquePoints.size()));
     for (std::size_t index = 0; index < uniquePoints.size(); ++index) {
@@ -398,6 +411,7 @@ bool makeInternalCurve(
             options.curveProjectionTolerance * 0.02);
         if (approximation.IsDone() && !approximation.Curve().IsNull()) {
             curve = approximation.Curve();
+            diagnostic = "fit_method=GeomAPI_PointsToBSpline";
         }
     } catch (const Standard_Failure&) {
     }
@@ -419,6 +433,7 @@ bool makeInternalCurve(
             if (interpolation.IsDone() &&
                 !interpolation.Curve().IsNull()) {
                 curve = interpolation.Curve();
+                diagnostic = "fit_method=GeomAPI_Interpolate";
             }
         } catch (const Standard_Failure&) {
         }
@@ -435,6 +450,11 @@ bool makeInternalCurve(
         return false;
     }
     maximumProjectionError = 0.0;
+    int worstValidationSample = 0;
+    double worstValidationParameter = curve->FirstParameter();
+    std::size_t worstCarrierSample = 0;
+    gp_Pnt worstCurvePoint = curve->Value(worstValidationParameter);
+    gp_Pnt worstProjectedPoint = worstCurvePoint;
     const auto sampleCount = std::max(2, options.curveValidationSampleCount);
     for (int sample = 0; sample < sampleCount; ++sample) {
         const auto alpha = static_cast<double>(sample) /
@@ -465,8 +485,34 @@ bool makeInternalCurve(
             message = "A frozen internal curve validation sample could not be projected.";
             return false;
         }
-        maximumProjectionError = std::max(maximumProjectionError, distance);
+        if (distance > maximumProjectionError) {
+            maximumProjectionError = distance;
+            worstValidationSample = sample;
+            worstValidationParameter = parameter;
+            worstCarrierSample = carrierSample;
+            worstCurvePoint = point;
+            worstProjectedPoint = projected;
+        }
     }
+    std::ostringstream diagnosticStream;
+    diagnosticStream << diagnostic
+        << "; projected_input_count=" << uniquePoints.size()
+        << "; max_projected_input_gap=" << std::setprecision(12)
+        << maximumProjectedInputGap
+        << "; max_carrier_projection_distance="
+        << maximumCarrierProjectionDistance
+        << "; max_fairing_projection_distance="
+        << maximumFairingProjectionDistance
+        << "; validation_sample=" << worstValidationSample
+        << "; validation_parameter=" << worstValidationParameter
+        << "; carrier_sample=" << worstCarrierSample
+        << "; curve_point=("
+        << worstCurvePoint.X() << "," << worstCurvePoint.Y() << ","
+        << worstCurvePoint.Z() << ")"
+        << "; projected_point=("
+        << worstProjectedPoint.X() << "," << worstProjectedPoint.Y() << ","
+        << worstProjectedPoint.Z() << ")";
+    diagnostic = diagnosticStream.str();
     return true;
 }
 
@@ -542,6 +588,9 @@ bool buildNetwork(
     network.partitionLayoutHash = layout.hash;
     std::map<std::size_t, std::size_t> nodeByMeshVertex;
     std::map<MeshEdge, std::pair<std::size_t, bool>> edgeUseByMeshEdge;
+    double worstInternalProjectionError = -1.0;
+    std::size_t worstInternalEdgeId = 0;
+    std::string worstInternalProjectionDiagnostic;
 
     std::map<std::pair<EdgeId, int>, std::vector<MeshEdge>> outerByOwner;
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
@@ -682,10 +731,12 @@ bool buildNetwork(
         Handle(Geom_Curve) curve;
         std::vector<double> parameters;
         double maximumProjectionError = 0.0;
+        std::string curveDiagnostic;
         if (!makeInternalCurve(
                 mesh, constraints, options, vertices,
                 network.nodes[start].point, network.nodes[end].point,
-                curve, parameters, maximumProjectionError, message)) {
+                curve, parameters, maximumProjectionError,
+                curveDiagnostic, message)) {
             return false;
         }
         RegionCurveNetworkEdge edge;
@@ -702,6 +753,15 @@ bool buildNetwork(
         edge.meshParameters = std::move(parameters);
         edge.frozen = true;
         edge.maximumProjectionError = maximumProjectionError;
+        if (maximumProjectionError > worstInternalProjectionError) {
+            worstInternalProjectionError = maximumProjectionError;
+            worstInternalEdgeId = edge.id;
+            std::ostringstream stream;
+            stream << curveDiagnostic
+                << "; start_mesh_vertex=" << vertices.front()
+                << "; end_mesh_vertex=" << vertices.back();
+            worstInternalProjectionDiagnostic = stream.str();
+        }
         network.nodes[start].incidentEdges.push_back(edge.id);
         network.nodes[end].incidentEdges.push_back(edge.id);
         network.edges.push_back(std::move(edge));
@@ -760,11 +820,20 @@ bool buildNetwork(
         }
         network.patchLoops.push_back(std::move(curveLoop));
     }
-    return validateRegionCurveNetwork(
+    const auto valid = validateRegionCurveNetwork(
         network,
         options.curveProjectionTolerance,
         options.curveValidationSampleCount,
         message);
+    if (!valid && !network.report.projectionPassed &&
+        !worstInternalProjectionDiagnostic.empty()) {
+        std::ostringstream stream;
+        stream << message
+            << " Worst internal curve edge " << worstInternalEdgeId
+            << ": " << worstInternalProjectionDiagnostic << ".";
+        message = stream.str();
+    }
+    return valid;
 }
 
 }
