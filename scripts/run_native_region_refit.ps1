@@ -349,17 +349,17 @@ $layoutCarrierStl = Join-Path $context.directories.artifacts "sampling\layout_ca
 if (Test-Path -LiteralPath $layoutCarrierStl -PathType Leaf) {
     $artifacts["layout_carrier_stl"] = $layoutCarrierStl
 }
-$layoutJson = Join-Path $context.directories.artifacts "layout\selected_layout.json"
-$layoutPly = Join-Path $context.directories.artifacts "layout\selected_layout.ply"
-$layoutSvg = Join-Path $context.directories.artifacts "layout\selected_layout.svg"
+$layoutJson = Join-Path $context.directories.artifacts "layout\selected_parameter_domain.json"
+$layoutPly = Join-Path $context.directories.artifacts "layout\selected_parameter_domain.ply"
+$layoutSvg = Join-Path $context.directories.artifacts "layout\selected_parameter_domain.svg"
 if (Test-Path -LiteralPath $layoutJson -PathType Leaf) {
-    $artifacts["selected_layout_json"] = $layoutJson
+    $artifacts["selected_parameter_domain_json"] = $layoutJson
 }
 if (Test-Path -LiteralPath $layoutPly -PathType Leaf) {
-    $artifacts["selected_layout_ply"] = $layoutPly
+    $artifacts["selected_parameter_domain_ply"] = $layoutPly
 }
 if (Test-Path -LiteralPath $layoutSvg -PathType Leaf) {
-    $artifacts["selected_layout_svg"] = $layoutSvg
+    $artifacts["selected_parameter_domain_svg"] = $layoutSvg
 }
 $curveNetworkJson = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.json"
 $curveNetworkPly = Join-Path $context.directories.artifacts "curve_network\selected_curve_network.ply"
@@ -373,17 +373,13 @@ if (Test-Path -LiteralPath $curveNetworkPly -PathType Leaf) {
 if (Test-Path -LiteralPath $curveNetworkStep -PathType Leaf) {
     $artifacts["selected_curve_network_step"] = $curveNetworkStep
 }
-$fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_patch_network.step"
+$fittedPatchNetwork = Join-Path $context.directories.artifacts "fit\fitted_support_surfaces.step"
 if (Test-Path -LiteralPath $fittedPatchNetwork -PathType Leaf) {
-    $artifacts["fitted_patch_network_step"] = $fittedPatchNetwork
+    $artifacts["fitted_support_surfaces_step"] = $fittedPatchNetwork
 }
-$bestEffortPatchNetwork = Join-Path $context.directories.artifacts "fit\best_effort_fitted_patch_network.step"
+$bestEffortPatchNetwork = Join-Path $context.directories.artifacts "fit\best_effort_support_surfaces.step"
 if (Test-Path -LiteralPath $bestEffortPatchNetwork -PathType Leaf) {
-    $artifacts["best_effort_fitted_patch_network_step"] = $bestEffortPatchNetwork
-}
-$cadCheckCandidate = Join-Path $context.directories.artifacts "brep\cad_check_candidate.step"
-if (Test-Path -LiteralPath $cadCheckCandidate -PathType Leaf) {
-    $artifacts["cad_check_candidate_step"] = $cadCheckCandidate
+    $artifacts["best_effort_support_surfaces_step"] = $bestEffortPatchNetwork
 }
 $replacementQuilt = Join-Path $context.directories.artifacts "brep\replacement_quilt.step"
 if (Test-Path -LiteralPath $replacementQuilt -PathType Leaf) {

@@ -79,6 +79,9 @@ struct LinearRow {
     std::uint64_t constraintGroup = 0;
     double constraintParameter = 0.0;
     bool requiredConstraintPoint = false;
+    int sourcePatch = -1;
+    std::array<double, 2> sourceUv {};
+    bool originalBoundary = false;
 };
 
 struct NormalRow {
@@ -233,6 +236,18 @@ std::optional<std::array<double, 2>> curveParameterOnPatch(
     }
     const auto& parameterization =
         layout.patches[static_cast<std::size_t>(patch)];
+    const auto exactPcurve = std::find_if(
+        parameterization.edgePcurves.begin(),
+        parameterization.edgePcurves.end(),
+        [&](const auto& pcurve) { return pcurve.edgeIndex == edge.id; });
+    if (exactPcurve != parameterization.edgePcurves.end()) {
+        const auto uv = evaluateRegionPatchEdgePcurve(
+            *exactPcurve, parameter);
+        return uv.has_value()
+            ? std::optional<std::array<double, 2>> {
+                normalizedParameter(*uv)}
+            : std::nullopt;
+    }
     std::unordered_map<std::size_t, std::size_t> localByGlobal;
     localByGlobal.reserve(parameterization.vertexIndices.size());
     for (std::size_t local = 0;
@@ -468,23 +483,21 @@ Eigen::VectorXd buildInitialControlPrior(
 }
 
 std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
-    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& /*fittingReference*/,
     const RegionReferenceMesh& layoutCarrier,
     const RegionPatchLayout& layout,
-    const std::vector<MappedReferenceSample>& representativeSamples,
+    const std::vector<MappedReferenceSample>& /*representativeSamples*/,
     const std::vector<KnotConfiguration>& knots,
     const std::vector<int>& variableOffsets,
     const int controlVariableCount) {
     Eigen::MatrixXd solution = Eigen::MatrixXd::Zero(controlVariableCount, 3);
-    std::vector<std::vector<const MappedReferenceSample*>> samplesByPatch(knots.size());
-    for (const auto& sample : representativeSamples) {
-        if (sample.patch >= 0 &&
-            static_cast<std::size_t>(sample.patch) < samplesByPatch.size()) {
-            samplesByPatch[static_cast<std::size_t>(sample.patch)].push_back(&sample);
-        }
-    }
     for (std::size_t patch = 0; patch < knots.size(); ++patch) {
-        if (samplesByPatch[patch].size() < 3) return std::nullopt;
+        const auto& parameterization = layout.patches[patch];
+        if (parameterization.vertexIndices.size() < 3 ||
+            parameterization.parameters.size() !=
+                parameterization.vertexIndices.size()) {
+            return std::nullopt;
+        }
         Eigen::Matrix3d gram = Eigen::Matrix3d::Zero();
         Eigen::Matrix3d targets = Eigen::Matrix3d::Zero();
         std::array<double, 3> minimum {
@@ -497,14 +510,18 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
             -std::numeric_limits<double>::infinity()};
         Eigen::Vector2d meanUv = Eigen::Vector2d::Zero();
         Eigen::Vector3d meanPoint = Eigen::Vector3d::Zero();
-        for (const auto* sample : samplesByPatch[patch]) {
-            const Eigen::Vector3d row(1.0, sample->uv[0], sample->uv[1]);
-            const auto& point =
-                fittingReference.vertices[sample->referenceVertex].point;
+        for (std::size_t local = 0;
+             local < parameterization.vertexIndices.size();
+             ++local) {
+            const auto vertex = parameterization.vertexIndices[local];
+            if (vertex >= layoutCarrier.vertices.size()) return std::nullopt;
+            const auto& uv = parameterization.parameters[local];
+            const Eigen::Vector3d row(1.0, uv[0], uv[1]);
+            const auto& point = layoutCarrier.vertices[vertex].point;
             const Eigen::Vector3d target(point.X(), point.Y(), point.Z());
             gram += row * row.transpose();
             targets += row * target.transpose();
-            meanUv += Eigen::Vector2d(sample->uv[0], sample->uv[1]);
+            meanUv += Eigen::Vector2d(uv[0], uv[1]);
             meanPoint += target;
             for (std::size_t axis = 0; axis < minimum.size(); ++axis) {
                 minimum[axis] = std::min(minimum[axis], target[static_cast<int>(axis)]);
@@ -515,12 +532,13 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
         if (decomposition.rank() < 3) return std::nullopt;
         const Eigen::Matrix3d coefficients = decomposition.solve(targets);
         if (!coefficients.allFinite()) return std::nullopt;
-        meanUv /= static_cast<double>(samplesByPatch[patch].size());
-        meanPoint /= static_cast<double>(samplesByPatch[patch].size());
+        meanUv /=
+            static_cast<double>(parameterization.vertexIndices.size());
+        meanPoint /=
+            static_cast<double>(parameterization.vertexIndices.size());
 
         gp_Vec referenceNormal;
         std::unordered_map<std::size_t, std::size_t> localByGlobal;
-        const auto& parameterization = layout.patches[patch];
         for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
             localByGlobal.emplace(parameterization.vertexIndices[local], local);
         }
@@ -553,63 +571,43 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
             coefficients(1, 0), coefficients(1, 1), coefficients(1, 2));
         gp_Vec tangentV(
             coefficients(2, 0), coefficients(2, 1), coefficients(2, 2));
-        if (tangentU.SquareMagnitude() <= 1.0e-24 ||
-            tangentV.SquareMagnitude() <= 1.0e-24 ||
-            tangentU.Crossed(tangentV).Dot(referenceNormal) <= 0.0) {
-            const auto uMagnitude = std::sqrt(std::max(
-                tangentU.SquareMagnitude(), tangentV.SquareMagnitude()));
-            const auto vMagnitude = std::sqrt(std::max(
-                tangentV.SquareMagnitude(), tangentU.SquareMagnitude()));
-            tangentU -= referenceNormal * tangentU.Dot(referenceNormal);
-            if (tangentU.SquareMagnitude() <= 1.0e-24) {
-                const gp_Vec axis =
-                    std::abs(referenceNormal.X()) < std::abs(referenceNormal.Y())
-                    ? gp_Vec(1.0, 0.0, 0.0)
-                    : gp_Vec(0.0, 1.0, 0.0);
-                tangentU = referenceNormal.Crossed(axis);
-            }
-            if (tangentU.SquareMagnitude() <= 1.0e-24) return std::nullopt;
-            tangentU.Normalize();
-            tangentU *= std::max(uMagnitude, 1.0e-12);
-            tangentV = referenceNormal.Crossed(tangentU);
-            if (tangentV.SquareMagnitude() <= 1.0e-24) return std::nullopt;
-            tangentV.Normalize();
-            tangentV *= std::max(vMagnitude, 1.0e-12);
-        }
-        if (tangentU.Crossed(tangentV).Dot(referenceNormal) <= 0.0) {
-            tangentV.Reverse();
-        }
-
-        auto envelopeScale = 1.0;
-        const auto uParameters = grevilleParameters(knots[patch].u);
-        const auto vParameters = grevilleParameters(knots[patch].v);
-        for (const auto u : uParameters) {
-            for (const auto v : vParameters) {
-                const gp_Vec delta =
-                    tangentU * (u - meanUv.x()) +
-                    tangentV * (v - meanUv.y());
-                const std::array<double, 3> components {
-                    delta.X(), delta.Y(), delta.Z()};
-                for (std::size_t axis = 0; axis < components.size(); ++axis) {
-                    if (components[axis] > 0.0) {
-                        envelopeScale = std::min(
-                            envelopeScale,
-                            (maximum[axis] - meanPoint[static_cast<int>(axis)]) /
-                                components[axis]);
-                    } else if (components[axis] < 0.0) {
-                        envelopeScale = std::min(
-                            envelopeScale,
-                            (minimum[axis] - meanPoint[static_cast<int>(axis)]) /
-                                components[axis]);
-                    }
-                }
-            }
-        }
-        if (!std::isfinite(envelopeScale) || envelopeScale <= 1.0e-12) {
+        const auto patchDiagonal = std::sqrt(
+            std::pow(maximum[0] - minimum[0], 2.0) +
+            std::pow(maximum[1] - minimum[1], 2.0) +
+            std::pow(maximum[2] - minimum[2], 2.0));
+        if (!std::isfinite(patchDiagonal) || patchDiagonal <= 1.0e-12) {
             return std::nullopt;
         }
-        tangentU *= std::min(1.0, envelopeScale);
-        tangentV *= std::min(1.0, envelopeScale);
+        const auto minimumTangentMagnitude = patchDiagonal * 1.0e-4;
+        const auto maximumTangentMagnitude = patchDiagonal * 2.0;
+        const auto uMagnitude = std::clamp(
+            std::sqrt(std::max(
+                tangentU.SquareMagnitude(), tangentV.SquareMagnitude())),
+            minimumTangentMagnitude,
+            maximumTangentMagnitude);
+        const auto vMagnitude = std::clamp(
+            std::sqrt(std::max(
+                tangentV.SquareMagnitude(), tangentU.SquareMagnitude())),
+            minimumTangentMagnitude,
+            maximumTangentMagnitude);
+        tangentU -= referenceNormal * tangentU.Dot(referenceNormal);
+        if (tangentU.SquareMagnitude() <= 1.0e-24) {
+            const gp_Vec axis =
+                std::abs(referenceNormal.X()) < std::abs(referenceNormal.Y())
+                ? gp_Vec(1.0, 0.0, 0.0)
+                : gp_Vec(0.0, 1.0, 0.0);
+            tangentU = referenceNormal.Crossed(axis);
+        }
+        if (tangentU.SquareMagnitude() <= 1.0e-24) return std::nullopt;
+        tangentU.Normalize();
+        tangentU *= uMagnitude;
+        tangentV = referenceNormal.Crossed(tangentU);
+        if (tangentV.SquareMagnitude() <= 1.0e-24) return std::nullopt;
+        tangentV.Normalize();
+        tangentV *= vMagnitude;
+
+        const auto uParameters = grevilleParameters(knots[patch].u);
+        const auto vParameters = grevilleParameters(knots[patch].v);
         for (int u = 0; u < knots[patch].uControlCount(); ++u) {
             for (int v = 0; v < knots[patch].vControlCount(); ++v) {
                 const gp_Pnt point(
@@ -1295,29 +1293,61 @@ std::vector<LinearRow> buildFrozenCurveEqualityRows(
     const RegionCurveNetwork& network,
     const std::vector<KnotConfiguration>& knots,
     const std::vector<int>& variableOffsets) {
-    constexpr std::uint64_t curveConstraintGroupMask =
+    constexpr std::uint64_t internalCurveConstraintGroupMask =
         std::uint64_t {1} << 62;
+    constexpr std::uint64_t boundaryCurveConstraintGroupMask =
+        std::uint64_t {1} << 61;
     std::vector<LinearRow> rows;
     for (const auto& edge : network.edges) {
-        if (edge.originalBoundary || edge.curve.IsNull() ||
-            edge.firstPatch < 0 || edge.secondPatch < 0) {
+        if (edge.curve.IsNull() || edge.firstPatch < 0 ||
+            (!edge.originalBoundary && edge.secondPatch < 0)) {
             continue;
         }
-        const auto maximumControlSide = std::max({
+        auto maximumControlSide = std::max(
             knots[static_cast<std::size_t>(edge.firstPatch)].uControlCount(),
-            knots[static_cast<std::size_t>(edge.firstPatch)].vControlCount(),
-            knots[static_cast<std::size_t>(edge.secondPatch)].uControlCount(),
-            knots[static_cast<std::size_t>(edge.secondPatch)].vControlCount()});
+            knots[static_cast<std::size_t>(edge.firstPatch)].vControlCount());
+        if (!edge.originalBoundary) {
+            maximumControlSide = std::max({
+                maximumControlSide,
+                knots[static_cast<std::size_t>(edge.secondPatch)].uControlCount(),
+                knots[static_cast<std::size_t>(edge.secondPatch)].vControlCount()});
+        }
         const auto sampleCount = std::max(16, maximumControlSide * 4);
+        std::vector<double> parameters;
+        parameters.reserve(
+            static_cast<std::size_t>(sampleCount) +
+            edge.meshParameters.size());
         for (int sample = 0; sample < sampleCount; ++sample) {
-            const auto alpha = sampleCount > 1
-                ? static_cast<double>(sample) /
-                    static_cast<double>(sampleCount - 1)
-                : 0.0;
-            const auto parameter = edge.firstParameter +
-                alpha * (edge.lastParameter - edge.firstParameter);
+            parameters.push_back(edge.firstParameter +
+                static_cast<double>(sample) /
+                    static_cast<double>(sampleCount - 1) *
+                (edge.lastParameter - edge.firstParameter));
+        }
+        parameters.insert(
+            parameters.end(),
+            edge.meshParameters.begin(),
+            edge.meshParameters.end());
+        std::sort(parameters.begin(), parameters.end());
+        parameters.erase(
+            std::unique(
+                parameters.begin(), parameters.end(),
+                [](const auto first, const auto second) {
+                    return std::abs(first - second) <= 1.0e-12;
+                }),
+            parameters.end());
+        for (std::size_t sample = 0; sample < parameters.size(); ++sample) {
+            const auto parameter = parameters[sample];
+            const auto alpha = std::clamp(
+                (parameter - edge.firstParameter) /
+                    (edge.lastParameter - edge.firstParameter),
+                0.0,
+                1.0);
             const auto target = edge.curve->Value(parameter);
-            for (const auto patch : {edge.firstPatch, edge.secondPatch}) {
+            const std::array<int, 2> patches {
+                edge.firstPatch, edge.secondPatch};
+            const auto patchCount = edge.originalBoundary ? 1 : 2;
+            for (int side = 0; side < patchCount; ++side) {
+                const auto patch = patches[static_cast<std::size_t>(side)];
                 const auto uv = curveParameterOnPatch(
                     layout, edge, patch, parameter);
                 if (!uv.has_value()) continue;
@@ -1327,10 +1357,19 @@ std::vector<LinearRow> buildFrozenCurveEqualityRows(
                         knots[static_cast<std::size_t>(patch)],
                         variableOffsets[static_cast<std::size_t>(patch)]),
                     target,
-                    curveConstraintGroupMask |
+                    (edge.originalBoundary
+                        ? boundaryCurveConstraintGroupMask
+                        : internalCurveConstraintGroupMask) |
                         static_cast<std::uint64_t>(edge.id),
                     alpha,
-                    sample == 0 || sample + 1 == sampleCount});
+                    sample == 0 || sample + 1 == parameters.size() ||
+                        std::binary_search(
+                            edge.meshParameters.begin(),
+                            edge.meshParameters.end(),
+                            parameter),
+                    patch,
+                    *uv,
+                    edge.originalBoundary});
             }
         }
     }
@@ -1545,6 +1584,8 @@ std::vector<LinearRow> compressConstraintRows(
 struct ConstraintFeasibility {
     std::size_t estimatedRank = 0;
     double minimumMaximumResidual = 0.0;
+    Eigen::MatrixXd solution;
+    std::vector<ResidualSample> residuals;
 };
 
 ConstraintFeasibility assessConstraintFeasibility(
@@ -1577,9 +1618,68 @@ ConstraintFeasibility assessConstraintFeasibility(
     result.estimatedRank = static_cast<std::size_t>(solver.rank());
     const Eigen::MatrixXd solution = solver.solve(targets);
     if (solver.info() != Eigen::Success || !solution.allFinite()) return result;
+    result.solution = solution;
     const Eigen::MatrixXd residuals = matrix * solution - targets;
     result.minimumMaximumResidual = residuals.cwiseAbs().maxCoeff();
+    result.residuals.reserve(rows.size());
+    for (std::size_t row = 0; row < rows.size(); ++row) {
+        if (rows[row].sourcePatch < 0) continue;
+        result.residuals.push_back({
+            rows[row].sourcePatch,
+            rows[row].sourceUv[0],
+            rows[row].sourceUv[1],
+            residuals.row(static_cast<int>(row)).cwiseAbs().maxCoeff()});
+    }
     return result;
+}
+
+std::optional<Eigen::MatrixXd> projectOntoConstraints(
+    const std::vector<LinearRow>& rows,
+    const int controlVariableCount,
+    const Eigen::MatrixXd& reference) {
+    if (rows.empty()) return reference;
+    if (reference.rows() != controlVariableCount || reference.cols() != 3 ||
+        !reference.allFinite()) {
+        return std::nullopt;
+    }
+    const auto rowCount = static_cast<int>(rows.size());
+    const auto systemSize = controlVariableCount + rowCount;
+    std::vector<Eigen::Triplet<double>> triplets;
+    std::size_t nonZeros = static_cast<std::size_t>(controlVariableCount);
+    for (const auto& row : rows) nonZeros += row.coefficients.size() * 2;
+    triplets.reserve(nonZeros);
+    for (int variable = 0; variable < controlVariableCount; ++variable) {
+        triplets.emplace_back(variable, variable, 1.0);
+    }
+    for (int row = 0; row < rowCount; ++row) {
+        for (const auto& [column, value] :
+             rows[static_cast<std::size_t>(row)].coefficients) {
+            triplets.emplace_back(
+                column, controlVariableCount + row, value);
+            triplets.emplace_back(
+                controlVariableCount + row, column, value);
+        }
+    }
+    Eigen::SparseMatrix<double> system(systemSize, systemSize);
+    system.setFromTriplets(triplets.begin(), triplets.end());
+    system.makeCompressed();
+    Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+    solver.analyzePattern(system);
+    solver.factorize(system);
+    if (solver.info() != Eigen::Success) return std::nullopt;
+    Eigen::MatrixXd targets = Eigen::MatrixXd::Zero(systemSize, 3);
+    targets.topRows(controlVariableCount) = reference;
+    for (int row = 0; row < rowCount; ++row) {
+        const auto& target = rows[static_cast<std::size_t>(row)].target;
+        targets(controlVariableCount + row, 0) = target.X();
+        targets(controlVariableCount + row, 1) = target.Y();
+        targets(controlVariableCount + row, 2) = target.Z();
+    }
+    const auto solution = solver.solve(targets);
+    if (solver.info() != Eigen::Success || !solution.allFinite()) {
+        return std::nullopt;
+    }
+    return solution.topRows(controlVariableCount);
 }
 
 Handle(Geom_BSplineSurface) makeSurface(
@@ -1678,9 +1778,10 @@ bool evaluateLocalSupportDomain(
                 reason = "A fitted control net contains a non-finite pole.";
                 return false;
             }
-            if (pole.X() < minimum[0] - margin || pole.X() > maximum[0] + margin ||
-                pole.Y() < minimum[1] - margin || pole.Y() > maximum[1] + margin ||
-                pole.Z() < minimum[2] - margin || pole.Z() > maximum[2] + margin) {
+            if (parameterization.edgePcurves.empty() &&
+                (pole.X() < minimum[0] - margin || pole.X() > maximum[0] + margin ||
+                    pole.Y() < minimum[1] - margin || pole.Y() > maximum[1] + margin ||
+                    pole.Z() < minimum[2] - margin || pole.Z() > maximum[2] + margin)) {
                 reason = "A fitted control net expands beyond its local support-domain envelope.";
                 return false;
             }
@@ -2165,30 +2266,27 @@ void validateFrozenCurveContinuity(
                     std::numeric_limits<double>::infinity();
                 continue;
             }
-            const auto firstProjection = projectToSurface(
-                surfaces[static_cast<std::size_t>(edge.firstPatch)],
-                curvePoint,
-                *firstUv);
-            const auto secondProjection = projectToSurface(
-                surfaces[static_cast<std::size_t>(edge.secondPatch)],
-                curvePoint,
-                *secondUv);
-            metrics.projectionCount += 2;
-            metrics.uvIterationCount += firstProjection.iterationCount +
-                secondProjection.iterationCount;
-            metrics.projectionFallbackCount += firstProjection.fallbackCount +
-                secondProjection.fallbackCount;
+            gp_Pnt firstPoint;
+            gp_Pnt secondPoint;
+            gp_Vec firstDu;
+            gp_Vec firstDv;
+            gp_Vec secondDu;
+            gp_Vec secondDv;
+            surfaces[static_cast<std::size_t>(edge.firstPatch)]->D1(
+                (*firstUv)[0], (*firstUv)[1],
+                firstPoint, firstDu, firstDv);
+            surfaces[static_cast<std::size_t>(edge.secondPatch)]->D1(
+                (*secondUv)[0], (*secondUv)[1],
+                secondPoint, secondDu, secondDv);
             metrics.seamMaximumCurveDeviation = std::max({
                 metrics.seamMaximumCurveDeviation,
-                firstProjection.distance,
-                secondProjection.distance});
+                firstPoint.Distance(curvePoint),
+                secondPoint.Distance(curvePoint)});
             metrics.seamMaximumDistance = std::max(
                 metrics.seamMaximumDistance,
-                firstProjection.point.Distance(secondProjection.point));
-            const auto firstNormal =
-                firstProjection.du.Crossed(firstProjection.dv);
-            const auto secondNormal =
-                secondProjection.du.Crossed(secondProjection.dv);
+                firstPoint.Distance(secondPoint));
+            const auto firstNormal = firstDu.Crossed(firstDv);
+            const auto secondNormal = secondDu.Crossed(secondDv);
             const auto normalDegrees = normalAngleDegrees(
                 firstNormal,
                 secondNormal.SquareMagnitude() > 1.0e-24
@@ -2200,14 +2298,14 @@ void validateFrozenCurveContinuity(
                 try {
                     GeomLProp_SLProps firstProperties(
                         surfaces[static_cast<std::size_t>(edge.firstPatch)],
-                        firstProjection.u,
-                        firstProjection.v,
+                        (*firstUv)[0],
+                        (*firstUv)[1],
                         2,
                         1.0e-9);
                     GeomLProp_SLProps secondProperties(
                         surfaces[static_cast<std::size_t>(edge.secondPatch)],
-                        secondProjection.u,
-                        secondProjection.v,
+                        (*secondUv)[0],
+                        (*secondUv)[1],
                         2,
                         1.0e-9);
                     if (!firstProperties.IsCurvatureDefined() ||
@@ -2326,6 +2424,61 @@ bool insertResidualKnot(
     return insertedAny;
 }
 
+bool insertBoundaryFeasibilityKnots(
+    const std::vector<ResidualSample>& residuals,
+    std::vector<KnotConfiguration>& knots,
+    const int maximumControlPointsPerSide,
+    const double minimumError) {
+    std::map<int, ResidualSample> worstByPatch;
+    for (const auto& sample : residuals) {
+        if (sample.patch < 0 ||
+            sample.patch >= static_cast<int>(knots.size()) ||
+            sample.error <= minimumError) {
+            continue;
+        }
+        const auto found = worstByPatch.find(sample.patch);
+        if (found == worstByPatch.end() ||
+            sample.error > found->second.error) {
+            worstByPatch[sample.patch] = sample;
+        }
+    }
+    const auto insert = [maximumControlPointsPerSide](
+                            std::vector<double>& target,
+                            double value) {
+        if (static_cast<int>(target.size()) + kDegree - 1 >=
+            maximumControlPointsPerSide) {
+            return false;
+        }
+        value = std::clamp(value, 0.02, 0.98);
+        if (std::any_of(
+                target.begin(), target.end(),
+                [&](const auto knot) {
+                    return std::abs(knot - value) < 0.005;
+                })) {
+            auto largest = 0.0;
+            for (std::size_t index = 0; index + 1 < target.size(); ++index) {
+                const auto span = target[index + 1] - target[index];
+                if (span > largest) {
+                    largest = span;
+                    value = (target[index + 1] + target[index]) * 0.5;
+                }
+            }
+            if (largest < 0.01) return false;
+        }
+        target.push_back(value);
+        std::sort(target.begin(), target.end());
+        return true;
+    };
+    auto insertedAny = false;
+    for (const auto& [patch, worst] : worstByPatch) {
+        auto& patchKnots = knots[static_cast<std::size_t>(patch)];
+        const auto insertedU = insert(patchKnots.u, worst.u);
+        const auto insertedV = insert(patchKnots.v, worst.v);
+        insertedAny = insertedAny || insertedU || insertedV;
+    }
+    return insertedAny;
+}
+
 TopoDS_Shape inspectionShape(const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
     BRep_Builder builder;
     TopoDS_Compound compound;
@@ -2409,9 +2562,19 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             return result;
         }
         const auto attemptStarted = std::chrono::steady_clock::now();
+        const auto remainingAttempts = maximumAttempts - candidateIndex;
+        const auto remainingFitMilliseconds =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - attemptStarted).count();
+        const auto fairAttemptBudgetMilliseconds = std::max<std::int64_t>(
+            1,
+            remainingFitMilliseconds /
+                static_cast<std::int64_t>(remainingAttempts));
         const auto attemptDeadline = std::min(
             deadline,
-            attemptStarted + std::chrono::milliseconds(options.singleFitBudgetMilliseconds));
+            attemptStarted + std::chrono::milliseconds(std::max(
+                options.singleFitBudgetMilliseconds,
+                fairAttemptBudgetMilliseconds)));
         const auto& layout = candidates[candidateIndex];
         const auto* curveNetwork = curveNetworkFor(layout, curveNetworks);
         RegionFitAttemptReport attempt;
@@ -2435,6 +2598,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         std::vector<KnotConfiguration> knots(static_cast<std::size_t>(layout.patchCount));
         double previousSelection = std::numeric_limits<double>::infinity();
         int lowImprovementRounds = 0;
+        int boundaryFeasibilityRefinementRounds = 0;
         std::vector<Handle(Geom_BSplineSurface)> bestSurfaces;
         ValidationMetrics bestMetrics;
 
@@ -2443,6 +2607,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             const auto iterationStarted = std::chrono::steady_clock::now();
             RegionFitIterationReport iterationReport;
             iterationReport.iteration = iteration + 1;
+            auto finalIterationForBudget = false;
             for (const auto& patchKnots : knots) {
                 iterationReport.uControlCount = std::max(
                     iterationReport.uControlCount, patchKnots.uControlCount());
@@ -2451,14 +2616,10 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             }
             if (!attempt.iterations.empty()) {
                 const auto forecastMilliseconds = static_cast<long long>(std::ceil(
-                    std::max(1.0, attempt.iterations.back().wallMilliseconds) * 1.25));
+                    std::max(1.0, attempt.iterations.back().wallMilliseconds) * 2.5));
                 if (std::chrono::steady_clock::now() +
                         std::chrono::milliseconds(forecastMilliseconds) >= attemptDeadline) {
-                    iterationReport.stopReason =
-                        "Single-fit deadline reserve is insufficient for another iteration.";
-                    attempt.iterations.push_back(iterationReport);
-                    attempt.stopReason = iterationReport.stopReason;
-                    break;
+                    finalIterationForBudget = true;
                 }
             }
             if (std::chrono::steady_clock::now() >= attemptDeadline) {
@@ -2510,19 +2671,25 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 representativeFitSamples,
                 adjacentNormalRowCount);
             iterationReport.adjacentNormalSoftConstraintCount = adjacentNormalRowCount;
-            auto equalityRows = buildBoundaryEqualityRows(
-                layoutCarrier,
-                constraints,
-                layout,
-                knots,
-                variableOffsets);
-            const auto boundaryEqualityRowCount = equalityRows.size();
-            auto seamEqualityRows = curveNetwork != nullptr
+            auto equalityRows = curveNetwork != nullptr
                 ? buildFrozenCurveEqualityRows(
                     layout,
                     *curveNetwork,
                     knots,
                     variableOffsets)
+                : buildBoundaryEqualityRows(
+                    layoutCarrier,
+                    constraints,
+                    layout,
+                    knots,
+                    variableOffsets);
+            const auto boundaryEqualityRowCount = curveNetwork != nullptr
+                ? static_cast<std::size_t>(std::count_if(
+                    equalityRows.begin(), equalityRows.end(),
+                    [](const auto& row) { return row.originalBoundary; }))
+                : equalityRows.size();
+            auto seamEqualityRows = curveNetwork != nullptr
+                ? std::vector<LinearRow> {}
                 : buildSeamEqualityRows(
                     layout,
                     knots,
@@ -2530,7 +2697,9 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     lookups,
                     seamConstraintSamples);
             iterationReport.boundaryHardConstraintCount = boundaryEqualityRowCount;
-            iterationReport.seamG0ConstraintCount = seamEqualityRows.size();
+            iterationReport.seamG0ConstraintCount = curveNetwork != nullptr
+                ? equalityRows.size() - boundaryEqualityRowCount
+                : seamEqualityRows.size();
             iterationReport.seamG1SoftConstraintCount = seamG1RowCount;
             iterationReport.seamG2SoftConstraintCount = seamG2RowCount;
             if (boundaryEqualityRowCount > 0) {
@@ -2542,7 +2711,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     -std::numeric_limits<double>::infinity(),
                     -std::numeric_limits<double>::infinity(),
                     -std::numeric_limits<double>::infinity()};
-                for (std::size_t row = 0; row < boundaryEqualityRowCount; ++row) {
+                for (std::size_t row = 0; row < equalityRows.size(); ++row) {
+                    if (curveNetwork != nullptr &&
+                        !equalityRows[row].originalBoundary) {
+                        continue;
+                    }
                     const std::array<double, 3> target {
                         equalityRows[row].target.X(),
                         equalityRows[row].target.Y(),
@@ -2567,6 +2740,10 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 equalityRows, controlVariableCount);
             iterationReport.minimumFullHardConstraintResidual =
                 fullConstraintFeasibility.minimumMaximumResidual;
+            iterationReport.boundaryFeasibilityRefinementRounds =
+                boundaryFeasibilityRefinementRounds;
+            iterationReport.boundaryFeasibilityResidual =
+                fullConstraintFeasibility.minimumMaximumResidual;
             iterationReport.hardConstraintFeasible =
                 equalityRows.empty() ||
                 (fullConstraintFeasibility.estimatedRank > 0 &&
@@ -2578,6 +2755,31 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     : iterationReport.hardConstraintFeasible
                     ? "Feasible"
                     : "InfeasibleHardBoundaryConstraints";
+            if (!iterationReport.hardConstraintFeasible &&
+                !bestSurfaces.empty() &&
+                !finalIterationForBudget &&
+                iteration + 1 < maximumIterations &&
+                insertBoundaryFeasibilityKnots(
+                    fullConstraintFeasibility.residuals,
+                    knots,
+                    options.maximumControlPointsPerSide,
+                    options.curveOnSurfaceTolerance)) {
+                ++boundaryFeasibilityRefinementRounds;
+                iterationReport.boundaryFeasibilityRefinementRounds =
+                    boundaryFeasibilityRefinementRounds;
+                iterationReport.stopReason =
+                    "Refined U and V knots while retaining the previously constructible diagnostic network.";
+                iterationReport.wallMilliseconds =
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() -
+                        iterationStarted).count();
+                attempt.iterations.push_back(iterationReport);
+                continue;
+            }
+            if (!iterationReport.hardConstraintFeasible) {
+                iterationReport.hardConstraintStatus =
+                    "BoundaryInfeasibleDiagnostic";
+            }
             auto samplesPerConstraintCurve = static_cast<std::size_t>(kDegree + 1);
             for (const auto& patchKnots : knots) {
                 samplesPerConstraintCurve = std::max({
@@ -2694,10 +2896,10 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     columnScales[column] += value.value() * value.value();
                 }
             }
-            for (std::size_t rowIndex = 0;
-                 rowIndex < boundaryEqualityRowCount;
-                 ++rowIndex) {
-                const auto& row = equalityRows[rowIndex];
+            for (const auto& row : equalityRows) {
+                if (curveNetwork != nullptr && !row.originalBoundary) {
+                    continue;
+                }
                 for (const auto& [column, value] : row.coefficients) {
                     for (int axis = 0; axis < 3; ++axis) {
                         columnScales[column * 3 + axis] += value * value;
@@ -2721,6 +2923,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             ValidationMetrics initialDiagnosticMetrics;
             std::string initialDiagnosticFailure;
             std::optional<Eigen::MatrixXd> initialConstructibleSolution;
+            auto boundaryRefinementNeeded = false;
             if (!equalityRows.empty()) {
                 auto initialNormalMatrix = normalMatrix;
                 auto initialNormalTargets = normalTargets;
@@ -2784,7 +2987,59 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     knots,
                     variableOffsets,
                     controlVariableCount);
-                if (affineBaseline) {
+                if (iterationReport.hardConstraintFeasible) {
+                    const auto boundarySolution = projectOntoConstraints(
+                        solveEqualityRows,
+                        controlVariableCount,
+                        initialFitSolution);
+                    if (boundarySolution.has_value()) {
+                        auto boundaryBaseline = largestConstructibleBlend(
+                            *boundarySolution,
+                            *boundarySolution,
+                            knots,
+                            variableOffsets,
+                            layoutCarrier,
+                            layout,
+                            options);
+                        if (boundaryBaseline.available) {
+                            iterationReport.initialSupportBlendAlpha = 1.0;
+                            initialDiagnosticMetrics = validateNetwork(
+                                fittingReference,
+                                layoutCarrier,
+                                layout,
+                                lookups,
+                                boundaryBaseline.surfaces,
+                                options,
+                                mappedSamples);
+                            if (curveNetwork != nullptr) {
+                                validateFrozenCurveContinuity(
+                                    initialDiagnosticMetrics,
+                                    layout,
+                                    *curveNetwork,
+                                    boundaryBaseline.surfaces,
+                                    options);
+                            }
+                            initialConstructibleSolution =
+                                std::move(boundaryBaseline.solution);
+                            initialDiagnosticSurfaces =
+                                std::move(boundaryBaseline.surfaces);
+                            initialDiagnosticFailure =
+                                boundaryBaseline.failure;
+                        } else {
+                            initialDiagnosticFailure =
+                                boundaryBaseline.failure;
+                        }
+                    } else {
+                        initialDiagnosticFailure =
+                            "Could not project the data-fit control network onto all hard curve constraints.";
+                    }
+                    boundaryRefinementNeeded = !initialConstructibleSolution;
+                }
+                boundaryRefinementNeeded =
+                    boundaryRefinementNeeded ||
+                    !iterationReport.hardConstraintFeasible;
+                if (boundaryRefinementNeeded &&
+                    affineBaseline) {
                     const auto baseline = largestConstructibleBlend(
                         *affineBaseline,
                         *affineBaseline,
@@ -2838,7 +3093,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                                 initialDiagnosticMetrics,
                                 layout,
                                 *curveNetwork,
-                                initialDiagnosticSurfaces,
+                                initialBlend.surfaces,
                                 options);
                         }
                         initialConstructibleSolution = std::move(initialBlend.solution);
@@ -2847,7 +3102,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     } else {
                         initialDiagnosticFailure = initialBlend.failure;
                     }
-                } else {
+                } else if (boundaryRefinementNeeded) {
                     initialDiagnosticFailure =
                         "Could not construct a non-degenerate affine local support baseline.";
                 }
@@ -2856,6 +3111,54 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         initialDiagnosticMetrics.trainingMaximumDistance;
                     iterationReport.initialBoundaryMaximumDistance =
                         initialDiagnosticMetrics.boundaryMaximumDistance;
+                }
+                if (boundaryRefinementNeeded) {
+                    auto refinementSamples =
+                        fullConstraintFeasibility.residuals;
+                    if (refinementSamples.empty() ||
+                        std::all_of(
+                            refinementSamples.begin(),
+                            refinementSamples.end(),
+                            [](const auto& sample) {
+                                return sample.error <= 1.0e-12;
+                            })) {
+                        for (const auto& row : equalityRows) {
+                            if (row.sourcePatch >= 0) {
+                                refinementSamples.push_back({
+                                    row.sourcePatch,
+                                    row.sourceUv[0],
+                                    row.sourceUv[1],
+                                    1.0});
+                            }
+                        }
+                    }
+                    if (!finalIterationForBudget &&
+                        iteration + 1 < maximumIterations &&
+                        insertBoundaryFeasibilityKnots(
+                            refinementSamples,
+                            knots,
+                            options.maximumControlPointsPerSide,
+                            options.curveOnSurfaceTolerance)) {
+                        if (!initialDiagnosticSurfaces.empty()) {
+                            bestSurfaces = initialDiagnosticSurfaces;
+                            bestMetrics = initialDiagnosticMetrics;
+                        }
+                        ++boundaryFeasibilityRefinementRounds;
+                        iterationReport.boundaryFeasibilityRefinementRounds =
+                            boundaryFeasibilityRefinementRounds;
+                        iterationReport.stopReason =
+                            "Refined U and V knots because the boundary-feasible control network was not constructible: " +
+                            initialDiagnosticFailure;
+                        iterationReport.wallMilliseconds =
+                            std::chrono::duration<double, std::milli>(
+                                std::chrono::steady_clock::now() -
+                                iterationStarted).count();
+                        attempt.iterations.push_back(iterationReport);
+                        continue;
+                    }
+                    iterationReport.hardConstraintFeasible = false;
+                    iterationReport.hardConstraintStatus =
+                        "BoundaryInfeasibleDiagnostic";
                 }
 
                 auto diagonalScale = 0.0;
@@ -2975,7 +3278,18 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 return result;
             }
             if (std::chrono::steady_clock::now() >= attemptDeadline) {
-                iterationReport.stopReason = "Single-fit deadline reached before sparse factorization.";
+                if (!iterationReport.hardConstraintFeasible &&
+                    !initialDiagnosticSurfaces.empty()) {
+                    bestSurfaces = initialDiagnosticSurfaces;
+                    bestMetrics = initialDiagnosticMetrics;
+                    iterationReport.constraintCorrectionBlendAlpha = 0.0;
+                    iterationReport.stopReason =
+                        iterationReport.hardConstraintStatus +
+                        "; single-fit deadline reached before constrained factorization, so the constructible initial network was retained for diagnostic sewing.";
+                } else {
+                    iterationReport.stopReason =
+                        "Single-fit deadline reached before sparse factorization.";
+                }
                 attempt.iterations.push_back(iterationReport);
                 attempt.stopReason = iterationReport.stopReason;
                 break;
@@ -3098,8 +3412,11 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             if (iterationReport.maximumHardConstraintResidual >
                 options.curveOnSurfaceTolerance) {
                 iterationReport.hardConstraintFeasible = false;
-                iterationReport.hardConstraintStatus =
-                    "InfeasibleHardBoundaryConstraints";
+                if (iterationReport.hardConstraintStatus !=
+                    "BoundaryInfeasibleDiagnostic") {
+                    iterationReport.hardConstraintStatus =
+                        "InfeasibleHardBoundaryConstraints";
+                }
             }
             try {
                 if (surfaces.empty()) {

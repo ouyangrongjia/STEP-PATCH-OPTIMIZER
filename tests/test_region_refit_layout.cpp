@@ -7,6 +7,7 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRep_Tool.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 
@@ -146,6 +147,63 @@ PlanarCurveFixture makePlanarCurveFixture(const int resolution) {
     }
     fixture.mesh.updateIntegrationWeights();
     return fixture;
+}
+
+spo::RegionCurveNetwork makeBoundaryOnlyCurveNetwork(
+    const spo::RegionReferenceMesh& mesh,
+    const int boundaryCount) {
+    spo::RegionCurveNetwork network;
+    network.patchCount = 1;
+    network.trianglePatches.assign(mesh.triangles.size(), 0);
+    network.nodes.resize(static_cast<std::size_t>(boundaryCount));
+    for (int index = 0; index < boundaryCount; ++index) {
+        auto& node = network.nodes[static_cast<std::size_t>(index)];
+        node.id = static_cast<std::size_t>(index);
+        node.meshVertex = static_cast<std::size_t>(index + 1);
+        node.point = mesh.vertices[node.meshVertex].point;
+        node.originalBoundary = true;
+    }
+    spo::RegionCurveNetworkPatchLoop loop;
+    loop.patch = 0;
+    for (int index = 0; index < boundaryCount; ++index) {
+        const auto next = (index + 1) % boundaryCount;
+        const auto original = BRepBuilderAPI_MakeEdge(
+            network.nodes[static_cast<std::size_t>(index)].point,
+            network.nodes[static_cast<std::size_t>(next)].point).Edge();
+        double first = 0.0;
+        double last = 0.0;
+        const auto curve = BRep_Tool::Curve(original, first, last);
+        spo::RegionCurveNetworkEdge edge;
+        edge.id = static_cast<std::size_t>(index);
+        edge.startNode = static_cast<std::size_t>(index);
+        edge.endNode = static_cast<std::size_t>(next);
+        edge.firstPatch = 0;
+        edge.originalBoundary = true;
+        edge.hasOriginalEdge = true;
+        edge.originalEdgeId = static_cast<spo::EdgeId>(index);
+        edge.originalEdge = original;
+        edge.curve = curve;
+        edge.firstParameter = first;
+        edge.lastParameter = last;
+        edge.meshVertices = {
+            static_cast<std::size_t>(index + 1),
+            static_cast<std::size_t>(next + 1)};
+        edge.meshParameters = {first, last};
+        edge.reusesOriginalEdge = true;
+        edge.frozen = true;
+        edge.productQualityPassed = true;
+        edge.validationSampleCount = 97;
+        network.nodes[edge.startNode].incidentEdges.push_back(edge.id);
+        network.nodes[edge.endNode].incidentEdges.push_back(edge.id);
+        network.edges.push_back(std::move(edge));
+        loop.edges.push_back({
+            static_cast<std::size_t>(index), true});
+    }
+    network.patchLoops.push_back(std::move(loop));
+    std::string message;
+    assert(spo::validateRegionCurveNetwork(
+        network, 1.0e-8, 97, message));
+    return network;
 }
 
 PlanarCurveFixture makeTriangulatedCurveFixture(const int resolution) {
@@ -595,6 +653,56 @@ void test_curve_network_freezes_one_shared_internal_curve_before_layout_binding(
         network.hash);
     assert(layouts.selectedCandidates.front().hash !=
         network.partitionLayoutHash);
+    for (const auto& patch : layouts.selectedCandidates.front().patches) {
+        assert(patch.pcurveLoopClosed);
+        assert(patch.pcurveOrientationConsistent);
+        assert(patch.pcurveSelfIntersectionCount == 0);
+        assert(patch.pcurveNonAdjacentIntersectionCount == 0);
+        assert(patch.flippedTriangleCount == 0);
+        assert(!patch.edgePcurves.empty());
+    }
+}
+
+void test_three_four_and_seven_edge_domains_are_convex_and_injective() {
+    for (const auto edgeCount : {3, 4, 7}) {
+        const auto mesh = makeTurningDisk(edgeCount);
+        spo::RegionRefitOptions options;
+        options.fixedPatchCount = 1;
+        options.maximumParameterDistortion = 1000.0;
+        options.curveOnSurfaceTolerance = 1.0e-6;
+        const auto partitions = spo::RegionPatchLayoutGenerator().generate(
+            mesh,
+            spo::RegionRefitLayoutMode::FixedPatchCount,
+            options);
+        assert(partitions.success());
+        auto layout = partitions.selectedCandidates.front();
+        const auto network = makeBoundaryOnlyCurveNetwork(
+            mesh, edgeCount);
+        std::string message;
+        assert(spo::buildCurveConsistentParameterDomain(
+            mesh, network, options, layout, message));
+        const auto& patch = layout.patches.front();
+        assert(patch.edgePcurves.size() ==
+            static_cast<std::size_t>(edgeCount));
+        assert(patch.pcurveLoopClosed);
+        assert(patch.pcurveOrientationConsistent);
+        assert(patch.pcurveSelfIntersectionCount == 0);
+        assert(patch.pcurveNonAdjacentIntersectionCount == 0);
+        assert(patch.flippedTriangleCount == 0);
+        assert(patch.minimumToMedianUvAreaRatio > 0.0);
+        for (const auto& pcurve : patch.edgePcurves) {
+            for (std::size_t sample = 0;
+                 sample < pcurve.parameters.size(); ++sample) {
+                const auto uv = spo::evaluateRegionPatchEdgePcurve(
+                    pcurve, pcurve.parameters[sample]);
+                assert(uv.has_value());
+                assert(std::hypot(
+                    (*uv)[0] - pcurve.uvPoints[sample][0],
+                    (*uv)[1] - pcurve.uvPoints[sample][1]) <=
+                    1.0e-12);
+            }
+        }
+    }
 }
 
 void test_triangulated_curve_network_uses_diagnostic_polyline_without_blocking_topology() {
@@ -755,6 +863,9 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
     assert(built.internalSeamCount == 1);
     assert(built.internalSeamEdges.size() == 1);
     assert(built.sameParameterFailureCount == 0);
+    assert(built.diagnosticPcurveFallbackCount == 0);
+    assert(built.unexpectedFaceIntersectionCount == 0);
+    assert(built.replacementQuiltInternalFreeEdgeCount == 0);
     const auto internal = std::find_if(
         built.edgeConsistency.begin(),
         built.edgeConsistency.end(),
@@ -851,10 +962,10 @@ void test_curve_network_cache_roundtrip_is_deterministic() {
             std::ios::in | std::ios::out | std::ios::binary);
         assert(stream);
         const std::array<char, 4> oldVersion {
+            static_cast<char>(7),
             static_cast<char>(0),
             static_cast<char>(0),
-            static_cast<char>(0),
-            static_cast<char>(6)};
+            static_cast<char>(0)};
         stream.seekp(4);
         stream.write(oldVersion.data(), oldVersion.size());
         assert(stream);
@@ -884,6 +995,7 @@ void run_region_refit_layout_tests() {
     test_curve_network_accepts_near_preferred_face_projection();
     test_curve_network_classifies_internal_continuity_from_evidence();
     test_curve_network_freezes_one_shared_internal_curve_before_layout_binding();
+    test_three_four_and_seven_edge_domains_are_convex_and_injective();
     test_triangulated_curve_network_uses_diagnostic_polyline_without_blocking_topology();
     test_curve_network_rejects_open_misoriented_and_multiple_use_loops();
     test_four_patch_curve_network_keeps_closed_oriented_patch_loops();

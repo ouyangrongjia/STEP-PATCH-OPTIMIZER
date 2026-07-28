@@ -64,9 +64,11 @@ BoundaryConstrainedPatchBuildResult replacementBuildResult(
     replacement.multiSurfaceSplitBoundaryEdgeCount = native.splitBoundarySegmentCount;
     replacement.multiSurfaceBuiltFaceCount = replacement.replacementFaceCount;
     replacement.multiSurfaceClosedWireCount = replacement.replacementFaceCount;
-    replacement.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount = native.pcurveProjectionCount;
+    replacement.multiSurfaceBoundaryEdgePcurveRebuildAttemptCount =
+        native.storedPcurveAttachmentCount;
     replacement.multiSurfaceBoundaryEdgePcurveRebuildSuccessCount =
-        native.pcurveProjectionCount - native.sameParameterFailureCount;
+        native.storedPcurveAttachmentCount -
+        native.sameParameterFailureCount;
     replacement.multiSurfaceBoundaryEdgePcurveRebuildFailureCount =
         native.sameParameterFailureCount;
     replacement.multiSurfaceBoundaryEdgeSameParameterCheckCount =
@@ -711,6 +713,29 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.exactTargetReached = result.report.requestedPatchCount > 0 &&
         result.report.patchCountDeviation == 0;
     result.report.selectedLayoutHash = result.fittedNetwork->layout.hash;
+    for (const auto& patch : result.fittedNetwork->layout.patches) {
+        result.report.pcurveSelfIntersectionCount +=
+            patch.pcurveSelfIntersectionCount;
+        result.report.pcurveNonAdjacentIntersectionCount +=
+            patch.pcurveNonAdjacentIntersectionCount;
+    }
+    const auto selectedAttempt = std::find_if(
+        fitted.attempts.begin(), fitted.attempts.end(),
+        [&](const auto& attempt) {
+            return attempt.layoutHash == result.report.selectedLayoutHash;
+        });
+    if (selectedAttempt != fitted.attempts.end() &&
+        !selectedAttempt->iterations.empty()) {
+        const auto& finalIteration = selectedAttempt->iterations.back();
+        result.report.boundaryFeasibilityRefinementRounds =
+            finalIteration.boundaryFeasibilityRefinementRounds;
+        result.report.boundaryFeasibilityResidual =
+            finalIteration.boundaryFeasibilityResidual;
+        result.report.fittedMaximumUControlCount =
+            finalIteration.uControlCount;
+        result.report.fittedMaximumVControlCount =
+            finalIteration.vControlCount;
+    }
     const auto fittedCurveNetwork = std::find_if(
         fitCurveNetworks.begin(),
         fitCurveNetworks.end(),
@@ -832,15 +857,26 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.retrimInternalSeamCount = nativeBuild.internalSeamCount;
     result.report.retrimReusedBoundaryEdgeCount = nativeBuild.reusedOriginalBoundaryEdgeCount;
     result.report.retrimSplitBoundarySegmentCount = nativeBuild.splitBoundarySegmentCount;
-    result.report.retrimPcurveProjectionCount = nativeBuild.pcurveProjectionCount;
+    result.report.retrimStoredPcurveAttachmentCount =
+        nativeBuild.storedPcurveAttachmentCount;
     result.report.retrimDiagnosticPcurveFallbackCount =
         nativeBuild.diagnosticPcurveFallbackCount;
     result.report.retrimSameParameterCheckCount = nativeBuild.sameParameterCheckCount;
     result.report.retrimSameParameterFailureCount = nativeBuild.sameParameterFailureCount;
     result.report.retrimMaximumSameParameterDeviation = nativeBuild.maximumSameParameterDeviation;
+    result.report.unexpectedFaceIntersectionCount =
+        nativeBuild.unexpectedFaceIntersectionCount;
+    result.report.unexpectedFaceIntersectionTotalLength =
+        nativeBuild.unexpectedFaceIntersectionTotalLength;
+    result.report.replacementQuiltInternalFreeEdgeCount =
+        nativeBuild.replacementQuiltInternalFreeEdgeCount;
     result.report.edgeConsistency = nativeBuild.edgeConsistency;
     result.report.assemblyPassed = assembly.success;
     result.report.retrimValidationPassed = retrimStage.success;
+    if (!nativeBuild.success() &&
+        result.report.firstProductFailureGate.empty()) {
+        result.report.firstProductFailureGate = "Retrim";
+    }
     const auto retrimConstructed = nativeBuild.constructible() && boundary.valid && assembly.success &&
         !assembly.shape.IsNull();
     if (!retrimConstructed) {
@@ -861,12 +897,23 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         failMemoryBudget(result, RegionRefitStage::Retrim);
         return result;
     }
-    if (retrimStage.wallMilliseconds > static_cast<double>(request.options.retrimBudgetMilliseconds) ||
-        result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+    const auto retrimTimeExceeded =
+        retrimStage.wallMilliseconds >
+            static_cast<double>(request.options.retrimBudgetMilliseconds) ||
+        result.report.totalWallMilliseconds >
+            static_cast<double>(request.options.maximumWallClockMilliseconds);
+    if (retrimTimeExceeded &&
+        request.executionMode !=
+            RegionRefitExecutionMode::BestEffortThroughSewing &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
         result.report.failureStage = RegionRefitStage::Retrim;
         result.report.message = "Native retrimming exceeded its wall-clock budget.";
         return result;
+    }
+    if (retrimTimeExceeded) {
+        result.report.continuationStopReason =
+            "Native retrimming exceeded its quality budget; diagnostic sewing continued.";
     }
     if (request.diagnosticStopAfterStage == RegionRefitStage::Retrim) {
         result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;

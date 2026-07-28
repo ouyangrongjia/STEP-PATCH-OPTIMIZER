@@ -187,7 +187,7 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(!fitted.attempts.front().iterations.empty());
     const auto& iteration = fitted.attempts.front().iterations.back();
     assert(!iteration.hardConstraintFeasible);
-    assert(iteration.hardConstraintStatus == "InfeasibleHardBoundaryConstraints");
+    assert(iteration.hardConstraintStatus == "BoundaryInfeasibleDiagnostic");
     assert(iteration.minimumFullHardConstraintResidual > options.curveOnSurfaceTolerance);
     assert(iteration.initialControlPriorScale > 0.0);
     assert(iteration.initialSupportBlendAlpha >= 0.0);
@@ -420,12 +420,45 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
         request.layoutMode,
         request.options);
     assert(layouts.success());
+    spo::RegionPatchEdgePcurve cachedPcurve;
+    cachedPcurve.edgeIndex = 17;
+    cachedPcurve.forward = false;
+    cachedPcurve.firstParameter = 2.0;
+    cachedPcurve.lastParameter = 5.0;
+    cachedPcurve.startNode = 3;
+    cachedPcurve.endNode = 9;
+    cachedPcurve.loopOrder = 1;
+    cachedPcurve.parameters = {2.0, 3.5, 5.0};
+    cachedPcurve.uvPoints = {{
+        {0.1, 0.2}, {0.5, 0.2}, {0.9, 0.2}}};
+    cachedPcurve.hash = "pcurve-cache-v8";
+    layouts.selectedCandidates.front().patches.front().edgePcurves = {
+        cachedPcurve};
+    layouts.selectedCandidates.front().patches.front().pcurveLoopClosed = true;
+    layouts.selectedCandidates.front().patches.front()
+        .pcurveOrientationConsistent = true;
+    layouts.selectedCandidates.front().patches.front()
+        .minimumToMedianUvAreaRatio = 0.125;
+    layouts.selectedCandidates.front().patches.front()
+        .boundaryRepresentabilityResidual = 1.0e-9;
     cache.saveLayouts(layouts);
     spo::RegionPatchLayoutGenerationResult loadedLayouts;
     spo::RegionRefitCacheEvent layoutRead;
     assert(cache.loadLayouts(loadedLayouts, layoutRead));
     assert(layoutRead.hit);
     assert(loadedLayouts.selectedCandidates.front().hash == layouts.selectedCandidates.front().hash);
+    const auto& loadedPatch =
+        loadedLayouts.selectedCandidates.front().patches.front();
+    assert(loadedPatch.edgePcurves.size() == 1);
+    assert(loadedPatch.edgePcurves.front().hash == cachedPcurve.hash);
+    assert(loadedPatch.edgePcurves.front().parameters ==
+        cachedPcurve.parameters);
+    assert(loadedPatch.edgePcurves.front().uvPoints ==
+        cachedPcurve.uvPoints);
+    assert(loadedPatch.pcurveLoopClosed);
+    assert(loadedPatch.pcurveOrientationConsistent);
+    assert(std::abs(
+        loadedPatch.minimumToMedianUvAreaRatio - 0.125) <= 1.0e-15);
 
     spo::RegionRefitOptions fitOptions = request.options;
     fitOptions.tolerance3d = 0.1;

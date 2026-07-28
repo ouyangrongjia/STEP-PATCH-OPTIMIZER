@@ -723,11 +723,11 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("RequestedPatchCount") != std::string::npos);
     assert(script.find("AdaptiveSafetyCap") != std::string::npos);
     assert(script.find("LayoutCarrierSamplingMode") != std::string::npos);
-    assert(script.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(script.find("best_effort_support_surfaces.step") != std::string::npos);
+    assert(script.find("selected_parameter_domain.json") != std::string::npos);
     assert(script.find("selected_curve_network.step") != std::string::npos);
     assert(script.find("replacement_quilt.step") != std::string::npos);
     assert(script.find("sewn_attempt.step") != std::string::npos);
-    assert(script.find("cad_check_candidate.step") != std::string::npos);
     assert(script.find("curve_network.json") != std::string::npos);
     assert(script.find("artifact_status.json") != std::string::npos);
     assert(script.find("final_sewn.step") != std::string::npos);
@@ -747,7 +747,6 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find(
         "$context.directories.diagnostics \"evidence_manifest.json\"") ==
         std::string::npos);
-    assert(script.find("brep\\cad_check_candidate.step") != std::string::npos);
     assert(script.find("brep\\sewn_attempt.step") != std::string::npos);
     assert(script.find("assembly\\cad_check_candidate.step") == std::string::npos);
     assert(script.find("assembly\\sewn_attempt.step") == std::string::npos);
@@ -757,15 +756,16 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("$newNmsdProcesses | Wait-Process") != std::string::npos);
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
-    assert(probe.find("native-regional-refit-v35-local-curve") != std::string::npos);
+    assert(probe.find("native-regional-refit-v36-pcurve-domain") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
-    assert(probe.find("best_effort_fitted_patch_network.step") != std::string::npos);
+    assert(probe.find("best_effort_support_surfaces.step") != std::string::npos);
+    assert(probe.find("fitted_support_surfaces.step") != std::string::npos);
+    assert(probe.find("selected_parameter_domain.json") != std::string::npos);
     assert(probe.find("selected_curve_network.step") != std::string::npos);
     assert(probe.find("replacement_quilt.step") != std::string::npos);
     assert(probe.find("sewn_attempt.step") != std::string::npos);
-    assert(probe.find("cad_check_candidate.step") != std::string::npos);
     assert(probe.find("edge_consistency_report.json") != std::string::npos);
     assert(probe.find("output_complexity_report.json") != std::string::npos);
     assert(probe.find("curve_network.json") != std::string::npos);

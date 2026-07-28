@@ -4,6 +4,7 @@
 #include <Eigen/Eigenvalues>
 #include <Eigen/IterativeLinearSolvers>
 #include <Eigen/SparseCore>
+#include <Eigen/SparseLU>
 
 #include <gp_Vec.hxx>
 
@@ -457,6 +458,291 @@ double signedArea2d(
     const std::array<double, 2>& third) {
     return (second[0] - first[0]) * (third[1] - first[1]) -
         (second[1] - first[1]) * (third[0] - first[0]);
+}
+
+double curveEdgeLength(const RegionCurveNetworkEdge& edge) {
+    if (edge.curve.IsNull() || edge.lastParameter <= edge.firstParameter) {
+        return 0.0;
+    }
+    const auto sampleCount = std::max<std::size_t>(2, edge.meshParameters.size());
+    auto previous = edge.curve->Value(edge.firstParameter);
+    auto length = 0.0;
+    for (std::size_t sample = 1; sample < sampleCount; ++sample) {
+        const auto parameter = edge.firstParameter +
+            (edge.lastParameter - edge.firstParameter) *
+                static_cast<double>(sample) /
+                static_cast<double>(sampleCount - 1);
+        const auto point = edge.curve->Value(parameter);
+        length += previous.Distance(point);
+        previous = point;
+    }
+    return length;
+}
+
+std::vector<double> boundedAngularSpans(
+    const RegionCurveNetworkPatchLoop& loop,
+    const RegionCurveNetwork& network) {
+    std::vector<double> weights;
+    weights.reserve(loop.edges.size());
+    for (const auto& use : loop.edges) {
+        weights.push_back(std::sqrt(std::max(
+            curveEdgeLength(network.edges[use.edgeIndex]), 1.0e-12)));
+    }
+    const auto total = std::accumulate(weights.begin(), weights.end(), 0.0);
+    if (!(total > 0.0)) return {};
+    for (auto& weight : weights) weight /= total;
+    const auto largest = std::max_element(weights.begin(), weights.end());
+    constexpr double maximumFraction = 0.49;
+    if (largest != weights.end() && *largest >= maximumFraction) {
+        const auto remainder = 1.0 - *largest;
+        *largest = maximumFraction;
+        const auto scale = (1.0 - maximumFraction) /
+            std::max(remainder, 1.0e-12);
+        for (auto& weight : weights) {
+            if (&weight != &*largest) weight *= scale;
+        }
+    }
+    constexpr double twoPi = 6.28318530717958647692;
+    for (auto& weight : weights) weight *= twoPi;
+    return weights;
+}
+
+std::string pcurveHash(const RegionPatchEdgePcurve& pcurve) {
+    std::uint64_t hash = 1469598103934665603ull;
+    const auto append = [&](const std::uint64_t value) {
+        for (int shift = 0; shift < 64; shift += 8) {
+            hash ^= (value >> shift) & 0xffu;
+            hash *= 1099511628211ull;
+        }
+    };
+    append(pcurve.edgeIndex);
+    append(pcurve.forward ? 1u : 0u);
+    append(pcurve.startNode);
+    append(pcurve.endNode);
+    append(pcurve.loopOrder);
+    for (std::size_t index = 0; index < pcurve.parameters.size(); ++index) {
+        append(static_cast<std::uint64_t>(
+            std::llround(pcurve.parameters[index] * 1.0e12)));
+        append(static_cast<std::uint64_t>(
+            std::llround(pcurve.uvPoints[index][0] * 1.0e12)));
+        append(static_cast<std::uint64_t>(
+            std::llround(pcurve.uvPoints[index][1] * 1.0e12)));
+    }
+    std::ostringstream stream;
+    stream << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return stream.str();
+}
+
+int orientation2d(
+    const std::array<double, 2>& first,
+    const std::array<double, 2>& second,
+    const std::array<double, 2>& third) {
+    const auto area = signedArea2d(first, second, third);
+    constexpr double tolerance = 1.0e-12;
+    return area > tolerance ? 1 : area < -tolerance ? -1 : 0;
+}
+
+bool segmentsIntersectStrictly(
+    const std::array<double, 2>& firstStart,
+    const std::array<double, 2>& firstEnd,
+    const std::array<double, 2>& secondStart,
+    const std::array<double, 2>& secondEnd) {
+    const auto firstA = orientation2d(firstStart, firstEnd, secondStart);
+    const auto firstB = orientation2d(firstStart, firstEnd, secondEnd);
+    const auto secondA = orientation2d(secondStart, secondEnd, firstStart);
+    const auto secondB = orientation2d(secondStart, secondEnd, firstEnd);
+    return firstA != 0 && firstB != 0 && secondA != 0 && secondB != 0 &&
+        firstA != firstB && secondA != secondB;
+}
+
+double halfAngleTangent(
+    const gp_Pnt& center,
+    const gp_Pnt& first,
+    const gp_Pnt& second) {
+    gp_Vec firstDirection(center, first);
+    gp_Vec secondDirection(center, second);
+    if (firstDirection.SquareMagnitude() <= 1.0e-24 ||
+        secondDirection.SquareMagnitude() <= 1.0e-24) {
+        return 0.0;
+    }
+    firstDirection.Normalize();
+    secondDirection.Normalize();
+    const auto cosine = std::clamp(
+        firstDirection.Dot(secondDirection), -1.0, 1.0);
+    const auto sine = firstDirection.Crossed(secondDirection).Magnitude();
+    return sine / std::max(1.0 + cosine, 1.0e-12);
+}
+
+bool meanValueParameterizeInterior(
+    const RegionReferenceMesh& mesh,
+    RegionPatchParameterization& patch,
+    const std::unordered_map<std::size_t, std::size_t>& localByGlobal,
+    std::string& message) {
+    std::set<std::size_t> boundaryLocal;
+    for (const auto vertex : patch.boundaryLoop) {
+        const auto found = localByGlobal.find(vertex);
+        if (found == localByGlobal.end()) {
+            message = "A curve-network boundary vertex is absent from its patch.";
+            return false;
+        }
+        boundaryLocal.insert(found->second);
+    }
+    std::vector<std::size_t> interior;
+    std::vector<int> interiorRow(patch.vertexIndices.size(), -1);
+    for (std::size_t local = 0; local < patch.vertexIndices.size(); ++local) {
+        if (!boundaryLocal.contains(local)) {
+            interiorRow[local] = static_cast<int>(interior.size());
+            interior.push_back(local);
+        }
+    }
+    patch.matrixRows = interior.size();
+    if (interior.empty()) return true;
+
+    std::vector<std::map<std::size_t, double>> weights(
+        patch.vertexIndices.size());
+    for (const auto triangleIndex : patch.triangleIndices) {
+        if (triangleIndex >= mesh.triangles.size()) {
+            message = "A curve-consistent parameter domain references an invalid triangle.";
+            return false;
+        }
+        const auto& triangle = mesh.triangles[triangleIndex];
+        for (std::size_t corner = 0; corner < 3; ++corner) {
+            const auto center = localByGlobal.at(triangle.vertices[corner]);
+            const auto first = localByGlobal.at(
+                triangle.vertices[(corner + 1) % 3]);
+            const auto second = localByGlobal.at(
+                triangle.vertices[(corner + 2) % 3]);
+            const auto tangent = halfAngleTangent(
+                mesh.vertices[patch.vertexIndices[center]].point,
+                mesh.vertices[patch.vertexIndices[first]].point,
+                mesh.vertices[patch.vertexIndices[second]].point);
+            if (!(tangent > 0.0) || !std::isfinite(tangent)) continue;
+            const auto firstLength = mesh.vertices[patch.vertexIndices[center]].point.Distance(
+                mesh.vertices[patch.vertexIndices[first]].point);
+            const auto secondLength = mesh.vertices[patch.vertexIndices[center]].point.Distance(
+                mesh.vertices[patch.vertexIndices[second]].point);
+            weights[center][first] += tangent / std::max(firstLength, 1.0e-12);
+            weights[center][second] += tangent / std::max(secondLength, 1.0e-12);
+        }
+    }
+
+    using SparseMatrix = Eigen::SparseMatrix<double>;
+    std::vector<Eigen::Triplet<double>> coefficients;
+    Eigen::VectorXd rightU = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(interior.size()));
+    Eigen::VectorXd rightV = rightU;
+    for (const auto local : interior) {
+        const auto row = interiorRow[local];
+        auto sum = 0.0;
+        for (const auto& [neighbor, weight] : weights[local]) {
+            if (!(weight > 0.0) || !std::isfinite(weight)) continue;
+            sum += weight;
+            const auto column = interiorRow[neighbor];
+            if (column >= 0) {
+                coefficients.emplace_back(row, column, -weight);
+            } else {
+                rightU[row] += weight * patch.parameters[neighbor][0];
+                rightV[row] += weight * patch.parameters[neighbor][1];
+            }
+        }
+        if (!(sum > 0.0)) {
+            message = "Mean-value parameterization found an isolated interior vertex.";
+            return false;
+        }
+        coefficients.emplace_back(row, row, sum);
+    }
+    patch.matrixNonZeros = coefficients.size();
+    SparseMatrix matrix(
+        static_cast<Eigen::Index>(interior.size()),
+        static_cast<Eigen::Index>(interior.size()));
+    matrix.setFromTriplets(coefficients.begin(), coefficients.end());
+    matrix.makeCompressed();
+    Eigen::SparseLU<SparseMatrix> solver;
+    solver.analyzePattern(matrix);
+    solver.factorize(matrix);
+    if (solver.info() != Eigen::Success) {
+        message = "Mean-value parameterization factorization failed.";
+        return false;
+    }
+    const auto solutionU = solver.solve(rightU);
+    const auto solutionV = solver.solve(rightV);
+    if (solver.info() != Eigen::Success ||
+        !solutionU.allFinite() || !solutionV.allFinite()) {
+        message = "Mean-value parameterization solve failed.";
+        return false;
+    }
+    for (const auto local : interior) {
+        const auto row = interiorRow[local];
+        patch.parameters[local] = {solutionU[row], solutionV[row]};
+    }
+    return true;
+}
+
+bool orientPatchTriangles(
+    const RegionReferenceMesh& mesh,
+    const RegionPatchParameterization& patch,
+    std::vector<int>& orientations,
+    std::string& message) {
+    struct DirectedUse {
+        std::size_t triangle = 0;
+        int direction = 0;
+    };
+    std::map<MeshEdge, std::vector<DirectedUse>> uses;
+    for (const auto triangleIndex : patch.triangleIndices) {
+        if (triangleIndex >= mesh.triangles.size()) {
+            message = "A curve-consistent parameter domain references an invalid triangle.";
+            return false;
+        }
+        const auto& triangle = mesh.triangles[triangleIndex];
+        for (std::size_t edge = 0; edge < triangle.vertices.size(); ++edge) {
+            const auto first = triangle.vertices[edge];
+            const auto second =
+                triangle.vertices[(edge + 1) % triangle.vertices.size()];
+            uses[orderedEdge(first, second)].push_back({
+                triangleIndex,
+                first < second ? 1 : -1});
+        }
+    }
+    orientations.assign(mesh.triangles.size(), 0);
+    orientations[patch.triangleIndices.front()] = 1;
+    std::queue<std::size_t> pending;
+    pending.push(patch.triangleIndices.front());
+    while (!pending.empty()) {
+        const auto currentTriangle = pending.front();
+        pending.pop();
+        const auto& triangle = mesh.triangles[currentTriangle];
+        for (std::size_t edge = 0; edge < triangle.vertices.size(); ++edge) {
+            const auto key = orderedEdge(
+                triangle.vertices[edge],
+                triangle.vertices[(edge + 1) % triangle.vertices.size()]);
+            const auto& edgeUses = uses.at(key);
+            if (edgeUses.size() != 2) continue;
+            const auto current = edgeUses[0].triangle == currentTriangle
+                ? edgeUses[0] : edgeUses[1];
+            const auto other = edgeUses[0].triangle == currentTriangle
+                ? edgeUses[1] : edgeUses[0];
+            const auto expected =
+                -current.direction * orientations[currentTriangle] *
+                other.direction;
+            if (orientations[other.triangle] == 0) {
+                orientations[other.triangle] = expected;
+                pending.push(other.triangle);
+            } else if (orientations[other.triangle] != expected) {
+                message = "Curve-consistent patch triangles are not orientable.";
+                return false;
+            }
+        }
+    }
+    if (std::any_of(
+            patch.triangleIndices.begin(),
+            patch.triangleIndices.end(),
+            [&](const auto triangle) {
+                return orientations[triangle] == 0;
+            })) {
+        message = "Curve-consistent patch triangles are disconnected.";
+        return false;
+    }
+    return true;
 }
 
 bool mapBoundaryToConvexLoop(
@@ -1066,6 +1352,19 @@ std::string layoutHash(const RegionPatchLayout& layout) {
             append(static_cast<std::uint64_t>(std::llround(uv[0] * 1.0e12)));
             append(static_cast<std::uint64_t>(std::llround(uv[1] * 1.0e12)));
         }
+        for (const auto& pcurve : parameterization.edgePcurves) {
+            append(pcurve.edgeIndex);
+            append(pcurve.forward ? 1u : 0u);
+            append(pcurve.loopOrder);
+            for (std::size_t index = 0; index < pcurve.parameters.size(); ++index) {
+                append(static_cast<std::uint64_t>(
+                    std::llround(pcurve.parameters[index] * 1.0e12)));
+                append(static_cast<std::uint64_t>(
+                    std::llround(pcurve.uvPoints[index][0] * 1.0e12)));
+                append(static_cast<std::uint64_t>(
+                    std::llround(pcurve.uvPoints[index][1] * 1.0e12)));
+            }
+        }
     }
     for (const auto character : layout.curveNetworkHash) {
         append(static_cast<std::uint64_t>(
@@ -1226,6 +1525,467 @@ std::vector<int> requestedPatchCounts(
 
 bool RegionPatchLayoutGenerationResult::success() const {
     return status == RegionRefitStatus::Success && !selectedCandidates.empty();
+}
+
+std::optional<std::array<double, 2>> evaluateRegionPatchEdgePcurve(
+    const RegionPatchEdgePcurve& pcurve,
+    const double parameter) {
+    if (pcurve.parameters.size() < 2 ||
+        pcurve.parameters.size() != pcurve.uvPoints.size() ||
+        !std::isfinite(parameter)) {
+        return std::nullopt;
+    }
+    const auto clamped = std::clamp(
+        parameter, pcurve.parameters.front(), pcurve.parameters.back());
+    const auto upper = std::upper_bound(
+        pcurve.parameters.begin(), pcurve.parameters.end(), clamped);
+    const auto second = upper == pcurve.parameters.begin()
+        ? std::size_t {1}
+        : upper == pcurve.parameters.end()
+        ? pcurve.parameters.size() - 1
+        : static_cast<std::size_t>(
+            std::distance(pcurve.parameters.begin(), upper));
+    const auto first = second - 1;
+    const auto span = pcurve.parameters[second] - pcurve.parameters[first];
+    if (!(span > 0.0)) return std::nullopt;
+    const auto alpha = std::clamp(
+        (clamped - pcurve.parameters[first]) / span, 0.0, 1.0);
+    return std::array<double, 2> {
+        (1.0 - alpha) * pcurve.uvPoints[first][0] +
+            alpha * pcurve.uvPoints[second][0],
+        (1.0 - alpha) * pcurve.uvPoints[first][1] +
+            alpha * pcurve.uvPoints[second][1]};
+}
+
+double minimumUvAreaRatioLimit(
+    const RegionReferenceMesh& mesh,
+    const RegionPatchParameterization& patch,
+    const RegionRefitOptions& options) {
+    if (patch.vertexIndices.empty()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    gp_Pnt minimum = mesh.vertices[patch.vertexIndices.front()].point;
+    gp_Pnt maximum = minimum;
+    for (const auto vertex : patch.vertexIndices) {
+        const auto& point = mesh.vertices[vertex].point;
+        minimum.SetX(std::min(minimum.X(), point.X()));
+        minimum.SetY(std::min(minimum.Y(), point.Y()));
+        minimum.SetZ(std::min(minimum.Z(), point.Z()));
+        maximum.SetX(std::max(maximum.X(), point.X()));
+        maximum.SetY(std::max(maximum.Y(), point.Y()));
+        maximum.SetZ(std::max(maximum.Z(), point.Z()));
+    }
+    return std::max(
+        std::sqrt(std::numeric_limits<double>::epsilon()),
+        options.curveOnSurfaceTolerance /
+            std::max(
+                minimum.Distance(maximum),
+                options.curveOnSurfaceTolerance));
+}
+
+bool buildCurveConsistentParameterDomainWithBlend(
+    const RegionReferenceMesh& mesh,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    RegionPatchLayout& layout,
+    const double boundaryConvexityBlend,
+    bool& retryableAreaFailure,
+    double& failedAreaRatio,
+    double& requiredAreaRatio,
+    std::string& message) {
+    retryableAreaFailure = false;
+    failedAreaRatio = 0.0;
+    requiredAreaRatio = 0.0;
+    if (!network.valid() || layout.patchCount != network.patchCount ||
+        layout.patches.size() != network.patchLoops.size() ||
+        layout.trianglePatches != network.trianglePatches) {
+        message = "Curve-consistent parameterization received mismatched topology.";
+        return false;
+    }
+    constexpr double center = 0.5;
+    constexpr double radius = 0.45;
+    constexpr double twoPi = 6.28318530717958647692;
+    for (const auto& loop : network.patchLoops) {
+        if (loop.patch < 0 || loop.patch >= layout.patchCount ||
+            loop.edges.size() < 3) {
+            message = "A curve-consistent patch needs at least three loop edges.";
+            return false;
+        }
+        auto& patch = layout.patches[static_cast<std::size_t>(loop.patch)];
+        patch.edgePcurves.clear();
+        patch.pcurveLoopClosed = false;
+        patch.pcurveOrientationConsistent = false;
+        patch.pcurveSelfIntersectionCount = 0;
+        patch.pcurveNonAdjacentIntersectionCount = 0;
+        patch.boundaryRepresentabilityResidual = 0.0;
+        patch.domainType = "CurveConsistentConvexPolygon";
+        for (auto& side : patch.boundarySides) side.clear();
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        for (std::size_t local = 0; local < patch.vertexIndices.size(); ++local) {
+            localByGlobal.emplace(patch.vertexIndices[local], local);
+        }
+        if (patch.parameters.size() != patch.vertexIndices.size()) {
+            patch.parameters.assign(patch.vertexIndices.size(), {});
+        }
+        const auto spans = boundedAngularSpans(loop, network);
+        if (spans.size() != loop.edges.size() ||
+            std::any_of(spans.begin(), spans.end(), [](const auto span) {
+                return !(span > 0.0) || span >= 3.14159265358979323846;
+            })) {
+            message = "Could not allocate strictly convex cyclic node angles.";
+            return false;
+        }
+        std::vector<double> loopNodeAngles(loop.edges.size());
+        std::vector<std::array<double, 2>> loopNodeUv(loop.edges.size());
+        auto angle = 0.0;
+        for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+            loopNodeAngles[order] = angle;
+            loopNodeUv[order] = {
+                center + radius * std::cos(angle),
+                center + radius * std::sin(angle)};
+            angle += spans[order];
+        }
+        if (std::abs(angle - twoPi) > 1.0e-10) {
+            message = "Convex cyclic node angles do not close.";
+            return false;
+        }
+        auto longestInternal = loop.edges.size();
+        auto longestLength = -1.0;
+        for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+            const auto& edge = network.edges[loop.edges[order].edgeIndex];
+            const auto length = curveEdgeLength(edge);
+            if (!edge.originalBoundary && length > longestLength) {
+                longestLength = length;
+                longestInternal = order;
+            }
+        }
+        if (longestInternal == loop.edges.size()) {
+            longestInternal = static_cast<std::size_t>(
+                std::distance(spans.begin(), std::max_element(
+                    spans.begin(), spans.end())));
+        }
+        const auto& rotationStart = loopNodeUv[longestInternal];
+        const auto& rotationEnd =
+            loopNodeUv[(longestInternal + 1) % loopNodeUv.size()];
+        const auto rotation = -std::atan2(
+            rotationEnd[1] - rotationStart[1],
+            rotationEnd[0] - rotationStart[0]);
+        const auto cosine = std::cos(rotation);
+        const auto sine = std::sin(rotation);
+        for (std::size_t order = 0; order < loopNodeUv.size(); ++order) {
+            loopNodeAngles[order] += rotation;
+            loopNodeUv[order] = {
+                center + radius * std::cos(loopNodeAngles[order]),
+                center + radius * std::sin(loopNodeAngles[order])};
+        }
+
+        std::unordered_map<std::size_t, std::array<double, 2>> boundaryUv;
+        patch.edgePcurves.reserve(loop.edges.size());
+        for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+            const auto& use = loop.edges[order];
+            if (use.edgeIndex >= network.edges.size()) {
+                message = "A patch pcurve references a missing frozen edge.";
+                return false;
+            }
+        }
+        for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+            const auto& use = loop.edges[order];
+            const auto& edge = network.edges[use.edgeIndex];
+            const auto& loopStartUv = loopNodeUv[order];
+            const auto& loopEndUv =
+                loopNodeUv[(order + 1) % loopNodeUv.size()];
+            RegionPatchEdgePcurve pcurve;
+            pcurve.edgeIndex = use.edgeIndex;
+            pcurve.forward = use.forward;
+            pcurve.firstParameter = edge.firstParameter;
+            pcurve.lastParameter = edge.lastParameter;
+            pcurve.startNode = edge.startNode;
+            pcurve.endNode = edge.endNode;
+            pcurve.loopOrder = order;
+            pcurve.parameters = edge.meshParameters;
+            if (pcurve.parameters.size() < 2) {
+                message = "A frozen edge has too few parameters for a pcurve.";
+                return false;
+            }
+            pcurve.parameters.front() = edge.firstParameter;
+            pcurve.parameters.back() = edge.lastParameter;
+            if (std::adjacent_find(
+                    pcurve.parameters.begin(), pcurve.parameters.end(),
+                    [](const auto first, const auto second) {
+                        return !std::isfinite(first) ||
+                            !std::isfinite(second) || second <= first;
+                    }) != pcurve.parameters.end()) {
+                message = "A frozen edge has a non-monotone pcurve parameter range.";
+                return false;
+            }
+            pcurve.uvPoints.reserve(pcurve.parameters.size());
+            for (const auto parameter : pcurve.parameters) {
+                const auto alpha = std::clamp(
+                    (parameter - edge.firstParameter) /
+                        (edge.lastParameter - edge.firstParameter),
+                    0.0,
+                    1.0);
+                const auto loopAlpha = use.forward ? alpha : 1.0 - alpha;
+                const auto sampleAngle =
+                    loopNodeAngles[order] + loopAlpha * spans[order];
+                const std::array<double, 2> chordUv {
+                    (1.0 - loopAlpha) * loopStartUv[0] +
+                        loopAlpha * loopEndUv[0],
+                    (1.0 - loopAlpha) * loopStartUv[1] +
+                        loopAlpha * loopEndUv[1]};
+                const std::array<double, 2> arcUv {
+                    center + radius * std::cos(sampleAngle),
+                    center + radius * std::sin(sampleAngle)};
+                pcurve.uvPoints.push_back({
+                    (1.0 - boundaryConvexityBlend) * chordUv[0] +
+                        boundaryConvexityBlend * arcUv[0],
+                    (1.0 - boundaryConvexityBlend) * chordUv[1] +
+                        boundaryConvexityBlend * arcUv[1]});
+            }
+            pcurve.hash = pcurveHash(pcurve);
+            if (edge.meshVertices.size() != edge.meshParameters.size()) {
+                message = "A frozen edge has inconsistent mesh and parameter samples.";
+                return false;
+            }
+            for (std::size_t sample = 0;
+                 sample < edge.meshVertices.size(); ++sample) {
+                const auto uv = evaluateRegionPatchEdgePcurve(
+                    pcurve, edge.meshParameters[sample]);
+                if (!uv.has_value()) {
+                    message = "A pcurve could not evaluate one boundary sample.";
+                    return false;
+                }
+                const auto [found, inserted] = boundaryUv.emplace(
+                    edge.meshVertices[sample], *uv);
+                if (!inserted) {
+                    patch.boundaryRepresentabilityResidual = std::max(
+                        patch.boundaryRepresentabilityResidual,
+                        std::hypot(
+                            found->second[0] - (*uv)[0],
+                            found->second[1] - (*uv)[1]));
+                }
+            }
+            patch.edgePcurves.push_back(std::move(pcurve));
+        }
+        for (const auto vertex : patch.boundaryLoop) {
+            const auto found = boundaryUv.find(vertex);
+            const auto local = localByGlobal.find(vertex);
+            if (found == boundaryUv.end() || local == localByGlobal.end()) {
+                message = "The frozen pcurve loop does not cover every patch boundary vertex.";
+                return false;
+            }
+            patch.parameters[local->second] = found->second;
+        }
+
+        patch.pcurveLoopClosed = true;
+        patch.pcurveOrientationConsistent = true;
+        auto polygonOrientation = 0;
+        for (std::size_t order = 0; order < loopNodeUv.size(); ++order) {
+            const auto orientation = orientation2d(
+                loopNodeUv[order],
+                loopNodeUv[(order + 1) % loopNodeUv.size()],
+                loopNodeUv[(order + 2) % loopNodeUv.size()]);
+            if (orientation == 0) {
+                patch.pcurveOrientationConsistent = false;
+            } else if (polygonOrientation == 0) {
+                polygonOrientation = orientation;
+            } else if (polygonOrientation != orientation) {
+                patch.pcurveOrientationConsistent = false;
+            }
+            const auto& current = patch.edgePcurves[order];
+            const auto& next =
+                patch.edgePcurves[(order + 1) % patch.edgePcurves.size()];
+            const auto currentEnd = current.forward
+                ? current.uvPoints.back() : current.uvPoints.front();
+            const auto nextStart = next.forward
+                ? next.uvPoints.front() : next.uvPoints.back();
+            if (std::hypot(
+                    currentEnd[0] - nextStart[0],
+                    currentEnd[1] - nextStart[1]) > 1.0e-12) {
+                patch.pcurveLoopClosed = false;
+            }
+        }
+        for (std::size_t first = 0;
+             first < patch.edgePcurves.size(); ++first) {
+            const auto& firstCurve = patch.edgePcurves[first];
+            for (std::size_t firstSegment = 0;
+                 firstSegment + 1 < firstCurve.uvPoints.size();
+                 ++firstSegment) {
+                for (std::size_t secondSegment = firstSegment + 2;
+                     secondSegment + 1 < firstCurve.uvPoints.size();
+                     ++secondSegment) {
+                    if (segmentsIntersectStrictly(
+                            firstCurve.uvPoints[firstSegment],
+                            firstCurve.uvPoints[firstSegment + 1],
+                            firstCurve.uvPoints[secondSegment],
+                            firstCurve.uvPoints[secondSegment + 1])) {
+                        ++patch.pcurveSelfIntersectionCount;
+                    }
+                }
+            }
+            for (std::size_t second = first + 1;
+                 second < patch.edgePcurves.size(); ++second) {
+                const auto adjacent =
+                    second == first + 1 ||
+                    (first == 0 && second + 1 == patch.edgePcurves.size());
+                if (adjacent) continue;
+                const auto& secondCurve = patch.edgePcurves[second];
+                for (std::size_t firstSegment = 0;
+                     firstSegment + 1 < firstCurve.uvPoints.size();
+                     ++firstSegment) {
+                    for (std::size_t secondSegment = 0;
+                         secondSegment + 1 < secondCurve.uvPoints.size();
+                         ++secondSegment) {
+                        if (segmentsIntersectStrictly(
+                                firstCurve.uvPoints[firstSegment],
+                                firstCurve.uvPoints[firstSegment + 1],
+                                secondCurve.uvPoints[secondSegment],
+                                secondCurve.uvPoints[secondSegment + 1])) {
+                            ++patch.pcurveNonAdjacentIntersectionCount;
+                        }
+                    }
+                }
+            }
+        }
+        if (!patch.pcurveLoopClosed ||
+            !patch.pcurveOrientationConsistent ||
+            patch.pcurveSelfIntersectionCount != 0 ||
+            patch.pcurveNonAdjacentIntersectionCount != 0) {
+            message = "A curve-consistent pcurve loop is open, misoriented, or self-intersecting.";
+            return false;
+        }
+        if (!meanValueParameterizeInterior(
+                mesh, patch, localByGlobal, message)) {
+            return false;
+        }
+
+        std::vector<int> triangleOrientations;
+        if (!orientPatchTriangles(
+                mesh, patch, triangleOrientations, message)) {
+            return false;
+        }
+        std::vector<double> uvAreas;
+        uvAreas.reserve(patch.triangleIndices.size());
+        int positive = 0;
+        int negative = 0;
+        patch.maximumDistortion = 0.0;
+        for (const auto triangleIndex : patch.triangleIndices) {
+            const auto& triangle = mesh.triangles[triangleIndex];
+            const auto first = localByGlobal.at(triangle.vertices[0]);
+            const auto second = localByGlobal.at(triangle.vertices[1]);
+            const auto third = localByGlobal.at(triangle.vertices[2]);
+            const auto area =
+                static_cast<double>(triangleOrientations[triangleIndex]) *
+                signedArea2d(
+                patch.parameters[first],
+                patch.parameters[second],
+                patch.parameters[third]);
+            if (area > 1.0e-14) ++positive;
+            else if (area < -1.0e-14) ++negative;
+            uvAreas.push_back(std::abs(area));
+            const auto quality3d = normalizedTriangleQuality(
+                mesh.vertices[triangle.vertices[0]].point,
+                mesh.vertices[triangle.vertices[1]].point,
+                mesh.vertices[triangle.vertices[2]].point);
+            const gp_Pnt uvFirst(
+                patch.parameters[first][0], patch.parameters[first][1], 0.0);
+            const gp_Pnt uvSecond(
+                patch.parameters[second][0], patch.parameters[second][1], 0.0);
+            const gp_Pnt uvThird(
+                patch.parameters[third][0], patch.parameters[third][1], 0.0);
+            const auto quality2d = normalizedTriangleQuality(
+                uvFirst, uvSecond, uvThird);
+            if (quality3d > 1.0e-14 && quality2d > 1.0e-14) {
+                patch.maximumDistortion = std::max(
+                    patch.maximumDistortion,
+                    std::max(
+                        quality3d / quality2d,
+                        quality2d / quality3d));
+            }
+        }
+        patch.flippedTriangleCount =
+            static_cast<int>(uvAreas.size()) - std::max(positive, negative);
+        if (uvAreas.empty()) {
+            message = "A curve-consistent parameter domain has no triangles.";
+            return false;
+        }
+        patch.minimumSignedUvArea = *std::min_element(
+            uvAreas.begin(), uvAreas.end());
+        auto medianAreas = uvAreas;
+        const auto median = medianAreas.begin() +
+            static_cast<std::ptrdiff_t>(medianAreas.size() / 2);
+        std::nth_element(medianAreas.begin(), median, medianAreas.end());
+        patch.minimumToMedianUvAreaRatio =
+            patch.minimumSignedUvArea / std::max(*median, 1.0e-30);
+        const auto areaRatioLimit = minimumUvAreaRatioLimit(
+            mesh, patch, options);
+        const auto constructibleAreaRatioLimit =
+            std::sqrt(std::numeric_limits<double>::epsilon());
+        if (patch.flippedTriangleCount != 0 ||
+            patch.minimumToMedianUvAreaRatio <
+                constructibleAreaRatioLimit) {
+            retryableAreaFailure = true;
+            failedAreaRatio = patch.minimumToMedianUvAreaRatio;
+            requiredAreaRatio = constructibleAreaRatioLimit;
+            std::ostringstream stream;
+            stream << "Curve-consistent mean-value parameterization has "
+                   << patch.flippedTriangleCount
+                   << " flipped triangles and minimum/median UV area ratio "
+                   << patch.minimumToMedianUvAreaRatio
+                   << " below the constructibility limit "
+                   << constructibleAreaRatioLimit
+                   << "; the product limit is " << areaRatioLimit << '.';
+            message = stream.str();
+            return false;
+        }
+    }
+    layout.curveNetworkHash = network.hash;
+    layout.hash = layoutHash(layout);
+    return true;
+}
+
+bool buildCurveConsistentParameterDomain(
+    const RegionReferenceMesh& mesh,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    RegionPatchLayout& layout,
+    std::string& message) {
+    auto boundaryConvexityBlend =
+        std::sqrt(std::numeric_limits<double>::epsilon());
+    while (true) {
+        auto candidate = layout;
+        bool retryableAreaFailure = false;
+        auto failedAreaRatio = 0.0;
+        auto requiredAreaRatio = 0.0;
+        if (buildCurveConsistentParameterDomainWithBlend(
+                mesh,
+                network,
+                options,
+                candidate,
+                boundaryConvexityBlend,
+                retryableAreaFailure,
+                failedAreaRatio,
+                requiredAreaRatio,
+                message)) {
+            layout = std::move(candidate);
+            return true;
+        }
+        if (!retryableAreaFailure || boundaryConvexityBlend >= 1.0) {
+            return false;
+        }
+        const auto estimatedRequiredBlend = failedAreaRatio > 0.0
+            ? boundaryConvexityBlend * requiredAreaRatio / failedAreaRatio
+            : 0.0;
+        auto nextBlend = std::max(
+            std::sqrt(boundaryConvexityBlend),
+            estimatedRequiredBlend);
+        nextBlend = std::clamp(nextBlend, boundaryConvexityBlend, 1.0);
+        if (1.0 - nextBlend <=
+            std::sqrt(std::numeric_limits<double>::epsilon())) {
+            nextBlend = 1.0;
+        }
+        boundaryConvexityBlend = nextBlend;
+    }
 }
 
 RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
@@ -1457,8 +2217,6 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     const RegionReferenceMesh& mesh,
     const RegionCurveNetworkGenerationResult& curveNetworks,
     const RegionRefitOptions& options) const {
-    (void)mesh;
-    (void)options;
     RegionPatchLayoutGenerationResult result;
     result.candidates = curveNetworks.layoutReports;
     if (!curveNetworks.success()) {
@@ -1476,14 +2234,83 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             return std::optional<RegionPatchLayout> {};
         }
         auto layout = candidate.partitionLayout;
-        const auto partitionHash = layout.hash;
-        layout.curveNetworkHash = candidate.network.hash;
-        layout.hash = layoutHash(layout);
+        std::string parameterizationFailure;
+        if (!buildCurveConsistentParameterDomain(
+                mesh,
+                candidate.network,
+                options,
+                layout,
+                parameterizationFailure)) {
+            const auto failedReport = std::find_if(
+                result.candidates.begin(), result.candidates.end(),
+                [&](const auto& item) {
+                    return item.patchCount == layout.patchCount;
+                });
+            if (failedReport != result.candidates.end()) {
+                failedReport->parameterizationPassed = false;
+                failedReport->constructibleParameterization = false;
+                failedReport->rejectionReason = parameterizationFailure;
+            }
+            return std::optional<RegionPatchLayout> {};
+        }
         const auto report = std::find_if(
             result.candidates.begin(), result.candidates.end(),
-            [&](const auto& item) { return item.layoutHash == partitionHash; });
+            [&](const auto& item) {
+                return item.patchCount == layout.patchCount;
+            });
         if (report != result.candidates.end()) {
             report->layoutHash = layout.hash;
+            report->maximumDistortion = 0.0;
+            report->flippedTriangleCount = 0;
+            report->pcurveSelfIntersectionCount = 0;
+            report->pcurveNonAdjacentIntersectionCount = 0;
+            report->minimumSignedUvArea = 0.0;
+            report->minimumToMedianUvAreaRatio =
+                std::numeric_limits<double>::infinity();
+            report->boundaryRepresentabilityResidual = 0.0;
+            for (const auto& patch : layout.patches) {
+                report->maximumDistortion = std::max(
+                    report->maximumDistortion, patch.maximumDistortion);
+                report->flippedTriangleCount += patch.flippedTriangleCount;
+                report->pcurveSelfIntersectionCount +=
+                    patch.pcurveSelfIntersectionCount;
+                report->pcurveNonAdjacentIntersectionCount +=
+                    patch.pcurveNonAdjacentIntersectionCount;
+                report->minimumSignedUvArea =
+                    report->minimumSignedUvArea == 0.0
+                    ? patch.minimumSignedUvArea
+                    : std::min(
+                        report->minimumSignedUvArea,
+                        patch.minimumSignedUvArea);
+                report->minimumToMedianUvAreaRatio = std::min(
+                    report->minimumToMedianUvAreaRatio,
+                    patch.minimumToMedianUvAreaRatio);
+                report->boundaryRepresentabilityResidual = std::max(
+                    report->boundaryRepresentabilityResidual,
+                    patch.boundaryRepresentabilityResidual);
+                report->domainType = patch.domainType;
+            }
+            report->constructibleParameterization = true;
+            const auto uvAreaRatioPassed = std::all_of(
+                layout.patches.begin(),
+                layout.patches.end(),
+                [&](const auto& patch) {
+                    return patch.minimumToMedianUvAreaRatio >=
+                        minimumUvAreaRatioLimit(mesh, patch, options);
+                });
+            report->parameterizationPassed =
+                report->flippedTriangleCount == 0 &&
+                report->pcurveSelfIntersectionCount == 0 &&
+                report->pcurveNonAdjacentIntersectionCount == 0 &&
+                report->boundaryRepresentabilityResidual <=
+                    options.curveOnSurfaceTolerance &&
+                uvAreaRatioPassed &&
+                report->maximumDistortion <=
+                    options.maximumParameterDistortion;
+            if (!report->parameterizationPassed) {
+                report->rejectionReason =
+                    "The curve-consistent parameter domain exceeded a product layout gate.";
+            }
         }
         return std::optional<RegionPatchLayout> {std::move(layout)};
     };
@@ -1507,7 +2334,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     }
     result.status = RegionRefitStatus::Success;
     result.message =
-        "Bound trimmed-disk parameterizations to frozen curve-network hashes.";
+        "Built curve-consistent convex parameter domains from frozen curve networks.";
     return result;
 }
 

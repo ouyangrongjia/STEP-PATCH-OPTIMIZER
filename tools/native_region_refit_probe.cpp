@@ -451,10 +451,17 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
             {"proxy_error", candidate.proxyError},
             {"maximum_distortion", candidate.maximumDistortion},
             {"flipped_triangles", candidate.flippedTriangleCount},
+            {"pcurve_self_intersections", candidate.pcurveSelfIntersectionCount},
+            {"pcurve_nonadjacent_intersections",
+                candidate.pcurveNonAdjacentIntersectionCount},
             {"domain_type", QString::fromStdString(candidate.domainType)},
             {"boundary_chain_count", QString::number(candidate.boundaryChainCount)},
             {"trim_corner_count", candidate.trimCornerCount},
             {"minimum_signed_uv_area", candidate.minimumSignedUvArea},
+            {"minimum_to_median_uv_area_ratio",
+                candidate.minimumToMedianUvAreaRatio},
+            {"boundary_representability_residual",
+                candidate.boundaryRepresentabilityResidual},
             {"matrix_rows", QString::number(candidate.matrixRows)},
             {"matrix_nonzeros", QString::number(candidate.matrixNonZeros)},
             {"estimated_solver_bytes", QString::number(candidate.estimatedSolverBytes)},
@@ -495,11 +502,27 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
         for (const auto vertex : patch.boundaryLoop) {
             boundary.append(QString::number(vertex));
         }
-        QJsonArray boundarySides;
-        for (const auto& side : patch.boundarySides) {
-            QJsonArray sideVertices;
-            for (const auto vertex : side) sideVertices.append(QString::number(vertex));
-            boundarySides.append(sideVertices);
+        QJsonArray edgePcurves;
+        for (const auto& pcurve : patch.edgePcurves) {
+            QJsonArray samples;
+            for (std::size_t sample = 0;
+                 sample < pcurve.parameters.size(); ++sample) {
+                samples.append(QJsonObject {
+                    {"t", pcurve.parameters[sample]},
+                    {"uv", QJsonArray {
+                        pcurve.uvPoints[sample][0],
+                        pcurve.uvPoints[sample][1]}}});
+            }
+            edgePcurves.append(QJsonObject {
+                {"edge_index", QString::number(pcurve.edgeIndex)},
+                {"forward", pcurve.forward},
+                {"first_parameter", pcurve.firstParameter},
+                {"last_parameter", pcurve.lastParameter},
+                {"start_node", QString::number(pcurve.startNode)},
+                {"end_node", QString::number(pcurve.endNode)},
+                {"loop_order", QString::number(pcurve.loopOrder)},
+                {"hash", QString::fromStdString(pcurve.hash)},
+                {"samples", samples}});
         }
         QJsonArray boundaryChains;
         for (const auto& chain : patch.boundaryChains) {
@@ -520,17 +543,28 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
             {"triangles", QString::number(patch.triangleIndices.size())},
             {"vertices", QString::number(patch.vertexIndices.size())},
             {"boundary_loop", boundary},
-            {"boundary_sides", boundarySides},
+            {"edge_pcurves", edgePcurves},
             {"boundary_chains", boundaryChains},
             {"boundary_chain_count", QString::number(patch.boundaryChainCount)},
             {"trim_corners", trimCorners},
             {"trim_corner_count", patch.trimCornerCount},
             {"domain_type", QString::fromStdString(patch.domainType)},
             {"disk_topology_passed", patch.diskTopologyPassed},
+            {"pcurve_loop_closed", patch.pcurveLoopClosed},
+            {"pcurve_orientation_consistent",
+                patch.pcurveOrientationConsistent},
+            {"pcurve_self_intersection_count",
+                patch.pcurveSelfIntersectionCount},
+            {"pcurve_nonadjacent_intersection_count",
+                patch.pcurveNonAdjacentIntersectionCount},
             {"matrix_rows", QString::number(patch.matrixRows)},
             {"matrix_nonzeros", QString::number(patch.matrixNonZeros)},
             {"flipped_triangles", patch.flippedTriangleCount},
             {"minimum_signed_uv_area", patch.minimumSignedUvArea},
+            {"minimum_to_median_uv_area_ratio",
+                patch.minimumToMedianUvAreaRatio},
+            {"boundary_representability_residual",
+                patch.boundaryRepresentabilityResidual},
             {"maximum_distortion", patch.maximumDistortion}});
     }
     QJsonArray seams;
@@ -541,7 +575,7 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
             {"mesh_edges", QString::number(seam.meshEdges.size())}});
     }
     return {
-        {"schema_version", 1},
+        {"schema_version", 2},
         {"patch_count", layout.patchCount},
         {"layout_hash", QString::fromStdString(layout.hash)},
         {"proxy_error", layout.proxyError},
@@ -588,6 +622,10 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                     iteration.boundaryTargetMaximum[2]}},
                 {"maximum_hard_constraint_residual", iteration.maximumHardConstraintResidual},
                 {"minimum_full_hard_constraint_residual", iteration.minimumFullHardConstraintResidual},
+                {"boundary_feasibility_refinement_rounds",
+                    iteration.boundaryFeasibilityRefinementRounds},
+                {"boundary_feasibility_residual",
+                    iteration.boundaryFeasibilityResidual},
                 {"hard_constraint_feasible", iteration.hardConstraintFeasible},
                 {"hard_constraint_status", QString::fromStdString(iteration.hardConstraintStatus)},
                 {"initial_control_prior_scale", iteration.initialControlPriorScale},
@@ -634,6 +672,14 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
         {"status", result.report.fitGatePassed ? "Success" : spo::toString(result.report.status)},
         {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
+        {"boundary_feasibility_refinement_rounds",
+            result.report.boundaryFeasibilityRefinementRounds},
+        {"boundary_feasibility_residual",
+            result.report.boundaryFeasibilityResidual},
+        {"maximum_u_control_count",
+            result.report.fittedMaximumUControlCount},
+        {"maximum_v_control_count",
+            result.report.fittedMaximumVControlCount},
         {"best_effort_used", result.report.bestEffortUsed},
         {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
         {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
@@ -660,13 +706,21 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
         {"internal_seams", result.report.retrimInternalSeamCount},
         {"reused_original_boundary_edges", result.report.retrimReusedBoundaryEdgeCount},
         {"split_boundary_segments", result.report.retrimSplitBoundarySegmentCount},
-        {"pcurve_constructions", result.report.retrimPcurveProjectionCount},
-        {"legacy_pcurve_projection_count", result.report.retrimPcurveProjectionCount},
+        {"pcurve_constructions",
+            result.report.retrimStoredPcurveAttachmentCount},
+        {"stored_pcurve_attachment_count",
+            result.report.retrimStoredPcurveAttachmentCount},
         {"diagnostic_parameter_pcurve_fallback_count",
             result.report.retrimDiagnosticPcurveFallbackCount},
         {"same_parameter_checks", result.report.retrimSameParameterCheckCount},
         {"same_parameter_failures", result.report.retrimSameParameterFailureCount},
         {"maximum_same_parameter_deviation", result.report.retrimMaximumSameParameterDeviation},
+        {"unexpected_face_intersection_count",
+            result.report.unexpectedFaceIntersectionCount},
+        {"unexpected_face_intersection_total_length",
+            result.report.unexpectedFaceIntersectionTotalLength},
+        {"replacement_quilt_internal_free_edge_count",
+            result.report.replacementQuiltInternalFreeEdgeCount},
         {"assembly_passed", result.report.assemblyPassed}};
 }
 
@@ -806,127 +860,94 @@ QByteArray layoutPly(
 QByteArray layoutSvg(
     const spo::RegionReferenceMesh& mesh,
     const spo::RegionPatchLayout& layout) {
-    std::array<double, 3> minimum {
-        mesh.vertices.front().point.X(), mesh.vertices.front().point.Y(), mesh.vertices.front().point.Z()};
-    auto maximum = minimum;
-    for (const auto& vertex : mesh.vertices) {
-        const std::array<double, 3> point {vertex.point.X(), vertex.point.Y(), vertex.point.Z()};
-        for (int axis = 0; axis < 3; ++axis) {
-            minimum[static_cast<std::size_t>(axis)] = std::min(minimum[static_cast<std::size_t>(axis)], point[static_cast<std::size_t>(axis)]);
-            maximum[static_cast<std::size_t>(axis)] = std::max(maximum[static_cast<std::size_t>(axis)], point[static_cast<std::size_t>(axis)]);
-        }
-    }
-    std::array<int, 3> axes {0, 1, 2};
-    std::sort(axes.begin(), axes.end(), [&](const auto lhs, const auto rhs) {
-        return maximum[static_cast<std::size_t>(lhs)] - minimum[static_cast<std::size_t>(lhs)] >
-            maximum[static_cast<std::size_t>(rhs)] - minimum[static_cast<std::size_t>(rhs)];
-    });
-    const auto xAxis = axes[0];
-    const auto yAxis = axes[1];
-    const auto coordinate = [](const gp_Pnt& point, const int axis) {
-        return axis == 0 ? point.X() : (axis == 1 ? point.Y() : point.Z());
-    };
-    const auto width = std::max(1.0e-12, maximum[static_cast<std::size_t>(xAxis)] - minimum[static_cast<std::size_t>(xAxis)]);
-    const auto height = std::max(1.0e-12, maximum[static_cast<std::size_t>(yAxis)] - minimum[static_cast<std::size_t>(yAxis)]);
-    const auto scale = std::min(960.0 / width, 960.0 / height);
-    const auto project = [&](const gp_Pnt& point) {
-        return std::array<double, 2> {
-            20.0 + (coordinate(point, xAxis) - minimum[static_cast<std::size_t>(xAxis)]) * scale,
-            980.0 - (coordinate(point, yAxis) - minimum[static_cast<std::size_t>(yAxis)]) * scale};
-    };
-    std::map<std::array<std::size_t, 2>, std::vector<std::size_t>> edgeTriangles;
     QByteArray output;
     QTextStream stream(&output, QIODevice::WriteOnly);
     stream.setRealNumberPrecision(8);
     stream << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1000\" height=\"1000\" viewBox=\"0 0 1000 1000\">\n"
            << "<rect width=\"1000\" height=\"1000\" fill=\"white\"/>\n";
-    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
-        const auto& triangle = mesh.triangles[triangleIndex];
-        const auto color = patchColor(layout.trianglePatches[triangleIndex]);
-        stream << "<polygon points=\"";
-        for (const auto vertex : triangle.vertices) {
-            const auto point = project(mesh.vertices[vertex].point);
-            stream << point[0] << ',' << point[1] << ' ';
+    const auto columns = std::max(
+        1, static_cast<int>(std::ceil(
+            std::sqrt(static_cast<double>(layout.patches.size())))));
+    const auto rows = std::max(
+        1, static_cast<int>((layout.patches.size() +
+            static_cast<std::size_t>(columns) - 1) /
+            static_cast<std::size_t>(columns)));
+    const auto cellWidth = 960.0 / columns;
+    const auto cellHeight = 920.0 / rows;
+    for (std::size_t patchIndex = 0;
+         patchIndex < layout.patches.size(); ++patchIndex) {
+        const auto& patch = layout.patches[patchIndex];
+        const auto column = static_cast<int>(patchIndex) % columns;
+        const auto row = static_cast<int>(patchIndex) / columns;
+        const auto cellSize = std::min(cellWidth, cellHeight);
+        const auto originX = 20.0 + column * cellWidth +
+            (cellWidth - cellSize) * 0.5;
+        const auto originY = 55.0 + row * cellHeight +
+            (cellHeight - cellSize) * 0.5;
+        const auto projectUv = [&](const std::array<double, 2>& uv) {
+            return std::array<double, 2> {
+                originX + 0.08 * cellSize + uv[0] * 0.84 * cellSize,
+                originY + 0.92 * cellSize - uv[1] * 0.84 * cellSize};
+        };
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        for (std::size_t local = 0;
+             local < patch.vertexIndices.size(); ++local) {
+            localByGlobal.emplace(patch.vertexIndices[local], local);
         }
-        stream << "\" fill=\"rgb(" << color[0] << ',' << color[1] << ',' << color[2]
-               << ")\" fill-opacity=\"0.70\" stroke=\"none\"/>\n";
-        for (int edge = 0; edge < 3; ++edge) {
-            const auto first = triangle.vertices[static_cast<std::size_t>(edge)];
-            const auto second = triangle.vertices[static_cast<std::size_t>((edge + 1) % 3)];
-            edgeTriangles[{std::min(first, second), std::max(first, second)}].push_back(triangleIndex);
+        const auto color = patchColor(static_cast<int>(patchIndex));
+        for (const auto triangleIndex : patch.triangleIndices) {
+            if (triangleIndex >= mesh.triangles.size()) continue;
+            const auto& triangle = mesh.triangles[triangleIndex];
+            stream << "<polygon points=\"";
+            for (const auto vertex : triangle.vertices) {
+                const auto found = localByGlobal.find(vertex);
+                if (found == localByGlobal.end()) continue;
+                const auto point = projectUv(patch.parameters[found->second]);
+                stream << point[0] << ',' << point[1] << ' ';
+            }
+            stream << "\" fill=\"rgb(" << color[0] << ',' << color[1] << ','
+                   << color[2] << ")\" fill-opacity=\"0.45\" stroke=\"#d8d8d8\""
+                   << " stroke-width=\"0.35\"/>\n";
         }
-    }
-    for (const auto& [edge, triangles] : edgeTriangles) {
-        const bool outer = triangles.size() == 1;
-        const bool seam = triangles.size() == 2 &&
-            layout.trianglePatches[triangles[0]] != layout.trianglePatches[triangles[1]];
-        if (!outer && !seam) continue;
-        const auto first = project(mesh.vertices[edge[0]].point);
-        const auto second = project(mesh.vertices[edge[1]].point);
-        std::set<spo::EdgeId> originalEdgeIds;
-        if (outer) {
-            originalEdgeIds.insert(
-                mesh.vertices[edge[0]].boundaryEdgeIds.begin(),
-                mesh.vertices[edge[0]].boundaryEdgeIds.end());
-            originalEdgeIds.insert(
-                mesh.vertices[edge[1]].boundaryEdgeIds.begin(),
-                mesh.vertices[edge[1]].boundaryEdgeIds.end());
+        for (const auto& pcurve : patch.edgePcurves) {
+            stream << "<polyline points=\"";
+            if (pcurve.forward) {
+                for (const auto& uv : pcurve.uvPoints) {
+                    const auto point = projectUv(uv);
+                    stream << point[0] << ',' << point[1] << ' ';
+                }
+            } else {
+                for (auto uv = pcurve.uvPoints.rbegin();
+                     uv != pcurve.uvPoints.rend(); ++uv) {
+                    const auto point = projectUv(*uv);
+                    stream << point[0] << ',' << point[1] << ' ';
+                }
+            }
+            stream << "\" fill=\"none\" stroke=\"#111\" stroke-width=\"2.2\""
+                   << " data-edge-index=\"" << pcurve.edgeIndex
+                   << "\" data-pcurve-hash=\""
+                   << QString::fromStdString(pcurve.hash)
+                   << "\"/>\n";
         }
-        stream << "<line x1=\"" << first[0] << "\" y1=\"" << first[1]
-                << "\" x2=\"" << second[0] << "\" y2=\"" << second[1]
-                << "\" stroke=\"" << (outer ? "#000000" : "#ffffff")
-                << "\" stroke-width=\"" << (outer ? "2.2" : "1.4")
-                << "\" data-kind=\"" << (outer ? "original-step-boundary" : "internal-seam")
-                << "\">";
-        if (outer) {
-            stream << "<title>Original STEP EdgeId ownership:";
-            for (const auto edgeId : originalEdgeIds) stream << ' ' << edgeId;
-            stream << "</title>";
-        }
-        stream << "</line>\n";
-    }
-    std::vector<std::array<double, 2>> centers(static_cast<std::size_t>(layout.patchCount));
-    std::vector<std::size_t> counts(static_cast<std::size_t>(layout.patchCount));
-    for (std::size_t triangleIndex = 0; triangleIndex < mesh.triangles.size(); ++triangleIndex) {
-        const auto patch = static_cast<std::size_t>(layout.trianglePatches[triangleIndex]);
-        const auto& triangle = mesh.triangles[triangleIndex];
-        gp_Pnt centroid(
-            (mesh.vertices[triangle.vertices[0]].point.X() + mesh.vertices[triangle.vertices[1]].point.X() + mesh.vertices[triangle.vertices[2]].point.X()) / 3.0,
-            (mesh.vertices[triangle.vertices[0]].point.Y() + mesh.vertices[triangle.vertices[1]].point.Y() + mesh.vertices[triangle.vertices[2]].point.Y()) / 3.0,
-            (mesh.vertices[triangle.vertices[0]].point.Z() + mesh.vertices[triangle.vertices[1]].point.Z() + mesh.vertices[triangle.vertices[2]].point.Z()) / 3.0);
-        const auto point = project(centroid);
-        centers[patch][0] += point[0];
-        centers[patch][1] += point[1];
-        ++counts[patch];
-    }
-    for (std::size_t patch = 0; patch < centers.size(); ++patch) {
-        if (counts[patch] == 0) continue;
-        stream << "<text x=\"" << centers[patch][0] / counts[patch]
-               << "\" y=\"" << centers[patch][1] / counts[patch]
-               << "\" text-anchor=\"middle\" font-family=\"sans-serif\" font-size=\"18\""
-                  " font-weight=\"bold\" fill=\"#111\" stroke=\"white\" stroke-width=\"3\" paint-order=\"stroke\">"
-               << patch << "</text>\n";
-    }
-    for (std::size_t patchIndex = 0; patchIndex < layout.patches.size(); ++patchIndex) {
-        for (const auto vertex : layout.patches[patchIndex].trimCorners) {
-            const auto point = project(mesh.vertices[vertex].point);
-            stream << "<circle cx=\"" << point[0] << "\" cy=\"" << point[1]
-                   << "\" r=\"3.2\" fill=\"#ff00aa\" stroke=\"white\" stroke-width=\"0.8\">"
-                   << "<title>trim turn, patch " << patchIndex << "</title></circle>\n";
-        }
+        stream << "<text x=\"" << originX + cellSize * 0.5
+               << "\" y=\"" << originY + 18.0
+               << "\" text-anchor=\"middle\" font-family=\"sans-serif\""
+               << " font-size=\"16\" font-weight=\"bold\">patch "
+               << patchIndex << "</text>\n";
     }
     auto totalFlips = 0;
+    auto pcurveIntersections = 0;
     auto maximumDistortion = 0.0;
-    auto trimTurns = 0;
     for (const auto& patch : layout.patches) {
         totalFlips += patch.flippedTriangleCount;
+        pcurveIntersections += patch.pcurveSelfIntersectionCount +
+            patch.pcurveNonAdjacentIntersectionCount;
         maximumDistortion = std::max(maximumDistortion, patch.maximumDistortion);
-        trimTurns += patch.trimCornerCount;
     }
-    stream << "<rect x=\"8\" y=\"8\" width=\"470\" height=\"28\" fill=\"white\" fill-opacity=\"0.86\"/>"
+    stream << "<rect x=\"8\" y=\"8\" width=\"650\" height=\"28\" fill=\"white\" fill-opacity=\"0.86\"/>"
            << "<text x=\"14\" y=\"28\" font-family=\"sans-serif\" font-size=\"14\" fill=\"#111\">"
-           << "domain=trimmed-disk; trim turns=" << trimTurns
-           << "; UV flips=" << totalFlips
+           << "domain=curve-consistent-convex-polygon; pcurve intersections="
+           << pcurveIntersections << "; UV flips=" << totalFlips
            << "; max distortion=" << maximumDistortion
            << "</text>\n";
     stream << "</svg>\n";
@@ -1230,7 +1251,7 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v35-local-curve";
+    request.options.algorithmFingerprint = "native-regional-refit-v36-pcurve-domain";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1365,7 +1386,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v35-local-curve-") +
+        request.options.algorithmFingerprint = std::string("native-regional-refit-v36-pcurve-domain-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
@@ -1557,9 +1578,9 @@ int main(int argc, char* argv[]) {
     }
     if (!performanceOnly && result.layoutCarrierMesh && result.selectedLayout) {
         const auto layoutDirectory = outputDirectory / "artifacts" / "layout";
-        if (!writeJson(layoutDirectory / "selected_layout.json", selectedLayoutToJson(*result.selectedLayout)) ||
-            !writeText(layoutDirectory / "selected_layout.ply", layoutPly(*result.layoutCarrierMesh, *result.selectedLayout)) ||
-            !writeText(layoutDirectory / "selected_layout.svg", layoutSvg(*result.layoutCarrierMesh, *result.selectedLayout))) {
+        if (!writeJson(layoutDirectory / "selected_parameter_domain.json", selectedLayoutToJson(*result.selectedLayout)) ||
+            !writeText(layoutDirectory / "selected_parameter_domain.ply", layoutPly(*result.layoutCarrierMesh, *result.selectedLayout)) ||
+            !writeText(layoutDirectory / "selected_parameter_domain.svg", layoutSvg(*result.layoutCarrierMesh, *result.selectedLayout))) {
             std::cerr << "无法写入布局证据。\n";
             return 1;
         }
@@ -1568,8 +1589,8 @@ int main(int argc, char* argv[]) {
         const auto fitDirectory = outputDirectory / "artifacts" / "fit";
         std::filesystem::create_directories(fitDirectory);
         const auto fitName = result.report.fitGatePassed
-            ? std::filesystem::path("fitted_patch_network.step")
-            : std::filesystem::path("best_effort_fitted_patch_network.step");
+            ? std::filesystem::path("fitted_support_surfaces.step")
+            : std::filesystem::path("best_effort_support_surfaces.step");
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(result.fittedPatchNetwork, {}),
             fitDirectory / fitName);
@@ -1592,10 +1613,7 @@ int main(int argc, char* argv[]) {
     std::filesystem::path assemblyOutputPath;
     if (!performanceOnly && (result.canApply() || !result.diagnosticSewnShape.IsNull())) {
         const auto brepDirectory = outputDirectory / "artifacts" / "brep";
-        const auto assemblyName = result.canApply()
-            ? std::filesystem::path("cad_check_candidate.step")
-            : std::filesystem::path("sewn_attempt.step");
-        assemblyOutputPath = brepDirectory / assemblyName;
+        assemblyOutputPath = brepDirectory / "sewn_attempt.step";
         const auto& assemblyShape = result.canApply()
             ? result.finalShape
             : result.diagnosticSewnShape;
@@ -1635,11 +1653,13 @@ int main(int argc, char* argv[]) {
         }
         if (result.canApply() && !outputComplexityPassed && !assemblyOutputPath.empty()) {
             const auto diagnosticPath = assemblyOutputPath.parent_path() / "sewn_attempt.step";
-            std::error_code renameError;
-            std::filesystem::rename(assemblyOutputPath, diagnosticPath, renameError);
-            if (renameError) {
-                std::cerr << "无法把复杂度门失败结果降级为诊断产物。\n";
-                return 1;
+            if (assemblyOutputPath != diagnosticPath) {
+                std::error_code renameError;
+                std::filesystem::rename(assemblyOutputPath, diagnosticPath, renameError);
+                if (renameError) {
+                    std::cerr << "无法把复杂度门失败结果降级为诊断产物。\n";
+                    return 1;
+                }
             }
             assemblyOutputPath = diagnosticPath;
             result.report.status = spo::RegionRefitStatus::Failed;

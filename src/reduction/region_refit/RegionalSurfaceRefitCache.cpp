@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 7;
+constexpr quint32 kVersion = 8;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -243,8 +243,12 @@ void writeCandidateReport(QDataStream& stream, const RegionLayoutCandidateReport
            << report.constructibleParameterization << report.coarseFitPassed
            << report.selectedForFullFit << report.proxyError
            << report.maximumDistortion << report.flippedTriangleCount
+           << report.pcurveSelfIntersectionCount
+           << report.pcurveNonAdjacentIntersectionCount
            << quint64(report.boundaryChainCount) << report.trimCornerCount
            << report.minimumSignedUvArea
+           << report.minimumToMedianUvAreaRatio
+           << report.boundaryRepresentabilityResidual
            << quint64(report.matrixRows) << quint64(report.matrixNonZeros)
            << quint64(report.estimatedSolverBytes)
            << quint64(report.estimatedOutputEntities) << report.wallMilliseconds;
@@ -263,7 +267,11 @@ bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& repor
            >> report.constructibleParameterization >> report.coarseFitPassed
            >> report.selectedForFullFit >> report.proxyError
            >> report.maximumDistortion >> report.flippedTriangleCount
+           >> report.pcurveSelfIntersectionCount
+           >> report.pcurveNonAdjacentIntersectionCount
            >> boundaryChains >> report.trimCornerCount >> report.minimumSignedUvArea
+           >> report.minimumToMedianUvAreaRatio
+           >> report.boundaryRepresentabilityResidual
            >> rows >> nonZeros
            >> bytes >> outputEntities >> report.wallMilliseconds;
     if (!readString(stream, report.layoutHash) ||
@@ -294,6 +302,21 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
             stream << quint64(side.size());
             for (const auto index : side) stream << quint64(index);
         }
+        stream << quint64(patch.edgePcurves.size());
+        for (const auto& pcurve : patch.edgePcurves) {
+            stream << quint64(pcurve.edgeIndex) << pcurve.forward
+                   << pcurve.firstParameter << pcurve.lastParameter
+                   << quint64(pcurve.startNode) << quint64(pcurve.endNode)
+                   << quint64(pcurve.loopOrder)
+                   << quint64(pcurve.parameters.size());
+            for (std::size_t index = 0;
+                 index < pcurve.parameters.size(); ++index) {
+                stream << pcurve.parameters[index]
+                       << pcurve.uvPoints[index][0]
+                       << pcurve.uvPoints[index][1];
+            }
+            writeString(stream, pcurve.hash);
+        }
         stream << quint64(patch.boundaryChains.size());
         for (const auto& chain : patch.boundaryChains) {
             stream << chain.adjacentPatch << chain.originalBoundary
@@ -305,10 +328,17 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         stream << quint64(patch.trimCorners.size());
         for (const auto corner : patch.trimCorners) stream << quint64(corner);
         writeString(stream, patch.domainType);
-        stream << patch.diskTopologyPassed << quint64(patch.boundaryChainCount)
+        stream << patch.diskTopologyPassed
+               << patch.pcurveLoopClosed
+               << patch.pcurveOrientationConsistent
+               << patch.pcurveSelfIntersectionCount
+               << patch.pcurveNonAdjacentIntersectionCount
+               << quint64(patch.boundaryChainCount)
                << patch.trimCornerCount;
         stream << quint64(patch.matrixRows) << quint64(patch.matrixNonZeros)
                << patch.flippedTriangleCount << patch.minimumSignedUvArea
+               << patch.minimumToMedianUvAreaRatio
+               << patch.boundaryRepresentabilityResidual
                << patch.maximumDistortion;
     }
     stream << quint64(layout.seams.size());
@@ -365,6 +395,30 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
             }
         }
         if (!readCount(stream, count)) return false;
+        patch.edgePcurves.resize(count);
+        for (auto& pcurve : patch.edgePcurves) {
+            quint64 edgeIndex = 0;
+            quint64 startNode = 0;
+            quint64 endNode = 0;
+            quint64 loopOrder = 0;
+            stream >> edgeIndex >> pcurve.forward
+                   >> pcurve.firstParameter >> pcurve.lastParameter
+                   >> startNode >> endNode >> loopOrder;
+            pcurve.edgeIndex = static_cast<std::size_t>(edgeIndex);
+            pcurve.startNode = static_cast<std::size_t>(startNode);
+            pcurve.endNode = static_cast<std::size_t>(endNode);
+            pcurve.loopOrder = static_cast<std::size_t>(loopOrder);
+            if (!readCount(stream, count)) return false;
+            pcurve.parameters.resize(count);
+            pcurve.uvPoints.resize(count);
+            for (std::size_t index = 0; index < count; ++index) {
+                stream >> pcurve.parameters[index]
+                       >> pcurve.uvPoints[index][0]
+                       >> pcurve.uvPoints[index][1];
+            }
+            if (!readString(stream, pcurve.hash)) return false;
+        }
+        if (!readCount(stream, count)) return false;
         patch.boundaryChains.resize(count);
         for (auto& chain : patch.boundaryChains) {
             stream >> chain.adjacentPatch >> chain.originalBoundary;
@@ -392,12 +446,20 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
         }
         if (!readString(stream, patch.domainType)) return false;
         quint64 boundaryChainCount = 0;
-        stream >> patch.diskTopologyPassed >> boundaryChainCount >> patch.trimCornerCount;
+        stream >> patch.diskTopologyPassed
+               >> patch.pcurveLoopClosed
+               >> patch.pcurveOrientationConsistent
+               >> patch.pcurveSelfIntersectionCount
+               >> patch.pcurveNonAdjacentIntersectionCount
+               >> boundaryChainCount >> patch.trimCornerCount;
         patch.boundaryChainCount = static_cast<std::size_t>(boundaryChainCount);
         quint64 rows = 0;
         quint64 nonZeros = 0;
         stream >> rows >> nonZeros >> patch.flippedTriangleCount
-               >> patch.minimumSignedUvArea >> patch.maximumDistortion;
+               >> patch.minimumSignedUvArea
+               >> patch.minimumToMedianUvAreaRatio
+               >> patch.boundaryRepresentabilityResidual
+               >> patch.maximumDistortion;
         patch.matrixRows = static_cast<std::size_t>(rows);
         patch.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     }
@@ -699,6 +761,8 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
     for (const auto value : report.boundaryTargetMaximum) stream << value;
     stream << report.maximumHardConstraintResidual
            << report.minimumFullHardConstraintResidual
+           << report.boundaryFeasibilityRefinementRounds
+           << report.boundaryFeasibilityResidual
            << report.hardConstraintFeasible
            << report.initialControlPriorScale
            << report.constraintCorrectionAnchorScale
@@ -756,6 +820,8 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     for (auto& value : report.boundaryTargetMaximum) stream >> value;
     stream >> report.maximumHardConstraintResidual
            >> report.minimumFullHardConstraintResidual
+           >> report.boundaryFeasibilityRefinementRounds
+           >> report.boundaryFeasibilityResidual
            >> report.hardConstraintFeasible
            >> report.initialControlPriorScale
            >> report.constraintCorrectionAnchorScale

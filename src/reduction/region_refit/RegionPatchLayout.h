@@ -6,12 +6,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace spo {
 
 struct RegionCurveNetworkGenerationResult;
+struct RegionCurveNetwork;
 
 struct RegionBoundaryChain {
     int adjacentPatch = -1;
@@ -26,22 +28,44 @@ struct RegionLayoutSeam {
     std::vector<std::array<std::size_t, 2>> meshEdges;
 };
 
+struct RegionPatchEdgePcurve {
+    std::size_t edgeIndex = 0;
+    bool forward = true;
+    double firstParameter = 0.0;
+    double lastParameter = 0.0;
+    std::size_t startNode = 0;
+    std::size_t endNode = 0;
+    std::size_t loopOrder = 0;
+    std::vector<double> parameters;
+    std::vector<std::array<double, 2>> uvPoints;
+    std::string hash;
+};
+
 struct RegionPatchParameterization {
     std::vector<std::size_t> triangleIndices;
     std::vector<std::size_t> vertexIndices;
     std::vector<std::array<double, 2>> parameters;
     std::vector<std::size_t> boundaryLoop;
+    // Retained only for the legacy mesh-seam fitting path. Frozen curve-network
+    // fitting and B-rep construction use edgePcurves as their single UV truth.
     std::array<std::vector<std::size_t>, 4> boundarySides;
     std::vector<RegionBoundaryChain> boundaryChains;
+    std::vector<RegionPatchEdgePcurve> edgePcurves;
     std::vector<std::size_t> trimCorners;
     std::string domainType = "TrimmedDiskConvexBoundary";
     bool diskTopologyPassed = false;
+    bool pcurveLoopClosed = false;
+    bool pcurveOrientationConsistent = false;
+    int pcurveSelfIntersectionCount = 0;
+    int pcurveNonAdjacentIntersectionCount = 0;
     std::size_t boundaryChainCount = 0;
     int trimCornerCount = 0;
     std::size_t matrixRows = 0;
     std::size_t matrixNonZeros = 0;
     int flippedTriangleCount = 0;
     double minimumSignedUvArea = 0.0;
+    double minimumToMedianUvAreaRatio = 0.0;
+    double boundaryRepresentabilityResidual = 0.0;
     double maximumDistortion = 0.0;
 };
 
@@ -80,5 +104,16 @@ public:
         const RegionCurveNetworkGenerationResult& curveNetworks,
         const RegionRefitOptions& options) const;
 };
+
+std::optional<std::array<double, 2>> evaluateRegionPatchEdgePcurve(
+    const RegionPatchEdgePcurve& pcurve,
+    double parameter);
+
+bool buildCurveConsistentParameterDomain(
+    const RegionReferenceMesh& mesh,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    RegionPatchLayout& layout,
+    std::string& message);
 
 }

@@ -5,6 +5,7 @@
 
 #include <TopoDS_Shape.hxx>
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -20,11 +21,15 @@ struct NativeRegionPatchNetworkBuildResult {
     int reusedOriginalBoundaryEdgeCount = 0;
     int splitBoundarySegmentCount = 0;
     int internalSeamCount = 0;
-    int pcurveProjectionCount = 0;
+    int storedPcurveAttachmentCount = 0;
     int diagnosticPcurveFallbackCount = 0;
     int sameParameterCheckCount = 0;
     int sameParameterFailureCount = 0;
     int brepValidationFailureCount = 0;
+    int unexpectedFaceIntersectionCount = 0;
+    double unexpectedFaceIntersectionTotalLength = 0.0;
+    int replacementQuiltInternalFreeEdgeCount = 0;
+    std::vector<std::array<int, 2>> unexpectedFaceIntersectionPatches;
     double maximumSameParameterDeviation = 0.0;
     std::vector<RegionEdgeConsistencyReport> edgeConsistency;
 
