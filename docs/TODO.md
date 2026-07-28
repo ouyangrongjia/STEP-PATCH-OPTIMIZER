@@ -14,18 +14,18 @@
 验收：
 
 - 首版明确拒绝孔洞、多外环、分支边界、非流形和不连通候选。
-- 最终运行目录同时保留自适应采样 STL、布局可视化和最终整件缝合 STEP，并登记 SHA-256 和门禁状态。
+- 正式运行目录严格遵守单一 `final/` 白名单合同，状态文件始终存在，几何文件只在对应阶段确实完成时发布，并登记大小和 SHA-256。
 - candidate-179 先通过距离、法向、接缝、BRep、StrictTopologyGate、STEP 往返和 Creo 整件检查，再动态复核两个额外真实候选。
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：命令行纵向链已重构为显式 `RegionCurveNetwork` 先行。冻结网络之后，每个 patch 以网络节点构造严格凸循环域，并保存与唯一三维曲线同参数 `t` 的 `RegionPatchEdgePcurve`；边界载体点直接取该 pcurve 的 UV，内部点采用正权 mean-value 调和参数化。pcurve 的小幅凸化只保证数值可构造性，产品布局门仍独立检查 UV 面积比和畸变。布局、联合拟合、builder、缓存和 JSON/SVG 消费同一份 pcurve，builder 不再重新投影或插值。拟合先求满足全部外边界和共享曲线 G0 等式的 `P_boundary`，必要时同时细化 U/V 结点，再在相同等式下求 `P_fit`；构造性线搜索只允许在二者之间进行。达到控制点上限或拟合预算仍无边界可行构造网时只能标记 `BoundaryInfeasibleDiagnostic`，仿射局部支撑网只可用于继续诊断装配，不能当作拟合成功。
+当前阶段：命令行纵向链已改为显式 `RegionCurveNetwork` 先行。内部曲线采用端点固定的正则化 C2 三次 B-spline，并分别检查投影、转角、自交和非节点交叉；失败时只允许用穿过原投影点的一级曲线继续诊断。每张 patch 同时保存无翻转载体坐标和严格矩形 `surfaceParameters`，四组逻辑边映射到 `[0,1]^2` 的四条精确 iso 边。联合拟合以及超时或不可行时保留的 Coons 候选都必须锁定四条边界；G1/G2 只能调整相邻内部控制行，未锁边的初始支撑面不能进入 B-Rep。builder 复用唯一 Vertex、唯一三维 Edge 和双侧精确 pcurve，经 257 点检查后才设置 `SameParameter`。
 
-永久产物合同已经进入探针和运行脚本：区域重拟合未显式传入 `-OutputDir` 时，运行目录固定建立在 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\<run-id>\`；显式 `-OutputDir` 仍优先。每次运行均在根目录写 `evidence_manifest.json`，并创建 `artifacts/curve_network/`、`artifacts/layout/`、`artifacts/fit/`、`artifacts/brep/`、`artifacts/final/`、`validation/` 和 `external_cad/`。能够到达相应阶段时，依次保留 `selected_curve_network.step`、`selected_parameter_domain.json/.svg`、`fitted_support_surfaces.step` 或 `best_effort_support_surfaces.step`、`replacement_quilt.step`、`sewn_attempt.step` 和最终整件 STEP，且全部进入 manifest 并登记 SHA-256。`artifacts/final/artifact_status.json` 始终存在；产品通过写 `final_sewn.step`，仅诊断缝合成功写 `diagnostic_sewn.step`，无可构造 Face 时记录 `Unavailable` 且不伪造 STEP。缓存二进制版本为 8，精确保存曲线网络和 edge-use pcurve，旧版本明确拒绝。
+永久产物由运行脚本先写 `data\.native-region-refit-staging\<run-id>\`，成功包装后原子发布到 `data\runs\<run-id>\final\`，异常退出清理暂存目录，已有 run 冲突时拒绝覆盖。正式目录始终只含 `run.json`、`RUN.md`、`artifact_status.json`、`validation_summary.json`、`evidence_manifest.json`，以及阶段确实完成时的 `curve_network.json`、`curve_network.step`、`untrimmed_support_surfaces.step`、`trimmed_patch_faces.step` 和互斥的 `final_sewn.step` 或 `diagnostic_sewn.step`。manifest 最后生成且不记录自身。缓存二进制版本为 10，精确保存双参数域和 edge-use pcurve，旧版本明确拒绝。
 
-当前 candidate-179 全链诊断基线为 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260728_144618_560__native-region-refit__03_配件_Clay__cand-0179__target\`。K=4 曲线网络包含 33 条曲线和 5 条内部曲线，最大投影误差为 `0.0286171 mm`，曲线网络产品门通过。参数域无 pcurve 自交、非相邻交叉和 UV 翻转，但最小/中位 UV 面积比仅 `5.66211e-8`，布局产品门失败。联合拟合细化至 `21×21` 控制网，完整硬边界最小最大残差仍为 `0.0532919 mm`，因此保留 `BoundaryInfeasibleDiagnostic` 支撑网。运行继续生成 4-face replacement quilt、固定 `0.001 mm` 容差的 `sewn_attempt.step` 和永久 `diagnostic_sewn.step`；Face 意外交线为 0，replacement quilt 内部自由边为 0，但 38 次 pcurve 附着中有 37 次 `SameParameter` 失败，最大 Curve-on-Surface 偏差为 `0.576740 mm`。整件诊断缝合前后均有 8 条自由边，BRepCheck、StrictTopologyGate 和 STEP 往返失败。Creo 可导入并生成 ModelCHECK 报告，几何检查为 0，但短边为 1488 条，导入状态为 `SOLID_FAILED`、评分为 `FAIL`。最终状态为 `DiagnosticOnly`、`canApply=false`，不是产品成功。
+当前 candidate-179 真实结果位于 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\final\`。K=4 曲线网络产品门通过：5 条内部曲线均为 `RegularizedCubic`，最大投影误差 `0.0298705 mm`，无自交或非节点交叉。布局可构造且无翻转或 pcurve 交叉，但面积比 `2.49277e-5`、最大畸变 `201.442`，布局产品门失败。边界锁定诊断候选的边界和双侧分离均远小于 `0.001 mm`，但独立距离 `0.245723 mm`、法向 `20.1538°`、G1 `18.3648°`，拟合门失败。4 张裁剪 Face 的 38 次 `SameParameter` 检查无失败，内部自由边和意外交线均为 0；内存态逐 Face BRepCheck 尚未通过，而导出的 `trimmed_patch_faces.step` 再导入后 BRepCheck 和 Curve-on-Surface 检查通过。固定 `0.001 mm` 诊断缝合得到 1 个 Solid、0 条自由边，STEP 往返通过；Creo 可导入并生成 PRT，ModelCHECK 未通过。结果为 `DiagnosticOnly`、`canApply=false`。
 
-下一验收点仍在参数域和联合拟合：先把 UV 面积比提升到产品门以上，并使原 STEP 外边界和共享内部曲线的完整硬约束残差降至 `0.001 mm`；随后消除 37 次 `SameParameter` 失败和整件替换后的 8 条自由边，最后复核 StrictTopologyGate、STEP 往返和 Creo。不得通过放宽 `0.03 mm` 曲线投影门、`SameParameter` 或固定 sewing 容差制造成功。旧 candidate-179 49→46 与 12 区域 Surface Reduction 回归仍是独立前置验收，不能由合成测试或本次诊断缝合替代。GUI 接入仍不在本轮范围内。
+下一验收点仍在布局、拟合和内存态裁剪校验：先把面积比和畸变带回产品门，使独立距离、法向和 G1 分别不超过 `0.03 mm`、`15°`、`5°`，再定位并消除逐 Face BRepCheck 与导出后 BRepCheck 的差异，最后复核 Creo ModelCHECK。不得放宽曲线投影、Curve-on-Surface、`SameParameter` 或固定 `0.001 mm` sewing 容差制造成功。旧 candidate-179 49→46 与 12 区域 Surface Reduction 回归仍是独立前置验收，不能由本次诊断缝合替代。GUI 接入仍不在本轮范围内。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

@@ -494,20 +494,32 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.curveNetworkG0EdgeCount = selectedCurveReport.g0EdgeCount;
     result.report.curveNetworkG1EdgeCount = selectedCurveReport.g1EdgeCount;
     result.report.curveNetworkG2EdgeCount = selectedCurveReport.g2EdgeCount;
-    result.report.curveNetworkLocalCubicEdgeCount =
-        selectedCurveReport.localCubicEdgeCount;
+    result.report.curveNetworkRegularizedCubicEdgeCount =
+        selectedCurveReport.regularizedCubicEdgeCount;
     result.report.curveNetworkDiagnosticPolylineEdgeCount =
         selectedCurveReport.diagnosticPolylineEdgeCount;
     result.report.curveNetworkContinuityDowngradeCount =
         selectedCurveReport.continuityDowngradeCount;
     result.report.curveNetworkMaximumProjectionError =
         selectedCurveReport.maximumProjectionError;
+    result.report.curveNetworkMaximumSampleTurnDegrees =
+        selectedCurveReport.maximumSampleTurnDegrees;
+    result.report.curveNetworkMaximumBendingEnergy =
+        selectedCurveReport.maximumBendingEnergy;
+    result.report.curveNetworkSelfIntersectionCount =
+        selectedCurveReport.selfIntersectionCount;
+    result.report.curveNetworkUnexpectedIntersectionCount =
+        selectedCurveReport.unexpectedCurveIntersectionCount;
     result.report.curveNetworkClosurePassed =
         selectedCurveReport.closurePassed;
     result.report.curveNetworkOwnershipPassed =
         selectedCurveReport.ownershipPassed;
     result.report.curveNetworkProjectionPassed =
         selectedCurveReport.projectionPassed;
+    result.report.curveNetworkOrientationPassed =
+        selectedCurveReport.orientationPassed;
+    result.report.curveNetworkIntersectionPassed =
+        selectedCurveReport.intersectionPassed;
     result.report.curveNetworkProductQualityPassed =
         selectedCurveReport.productQualityPassed;
     result.report.curveNetworkFrozen = selectedCurveReport.frozen;
@@ -563,6 +575,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     if (!layouts.success()) {
         result.report.status = RegionRefitStatus::NoSewableGeometry;
         result.report.failureStage = RegionRefitStage::Layout;
+        if (result.report.firstProductFailureGate.empty()) {
+            result.report.firstProductFailureGate = "Layout";
+        }
         result.report.message = layouts.message;
         result.report.selectionOutcome = "NoSewableGeometry";
         result.report.unattainableReason = layouts.message;
@@ -673,9 +688,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         ? static_cast<int>(fitted.attempts.size())
         : 0;
     if (cache.enabled()) result.report.cacheEvents.push_back(fitCacheEvent);
-    result.report.fitGatePassed = fitted.success();
+    const auto fittedProductConstructible =
+        fitted.success() &&
+        fitted.network != nullptr &&
+        fitted.network->constructibleForBRep;
+    result.report.fitGatePassed = fittedProductConstructible;
     const auto useBestEffort = !fitted.success() &&
-        fitted.bestEffortNetwork != nullptr;
+        fitted.bestEffortNetwork != nullptr &&
+        fitted.bestEffortNetwork->constructibleForBRep;
     result.report.bestEffortUsed = useBestEffort;
     if (!fitted.success() && !useBestEffort) {
         result.report.status = RegionRefitStatus::NoSewableGeometry;
@@ -698,7 +718,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         failMemoryBudget(result, RegionRefitStage::Fitting);
         return result;
     }
-    result.fittedNetwork = fitted.success() ? fitted.network : fitted.bestEffortNetwork;
+    result.fittedNetwork =
+        fittedProductConstructible ? fitted.network : fitted.bestEffortNetwork;
     result.report.sewableGeometryAvailable = result.fittedNetwork != nullptr;
     result.report.diagnosticCandidatePatchCount = result.fittedNetwork->layout.patchCount;
     result.report.diagnosticSelectionReason =
@@ -767,20 +788,32 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.curveNetworkG0EdgeCount = fittedCurveReport.g0EdgeCount;
     result.report.curveNetworkG1EdgeCount = fittedCurveReport.g1EdgeCount;
     result.report.curveNetworkG2EdgeCount = fittedCurveReport.g2EdgeCount;
-    result.report.curveNetworkLocalCubicEdgeCount =
-        fittedCurveReport.localCubicEdgeCount;
+    result.report.curveNetworkRegularizedCubicEdgeCount =
+        fittedCurveReport.regularizedCubicEdgeCount;
     result.report.curveNetworkDiagnosticPolylineEdgeCount =
         fittedCurveReport.diagnosticPolylineEdgeCount;
     result.report.curveNetworkContinuityDowngradeCount =
         fittedCurveReport.continuityDowngradeCount;
     result.report.curveNetworkMaximumProjectionError =
         fittedCurveReport.maximumProjectionError;
+    result.report.curveNetworkMaximumSampleTurnDegrees =
+        fittedCurveReport.maximumSampleTurnDegrees;
+    result.report.curveNetworkMaximumBendingEnergy =
+        fittedCurveReport.maximumBendingEnergy;
+    result.report.curveNetworkSelfIntersectionCount =
+        fittedCurveReport.selfIntersectionCount;
+    result.report.curveNetworkUnexpectedIntersectionCount =
+        fittedCurveReport.unexpectedCurveIntersectionCount;
     result.report.curveNetworkClosurePassed =
         fittedCurveReport.closurePassed;
     result.report.curveNetworkOwnershipPassed =
         fittedCurveReport.ownershipPassed;
     result.report.curveNetworkProjectionPassed =
         fittedCurveReport.projectionPassed;
+    result.report.curveNetworkOrientationPassed =
+        fittedCurveReport.orientationPassed;
+    result.report.curveNetworkIntersectionPassed =
+        fittedCurveReport.intersectionPassed;
     result.report.curveNetworkProductQualityPassed =
         fittedCurveReport.productQualityPassed;
     result.report.curveNetworkFrozen = fittedCurveReport.frozen;

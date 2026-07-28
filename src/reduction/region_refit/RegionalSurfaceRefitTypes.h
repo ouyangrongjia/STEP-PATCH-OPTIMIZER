@@ -106,6 +106,7 @@ struct RegionRefitOptions {
     int curveValidationSampleCount = 97;
     int curveFairingIterations = 3;
     double curveFairingWeight = 0.25;
+    double maximumInternalCurveSampleTurnDegrees = 20.0;
     double g1ToleranceDegrees = 5.0;
     double g2CurvatureTolerance = 0.1;
     bool enableInternalSeamG2 = false;
@@ -387,13 +388,19 @@ struct RegionRefitReport {
     std::size_t curveNetworkG0EdgeCount = 0;
     std::size_t curveNetworkG1EdgeCount = 0;
     std::size_t curveNetworkG2EdgeCount = 0;
-    std::size_t curveNetworkLocalCubicEdgeCount = 0;
+    std::size_t curveNetworkRegularizedCubicEdgeCount = 0;
     std::size_t curveNetworkDiagnosticPolylineEdgeCount = 0;
     std::size_t curveNetworkContinuityDowngradeCount = 0;
     double curveNetworkMaximumProjectionError = 0.0;
+    double curveNetworkMaximumSampleTurnDegrees = 0.0;
+    double curveNetworkMaximumBendingEnergy = 0.0;
+    int curveNetworkSelfIntersectionCount = 0;
+    int curveNetworkUnexpectedIntersectionCount = 0;
     bool curveNetworkClosurePassed = false;
     bool curveNetworkOwnershipPassed = false;
     bool curveNetworkProjectionPassed = false;
+    bool curveNetworkOrientationPassed = false;
+    bool curveNetworkIntersectionPassed = false;
     bool curveNetworkProductQualityPassed = false;
     bool curveNetworkFrozen = false;
     std::vector<RegionLayoutCandidateReport> layoutCandidates;

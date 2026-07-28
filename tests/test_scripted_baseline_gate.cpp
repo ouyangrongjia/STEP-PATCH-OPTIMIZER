@@ -711,7 +711,9 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find(
         "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs") !=
         std::string::npos);
-    assert(script.find("-DefaultRunRoot $nativeRegionalRefitRunRoot") !=
+    assert(script.find("-DefaultRunRoot $nativeRegionalRefitStagingRoot") !=
+        std::string::npos);
+    assert(script.find("data\\.native-region-refit-staging") !=
         std::string::npos);
     assert(artifactScript.find(
         "[AllowEmptyString()][string]$DefaultRunRoot = \"\"") !=
@@ -742,7 +744,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("Get-SharedFileSha256") != std::string::npos);
     assert(script.find("[System.IO.FileShare]::ReadWrite") != std::string::npos);
     assert(script.find(
-        "$manifestPath = Join-Path $context.output_dir \"evidence_manifest.json\"") !=
+        "\"evidence_manifest.json\"") !=
         std::string::npos);
     assert(script.find(
         "$context.directories.diagnostics \"evidence_manifest.json\"") ==
@@ -750,13 +752,33 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("brep\\sewn_attempt.step") != std::string::npos);
     assert(script.find("assembly\\cad_check_candidate.step") == std::string::npos);
     assert(script.find("assembly\\sewn_attempt.step") == std::string::npos);
+    assert(script.find("\"validation_summary.json\"") != std::string::npos);
+    assert(script.find("\"untrimmed_support_surfaces.step\"") !=
+        std::string::npos);
+    assert(script.find("\"trimmed_patch_faces.step\"") !=
+        std::string::npos);
+    assert(script.find("manifest_self_excluded = $true") !=
+        std::string::npos);
+    assert(script.find("role = $role") != std::string::npos);
+    assert(script.find("size_bytes = [uint64]$_.Length") !=
+        std::string::npos);
+    assert(script.find("Final run directory already exists; refusing to overwrite it") !=
+        std::string::npos);
+    assert(script.find("Remove-Item -LiteralPath $stagingDirectory -Recurse -Force") !=
+        std::string::npos);
+    assert(script.find("creo_validation_passed = $creoPassed") !=
+        std::string::npos);
+    assert(script.find("can_apply = $productValidated") !=
+        std::string::npos);
     assert(script.find("Get-Process -Name \"nmsd\"") != std::string::npos);
     assert(script.find("$newNmsdProcesses | Stop-Process -Force") != std::string::npos);
     assert(script.find("$creoDescendantStopTimeoutSeconds = 10") != std::string::npos);
     assert(script.find("$newNmsdProcesses | Wait-Process") != std::string::npos);
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
-    assert(probe.find("native-regional-refit-v36-pcurve-domain") != std::string::npos);
+    assert(probe.find(
+        "native-regional-refit-v39-constructible-layout") !=
+        std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
@@ -792,7 +814,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(curveNetwork.find("GeomAPI_PointsToBSpline") ==
         std::string::npos);
     assert(curveNetwork.find(
-        "RegionInternalCurveConstructionMode::LocalCubic") !=
+        "RegionInternalCurveConstructionMode::RegularizedCubic") !=
         std::string::npos);
     assert(curveNetwork.find(
         "RegionInternalCurveConstructionMode::DiagnosticPolyline") !=

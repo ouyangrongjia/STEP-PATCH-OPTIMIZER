@@ -23,7 +23,7 @@ enum class RegionCurveContinuity {
 const char* toString(RegionCurveContinuity continuity);
 
 enum class RegionInternalCurveConstructionMode {
-    LocalCubic,
+    RegularizedCubic,
     DiagnosticPolyline
 };
 
@@ -46,9 +46,13 @@ struct RegionCurveNetworkEdge {
     RegionCurveContinuity requestedContinuity = RegionCurveContinuity::G0;
     RegionCurveContinuity continuity = RegionCurveContinuity::G0;
     RegionInternalCurveConstructionMode constructionMode =
-        RegionInternalCurveConstructionMode::LocalCubic;
+        RegionInternalCurveConstructionMode::RegularizedCubic;
     bool productQualityPassed = true;
     int validationSampleCount = 0;
+    int controlPointCount = 0;
+    double maximumSampleTurnDegrees = 0.0;
+    double bendingEnergy = 0.0;
+    int selfIntersectionCount = 0;
     bool originalBoundary = false;
     bool hasOriginalEdge = false;
     EdgeId originalEdgeId = 0;
@@ -79,6 +83,8 @@ struct RegionCurveNetworkReport {
     bool closurePassed = false;
     bool ownershipPassed = false;
     bool projectionPassed = false;
+    bool orientationPassed = false;
+    bool intersectionPassed = false;
     bool nonManifoldEdgePassed = false;
     bool frozen = false;
     std::size_t nodeCount = 0;
@@ -88,10 +94,14 @@ struct RegionCurveNetworkReport {
     std::size_t g0EdgeCount = 0;
     std::size_t g1EdgeCount = 0;
     std::size_t g2EdgeCount = 0;
-    std::size_t localCubicEdgeCount = 0;
+    std::size_t regularizedCubicEdgeCount = 0;
     std::size_t diagnosticPolylineEdgeCount = 0;
     std::size_t continuityDowngradeCount = 0;
     double maximumProjectionError = 0.0;
+    double maximumSampleTurnDegrees = 0.0;
+    double maximumBendingEnergy = 0.0;
+    int selfIntersectionCount = 0;
+    int unexpectedCurveIntersectionCount = 0;
     bool productQualityPassed = false;
     std::string rejectionReason;
 };

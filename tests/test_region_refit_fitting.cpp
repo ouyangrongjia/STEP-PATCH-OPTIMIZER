@@ -198,6 +198,10 @@ void test_inconsistent_dense_hard_constraints_are_reported_explicitly() {
     assert(std::isfinite(iteration.affineBaselineBoundaryMaximumDistance));
     assert(fitted.bestEffortNetwork);
     assert(!fitted.bestEffortNetwork->fitGatePassed);
+    assert(!fitted.bestEffortNetwork->boundaryLocked);
+    assert(!fitted.bestEffortNetwork->constructibleForBRep);
+    assert(fitted.bestEffortNetwork->fitOutcome ==
+        "UnconstrainedInspectionOnly");
 }
 
 void test_trimmed_disk_jacobian_ignores_unused_rectangular_corners() {
@@ -320,6 +324,10 @@ void test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails() {
     assert(!fitted.network);
     assert(fitted.bestEffortNetwork);
     assert(!fitted.bestEffortNetwork->fitGatePassed);
+    assert(fitted.bestEffortNetwork->boundaryLocked);
+    assert(!fitted.bestEffortNetwork->constructibleForBRep);
+    assert(fitted.bestEffortNetwork->fitOutcome ==
+        "BoundaryLockedDiagnostic");
     assert(fitted.bestEffortNetwork->normalizedViolationScore > 1.0);
 }
 

@@ -35,6 +35,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $nativeRegionalRefitRunRoot =
     "D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs"
+$nativeRegionalRefitStagingRoot =
+    Join-Path $repoRoot "data\.native-region-refit-staging"
 . (Join-Path $PSScriptRoot "run_artifacts.ps1")
 
 $sourcePath = [System.IO.Path]::GetFullPath($SourceStep)
@@ -66,10 +68,29 @@ $context = New-SpoRunContext `
     -SourcePath $sourcePath `
     -CandidateId $candidateToken `
     -Variant $variant `
-    -OutputDir $OutputDir `
-    -DefaultRunRoot $nativeRegionalRefitRunRoot `
+    -OutputDir "" `
+    -DefaultRunRoot $nativeRegionalRefitStagingRoot `
     -ScriptPath $PSCommandPath `
     -Parameters $PSBoundParameters
+$stagingDirectory = [System.IO.Path]::GetFullPath($context.output_dir)
+$finalRunDirectory = if ($OutputDir) {
+    if ([System.IO.Path]::IsPathRooted($OutputDir)) {
+        [System.IO.Path]::GetFullPath($OutputDir)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
+    }
+} else {
+    Join-Path $nativeRegionalRefitRunRoot $context.run_id
+}
+$publishedFinalDirectory = Join-Path $finalRunDirectory "final"
+$runFailure = $null
+$publishFailure = $null
+$scriptExitCode = 1
+
+try {
+if (Test-Path -LiteralPath $finalRunDirectory) {
+    throw "Final run directory already exists; refusing to overwrite it: $finalRunDirectory"
+}
 
 $probe = Join-Path $repoRoot "build\windows-msvc-debug\Debug\native_region_refit_probe.exe"
 if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) {
@@ -465,19 +486,6 @@ if ((Test-Path -LiteralPath $performancePath -PathType Leaf) -and
         -NotePropertyValue ([bool]$performance.diagnostic_pipeline_completed) -Force
     $runJson | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $runJsonPath -Encoding UTF8
 }
-$manifestPath = Join-Path $context.output_dir "evidence_manifest.json"
-$requiredDiagnosticNames = @(
-    "sampling_report.json",
-    "curve_network.json",
-    "layout_report.json",
-    "fit_report.json",
-    "edge_consistency_report.json",
-    "triangulation_report.json",
-    "retrim_report.json",
-    "sewing_report.json",
-    "strict_topology_report.json",
-    "output_complexity_report.json",
-    "performance_report.json")
 function Get-SharedFileSha256 {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -495,36 +503,410 @@ function Get-SharedFileSha256 {
         $stream.Dispose()
     }
 }
-$evidence = @(
-    Get-ChildItem -LiteralPath $context.output_dir -Recurse -File |
-        Where-Object { $_.FullName -ne $manifestPath } |
-        Sort-Object FullName |
-        ForEach-Object {
-            $relativePath = [System.IO.Path]::GetRelativePath($context.output_dir, $_.FullName)
-            [ordered]@{
-                name = $relativePath.Replace("\", "/")
-                path = $relativePath
-                sha256 = Get-SharedFileSha256 -Path $_.FullName
-                generated_stage = if ($relativePath -like "external_cad*") {
-                    "ExternalCad"
-                } elseif ($relativePath -like "artifacts*") {
-                    "Artifact"
-                } elseif ($relativePath -like "logs*") {
-                    "Log"
-                } else {
-                    "Run"
+
+function Get-OptionalJson {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $null
+    }
+    try {
+        return Get-Content -LiteralPath $Path -Raw -Encoding UTF8 |
+            ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Copy-PublishedFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    if (-not (Test-Path -LiteralPath $Source -PathType Leaf) -or
+        (Get-Item -LiteralPath $Source).Length -le 0) {
+        return $false
+    }
+    Copy-Item -LiteralPath $Source -Destination $Destination
+    return $true
+}
+
+function Publish-NativeRegionRefitFinal {
+    param(
+        [Parameter(Mandatory = $true)][string]$StagingDirectory,
+        [Parameter(Mandatory = $true)][string]$FinalRunDirectory,
+        [Parameter(Mandatory = $true)]$Context
+    )
+
+    if (Test-Path -LiteralPath $FinalRunDirectory) {
+        throw "Final run directory already exists; refusing to overwrite it: $FinalRunDirectory"
+    }
+    $finalParent = [System.IO.Path]::GetFullPath(
+        (Split-Path -Parent $FinalRunDirectory))
+    New-Item -ItemType Directory -Path $finalParent -Force | Out-Null
+    $transactionDirectory = [System.IO.Path]::GetFullPath(
+        "$FinalRunDirectory.__publishing__$([guid]::NewGuid().ToString('N'))")
+    $expectedParentPrefix = $finalParent.TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar) +
+        [System.IO.Path]::DirectorySeparatorChar
+    if (-not $transactionDirectory.StartsWith(
+            $expectedParentPrefix,
+            [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not ([System.IO.Path]::GetFullPath($FinalRunDirectory)).StartsWith(
+            $expectedParentPrefix,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Publishing paths escaped the intended run parent."
+    }
+    $packageFinalDirectory = Join-Path $transactionDirectory "final"
+    New-Item -ItemType Directory -Path $packageFinalDirectory -Force |
+        Out-Null
+
+    try {
+        $stagedArtifactStatus = Get-OptionalJson -Path (
+            Join-Path $StagingDirectory "artifacts\final\artifact_status.json")
+        $creoResult = Get-OptionalJson -Path (
+            Join-Path $StagingDirectory "external_cad\creo\creo_step_diagnostic_result.json")
+        $creoAttempted = $null -ne $creoResult
+        $creoPassed = $creoAttempted -and
+            [bool]$creoResult.import.generated_prt -and
+            [bool]$creoResult.modelcheck.diagnostic_passed
+        $productGatesPassedBeforeCreo = $null -ne $stagedArtifactStatus -and
+            [bool]$stagedArtifactStatus.product_validated
+
+        $stagedFinalSewn = Join-Path $StagingDirectory (
+            "artifacts\final\final_sewn.step")
+        $stagedDiagnosticSewn = Join-Path $StagingDirectory (
+            "artifacts\final\diagnostic_sewn.step")
+        $sewnSource = if (Test-Path -LiteralPath $stagedDiagnosticSewn -PathType Leaf) {
+            $stagedDiagnosticSewn
+        } elseif (Test-Path -LiteralPath $stagedFinalSewn -PathType Leaf) {
+            $stagedFinalSewn
+        } else {
+            $null
+        }
+        $constructibleGeometry = $null -ne $sewnSource -and
+            (Get-Item -LiteralPath $sewnSource).Length -gt 0
+        $productValidated = $constructibleGeometry -and
+            $productGatesPassedBeforeCreo -and $creoPassed
+        $finalStatus = if ($productValidated) {
+            "ProductValidated"
+        } elseif ($constructibleGeometry) {
+            "DiagnosticOnly"
+        } else {
+            "Unavailable"
+        }
+        $sewnName = if ($productValidated) {
+            "final_sewn.step"
+        } elseif ($constructibleGeometry) {
+            "diagnostic_sewn.step"
+        } else {
+            $null
+        }
+
+        $publishSources = [ordered]@{
+            "curve_network.json" = @(
+                (Join-Path $StagingDirectory (
+                    "artifacts\curve_network\selected_curve_network.json")),
+                (Join-Path $StagingDirectory "diagnostics\curve_network.json"))
+            "curve_network.step" = @(
+                (Join-Path $StagingDirectory (
+                    "artifacts\curve_network\selected_curve_network.step")))
+            "untrimmed_support_surfaces.step" = @(
+                (Join-Path $StagingDirectory (
+                    "artifacts\fit\fitted_support_surfaces.step")),
+                (Join-Path $StagingDirectory (
+                    "artifacts\fit\best_effort_support_surfaces.step")))
+            "trimmed_patch_faces.step" = @(
+                (Join-Path $StagingDirectory (
+                    "artifacts\brep\replacement_quilt.step")))
+        }
+        foreach ($entry in $publishSources.GetEnumerator()) {
+            foreach ($source in $entry.Value) {
+                if (Copy-PublishedFile `
+                        -Source $source `
+                        -Destination (Join-Path $packageFinalDirectory $entry.Key)) {
+                    break
                 }
-                required = $false
-                validated = ($status -eq "succeeded")
             }
         }
-)
-[ordered]@{
-    schema_version = 2
-    run_id = $context.run_id
-    manifest_self_excluded = $true
-    expected_diagnostics = $requiredDiagnosticNames
-    evidence = $evidence
-} | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-Write-Output $context.output_dir
-exit $(if ($status -eq "succeeded") { 0 } else { 1 })
+        if ($constructibleGeometry) {
+            Copy-PublishedFile `
+                -Source $sewnSource `
+                -Destination (Join-Path $packageFinalDirectory $sewnName) |
+                Out-Null
+        }
+
+        $publishedSewnPath = if ($sewnName) {
+            Join-Path $packageFinalDirectory $sewnName
+        } else {
+            $null
+        }
+        $firstProductFailureGate = if ($productValidated) {
+            $null
+        } elseif ($productGatesPassedBeforeCreo -and -not $creoPassed) {
+            "Creo"
+        } elseif ($null -ne $stagedArtifactStatus) {
+            $stagedArtifactStatus.first_product_failure_gate
+        } else {
+            $null
+        }
+        $unavailableReason = if ($constructibleGeometry) {
+            $null
+        } elseif ($null -ne $stagedArtifactStatus) {
+            $stagedArtifactStatus.unavailable_reason
+        } else {
+            "The probe did not produce constructible sewn geometry."
+        }
+        $publishedArtifactStatus = [ordered]@{
+            schema_version = 2
+            status = $finalStatus
+            product_gates_passed_before_creo =
+                $productGatesPassedBeforeCreo
+            creo_attempted = $creoAttempted
+            creo_validation_passed = $creoPassed
+            product_validated = $productValidated
+            diagnostic_only =
+                $constructibleGeometry -and -not $productValidated
+            can_apply = $productValidated
+            constructible_geometry = $constructibleGeometry
+            sewn_step = $sewnName
+            sha256 = if ($publishedSewnPath) {
+                Get-SharedFileSha256 -Path $publishedSewnPath
+            } else {
+                $null
+            }
+            sewing_tolerance_mm = 0.001
+            first_product_failure_gate = $firstProductFailureGate
+            unavailable_reason = $unavailableReason
+            message = if ($null -ne $stagedArtifactStatus) {
+                $stagedArtifactStatus.message
+            } else {
+                $Context.message
+            }
+        }
+        $publishedArtifactStatus | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath (
+                Join-Path $packageFinalDirectory "artifact_status.json") `
+                -Encoding UTF8
+
+        $performancePath = Get-ChildItem `
+            -LiteralPath (Join-Path $StagingDirectory "diagnostics") `
+            -Filter "performance_*.json" -File -ErrorAction SilentlyContinue |
+            Sort-Object Name | Select-Object -First 1 -ExpandProperty FullName
+        $validationSummary = [ordered]@{
+            schema_version = 1
+            run_id = $Context.run_id
+            status = $finalStatus
+            product_validated = $productValidated
+            can_apply = $productValidated
+            curve_network = Get-OptionalJson -Path (
+                Join-Path $StagingDirectory "diagnostics\curve_network.json")
+            layout = Get-OptionalJson -Path (
+                Join-Path $StagingDirectory "diagnostics\layout_report.json")
+            fitting = Get-OptionalJson -Path (
+                Join-Path $StagingDirectory "diagnostics\fit_report.json")
+            brep = [ordered]@{
+                retrim = Get-OptionalJson -Path (
+                    Join-Path $StagingDirectory "diagnostics\retrim_report.json")
+                edge_consistency = Get-OptionalJson -Path (
+                    Join-Path $StagingDirectory (
+                        "diagnostics\edge_consistency_report.json"))
+                triangulation = Get-OptionalJson -Path (
+                    Join-Path $StagingDirectory (
+                        "diagnostics\triangulation_report.json"))
+                output_complexity = Get-OptionalJson -Path (
+                    Join-Path $StagingDirectory (
+                        "diagnostics\output_complexity_report.json"))
+            }
+            sewing = Get-OptionalJson -Path (
+                Join-Path $StagingDirectory "diagnostics\sewing_report.json")
+            step_roundtrip = Get-OptionalJson -Path (
+                Join-Path $StagingDirectory (
+                    "diagnostics\strict_topology_report.json"))
+            performance = if ($performancePath) {
+                Get-OptionalJson -Path $performancePath
+            } else {
+                $null
+            }
+            creo = [ordered]@{
+                attempted = $creoAttempted
+                captured = if ($creoAttempted) {
+                    [bool]$creoResult.captured
+                } else {
+                    $false
+                }
+                generated_prt = if ($creoAttempted) {
+                    [bool]$creoResult.import.generated_prt
+                } else {
+                    $false
+                }
+                modelcheck_passed = if ($creoAttempted) {
+                    [bool]$creoResult.modelcheck.diagnostic_passed
+                } else {
+                    $false
+                }
+                validation_passed = $creoPassed
+                status = if ($creoAttempted) {
+                    $creoResult.status
+                } else {
+                    "NotAttempted"
+                }
+                import_validation = if ($creoAttempted) {
+                    $creoResult.modelcheck.summary.import_validation
+                } else {
+                    $null
+                }
+            }
+        }
+        $validationSummary | ConvertTo-Json -Depth 100 |
+            Set-Content -LiteralPath (
+                Join-Path $packageFinalDirectory "validation_summary.json") `
+                -Encoding UTF8
+
+        $publishedRun = Get-OptionalJson -Path (
+            Join-Path $StagingDirectory "run.json")
+        if ($null -eq $publishedRun) {
+            $publishedRun = $Context
+        }
+        $publishedRun.output_dir = $FinalRunDirectory
+        $publishedRun.directories = [ordered]@{
+            final = Join-Path $FinalRunDirectory "final"
+        }
+        $publishedRun.artifacts = [ordered]@{}
+        foreach ($file in Get-ChildItem `
+                -LiteralPath $packageFinalDirectory -File |
+                Sort-Object Name) {
+            $publishedRun.artifacts[$file.BaseName] = $file.Name
+        }
+        $publishedRun | ConvertTo-Json -Depth 100 |
+            Set-Content -LiteralPath (
+                Join-Path $packageFinalDirectory "run.json") -Encoding UTF8
+
+        $runMarkdown = @(
+            "# Run $($Context.run_id)",
+            "",
+            "| 字段 | 值 |",
+            "|---|---|",
+            "| 状态 | $finalStatus |",
+            "| 产品门在 Creo 前通过 | $productGatesPassedBeforeCreo |",
+            "| Creo 验证通过 | $creoPassed |",
+            "| 可 Apply | $productValidated |",
+            "| 固定诊断缝合容差 | 0.001 mm |",
+            "| 最终目录 | $(Join-Path $FinalRunDirectory 'final') |",
+            "",
+            "## 说明",
+            "",
+            "$($Context.message)",
+            "",
+            "## 发布文件",
+            ""
+        )
+        foreach ($file in Get-ChildItem `
+                -LiteralPath $packageFinalDirectory -File |
+                Sort-Object Name) {
+            $runMarkdown += "- $($file.Name)"
+        }
+        $runMarkdown | Set-Content -LiteralPath (
+            Join-Path $packageFinalDirectory "RUN.md") -Encoding UTF8
+
+        $manifestPath = Join-Path $packageFinalDirectory (
+            "evidence_manifest.json")
+        $evidence = @(
+            Get-ChildItem -LiteralPath $packageFinalDirectory -File |
+                Where-Object { $_.FullName -ne $manifestPath } |
+                Sort-Object Name |
+                ForEach-Object {
+                    $role = switch ($_.Name) {
+                        "run.json" { "RunMetadata" }
+                        "RUN.md" { "RunSummary" }
+                        "artifact_status.json" { "ArtifactStatus" }
+                        "validation_summary.json" { "ValidationSummary" }
+                        "curve_network.json" { "CurveNetworkData" }
+                        "curve_network.step" { "CurveNetworkGeometry" }
+                        "untrimmed_support_surfaces.step" {
+                            "UntrimmedSupportSurfaces"
+                        }
+                        "trimmed_patch_faces.step" {
+                            "TrimmedReplacementFaces"
+                        }
+                        "final_sewn.step" { "ProductSewnShape" }
+                        "diagnostic_sewn.step" { "DiagnosticSewnShape" }
+                        default { "Unexpected" }
+                    }
+                    [ordered]@{
+                        name = $_.Name
+                        role = $role
+                        size_bytes = [uint64]$_.Length
+                        sha256 = Get-SharedFileSha256 -Path $_.FullName
+                    }
+                }
+        )
+        [ordered]@{
+            schema_version = 3
+            run_id = $Context.run_id
+            manifest_self_excluded = $true
+            evidence = $evidence
+        } | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        Move-Item `
+            -LiteralPath $transactionDirectory `
+            -Destination $FinalRunDirectory
+    } catch {
+        if (Test-Path -LiteralPath $transactionDirectory) {
+            Remove-Item -LiteralPath $transactionDirectory -Recurse -Force
+        }
+        throw
+    }
+    return Join-Path $FinalRunDirectory "final"
+}
+
+$scriptExitCode = if ($status -eq "succeeded") { 0 } else { 1 }
+} catch {
+    $runFailure = $_
+    try {
+        Complete-SpoRun `
+            -Context $context `
+            -Status "failed" `
+            -Message ("Native regional refit wrapper failed: " + $_.Exception.Message) `
+            -Artifacts ([ordered]@{})
+    } catch {
+        $context.status = "failed"
+        $context.message = "Native regional refit wrapper failed before run metadata could be finalized."
+    }
+} finally {
+    try {
+        $publishedFinalDirectory = Publish-NativeRegionRefitFinal `
+            -StagingDirectory $stagingDirectory `
+            -FinalRunDirectory $finalRunDirectory `
+            -Context $context
+    } catch {
+        $publishFailure = $_
+    }
+    $resolvedStagingRoot = [System.IO.Path]::GetFullPath(
+        $nativeRegionalRefitStagingRoot).TrimEnd(
+            [System.IO.Path]::DirectorySeparatorChar) +
+        [System.IO.Path]::DirectorySeparatorChar
+    if (-not $stagingDirectory.StartsWith(
+            $resolvedStagingRoot,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($null -eq $publishFailure) {
+            $publishFailure =
+                "Staging cleanup target escaped the configured staging root."
+        }
+    } elseif (Test-Path -LiteralPath $stagingDirectory) {
+        Remove-Item -LiteralPath $stagingDirectory -Recurse -Force
+    }
+}
+
+if ($null -ne $publishFailure) {
+    Write-Error ("Final publication failed: " + $publishFailure)
+    exit 1
+}
+if ($null -ne $runFailure) {
+    Write-Error ("Native regional refit failed: " + $runFailure)
+    exit 1
+}
+Write-Output $publishedFinalDirectory
+exit $scriptExitCode

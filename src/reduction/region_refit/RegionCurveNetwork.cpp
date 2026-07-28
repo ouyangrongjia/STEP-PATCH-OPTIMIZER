@@ -1,11 +1,11 @@
 #include "reduction/region_refit/RegionCurveNetwork.h"
 
+#include <Eigen/Dense>
+
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRep_Tool.hxx>
-#include <GeomConvert_CompCurveToBSplineCurve.hxx>
 #include <Geom_BSplineCurve.hxx>
-#include <Geom_BezierCurve.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <Standard_Failure.hxx>
 #include <TColStd_Array1OfInteger.hxx>
@@ -282,73 +282,241 @@ std::vector<double> chordParameters(
     return cumulative;
 }
 
-std::vector<gp_Vec> localCurveTangents(
-    const std::vector<gp_Pnt>& points) {
-    std::vector<gp_Vec> tangents;
-    tangents.reserve(points.size());
-    for (std::size_t index = 0; index < points.size(); ++index) {
-        gp_Vec tangent;
-        if (index == 0) {
-            tangent = gp_Vec(points[0], points[1]);
-        } else if (index + 1 == points.size()) {
-            tangent = gp_Vec(points[index - 1], points[index]);
-        } else {
-            tangent = gp_Vec(points[index - 1], points[index + 1]);
-            if (tangent.SquareMagnitude() <= 1.0e-24) {
-                tangent = gp_Vec(points[index], points[index + 1]);
-            }
-        }
-        if (tangent.SquareMagnitude() <= 1.0e-24) return {};
-        tangent.Normalize();
-        tangents.push_back(tangent);
+constexpr int kInternalCurveDegree = 3;
+
+std::vector<double> curveFullKnotVector(
+    const std::vector<double>& uniqueKnots) {
+    std::vector<double> full;
+    full.reserve(
+        uniqueKnots.size() +
+        2 * static_cast<std::size_t>(kInternalCurveDegree));
+    for (int repeat = 0; repeat <= kInternalCurveDegree; ++repeat) {
+        full.push_back(uniqueKnots.front());
     }
-    return tangents;
+    for (std::size_t index = 1; index + 1 < uniqueKnots.size(); ++index) {
+        full.push_back(uniqueKnots[index]);
+    }
+    for (int repeat = 0; repeat <= kInternalCurveDegree; ++repeat) {
+        full.push_back(uniqueKnots.back());
+    }
+    return full;
 }
 
-Handle(Geom_BSplineCurve) localCubicCurve(
-    const std::vector<gp_Pnt>& points,
-    const double handleScale,
-    const double joinTolerance) {
-    if (points.size() < 2 || handleScale <= 0.0) return {};
-    const auto tangents = localCurveTangents(points);
-    if (tangents.size() != points.size()) return {};
-    GeomConvert_CompCurveToBSplineCurve composite;
-    bool initialized = false;
-    for (std::size_t index = 0; index + 1 < points.size(); ++index) {
-        const auto length = points[index].Distance(points[index + 1]);
-        if (length <= joinTolerance) return {};
-        const auto previousLength = index == 0
-            ? length
-            : points[index - 1].Distance(points[index]);
-        const auto nextLength = index + 2 >= points.size()
-            ? length
-            : points[index + 1].Distance(points[index + 2]);
-        const auto outgoing = handleScale *
-            std::min(previousLength, length) / 3.0;
-        const auto incoming = handleScale *
-            std::min(length, nextLength) / 3.0;
-        TColgp_Array1OfPnt poles(1, 4);
-        poles.SetValue(1, points[index]);
-        poles.SetValue(
-            2, points[index].Translated(tangents[index] * outgoing));
-        poles.SetValue(
-            3, points[index + 1].Translated(
-                tangents[index + 1] * -incoming));
-        poles.SetValue(4, points[index + 1]);
-        Handle(Geom_BezierCurve) segment = new Geom_BezierCurve(poles);
-        if (!initialized) {
-            composite = GeomConvert_CompCurveToBSplineCurve(segment);
-            initialized = true;
-        } else if (!composite.Add(
-                       segment,
-                       joinTolerance,
-                       Standard_True,
-                       Standard_True,
-                       2)) {
-            return {};
-        }
+std::vector<double> curveBasisValues(
+    const std::vector<double>& uniqueKnots,
+    const double parameter) {
+    const auto fullKnots = curveFullKnotVector(uniqueKnots);
+    const auto controlCount =
+        static_cast<int>(uniqueKnots.size()) + kInternalCurveDegree - 1;
+    const auto clamped = std::clamp(
+        parameter, uniqueKnots.front(), uniqueKnots.back());
+    const auto lastControl = controlCount - 1;
+    auto span = lastControl;
+    if (clamped < uniqueKnots.back()) {
+        const auto upper = std::upper_bound(
+            fullKnots.begin() + kInternalCurveDegree,
+            fullKnots.begin() + controlCount + 1,
+            clamped);
+        span = std::clamp(
+            static_cast<int>(std::distance(fullKnots.begin(), upper)) - 1,
+            kInternalCurveDegree,
+            lastControl);
     }
-    return initialized ? composite.BSplineCurve() : Handle(Geom_BSplineCurve) {};
+    std::array<double, kInternalCurveDegree + 1> local {};
+    std::array<double, kInternalCurveDegree + 1> left {};
+    std::array<double, kInternalCurveDegree + 1> right {};
+    local[0] = 1.0;
+    for (int degree = 1; degree <= kInternalCurveDegree; ++degree) {
+        left[static_cast<std::size_t>(degree)] =
+            clamped - fullKnots[static_cast<std::size_t>(
+                span + 1 - degree)];
+        right[static_cast<std::size_t>(degree)] =
+            fullKnots[static_cast<std::size_t>(span + degree)] - clamped;
+        auto saved = 0.0;
+        for (int index = 0; index < degree; ++index) {
+            const auto denominator =
+                right[static_cast<std::size_t>(index + 1)] +
+                left[static_cast<std::size_t>(degree - index)];
+            const auto term = denominator > 0.0
+                ? local[static_cast<std::size_t>(index)] / denominator
+                : 0.0;
+            local[static_cast<std::size_t>(index)] =
+                saved +
+                right[static_cast<std::size_t>(index + 1)] * term;
+            saved =
+                left[static_cast<std::size_t>(degree - index)] * term;
+        }
+        local[static_cast<std::size_t>(degree)] = saved;
+    }
+    std::vector<double> values(
+        static_cast<std::size_t>(controlCount), 0.0);
+    for (int index = 0; index <= kInternalCurveDegree; ++index) {
+        values[static_cast<std::size_t>(
+            span - kInternalCurveDegree + index)] =
+            local[static_cast<std::size_t>(index)];
+    }
+    return values;
+}
+
+std::vector<gp_Pnt> resampleByArcLength(
+    const std::vector<gp_Pnt>& points,
+    const std::size_t requestedCount) {
+    if (points.size() < 2 || requestedCount < 2) return {};
+    std::vector<double> cumulative(points.size(), 0.0);
+    for (std::size_t index = 1; index < points.size(); ++index) {
+        cumulative[index] = cumulative[index - 1] +
+            points[index - 1].Distance(points[index]);
+    }
+    if (cumulative.back() <= 1.0e-14) return {};
+    std::vector<gp_Pnt> result;
+    result.reserve(requestedCount);
+    for (std::size_t sample = 0; sample < requestedCount; ++sample) {
+        const auto distance = cumulative.back() *
+            static_cast<double>(sample) /
+            static_cast<double>(requestedCount - 1);
+        const auto upper = std::lower_bound(
+            cumulative.begin(), cumulative.end(), distance);
+        if (upper == cumulative.begin()) {
+            result.push_back(points.front());
+            continue;
+        }
+        if (upper == cumulative.end()) {
+            result.push_back(points.back());
+            continue;
+        }
+        const auto second = static_cast<std::size_t>(
+            std::distance(cumulative.begin(), upper));
+        const auto first = second - 1;
+        const auto span = cumulative[second] - cumulative[first];
+        const auto alpha = span > 0.0
+            ? (distance - cumulative[first]) / span
+            : 0.0;
+        result.emplace_back(
+            (1.0 - alpha) * points[first].X() +
+                alpha * points[second].X(),
+            (1.0 - alpha) * points[first].Y() +
+                alpha * points[second].Y(),
+            (1.0 - alpha) * points[first].Z() +
+                alpha * points[second].Z());
+    }
+    result.front() = points.front();
+    result.back() = points.back();
+    return result;
+}
+
+Handle(Geom_BSplineCurve) regularizedCubicCurve(
+    const std::vector<gp_Pnt>& points,
+    const std::vector<double>& uniqueKnots,
+    const double fairingWeight) {
+    if (points.size() < 2 || uniqueKnots.size() < 2 ||
+        uniqueKnots.front() != 0.0 || uniqueKnots.back() != 1.0) {
+        return {};
+    }
+    const auto controlCount =
+        static_cast<int>(uniqueKnots.size()) + kInternalCurveDegree - 1;
+    if (controlCount < kInternalCurveDegree + 1) return {};
+    const auto unknownCount = controlCount - 2;
+    const auto parameters = chordParameters(points, 0.0, 1.0);
+    if (parameters.size() != points.size()) return {};
+    const auto fairingRowCount = std::max(0, controlCount - 2);
+    Eigen::MatrixXd matrix = Eigen::MatrixXd::Zero(
+        static_cast<Eigen::Index>(points.size() + fairingRowCount),
+        unknownCount);
+    Eigen::MatrixXd targets = Eigen::MatrixXd::Zero(
+        matrix.rows(), 3);
+    for (std::size_t sample = 0; sample < points.size(); ++sample) {
+        const auto basis = curveBasisValues(
+            uniqueKnots, parameters[sample]);
+        Eigen::Vector3d target(
+            points[sample].X(),
+            points[sample].Y(),
+            points[sample].Z());
+        target -= basis.front() * Eigen::Vector3d(
+            points.front().X(),
+            points.front().Y(),
+            points.front().Z());
+        target -= basis.back() * Eigen::Vector3d(
+            points.back().X(),
+            points.back().Y(),
+            points.back().Z());
+        for (int control = 1; control + 1 < controlCount; ++control) {
+            matrix(
+                static_cast<Eigen::Index>(sample),
+                control - 1) =
+                basis[static_cast<std::size_t>(control)];
+        }
+        targets.row(static_cast<Eigen::Index>(sample)) =
+            target.transpose();
+    }
+    const auto fairnessScale = std::sqrt(std::max(
+        1.0e-12,
+        fairingWeight * static_cast<double>(points.size()) /
+            static_cast<double>(std::max(1, fairingRowCount))));
+    for (int center = 1; center + 1 < controlCount; ++center) {
+        const auto row = static_cast<Eigen::Index>(
+            points.size() + static_cast<std::size_t>(center - 1));
+        Eigen::Vector3d target = Eigen::Vector3d::Zero();
+        const std::array<std::pair<int, double>, 3> coefficients {{
+            {center - 1, 1.0},
+            {center, -2.0},
+            {center + 1, 1.0}}};
+        for (const auto& [control, coefficient] : coefficients) {
+            if (control == 0) {
+                target -= fairnessScale * coefficient *
+                    Eigen::Vector3d(
+                        points.front().X(),
+                        points.front().Y(),
+                        points.front().Z());
+            } else if (control + 1 == controlCount) {
+                target -= fairnessScale * coefficient *
+                    Eigen::Vector3d(
+                        points.back().X(),
+                        points.back().Y(),
+                        points.back().Z());
+            } else {
+                matrix(row, control - 1) +=
+                    fairnessScale * coefficient;
+            }
+        }
+        targets.row(row) = target.transpose();
+    }
+    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> solver(matrix);
+    if (solver.rank() < unknownCount) return {};
+    const auto solution = solver.solve(targets);
+    if (!solution.allFinite()) return {};
+    TColgp_Array1OfPnt poles(1, controlCount);
+    poles.SetValue(1, points.front());
+    poles.SetValue(controlCount, points.back());
+    for (int control = 1; control + 1 < controlCount; ++control) {
+        poles.SetValue(
+            control + 1,
+            gp_Pnt(
+                solution(control - 1, 0),
+                solution(control - 1, 1),
+                solution(control - 1, 2)));
+    }
+    TColStd_Array1OfReal knots(
+        1, static_cast<int>(uniqueKnots.size()));
+    TColStd_Array1OfInteger multiplicities(
+        1, static_cast<int>(uniqueKnots.size()));
+    for (std::size_t index = 0; index < uniqueKnots.size(); ++index) {
+        knots.SetValue(static_cast<int>(index + 1), uniqueKnots[index]);
+        multiplicities.SetValue(
+            static_cast<int>(index + 1),
+            index == 0 || index + 1 == uniqueKnots.size()
+                ? kInternalCurveDegree + 1
+                : 1);
+    }
+    try {
+        return new Geom_BSplineCurve(
+            poles,
+            knots,
+            multiplicities,
+            kInternalCurveDegree,
+            Standard_False);
+    } catch (const Standard_Failure&) {
+        return {};
+    }
 }
 
 Handle(Geom_BSplineCurve) diagnosticPolyline(
@@ -383,6 +551,10 @@ Handle(Geom_BSplineCurve) diagnosticPolyline(
 struct InternalCurveValidation {
     bool projected = false;
     double maximumProjectionError = 0.0;
+    double maximumCarrierPathDeviation = 0.0;
+    double maximumSampleTurnDegrees = 0.0;
+    double bendingEnergy = 0.0;
+    int selfIntersectionCount = 0;
     int sampleCount = 0;
     int worstSample = 0;
     double worstParameter = 0.0;
@@ -390,6 +562,102 @@ struct InternalCurveValidation {
     gp_Pnt worstCurvePoint;
     gp_Pnt worstProjectedPoint;
 };
+
+struct ProjectedCarrierPoint {
+    std::size_t vertex = 0;
+    gp_Pnt point;
+};
+
+double polylineTurnDegrees(
+    const gp_Pnt& previous,
+    const gp_Pnt& current,
+    const gp_Pnt& next) {
+    gp_Vec incoming(previous, current);
+    gp_Vec outgoing(current, next);
+    if (incoming.SquareMagnitude() <= 1.0e-24 ||
+        outgoing.SquareMagnitude() <= 1.0e-24) {
+        return 0.0;
+    }
+    incoming.Normalize();
+    outgoing.Normalize();
+    return std::acos(std::clamp(
+        incoming.Dot(outgoing), -1.0, 1.0)) *
+        180.0 / 3.14159265358979323846;
+}
+
+void removeExcessiveCarrierTurns(
+    std::vector<ProjectedCarrierPoint>& points,
+    const double maximumTurnDegrees) {
+    if (points.size() < 3 || maximumTurnDegrees <= 0.0) return;
+    bool changed = true;
+    while (changed && points.size() > 2) {
+        changed = false;
+        for (std::size_t index = 1; index + 1 < points.size(); ++index) {
+            if (polylineTurnDegrees(
+                    points[index - 1].point,
+                    points[index].point,
+                    points[index + 1].point) <= maximumTurnDegrees) {
+                continue;
+            }
+            points.erase(points.begin() + static_cast<std::ptrdiff_t>(index));
+            changed = true;
+            break;
+        }
+    }
+}
+
+double segmentSegmentDistance(
+    const gp_Pnt& firstStart,
+    const gp_Pnt& firstEnd,
+    const gp_Pnt& secondStart,
+    const gp_Pnt& secondEnd) {
+    const gp_Vec firstDirection(firstStart, firstEnd);
+    const gp_Vec secondDirection(secondStart, secondEnd);
+    const gp_Vec offset(secondStart, firstStart);
+    const auto firstSquared = firstDirection.SquareMagnitude();
+    const auto secondSquared = secondDirection.SquareMagnitude();
+    const auto dot = firstDirection.Dot(secondDirection);
+    const auto firstOffset = firstDirection.Dot(offset);
+    const auto secondOffset = secondDirection.Dot(offset);
+    const auto denominator =
+        firstSquared * secondSquared - dot * dot;
+    auto firstParameter = 0.0;
+    auto secondParameter = 0.0;
+    if (firstSquared <= 1.0e-24 && secondSquared <= 1.0e-24) {
+        return firstStart.Distance(secondStart);
+    }
+    if (firstSquared <= 1.0e-24) {
+        secondParameter = std::clamp(
+            secondOffset / secondSquared, 0.0, 1.0);
+    } else if (secondSquared <= 1.0e-24) {
+        firstParameter = std::clamp(
+            -firstOffset / firstSquared, 0.0, 1.0);
+    } else {
+        if (std::abs(denominator) > 1.0e-24) {
+            firstParameter = std::clamp(
+                (dot * secondOffset - secondSquared * firstOffset) /
+                    denominator,
+                0.0,
+                1.0);
+        }
+        secondParameter =
+            (dot * firstParameter + secondOffset) / secondSquared;
+        if (secondParameter < 0.0) {
+            secondParameter = 0.0;
+            firstParameter = std::clamp(
+                -firstOffset / firstSquared, 0.0, 1.0);
+        } else if (secondParameter > 1.0) {
+            secondParameter = 1.0;
+            firstParameter = std::clamp(
+                (dot - firstOffset) / firstSquared, 0.0, 1.0);
+        }
+    }
+    const auto firstPoint = firstStart.Translated(
+        firstDirection * firstParameter);
+    const auto secondPoint = secondStart.Translated(
+        secondDirection * secondParameter);
+    return firstPoint.Distance(secondPoint);
+}
 
 InternalCurveValidation validateInternalCurve(
     const Handle(Geom_Curve)& curve,
@@ -409,12 +677,42 @@ InternalCurveValidation validateInternalCurve(
     result.worstParameter = curve->FirstParameter();
     result.worstCurvePoint = curve->Value(result.worstParameter);
     result.worstProjectedPoint = result.worstCurvePoint;
+    std::vector<gp_Pnt> sampledPoints;
+    std::vector<gp_Vec> sampledTangents;
+    sampledPoints.reserve(static_cast<std::size_t>(result.sampleCount));
+    sampledTangents.reserve(static_cast<std::size_t>(result.sampleCount));
     for (int sample = 0; sample < result.sampleCount; ++sample) {
         const auto alpha = static_cast<double>(sample) /
             static_cast<double>(result.sampleCount - 1);
         const auto parameter = curve->FirstParameter() +
             alpha * (curve->LastParameter() - curve->FirstParameter());
-        const auto point = curve->Value(parameter);
+        gp_Pnt point;
+        gp_Vec tangent;
+        try {
+            curve->D1(parameter, point, tangent);
+        } catch (const Standard_Failure&) {
+            result.projected = false;
+            return result;
+        }
+        if (!finitePoint(point) ||
+            tangent.SquareMagnitude() <= 1.0e-24) {
+            result.projected = false;
+            return result;
+        }
+        tangent.Normalize();
+        sampledPoints.push_back(point);
+        sampledTangents.push_back(tangent);
+        if (sample > 0) {
+            const auto angle = std::acos(std::clamp(
+                sampledTangents[static_cast<std::size_t>(sample - 1)].Dot(
+                    tangent),
+                -1.0,
+                1.0));
+            result.maximumSampleTurnDegrees = std::max(
+                result.maximumSampleTurnDegrees,
+                angle * 180.0 / 3.14159265358979323846);
+            result.bendingEnergy += angle * angle;
+        }
         const auto lower = std::lower_bound(
             parameters.begin(), parameters.end(), parameter);
         auto carrierSample = lower == parameters.end()
@@ -447,6 +745,28 @@ InternalCurveValidation validateInternalCurve(
             result.worstProjectedPoint = projected;
         }
     }
+    for (std::size_t sample = 0; sample < parameters.size(); ++sample) {
+        result.maximumCarrierPathDeviation = std::max(
+            result.maximumCarrierPathDeviation,
+            curve->Value(parameters[sample]).Distance(
+                carrierPoints[sample]));
+    }
+    const auto intersectionTolerance = std::max(
+        1.0e-9, options.curveProjectionTolerance * 1.0e-3);
+    for (std::size_t first = 0; first + 1 < sampledPoints.size(); ++first) {
+        for (std::size_t second = first + 2;
+             second + 1 < sampledPoints.size();
+             ++second) {
+            if (segmentSegmentDistance(
+                    sampledPoints[first],
+                    sampledPoints[first + 1],
+                    sampledPoints[second],
+                    sampledPoints[second + 1]) <=
+                intersectionTolerance) {
+                ++result.selfIntersectionCount;
+            }
+        }
+    }
     return result;
 }
 
@@ -463,6 +783,10 @@ bool makeInternalCurve(
     RegionInternalCurveConstructionMode& constructionMode,
     bool& productQualityPassed,
     int& validationSampleCount,
+    int& controlPointCount,
+    double& maximumSampleTurnDegrees,
+    double& bendingEnergy,
+    int& selfIntersectionCount,
     std::string& diagnostic,
     std::string& message) {
     if (vertices.size() < 2) {
@@ -491,128 +815,209 @@ bool makeInternalCurve(
     }
     points.front() = startPoint;
     points.back() = endPoint;
-    double maximumFairingProjectionDistance = 0.0;
-    for (int iteration = 0; iteration < options.curveFairingIterations; ++iteration) {
-        auto faired = points;
-        for (std::size_t index = 1; index + 1 < points.size(); ++index) {
-            const gp_Pnt average(
-                (points[index - 1].X() + points[index + 1].X()) * 0.5,
-                (points[index - 1].Y() + points[index + 1].Y()) * 0.5,
-                (points[index - 1].Z() + points[index + 1].Z()) * 0.5);
-            const gp_Pnt target(
-                points[index].X() * (1.0 - options.curveFairingWeight) +
-                    average.X() * options.curveFairingWeight,
-                points[index].Y() * (1.0 - options.curveFairingWeight) +
-                    average.Y() * options.curveFairingWeight,
-                points[index].Z() * (1.0 - options.curveFairingWeight) +
-                    average.Z() * options.curveFairingWeight);
-            gp_Pnt projected;
-            double distance = 0.0;
-            if (!projectToOriginalRegion(
-                    target,
-                    constraints,
-                    projected,
-                    distance,
-                    options.curveProjectionTolerance,
-                    preferredFace(mesh.vertices[vertices[index]]))) {
-                message = "A fairing iterate could not be projected to the original STEP region.";
-                return false;
-            }
-            maximumFairingProjectionDistance =
-                std::max(maximumFairingProjectionDistance, distance);
-            faired[index] = projected;
-        }
-        points = std::move(faired);
-    }
-    std::vector<gp_Pnt> uniquePoints;
-    uniquePoints.reserve(points.size());
+    std::vector<ProjectedCarrierPoint> projectedCarrier;
+    projectedCarrier.reserve(points.size());
     const auto duplicateTolerance = std::max(
         1.0e-10, options.curveProjectionTolerance * 1.0e-6);
-    for (const auto& point : points) {
-        if (uniquePoints.empty() ||
-            uniquePoints.back().Distance(point) > duplicateTolerance) {
-            uniquePoints.push_back(point);
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        if (projectedCarrier.empty() ||
+            projectedCarrier.back().point.Distance(points[index]) >
+                duplicateTolerance) {
+            projectedCarrier.push_back({vertices[index], points[index]});
         }
     }
-    if (uniquePoints.size() < 2 ||
-        uniquePoints.front().Distance(uniquePoints.back()) <=
+    if (projectedCarrier.size() < 2 ||
+        projectedCarrier.front().point.Distance(
+            projectedCarrier.back().point) <=
             duplicateTolerance) {
         message =
             "The projected internal interface collapsed to a degenerate curve.";
         return false;
     }
     constexpr std::size_t maximumInterpolationPointCount = 129;
-    if (uniquePoints.size() > maximumInterpolationPointCount) {
-        std::vector<gp_Pnt> reduced;
+    if (projectedCarrier.size() > maximumInterpolationPointCount) {
+        std::vector<ProjectedCarrierPoint> reduced;
         reduced.reserve(maximumInterpolationPointCount);
         for (std::size_t index = 0;
              index < maximumInterpolationPointCount; ++index) {
-            const auto source = index * (uniquePoints.size() - 1) /
+            const auto source = index * (projectedCarrier.size() - 1) /
                 (maximumInterpolationPointCount - 1);
             if (reduced.empty() ||
-                reduced.back().Distance(uniquePoints[source]) >
+                reduced.back().point.Distance(
+                    projectedCarrier[source].point) >
                     duplicateTolerance) {
-                reduced.push_back(uniquePoints[source]);
+                reduced.push_back(projectedCarrier[source]);
             }
         }
-        if (reduced.back().Distance(uniquePoints.back()) >
+        if (reduced.back().point.Distance(projectedCarrier.back().point) >
             duplicateTolerance) {
-            reduced.push_back(uniquePoints.back());
+            reduced.push_back(projectedCarrier.back());
         }
-        uniquePoints = std::move(reduced);
+        projectedCarrier = std::move(reduced);
     }
     double maximumProjectedInputGap = 0.0;
-    for (std::size_t index = 1; index < uniquePoints.size(); ++index) {
+    for (std::size_t index = 1; index < projectedCarrier.size(); ++index) {
         maximumProjectedInputGap = std::max(
             maximumProjectedInputGap,
-            uniquePoints[index - 1].Distance(uniquePoints[index]));
+            projectedCarrier[index - 1].point.Distance(
+                projectedCarrier[index].point));
     }
-    const auto sampleCount = std::max(
-        options.curveValidationSampleCount,
-        static_cast<int>(8 * (uniquePoints.size() - 1) + 1));
+    const auto originalProjectedCarrier = projectedCarrier;
+    removeExcessiveCarrierTurns(
+        projectedCarrier,
+        options.maximumInternalCurveSampleTurnDegrees);
+    if (projectedCarrier.size() < 2 ||
+        projectedCarrier.front().point.Distance(
+            projectedCarrier.back().point) <= duplicateTolerance) {
+        message =
+            "The projected internal interface collapsed while removing local reversals.";
+        return false;
+    }
+    std::vector<std::size_t> validationVertices;
+    std::vector<gp_Pnt> validationPoints;
+    validationVertices.reserve(projectedCarrier.size());
+    validationPoints.reserve(projectedCarrier.size());
+    for (const auto& item : projectedCarrier) {
+        validationVertices.push_back(item.vertex);
+        validationPoints.push_back(item.point);
+    }
+    auto fitPoints = resampleByArcLength(
+        validationPoints,
+        std::min<std::size_t>(
+            maximumInterpolationPointCount,
+            std::max<std::size_t>(17, validationPoints.size())));
+    if (fitPoints.size() < 2) {
+        message = "The projected internal interface could not be resampled.";
+        return false;
+    }
     InternalCurveValidation selectedValidation;
-    double selectedHandleScale = 0.0;
-    for (const auto handleScale : {1.0, 0.5, 0.25}) {
-        const auto candidate = localCubicCurve(
-            uniquePoints, handleScale, duplicateTolerance);
-        if (candidate.IsNull()) continue;
+    auto selectedProjectedInputCount = validationPoints.size();
+    std::vector<double> uniqueKnots {0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0};
+    auto selectedControlPointCount = 0;
+    while (options.curveFairingIterations > 0 &&
+           static_cast<int>(uniqueKnots.size()) +
+                   kInternalCurveDegree - 1 <=
+               options.maximumControlPointsPerSide) {
+        const auto candidate = regularizedCubicCurve(
+            fitPoints, uniqueKnots, options.curveFairingWeight);
+        if (candidate.IsNull()) break;
+        const auto sampleCount = std::max(
+            options.curveValidationSampleCount,
+            8 * std::max(1, candidate->NbKnots() - 1) + 1);
         const auto validation = validateInternalCurve(
             candidate,
             mesh,
             constraints,
             options,
-            vertices,
-            points,
+            validationVertices,
+            validationPoints,
             sampleCount);
         if (validation.projected &&
             validation.maximumProjectionError <=
                 options.curveProjectionTolerance &&
-            candidate->Continuity() >= GeomAbs_C1) {
+            validation.maximumCarrierPathDeviation <= options.tolerance3d &&
+            validation.maximumSampleTurnDegrees <=
+                options.maximumInternalCurveSampleTurnDegrees &&
+            validation.selfIntersectionCount == 0 &&
+            candidate->Continuity() >= GeomAbs_C2) {
             curve = candidate;
             selectedValidation = validation;
-            selectedHandleScale = handleScale;
             constructionMode =
-                RegionInternalCurveConstructionMode::LocalCubic;
+                RegionInternalCurveConstructionMode::RegularizedCubic;
             productQualityPassed = true;
+            selectedControlPointCount = candidate->NbPoles();
             break;
         }
         if (!selectedValidation.projected ||
-            validation.maximumProjectionError <
-                selectedValidation.maximumProjectionError) {
+            std::max(
+                validation.maximumProjectionError,
+                validation.maximumCarrierPathDeviation) <
+                std::max(
+                    selectedValidation.maximumProjectionError,
+                    selectedValidation.maximumCarrierPathDeviation)) {
             selectedValidation = validation;
-            selectedHandleScale = handleScale;
         }
+        if (static_cast<int>(uniqueKnots.size()) +
+                kInternalCurveDegree - 1 >=
+            options.maximumControlPointsPerSide) {
+            break;
+        }
+        const auto parameters = chordParameters(fitPoints, 0.0, 1.0);
+        auto worstParameter = 0.5;
+        auto worstDistance = -1.0;
+        for (std::size_t sample = 1;
+             sample + 1 < fitPoints.size();
+             ++sample) {
+            const auto distance = candidate->Value(parameters[sample]).Distance(
+                fitPoints[sample]);
+            if (distance > worstDistance) {
+                worstDistance = distance;
+                worstParameter = parameters[sample];
+            }
+        }
+        if (std::any_of(
+                uniqueKnots.begin(),
+                uniqueKnots.end(),
+                [&](const auto knot) {
+                    return std::abs(knot - worstParameter) < 0.01;
+                })) {
+            auto largestSpan = 0.0;
+            for (std::size_t knot = 0;
+                 knot + 1 < uniqueKnots.size();
+                 ++knot) {
+                const auto span =
+                    uniqueKnots[knot + 1] - uniqueKnots[knot];
+                if (span > largestSpan) {
+                    largestSpan = span;
+                    worstParameter =
+                        0.5 * (uniqueKnots[knot] + uniqueKnots[knot + 1]);
+                }
+            }
+        }
+        uniqueKnots.push_back(worstParameter);
+        std::sort(uniqueKnots.begin(), uniqueKnots.end());
     }
     if (curve.IsNull()) {
-        const auto candidate = diagnosticPolyline(uniquePoints);
-        const auto validation = validateInternalCurve(
+        auto candidate = diagnosticPolyline(validationPoints);
+        const auto sampleCount = std::max(
+            options.curveValidationSampleCount,
+            static_cast<int>(8 * (validationPoints.size() - 1) + 1));
+        auto validation = validateInternalCurve(
             candidate,
             mesh,
             constraints,
             options,
-            vertices,
-            points,
+            validationVertices,
+            validationPoints,
             sampleCount);
+        if (candidate.IsNull() || !validation.projected ||
+            validation.maximumProjectionError >
+                options.curveProjectionTolerance) {
+            std::vector<std::size_t> originalValidationVertices;
+            std::vector<gp_Pnt> originalValidationPoints;
+            originalValidationVertices.reserve(
+                originalProjectedCarrier.size());
+            originalValidationPoints.reserve(
+                originalProjectedCarrier.size());
+            for (const auto& item : originalProjectedCarrier) {
+                originalValidationVertices.push_back(item.vertex);
+                originalValidationPoints.push_back(item.point);
+            }
+            candidate = diagnosticPolyline(originalValidationPoints);
+            validation = validateInternalCurve(
+                candidate,
+                mesh,
+                constraints,
+                options,
+                originalValidationVertices,
+                originalValidationPoints,
+                std::max(
+                    options.curveValidationSampleCount,
+                    static_cast<int>(
+                        8 * (originalValidationPoints.size() - 1) + 1)));
+            selectedProjectedInputCount =
+                originalValidationPoints.size();
+        }
         if (candidate.IsNull() || !validation.projected ||
             validation.maximumProjectionError >
                 options.curveProjectionTolerance) {
@@ -622,10 +1027,11 @@ bool makeInternalCurve(
         }
         curve = candidate;
         selectedValidation = validation;
-        selectedHandleScale = 0.0;
         constructionMode =
             RegionInternalCurveConstructionMode::DiagnosticPolyline;
         productQualityPassed = false;
+        selectedControlPointCount =
+            Handle(Geom_BSplineCurve)::DownCast(candidate)->NbPoles();
     }
     meshParameters = chordParameters(
         points, curve->FirstParameter(), curve->LastParameter());
@@ -635,18 +1041,29 @@ bool makeInternalCurve(
     }
     maximumProjectionError = selectedValidation.maximumProjectionError;
     validationSampleCount = selectedValidation.sampleCount;
+    controlPointCount = selectedControlPointCount;
+    maximumSampleTurnDegrees =
+        selectedValidation.maximumSampleTurnDegrees;
+    bendingEnergy = selectedValidation.bendingEnergy;
+    selfIntersectionCount = selectedValidation.selfIntersectionCount;
     std::ostringstream diagnosticStream;
     diagnosticStream
         << "fit_method=" << toString(constructionMode)
         << "; product_quality_passed=" << productQualityPassed
-        << "; handle_scale=" << selectedHandleScale
-        << "; projected_input_count=" << uniquePoints.size()
+        << "; control_point_count=" << controlPointCount
+        << "; projected_input_count=" << selectedProjectedInputCount
+        << "; original_projected_input_count="
+        << originalProjectedCarrier.size()
         << "; max_projected_input_gap=" << std::setprecision(12)
         << maximumProjectedInputGap
         << "; max_carrier_projection_distance="
         << maximumCarrierProjectionDistance
-        << "; max_fairing_projection_distance="
-        << maximumFairingProjectionDistance
+        << "; max_carrier_path_deviation="
+        << selectedValidation.maximumCarrierPathDeviation
+        << "; max_sample_turn_degrees="
+        << maximumSampleTurnDegrees
+        << "; bending_energy=" << bendingEnergy
+        << "; self_intersection_count=" << selfIntersectionCount
         << "; validation_sample_count=" << validationSampleCount
         << "; validation_sample=" << selectedValidation.worstSample
         << "; validation_parameter=" << selectedValidation.worstParameter
@@ -699,6 +1116,12 @@ std::string stableHash(const RegionCurveNetwork& network) {
         append(static_cast<std::uint64_t>(edge.continuity));
         append(static_cast<std::uint64_t>(edge.constructionMode));
         append(edge.productQualityPassed);
+        append(static_cast<std::uint64_t>(edge.controlPointCount));
+        append(static_cast<std::uint64_t>(
+            std::llround(edge.maximumSampleTurnDegrees * 1.0e9)));
+        append(static_cast<std::uint64_t>(
+            std::llround(edge.bendingEnergy * 1.0e12)));
+        append(static_cast<std::uint64_t>(edge.selfIntersectionCount));
         append(edge.originalBoundary);
         append(edge.hasOriginalEdge ? edge.originalEdgeId : 0);
         for (const auto vertex : edge.meshVertices) append(vertex);
@@ -724,6 +1147,202 @@ std::string stableHash(const RegionCurveNetwork& network) {
     std::ostringstream stream;
     stream << std::hex << std::setfill('0') << std::setw(16) << hash;
     return stream.str();
+}
+
+bool orientPatchLoops(RegionCurveNetwork& network, std::string& message) {
+    struct Use {
+        int patch = -1;
+        bool forward = true;
+    };
+    std::vector<std::vector<Use>> uses(network.edges.size());
+    for (const auto& loop : network.patchLoops) {
+        for (const auto& use : loop.edges) {
+            if (use.edgeIndex >= uses.size()) {
+                message = "A patch loop references a missing curve edge.";
+                return false;
+            }
+            uses[use.edgeIndex].push_back({loop.patch, use.forward});
+        }
+    }
+    std::vector<int> flips(static_cast<std::size_t>(network.patchCount), -1);
+    for (int root = 0; root < network.patchCount; ++root) {
+        if (flips[static_cast<std::size_t>(root)] >= 0) continue;
+        flips[static_cast<std::size_t>(root)] = 0;
+        std::queue<int> pending;
+        pending.push(root);
+        while (!pending.empty()) {
+            const auto patch = pending.front();
+            pending.pop();
+            for (std::size_t edgeIndex = 0;
+                 edgeIndex < network.edges.size();
+                 ++edgeIndex) {
+                const auto& edge = network.edges[edgeIndex];
+                if (edge.originalBoundary || uses[edgeIndex].size() != 2) {
+                    continue;
+                }
+                const auto& first = uses[edgeIndex][0];
+                const auto& second = uses[edgeIndex][1];
+                const auto* current = first.patch == patch ? &first
+                    : second.patch == patch ? &second : nullptr;
+                const auto* adjacent = first.patch == patch ? &second
+                    : second.patch == patch ? &first : nullptr;
+                if (current == nullptr || adjacent == nullptr) continue;
+                const auto requiredAdjacentFlip =
+                    flips[static_cast<std::size_t>(patch)] ^
+                    (current->forward == adjacent->forward ? 1 : 0);
+                auto& adjacentFlip =
+                    flips[static_cast<std::size_t>(adjacent->patch)];
+                if (adjacentFlip < 0) {
+                    adjacentFlip = requiredAdjacentFlip;
+                    pending.push(adjacent->patch);
+                } else if (adjacentFlip != requiredAdjacentFlip) {
+                    message = "Patch loops cannot be oriented consistently across shared curves.";
+                    return false;
+                }
+            }
+        }
+    }
+    for (auto& loop : network.patchLoops) {
+        if (loop.patch < 0 || loop.patch >= network.patchCount) return false;
+        if (flips[static_cast<std::size_t>(loop.patch)] == 0) continue;
+        std::reverse(loop.edges.begin(), loop.edges.end());
+        for (auto& use : loop.edges) use.forward = !use.forward;
+    }
+    return true;
+}
+
+bool splitBoundaryCurvesForFourSides(
+    RegionCurveNetwork& network,
+    std::string& message) {
+    for (auto& loop : network.patchLoops) {
+        while (loop.edges.size() < 4) {
+            auto selectedOrder = loop.edges.size();
+            auto selectedLength = -1.0;
+            for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+                const auto edgeIndex = loop.edges[order].edgeIndex;
+                if (edgeIndex >= network.edges.size()) continue;
+                const auto& edge = network.edges[edgeIndex];
+                if (!edge.originalBoundary ||
+                    edge.meshVertices.size() < 3 ||
+                    edge.meshParameters.size() != edge.meshVertices.size()) {
+                    continue;
+                }
+                const auto length = edge.lastParameter - edge.firstParameter;
+                if (length > selectedLength) {
+                    selectedLength = length;
+                    selectedOrder = order;
+                }
+            }
+            if (selectedOrder >= loop.edges.size()) {
+                message =
+                    "A patch loop has fewer than four sides and no splittable original boundary edge.";
+                return false;
+            }
+            const auto selectedUse = loop.edges[selectedOrder];
+            const auto originalIndex = selectedUse.edgeIndex;
+            auto& original = network.edges[originalIndex];
+            const auto midpoint =
+                (original.firstParameter + original.lastParameter) * 0.5;
+            auto splitOffset = std::size_t {1};
+            auto splitDistance = std::numeric_limits<double>::infinity();
+            for (std::size_t offset = 1;
+                 offset + 1 < original.meshParameters.size(); ++offset) {
+                const auto distance =
+                    std::abs(original.meshParameters[offset] - midpoint);
+                if (distance < splitDistance) {
+                    splitDistance = distance;
+                    splitOffset = offset;
+                }
+            }
+            const auto splitParameter =
+                original.meshParameters[splitOffset];
+            if (!(splitParameter > original.firstParameter) ||
+                !(splitParameter < original.lastParameter)) {
+                message =
+                    "A selected original boundary edge has no interior split parameter.";
+                return false;
+            }
+            auto node = std::find_if(
+                network.nodes.begin(),
+                network.nodes.end(),
+                [&](const auto& candidate) {
+                    return candidate.meshVertex ==
+                        original.meshVertices[splitOffset];
+                });
+            std::size_t splitNode = 0;
+            if (node == network.nodes.end()) {
+                RegionCurveNetworkNode created;
+                created.id = network.nodes.size();
+                created.meshVertex = original.meshVertices[splitOffset];
+                created.point = original.curve->Value(splitParameter);
+                created.originalBoundary = true;
+                splitNode = created.id;
+                network.nodes.push_back(std::move(created));
+            } else {
+                splitNode = node->id;
+            }
+
+            auto second = original;
+            const auto originalEndNode = original.endNode;
+            second.id = network.edges.size();
+            second.startNode = splitNode;
+            second.endNode = originalEndNode;
+            second.firstParameter = splitParameter;
+            second.meshVertices.assign(
+                original.meshVertices.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset),
+                original.meshVertices.end());
+            second.meshParameters.assign(
+                original.meshParameters.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset),
+                original.meshParameters.end());
+            second.reusesOriginalEdge = false;
+            second.splitsOriginalEdge = true;
+
+            original.endNode = splitNode;
+            original.lastParameter = splitParameter;
+            original.meshVertices.erase(
+                original.meshVertices.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset + 1),
+                original.meshVertices.end());
+            original.meshParameters.erase(
+                original.meshParameters.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset + 1),
+                original.meshParameters.end());
+            original.reusesOriginalEdge = false;
+            original.splitsOriginalEdge = true;
+            network.edges.push_back(std::move(second));
+
+            const auto secondIndex = network.edges.size() - 1;
+            const std::array<RegionCurveNetworkEdgeUse, 2> replacements =
+                selectedUse.forward
+                ? std::array<RegionCurveNetworkEdgeUse, 2> {{
+                    {originalIndex, true}, {secondIndex, true}}}
+                : std::array<RegionCurveNetworkEdgeUse, 2> {{
+                    {secondIndex, false}, {originalIndex, false}}};
+            loop.edges.erase(
+                loop.edges.begin() +
+                static_cast<std::ptrdiff_t>(selectedOrder));
+            loop.edges.insert(
+                loop.edges.begin() +
+                    static_cast<std::ptrdiff_t>(selectedOrder),
+                replacements.begin(),
+                replacements.end());
+        }
+    }
+    for (auto& node : network.nodes) node.incidentEdges.clear();
+    for (std::size_t index = 0; index < network.edges.size(); ++index) {
+        auto& edge = network.edges[index];
+        edge.id = index;
+        if (edge.startNode >= network.nodes.size() ||
+            edge.endNode >= network.nodes.size()) {
+            message = "A split curve edge references a missing network node.";
+            return false;
+        }
+        network.nodes[edge.startNode].incidentEdges.push_back(index);
+        network.nodes[edge.endNode].incidentEdges.push_back(index);
+    }
+    return true;
 }
 
 bool buildNetwork(
@@ -885,9 +1504,13 @@ bool buildNetwork(
         std::vector<double> parameters;
         double maximumProjectionError = 0.0;
         RegionInternalCurveConstructionMode constructionMode =
-            RegionInternalCurveConstructionMode::LocalCubic;
+            RegionInternalCurveConstructionMode::RegularizedCubic;
         bool productQualityPassed = false;
         int validationSampleCount = 0;
+        int controlPointCount = 0;
+        double maximumSampleTurnDegrees = 0.0;
+        double bendingEnergy = 0.0;
+        int selfIntersectionCount = 0;
         std::string curveDiagnostic;
         if (!makeInternalCurve(
                 mesh, constraints, options, vertices,
@@ -895,6 +1518,10 @@ bool buildNetwork(
                 curve, parameters, maximumProjectionError,
                 constructionMode, productQualityPassed,
                 validationSampleCount,
+                controlPointCount,
+                maximumSampleTurnDegrees,
+                bendingEnergy,
+                selfIntersectionCount,
                 curveDiagnostic, message)) {
             return false;
         }
@@ -912,6 +1539,10 @@ bool buildNetwork(
         edge.constructionMode = constructionMode;
         edge.productQualityPassed = productQualityPassed;
         edge.validationSampleCount = validationSampleCount;
+        edge.controlPointCount = controlPointCount;
+        edge.maximumSampleTurnDegrees = maximumSampleTurnDegrees;
+        edge.bendingEnergy = bendingEnergy;
+        edge.selfIntersectionCount = selfIntersectionCount;
         edge.curve = curve;
         edge.firstParameter = curve->FirstParameter();
         edge.lastParameter = curve->LastParameter();
@@ -986,6 +1617,10 @@ bool buildNetwork(
         }
         network.patchLoops.push_back(std::move(curveLoop));
     }
+    if (!splitBoundaryCurvesForFourSides(network, message) ||
+        !orientPatchLoops(network, message)) {
+        return false;
+    }
     const auto valid = validateRegionCurveNetwork(
         network,
         options.curveProjectionTolerance,
@@ -1016,8 +1651,8 @@ const char* toString(const RegionCurveContinuity continuity) {
 const char* toString(
     const RegionInternalCurveConstructionMode mode) {
     switch (mode) {
-    case RegionInternalCurveConstructionMode::LocalCubic:
-        return "LocalCubic";
+    case RegionInternalCurveConstructionMode::RegularizedCubic:
+        return "RegularizedCubic";
     case RegionInternalCurveConstructionMode::DiagnosticPolyline:
         return "DiagnosticPolyline";
     }
@@ -1027,6 +1662,7 @@ const char* toString(
 bool RegionCurveNetwork::valid() const {
     return report.finitePassed && report.closurePassed &&
         report.ownershipPassed && report.projectionPassed &&
+        report.orientationPassed && report.intersectionPassed &&
         report.nonManifoldEdgePassed && report.frozen && !hash.empty();
 }
 
@@ -1054,6 +1690,7 @@ bool validateRegionCurveNetwork(
         network.nodes.begin(), network.nodes.end(),
         [](const auto& node) { return finitePoint(node.point); });
     std::vector<int> edgeUseCount(network.edges.size(), 0);
+    std::vector<std::vector<bool>> edgeUseDirections(network.edges.size());
     network.report.closurePassed = true;
     for (const auto& loop : network.patchLoops) {
         if (loop.patch < 0 || loop.patch >= network.patchCount ||
@@ -1078,11 +1715,14 @@ bool validateRegionCurveNetwork(
                 break;
             }
             ++edgeUseCount[use.edgeIndex];
+            edgeUseDirections[use.edgeIndex].push_back(use.forward);
         }
     }
     network.report.ownershipPassed = network.report.closurePassed;
     network.report.nonManifoldEdgePassed = true;
     network.report.projectionPassed = true;
+    network.report.orientationPassed = network.report.closurePassed;
+    network.report.intersectionPassed = true;
     network.report.productQualityPassed = true;
     network.report.frozen = true;
     for (std::size_t index = 0; index < network.edges.size(); ++index) {
@@ -1128,8 +1768,8 @@ bool validateRegionCurveNetwork(
         } else {
             ++network.report.internalEdgeCount;
             switch (edge.constructionMode) {
-            case RegionInternalCurveConstructionMode::LocalCubic:
-                ++network.report.localCubicEdgeCount;
+            case RegionInternalCurveConstructionMode::RegularizedCubic:
+                ++network.report.regularizedCubicEdgeCount;
                 break;
             case RegionInternalCurveConstructionMode::DiagnosticPolyline:
                 ++network.report.diagnosticPolylineEdgeCount;
@@ -1142,8 +1782,21 @@ bool validateRegionCurveNetwork(
                 network.report.productQualityPassed &&
                 edge.productQualityPassed &&
                 edge.constructionMode ==
-                    RegionInternalCurveConstructionMode::LocalCubic &&
+                    RegionInternalCurveConstructionMode::RegularizedCubic &&
                 edge.requestedContinuity == edge.continuity;
+            network.report.maximumSampleTurnDegrees = std::max(
+                network.report.maximumSampleTurnDegrees,
+                edge.maximumSampleTurnDegrees);
+            network.report.maximumBendingEnergy = std::max(
+                network.report.maximumBendingEnergy,
+                edge.bendingEnergy);
+            network.report.selfIntersectionCount +=
+                edge.selfIntersectionCount;
+            if (edgeUseDirections[index].size() != 2 ||
+                edgeUseDirections[index][0] ==
+                    edgeUseDirections[index][1]) {
+                network.report.orientationPassed = false;
+            }
         }
         switch (edge.continuity) {
         case RegionCurveContinuity::G0: ++network.report.g0EdgeCount; break;
@@ -1159,9 +1812,98 @@ bool validateRegionCurveNetwork(
             edge.maximumProjectionError <= projectionTolerance;
         network.report.frozen = network.report.frozen && edge.frozen;
     }
+    network.report.intersectionPassed =
+        network.report.selfIntersectionCount == 0;
+    const auto intersectionTolerance = std::isfinite(projectionTolerance)
+        ? std::max(1.0e-9, projectionTolerance * 1.0e-3)
+        : 1.0e-9;
+    const auto segmentsShareOnlyNetworkNode = [](
+        const RegionCurveNetworkEdge& firstEdge,
+        const int firstSegment,
+        const RegionCurveNetworkEdge& secondEdge,
+        const int secondSegment,
+        const int segmentCount) {
+        return
+            (firstEdge.startNode == secondEdge.startNode &&
+                firstSegment == 0 && secondSegment == 0) ||
+            (firstEdge.startNode == secondEdge.endNode &&
+                firstSegment == 0 && secondSegment + 1 == segmentCount) ||
+            (firstEdge.endNode == secondEdge.startNode &&
+                firstSegment + 1 == segmentCount && secondSegment == 0) ||
+            (firstEdge.endNode == secondEdge.endNode &&
+                firstSegment + 1 == segmentCount &&
+                secondSegment + 1 == segmentCount);
+    };
+    for (std::size_t first = 0; first < network.edges.size(); ++first) {
+        const auto& firstEdge = network.edges[first];
+        if (firstEdge.curve.IsNull()) continue;
+        for (std::size_t second = first + 1;
+             second < network.edges.size();
+             ++second) {
+            const auto& secondEdge = network.edges[second];
+            if (secondEdge.curve.IsNull() ||
+                (firstEdge.originalBoundary && secondEdge.originalBoundary)) {
+                continue;
+            }
+            constexpr int samples = 65;
+            constexpr int segmentCount = samples - 1;
+            std::array<gp_Pnt, samples> firstPoints;
+            std::array<gp_Pnt, samples> secondPoints;
+            for (int sample = 0; sample < samples; ++sample) {
+                const auto alpha = static_cast<double>(sample) /
+                    static_cast<double>(samples - 1);
+                firstPoints[static_cast<std::size_t>(sample)] =
+                    firstEdge.curve->Value(
+                        firstEdge.firstParameter +
+                        alpha * (firstEdge.lastParameter -
+                            firstEdge.firstParameter));
+                secondPoints[static_cast<std::size_t>(sample)] =
+                    secondEdge.curve->Value(
+                        secondEdge.firstParameter +
+                        alpha * (secondEdge.lastParameter -
+                            secondEdge.firstParameter));
+            }
+            auto intersects = false;
+            for (int firstSegment = 0;
+                 firstSegment + 1 < samples && !intersects;
+                 ++firstSegment) {
+                for (int secondSegment = 0;
+                     secondSegment + 1 < samples;
+                     ++secondSegment) {
+                    if (segmentsShareOnlyNetworkNode(
+                            firstEdge,
+                            firstSegment,
+                            secondEdge,
+                            secondSegment,
+                            segmentCount)) {
+                        continue;
+                    }
+                    if (segmentSegmentDistance(
+                            firstPoints[static_cast<std::size_t>(
+                                firstSegment)],
+                            firstPoints[static_cast<std::size_t>(
+                                firstSegment + 1)],
+                            secondPoints[static_cast<std::size_t>(
+                                secondSegment)],
+                            secondPoints[static_cast<std::size_t>(
+                                secondSegment + 1)]) <=
+                        intersectionTolerance) {
+                        intersects = true;
+                        break;
+                    }
+                }
+            }
+            if (intersects) {
+                ++network.report.unexpectedCurveIntersectionCount;
+                network.report.intersectionPassed = false;
+            }
+        }
+    }
     if (!network.report.finitePassed) message = "Curve network contains non-finite or incomplete geometry.";
     else if (!network.report.closurePassed) message = "Curve network contains an open or misoriented patch loop.";
     else if (!network.report.ownershipPassed) message = "Curve network edge ownership counts are inconsistent.";
+    else if (!network.report.orientationPassed) message = "A shared internal curve is used in the same direction by both adjacent patches.";
+    else if (!network.report.intersectionPassed) message = "Curve network contains a self-intersection or a non-node curve crossing.";
     else if (!network.report.nonManifoldEdgePassed) message = "Curve network contains an invalid shared-edge adjacency.";
     else if (!network.report.projectionPassed) {
         std::ostringstream stream;

@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 8;
+constexpr quint32 kVersion = 10;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -296,11 +296,23 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         for (const auto index : patch.vertexIndices) stream << quint64(index);
         stream << quint64(patch.parameters.size());
         for (const auto& uv : patch.parameters) stream << uv[0] << uv[1];
+        stream << quint64(patch.surfaceParameters.size());
+        for (const auto& uv : patch.surfaceParameters) {
+            stream << uv[0] << uv[1];
+        }
         stream << quint64(patch.boundaryLoop.size());
         for (const auto index : patch.boundaryLoop) stream << quint64(index);
         for (const auto& side : patch.boundarySides) {
             stream << quint64(side.size());
             for (const auto index : side) stream << quint64(index);
+        }
+        for (const auto& side : patch.logicalSides) {
+            stream << qint32(side.isoSide)
+                   << quint64(side.edgeUseOrders.size());
+            for (const auto order : side.edgeUseOrders) {
+                stream << quint64(order);
+            }
+            stream << side.curveLength;
         }
         stream << quint64(patch.edgePcurves.size());
         for (const auto& pcurve : patch.edgePcurves) {
@@ -308,6 +320,9 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
                    << pcurve.firstParameter << pcurve.lastParameter
                    << quint64(pcurve.startNode) << quint64(pcurve.endNode)
                    << quint64(pcurve.loopOrder)
+                   << qint32(pcurve.isoSide)
+                   << pcurve.sideFirstParameter
+                   << pcurve.sideLastParameter
                    << quint64(pcurve.parameters.size());
             for (std::size_t index = 0;
                  index < pcurve.parameters.size(); ++index) {
@@ -328,7 +343,8 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         stream << quint64(patch.trimCorners.size());
         for (const auto corner : patch.trimCorners) stream << quint64(corner);
         writeString(stream, patch.domainType);
-        stream << patch.diskTopologyPassed
+        stream << patch.rectangularIsoBoundary
+               << patch.diskTopologyPassed
                << patch.pcurveLoopClosed
                << patch.pcurveOrientationConsistent
                << patch.pcurveSelfIntersectionCount
@@ -379,6 +395,9 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
         patch.parameters.resize(count);
         for (auto& uv : patch.parameters) stream >> uv[0] >> uv[1];
         if (!readCount(stream, count)) return false;
+        patch.surfaceParameters.resize(count);
+        for (auto& uv : patch.surfaceParameters) stream >> uv[0] >> uv[1];
+        if (!readCount(stream, count)) return false;
         patch.boundaryLoop.resize(count);
         for (auto& index : patch.boundaryLoop) {
             quint64 value = 0;
@@ -394,6 +413,19 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
                 index = static_cast<std::size_t>(value);
             }
         }
+        for (auto& side : patch.logicalSides) {
+            qint32 isoSide = 0;
+            stream >> isoSide;
+            side.isoSide = static_cast<RegionPatchIsoSide>(isoSide);
+            if (!readCount(stream, count)) return false;
+            side.edgeUseOrders.resize(count);
+            for (auto& order : side.edgeUseOrders) {
+                quint64 value = 0;
+                stream >> value;
+                order = static_cast<std::size_t>(value);
+            }
+            stream >> side.curveLength;
+        }
         if (!readCount(stream, count)) return false;
         patch.edgePcurves.resize(count);
         for (auto& pcurve : patch.edgePcurves) {
@@ -401,13 +433,18 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
             quint64 startNode = 0;
             quint64 endNode = 0;
             quint64 loopOrder = 0;
+            qint32 isoSide = 0;
             stream >> edgeIndex >> pcurve.forward
                    >> pcurve.firstParameter >> pcurve.lastParameter
-                   >> startNode >> endNode >> loopOrder;
+                   >> startNode >> endNode >> loopOrder
+                   >> isoSide
+                   >> pcurve.sideFirstParameter
+                   >> pcurve.sideLastParameter;
             pcurve.edgeIndex = static_cast<std::size_t>(edgeIndex);
             pcurve.startNode = static_cast<std::size_t>(startNode);
             pcurve.endNode = static_cast<std::size_t>(endNode);
             pcurve.loopOrder = static_cast<std::size_t>(loopOrder);
+            pcurve.isoSide = static_cast<RegionPatchIsoSide>(isoSide);
             if (!readCount(stream, count)) return false;
             pcurve.parameters.resize(count);
             pcurve.uvPoints.resize(count);
@@ -446,7 +483,8 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
         }
         if (!readString(stream, patch.domainType)) return false;
         quint64 boundaryChainCount = 0;
-        stream >> patch.diskTopologyPassed
+        stream >> patch.rectangularIsoBoundary
+               >> patch.diskTopologyPassed
                >> patch.pcurveLoopClosed
                >> patch.pcurveOrientationConsistent
                >> patch.pcurveSelfIntersectionCount
@@ -517,6 +555,10 @@ void writeCurveNetwork(
                << qint32(edge.constructionMode)
                << edge.productQualityPassed
                << edge.validationSampleCount
+               << edge.controlPointCount
+               << edge.maximumSampleTurnDegrees
+               << edge.bendingEnergy
+               << edge.selfIntersectionCount
                << edge.originalBoundary
                << edge.hasOriginalEdge << quint64(edge.originalEdgeId)
                << edge.firstParameter << edge.lastParameter
@@ -601,6 +643,10 @@ bool readCurveNetwork(
                >> requestedContinuity >> continuity >> constructionMode
                >> edge.productQualityPassed
                >> edge.validationSampleCount
+               >> edge.controlPointCount
+               >> edge.maximumSampleTurnDegrees
+               >> edge.bendingEnergy
+               >> edge.selfIntersectionCount
                >> edge.originalBoundary >> edge.hasOriginalEdge
                >> originalEdgeId >> edge.firstParameter >> edge.lastParameter
                >> edge.reusesOriginalEdge >> edge.splitsOriginalEdge
@@ -945,6 +991,7 @@ std::string makeKey(const RegionRefitRequest& request) {
          << '|' << request.options.curveValidationSampleCount
          << '|' << request.options.curveFairingIterations
          << '|' << request.options.curveFairingWeight
+         << '|' << request.options.maximumInternalCurveSampleTurnDegrees
          << '|' << request.options.g1ToleranceDegrees
          << '|' << request.options.g2CurvatureTolerance
          << '|' << request.options.enableInternalSeamG2
@@ -1253,6 +1300,9 @@ bool RegionalSurfaceRefitCache::loadFit(
     double seamNormalDegrees = 0.0;
     double seamCurvatureDifference = 0.0;
     bool seamContinuityGatePassed = false;
+    bool boundaryLocked = false;
+    bool constructibleForBRep = false;
+    std::string fitOutcome;
     const auto started = std::chrono::steady_clock::now();
     const auto metadataLoaded = openDataFile(cacheFile("fit.bin"), [&](QDataStream& stream) {
         quint32 magic = 0;
@@ -1265,7 +1315,9 @@ bool RegionalSurfaceRefitCache::loadFit(
         if (!readString(stream, layoutHash)) return false;
         stream >> holdoutDistance >> holdoutNormal >> boundaryDistance
                >> seamDistance >> seamCurveDeviation >> seamNormalDegrees
-               >> seamCurvatureDifference >> seamContinuityGatePassed;
+               >> seamCurvatureDifference >> seamContinuityGatePassed
+               >> boundaryLocked >> constructibleForBRep;
+        if (!readString(stream, fitOutcome)) return false;
         result.status = static_cast<RegionRefitStatus>(status);
         return stream.status() == QDataStream::Ok;
     });
@@ -1317,6 +1369,9 @@ bool RegionalSurfaceRefitCache::loadFit(
     network->seamMaximumNormalDegrees = seamNormalDegrees;
     network->seamMaximumCurvatureDifference = seamCurvatureDifference;
     network->seamContinuityGatePassed = seamContinuityGatePassed;
+    network->boundaryLocked = boundaryLocked;
+    network->constructibleForBRep = constructibleForBRep;
+    network->fitOutcome = fitOutcome;
     network->fitGatePassed = true;
     result.network = std::move(network);
     event.hit = true;
@@ -1366,7 +1421,12 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
                << (result.success() ? result.network->seamMaximumCurveDeviation : 0.0)
                << (result.success() ? result.network->seamMaximumNormalDegrees : 0.0)
                << (result.success() ? result.network->seamMaximumCurvatureDifference : 0.0)
-               << (result.success() && result.network->seamContinuityGatePassed);
+               << (result.success() && result.network->seamContinuityGatePassed)
+               << (result.success() && result.network->boundaryLocked)
+               << (result.success() && result.network->constructibleForBRep);
+        writeString(
+            stream,
+            result.success() ? result.network->fitOutcome : std::string {});
     });
     event.writeMilliseconds = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();

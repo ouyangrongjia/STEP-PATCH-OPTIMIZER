@@ -72,7 +72,7 @@ Handle(Geom2d_Curve) storedPcurve(
     const RegionPatchEdgePcurve& source,
     double& first,
     double& last) {
-    if (source.parameters.size() < 2 ||
+    if (source.parameters.size() != 2 ||
         source.parameters.size() != source.uvPoints.size() ||
         source.lastParameter <= source.firstParameter) {
         return {};
@@ -108,6 +108,40 @@ Handle(Geom2d_Curve) storedPcurve(
     } catch (const Standard_Failure&) {
         return {};
     }
+}
+
+bool isExactIsoPcurve(const RegionPatchEdgePcurve& source) {
+    if (source.parameters.size() != 2 ||
+        source.uvPoints.size() != 2 ||
+        !(source.sideLastParameter > source.sideFirstParameter)) {
+        return false;
+    }
+    const auto sidePoint = [](const RegionPatchIsoSide side, const double value) {
+        switch (side) {
+        case RegionPatchIsoSide::VMin:
+            return std::array<double, 2> {value, 0.0};
+        case RegionPatchIsoSide::UMax:
+            return std::array<double, 2> {1.0, value};
+        case RegionPatchIsoSide::VMax:
+            return std::array<double, 2> {1.0 - value, 1.0};
+        case RegionPatchIsoSide::UMin:
+            return std::array<double, 2> {0.0, 1.0 - value};
+        }
+        return std::array<double, 2> {};
+    };
+    const auto loopFirst =
+        sidePoint(source.isoSide, source.sideFirstParameter);
+    const auto loopLast =
+        sidePoint(source.isoSide, source.sideLastParameter);
+    const auto expectedFirst = source.forward ? loopFirst : loopLast;
+    const auto expectedLast = source.forward ? loopLast : loopFirst;
+    constexpr double tolerance = 1.0e-12;
+    return std::hypot(
+               source.uvPoints.front()[0] - expectedFirst[0],
+               source.uvPoints.front()[1] - expectedFirst[1]) <= tolerance &&
+        std::hypot(
+               source.uvPoints.back()[0] - expectedLast[0],
+               source.uvPoints.back()[1] - expectedLast[1]) <= tolerance;
 }
 
 double sectionCurveLength(const TopoDS_Edge& edge) {
@@ -299,8 +333,8 @@ std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
                 }
                 const auto first = std::max(std::min(curveFirst, curveLast), std::min(pcurveFirst, pcurveLast));
                 const auto last = std::min(std::max(curveFirst, curveLast), std::max(pcurveFirst, pcurveLast));
-                for (int sample = 0; sample < 97 && last >= first; ++sample) {
-                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 96.0;
+                for (int sample = 0; sample < 257 && last >= first; ++sample) {
+                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 256.0;
                     const auto uv = pcurve->Value(parameter);
                     const auto deviation = curve->Value(parameter).Distance(surface->Value(uv.X(), uv.Y()));
                     deviations.push_back(deviation);
@@ -335,8 +369,8 @@ std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
                 const auto last = std::min(
                     std::max(firstParameters[0], lastParameters[0]),
                     std::max(firstParameters[1], lastParameters[1]));
-                for (int sample = 0; sample < 97 && last >= first; ++sample) {
-                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 96.0;
+                for (int sample = 0; sample < 257 && last >= first; ++sample) {
+                    const auto parameter = first + (last - first) * static_cast<double>(sample) / 256.0;
                     const auto firstUv = firstPcurve->Value(parameter);
                     const auto secondUv = secondPcurve->Value(parameter);
                     gp_Pnt firstPoint;
@@ -410,6 +444,8 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         !curveNetwork.valid() ||
         curveNetwork.hash != network.layout.curveNetworkHash ||
         curveNetwork.patchCount != network.layout.patchCount ||
+        !network.boundaryLocked ||
+        !network.constructibleForBRep ||
         curveOnSurfaceTolerance <= 0.0) {
         result.status = RegionRefitStatus::InvalidRequest;
         result.message = "Native patch-network construction received inconsistent geometry.";
@@ -504,6 +540,7 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     };
     std::vector<PatchEdges> patchEdges(
         static_cast<std::size_t>(curveNetwork.patchCount));
+    std::vector<int> edgeUseCounts(edges.size(), 0);
     for (const auto& loop : curveNetwork.patchLoops) {
         if (loop.patch < 0 || loop.patch >= curveNetwork.patchCount ||
             loop.edges.size() < 2) {
@@ -512,7 +549,8 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         }
         const auto patch = static_cast<std::size_t>(loop.patch);
         const auto& parameterization = network.layout.patches[patch];
-        if (!parameterization.pcurveLoopClosed ||
+        if (!parameterization.rectangularIsoBoundary ||
+            !parameterization.pcurveLoopClosed ||
             !parameterization.pcurveOrientationConsistent ||
             parameterization.pcurveSelfIntersectionCount != 0 ||
             parameterization.pcurveNonAdjacentIntersectionCount != 0 ||
@@ -540,6 +578,11 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                     "A patch loop has no matching frozen parameter-domain pcurve.";
                 return result;
             }
+            if (!isExactIsoPcurve(*stored)) {
+                result.message =
+                    "A patch loop pcurve is not an exact rectangular iso segment.";
+                return result;
+            }
             double pcurveFirst = 0.0;
             double pcurveLast = 0.0;
             const auto pcurve = storedPcurve(
@@ -556,6 +599,7 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                 return result;
             }
             ++result.storedPcurveAttachmentCount;
+            ++edgeUseCounts[use.edgeIndex];
             const auto firstNode = use.forward
                 ? curveEdge.startNode : curveEdge.endNode;
             const auto secondNode = use.forward
@@ -574,6 +618,7 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
     }
 
     result.replacementFaces.reserve(network.layout.patches.size());
+    std::vector<bool> denseSameParameterPassed(edges.size(), true);
     for (std::size_t patch = 0;
          patch < network.layout.patches.size(); ++patch) {
         BRepBuilderAPI_MakeWire wireBuilder;
@@ -614,12 +659,11 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
             }
         }
         ShapeAnalysis_Edge edgeAnalyzer;
-        BRep_Builder topologyBuilder;
         for (const auto edgeIndex : patchEdges[patch].indices) {
             Standard_Real deviation = 0.0;
             ++result.sameParameterCheckCount;
             edgeAnalyzer.CheckSameParameter(
-                edges[edgeIndex], face, deviation, 97);
+                edges[edgeIndex], face, deviation, 257);
             result.maximumSameParameterDeviation = std::max(
                 result.maximumSameParameterDeviation,
                 std::isfinite(deviation)
@@ -628,20 +672,34 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
             if (!std::isfinite(deviation) ||
                 deviation > curveOnSurfaceTolerance) {
                 ++result.sameParameterFailureCount;
-            } else {
-                topologyBuilder.SameParameter(
-                    edges[edgeIndex], Standard_True);
+                denseSameParameterPassed[edgeIndex] = false;
             }
         }
-        const auto faceValid = BRepCheck_Analyzer(face).IsValid();
-        if (!faceValid) ++result.brepValidationFailureCount;
-        if ((result.sameParameterFailureCount > 0 || !faceValid) &&
-            !allowUnvalidatedFaces) {
-            result.message =
-                "A trimmed fitted patch failed dense SameParameter or BRep validation.";
-            return result;
-        }
         result.replacementFaces.push_back(face);
+    }
+    BRep_Builder topologyBuilder;
+    for (std::size_t edgeIndex = 0; edgeIndex < edges.size(); ++edgeIndex) {
+        const auto expectedUseCount =
+            curveNetwork.edges[edgeIndex].originalBoundary ? 1 : 2;
+        const auto passed = denseSameParameterPassed[edgeIndex] &&
+            edgeUseCounts[edgeIndex] == expectedUseCount;
+        topologyBuilder.SameParameter(
+            edges[edgeIndex], passed ? Standard_True : Standard_False);
+        if (!passed && denseSameParameterPassed[edgeIndex]) {
+            ++result.sameParameterFailureCount;
+        }
+    }
+    for (const auto& face : result.replacementFaces) {
+        if (!BRepCheck_Analyzer(face).IsValid()) {
+            ++result.brepValidationFailureCount;
+        }
+    }
+    if ((result.sameParameterFailureCount > 0 ||
+         result.brepValidationFailureCount > 0) &&
+        !allowUnvalidatedFaces) {
+        result.message =
+            "A trimmed fitted patch failed dense SameParameter or BRep validation.";
+        return result;
     }
 
     if (static_cast<int>(result.replacementFaces.size()) != network.layout.patchCount) {

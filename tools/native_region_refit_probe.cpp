@@ -281,6 +281,12 @@ QJsonObject curveNetworkToJson(
                     edge.productQualityPassed},
                 {"validation_sample_count",
                     edge.validationSampleCount},
+                {"control_point_count", edge.controlPointCount},
+                {"maximum_sample_turn_degrees",
+                    edge.maximumSampleTurnDegrees},
+                {"bending_energy", edge.bendingEnergy},
+                {"self_intersection_count",
+                    edge.selfIntersectionCount},
                 {"original_boundary", edge.originalBoundary},
                 {"has_original_edge", edge.hasOriginalEdge},
                 {"original_edge_id", edge.hasOriginalEdge
@@ -321,8 +327,9 @@ QJsonObject curveNetworkToJson(
         {"g0_edge_count", QString::number(result.report.curveNetworkG0EdgeCount)},
         {"g1_edge_count", QString::number(result.report.curveNetworkG1EdgeCount)},
         {"g2_edge_count", QString::number(result.report.curveNetworkG2EdgeCount)},
-        {"local_cubic_edge_count",
-            QString::number(result.report.curveNetworkLocalCubicEdgeCount)},
+        {"regularized_cubic_edge_count",
+            QString::number(
+                result.report.curveNetworkRegularizedCubicEdgeCount)},
         {"diagnostic_polyline_edge_count",
             QString::number(
                 result.report.curveNetworkDiagnosticPolylineEdgeCount)},
@@ -330,9 +337,21 @@ QJsonObject curveNetworkToJson(
             QString::number(
                 result.report.curveNetworkContinuityDowngradeCount)},
         {"maximum_projection_error", result.report.curveNetworkMaximumProjectionError},
+        {"maximum_sample_turn_degrees",
+            result.report.curveNetworkMaximumSampleTurnDegrees},
+        {"maximum_bending_energy",
+            result.report.curveNetworkMaximumBendingEnergy},
+        {"self_intersection_count",
+            result.report.curveNetworkSelfIntersectionCount},
+        {"unexpected_curve_intersection_count",
+            result.report.curveNetworkUnexpectedIntersectionCount},
         {"closure_passed", result.report.curveNetworkClosurePassed},
         {"ownership_passed", result.report.curveNetworkOwnershipPassed},
         {"projection_passed", result.report.curveNetworkProjectionPassed},
+        {"orientation_passed",
+            result.report.curveNetworkOrientationPassed},
+        {"intersection_passed",
+            result.report.curveNetworkIntersectionPassed},
         {"product_quality_passed",
             result.report.curveNetworkProductQualityPassed},
         {"frozen", result.report.curveNetworkFrozen},
@@ -521,8 +540,22 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
                 {"start_node", QString::number(pcurve.startNode)},
                 {"end_node", QString::number(pcurve.endNode)},
                 {"loop_order", QString::number(pcurve.loopOrder)},
+                {"iso_side", static_cast<int>(pcurve.isoSide)},
+                {"side_first_parameter", pcurve.sideFirstParameter},
+                {"side_last_parameter", pcurve.sideLastParameter},
                 {"hash", QString::fromStdString(pcurve.hash)},
                 {"samples", samples}});
+        }
+        QJsonArray logicalSides;
+        for (const auto& side : patch.logicalSides) {
+            QJsonArray orders;
+            for (const auto order : side.edgeUseOrders) {
+                orders.append(QString::number(order));
+            }
+            logicalSides.append(QJsonObject {
+                {"iso_side", static_cast<int>(side.isoSide)},
+                {"curve_length", side.curveLength},
+                {"edge_use_orders", orders}});
         }
         QJsonArray boundaryChains;
         for (const auto& chain : patch.boundaryChains) {
@@ -544,11 +577,13 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
             {"vertices", QString::number(patch.vertexIndices.size())},
             {"boundary_loop", boundary},
             {"edge_pcurves", edgePcurves},
+            {"logical_sides", logicalSides},
             {"boundary_chains", boundaryChains},
             {"boundary_chain_count", QString::number(patch.boundaryChainCount)},
             {"trim_corners", trimCorners},
             {"trim_corner_count", patch.trimCornerCount},
             {"domain_type", QString::fromStdString(patch.domainType)},
+            {"rectangular_iso_boundary", patch.rectangularIsoBoundary},
             {"disk_topology_passed", patch.diskTopologyPassed},
             {"pcurve_loop_closed", patch.pcurveLoopClosed},
             {"pcurve_orientation_consistent",
@@ -1251,7 +1286,8 @@ int main(int argc, char* argv[]) {
     std::string runIdentity = "single";
     std::string commit;
     spo::RegionRefitRequest request;
-    request.options.algorithmFingerprint = "native-regional-refit-v36-pcurve-domain";
+    request.options.algorithmFingerprint =
+        "native-regional-refit-v39-constructible-layout";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1386,7 +1422,8 @@ int main(int argc, char* argv[]) {
     }
 
     if (!algorithmFingerprintSpecified) {
-        request.options.algorithmFingerprint = std::string("native-regional-refit-v36-pcurve-domain-") +
+        request.options.algorithmFingerprint = std::string(
+            "native-regional-refit-v39-constructible-layout-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);

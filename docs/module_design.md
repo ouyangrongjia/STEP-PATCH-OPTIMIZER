@@ -189,15 +189,15 @@ src/reduction 实现当前原生曲面缩减产品合同。
 
 - `UniformUv` 等 STEP 参考采样提供拟合点、法向、曲率和原始 `FaceId/UV`；其 STL 只用于形状参考和诊断。
 - 独立 `QualityBalanced` 载体只用于临时分区和局部参数化；载体必须通过连通、可定向、无孔单外环圆盘、零翻转和内存预检，不能成为最终内部共享曲线的几何真值。
-- `RegionCurveNetwork` 在支撑面拟合前显式冻结节点、唯一三维曲线边、相邻 patch、期望与实际连续性、构造模式、原边界来源、方向化 patch 闭环和稳定 hash。外边界直接引用或受控切分原 STEP Edge；内部界面先由临时分区提出并投影到原 STEP，再以端点固定、局部弦切向和不超过相邻最短弦长三分之一的手柄构造三次复合 B-spline。手柄缩放按 `1/0.5/0.25` 验收，每条曲线至少检查 `max(97, 8×段数)` 个样本。三次曲线仍超出投影门时，只允许用通过投影点的一级 B-spline 继续诊断，并把实际连续性降为 G0、永久取消产品资格。闭环、所有权、投影、非流形和冻结门通过后，布局与拟合只能按包含构造模式和实际连续性的 network hash 消费该网络。
-- 载体网格首先只提出临时 patch 分区。冻结曲线网络后，每张 patch 都重建曲线一致的 trimmed-disk 局部域：网络节点按三维边长平方根分配角跨度并映射到严格凸循环多边形，每条 edge-use 保存与唯一三维曲线同参数 `t` 的一级 `RegionPatchEdgePcurve`；边界载体点直接由该 pcurve 求 UV，内部点使用正权 mean-value 调和参数化。为避免同一网络边上的多个载体边界点共线导致边界三角形塌缩，一级 pcurve 在端点弦与凸圆弧之间保持确定性小幅凸化。布局、拟合、builder、缓存和 JSON/SVG 必须消费同一份 pcurve，不得各自重新投影或插值。闭环、方向、自交、非相邻交叉、UV 翻转和最小/中位 UV 面积比均在拟合前检查；支撑曲面的 Jacobian 构造性硬门按该布局 UV 三角形作稠密重心采样，并覆盖 trim 外侧的小安全带。
+- `RegionCurveNetwork` 在支撑面拟合前显式冻结节点、唯一三维曲线边、相邻 patch、期望与实际连续性、构造模式、原边界来源、方向化 patch 闭环和稳定 hash。外边界直接引用或按已有内部采样参数受控切分原 STEP Edge；内部界面先由临时分区提出并投影到原 STEP，删除超过门限的局部反向载体段后，构造端点固定、正则化的 C2 三次 B-spline。每条内部曲线分别检查投影走廊、转角、弯曲能、自交和非节点交叉；三次曲线仍不合格时，只允许用穿过原投影点的一级 B-spline 继续诊断，并永久取消产品资格。
+- 载体网格只提出临时 patch 分区。冻结曲线网络后，每张 patch 保存两套职责分离的参数：`parameters` 是严格凸、正权 mean-value 调和的载体坐标，用于无翻转三角形布局和畸变评价；`surfaceParameters` 把四组逻辑边严格映射到 `[0,1]^2` 的四条 iso 边，并对内部点作调和延拓，用于支撑面拟合和边界验证。每条 edge-use 的 `RegionPatchEdgePcurve` 都是与唯一三维曲线同参数 `t` 的二点一级 iso 线段。布局、拟合、builder、缓存和诊断必须消费同一份双参数域，不得各自重新投影或插值。
 - 原始 STEP 三维边、相邻保留面及 `FaceId` 始终是边界和拓扑真值。
 
-拟合先求边界可行解，再求几何目标。从每面 `6×6` 三次控制网开始，原 STEP 外边界和内部共享曲线全部使用保存的 pcurve 与共同参数 `t` 建立硬等式；代表配点覆盖三维曲线结点跨度、pcurve 折点和端点。若完整边界系统的最小最大残差超过 `0.001 mm`，就在最差样本 UV 处同时尝试插入 U、V 结点，直至通过、无法继续或单方向达到 25 个控制点。由仿射先验投影到全部等式约束所得的可构造控制网记为 `P_boundary`；位置、法向、公平性和 G1/G2 目标在同一等式约束下求得 `P_fit`，构造性线搜索只能在 `P_boundary → P_fit` 之间进行，因此任意混合比例仍满足全部 G0 曲线。达到控制点上限仍无法获得有限、无翻转的边界可行网时，只能标记 `BoundaryInfeasibleDiagnostic`，不能把未满足边界的仿射网当作拟合成功。G1/G2 仍是联合软目标，并在解后按每边至少 97 点验收曲线偏差、双侧分离、法向夹角和曲率差。
+拟合先建立四条冻结边界完全锁定的 Coons 候选，再尝试受约束联合求解。从每面 `6×6` 三次控制网开始，原 STEP 外边界和内部共享曲线全部使用保存的 iso pcurve 与共同参数 `t` 建立硬等式；结点插入前后四条边界控制行和权重必须不变。G0 由共享边界行保证，位置、法向、公平性和 G1/G2 目标只能调整相邻内部控制行。达到控制点上限、超时或硬约束不可行时，只能保留通过边界稠密验收的 Coons 候选继续诊断，不能把未锁边的仿射网送入 B-Rep。
 
 构造顺序是稳定合同：每个曲线节点只创建一个拓扑 Vertex，每条内部曲线只创建一个三维 Edge；builder 直接把布局保存的一级 pcurve 附着到该 Edge 的两侧支撑面，不允许重新投影、重新插值或生成诊断替代 pcurve。完成双侧附着后统一执行 `SameRange` 与 `SameParameter`，再严格按方向化 pcurve 闭环构造 Wire 与 Face。Face 构造后逐对执行 `BRepAlgoAPI_Section`，除预期共享 Edge 外的交线一律记为 `UnexpectedFaceIntersection`；内部 Edge 必须恰好被两张 Face 使用，replacement quilt 的自由边只能属于原 STEP 外边界。逐边报告必须区分拓扑开口、Curve-on-Surface 偏差、相邻曲面分离、法向/曲率连续性和三档显示三角化裂纹。
 
-缝合且拓扑水密只表示诊断链完成。只要存在有限、无翻转且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向、连续性、Face 交叉或 `SameParameter` 失败不会中止该诊断链，也不会提高容差。每次探针运行都按可达阶段保留 `selected_curve_network.step`、`selected_parameter_domain.json/.svg`、`fitted_support_surfaces.step` 或 `best_effort_support_surfaces.step`、`replacement_quilt.step`、`sewn_attempt.step` 和最终整件 STEP，并在 manifest 中登记 SHA-256。产品通过时写 `final_sewn.step`，未通过但成功缝合时写 `diagnostic_sewn.step`，没有可构造 Face 时不伪造 STEP；`artifact_status.json` 始终记录 `ProductValidated`、`DiagnosticOnly` 或 `Unavailable`。缓存二进制版本为 8，精确序列化 edge-use pcurve，旧版本明确拒绝。任一产品门失败时 `canApply` 必须为 false。
+缝合且拓扑水密只表示诊断链完成。只要存在边界锁定且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向或连续性失败不会提高容差。运行先写暂存目录，完成后只发布单一 `final/`：五个状态文件始终存在，曲线网络、未裁剪支撑面、裁剪 Face 和最终整件 STEP 只在阶段确实完成时出现，`final_sewn.step` 与 `diagnostic_sewn.step` 互斥，不保留原始日志、中间目录或 `sewn_attempt`。manifest 最后生成并记录除自身外各文件的角色、大小和 SHA-256。缓存二进制版本为 10，旧版本明确拒绝。只有全部产品门和 Creo 均通过时 `canApply` 才能为 true。
 
 ## patch：边界约束替换
 

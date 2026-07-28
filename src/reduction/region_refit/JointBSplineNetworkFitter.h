@@ -27,6 +27,9 @@ struct RegionFittedPatchNetwork {
     bool seamContinuityGatePassed = false;
     double normalizedViolationScore = 0.0;
     bool fitGatePassed = false;
+    bool boundaryLocked = false;
+    bool constructibleForBRep = false;
+    std::string fitOutcome = "NotEvaluated";
 };
 
 struct JointBSplineNetworkFitResult {

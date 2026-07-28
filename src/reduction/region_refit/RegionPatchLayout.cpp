@@ -520,6 +520,11 @@ std::string pcurveHash(const RegionPatchEdgePcurve& pcurve) {
     append(pcurve.startNode);
     append(pcurve.endNode);
     append(pcurve.loopOrder);
+    append(static_cast<std::uint64_t>(pcurve.isoSide));
+    append(static_cast<std::uint64_t>(
+        std::llround(pcurve.sideFirstParameter * 1.0e12)));
+    append(static_cast<std::uint64_t>(
+        std::llround(pcurve.sideLastParameter * 1.0e12)));
     for (std::size_t index = 0; index < pcurve.parameters.size(); ++index) {
         append(static_cast<std::uint64_t>(
             std::llround(pcurve.parameters[index] * 1.0e12)));
@@ -577,7 +582,13 @@ bool meanValueParameterizeInterior(
     const RegionReferenceMesh& mesh,
     RegionPatchParameterization& patch,
     const std::unordered_map<std::size_t, std::size_t>& localByGlobal,
+    std::vector<std::array<double, 2>>& parameters,
     std::string& message) {
+    if (parameters.size() != patch.vertexIndices.size()) {
+        message =
+            "Mean-value parameterization received a mismatched coordinate array.";
+        return false;
+    }
     std::set<std::size_t> boundaryLocal;
     for (const auto vertex : patch.boundaryLoop) {
         const auto found = localByGlobal.find(vertex);
@@ -641,8 +652,8 @@ bool meanValueParameterizeInterior(
             if (column >= 0) {
                 coefficients.emplace_back(row, column, -weight);
             } else {
-                rightU[row] += weight * patch.parameters[neighbor][0];
-                rightV[row] += weight * patch.parameters[neighbor][1];
+                rightU[row] += weight * parameters[neighbor][0];
+                rightV[row] += weight * parameters[neighbor][1];
             }
         }
         if (!(sum > 0.0)) {
@@ -673,7 +684,7 @@ bool meanValueParameterizeInterior(
     }
     for (const auto local : interior) {
         const auto row = interiorRow[local];
-        patch.parameters[local] = {solutionU[row], solutionV[row]};
+        parameters[local] = {solutionU[row], solutionV[row]};
     }
     return true;
 }
@@ -1352,10 +1363,19 @@ std::string layoutHash(const RegionPatchLayout& layout) {
             append(static_cast<std::uint64_t>(std::llround(uv[0] * 1.0e12)));
             append(static_cast<std::uint64_t>(std::llround(uv[1] * 1.0e12)));
         }
+        for (const auto& uv : parameterization.surfaceParameters) {
+            append(static_cast<std::uint64_t>(std::llround(uv[0] * 1.0e12)));
+            append(static_cast<std::uint64_t>(std::llround(uv[1] * 1.0e12)));
+        }
         for (const auto& pcurve : parameterization.edgePcurves) {
             append(pcurve.edgeIndex);
             append(pcurve.forward ? 1u : 0u);
             append(pcurve.loopOrder);
+            append(static_cast<std::uint64_t>(pcurve.isoSide));
+            append(static_cast<std::uint64_t>(
+                std::llround(pcurve.sideFirstParameter * 1.0e12)));
+            append(static_cast<std::uint64_t>(
+                std::llround(pcurve.sideLastParameter * 1.0e12)));
             for (std::size_t index = 0; index < pcurve.parameters.size(); ++index) {
                 append(static_cast<std::uint64_t>(
                     std::llround(pcurve.parameters[index] * 1.0e12)));
@@ -1364,6 +1384,13 @@ std::string layoutHash(const RegionPatchLayout& layout) {
                 append(static_cast<std::uint64_t>(
                     std::llround(pcurve.uvPoints[index][1] * 1.0e12)));
             }
+        }
+        append(parameterization.rectangularIsoBoundary ? 1u : 0u);
+        for (const auto& side : parameterization.logicalSides) {
+            append(static_cast<std::uint64_t>(side.isoSide));
+            append(static_cast<std::uint64_t>(
+                std::llround(side.curveLength * 1.0e12)));
+            for (const auto order : side.edgeUseOrders) append(order);
         }
     }
     for (const auto character : layout.curveNetworkHash) {
@@ -1602,9 +1629,20 @@ bool buildCurveConsistentParameterDomainWithBlend(
         message = "Curve-consistent parameterization received mismatched topology.";
         return false;
     }
-    constexpr double center = 0.5;
-    constexpr double radius = 0.45;
-    constexpr double twoPi = 6.28318530717958647692;
+    constexpr double endpointTolerance = 1.0e-3;
+    const auto uvOnSide = [](const RegionPatchIsoSide side, const double parameter) {
+        switch (side) {
+        case RegionPatchIsoSide::VMin:
+            return std::array<double, 2> {parameter, 0.0};
+        case RegionPatchIsoSide::UMax:
+            return std::array<double, 2> {1.0, parameter};
+        case RegionPatchIsoSide::VMax:
+            return std::array<double, 2> {1.0 - parameter, 1.0};
+        case RegionPatchIsoSide::UMin:
+            return std::array<double, 2> {0.0, 1.0 - parameter};
+        }
+        return std::array<double, 2> {};
+    };
     for (const auto& loop : network.patchLoops) {
         if (loop.patch < 0 || loop.patch >= layout.patchCount ||
             loop.edges.size() < 3) {
@@ -1618,8 +1656,14 @@ bool buildCurveConsistentParameterDomainWithBlend(
         patch.pcurveSelfIntersectionCount = 0;
         patch.pcurveNonAdjacentIntersectionCount = 0;
         patch.boundaryRepresentabilityResidual = 0.0;
-        patch.domainType = "CurveConsistentConvexPolygon";
+        patch.domainType = "RectangularIsoBoundary";
+        patch.rectangularIsoBoundary = false;
         for (auto& side : patch.boundarySides) side.clear();
+        for (std::size_t side = 0; side < patch.logicalSides.size(); ++side) {
+            patch.logicalSides[side] = {};
+            patch.logicalSides[side].isoSide =
+                static_cast<RegionPatchIsoSide>(side);
+        }
         std::unordered_map<std::size_t, std::size_t> localByGlobal;
         for (std::size_t local = 0; local < patch.vertexIndices.size(); ++local) {
             localByGlobal.emplace(patch.vertexIndices[local], local);
@@ -1627,12 +1671,19 @@ bool buildCurveConsistentParameterDomainWithBlend(
         if (patch.parameters.size() != patch.vertexIndices.size()) {
             patch.parameters.assign(patch.vertexIndices.size(), {});
         }
+        patch.surfaceParameters.assign(patch.vertexIndices.size(), {});
+        constexpr double center = 0.5;
+        constexpr double radius = 0.45;
+        constexpr double twoPi = 6.28318530717958647692;
         const auto spans = boundedAngularSpans(loop, network);
         if (spans.size() != loop.edges.size() ||
-            std::any_of(spans.begin(), spans.end(), [](const auto span) {
-                return !(span > 0.0) || span >= 3.14159265358979323846;
-            })) {
-            message = "Could not allocate strictly convex cyclic node angles.";
+            std::any_of(
+                spans.begin(), spans.end(),
+                [](const auto span) {
+                    return !(span > 0.0) ||
+                        span >= 3.14159265358979323846;
+                })) {
+            message = "Could not allocate strictly convex carrier-boundary angles.";
             return false;
         }
         std::vector<double> loopNodeAngles(loop.edges.size());
@@ -1646,7 +1697,7 @@ bool buildCurveConsistentParameterDomainWithBlend(
             angle += spans[order];
         }
         if (std::abs(angle - twoPi) > 1.0e-10) {
-            message = "Convex cyclic node angles do not close.";
+            message = "Strictly convex carrier-boundary angles do not close.";
             return false;
         }
         auto longestInternal = loop.edges.size();
@@ -1661,8 +1712,9 @@ bool buildCurveConsistentParameterDomainWithBlend(
         }
         if (longestInternal == loop.edges.size()) {
             longestInternal = static_cast<std::size_t>(
-                std::distance(spans.begin(), std::max_element(
-                    spans.begin(), spans.end())));
+                std::distance(
+                    spans.begin(),
+                    std::max_element(spans.begin(), spans.end())));
         }
         const auto& rotationStart = loopNodeUv[longestInternal];
         const auto& rotationEnd =
@@ -1670,8 +1722,6 @@ bool buildCurveConsistentParameterDomainWithBlend(
         const auto rotation = -std::atan2(
             rotationEnd[1] - rotationStart[1],
             rotationEnd[0] - rotationStart[0]);
-        const auto cosine = std::cos(rotation);
-        const auto sine = std::sin(rotation);
         for (std::size_t order = 0; order < loopNodeUv.size(); ++order) {
             loopNodeAngles[order] += rotation;
             loopNodeUv[order] = {
@@ -1679,119 +1729,259 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 center + radius * std::sin(loopNodeAngles[order])};
         }
 
-        std::unordered_map<std::size_t, std::array<double, 2>> boundaryUv;
-        patch.edgePcurves.reserve(loop.edges.size());
+        struct LogicalGroup {
+            bool originalBoundary = false;
+            std::vector<std::size_t> edgeUseOrders;
+            double length = 0.0;
+        };
+        std::vector<LogicalGroup> groups;
         for (std::size_t order = 0; order < loop.edges.size(); ++order) {
             const auto& use = loop.edges[order];
             if (use.edgeIndex >= network.edges.size()) {
-                message = "A patch pcurve references a missing frozen edge.";
+                message = "A patch loop references a missing frozen edge.";
                 return false;
             }
-        }
-        for (std::size_t order = 0; order < loop.edges.size(); ++order) {
-            const auto& use = loop.edges[order];
             const auto& edge = network.edges[use.edgeIndex];
-            const auto& loopStartUv = loopNodeUv[order];
-            const auto& loopEndUv =
-                loopNodeUv[(order + 1) % loopNodeUv.size()];
-            RegionPatchEdgePcurve pcurve;
-            pcurve.edgeIndex = use.edgeIndex;
-            pcurve.forward = use.forward;
-            pcurve.firstParameter = edge.firstParameter;
-            pcurve.lastParameter = edge.lastParameter;
-            pcurve.startNode = edge.startNode;
-            pcurve.endNode = edge.endNode;
-            pcurve.loopOrder = order;
-            pcurve.parameters = edge.meshParameters;
-            if (pcurve.parameters.size() < 2) {
-                message = "A frozen edge has too few parameters for a pcurve.";
+            const auto nextOrder = (order + 1) % loop.edges.size();
+            const auto& nextUse = loop.edges[nextOrder];
+            if (nextUse.edgeIndex >= network.edges.size()) {
+                message = "A patch loop references a missing frozen edge.";
                 return false;
             }
-            pcurve.parameters.front() = edge.firstParameter;
-            pcurve.parameters.back() = edge.lastParameter;
-            if (std::adjacent_find(
-                    pcurve.parameters.begin(), pcurve.parameters.end(),
-                    [](const auto first, const auto second) {
-                        return !std::isfinite(first) ||
-                            !std::isfinite(second) || second <= first;
-                    }) != pcurve.parameters.end()) {
-                message = "A frozen edge has a non-monotone pcurve parameter range.";
+            const auto& nextEdge = network.edges[nextUse.edgeIndex];
+            const auto endNode = use.forward ? edge.endNode : edge.startNode;
+            const auto nextStartNode =
+                nextUse.forward ? nextEdge.startNode : nextEdge.endNode;
+            if (endNode >= network.nodes.size() ||
+                nextStartNode >= network.nodes.size() ||
+                endNode != nextStartNode ||
+                network.nodes[endNode].point.Distance(
+                    network.nodes[nextStartNode].point) > endpointTolerance) {
+                message =
+                    "A patch loop has inconsistent consecutive curve endpoints.";
                 return false;
             }
-            pcurve.uvPoints.reserve(pcurve.parameters.size());
-            for (const auto parameter : pcurve.parameters) {
-                const auto alpha = std::clamp(
-                    (parameter - edge.firstParameter) /
-                        (edge.lastParameter - edge.firstParameter),
-                    0.0,
-                    1.0);
-                const auto loopAlpha = use.forward ? alpha : 1.0 - alpha;
-                const auto sampleAngle =
-                    loopNodeAngles[order] + loopAlpha * spans[order];
-                const std::array<double, 2> chordUv {
-                    (1.0 - loopAlpha) * loopStartUv[0] +
-                        loopAlpha * loopEndUv[0],
-                    (1.0 - loopAlpha) * loopStartUv[1] +
-                        loopAlpha * loopEndUv[1]};
-                const std::array<double, 2> arcUv {
-                    center + radius * std::cos(sampleAngle),
-                    center + radius * std::sin(sampleAngle)};
-                pcurve.uvPoints.push_back({
-                    (1.0 - boundaryConvexityBlend) * chordUv[0] +
-                        boundaryConvexityBlend * arcUv[0],
-                    (1.0 - boundaryConvexityBlend) * chordUv[1] +
-                        boundaryConvexityBlend * arcUv[1]});
-            }
-            pcurve.hash = pcurveHash(pcurve);
-            if (edge.meshVertices.size() != edge.meshParameters.size()) {
-                message = "A frozen edge has inconsistent mesh and parameter samples.";
+            const auto length = curveEdgeLength(edge);
+            if (!(length > 0.0) || !std::isfinite(length)) {
+                message = "A patch loop contains a collapsed curve edge.";
                 return false;
             }
-            for (std::size_t sample = 0;
-                 sample < edge.meshVertices.size(); ++sample) {
-                const auto uv = evaluateRegionPatchEdgePcurve(
-                    pcurve, edge.meshParameters[sample]);
-                if (!uv.has_value()) {
-                    message = "A pcurve could not evaluate one boundary sample.";
+            if (!edge.originalBoundary || groups.empty() ||
+                !groups.back().originalBoundary) {
+                groups.push_back({edge.originalBoundary, {}, 0.0});
+            }
+            groups.back().edgeUseOrders.push_back(order);
+            groups.back().length += length;
+        }
+        if (groups.size() > 1 && groups.front().originalBoundary &&
+            groups.back().originalBoundary) {
+            LogicalGroup merged = groups.back();
+            merged.edgeUseOrders.insert(
+                merged.edgeUseOrders.end(),
+                groups.front().edgeUseOrders.begin(),
+                groups.front().edgeUseOrders.end());
+            merged.length += groups.front().length;
+            std::vector<LogicalGroup> normalized;
+            normalized.push_back(std::move(merged));
+            normalized.insert(
+                normalized.end(),
+                groups.begin() + 1,
+                groups.end() - 1);
+            groups = std::move(normalized);
+        }
+        while (groups.size() < 4) {
+            auto split = groups.end();
+            for (auto candidate = groups.begin();
+                 candidate != groups.end(); ++candidate) {
+                if (!candidate->originalBoundary ||
+                    candidate->edgeUseOrders.size() < 2) {
+                    continue;
+                }
+                if (split == groups.end() ||
+                    candidate->length > split->length) {
+                    split = candidate;
+                }
+            }
+            if (split == groups.end()) {
+                message =
+                    "A patch loop has fewer than four logical sides and no splittable outer boundary chain.";
+                return false;
+            }
+            auto accumulated = 0.0;
+            auto splitOffset = std::size_t {1};
+            auto bestBalance = std::numeric_limits<double>::infinity();
+            for (std::size_t offset = 1;
+                 offset < split->edgeUseOrders.size(); ++offset) {
+                accumulated += curveEdgeLength(network.edges[
+                    loop.edges[split->edgeUseOrders[offset - 1]].edgeIndex]);
+                const auto balance =
+                    std::abs(2.0 * accumulated - split->length);
+                if (balance < bestBalance) {
+                    bestBalance = balance;
+                    splitOffset = offset;
+                }
+            }
+            LogicalGroup second;
+            second.originalBoundary = true;
+            second.edgeUseOrders.assign(
+                split->edgeUseOrders.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset),
+                split->edgeUseOrders.end());
+            second.length = 0.0;
+            for (const auto order : second.edgeUseOrders) {
+                second.length +=
+                    curveEdgeLength(network.edges[loop.edges[order].edgeIndex]);
+            }
+            split->edgeUseOrders.erase(
+                split->edgeUseOrders.begin() +
+                    static_cast<std::ptrdiff_t>(splitOffset),
+                split->edgeUseOrders.end());
+            split->length -= second.length;
+            groups.insert(split + 1, std::move(second));
+        }
+        if (groups.size() != 4) {
+            message =
+                "A patch loop cannot be represented by exactly four logical sides.";
+            return false;
+        }
+
+        std::unordered_map<std::size_t, std::array<double, 2>> boundaryUv;
+        std::unordered_map<std::size_t, std::array<double, 2>>
+            carrierBoundaryUv;
+        patch.edgePcurves.reserve(loop.edges.size());
+        for (std::size_t sideIndex = 0; sideIndex < groups.size();
+             ++sideIndex) {
+            const auto side = static_cast<RegionPatchIsoSide>(sideIndex);
+            const auto& group = groups[sideIndex];
+            if (!(group.length > 0.0)) {
+                message = "A patch logical side has zero curve length.";
+                return false;
+            }
+            patch.logicalSides[sideIndex].isoSide = side;
+            patch.logicalSides[sideIndex].edgeUseOrders =
+                group.edgeUseOrders;
+            patch.logicalSides[sideIndex].curveLength = group.length;
+            auto accumulated = 0.0;
+            for (const auto order : group.edgeUseOrders) {
+                const auto& use = loop.edges[order];
+                const auto& edge = network.edges[use.edgeIndex];
+                if (edge.meshVertices.size() != edge.meshParameters.size() ||
+                    edge.meshParameters.size() < 2 ||
+                    !(edge.lastParameter > edge.firstParameter)) {
+                    message =
+                        "A frozen edge has inconsistent mesh and parameter samples.";
                     return false;
                 }
-                const auto [found, inserted] = boundaryUv.emplace(
-                    edge.meshVertices[sample], *uv);
-                if (!inserted) {
-                    patch.boundaryRepresentabilityResidual = std::max(
-                        patch.boundaryRepresentabilityResidual,
-                        std::hypot(
-                            found->second[0] - (*uv)[0],
-                            found->second[1] - (*uv)[1]));
+                const auto length = curveEdgeLength(edge);
+                const auto sideFirst = accumulated / group.length;
+                accumulated += length;
+                const auto sideLast = accumulated / group.length;
+                const auto loopStartUv = uvOnSide(side, sideFirst);
+                const auto loopEndUv = uvOnSide(side, sideLast);
+                RegionPatchEdgePcurve pcurve;
+                pcurve.edgeIndex = use.edgeIndex;
+                pcurve.forward = use.forward;
+                pcurve.firstParameter = edge.firstParameter;
+                pcurve.lastParameter = edge.lastParameter;
+                pcurve.startNode = edge.startNode;
+                pcurve.endNode = edge.endNode;
+                pcurve.loopOrder = order;
+                pcurve.isoSide = side;
+                pcurve.sideFirstParameter = sideFirst;
+                pcurve.sideLastParameter = sideLast;
+                pcurve.parameters = {
+                    edge.firstParameter, edge.lastParameter};
+                pcurve.uvPoints = use.forward
+                    ? std::vector<std::array<double, 2>> {
+                        loopStartUv, loopEndUv}
+                    : std::vector<std::array<double, 2>> {
+                        loopEndUv, loopStartUv};
+                pcurve.hash = pcurveHash(pcurve);
+                for (std::size_t sample = 0;
+                     sample < edge.meshVertices.size(); ++sample) {
+                    const auto uv = evaluateRegionPatchEdgePcurve(
+                        pcurve, edge.meshParameters[sample]);
+                    if (!uv.has_value()) {
+                        message =
+                            "An iso pcurve could not evaluate one boundary sample.";
+                        return false;
+                    }
+                    const auto [found, inserted] = boundaryUv.emplace(
+                        edge.meshVertices[sample], *uv);
+                    if (!inserted) {
+                        patch.boundaryRepresentabilityResidual = std::max(
+                            patch.boundaryRepresentabilityResidual,
+                            std::hypot(
+                                found->second[0] - (*uv)[0],
+                                found->second[1] - (*uv)[1]));
+                    }
+                    const auto parameter = edge.meshParameters[sample];
+                    const auto alpha = std::clamp(
+                        (parameter - edge.firstParameter) /
+                            (edge.lastParameter - edge.firstParameter),
+                        0.0,
+                        1.0);
+                    const auto loopAlpha = use.forward ? alpha : 1.0 - alpha;
+                    const auto& loopStartUv = loopNodeUv[order];
+                    const auto& loopEndUv =
+                        loopNodeUv[(order + 1) % loopNodeUv.size()];
+                    const std::array<double, 2> chordUv {
+                        (1.0 - loopAlpha) * loopStartUv[0] +
+                            loopAlpha * loopEndUv[0],
+                        (1.0 - loopAlpha) * loopStartUv[1] +
+                            loopAlpha * loopEndUv[1]};
+                    const auto sampleAngle =
+                        loopNodeAngles[order] + loopAlpha * spans[order];
+                    const std::array<double, 2> arcUv {
+                        center + radius * std::cos(sampleAngle),
+                        center + radius * std::sin(sampleAngle)};
+                    carrierBoundaryUv.emplace(
+                        edge.meshVertices[sample],
+                        std::array<double, 2> {
+                            (1.0 - boundaryConvexityBlend) * chordUv[0] +
+                                boundaryConvexityBlend * arcUv[0],
+                            (1.0 - boundaryConvexityBlend) * chordUv[1] +
+                                boundaryConvexityBlend * arcUv[1]});
                 }
+                auto vertices = edge.meshVertices;
+                if (!use.forward) {
+                    std::reverse(vertices.begin(), vertices.end());
+                }
+                auto& boundarySide =
+                    patch.boundarySides[sideIndex];
+                if (!boundarySide.empty() && !vertices.empty() &&
+                    boundarySide.back() == vertices.front()) {
+                    vertices.erase(vertices.begin());
+                }
+                boundarySide.insert(
+                    boundarySide.end(), vertices.begin(), vertices.end());
+                patch.edgePcurves.push_back(std::move(pcurve));
             }
-            patch.edgePcurves.push_back(std::move(pcurve));
         }
+        std::sort(
+            patch.edgePcurves.begin(),
+            patch.edgePcurves.end(),
+            [](const auto& first, const auto& second) {
+                return first.loopOrder < second.loopOrder;
+            });
         for (const auto vertex : patch.boundaryLoop) {
             const auto found = boundaryUv.find(vertex);
+            const auto carrier = carrierBoundaryUv.find(vertex);
             const auto local = localByGlobal.find(vertex);
-            if (found == boundaryUv.end() || local == localByGlobal.end()) {
+            if (found == boundaryUv.end() ||
+                carrier == carrierBoundaryUv.end() ||
+                local == localByGlobal.end()) {
                 message = "The frozen pcurve loop does not cover every patch boundary vertex.";
                 return false;
             }
-            patch.parameters[local->second] = found->second;
+            patch.parameters[local->second] = carrier->second;
+            patch.surfaceParameters[local->second] = found->second;
         }
 
         patch.pcurveLoopClosed = true;
         patch.pcurveOrientationConsistent = true;
-        auto polygonOrientation = 0;
-        for (std::size_t order = 0; order < loopNodeUv.size(); ++order) {
-            const auto orientation = orientation2d(
-                loopNodeUv[order],
-                loopNodeUv[(order + 1) % loopNodeUv.size()],
-                loopNodeUv[(order + 2) % loopNodeUv.size()]);
-            if (orientation == 0) {
-                patch.pcurveOrientationConsistent = false;
-            } else if (polygonOrientation == 0) {
-                polygonOrientation = orientation;
-            } else if (polygonOrientation != orientation) {
-                patch.pcurveOrientationConsistent = false;
-            }
+        for (std::size_t order = 0;
+             order < patch.edgePcurves.size(); ++order) {
             const auto& current = patch.edgePcurves[order];
             const auto& next =
                 patch.edgePcurves[(order + 1) % patch.edgePcurves.size()];
@@ -1854,8 +2044,19 @@ bool buildCurveConsistentParameterDomainWithBlend(
             message = "A curve-consistent pcurve loop is open, misoriented, or self-intersecting.";
             return false;
         }
+        patch.rectangularIsoBoundary = true;
         if (!meanValueParameterizeInterior(
-                mesh, patch, localByGlobal, message)) {
+                mesh,
+                patch,
+                localByGlobal,
+                patch.parameters,
+                message) ||
+            !meanValueParameterizeInterior(
+                mesh,
+                patch,
+                localByGlobal,
+                patch.surfaceParameters,
+                message)) {
             return false;
         }
 
@@ -1868,6 +2069,8 @@ bool buildCurveConsistentParameterDomainWithBlend(
         uvAreas.reserve(patch.triangleIndices.size());
         int positive = 0;
         int negative = 0;
+        int degenerate = 0;
+        std::array<int, 4> degenerateByBoundaryVertexCount {};
         patch.maximumDistortion = 0.0;
         for (const auto triangleIndex : patch.triangleIndices) {
             const auto& triangle = mesh.triangles[triangleIndex];
@@ -1882,6 +2085,15 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 patch.parameters[third]);
             if (area > 1.0e-14) ++positive;
             else if (area < -1.0e-14) ++negative;
+            else {
+                ++degenerate;
+                const auto boundaryVertexCount =
+                    static_cast<int>(boundaryUv.contains(triangle.vertices[0])) +
+                    static_cast<int>(boundaryUv.contains(triangle.vertices[1])) +
+                    static_cast<int>(boundaryUv.contains(triangle.vertices[2]));
+                ++degenerateByBoundaryVertexCount[
+                    static_cast<std::size_t>(boundaryVertexCount)];
+            }
             uvAreas.push_back(std::abs(area));
             const auto quality3d = normalizedTriangleQuality(
                 mesh.vertices[triangle.vertices[0]].point,
@@ -1917,26 +2129,33 @@ bool buildCurveConsistentParameterDomainWithBlend(
         std::nth_element(medianAreas.begin(), median, medianAreas.end());
         patch.minimumToMedianUvAreaRatio =
             patch.minimumSignedUvArea / std::max(*median, 1.0e-30);
-        const auto areaRatioLimit = minimumUvAreaRatioLimit(
-            mesh, patch, options);
-        const auto constructibleAreaRatioLimit =
-            std::sqrt(std::numeric_limits<double>::epsilon());
         if (patch.flippedTriangleCount != 0 ||
-            patch.minimumToMedianUvAreaRatio <
-                constructibleAreaRatioLimit) {
-            retryableAreaFailure = true;
+            !(patch.minimumSignedUvArea > 1.0e-14)) {
+            retryableAreaFailure =
+                degenerate > 0 && (positive == 0 || negative == 0);
             failedAreaRatio = patch.minimumToMedianUvAreaRatio;
-            requiredAreaRatio = constructibleAreaRatioLimit;
+            requiredAreaRatio =
+                minimumUvAreaRatioLimit(mesh, patch, options);
             std::ostringstream stream;
-            stream << "Curve-consistent mean-value parameterization has "
+            stream << "Patch " << loop.patch
+                   << " rectangular harmonic parameterization has "
                    << patch.flippedTriangleCount
-                   << " flipped triangles and minimum/median UV area ratio "
-                   << patch.minimumToMedianUvAreaRatio
-                   << " below the constructibility limit "
-                   << constructibleAreaRatioLimit
-                   << "; the product limit is " << areaRatioLimit << '.';
+                   << " flipped or degenerate triangles (positive="
+                   << positive << ", negative=" << negative
+                   << ", degenerate=" << degenerate
+                   << ", degenerate_by_boundary_vertices=["
+                   << degenerateByBoundaryVertexCount[0] << ','
+                   << degenerateByBoundaryVertexCount[1] << ','
+                   << degenerateByBoundaryVertexCount[2] << ','
+                   << degenerateByBoundaryVertexCount[3] << ']'
+                   << "); minimum UV area is "
+                   << patch.minimumSignedUvArea << '.';
             message = stream.str();
             return false;
+        }
+        requiredAreaRatio = minimumUvAreaRatioLimit(mesh, patch, options);
+        if (patch.minimumToMedianUvAreaRatio < requiredAreaRatio) {
+            failedAreaRatio = patch.minimumToMedianUvAreaRatio;
         }
     }
     layout.curveNetworkHash = network.hash;
@@ -2291,25 +2510,32 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                 report->domainType = patch.domainType;
             }
             report->constructibleParameterization = true;
-            const auto uvAreaRatioPassed = std::all_of(
-                layout.patches.begin(),
-                layout.patches.end(),
-                [&](const auto& patch) {
-                    return patch.minimumToMedianUvAreaRatio >=
-                        minimumUvAreaRatioLimit(mesh, patch, options);
-                });
             report->parameterizationPassed =
                 report->flippedTriangleCount == 0 &&
                 report->pcurveSelfIntersectionCount == 0 &&
                 report->pcurveNonAdjacentIntersectionCount == 0 &&
                 report->boundaryRepresentabilityResidual <=
                     options.curveOnSurfaceTolerance &&
-                uvAreaRatioPassed &&
+                std::all_of(
+                    layout.patches.begin(),
+                    layout.patches.end(),
+                    [&](const auto& patch) {
+                        return patch.rectangularIsoBoundary &&
+                            patch.minimumToMedianUvAreaRatio >=
+                                minimumUvAreaRatioLimit(
+                                    mesh, patch, options);
+                    }) &&
                 report->maximumDistortion <=
                     options.maximumParameterDistortion;
             if (!report->parameterizationPassed) {
-                report->rejectionReason =
-                    "The curve-consistent parameter domain exceeded a product layout gate.";
+                std::ostringstream stream;
+                stream
+                    << "The curve-consistent parameter domain is constructible but exceeded a product layout gate"
+                    << " (area_ratio="
+                    << report->minimumToMedianUvAreaRatio
+                    << ", distortion="
+                    << report->maximumDistortion << ").";
+                report->rejectionReason = stream.str();
             }
         }
         return std::optional<RegionPatchLayout> {std::move(layout)};
@@ -2334,7 +2560,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
     }
     result.status = RegionRefitStatus::Success;
     result.message =
-        "Built curve-consistent convex parameter domains from frozen curve networks.";
+        "Built four-sided rectangular iso-boundary parameter domains from frozen curve networks.";
     return result;
 }
 

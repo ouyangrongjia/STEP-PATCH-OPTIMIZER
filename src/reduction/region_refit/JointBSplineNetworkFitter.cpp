@@ -11,9 +11,14 @@
 #include <BRep_Builder.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomConvert.hxx>
+#include <GeomConvert_CompCurveToBSplineCurve.hxx>
+#include <GeomFill_BSplineCurves.hxx>
 #include <GeomLProp_SLProps.hxx>
+#include <Geom_BoundedCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
+#include <Geom_TrimmedCurve.hxx>
 #include <Standard_Failure.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
@@ -2190,10 +2195,15 @@ ValidationMetrics validateNetwork(
     }
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
         const auto& parameterization = layout.patches[patch];
+        const auto& surfaceParameters =
+            parameterization.surfaceParameters.size() ==
+                    parameterization.vertexIndices.size()
+                ? parameterization.surfaceParameters
+                : parameterization.parameters;
         for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
             const auto vertexIndex = parameterization.vertexIndices[local];
             const auto& vertex = layoutCarrier.vertices[vertexIndex];
-            const auto uv = normalizedParameter(parameterization.parameters[local]);
+            const auto uv = normalizedParameter(surfaceParameters[local]);
             if (!vertex.boundary) continue;
             const auto projection = projectToSurface(surfaces[patch], vertex.point, uv);
             ++metrics.projectionCount;
@@ -2212,10 +2222,24 @@ ValidationMetrics validateNetwork(
         for (const auto vertex : vertices) {
             const auto firstLocal = lookups[static_cast<std::size_t>(seam.firstPatch)].localByGlobal.at(vertex);
             const auto secondLocal = lookups[static_cast<std::size_t>(seam.secondPatch)].localByGlobal.at(vertex);
+            const auto& firstParameterization =
+                layout.patches[static_cast<std::size_t>(seam.firstPatch)];
+            const auto& secondParameterization =
+                layout.patches[static_cast<std::size_t>(seam.secondPatch)];
+            const auto& firstParameters =
+                firstParameterization.surfaceParameters.size() ==
+                        firstParameterization.vertexIndices.size()
+                    ? firstParameterization.surfaceParameters
+                    : firstParameterization.parameters;
+            const auto& secondParameters =
+                secondParameterization.surfaceParameters.size() ==
+                        secondParameterization.vertexIndices.size()
+                    ? secondParameterization.surfaceParameters
+                    : secondParameterization.parameters;
             const auto firstUv = normalizedParameter(
-                layout.patches[static_cast<std::size_t>(seam.firstPatch)].parameters[firstLocal]);
+                firstParameters[firstLocal]);
             const auto secondUv = normalizedParameter(
-                layout.patches[static_cast<std::size_t>(seam.secondPatch)].parameters[secondLocal]);
+                secondParameters[secondLocal]);
             metrics.seamMaximumDistance = std::max(
                 metrics.seamMaximumDistance,
                 surfaces[static_cast<std::size_t>(seam.firstPatch)]->Value(firstUv[0], firstUv[1]).Distance(
@@ -2490,6 +2514,309 @@ TopoDS_Shape inspectionShape(const std::vector<Handle(Geom_BSplineSurface)>& sur
     return compound;
 }
 
+std::vector<Handle(Geom_BSplineSurface)> makeBoundaryLockedCoonsNetwork(
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    std::string& failure) {
+    std::vector<Handle(Geom_BSplineSurface)> surfaces;
+    surfaces.reserve(layout.patches.size());
+    constexpr double joinTolerance = 1.0e-7;
+    try {
+        for (std::size_t patchIndex = 0;
+             patchIndex < layout.patches.size();
+             ++patchIndex) {
+            const auto loop = std::find_if(
+                network.patchLoops.begin(),
+                network.patchLoops.end(),
+                [&](const auto& candidate) {
+                    return candidate.patch ==
+                        static_cast<int>(patchIndex);
+                });
+            if (loop == network.patchLoops.end()) {
+                failure = "A Coons fallback patch has no frozen curve loop.";
+                return {};
+            }
+            const auto& parameterization = layout.patches[patchIndex];
+            if (!parameterization.rectangularIsoBoundary) {
+                failure =
+                    "A Coons fallback patch has no rectangular iso boundary.";
+                return {};
+            }
+            std::array<Handle(Geom_BSplineCurve), 4> sides;
+            for (std::size_t sideIndex = 0;
+                 sideIndex < parameterization.logicalSides.size();
+                 ++sideIndex) {
+                const auto& logicalSide =
+                    parameterization.logicalSides[sideIndex];
+                std::unique_ptr<GeomConvert_CompCurveToBSplineCurve> composer;
+                for (const auto order : logicalSide.edgeUseOrders) {
+                    if (order >= loop->edges.size()) {
+                        failure =
+                            "A Coons fallback logical side references a missing edge use.";
+                        return {};
+                    }
+                    const auto& use = loop->edges[order];
+                    if (use.edgeIndex >= network.edges.size()) {
+                        failure =
+                            "A Coons fallback logical side references a missing frozen edge.";
+                        return {};
+                    }
+                    const auto& edge = network.edges[use.edgeIndex];
+                    if (edge.curve.IsNull() ||
+                        !(edge.lastParameter > edge.firstParameter)) {
+                        failure =
+                            "A Coons fallback logical side contains an invalid frozen curve.";
+                        return {};
+                    }
+                    Handle(Geom_TrimmedCurve) segment =
+                        new Geom_TrimmedCurve(
+                            edge.curve,
+                            edge.firstParameter,
+                            edge.lastParameter);
+                    if (!use.forward) segment->Reverse();
+                    auto segmentSpline =
+                        GeomConvert::CurveToBSplineCurve(segment);
+                    if (segmentSpline.IsNull()) {
+                        failure =
+                            "A Coons fallback edge could not be converted to B-spline form.";
+                        return {};
+                    }
+                    const auto pcurve = std::find_if(
+                        parameterization.edgePcurves.begin(),
+                        parameterization.edgePcurves.end(),
+                        [&](const auto& candidate) {
+                            return candidate.edgeIndex == use.edgeIndex;
+                        });
+                    if (pcurve == parameterization.edgePcurves.end() ||
+                        !(pcurve->sideLastParameter >
+                            pcurve->sideFirstParameter)) {
+                        failure =
+                            "A Coons fallback edge has no logical-side parameter interval.";
+                        return {};
+                    }
+                    const auto firstKnot = segmentSpline->Knot(1);
+                    const auto lastKnot =
+                        segmentSpline->Knot(segmentSpline->NbKnots());
+                    if (!(lastKnot > firstKnot)) {
+                        failure =
+                            "A Coons fallback edge has a degenerate B-spline parameter range.";
+                        return {};
+                    }
+                    TColStd_Array1OfReal segmentKnots(
+                        1, segmentSpline->NbKnots());
+                    for (int knot = 1;
+                         knot <= segmentSpline->NbKnots();
+                         ++knot) {
+                        const auto alpha =
+                            (segmentSpline->Knot(knot) - firstKnot) /
+                            (lastKnot - firstKnot);
+                        segmentKnots.SetValue(
+                            knot,
+                            pcurve->sideFirstParameter +
+                                alpha *
+                                    (pcurve->sideLastParameter -
+                                     pcurve->sideFirstParameter));
+                    }
+                    segmentSpline->SetKnots(segmentKnots);
+                    Handle(Geom_BoundedCurve) bounded = segmentSpline;
+                    if (!composer) {
+                        composer =
+                            std::make_unique<
+                                GeomConvert_CompCurveToBSplineCurve>(
+                                bounded);
+                    } else if (!composer->Add(
+                                   bounded,
+                                   joinTolerance,
+                                   Standard_True,
+                                   Standard_False,
+                                   0)) {
+                        failure =
+                            "A Coons fallback logical side is not G0-contiguous.";
+                        return {};
+                    }
+                }
+                if (!composer) {
+                    failure = "A Coons fallback logical side is empty.";
+                    return {};
+                }
+                sides[sideIndex] = composer->BSplineCurve();
+                if (sides[sideIndex].IsNull()) {
+                    failure =
+                        "A Coons fallback logical side could not be converted to B-spline form.";
+                    return {};
+                }
+            }
+            const auto normalizeKnots = [](const auto count,
+                                           const auto knot,
+                                           const auto setKnots) {
+                const auto first = knot(1);
+                const auto last = knot(count);
+                if (!(last > first)) return false;
+                TColStd_Array1OfReal normalized(1, count);
+                for (int index = 1; index <= count; ++index) {
+                    normalized.SetValue(
+                        index,
+                        (knot(index) - first) / (last - first));
+                }
+                setKnots(normalized);
+                return true;
+            };
+            Handle(Geom_BSplineSurface) surface;
+            std::string lastSupportFailure;
+            for (const auto style : {
+                     GeomFill_CoonsStyle,
+                     GeomFill_StretchStyle,
+                     GeomFill_CurvedStyle}) {
+                try {
+                    GeomFill_BSplineCurves filling(
+                        sides[0],
+                        sides[1],
+                        sides[2],
+                        sides[3],
+                        style);
+                    auto candidate = filling.Surface();
+                    if (candidate.IsNull()) {
+                        lastSupportFailure =
+                            "Open CASCADE did not construct a boundary-locked fallback surface.";
+                        continue;
+                    }
+                    if (!normalizeKnots(
+                            candidate->NbUKnots(),
+                            [&](const int index) {
+                                return candidate->UKnot(index);
+                            },
+                            [&](const TColStd_Array1OfReal& knots) {
+                                candidate->SetUKnots(knots);
+                            }) ||
+                        !normalizeKnots(
+                            candidate->NbVKnots(),
+                            [&](const int index) {
+                                return candidate->VKnot(index);
+                            },
+                            [&](const TColStd_Array1OfReal& knots) {
+                                candidate->SetVKnots(knots);
+                            })) {
+                        lastSupportFailure =
+                            "A boundary-locked fallback surface has a degenerate parameter range.";
+                        continue;
+                    }
+                    auto boundaryDeviation = 0.0;
+                    constexpr int boundarySamples = 33;
+                    for (const auto& use : loop->edges) {
+                        const auto& edge = network.edges[use.edgeIndex];
+                        for (int sample = 0;
+                             sample < boundarySamples;
+                             ++sample) {
+                            const auto parameter =
+                                edge.firstParameter +
+                                static_cast<double>(sample) /
+                                    static_cast<double>(boundarySamples - 1) *
+                                    (edge.lastParameter - edge.firstParameter);
+                            const auto uv = curveParameterOnPatch(
+                                layout,
+                                edge,
+                                static_cast<int>(patchIndex),
+                                parameter);
+                            if (!uv.has_value()) {
+                                boundaryDeviation =
+                                    std::numeric_limits<double>::infinity();
+                                break;
+                            }
+                            boundaryDeviation = std::max(
+                                boundaryDeviation,
+                                candidate->Value((*uv)[0], (*uv)[1])
+                                    .Distance(edge.curve->Value(parameter)));
+                        }
+                    }
+                    if (boundaryDeviation >
+                        options.curveOnSurfaceTolerance) {
+                        std::ostringstream stream;
+                        stream
+                            << "A boundary-locked fallback surface boundary deviates by "
+                            << boundaryDeviation
+                            << " mm from its exact iso pcurve.";
+                        lastSupportFailure = stream.str();
+                        continue;
+                    }
+                    if (!evaluateLocalSupportDomain(
+                            candidate,
+                            layoutCarrier,
+                            parameterization,
+                            options,
+                            lastSupportFailure)) {
+                        continue;
+                    }
+                    surface = std::move(candidate);
+                    break;
+                } catch (const Standard_Failure& exception) {
+                    lastSupportFailure =
+                        "Open CASCADE rejected a boundary-locked filling style";
+                    if (const auto* text = exception.GetMessageString();
+                        text != nullptr && *text != '\0') {
+                        lastSupportFailure += ": ";
+                        lastSupportFailure += text;
+                    }
+                    lastSupportFailure += ".";
+                    continue;
+                }
+            }
+            if (surface.IsNull()) {
+                failure = lastSupportFailure;
+                return {};
+            }
+            surfaces.push_back(std::move(surface));
+        }
+        constexpr int validationSamples = 257;
+        auto maximumDeviation = 0.0;
+        for (const auto& edge : network.edges) {
+            const std::array<int, 2> patches {
+                edge.firstPatch, edge.secondPatch};
+            const auto patchCount = edge.originalBoundary ? 1 : 2;
+            for (int side = 0; side < patchCount; ++side) {
+                const auto patch = patches[static_cast<std::size_t>(side)];
+                if (patch < 0 ||
+                    patch >= static_cast<int>(surfaces.size())) {
+                    failure =
+                        "A Coons fallback edge references an invalid patch.";
+                    return {};
+                }
+                for (int sample = 0; sample < validationSamples; ++sample) {
+                    const auto parameter =
+                        edge.firstParameter +
+                        static_cast<double>(sample) /
+                            static_cast<double>(validationSamples - 1) *
+                            (edge.lastParameter - edge.firstParameter);
+                    const auto uv = curveParameterOnPatch(
+                        layout, edge, patch, parameter);
+                    if (!uv.has_value()) {
+                        failure =
+                            "A Coons fallback edge has no exact iso pcurve.";
+                        return {};
+                    }
+                    maximumDeviation = std::max(
+                        maximumDeviation,
+                        surfaces[static_cast<std::size_t>(patch)]
+                            ->Value((*uv)[0], (*uv)[1])
+                            .Distance(edge.curve->Value(parameter)));
+                }
+            }
+        }
+        if (maximumDeviation > options.curveOnSurfaceTolerance) {
+            std::ostringstream stream;
+            stream << "A Coons fallback boundary deviates by "
+                   << maximumDeviation << " mm from its frozen curve.";
+            failure = stream.str();
+            return {};
+        }
+    } catch (const Standard_Failure&) {
+        failure = "Open CASCADE rejected a boundary-locked Coons fallback.";
+        return {};
+    }
+    return surfaces;
+}
+
 }
 
 bool regionLocalSupportDomainPassed(
@@ -2519,12 +2846,27 @@ double normalizedViolationScore(
         metrics.seamMaximumCurvatureDifference / std::max(options.g2CurvatureTolerance, 1.0e-12)});
 }
 
+bool fitGatesPassed(
+    const ValidationMetrics& metrics,
+    const RegionRefitOptions& options) {
+    return metrics.holdoutMaximumDistance <= options.tolerance3d &&
+        metrics.holdoutMaximumNormalDegrees <=
+            options.normalToleranceDegrees &&
+        metrics.boundaryMaximumDistance <=
+            options.curveOnSurfaceTolerance &&
+        metrics.seamMaximumDistance <=
+            options.curveOnSurfaceTolerance &&
+        metrics.seamContinuityGatePassed;
+}
+
 std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
     const RegionPatchLayout& layout,
     std::vector<Handle(Geom_BSplineSurface)> surfaces,
     const ValidationMetrics& metrics,
     const RegionRefitOptions& options,
-    const bool gatePassed) {
+    const bool gatePassed,
+    const bool boundaryLocked,
+    std::string fitOutcome) {
     auto network = std::make_shared<RegionFittedPatchNetwork>();
     network->layout = layout;
     network->surfaces = std::move(surfaces);
@@ -2540,6 +2882,16 @@ std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
     network->seamContinuityGatePassed = metrics.seamContinuityGatePassed;
     network->normalizedViolationScore = normalizedViolationScore(metrics, options);
     network->fitGatePassed = gatePassed;
+    network->boundaryLocked = boundaryLocked;
+    network->constructibleForBRep =
+        boundaryLocked &&
+        std::all_of(
+            layout.patches.begin(),
+            layout.patches.end(),
+            [](const auto& patch) {
+                return patch.rectangularIsoBoundary;
+            });
+    network->fitOutcome = std::move(fitOutcome);
     return network;
 }
 
@@ -2601,6 +2953,56 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         int boundaryFeasibilityRefinementRounds = 0;
         std::vector<Handle(Geom_BSplineSurface)> bestSurfaces;
         ValidationMetrics bestMetrics;
+        auto bestBoundaryLocked = false;
+        std::string boundaryFallbackFailure;
+        if (curveNetwork != nullptr) {
+            auto coonsSurfaces = makeBoundaryLockedCoonsNetwork(
+                layoutCarrier,
+                layout,
+                *curveNetwork,
+                options,
+                boundaryFallbackFailure);
+            if (!coonsSurfaces.empty()) {
+                bestMetrics = validateNetwork(
+                    fittingReference,
+                    layoutCarrier,
+                    layout,
+                    lookups,
+                    coonsSurfaces,
+                    options,
+                    mappedSamples);
+                validateFrozenCurveContinuity(
+                    bestMetrics,
+                    layout,
+                    *curveNetwork,
+                    coonsSurfaces,
+                    options);
+                if (fitGatesPassed(bestMetrics, options)) {
+                    attempt.success = true;
+                    attempt.stopReason =
+                        "The boundary-locked fallback passed all fitting gates.";
+                    attempt.wallMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            attemptStarted).count();
+                    result.attempts.push_back(attempt);
+                    result.network = fittedNetwork(
+                        layout,
+                        std::move(coonsSurfaces),
+                        bestMetrics,
+                        options,
+                        true,
+                        true,
+                        "ProductFit");
+                    result.status = RegionRefitStatus::Success;
+                    result.message =
+                        "The boundary-locked fallback passed all fitting gates.";
+                    return result;
+                }
+                bestSurfaces = std::move(coonsSurfaces);
+                bestBoundaryLocked = true;
+            }
+        }
 
         const auto maximumIterations = std::min(options.maximumFitIterations, 20);
         for (int iteration = 0; iteration < maximumIterations; ++iteration) {
@@ -3039,7 +3441,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     boundaryRefinementNeeded ||
                     !iterationReport.hardConstraintFeasible;
                 if (boundaryRefinementNeeded &&
-                    affineBaseline) {
+                    affineBaseline &&
+                    curveNetwork == nullptr) {
                     const auto baseline = largestConstructibleBlend(
                         *affineBaseline,
                         *affineBaseline,
@@ -3142,6 +3545,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         if (!initialDiagnosticSurfaces.empty()) {
                             bestSurfaces = initialDiagnosticSurfaces;
                             bestMetrics = initialDiagnosticMetrics;
+                            bestBoundaryLocked =
+                                iterationReport.hardConstraintFeasible;
                         }
                         ++boundaryFeasibilityRefinementRounds;
                         iterationReport.boundaryFeasibilityRefinementRounds =
@@ -3506,16 +3911,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 }
                 iterationReport.correctedTrainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.correctedBoundaryMaximumDistance = metrics.boundaryMaximumDistance;
-                const auto accepted = metrics.holdoutMaximumDistance <= options.tolerance3d &&
-                    metrics.holdoutMaximumNormalDegrees <= options.normalToleranceDegrees &&
-                    metrics.boundaryMaximumDistance <= options.curveOnSurfaceTolerance &&
-                    metrics.seamMaximumDistance <= options.curveOnSurfaceTolerance &&
-                    metrics.seamContinuityGatePassed &&
+                const auto accepted = fitGatesPassed(metrics, options) &&
                     iterationReport.hardConstraintFeasible;
                 if (bestSurfaces.empty() || normalizedViolationScore(metrics, options) <
                         normalizedViolationScore(bestMetrics, options)) {
                     bestSurfaces = surfaces;
                     bestMetrics = metrics;
+                    bestBoundaryLocked =
+                        iterationReport.hardConstraintFeasible;
                 }
                 if (accepted) {
                     iterationReport.stopReason = "All fit, boundary, seam, and holdout gates passed.";
@@ -3527,7 +3930,14 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     attempt.wallMilliseconds = std::chrono::duration<double, std::milli>(
                         std::chrono::steady_clock::now() - attemptStarted).count();
                     result.attempts.push_back(attempt);
-                    result.network = fittedNetwork(layout, std::move(surfaces), metrics, options, true);
+                    result.network = fittedNetwork(
+                        layout,
+                        std::move(surfaces),
+                        metrics,
+                        options,
+                        true,
+                        true,
+                        "ProductFit");
                     result.status = RegionRefitStatus::Success;
                     result.message = "The smallest fully fitted layout passed all fitting gates.";
                     return result;
@@ -3575,8 +3985,24 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         if (attempt.stopReason.empty()) {
             attempt.stopReason = "Fit iteration budget exhausted without passing all gates.";
         }
+        if (!boundaryFallbackFailure.empty() &&
+            attempt.stopReason.find(boundaryFallbackFailure) ==
+                std::string::npos) {
+            attempt.stopReason +=
+                " Boundary-locked Coons fallback unavailable: " +
+                boundaryFallbackFailure;
+        }
         if (!bestSurfaces.empty()) {
-            auto candidate = fittedNetwork(layout, std::move(bestSurfaces), bestMetrics, options, false);
+            auto candidate = fittedNetwork(
+                layout,
+                std::move(bestSurfaces),
+                bestMetrics,
+                options,
+                false,
+                bestBoundaryLocked,
+                bestBoundaryLocked
+                    ? "BoundaryLockedDiagnostic"
+                    : "UnconstrainedInspectionOnly");
             if (candidate->normalizedViolationScore < bestEffortScore) {
                 bestEffortScore = candidate->normalizedViolationScore;
                 result.bestEffortNetwork = std::move(candidate);

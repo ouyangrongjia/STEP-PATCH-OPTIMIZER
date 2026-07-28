@@ -28,6 +28,19 @@ struct RegionLayoutSeam {
     std::vector<std::array<std::size_t, 2>> meshEdges;
 };
 
+enum class RegionPatchIsoSide {
+    VMin = 0,
+    UMax = 1,
+    VMax = 2,
+    UMin = 3
+};
+
+struct RegionPatchLogicalSide {
+    RegionPatchIsoSide isoSide = RegionPatchIsoSide::VMin;
+    std::vector<std::size_t> edgeUseOrders;
+    double curveLength = 0.0;
+};
+
 struct RegionPatchEdgePcurve {
     std::size_t edgeIndex = 0;
     bool forward = true;
@@ -36,6 +49,9 @@ struct RegionPatchEdgePcurve {
     std::size_t startNode = 0;
     std::size_t endNode = 0;
     std::size_t loopOrder = 0;
+    RegionPatchIsoSide isoSide = RegionPatchIsoSide::VMin;
+    double sideFirstParameter = 0.0;
+    double sideLastParameter = 1.0;
     std::vector<double> parameters;
     std::vector<std::array<double, 2>> uvPoints;
     std::string hash;
@@ -44,15 +60,22 @@ struct RegionPatchEdgePcurve {
 struct RegionPatchParameterization {
     std::vector<std::size_t> triangleIndices;
     std::vector<std::size_t> vertexIndices;
+    // Strictly convex carrier coordinates used only for injective triangle
+    // location and layout-quality diagnostics.
     std::vector<std::array<double, 2>> parameters;
+    // Rectangular surface coordinates whose boundary is exactly the four
+    // logical iso sides used by fitting and B-rep pcurves.
+    std::vector<std::array<double, 2>> surfaceParameters;
     std::vector<std::size_t> boundaryLoop;
     // Retained only for the legacy mesh-seam fitting path. Frozen curve-network
     // fitting and B-rep construction use edgePcurves as their single UV truth.
     std::array<std::vector<std::size_t>, 4> boundarySides;
+    std::array<RegionPatchLogicalSide, 4> logicalSides;
     std::vector<RegionBoundaryChain> boundaryChains;
     std::vector<RegionPatchEdgePcurve> edgePcurves;
     std::vector<std::size_t> trimCorners;
     std::string domainType = "TrimmedDiskConvexBoundary";
+    bool rectangularIsoBoundary = false;
     bool diskTopologyPassed = false;
     bool pcurveLoopClosed = false;
     bool pcurveOrientationConsistent = false;
