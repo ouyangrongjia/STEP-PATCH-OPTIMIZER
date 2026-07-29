@@ -214,7 +214,10 @@ struct RegionLayoutCandidateReport {
     int trimCornerCount = 0;
     double minimumSignedUvArea = 0.0;
     double minimumToMedianUvAreaRatio = 0.0;
+    double distortionP995 = 0.0;
     double boundaryRepresentabilityResidual = 0.0;
+    std::size_t logicalSideCandidateCount = 0;
+    std::string selectedLogicalSideHash;
     std::string domainType;
     std::size_t matrixRows = 0;
     std::size_t matrixNonZeros = 0;
@@ -237,6 +240,9 @@ struct RegionFitIterationReport {
     std::size_t projectionCount = 0;
     std::size_t uvIterationCount = 0;
     std::size_t projectionFallbackCount = 0;
+    std::size_t sameFaceBarycentricMappingCount = 0;
+    std::size_t sameFaceMappingFallbackCount = 0;
+    std::size_t crossFaceMappingFailureCount = 0;
     std::size_t boundaryHardConstraintCount = 0;
     std::size_t seamG0ConstraintCount = 0;
     std::size_t seamG1SoftConstraintCount = 0;
@@ -282,6 +288,20 @@ struct RegionFitIterationReport {
     double seamMaximumNormalDegrees = 0.0;
     double seamMaximumCurvatureDifference = 0.0;
     bool seamContinuityGatePassed = false;
+    int actualTotalPoleCount = 0;
+    int actualMaximumPoleCountPerSide = 0;
+    int actualTotalKnotCount = 0;
+    int fixedBoundaryControlPointCount = 0;
+    int interiorControlPointCount = 0;
+    bool reducedSpdSystemUsed = false;
+    double fairnessEnergy = 0.0;
+    double maximumNormalVariationDegrees = 0.0;
+    double curvatureOscillation = 0.0;
+    double minimumNormalizedJacobian = 0.0;
+    double conditionNumberP50 = 0.0;
+    double conditionNumberP95 = 0.0;
+    double conditionNumberP99 = 0.0;
+    bool surfaceQualityHardFailure = false;
     double wallMilliseconds = 0.0;
     std::string stopReason;
 };
@@ -289,10 +309,21 @@ struct RegionFitIterationReport {
 struct RegionFitAttemptReport {
     int patchCount = 0;
     std::string layoutHash;
+    std::size_t sameFaceBarycentricMappingCount = 0;
+    std::size_t sameFaceMappingFallbackCount = 0;
+    std::size_t crossFaceMappingFailureCount = 0;
     bool success = false;
     double wallMilliseconds = 0.0;
     std::string stopReason;
     std::vector<RegionFitIterationReport> iterations;
+};
+
+struct RegionSurfaceComplexityReport {
+    int patchIndex = -1;
+    int uPoleCount = 0;
+    int vPoleCount = 0;
+    int uKnotCount = 0;
+    int vKnotCount = 0;
 };
 
 struct RegionEdgeConsistencyReport {
@@ -314,6 +345,15 @@ struct RegionEdgeConsistencyReport {
     std::vector<double> triangulationDeflections;
     std::vector<double> triangulationPolylineSeparations;
     std::string classification;
+};
+
+struct RegionBRepCheckStatusReport {
+    std::string shapeKind;
+    int faceIndex = -1;
+    int subshapeIndex = -1;
+    int statusCode = 0;
+    std::string status;
+    bool valid = false;
 };
 
 std::string classifyRegionEdgeConsistency(
@@ -411,6 +451,22 @@ struct RegionRefitReport {
     double boundaryFeasibilityResidual = 0.0;
     int fittedMaximumUControlCount = 0;
     int fittedMaximumVControlCount = 0;
+    int fittedTotalPoleCount = 0;
+    int fittedMaximumPoleCountPerSide = 0;
+    int fittedTotalKnotCount = 0;
+    std::vector<RegionSurfaceComplexityReport>
+        fittedSurfaceComplexities;
+    std::size_t sameFaceBarycentricMappingCount = 0;
+    std::size_t sameFaceMappingFallbackCount = 0;
+    std::size_t crossFaceMappingFailureCount = 0;
+    double fittedFairnessEnergy = 0.0;
+    double fittedMaximumNormalVariationDegrees = 0.0;
+    double fittedCurvatureOscillation = 0.0;
+    double fittedMinimumNormalizedJacobian = 0.0;
+    double fittedConditionNumberP50 = 0.0;
+    double fittedConditionNumberP95 = 0.0;
+    double fittedConditionNumberP99 = 0.0;
+    bool fittedSurfaceQualityHardFailure = false;
     int pcurveSelfIntersectionCount = 0;
     int pcurveNonAdjacentIntersectionCount = 0;
     bool bestEffortUsed = false;
@@ -439,6 +495,7 @@ struct RegionRefitReport {
     double unexpectedFaceIntersectionTotalLength = 0.0;
     int replacementQuiltInternalFreeEdgeCount = 0;
     std::vector<RegionEdgeConsistencyReport> edgeConsistency;
+    std::vector<RegionBRepCheckStatusReport> brepCheckStatuses;
     bool assemblyPassed = false;
     bool repairPassed = false;
     bool sewingAttempted = false;

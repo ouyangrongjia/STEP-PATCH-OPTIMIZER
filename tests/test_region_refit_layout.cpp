@@ -46,6 +46,7 @@ spo::RegionReferenceMesh makeGrid(const int columns, const int rows) {
                 -0.12 * std::sin(x * 2.0) * std::cos(y * 1.5), 1.0);
             spo::RegionReferenceSourceSample source;
             source.faceId = 1;
+            source.uv = gp_Pnt2d(x, y);
             source.normal = vertex.normal;
             source.normalDefined = true;
             source.curvatureDefined = true;
@@ -713,6 +714,15 @@ void test_four_seven_ten_and_eleven_edge_domains_are_rectangular_and_injective()
         assert(patch.pcurveNonAdjacentIntersectionCount == 0);
         assert(patch.flippedTriangleCount == 0);
         assert(patch.minimumToMedianUvAreaRatio > 0.0);
+        assert(patch.logicalSideCandidateCount >= 1);
+        assert(!patch.selectedLogicalSideHash.empty());
+        auto repeated = partitions.selectedCandidates.front();
+        std::string repeatedMessage;
+        assert(spo::buildCurveConsistentParameterDomain(
+            mesh, network, options, repeated, repeatedMessage));
+        assert(repeated.hash == layout.hash);
+        assert(repeated.patches.front().selectedLogicalSideHash ==
+            patch.selectedLogicalSideHash);
         for (const auto& pcurve : patch.edgePcurves) {
             for (std::size_t sample = 0;
                  sample < pcurve.parameters.size(); ++sample) {
@@ -925,6 +935,23 @@ void test_four_patch_curve_network_keeps_closed_oriented_patch_loops() {
         network.nodes.begin(),
         network.nodes.end(),
         [](const auto& node) { return node.incidentEdges.size() >= 4; }));
+    const auto layouts = spo::RegionPatchLayoutGenerator().generate(
+        fixture.mesh, generated, options);
+    assert(layouts.success());
+    assert(layouts.selectedCandidates.front().patchCount == 4);
+    for (const auto& patch :
+         layouts.selectedCandidates.front().patches) {
+        assert(std::all_of(
+            patch.logicalSides.begin(),
+            patch.logicalSides.end(),
+            [](const auto& side) {
+                return !side.edgeUseOrders.empty();
+            }));
+        assert(patch.pcurveSelfIntersectionCount == 0);
+        assert(patch.pcurveNonAdjacentIntersectionCount == 0);
+        assert(patch.logicalSideCandidateCount >= 1);
+        assert(!patch.selectedLogicalSideHash.empty());
+    }
     for (const auto& edge : network.edges) {
         if (edge.originalBoundary) continue;
         std::vector<bool> directions;
@@ -986,16 +1013,78 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
     assert(fitted.network->seamContinuityGatePassed);
     assert(!fitted.attempts.empty());
     assert(fitted.attempts.front().success);
-    if (fitted.attempts.front().iterations.empty()) {
-        assert(fitted.attempts.front().stopReason ==
-            "The boundary-locked fallback passed all fitting gates.");
-    } else {
-        const auto& iteration =
-            fitted.attempts.front().iterations.back();
-        assert(iteration.seamG0ConstraintCount > 0);
-        assert(iteration.seamG1SoftConstraintCount > 0);
-        assert(iteration.seamG2SoftConstraintCount > 0);
-        assert(iteration.seamContinuityGatePassed);
+    assert(!fitted.attempts.front().iterations.empty());
+    const auto& iteration =
+        fitted.attempts.front().iterations.back();
+    assert(iteration.seamG0ConstraintCount > 0);
+    assert(iteration.seamG1SoftConstraintCount > 0);
+    assert(iteration.seamG2SoftConstraintCount > 0);
+    assert(iteration.seamContinuityGatePassed);
+    assert(iteration.reducedSpdSystemUsed);
+    assert(iteration.fixedBoundaryControlPointCount > 0);
+    assert(iteration.interiorControlPointCount > 0);
+    assert(iteration.sameFaceBarycentricMappingCount ==
+        fixture.mesh.vertices.size());
+    assert(iteration.sameFaceMappingFallbackCount == 0);
+    assert(iteration.crossFaceMappingFailureCount == 0);
+    assert(iteration.actualTotalPoleCount > 0);
+    assert(iteration.actualMaximumPoleCountPerSide <= 25);
+    assert(iteration.actualTotalKnotCount > 0);
+    assert(!iteration.surfaceQualityHardFailure);
+    auto measuredTotalPoles = 0;
+    auto measuredTotalKnots = 0;
+    auto measuredMaximumSide = 0;
+    assert(fitted.network->quality.surfaceComplexities.size() ==
+        fitted.network->surfaces.size());
+    for (std::size_t patch = 0;
+         patch < fitted.network->surfaces.size();
+         ++patch) {
+        const auto& surface = fitted.network->surfaces[patch];
+        const auto& complexity =
+            fitted.network->quality.surfaceComplexities[patch];
+        assert(complexity.patchIndex == static_cast<int>(patch));
+        assert(complexity.uPoleCount == surface->NbUPoles());
+        assert(complexity.vPoleCount == surface->NbVPoles());
+        assert(complexity.uKnotCount == surface->NbUKnots());
+        assert(complexity.vKnotCount == surface->NbVKnots());
+        measuredTotalPoles +=
+            surface->NbUPoles() * surface->NbVPoles();
+        measuredTotalKnots +=
+            surface->NbUKnots() + surface->NbVKnots();
+        measuredMaximumSide = std::max({
+            measuredMaximumSide,
+            surface->NbUPoles(),
+            surface->NbVPoles()});
+    }
+    assert(iteration.actualTotalPoleCount == measuredTotalPoles);
+    assert(iteration.actualTotalKnotCount == measuredTotalKnots);
+    assert(iteration.actualMaximumPoleCountPerSide ==
+        measuredMaximumSide);
+    assert(iteration.stopReason.find("factorization") ==
+        std::string::npos);
+    for (const auto& curveEdge : curveNetwork.edges) {
+        if (curveEdge.originalBoundary) continue;
+        std::vector<int> sidePoleCounts;
+        for (std::size_t patch = 0;
+             patch < fitted.network->layout.patches.size();
+             ++patch) {
+            const auto& parameterization =
+                fitted.network->layout.patches[patch];
+            const auto use = std::find_if(
+                parameterization.edgePcurves.begin(),
+                parameterization.edgePcurves.end(),
+                [&](const auto& pcurve) {
+                    return pcurve.edgeIndex == curveEdge.id;
+                });
+            if (use == parameterization.edgePcurves.end()) continue;
+            sidePoleCounts.push_back(
+                use->isoSide == spo::RegionPatchIsoSide::VMin ||
+                    use->isoSide == spo::RegionPatchIsoSide::VMax
+                ? fitted.network->surfaces[patch]->NbUPoles()
+                : fitted.network->surfaces[patch]->NbVPoles());
+        }
+        assert(sidePoleCounts.size() == 2);
+        assert(sidePoleCounts[0] == sidePoleCounts[1]);
     }
 
     const auto built = spo::NativeRegionPatchNetworkBuilder().build(
@@ -1005,12 +1094,29 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
         curveNetwork,
         options.curveOnSurfaceTolerance);
     assert(built.success());
+    assert(built.replacementShape.ShapeType() == TopAbs_SHELL);
     assert(built.internalSeamCount == 1);
     assert(built.internalSeamEdges.size() == 1);
     assert(built.sameParameterFailureCount == 0);
     assert(built.diagnosticPcurveFallbackCount == 0);
     assert(built.unexpectedFaceIntersectionCount == 0);
     assert(built.replacementQuiltInternalFreeEdgeCount == 0);
+    assert(std::any_of(
+        built.brepCheckStatuses.begin(),
+        built.brepCheckStatuses.end(),
+        [](const auto& status) {
+            return status.shapeKind == "Shell" &&
+                status.status == "NoError" &&
+                status.valid;
+        }));
+    for (const auto* kind : {"Face", "Wire", "Edge", "Shell"}) {
+        assert(std::any_of(
+            built.brepCheckStatuses.begin(),
+            built.brepCheckStatuses.end(),
+            [&](const auto& status) {
+                return status.shapeKind == kind;
+            }));
+    }
     const auto internal = std::find_if(
         built.edgeConsistency.begin(),
         built.edgeConsistency.end(),
@@ -1027,6 +1133,88 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
             face, gp_Pnt2d(-0.05, 0.5), 1.0e-9);
         assert(outside.State() == TopAbs_OUT);
     }
+}
+
+void test_repeated_data_constraints_do_not_break_reduced_spd_fit() {
+    const auto fixture = makePlanarCurveFixture(8);
+    spo::RegionRefitOptions options;
+    options.fixedPatchCount = 2;
+    options.maximumParameterDistortion = 1000.0;
+    options.curveProjectionTolerance = 0.01;
+    options.curveOnSurfaceTolerance = 0.05;
+    options.tolerance3d = 0.05;
+    options.normalToleranceDegrees = 1.0;
+    options.g1ToleranceDegrees = 1.0;
+    const auto generated = spo::RegionCurveNetworkGenerator().generate(
+        fixture.mesh,
+        fixture.constraints,
+        spo::RegionRefitLayoutMode::FixedPatchCount,
+        options);
+    assert(generated.success());
+    const auto layouts = spo::RegionPatchLayoutGenerator().generate(
+        fixture.mesh, generated, options);
+    assert(layouts.success());
+    auto repeatedReference = fixture.mesh;
+    repeatedReference.vertices.insert(
+        repeatedReference.vertices.end(),
+        fixture.mesh.vertices.begin(),
+        fixture.mesh.vertices.end());
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        repeatedReference,
+        fixture.mesh,
+        fixture.constraints,
+        layouts.selectedCandidates,
+        std::vector<spo::RegionCurveNetwork> {
+            generated.selectedCandidates.front().network},
+        options,
+        std::chrono::steady_clock::now() +
+            std::chrono::seconds(20));
+    assert(fitted.success());
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front().iterations.empty());
+    const auto& iteration =
+        fitted.attempts.front().iterations.back();
+    assert(iteration.reducedSpdSystemUsed);
+    assert(iteration.stopReason.find("factorization") ==
+        std::string::npos);
+}
+
+void test_coons_fallback_is_diagnostic_only() {
+    const auto fixture = makePlanarCurveFixture(8);
+    spo::RegionRefitOptions options;
+    options.fixedPatchCount = 2;
+    options.maximumParameterDistortion = 1000.0;
+    options.curveProjectionTolerance = 0.01;
+    options.curveOnSurfaceTolerance = 0.05;
+    options.tolerance3d = 0.05;
+    options.maximumControlPointsPerSide = 3;
+    const auto generated = spo::RegionCurveNetworkGenerator().generate(
+        fixture.mesh,
+        fixture.constraints,
+        spo::RegionRefitLayoutMode::FixedPatchCount,
+        options);
+    assert(generated.success());
+    const auto layouts = spo::RegionPatchLayoutGenerator().generate(
+        fixture.mesh, generated, options);
+    assert(layouts.success());
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        fixture.mesh,
+        fixture.mesh,
+        fixture.constraints,
+        layouts.selectedCandidates,
+        std::vector<spo::RegionCurveNetwork> {
+            generated.selectedCandidates.front().network},
+        options,
+        std::chrono::steady_clock::now() +
+            std::chrono::seconds(20));
+    assert(!fitted.success());
+    assert(!fitted.network);
+    assert(fitted.bestEffortNetwork);
+    assert(fitted.bestEffortNetwork->boundaryLocked);
+    assert(fitted.bestEffortNetwork->constructibleForBRep);
+    assert(fitted.bestEffortNetwork->fitOutcome ==
+        "BoundaryLockedDiagnostic");
+    assert(fitted.attempts.front().iterations.empty());
 }
 
 void test_curve_network_cache_roundtrip_is_deterministic() {
@@ -1152,5 +1340,7 @@ void run_region_refit_layout_tests() {
     test_curve_network_rejects_open_misoriented_and_multiple_use_loops();
     test_four_patch_curve_network_keeps_closed_oriented_patch_loops();
     test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge();
+    test_repeated_data_constraints_do_not_break_reduced_spd_fit();
+    test_coons_fallback_is_diagnostic_only();
     test_curve_network_cache_roundtrip_is_deterministic();
 }

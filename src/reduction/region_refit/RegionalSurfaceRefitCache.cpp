@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 10;
+constexpr quint32 kVersion = 11;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -354,8 +354,11 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
         stream << quint64(patch.matrixRows) << quint64(patch.matrixNonZeros)
                << patch.flippedTriangleCount << patch.minimumSignedUvArea
                << patch.minimumToMedianUvAreaRatio
+               << patch.distortionP995
                << patch.boundaryRepresentabilityResidual
-               << patch.maximumDistortion;
+               << patch.maximumDistortion
+               << quint64(patch.logicalSideCandidateCount);
+        writeString(stream, patch.selectedLogicalSideHash);
     }
     stream << quint64(layout.seams.size());
     for (const auto& seam : layout.seams) {
@@ -496,8 +499,14 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
         stream >> rows >> nonZeros >> patch.flippedTriangleCount
                >> patch.minimumSignedUvArea
                >> patch.minimumToMedianUvAreaRatio
+               >> patch.distortionP995
                >> patch.boundaryRepresentabilityResidual
                >> patch.maximumDistortion;
+        quint64 logicalSideCandidateCount = 0;
+        stream >> logicalSideCandidateCount;
+        patch.logicalSideCandidateCount =
+            static_cast<std::size_t>(logicalSideCandidateCount);
+        if (!readString(stream, patch.selectedLogicalSideHash)) return false;
         patch.matrixRows = static_cast<std::size_t>(rows);
         patch.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     }
@@ -832,6 +841,23 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.seamMaximumNormalDegrees
            << report.seamMaximumCurvatureDifference
            << report.seamContinuityGatePassed
+           << quint64(report.sameFaceBarycentricMappingCount)
+           << quint64(report.sameFaceMappingFallbackCount)
+           << quint64(report.crossFaceMappingFailureCount)
+           << report.actualTotalPoleCount
+           << report.actualMaximumPoleCountPerSide
+           << report.actualTotalKnotCount
+           << report.fixedBoundaryControlPointCount
+           << report.interiorControlPointCount
+           << report.reducedSpdSystemUsed
+           << report.fairnessEnergy
+           << report.maximumNormalVariationDegrees
+           << report.curvatureOscillation
+           << report.minimumNormalizedJacobian
+           << report.conditionNumberP50
+           << report.conditionNumberP95
+           << report.conditionNumberP99
+           << report.surfaceQualityHardFailure
            << report.wallMilliseconds;
     writeString(stream, report.hardConstraintStatus);
     writeString(stream, report.stopReason);
@@ -856,6 +882,9 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     quint64 constraintRowsAfter = 0;
     quint64 constraintEstimatedRank = 0;
     quint64 nonZeroBoundaryRhs = 0;
+    quint64 sameFaceBarycentricMappings = 0;
+    quint64 sameFaceMappingFallbacks = 0;
+    quint64 crossFaceMappingFailures = 0;
     stream >> report.iteration >> report.uControlCount >> report.vControlCount
            >> rows >> columns >> nonZeros >> bytes >> report.symbolicFactorizationReuseCount
            >> projectionCount >> uvIterations >> projectionFallbacks
@@ -890,6 +919,23 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.seamMaximumNormalDegrees
            >> report.seamMaximumCurvatureDifference
            >> report.seamContinuityGatePassed
+           >> sameFaceBarycentricMappings
+           >> sameFaceMappingFallbacks
+           >> crossFaceMappingFailures
+           >> report.actualTotalPoleCount
+           >> report.actualMaximumPoleCountPerSide
+           >> report.actualTotalKnotCount
+           >> report.fixedBoundaryControlPointCount
+           >> report.interiorControlPointCount
+           >> report.reducedSpdSystemUsed
+           >> report.fairnessEnergy
+           >> report.maximumNormalVariationDegrees
+           >> report.curvatureOscillation
+           >> report.minimumNormalizedJacobian
+           >> report.conditionNumberP50
+           >> report.conditionNumberP95
+           >> report.conditionNumberP99
+           >> report.surfaceQualityHardFailure
            >> report.wallMilliseconds;
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixColumns = static_cast<std::size_t>(columns);
@@ -907,6 +953,12 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.constraintRowsAfter = static_cast<std::size_t>(constraintRowsAfter);
     report.constraintEstimatedRank = static_cast<std::size_t>(constraintEstimatedRank);
     report.nonZeroBoundaryRhsCount = static_cast<std::size_t>(nonZeroBoundaryRhs);
+    report.sameFaceBarycentricMappingCount =
+        static_cast<std::size_t>(sameFaceBarycentricMappings);
+    report.sameFaceMappingFallbackCount =
+        static_cast<std::size_t>(sameFaceMappingFallbacks);
+    report.crossFaceMappingFailureCount =
+        static_cast<std::size_t>(crossFaceMappingFailures);
     report.holdoutWorstDistanceVertex = static_cast<std::size_t>(worstDistance);
     report.holdoutWorstNormalVertex = static_cast<std::size_t>(worstNormal);
     return readString(stream, report.hardConstraintStatus) &&
@@ -919,6 +971,9 @@ void writeAttempts(QDataStream& stream, const std::vector<RegionFitAttemptReport
     for (const auto& attempt : attempts) {
         stream << attempt.patchCount;
         writeString(stream, attempt.layoutHash);
+        stream << quint64(attempt.sameFaceBarycentricMappingCount)
+               << quint64(attempt.sameFaceMappingFallbackCount)
+               << quint64(attempt.crossFaceMappingFailureCount);
         stream << attempt.success << attempt.wallMilliseconds;
         writeString(stream, attempt.stopReason);
         stream << quint64(attempt.iterations.size());
@@ -933,6 +988,18 @@ bool readAttempts(QDataStream& stream, std::vector<RegionFitAttemptReport>& atte
     for (auto& attempt : attempts) {
         stream >> attempt.patchCount;
         if (!readString(stream, attempt.layoutHash)) return false;
+        quint64 sameFaceBarycentricMappings = 0;
+        quint64 sameFaceMappingFallbacks = 0;
+        quint64 crossFaceMappingFailures = 0;
+        stream >> sameFaceBarycentricMappings
+               >> sameFaceMappingFallbacks
+               >> crossFaceMappingFailures;
+        attempt.sameFaceBarycentricMappingCount =
+            static_cast<std::size_t>(sameFaceBarycentricMappings);
+        attempt.sameFaceMappingFallbackCount =
+            static_cast<std::size_t>(sameFaceMappingFallbacks);
+        attempt.crossFaceMappingFailureCount =
+            static_cast<std::size_t>(crossFaceMappingFailures);
         stream >> attempt.success >> attempt.wallMilliseconds;
         if (!readString(stream, attempt.stopReason) || !readCount(stream, count)) return false;
         attempt.iterations.resize(count);
@@ -977,7 +1044,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v34-curve-network"
+                ? "native-regional-refit-v40-fair-boundary-spd"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << request.forceDiagnosticSewing << '|';
@@ -1302,6 +1369,8 @@ bool RegionalSurfaceRefitCache::loadFit(
     bool seamContinuityGatePassed = false;
     bool boundaryLocked = false;
     bool constructibleForBRep = false;
+    double normalizedViolationScore = 0.0;
+    RegionSurfaceQualityMetrics quality;
     std::string fitOutcome;
     const auto started = std::chrono::steady_clock::now();
     const auto metadataLoaded = openDataFile(cacheFile("fit.bin"), [&](QDataStream& stream) {
@@ -1316,7 +1385,19 @@ bool RegionalSurfaceRefitCache::loadFit(
         stream >> holdoutDistance >> holdoutNormal >> boundaryDistance
                >> seamDistance >> seamCurveDeviation >> seamNormalDegrees
                >> seamCurvatureDifference >> seamContinuityGatePassed
-               >> boundaryLocked >> constructibleForBRep;
+               >> boundaryLocked >> constructibleForBRep
+               >> normalizedViolationScore
+               >> quality.totalPoleCount
+               >> quality.maximumPoleCountPerSide
+               >> quality.totalKnotCount
+               >> quality.fairnessEnergy
+               >> quality.maximumNormalVariationDegrees
+               >> quality.curvatureOscillation
+               >> quality.minimumNormalizedJacobian
+               >> quality.conditionNumberP50
+               >> quality.conditionNumberP95
+               >> quality.conditionNumberP99
+               >> quality.hardFailure;
         if (!readString(stream, fitOutcome)) return false;
         result.status = static_cast<RegionRefitStatus>(status);
         return stream.status() == QDataStream::Ok;
@@ -1371,6 +1452,20 @@ bool RegionalSurfaceRefitCache::loadFit(
     network->seamContinuityGatePassed = seamContinuityGatePassed;
     network->boundaryLocked = boundaryLocked;
     network->constructibleForBRep = constructibleForBRep;
+    network->normalizedViolationScore = normalizedViolationScore;
+    network->quality = quality;
+    network->quality.surfaceComplexities.clear();
+    for (std::size_t patch = 0;
+         patch < network->surfaces.size();
+         ++patch) {
+        const auto& surface = network->surfaces[patch];
+        network->quality.surfaceComplexities.push_back({
+            static_cast<int>(patch),
+            surface->NbUPoles(),
+            surface->NbVPoles(),
+            surface->NbUKnots(),
+            surface->NbVKnots()});
+    }
     network->fitOutcome = fitOutcome;
     network->fitGatePassed = true;
     result.network = std::move(network);
@@ -1423,7 +1518,32 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
                << (result.success() ? result.network->seamMaximumCurvatureDifference : 0.0)
                << (result.success() && result.network->seamContinuityGatePassed)
                << (result.success() && result.network->boundaryLocked)
-               << (result.success() && result.network->constructibleForBRep);
+               << (result.success() && result.network->constructibleForBRep)
+               << (result.success()
+                    ? result.network->normalizedViolationScore : 0.0)
+               << (result.success()
+                    ? result.network->quality.totalPoleCount : 0)
+               << (result.success()
+                    ? result.network->quality.maximumPoleCountPerSide : 0)
+               << (result.success()
+                    ? result.network->quality.totalKnotCount : 0)
+               << (result.success()
+                    ? result.network->quality.fairnessEnergy : 0.0)
+               << (result.success()
+                    ? result.network->quality.maximumNormalVariationDegrees
+                    : 0.0)
+               << (result.success()
+                    ? result.network->quality.curvatureOscillation : 0.0)
+               << (result.success()
+                    ? result.network->quality.minimumNormalizedJacobian : 0.0)
+               << (result.success()
+                    ? result.network->quality.conditionNumberP50 : 0.0)
+               << (result.success()
+                    ? result.network->quality.conditionNumberP95 : 0.0)
+               << (result.success()
+                    ? result.network->quality.conditionNumberP99 : 0.0)
+               << (result.success() &&
+                    result.network->quality.hardFailure);
         writeString(
             stream,
             result.success() ? result.network->fitOutcome : std::string {});

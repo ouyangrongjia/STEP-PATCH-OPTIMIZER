@@ -578,9 +578,16 @@ function Publish-NativeRegionRefitFinal {
             "artifacts\final\final_sewn.step")
         $stagedDiagnosticSewn = Join-Path $StagingDirectory (
             "artifacts\final\diagnostic_sewn.step")
-        $sewnSource = if (Test-Path -LiteralPath $stagedDiagnosticSewn -PathType Leaf) {
+        $hasStagedFinalSewn =
+            Test-Path -LiteralPath $stagedFinalSewn -PathType Leaf
+        $hasStagedDiagnosticSewn =
+            Test-Path -LiteralPath $stagedDiagnosticSewn -PathType Leaf
+        if ($hasStagedFinalSewn -and $hasStagedDiagnosticSewn) {
+            throw "Staging output contains both final_sewn.step and diagnostic_sewn.step."
+        }
+        $sewnSource = if ($hasStagedDiagnosticSewn) {
             $stagedDiagnosticSewn
-        } elseif (Test-Path -LiteralPath $stagedFinalSewn -PathType Leaf) {
+        } elseif ($hasStagedFinalSewn) {
             $stagedFinalSewn
         } else {
             $null

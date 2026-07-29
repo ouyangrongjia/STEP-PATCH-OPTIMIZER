@@ -8,11 +8,15 @@
 #include <TColgp_Array2OfPnt.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 
 #include <cassert>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
+#include <tuple>
 
 namespace {
 
@@ -30,6 +34,9 @@ spo::RegionReferenceMesh makePlanarFitMesh(const int resolution) {
             vertex.hardBoundary = vertex.boundary;
             spo::RegionReferenceSourceSample source;
             source.faceId = 1;
+            source.uv = gp_Pnt2d(
+                static_cast<double>(column) / resolution,
+                static_cast<double>(row) / resolution);
             source.normal = vertex.normal;
             source.normalDefined = true;
             source.curvatureDefined = true;
@@ -64,6 +71,53 @@ std::vector<spo::RegionPatchLayout> planarLayouts(
         mesh, spo::RegionRefitLayoutMode::FixedPatchCount, options);
     assert(generated.success());
     return generated.selectedCandidates;
+}
+
+void test_face_uv_mapping_uses_same_face_barycentric_surface_parameters() {
+    const auto carrier = makePlanarFitMesh(1);
+    spo::RegionPatchLayout layout;
+    layout.patchCount = 1;
+    layout.trianglePatches = {0, 0};
+    spo::RegionPatchParameterization patch;
+    patch.triangleIndices = {0, 1};
+    patch.vertexIndices = {0, 1, 2, 3};
+    patch.parameters = {{
+        {0.0, 0.0},
+        {1.0, 0.0},
+        {0.0, 1.0},
+        {1.0, 1.0}}};
+    patch.surfaceParameters = {{
+        {0.0, 0.0},
+        {1.0, 0.0},
+        {0.0, 1.0},
+        {1.0, 1.0}}};
+    layout.patches.push_back(std::move(patch));
+
+    spo::RegionReferenceMesh fitting;
+    for (const auto& [faceId, u, v] :
+         std::array<std::tuple<spo::FaceId, double, double>, 3> {{
+             {1, 0.25, 0.75},
+             {1, 2.0, 2.0},
+             {2, 0.5, 0.5}}}) {
+        spo::RegionReferenceVertex vertex;
+        spo::RegionReferenceSourceSample source;
+        source.faceId = faceId;
+        source.uv = gp_Pnt2d(u, v);
+        vertex.sources.push_back(source);
+        fitting.vertices.push_back(std::move(vertex));
+    }
+
+    const auto mapped =
+        spo::mapRegionReferenceSamplesToSurfaceParameters(
+            fitting, carrier, layout);
+    assert(mapped.samples.size() == 2);
+    assert(mapped.sameFaceBarycentricCount == 1);
+    assert(mapped.sameFaceFallbackCount == 1);
+    assert(mapped.crossFaceFailureCount == 1);
+    assert(std::abs(mapped.samples.front().surfaceParameter[0] - 0.25) <=
+        1.0e-12);
+    assert(std::abs(mapped.samples.front().surfaceParameter[1] - 0.75) <=
+        1.0e-12);
 }
 
 void test_joint_fitter_passes_planar_two_patch_network() {
@@ -448,6 +502,12 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     layouts.selectedCandidates.front().patches.front()
         .minimumToMedianUvAreaRatio = 0.125;
     layouts.selectedCandidates.front().patches.front()
+        .distortionP995 = 3.25;
+    layouts.selectedCandidates.front().patches.front()
+        .logicalSideCandidateCount = 7;
+    layouts.selectedCandidates.front().patches.front()
+        .selectedLogicalSideHash = "logical-side-cache-v11";
+    layouts.selectedCandidates.front().patches.front()
         .boundaryRepresentabilityResidual = 1.0e-9;
     cache.saveLayouts(layouts);
     spo::RegionPatchLayoutGenerationResult loadedLayouts;
@@ -467,6 +527,10 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     assert(loadedPatch.pcurveOrientationConsistent);
     assert(std::abs(
         loadedPatch.minimumToMedianUvAreaRatio - 0.125) <= 1.0e-15);
+    assert(std::abs(loadedPatch.distortionP995 - 3.25) <= 1.0e-15);
+    assert(loadedPatch.logicalSideCandidateCount == 7);
+    assert(loadedPatch.selectedLogicalSideHash ==
+        "logical-side-cache-v11");
 
     spo::RegionRefitOptions fitOptions = request.options;
     fitOptions.tolerance3d = 0.1;
@@ -489,6 +553,56 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     assert(loadedFit.success());
     assert(loadedFit.network->surfaces.size() == fitted.network->surfaces.size());
     assert(loadedFit.network->layout.hash == fitted.network->layout.hash);
+    assert(loadedFit.network->quality.totalPoleCount ==
+        fitted.network->quality.totalPoleCount);
+    assert(loadedFit.network->quality.maximumPoleCountPerSide ==
+        fitted.network->quality.maximumPoleCountPerSide);
+    assert(loadedFit.network->quality.surfaceComplexities.size() ==
+        loadedFit.network->surfaces.size());
+    for (std::size_t patch = 0;
+         patch < loadedFit.network->surfaces.size();
+         ++patch) {
+        const auto& surface = loadedFit.network->surfaces[patch];
+        const auto& complexity =
+            loadedFit.network->quality.surfaceComplexities[patch];
+        assert(complexity.patchIndex == static_cast<int>(patch));
+        assert(complexity.uPoleCount == surface->NbUPoles());
+        assert(complexity.vPoleCount == surface->NbVPoles());
+        assert(complexity.uKnotCount == surface->NbUKnots());
+        assert(complexity.vKnotCount == surface->NbVKnots());
+    }
+    assert(std::abs(
+        loadedFit.network->quality.fairnessEnergy -
+        fitted.network->quality.fairnessEnergy) <= 1.0e-15);
+
+    const auto overwriteWithVersion10 =
+        [](const std::filesystem::path& path) {
+            std::fstream stream(
+                path,
+                std::ios::in | std::ios::out | std::ios::binary);
+            assert(stream);
+            const std::array<unsigned char, 4> version10 {
+                0x00, 0x00, 0x00, 0x0a};
+            stream.seekp(4);
+            stream.write(
+                reinterpret_cast<const char*>(version10.data()),
+                static_cast<std::streamsize>(version10.size()));
+            assert(stream.good());
+        };
+    overwriteWithVersion10(
+        cacheDirectory / cache.key() / "layouts.bin");
+    spo::RegionPatchLayoutGenerationResult rejectedLayouts;
+    spo::RegionRefitCacheEvent rejectedLayoutEvent;
+    assert(!cache.loadLayouts(
+        rejectedLayouts, rejectedLayoutEvent));
+    overwriteWithVersion10(
+        cacheDirectory / cache.key() / "fit.bin");
+    spo::JointBSplineNetworkFitResult rejectedFit;
+    spo::RegionRefitCacheEvent rejectedFitEvent;
+    assert(!cache.loadFit(
+        layouts.selectedCandidates,
+        rejectedFit,
+        rejectedFitEvent));
 
     std::filesystem::remove_all(cacheDirectory);
 }
@@ -496,6 +610,7 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
 }
 
 void run_region_refit_fitting_tests() {
+    test_face_uv_mapping_uses_same_face_barycentric_surface_parameters();
     test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs();
     test_inconsistent_dense_hard_constraints_are_reported_explicitly();
     test_trimmed_disk_jacobian_ignores_unused_rectangular_corners();

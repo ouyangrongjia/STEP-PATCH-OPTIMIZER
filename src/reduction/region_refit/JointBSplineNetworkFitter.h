@@ -13,6 +13,40 @@
 
 namespace spo {
 
+struct RegionSurfaceParameterMappingSample {
+    std::size_t referenceVertex = 0;
+    std::size_t carrierTriangle = 0;
+    int patch = -1;
+    std::array<double, 2> surfaceParameter {};
+};
+
+struct RegionSurfaceParameterMappingResult {
+    std::vector<RegionSurfaceParameterMappingSample> samples;
+    std::size_t sameFaceBarycentricCount = 0;
+    std::size_t sameFaceFallbackCount = 0;
+    std::size_t crossFaceFailureCount = 0;
+
+    bool complete(std::size_t expectedCount) const {
+        return samples.size() == expectedCount &&
+            crossFaceFailureCount == 0;
+    }
+};
+
+struct RegionSurfaceQualityMetrics {
+    int totalPoleCount = 0;
+    int maximumPoleCountPerSide = 0;
+    int totalKnotCount = 0;
+    std::vector<RegionSurfaceComplexityReport> surfaceComplexities;
+    double fairnessEnergy = 0.0;
+    double maximumNormalVariationDegrees = 0.0;
+    double curvatureOscillation = 0.0;
+    double minimumNormalizedJacobian = 0.0;
+    double conditionNumberP50 = 0.0;
+    double conditionNumberP95 = 0.0;
+    double conditionNumberP99 = 0.0;
+    bool hardFailure = false;
+};
+
 struct RegionFittedPatchNetwork {
     RegionPatchLayout layout;
     std::vector<Handle(Geom_BSplineSurface)> surfaces;
@@ -29,6 +63,7 @@ struct RegionFittedPatchNetwork {
     bool fitGatePassed = false;
     bool boundaryLocked = false;
     bool constructibleForBRep = false;
+    RegionSurfaceQualityMetrics quality;
     std::string fitOutcome = "NotEvaluated";
 };
 
@@ -48,6 +83,11 @@ bool regionLocalSupportDomainPassed(
     const RegionPatchParameterization& parameterization,
     const RegionRefitOptions& options,
     std::string& reason);
+
+RegionSurfaceParameterMappingResult mapRegionReferenceSamplesToSurfaceParameters(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout);
 
 class JointBSplineNetworkFitter {
 public:

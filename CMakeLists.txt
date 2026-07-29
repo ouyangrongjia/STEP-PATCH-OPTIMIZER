@@ -50,6 +50,7 @@ add_library(spo_core STATIC
     src/external/geomagic/GeomagicAutoSurfaceResult.cpp
     src/external/geomagic/GeomagicAutoSurfaceBackend.cpp
     src/io/StepReader.cpp
+    src/io/StepEntityStatistics.cpp
     src/io/StepWriter.cpp
     src/io/StlReader.cpp
     src/io/StlWriter.cpp

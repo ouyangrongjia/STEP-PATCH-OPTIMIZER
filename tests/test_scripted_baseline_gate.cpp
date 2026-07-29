@@ -734,6 +734,9 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(script.find("artifact_status.json") != std::string::npos);
     assert(script.find("final_sewn.step") != std::string::npos);
     assert(script.find("diagnostic_sewn.step") != std::string::npos);
+    assert(script.find(
+        "Staging output contains both final_sewn.step and diagnostic_sewn.step.") !=
+        std::string::npos);
     assert(script.find("edge_consistency_report.json") != std::string::npos);
     assert(script.find("output_complexity_report.json") != std::string::npos);
     assert(script.find("diagnostic_pipeline_completed") != std::string::npos);
@@ -777,7 +780,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find(
-        "native-regional-refit-v39-constructible-layout") !=
+        "native-regional-refit-v40-fair-boundary-spd") !=
         std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
@@ -842,6 +845,32 @@ void test_native_region_refit_force_diagnostic_contract() {
     assert(probe.find("product_validated") != std::string::npos);
     assert(engine.find("NoSewableGeometry") != std::string::npos);
     assert(engine.find("diagnosticSewingCandidateCount") != std::string::npos);
+    assert(engine.find(
+        "STEP roundtrip continued for forced diagnostic evidence") !=
+        std::string::npos);
+    const auto layoutGatePosition =
+        engine.find("result.report.layoutGatePassed =");
+    const auto diagnosticAttemptPosition =
+        engine.find(
+            "result.report.forceDiagnosticSewingAttempted = true;");
+    const auto fixedSewingPosition =
+        engine.find(
+            "repairPatchReplacementShape(assembly.shape, repairOptions)");
+    assert(layoutGatePosition != std::string::npos);
+    assert(diagnosticAttemptPosition != std::string::npos);
+    assert(fixedSewingPosition != std::string::npos);
+    assert(layoutGatePosition < diagnosticAttemptPosition);
+    assert(diagnosticAttemptPosition < fixedSewingPosition);
+    assert(engine.find("runAdaptiveSewing = false") !=
+        std::string::npos);
+    assert(engine.find("runUnifySameDomain = false") !=
+        std::string::npos);
+    assert(engine.find(
+        "repairOptions.minSewingTolerance = repairOptions.sewingTolerance") !=
+        std::string::npos);
+    assert(engine.find(
+        "repairOptions.maxSewingTolerance = repairOptions.sewingTolerance") !=
+        std::string::npos);
 }
 
 }

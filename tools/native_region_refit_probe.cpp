@@ -1,5 +1,6 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
+#include "io/StepEntityStatistics.h"
 #include "io/StepWriter.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
@@ -67,27 +68,34 @@ StepFileComplexity measureStepFile(const std::filesystem::path& path) {
     result.present = true;
     result.bytes = static_cast<std::uint64_t>(file.size());
     QCryptographicHash hash(QCryptographicHash::Sha256);
+    spo::StepEntityStatistics statistics;
     while (!file.atEnd()) {
         const auto line = file.readLine();
         hash.addData(line);
-        const auto trimmed = line.trimmed();
-        if (trimmed.startsWith('#') && trimmed.contains('=')) {
-            ++result.entityCount;
-            if (trimmed.contains("=EDGE_CURVE(")) ++result.edgeCurveCount;
-            static const std::array<QByteArray, 10> surfaceTokens {
-                "=PLANE(", "=CYLINDRICAL_SURFACE(", "=CONICAL_SURFACE(",
-                "=SPHERICAL_SURFACE(", "=TOROIDAL_SURFACE(",
-                "=B_SPLINE_SURFACE_WITH_KNOTS(", "=BEZIER_SURFACE(",
-                "=SURFACE_OF_REVOLUTION(", "=SURFACE_OF_LINEAR_EXTRUSION(",
-                "=OFFSET_SURFACE("};
-            if (std::any_of(surfaceTokens.begin(), surfaceTokens.end(), [&](const auto& token) {
-                    return trimmed.contains(token);
-                })) {
-                ++result.surfaceCount;
-            }
-        }
+        spo::accumulateStepEntityLine(
+            statistics,
+            std::string_view(
+                line.constData(),
+                static_cast<std::size_t>(line.size())));
     }
+    result.entityCount = statistics.entityCount;
+    result.edgeCurveCount = statistics.edgeCurveCount;
+    result.surfaceCount = statistics.surfaceCount;
     result.sha256 = hash.result().toHex().toStdString();
+    return result;
+}
+
+QJsonArray surfaceComplexitiesToJson(
+    const std::vector<spo::RegionSurfaceComplexityReport>& surfaces) {
+    QJsonArray result;
+    for (const auto& surface : surfaces) {
+        result.append(QJsonObject {
+            {"patch_index", surface.patchIndex},
+            {"u_poles", surface.uPoleCount},
+            {"v_poles", surface.vPoleCount},
+            {"u_knots", surface.uKnotCount},
+            {"v_knots", surface.vKnotCount}});
+    }
     return result;
 }
 
@@ -104,15 +112,10 @@ QJsonObject outputComplexityToJson(
         ? (static_cast<double>(candidate.entityCount) - static_cast<double>(baseline.entityCount)) /
             static_cast<double>(baseline.entityCount)
         : 0.0;
-    auto observedMaximumControlSide = 0;
-    for (const auto& attempt : result.report.fitAttempts) {
-        for (const auto& iteration : attempt.iterations) {
-            observedMaximumControlSide = std::max({
-                observedMaximumControlSide,
-                iteration.uControlCount,
-                iteration.vControlCount});
-        }
-    }
+    const auto observedMaximumControlSide =
+        result.report.fittedMaximumPoleCountPerSide;
+    const auto allowedMaximumControlSide =
+        std::min(maximumControlPointsPerSide, 25);
     const auto replacementFaceCountMatches = result.report.selectedPatchCount > 0 &&
         result.report.retrimReplacementFaceCount == result.report.selectedPatchCount;
     const auto duplicateTopology = std::any_of(
@@ -132,7 +135,7 @@ QJsonObject outputComplexityToJson(
     const auto passed = baseline.present && candidate.present &&
         byteIncrease <= 0.10 && entityIncrease <= 0.10 &&
         replacementFaceCountMatches && !duplicateTopology && !unexpectedEntityDuplication &&
-        observedMaximumControlSide <= maximumControlPointsPerSide;
+        observedMaximumControlSide <= allowedMaximumControlSide;
     return {
         {"schema_version", 1},
         {"baseline_role", "NoModificationStepRoundtripWithSameWriter"},
@@ -160,7 +163,9 @@ QJsonObject outputComplexityToJson(
         {"surface_count_increase", QString::number(surfaceEntityIncrease)},
         {"unexpected_duplicate_edges_or_surfaces", duplicateTopology || unexpectedEntityDuplication},
         {"observed_maximum_control_points_per_side", observedMaximumControlSide},
-        {"maximum_control_points_per_side", maximumControlPointsPerSide},
+        {"maximum_control_points_per_side", allowedMaximumControlSide},
+        {"surface_complexities", surfaceComplexitiesToJson(
+            result.report.fittedSurfaceComplexities)},
         {"passed", passed}};
 }
 
@@ -469,6 +474,7 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
             {"selected_for_full_fit", candidate.selectedForFullFit},
             {"proxy_error", candidate.proxyError},
             {"maximum_distortion", candidate.maximumDistortion},
+            {"distortion_p995", candidate.distortionP995},
             {"flipped_triangles", candidate.flippedTriangleCount},
             {"pcurve_self_intersections", candidate.pcurveSelfIntersectionCount},
             {"pcurve_nonadjacent_intersections",
@@ -479,6 +485,10 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
             {"minimum_signed_uv_area", candidate.minimumSignedUvArea},
             {"minimum_to_median_uv_area_ratio",
                 candidate.minimumToMedianUvAreaRatio},
+            {"logical_side_candidate_count",
+                QString::number(candidate.logicalSideCandidateCount)},
+            {"selected_logical_side_hash",
+                QString::fromStdString(candidate.selectedLogicalSideHash)},
             {"boundary_representability_residual",
                 candidate.boundaryRepresentabilityResidual},
             {"matrix_rows", QString::number(candidate.matrixRows)},
@@ -598,6 +608,11 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
             {"minimum_signed_uv_area", patch.minimumSignedUvArea},
             {"minimum_to_median_uv_area_ratio",
                 patch.minimumToMedianUvAreaRatio},
+            {"distortion_p995", patch.distortionP995},
+            {"logical_side_candidate_count",
+                QString::number(patch.logicalSideCandidateCount)},
+            {"selected_logical_side_hash",
+                QString::fromStdString(patch.selectedLogicalSideHash)},
             {"boundary_representability_residual",
                 patch.boundaryRepresentabilityResidual},
             {"maximum_distortion", patch.maximumDistortion}});
@@ -692,12 +707,48 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"seam_maximum_curvature_difference",
                     iteration.seamMaximumCurvatureDifference},
                 {"seam_continuity_gate_passed", iteration.seamContinuityGatePassed},
+                {"same_face_barycentric_mapping_count",
+                    QString::number(iteration.sameFaceBarycentricMappingCount)},
+                {"same_face_mapping_fallback_count",
+                    QString::number(iteration.sameFaceMappingFallbackCount)},
+                {"cross_face_mapping_failure_count",
+                    QString::number(iteration.crossFaceMappingFailureCount)},
+                {"actual_total_pole_count",
+                    iteration.actualTotalPoleCount},
+                {"actual_maximum_pole_count_per_side",
+                    iteration.actualMaximumPoleCountPerSide},
+                {"actual_total_knot_count",
+                    iteration.actualTotalKnotCount},
+                {"fixed_boundary_control_point_count",
+                    iteration.fixedBoundaryControlPointCount},
+                {"interior_control_point_count",
+                    iteration.interiorControlPointCount},
+                {"reduced_spd_system_used",
+                    iteration.reducedSpdSystemUsed},
+                {"fairness_energy", iteration.fairnessEnergy},
+                {"maximum_normal_variation_degrees",
+                    iteration.maximumNormalVariationDegrees},
+                {"curvature_oscillation",
+                    iteration.curvatureOscillation},
+                {"minimum_normalized_jacobian",
+                    iteration.minimumNormalizedJacobian},
+                {"condition_number_p50", iteration.conditionNumberP50},
+                {"condition_number_p95", iteration.conditionNumberP95},
+                {"condition_number_p99", iteration.conditionNumberP99},
+                {"surface_quality_hard_failure",
+                    iteration.surfaceQualityHardFailure},
                 {"wall_ms", iteration.wallMilliseconds},
                 {"stop_reason", QString::fromStdString(iteration.stopReason)}});
         }
         attempts.append(QJsonObject {
             {"patch_count", attempt.patchCount},
             {"layout_hash", QString::fromStdString(attempt.layoutHash)},
+            {"same_face_barycentric_mapping_count",
+                QString::number(attempt.sameFaceBarycentricMappingCount)},
+            {"same_face_mapping_fallback_count",
+                QString::number(attempt.sameFaceMappingFallbackCount)},
+            {"cross_face_mapping_failure_count",
+                QString::number(attempt.crossFaceMappingFailureCount)},
             {"success", attempt.success},
             {"wall_ms", attempt.wallMilliseconds},
             {"stop_reason", QString::fromStdString(attempt.stopReason)},
@@ -715,6 +766,36 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             result.report.fittedMaximumUControlCount},
         {"maximum_v_control_count",
             result.report.fittedMaximumVControlCount},
+        {"actual_total_pole_count",
+            result.report.fittedTotalPoleCount},
+        {"actual_maximum_pole_count_per_side",
+            result.report.fittedMaximumPoleCountPerSide},
+        {"actual_total_knot_count",
+            result.report.fittedTotalKnotCount},
+        {"surface_complexities", surfaceComplexitiesToJson(
+            result.report.fittedSurfaceComplexities)},
+        {"same_face_barycentric_mapping_count",
+            QString::number(result.report.sameFaceBarycentricMappingCount)},
+        {"same_face_mapping_fallback_count",
+            QString::number(result.report.sameFaceMappingFallbackCount)},
+        {"cross_face_mapping_failure_count",
+            QString::number(result.report.crossFaceMappingFailureCount)},
+        {"fairness_energy",
+            result.report.fittedFairnessEnergy},
+        {"maximum_normal_variation_degrees",
+            result.report.fittedMaximumNormalVariationDegrees},
+        {"curvature_oscillation",
+            result.report.fittedCurvatureOscillation},
+        {"minimum_normalized_jacobian",
+            result.report.fittedMinimumNormalizedJacobian},
+        {"condition_number_p50",
+            result.report.fittedConditionNumberP50},
+        {"condition_number_p95",
+            result.report.fittedConditionNumberP95},
+        {"condition_number_p99",
+            result.report.fittedConditionNumberP99},
+        {"surface_quality_hard_failure",
+            result.report.fittedSurfaceQualityHardFailure},
         {"best_effort_used", result.report.bestEffortUsed},
         {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
         {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
@@ -731,6 +812,16 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
 }
 
 QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
+    QJsonArray brepCheckStatuses;
+    for (const auto& check : result.report.brepCheckStatuses) {
+        brepCheckStatuses.append(QJsonObject {
+            {"shape_kind", QString::fromStdString(check.shapeKind)},
+            {"face_index", check.faceIndex},
+            {"subshape_index", check.subshapeIndex},
+            {"status_code", check.statusCode},
+            {"status", QString::fromStdString(check.status)},
+            {"valid", check.valid}});
+    }
     return {
         {"status", result.report.retrimValidationPassed
             ? "Success"
@@ -756,6 +847,7 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
             result.report.unexpectedFaceIntersectionTotalLength},
         {"replacement_quilt_internal_free_edge_count",
             result.report.replacementQuiltInternalFreeEdgeCount},
+        {"brep_check_statuses", brepCheckStatuses},
         {"assembly_passed", result.report.assemblyPassed}};
 }
 
@@ -1141,6 +1233,29 @@ QJsonObject performanceToJson(
                 ? result.fittedNetwork->seamMaximumCurvatureDifference : 0.0},
             {"seam_continuity_gate_passed", result.fittedNetwork
                 ? result.fittedNetwork->seamContinuityGatePassed : false},
+            {"actual_total_pole_count",
+                result.report.fittedTotalPoleCount},
+            {"actual_maximum_pole_count_per_side",
+                result.report.fittedMaximumPoleCountPerSide},
+            {"actual_total_knot_count",
+                result.report.fittedTotalKnotCount},
+            {"surface_complexities", surfaceComplexitiesToJson(
+                result.report.fittedSurfaceComplexities)},
+            {"fairness_energy", result.report.fittedFairnessEnergy},
+            {"maximum_normal_variation_degrees",
+                result.report.fittedMaximumNormalVariationDegrees},
+            {"curvature_oscillation",
+                result.report.fittedCurvatureOscillation},
+            {"minimum_normalized_jacobian",
+                result.report.fittedMinimumNormalizedJacobian},
+            {"condition_number_p50",
+                result.report.fittedConditionNumberP50},
+            {"condition_number_p95",
+                result.report.fittedConditionNumberP95},
+            {"condition_number_p99",
+                result.report.fittedConditionNumberP99},
+            {"surface_quality_hard_failure",
+                result.report.fittedSurfaceQualityHardFailure},
             {"output_faces", result.report.outputFaceCount},
             {"after_solids", result.report.afterSolidCount},
             {"after_free_edges", result.report.afterFreeEdgeCount},
@@ -1287,7 +1402,7 @@ int main(int argc, char* argv[]) {
     std::string commit;
     spo::RegionRefitRequest request;
     request.options.algorithmFingerprint =
-        "native-regional-refit-v39-constructible-layout";
+        "native-regional-refit-v40-fair-boundary-spd";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1423,7 +1538,7 @@ int main(int argc, char* argv[]) {
 
     if (!algorithmFingerprintSpecified) {
         request.options.algorithmFingerprint = std::string(
-            "native-regional-refit-v39-constructible-layout-") +
+            "native-regional-refit-v40-fair-boundary-spd-") +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);

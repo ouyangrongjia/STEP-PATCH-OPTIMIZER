@@ -5,6 +5,8 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepCheck_Result.hxx>
+#include <BRepCheck_Status.hxx>
 #include <BRepLib.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
@@ -27,6 +29,7 @@
 #include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
+#include <TopoDS_Shell.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
@@ -40,6 +43,100 @@
 namespace spo {
 
 namespace {
+
+const char* brepCheckStatusName(const BRepCheck_Status status) {
+    switch (status) {
+    case BRepCheck_NoError: return "NoError";
+    case BRepCheck_InvalidPointOnCurve: return "InvalidPointOnCurve";
+    case BRepCheck_InvalidPointOnCurveOnSurface:
+        return "InvalidPointOnCurveOnSurface";
+    case BRepCheck_InvalidPointOnSurface: return "InvalidPointOnSurface";
+    case BRepCheck_No3DCurve: return "No3DCurve";
+    case BRepCheck_Multiple3DCurve: return "Multiple3DCurve";
+    case BRepCheck_Invalid3DCurve: return "Invalid3DCurve";
+    case BRepCheck_NoCurveOnSurface: return "NoCurveOnSurface";
+    case BRepCheck_InvalidCurveOnSurface: return "InvalidCurveOnSurface";
+    case BRepCheck_InvalidCurveOnClosedSurface:
+        return "InvalidCurveOnClosedSurface";
+    case BRepCheck_InvalidSameRangeFlag: return "InvalidSameRangeFlag";
+    case BRepCheck_InvalidSameParameterFlag:
+        return "InvalidSameParameterFlag";
+    case BRepCheck_InvalidDegeneratedFlag: return "InvalidDegeneratedFlag";
+    case BRepCheck_FreeEdge: return "FreeEdge";
+    case BRepCheck_InvalidMultiConnexity: return "InvalidMultiConnexity";
+    case BRepCheck_InvalidRange: return "InvalidRange";
+    case BRepCheck_EmptyWire: return "EmptyWire";
+    case BRepCheck_RedundantEdge: return "RedundantEdge";
+    case BRepCheck_SelfIntersectingWire: return "SelfIntersectingWire";
+    case BRepCheck_NoSurface: return "NoSurface";
+    case BRepCheck_InvalidWire: return "InvalidWire";
+    case BRepCheck_RedundantWire: return "RedundantWire";
+    case BRepCheck_IntersectingWires: return "IntersectingWires";
+    case BRepCheck_InvalidImbricationOfWires:
+        return "InvalidImbricationOfWires";
+    case BRepCheck_EmptyShell: return "EmptyShell";
+    case BRepCheck_RedundantFace: return "RedundantFace";
+    case BRepCheck_InvalidImbricationOfShells:
+        return "InvalidImbricationOfShells";
+    case BRepCheck_UnorientableShape: return "UnorientableShape";
+    case BRepCheck_NotClosed: return "NotClosed";
+    case BRepCheck_NotConnected: return "NotConnected";
+    case BRepCheck_SubshapeNotInShape: return "SubshapeNotInShape";
+    case BRepCheck_BadOrientation: return "BadOrientation";
+    case BRepCheck_BadOrientationOfSubshape:
+        return "BadOrientationOfSubshape";
+    case BRepCheck_InvalidPolygonOnTriangulation:
+        return "InvalidPolygonOnTriangulation";
+    case BRepCheck_InvalidToleranceValue: return "InvalidToleranceValue";
+    case BRepCheck_EnclosedRegion: return "EnclosedRegion";
+    case BRepCheck_CheckFail: return "CheckFail";
+    }
+    return "Unknown";
+}
+
+void recordBRepCheckStatuses(
+    std::vector<RegionBRepCheckStatusReport>& reports,
+    const BRepCheck_Analyzer& analyzer,
+    const TopoDS_Shape& shape,
+    std::string shapeKind,
+    const int faceIndex,
+    const int subshapeIndex) {
+    const auto valid = analyzer.IsValid(shape) == Standard_True;
+    const auto result = analyzer.Result(shape);
+    if (result.IsNull()) {
+        reports.push_back({
+            std::move(shapeKind),
+            faceIndex,
+            subshapeIndex,
+            static_cast<int>(BRepCheck_CheckFail),
+            brepCheckStatusName(BRepCheck_CheckFail),
+            false});
+        return;
+    }
+    const auto& statuses = result->Status();
+    if (statuses.IsEmpty()) {
+        reports.push_back({
+            std::move(shapeKind),
+            faceIndex,
+            subshapeIndex,
+            static_cast<int>(BRepCheck_CheckFail),
+            brepCheckStatusName(BRepCheck_CheckFail),
+            false});
+        return;
+    }
+    for (BRepCheck_ListIteratorOfListOfStatus iterator(statuses);
+         iterator.More();
+         iterator.Next()) {
+        const auto status = iterator.Value();
+        reports.push_back({
+            shapeKind,
+            faceIndex,
+            subshapeIndex,
+            static_cast<int>(status),
+            brepCheckStatusName(status),
+            valid});
+    }
+}
 
 bool attachPcurve(
     const TopoDS_Edge& edge,
@@ -640,7 +737,12 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         faceBuilder.Add(face, wireBuilder.Wire());
         const auto& parameterization = network.layout.patches[patch];
         if (!parameterization.vertexIndices.empty()) {
-            const auto uv = parameterization.parameters.front();
+            const auto& parameters =
+                parameterization.surfaceParameters.size() ==
+                    parameterization.vertexIndices.size()
+                ? parameterization.surfaceParameters
+                : parameterization.parameters;
+            const auto uv = parameters.front();
             gp_Pnt point;
             gp_Vec du;
             gp_Vec dv;
@@ -689,19 +791,6 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
             ++result.sameParameterFailureCount;
         }
     }
-    for (const auto& face : result.replacementFaces) {
-        if (!BRepCheck_Analyzer(face).IsValid()) {
-            ++result.brepValidationFailureCount;
-        }
-    }
-    if ((result.sameParameterFailureCount > 0 ||
-         result.brepValidationFailureCount > 0) &&
-        !allowUnvalidatedFaces) {
-        result.message =
-            "A trimmed fitted patch failed dense SameParameter or BRep validation.";
-        return result;
-    }
-
     if (static_cast<int>(result.replacementFaces.size()) != network.layout.patchCount) {
         result.message = "The native replacement B-rep face count does not match the selected layout.";
         return result;
@@ -764,10 +853,69 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         }
     }
     BRep_Builder builder;
-    TopoDS_Compound compound;
-    builder.MakeCompound(compound);
-    for (const auto& face : result.replacementFaces) builder.Add(compound, face);
-    result.replacementShape = compound;
+    TopoDS_Shell shell;
+    builder.MakeShell(shell);
+    for (const auto& face : result.replacementFaces) {
+        builder.Add(shell, face);
+    }
+    result.replacementShape = shell;
+    BRepCheck_Analyzer shellAnalyzer(shell);
+    if (!shellAnalyzer.IsValid(shell)) {
+        ++result.brepValidationFailureCount;
+    }
+    recordBRepCheckStatuses(
+        result.brepCheckStatuses,
+        shellAnalyzer,
+        shell,
+        "Shell",
+        -1,
+        0);
+    for (std::size_t faceIndex = 0;
+         faceIndex < result.replacementFaces.size();
+         ++faceIndex) {
+        const auto& face = result.replacementFaces[faceIndex];
+        if (!shellAnalyzer.IsValid(face)) {
+            ++result.brepValidationFailureCount;
+        }
+        recordBRepCheckStatuses(
+            result.brepCheckStatuses,
+            shellAnalyzer,
+            face,
+            "Face",
+            static_cast<int>(faceIndex),
+            0);
+        auto wireIndex = 0;
+        for (TopExp_Explorer wireExplorer(face, TopAbs_WIRE);
+             wireExplorer.More();
+             wireExplorer.Next(), ++wireIndex) {
+            recordBRepCheckStatuses(
+                result.brepCheckStatuses,
+                shellAnalyzer,
+                wireExplorer.Current(),
+                "Wire",
+                static_cast<int>(faceIndex),
+                wireIndex);
+        }
+        auto edgeIndex = 0;
+        for (TopExp_Explorer edgeExplorer(face, TopAbs_EDGE);
+             edgeExplorer.More();
+             edgeExplorer.Next(), ++edgeIndex) {
+            recordBRepCheckStatuses(
+                result.brepCheckStatuses,
+                shellAnalyzer,
+                edgeExplorer.Current(),
+                "Edge",
+                static_cast<int>(faceIndex),
+                edgeIndex);
+        }
+    }
+    if ((result.sameParameterFailureCount > 0 ||
+         result.brepValidationFailureCount > 0) &&
+        !allowUnvalidatedFaces) {
+        result.message =
+            "A trimmed fitted patch shell failed dense SameParameter or BRep validation.";
+        return result;
+    }
     result.edgeConsistency = measureEdgeConsistency(
         result.replacementShape,
         result.replacementFaces,

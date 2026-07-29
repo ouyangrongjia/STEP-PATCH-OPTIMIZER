@@ -32,6 +32,7 @@ struct NativeRegionPatchNetworkBuildResult {
     std::vector<std::array<int, 2>> unexpectedFaceIntersectionPatches;
     double maximumSameParameterDeviation = 0.0;
     std::vector<RegionEdgeConsistencyReport> edgeConsistency;
+    std::vector<RegionBRepCheckStatusReport> brepCheckStatuses;
 
     bool success() const;
     bool constructible() const;

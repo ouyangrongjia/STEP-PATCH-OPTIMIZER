@@ -190,14 +190,14 @@ src/reduction 实现当前原生曲面缩减产品合同。
 - `UniformUv` 等 STEP 参考采样提供拟合点、法向、曲率和原始 `FaceId/UV`；其 STL 只用于形状参考和诊断。
 - 独立 `QualityBalanced` 载体只用于临时分区和局部参数化；载体必须通过连通、可定向、无孔单外环圆盘、零翻转和内存预检，不能成为最终内部共享曲线的几何真值。
 - `RegionCurveNetwork` 在支撑面拟合前显式冻结节点、唯一三维曲线边、相邻 patch、期望与实际连续性、构造模式、原边界来源、方向化 patch 闭环和稳定 hash。外边界直接引用或按已有内部采样参数受控切分原 STEP Edge；内部界面先由临时分区提出并投影到原 STEP，删除超过门限的局部反向载体段后，构造端点固定、正则化的 C2 三次 B-spline。每条内部曲线分别检查投影走廊、转角、弯曲能、自交和非节点交叉；三次曲线仍不合格时，只允许用穿过原投影点的一级 B-spline 继续诊断，并永久取消产品资格。
-- 载体网格只提出临时 patch 分区。冻结曲线网络后，每张 patch 保存两套职责分离的参数：`parameters` 是严格凸、正权 mean-value 调和的载体坐标，用于无翻转三角形布局和畸变评价；`surfaceParameters` 把四组逻辑边严格映射到 `[0,1]^2` 的四条 iso 边，并对内部点作调和延拓，用于支撑面拟合和边界验证。每条 edge-use 的 `RegionPatchEdgePcurve` 都是与唯一三维曲线同参数 `t` 的二点一级 iso 线段。布局、拟合、builder、缓存和诊断必须消费同一份双参数域，不得各自重新投影或插值。
+- 载体网格只提出临时 patch 分区。冻结曲线网络后，每张 patch 保存两套职责分离的参数：`parameters` 是严格凸、正权 mean-value 调和的载体坐标，只用于构造中间载体；`surfaceParameters` 把确定性选择的四组逻辑边映射到 `[0,1]^2` 的四条 iso 边，并对内部点作调和延拓。翻转、面积比、畸变、拟合、局部支撑域和最终曲面 Jacobian 都以实际 `surfaceParameters` 为准。拟合样本只能依据原始 `FaceId/UV` 在同面载体三角形内做确定性重心插值；无同面三角形时才记录同面回退，禁止跨面借用。每条 edge-use 的 `RegionPatchEdgePcurve` 都是与唯一三维曲线同参数 `t` 的二点一级 iso 线段。布局、拟合、builder、缓存和诊断必须消费同一份双参数域，不得各自重新投影或插值。
 - 原始 STEP 三维边、相邻保留面及 `FaceId` 始终是边界和拓扑真值。
 
-拟合先建立四条冻结边界完全锁定的 Coons 候选，再尝试受约束联合求解。从每面 `6×6` 三次控制网开始，原 STEP 外边界和内部共享曲线全部使用保存的 iso pcurve 与共同参数 `t` 建立硬等式；结点插入前后四条边界控制行和权重必须不变。G0 由共享边界行保证，位置、法向、公平性和 G1/G2 目标只能调整相邻内部控制行。达到控制点上限、超时或硬约束不可行时，只能保留通过边界稠密验收的 Coons 候选继续诊断，不能把未锁边的仿射网送入 B-Rep。
+每张 patch 的四条逻辑边先拟合为三次 B-spline 支撑曲线；相对边统一节点数，内部共享边只生成一份控制点并按方向复用，每侧最多 25 个控制点。四周控制点随后完全冻结，数据、法向、G1 和公平项中固定变量的贡献移入右端，只以 `SimplicialLDLT` 求解内部变量的约化 SPD 法方程；正式曲线网络路径不使用大型 KKT `SparseLU`。Coons 只作为初始化或高复杂度诊断回退，不能取得 `ProductFit`。最终 `Geom_BSplineSurface` 直接提供逐面 U/V poles、knots、总 poles、最大单边 poles、公平能量、法向变化、曲率振荡、归一化 Jacobian 下界和条件数分位数；非有限、翻转、退化或单边 poles 超限均取消产品资格。
 
 构造顺序是稳定合同：每个曲线节点只创建一个拓扑 Vertex，每条内部曲线只创建一个三维 Edge；builder 直接把布局保存的一级 pcurve 附着到该 Edge 的两侧支撑面，不允许重新投影、重新插值或生成诊断替代 pcurve。完成双侧附着后统一执行 `SameRange` 与 `SameParameter`，再严格按方向化 pcurve 闭环构造 Wire 与 Face。Face 构造后逐对执行 `BRepAlgoAPI_Section`，除预期共享 Edge 外的交线一律记为 `UnexpectedFaceIntersection`；内部 Edge 必须恰好被两张 Face 使用，replacement quilt 的自由边只能属于原 STEP 外边界。逐边报告必须区分拓扑开口、Curve-on-Surface 偏差、相邻曲面分离、法向/曲率连续性和三档显示三角化裂纹。
 
-缝合且拓扑水密只表示诊断链完成。只要存在边界锁定且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向或连续性失败不会提高容差。运行先写暂存目录，完成后只发布单一 `final/`：五个状态文件始终存在，曲线网络、未裁剪支撑面、裁剪 Face 和最终整件 STEP 只在阶段确实完成时出现，`final_sewn.step` 与 `diagnostic_sewn.step` 互斥，不保留原始日志、中间目录或 `sewn_attempt`。manifest 最后生成并记录除自身外各文件的角色、大小和 SHA-256。缓存二进制版本为 10，旧版本明确拒绝。只有全部产品门和 Creo 均通过时 `canApply` 才能为 true。
+四张 replacement Face 以唯一共享 Edge 直接组成单一 `TopoDS_Shell`，并逐 Shell、Face、Wire、Edge 保存具体 `BRepCheck` 状态。缝合且拓扑水密只表示诊断链完成。只要存在边界锁定且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向或连续性失败不会提高容差。运行先写暂存目录，完成后只发布单一 `final/`：五个状态文件始终存在，曲线网络、未裁剪支撑面、裁剪 Face 和最终整件 STEP 只在阶段确实完成时出现，`final_sewn.step` 与 `diagnostic_sewn.step` 互斥，不保留原始日志、中间目录或 `sewn_attempt`。manifest 最后生成并记录除自身外各文件的角色、大小和 SHA-256。缓存二进制版本为 11，算法指纹为 `native-regional-refit-v40-fair-boundary-spd`，旧布局和拟合缓存明确拒绝。只有全部产品门和 Creo 均通过时 `canApply` 才能为 true。
 
 ## patch：边界约束替换
 

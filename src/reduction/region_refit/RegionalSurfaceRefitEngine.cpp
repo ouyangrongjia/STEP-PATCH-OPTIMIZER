@@ -609,7 +609,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.firstProductFailureGate.empty()) {
         result.report.firstProductFailureGate = "Layout";
     }
-    if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+    if (result.report.totalWallMilliseconds >
+            static_cast<double>(
+                request.options.maximumWallClockMilliseconds) &&
+        request.executionMode !=
+            RegionRefitExecutionMode::BestEffortThroughSewing &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
         result.report.failureStage = RegionRefitStage::Layout;
         result.report.message = "Layout generation exceeded its wall-clock budget.";
@@ -723,7 +728,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.sewableGeometryAvailable = result.fittedNetwork != nullptr;
     result.report.diagnosticCandidatePatchCount = result.fittedNetwork->layout.patchCount;
     result.report.diagnosticSelectionReason =
-        "Selected the constructible fitted network by hard-gate count, normalized product-gate violation, patch count, proxy error, and stable hash.";
+        "Selected the constructible fitted network by hard-gate count, product-gate count, normalized violation, seam normal, holdout distance and normal, fairness energy, curvature oscillation, actual poles, patch count, and stable hash.";
     result.report.diagnosticSewingCandidateCount = 1;
     result.selectedLayout = std::make_shared<RegionPatchLayout>(result.fittedNetwork->layout);
     result.fittedPatchNetwork = result.fittedNetwork->inspectionShape;
@@ -746,6 +751,15 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             return attempt.layoutHash == result.report.selectedLayoutHash;
         });
     if (selectedAttempt != fitted.attempts.end() &&
+        selectedAttempt != fitted.attempts.end()) {
+        result.report.sameFaceBarycentricMappingCount =
+            selectedAttempt->sameFaceBarycentricMappingCount;
+        result.report.sameFaceMappingFallbackCount =
+            selectedAttempt->sameFaceMappingFallbackCount;
+        result.report.crossFaceMappingFailureCount =
+            selectedAttempt->crossFaceMappingFailureCount;
+    }
+    if (selectedAttempt != fitted.attempts.end() &&
         !selectedAttempt->iterations.empty()) {
         const auto& finalIteration = selectedAttempt->iterations.back();
         result.report.boundaryFeasibilityRefinementRounds =
@@ -757,6 +771,30 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.fittedMaximumVControlCount =
             finalIteration.vControlCount;
     }
+    result.report.fittedTotalPoleCount =
+        result.fittedNetwork->quality.totalPoleCount;
+    result.report.fittedMaximumPoleCountPerSide =
+        result.fittedNetwork->quality.maximumPoleCountPerSide;
+    result.report.fittedTotalKnotCount =
+        result.fittedNetwork->quality.totalKnotCount;
+    result.report.fittedSurfaceComplexities =
+        result.fittedNetwork->quality.surfaceComplexities;
+    result.report.fittedFairnessEnergy =
+        result.fittedNetwork->quality.fairnessEnergy;
+    result.report.fittedMaximumNormalVariationDegrees =
+        result.fittedNetwork->quality.maximumNormalVariationDegrees;
+    result.report.fittedCurvatureOscillation =
+        result.fittedNetwork->quality.curvatureOscillation;
+    result.report.fittedMinimumNormalizedJacobian =
+        result.fittedNetwork->quality.minimumNormalizedJacobian;
+    result.report.fittedConditionNumberP50 =
+        result.fittedNetwork->quality.conditionNumberP50;
+    result.report.fittedConditionNumberP95 =
+        result.fittedNetwork->quality.conditionNumberP95;
+    result.report.fittedConditionNumberP99 =
+        result.fittedNetwork->quality.conditionNumberP99;
+    result.report.fittedSurfaceQualityHardFailure =
+        result.fittedNetwork->quality.hardFailure;
     const auto fittedCurveNetwork = std::find_if(
         fitCurveNetworks.begin(),
         fitCurveNetworks.end(),
@@ -904,6 +942,7 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.report.replacementQuiltInternalFreeEdgeCount =
         nativeBuild.replacementQuiltInternalFreeEdgeCount;
     result.report.edgeConsistency = nativeBuild.edgeConsistency;
+    result.report.brepCheckStatuses = nativeBuild.brepCheckStatuses;
     result.report.assemblyPassed = assembly.success;
     result.report.retrimValidationPassed = retrimStage.success;
     if (!nativeBuild.success() &&
@@ -943,6 +982,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.failureStage = RegionRefitStage::Retrim;
         result.report.message = "Native retrimming exceeded its wall-clock budget.";
         return result;
+    }
+    if (result.report.totalWallMilliseconds >
+        static_cast<double>(
+            request.options.maximumWallClockMilliseconds)) {
+        result.report.continuationStopReason =
+            "Native retrimming exceeded the total wall-clock budget; fixed-tolerance sewing and STEP roundtrip continued for forced diagnostic evidence.";
     }
     if (retrimTimeExceeded) {
         result.report.continuationStopReason =
@@ -1001,11 +1046,22 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         failMemoryBudget(result, RegionRefitStage::Sewing);
         return result;
     }
-    if (result.report.totalWallMilliseconds > static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+    if (result.report.totalWallMilliseconds >
+            static_cast<double>(
+                request.options.maximumWallClockMilliseconds) &&
+        request.executionMode !=
+            RegionRefitExecutionMode::BestEffortThroughSewing &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
         result.report.failureStage = RegionRefitStage::Sewing;
         result.report.message = "Replacement sewing exceeded the total wall-clock budget.";
         return result;
+    }
+    if (result.report.totalWallMilliseconds >
+        static_cast<double>(
+            request.options.maximumWallClockMilliseconds)) {
+        result.report.continuationStopReason =
+            "Replacement sewing exceeded the total wall-clock budget; STEP roundtrip continued for forced diagnostic evidence.";
     }
     if (request.diagnosticStopAfterStage == RegionRefitStage::Sewing) {
         result.report.status = RegionRefitStatus::NoValidatedLayoutWithinBudget;
@@ -1079,14 +1135,25 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     }
     const auto finalValidationMilliseconds = sewingStage.wallMilliseconds +
         strictStage.wallMilliseconds + roundtripStage.wallMilliseconds;
-    if (finalValidationMilliseconds >
-            static_cast<double>(request.options.finalValidationBudgetMilliseconds) ||
+    const auto finalValidationTimeExceeded =
+        finalValidationMilliseconds >
+            static_cast<double>(
+                request.options.finalValidationBudgetMilliseconds) ||
         result.report.totalWallMilliseconds >
-            static_cast<double>(request.options.maximumWallClockMilliseconds)) {
+            static_cast<double>(
+                request.options.maximumWallClockMilliseconds);
+    if (finalValidationTimeExceeded &&
+        request.executionMode !=
+            RegionRefitExecutionMode::BestEffortThroughSewing &&
+        !request.forceDiagnosticSewing) {
         result.report.status = RegionRefitStatus::TimeBudgetExceeded;
         result.report.failureStage = RegionRefitStage::StepRoundtrip;
         result.report.message = "Sewing, topology, and STEP roundtrip exceeded the final validation budget.";
         return result;
+    }
+    if (finalValidationTimeExceeded) {
+        result.report.continuationStopReason =
+            "Sewing, topology, or STEP roundtrip exceeded its quality budget; forced diagnostic evidence was retained.";
     }
 
     const auto fullyValidated =

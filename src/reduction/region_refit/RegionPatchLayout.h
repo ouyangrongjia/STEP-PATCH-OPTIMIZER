@@ -88,8 +88,11 @@ struct RegionPatchParameterization {
     int flippedTriangleCount = 0;
     double minimumSignedUvArea = 0.0;
     double minimumToMedianUvAreaRatio = 0.0;
+    double distortionP995 = 0.0;
     double boundaryRepresentabilityResidual = 0.0;
     double maximumDistortion = 0.0;
+    std::size_t logicalSideCandidateCount = 0;
+    std::string selectedLogicalSideHash;
 };
 
 struct RegionPatchLayout {

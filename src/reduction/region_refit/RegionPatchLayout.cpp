@@ -479,6 +479,119 @@ double curveEdgeLength(const RegionCurveNetworkEdge& edge) {
     return length;
 }
 
+struct LogicalGroup {
+    bool originalBoundary = false;
+    std::vector<std::size_t> edgeUseOrders;
+    double length = 0.0;
+};
+
+std::string logicalGroupingHash(const std::vector<LogicalGroup>& groups) {
+    std::uint64_t hash = 1469598103934665603ull;
+    const auto append = [&](const std::uint64_t value) {
+        for (int shift = 0; shift < 64; shift += 8) {
+            hash ^= (value >> shift) & 0xffu;
+            hash *= 1099511628211ull;
+        }
+    };
+    append(groups.size());
+    for (std::size_t side = 0; side < groups.size(); ++side) {
+        append(side);
+        append(groups[side].originalBoundary ? 1u : 0u);
+        append(groups[side].edgeUseOrders.size());
+        for (const auto order : groups[side].edgeUseOrders) append(order);
+    }
+    std::ostringstream stream;
+    stream << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return stream.str();
+}
+
+std::vector<std::vector<LogicalGroup>> enumerateLogicalGroupings(
+    const RegionCurveNetworkPatchLoop& loop,
+    const RegionCurveNetwork& network) {
+    std::vector<LogicalGroup> base;
+    for (std::size_t order = 0; order < loop.edges.size(); ++order) {
+        const auto& use = loop.edges[order];
+        if (use.edgeIndex >= network.edges.size()) return {};
+        const auto& edge = network.edges[use.edgeIndex];
+        const auto length = curveEdgeLength(edge);
+        if (!(length > 0.0) || !std::isfinite(length)) return {};
+        if (!edge.originalBoundary || base.empty() ||
+            !base.back().originalBoundary) {
+            base.push_back({edge.originalBoundary, {}, 0.0});
+        }
+        base.back().edgeUseOrders.push_back(order);
+        base.back().length += length;
+    }
+    if (base.size() > 1 && base.front().originalBoundary &&
+        base.back().originalBoundary) {
+        LogicalGroup merged = base.back();
+        merged.edgeUseOrders.insert(
+            merged.edgeUseOrders.end(),
+            base.front().edgeUseOrders.begin(),
+            base.front().edgeUseOrders.end());
+        merged.length += base.front().length;
+        std::vector<LogicalGroup> normalized;
+        normalized.push_back(std::move(merged));
+        normalized.insert(
+            normalized.end(), base.begin() + 1, base.end() - 1);
+        base = std::move(normalized);
+    }
+    if (base.size() > 4) return {};
+
+    std::map<std::string, std::vector<LogicalGroup>> unique;
+    const auto split = [&](const auto& self,
+                           const std::vector<LogicalGroup>& groups) -> void {
+        if (groups.size() == 4) {
+            unique.emplace(logicalGroupingHash(groups), groups);
+            return;
+        }
+        for (std::size_t group = 0; group < groups.size(); ++group) {
+            if (!groups[group].originalBoundary ||
+                groups[group].edgeUseOrders.size() < 2) {
+                continue;
+            }
+            for (std::size_t offset = 1;
+                 offset < groups[group].edgeUseOrders.size();
+                 ++offset) {
+                auto candidate = groups;
+                LogicalGroup second;
+                second.originalBoundary = true;
+                second.edgeUseOrders.assign(
+                    candidate[group].edgeUseOrders.begin() +
+                        static_cast<std::ptrdiff_t>(offset),
+                    candidate[group].edgeUseOrders.end());
+                candidate[group].edgeUseOrders.erase(
+                    candidate[group].edgeUseOrders.begin() +
+                        static_cast<std::ptrdiff_t>(offset),
+                    candidate[group].edgeUseOrders.end());
+                candidate[group].length = 0.0;
+                second.length = 0.0;
+                for (const auto order : candidate[group].edgeUseOrders) {
+                    candidate[group].length += curveEdgeLength(
+                        network.edges[loop.edges[order].edgeIndex]);
+                }
+                for (const auto order : second.edgeUseOrders) {
+                    second.length += curveEdgeLength(
+                        network.edges[loop.edges[order].edgeIndex]);
+                }
+                candidate.insert(
+                    candidate.begin() +
+                        static_cast<std::ptrdiff_t>(group + 1),
+                    std::move(second));
+                self(self, candidate);
+            }
+        }
+    };
+    split(split, base);
+    std::vector<std::vector<LogicalGroup>> result;
+    result.reserve(unique.size());
+    for (auto& [hash, groups] : unique) {
+        (void)hash;
+        result.push_back(std::move(groups));
+    }
+    return result;
+}
+
 std::vector<double> boundedAngularSpans(
     const RegionCurveNetworkPatchLoop& loop,
     const RegionCurveNetwork& network) {
@@ -1615,6 +1728,7 @@ bool buildCurveConsistentParameterDomainWithBlend(
     const RegionCurveNetwork& network,
     const RegionRefitOptions& options,
     RegionPatchLayout& layout,
+    const std::vector<std::size_t>& logicalGroupingChoices,
     const double boundaryConvexityBlend,
     bool& retryableAreaFailure,
     double& failedAreaRatio,
@@ -1729,12 +1843,6 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 center + radius * std::sin(loopNodeAngles[order])};
         }
 
-        struct LogicalGroup {
-            bool originalBoundary = false;
-            std::vector<std::size_t> edgeUseOrders;
-            double length = 0.0;
-        };
-        std::vector<LogicalGroup> groups;
         for (std::size_t order = 0; order < loop.edges.size(); ++order) {
             const auto& use = loop.edges[order];
             if (use.edgeIndex >= network.edges.size()) {
@@ -1766,84 +1874,25 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 message = "A patch loop contains a collapsed curve edge.";
                 return false;
             }
-            if (!edge.originalBoundary || groups.empty() ||
-                !groups.back().originalBoundary) {
-                groups.push_back({edge.originalBoundary, {}, 0.0});
-            }
-            groups.back().edgeUseOrders.push_back(order);
-            groups.back().length += length;
         }
-        if (groups.size() > 1 && groups.front().originalBoundary &&
-            groups.back().originalBoundary) {
-            LogicalGroup merged = groups.back();
-            merged.edgeUseOrders.insert(
-                merged.edgeUseOrders.end(),
-                groups.front().edgeUseOrders.begin(),
-                groups.front().edgeUseOrders.end());
-            merged.length += groups.front().length;
-            std::vector<LogicalGroup> normalized;
-            normalized.push_back(std::move(merged));
-            normalized.insert(
-                normalized.end(),
-                groups.begin() + 1,
-                groups.end() - 1);
-            groups = std::move(normalized);
-        }
-        while (groups.size() < 4) {
-            auto split = groups.end();
-            for (auto candidate = groups.begin();
-                 candidate != groups.end(); ++candidate) {
-                if (!candidate->originalBoundary ||
-                    candidate->edgeUseOrders.size() < 2) {
-                    continue;
-                }
-                if (split == groups.end() ||
-                    candidate->length > split->length) {
-                    split = candidate;
-                }
-            }
-            if (split == groups.end()) {
-                message =
-                    "A patch loop has fewer than four logical sides and no splittable outer boundary chain.";
-                return false;
-            }
-            auto accumulated = 0.0;
-            auto splitOffset = std::size_t {1};
-            auto bestBalance = std::numeric_limits<double>::infinity();
-            for (std::size_t offset = 1;
-                 offset < split->edgeUseOrders.size(); ++offset) {
-                accumulated += curveEdgeLength(network.edges[
-                    loop.edges[split->edgeUseOrders[offset - 1]].edgeIndex]);
-                const auto balance =
-                    std::abs(2.0 * accumulated - split->length);
-                if (balance < bestBalance) {
-                    bestBalance = balance;
-                    splitOffset = offset;
-                }
-            }
-            LogicalGroup second;
-            second.originalBoundary = true;
-            second.edgeUseOrders.assign(
-                split->edgeUseOrders.begin() +
-                    static_cast<std::ptrdiff_t>(splitOffset),
-                split->edgeUseOrders.end());
-            second.length = 0.0;
-            for (const auto order : second.edgeUseOrders) {
-                second.length +=
-                    curveEdgeLength(network.edges[loop.edges[order].edgeIndex]);
-            }
-            split->edgeUseOrders.erase(
-                split->edgeUseOrders.begin() +
-                    static_cast<std::ptrdiff_t>(splitOffset),
-                split->edgeUseOrders.end());
-            split->length -= second.length;
-            groups.insert(split + 1, std::move(second));
-        }
-        if (groups.size() != 4) {
+        const auto groupings = enumerateLogicalGroupings(loop, network);
+        if (groupings.empty()) {
             message =
                 "A patch loop cannot be represented by exactly four logical sides.";
             return false;
         }
+        const auto patchIndex = static_cast<std::size_t>(loop.patch);
+        const auto groupingChoice =
+            patchIndex < logicalGroupingChoices.size()
+            ? logicalGroupingChoices[patchIndex]
+            : std::size_t {0};
+        if (groupingChoice >= groupings.size()) {
+            message = "A patch logical-side candidate index is out of range.";
+            return false;
+        }
+        const auto& groups = groupings[groupingChoice];
+        patch.logicalSideCandidateCount = groupings.size();
+        patch.selectedLogicalSideHash = logicalGroupingHash(groups);
 
         std::unordered_map<std::size_t, std::array<double, 2>> boundaryUv;
         std::unordered_map<std::size_t, std::array<double, 2>>
@@ -2066,7 +2115,9 @@ bool buildCurveConsistentParameterDomainWithBlend(
             return false;
         }
         std::vector<double> uvAreas;
+        std::vector<double> distortions;
         uvAreas.reserve(patch.triangleIndices.size());
+        distortions.reserve(patch.triangleIndices.size());
         int positive = 0;
         int negative = 0;
         int degenerate = 0;
@@ -2080,9 +2131,9 @@ bool buildCurveConsistentParameterDomainWithBlend(
             const auto area =
                 static_cast<double>(triangleOrientations[triangleIndex]) *
                 signedArea2d(
-                patch.parameters[first],
-                patch.parameters[second],
-                patch.parameters[third]);
+                patch.surfaceParameters[first],
+                patch.surfaceParameters[second],
+                patch.surfaceParameters[third]);
             if (area > 1.0e-14) ++positive;
             else if (area < -1.0e-14) ++negative;
             else {
@@ -2100,19 +2151,31 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 mesh.vertices[triangle.vertices[1]].point,
                 mesh.vertices[triangle.vertices[2]].point);
             const gp_Pnt uvFirst(
-                patch.parameters[first][0], patch.parameters[first][1], 0.0);
+                patch.surfaceParameters[first][0],
+                patch.surfaceParameters[first][1],
+                0.0);
             const gp_Pnt uvSecond(
-                patch.parameters[second][0], patch.parameters[second][1], 0.0);
+                patch.surfaceParameters[second][0],
+                patch.surfaceParameters[second][1],
+                0.0);
             const gp_Pnt uvThird(
-                patch.parameters[third][0], patch.parameters[third][1], 0.0);
+                patch.surfaceParameters[third][0],
+                patch.surfaceParameters[third][1],
+                0.0);
             const auto quality2d = normalizedTriangleQuality(
                 uvFirst, uvSecond, uvThird);
             if (quality3d > 1.0e-14 && quality2d > 1.0e-14) {
-                patch.maximumDistortion = std::max(
-                    patch.maximumDistortion,
-                    std::max(
-                        quality3d / quality2d,
-                        quality2d / quality3d));
+                const auto distortion = std::max(
+                    quality3d / quality2d,
+                    quality2d / quality3d);
+                distortions.push_back(distortion);
+                patch.maximumDistortion =
+                    std::max(patch.maximumDistortion, distortion);
+            } else {
+                distortions.push_back(
+                    std::numeric_limits<double>::infinity());
+                patch.maximumDistortion =
+                    std::numeric_limits<double>::infinity();
             }
         }
         patch.flippedTriangleCount =
@@ -2129,29 +2192,17 @@ bool buildCurveConsistentParameterDomainWithBlend(
         std::nth_element(medianAreas.begin(), median, medianAreas.end());
         patch.minimumToMedianUvAreaRatio =
             patch.minimumSignedUvArea / std::max(*median, 1.0e-30);
+        std::sort(distortions.begin(), distortions.end());
+        const auto percentileIndex = std::min(
+            distortions.size() - 1,
+            static_cast<std::size_t>(std::ceil(
+                0.995 * static_cast<double>(distortions.size()))) - 1);
+        patch.distortionP995 = distortions[percentileIndex];
         if (patch.flippedTriangleCount != 0 ||
             !(patch.minimumSignedUvArea > 1.0e-14)) {
-            retryableAreaFailure =
-                degenerate > 0 && (positive == 0 || negative == 0);
             failedAreaRatio = patch.minimumToMedianUvAreaRatio;
             requiredAreaRatio =
                 minimumUvAreaRatioLimit(mesh, patch, options);
-            std::ostringstream stream;
-            stream << "Patch " << loop.patch
-                   << " rectangular harmonic parameterization has "
-                   << patch.flippedTriangleCount
-                   << " flipped or degenerate triangles (positive="
-                   << positive << ", negative=" << negative
-                   << ", degenerate=" << degenerate
-                   << ", degenerate_by_boundary_vertices=["
-                   << degenerateByBoundaryVertexCount[0] << ','
-                   << degenerateByBoundaryVertexCount[1] << ','
-                   << degenerateByBoundaryVertexCount[2] << ','
-                   << degenerateByBoundaryVertexCount[3] << ']'
-                   << "); minimum UV area is "
-                   << patch.minimumSignedUvArea << '.';
-            message = stream.str();
-            return false;
         }
         requiredAreaRatio = minimumUvAreaRatioLimit(mesh, patch, options);
         if (patch.minimumToMedianUvAreaRatio < requiredAreaRatio) {
@@ -2163,16 +2214,18 @@ bool buildCurveConsistentParameterDomainWithBlend(
     return true;
 }
 
-bool buildCurveConsistentParameterDomain(
+bool buildCurveConsistentParameterDomainForChoices(
     const RegionReferenceMesh& mesh,
     const RegionCurveNetwork& network,
     const RegionRefitOptions& options,
-    RegionPatchLayout& layout,
+    const RegionPatchLayout& source,
+    const std::vector<std::size_t>& logicalGroupingChoices,
+    RegionPatchLayout& result,
     std::string& message) {
     auto boundaryConvexityBlend =
         std::sqrt(std::numeric_limits<double>::epsilon());
     while (true) {
-        auto candidate = layout;
+        auto candidate = source;
         bool retryableAreaFailure = false;
         auto failedAreaRatio = 0.0;
         auto requiredAreaRatio = 0.0;
@@ -2181,12 +2234,13 @@ bool buildCurveConsistentParameterDomain(
                 network,
                 options,
                 candidate,
+                logicalGroupingChoices,
                 boundaryConvexityBlend,
                 retryableAreaFailure,
                 failedAreaRatio,
                 requiredAreaRatio,
                 message)) {
-            layout = std::move(candidate);
+            result = std::move(candidate);
             return true;
         }
         if (!retryableAreaFailure || boundaryConvexityBlend >= 1.0) {
@@ -2205,6 +2259,115 @@ bool buildCurveConsistentParameterDomain(
         }
         boundaryConvexityBlend = nextBlend;
     }
+}
+
+bool buildCurveConsistentParameterDomain(
+    const RegionReferenceMesh& mesh,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    RegionPatchLayout& layout,
+    std::string& message) {
+    if (!network.valid() || layout.patchCount != network.patchCount) {
+        message =
+            "Curve-consistent parameterization received mismatched topology.";
+        return false;
+    }
+    const auto source = layout;
+    std::vector<std::size_t> choices(
+        static_cast<std::size_t>(layout.patchCount), 0);
+    for (int patchIndex = 0; patchIndex < layout.patchCount; ++patchIndex) {
+        const auto loop = std::find_if(
+            network.patchLoops.begin(), network.patchLoops.end(),
+            [&](const auto& candidate) {
+                return candidate.patch == patchIndex;
+            });
+        if (loop == network.patchLoops.end()) {
+            message = "A curve-network patch has no boundary loop.";
+            return false;
+        }
+        const auto groupings = enumerateLogicalGroupings(*loop, network);
+        if (groupings.empty()) {
+            message =
+                "A patch loop cannot be represented by exactly four logical sides.";
+            return false;
+        }
+        std::optional<RegionPatchLayout> best;
+        std::tuple<int, int, int, int, double, double, std::string>
+            bestScore;
+        auto hasBest = false;
+        for (std::size_t choice = 0; choice < groupings.size(); ++choice) {
+            choices[static_cast<std::size_t>(patchIndex)] = choice;
+            RegionPatchLayout candidate;
+            std::string candidateMessage;
+            if (!buildCurveConsistentParameterDomainForChoices(
+                    mesh,
+                    network,
+                    options,
+                    source,
+                    choices,
+                    candidate,
+                    candidateMessage)) {
+                continue;
+            }
+            const auto& patch =
+                candidate.patches[static_cast<std::size_t>(patchIndex)];
+            const auto areaGateFailed =
+                patch.minimumToMedianUvAreaRatio <
+                    minimumUvAreaRatioLimit(mesh, patch, options)
+                ? 1 : 0;
+            const auto maximumDistortionGateFailed =
+                !std::isfinite(patch.maximumDistortion) ||
+                    patch.maximumDistortion >
+                        options.maximumParameterDistortion
+                ? 1 : 0;
+            const auto score = std::tuple {
+                patch.flippedTriangleCount,
+                patch.pcurveSelfIntersectionCount +
+                    patch.pcurveNonAdjacentIntersectionCount,
+                areaGateFailed,
+                maximumDistortionGateFailed,
+                -patch.minimumToMedianUvAreaRatio,
+                patch.distortionP995,
+                patch.selectedLogicalSideHash};
+            if (!hasBest || score < bestScore) {
+                hasBest = true;
+                bestScore = score;
+                best = std::move(candidate);
+                choices[static_cast<std::size_t>(patchIndex)] = choice;
+            }
+        }
+        if (!best.has_value()) {
+            message =
+                "No deterministic four-side grouping produced a constructible parameter domain.";
+            return false;
+        }
+        const auto selectedHash =
+            best->patches[static_cast<std::size_t>(patchIndex)]
+                .selectedLogicalSideHash;
+        const auto selected = std::find_if(
+            groupings.begin(), groupings.end(),
+            [&](const auto& grouping) {
+                return logicalGroupingHash(grouping) == selectedHash;
+            });
+        choices[static_cast<std::size_t>(patchIndex)] =
+            selected == groupings.end()
+            ? std::size_t {0}
+            : static_cast<std::size_t>(
+                std::distance(groupings.begin(), selected));
+    }
+    RegionPatchLayout selected;
+    if (!buildCurveConsistentParameterDomainForChoices(
+            mesh,
+            network,
+            options,
+            source,
+            choices,
+            selected,
+            message)) {
+        return false;
+    }
+    layout = std::move(selected);
+    return true;
 }
 
 RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
@@ -2486,7 +2649,10 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             report->minimumSignedUvArea = 0.0;
             report->minimumToMedianUvAreaRatio =
                 std::numeric_limits<double>::infinity();
+            report->distortionP995 = 0.0;
             report->boundaryRepresentabilityResidual = 0.0;
+            report->logicalSideCandidateCount = 0;
+            report->selectedLogicalSideHash.clear();
             for (const auto& patch : layout.patches) {
                 report->maximumDistortion = std::max(
                     report->maximumDistortion, patch.maximumDistortion);
@@ -2504,10 +2670,20 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                 report->minimumToMedianUvAreaRatio = std::min(
                     report->minimumToMedianUvAreaRatio,
                     patch.minimumToMedianUvAreaRatio);
+                report->distortionP995 = std::max(
+                    report->distortionP995,
+                    patch.distortionP995);
                 report->boundaryRepresentabilityResidual = std::max(
                     report->boundaryRepresentabilityResidual,
                     patch.boundaryRepresentabilityResidual);
                 report->domainType = patch.domainType;
+                report->logicalSideCandidateCount +=
+                    patch.logicalSideCandidateCount;
+                if (!report->selectedLogicalSideHash.empty()) {
+                    report->selectedLogicalSideHash += '|';
+                }
+                report->selectedLogicalSideHash +=
+                    patch.selectedLogicalSideHash;
             }
             report->constructibleParameterization = true;
             report->parameterizationPassed =
@@ -2531,8 +2707,12 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                 std::ostringstream stream;
                 stream
                     << "The curve-consistent parameter domain is constructible but exceeded a product layout gate"
-                    << " (area_ratio="
+                    << " (flips="
+                    << report->flippedTriangleCount
+                    << ", area_ratio="
                     << report->minimumToMedianUvAreaRatio
+                    << ", distortion_p995="
+                    << report->distortionP995
                     << ", distortion="
                     << report->maximumDistortion << ").";
                 report->rejectionReason = stream.str();

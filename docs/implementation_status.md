@@ -4,7 +4,7 @@
 
 ## 分支
 
-当前开发分支为 native-surface-reduction。
+当前开发分支为 native-regional-refit。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
 
@@ -167,9 +167,11 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 状态：独立实验分支，命令行纵向链已改为曲线网络先行，尚未产品验收。
 
-当前实现先生成并冻结显式 `RegionCurveNetwork`。内部界面使用端点固定、正则化的 C2 三次 B-spline；投影载体先删除局部反向段，三次曲线仍不能同时通过投影、转角和交叉门时才退回穿过原投影点的一级诊断曲线。每个 patch 同时保存用于无翻转载体参数化的 `parameters` 和用于支撑面边界的矩形 `surfaceParameters`；四组逻辑边严格映射到 `[0,1]^2` 的四条 iso 边，每条 edge-use 只保存二点一级 pcurve。联合拟合和诊断 Coons 候选都锁定四条边界，未锁边的仿射基线不能进入 B-Rep。builder 为每个网络节点和内部曲线分别只创建一个 Vertex 和 Edge，附着双侧精确 iso pcurve，经 257 点 Curve-on-Surface 检查后才设置 `SameParameter`。缓存二进制版本为 10，旧版本不兼容。
+当前实现先生成并冻结显式 `RegionCurveNetwork`。内部界面使用端点固定、正则化的 C2 三次 B-spline；投影载体先删除局部反向段，三次曲线仍不能同时通过投影、转角和交叉门时才退回穿过原投影点的一级诊断曲线。每个 patch 同时保存载体 `parameters` 和矩形 `surfaceParameters`，四逻辑边从确定性合法分组中按实际 `surfaceParameters` 的翻转、面积比、99.5% 畸变和稳定 hash 选择。拟合样本以原始 `FaceId/UV` 在同面载体三角形内做重心映射，并记录同面回退和跨面失败。四条逻辑边使用相对边与共享边节点兼容、每侧不超过 25 个控制点的三次 B-spline 支撑；四周控制点冻结后，只用 `SimplicialLDLT` 求解内部变量的约化 SPD 法方程。Coons 仅可作为 `BoundaryLockedDiagnostic`。最终曲面直接报告逐面 poles/knots、公平能量、法向变化、曲率振荡、Jacobian 和条件数分位数。builder 复用唯一 Vertex/Edge，四张 Face 组成单一 `TopoDS_Shell`，并逐 Shell/Face/Wire/Edge 记录 `BRepCheck` 状态。缓存二进制版本为 11，算法指纹为 `native-regional-refit-v40-fair-boundary-spd`，旧布局和拟合缓存拒绝。
 
-合成测试覆盖曲线公平性、自交、非节点交叉和强制回退，4/7/10/11 条 edge-use 的四边分组及退化拒绝，K=4 中心节点链、边界锁定、精确 iso pcurve、缓存确定性、真实裁剪和最终目录白名单。当前 candidate-179 全链诊断基线为 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\final\`：K=4 的 5 条内部曲线均为 `RegularizedCubic`，最大投影误差 `0.0298705 mm`、最大采样转角 `1.78074°`，自交和非节点交叉均为 0。布局可构造且无翻转或 pcurve 交叉，但最小/中位 UV 面积比 `2.49277e-5`、最大畸变 `201.442`，产品布局门失败。边界锁定候选的边界偏差和双侧分离均小于 `3.2e-14 mm`，但独立距离 `0.245723 mm`、法向 `20.1538°`、接缝法向 `18.3648°`，拟合门失败。4 张裁剪 Face 的 38 次 `SameParameter` 检查无失败，内部自由边和意外交线均为 0；内存态逐 Face `BRepCheck` 仍使 retrim 状态为失败，但导出的 `trimmed_patch_faces.step` 再导入后 BRepCheck 通过，38 个 Curve-on-Surface incidence 的最大偏差为 `7.91277e-12 mm`，四张 Face 的支撑面控制点包围盒与裁剪 Face 包围盒比均为 1。固定 `0.001 mm` 诊断缝合把自由边从 6 降为 0，整件 STEP 往返保持 1 个 Solid、0 条自由边和有效 B-Rep；Creo 导入和 PRT 生成通过，ModelCHECK 未通过。最终为 `DiagnosticOnly`、`canApply=false`，不构成产品成功。
+合成测试覆盖同面 `FaceId/UV` 重心映射与跨面拒绝、K=4 四逻辑边选择、共享边兼容节点、内部变量消元、重复约束、Coons 诊断降级、实际 poles/knots、带空格 STEP 实体统计、单 Shell quilt、质量门失败后的固定容差缝合和最终目录互斥合同。当前 candidate-179 全链诊断基线为 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260729_032156_431__native-region-refit__03_配件_Clay__cand-0179__target\final\`。K=4 曲线网络仍为 30 个节点、33 条曲线，5 条内部曲线均为 `RegularizedCubic`，最大投影误差 `0.0298705 mm`，无自交或非节点交叉。2572 个 fitting samples 全部通过同面重心映射，无回退或跨面失败。实际 `surfaceParameters` 暴露 116 个翻转或退化三角形，面积比为 0，99.5% 和最大畸变均为非有限值，布局产品门失败；每侧 25 控制点内不能同时满足冻结曲线误差，因此正式约化 SPD 路径未启动，保留高复杂度 Coons 诊断。独立距离为 `0.324422 mm`、法向 `21.7735°`、接缝法向 `18.3652°`，均未过拟合门。四张面实际为 `125×14`、`81×74`、`118×11`、`9×67` poles，总计 9645，最大单边 125，复杂度门失败；公平能量为 `7.44722e-4`，曲率振荡为 `0.919857`，最小归一化 Jacobian 为 `0.238712`，条件数 P50/P95/P99 为 `1.62490/4.57683/10.6860`，质量硬失败。
+
+四张裁剪 Face 的 38 次 `SameParameter` 检查仍为零失败，最大残差 `4.36e-14 mm`，Curve-on-Surface 最大偏差 `4.78e-14 mm`，内部自由边和意外交线均为 0。单 Shell 中两张 Face 报 `BadOrientationOfSubshape`，所以内存态 BRep 产品门仍失败；固定 `0.001 mm` 诊断缝合和 STEP 回读保持 1 个 Solid、0 条自由边、0 条多重边与有效 B-Rep。STEP 实体统计已恢复为非零：基线/候选 surface 为 2739/2694、edge curve 为 5478/5400。Creo 导入状态与评分为 `OK/PASS`，PRT 生成成功，ModelCHECK 未通过。最终仍为 `DiagnosticOnly`、`canApply=false`；水密实体不代表布局、拟合、复杂度或产品门通过。K=5/6/8 布局筛选均未在 900000 ms 预算和 30 秒硬退出宽限内完成，因此没有进入完整拟合，K=4 是唯一形成完整可比较证据的候选。
 
 ## 当前限制
 

@@ -59,6 +59,16 @@ struct KnotConfiguration {
     int vControlCount() const { return static_cast<int>(v.size()) + kDegree - 1; }
 };
 
+struct BoundarySupportNetwork {
+    std::vector<KnotConfiguration> knots;
+    std::vector<std::optional<gp_Pnt>> fixedControls;
+    int fixedControlCount = 0;
+    double maximumOuterBoundaryDeviation = 0.0;
+    double maximumInternalBoundaryDeviation = 0.0;
+    bool productQualified = false;
+    std::string message;
+};
+
 struct PatchLookup {
     std::unordered_map<std::size_t, std::size_t> localByGlobal;
 };
@@ -205,6 +215,14 @@ std::array<double, 2> normalizedParameter(const std::array<double, 2>& uv) {
         std::clamp(uv[1], 0.0, 1.0)};
 }
 
+const std::vector<std::array<double, 2>>& surfaceParameters(
+    const RegionPatchParameterization& parameterization) {
+    return parameterization.surfaceParameters.size() ==
+            parameterization.vertexIndices.size()
+        ? parameterization.surfaceParameters
+        : parameterization.parameters;
+}
+
 std::vector<PatchLookup> buildLookups(const RegionPatchLayout& layout) {
     std::vector<PatchLookup> lookups(layout.patches.size());
     for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
@@ -284,9 +302,9 @@ std::optional<std::array<double, 2>> curveParameterOnPatch(
             0.0, 1.0)
         : 0.0;
     const auto firstUv = normalizedParameter(
-        parameterization.parameters[firstFound->second]);
+        surfaceParameters(parameterization)[firstFound->second]);
     const auto secondUv = normalizedParameter(
-        parameterization.parameters[secondFound->second]);
+        surfaceParameters(parameterization)[secondFound->second]);
     return std::array<double, 2> {
         firstUv[0] + alpha * (secondUv[0] - firstUv[0]),
         firstUv[1] + alpha * (secondUv[1] - firstUv[1])};
@@ -296,64 +314,28 @@ std::vector<MappedReferenceSample> mapReferenceSamples(
     const RegionReferenceMesh& fittingReference,
     const RegionReferenceMesh& layoutCarrier,
     const RegionPatchLayout& layout,
-    const std::vector<PatchLookup>& lookups) {
-    std::unordered_map<FaceId, std::vector<std::size_t>> carrierByFace;
-    for (std::size_t vertex = 0; vertex < layoutCarrier.vertices.size(); ++vertex) {
-        for (const auto& source : layoutCarrier.vertices[vertex].sources) {
-            carrierByFace[source.faceId].push_back(vertex);
-        }
-    }
-    for (auto& [faceId, vertices] : carrierByFace) {
-        (void)faceId;
-        std::sort(vertices.begin(), vertices.end());
-        vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
-    }
-
-    std::vector<std::vector<std::pair<int, std::size_t>>> patchLocals(layoutCarrier.vertices.size());
-    for (std::size_t patch = 0; patch < lookups.size(); ++patch) {
-        for (const auto& [global, local] : lookups[patch].localByGlobal) {
-            if (global < patchLocals.size()) {
-                patchLocals[global].emplace_back(static_cast<int>(patch), local);
-            }
-        }
-    }
-    for (auto& candidates : patchLocals) std::sort(candidates.begin(), candidates.end());
-
+    const std::vector<PatchLookup>& lookups,
+    std::size_t& sameFaceBarycentricCount,
+    std::size_t& sameFaceFallbackCount,
+    std::size_t& crossFaceFailureCount) {
+    (void)lookups;
+    const auto mapping = mapRegionReferenceSamplesToSurfaceParameters(
+        fittingReference, layoutCarrier, layout);
+    sameFaceBarycentricCount = mapping.sameFaceBarycentricCount;
+    sameFaceFallbackCount = mapping.sameFaceFallbackCount;
+    crossFaceFailureCount = mapping.crossFaceFailureCount;
     std::vector<MappedReferenceSample> mapped;
-    mapped.reserve(fittingReference.vertices.size());
-    for (std::size_t referenceVertex = 0; referenceVertex < fittingReference.vertices.size(); ++referenceVertex) {
-        const auto& reference = fittingReference.vertices[referenceVertex];
-        std::vector<std::size_t> candidates;
-        for (const auto& source : reference.sources) {
-            const auto found = carrierByFace.find(source.faceId);
-            if (found != carrierByFace.end()) {
-                candidates.insert(candidates.end(), found->second.begin(), found->second.end());
-            }
-        }
-        if (candidates.empty()) {
-            candidates.resize(layoutCarrier.vertices.size());
-            std::iota(candidates.begin(), candidates.end(), std::size_t {0});
-        } else {
-            std::sort(candidates.begin(), candidates.end());
-            candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-        }
-        auto closest = layoutCarrier.vertices.size();
-        auto distance = std::numeric_limits<double>::infinity();
-        for (const auto carrierVertex : candidates) {
-            if (carrierVertex >= layoutCarrier.vertices.size() || patchLocals[carrierVertex].empty()) continue;
-            const auto candidate = reference.point.SquareDistance(layoutCarrier.vertices[carrierVertex].point);
-            if (candidate < distance) {
-                closest = carrierVertex;
-                distance = candidate;
-            }
-        }
-        if (closest >= layoutCarrier.vertices.size() || patchLocals[closest].empty()) continue;
-        const auto [patch, local] = patchLocals[closest].front();
+    mapped.reserve(mapping.samples.size());
+    for (const auto& sample : mapping.samples) {
+        const auto carrierVertex =
+            sample.carrierTriangle < layoutCarrier.triangles.size()
+            ? layoutCarrier.triangles[sample.carrierTriangle].vertices.front()
+            : layoutCarrier.vertices.size();
         mapped.push_back({
-            referenceVertex,
-            closest,
-            patch,
-            normalizedParameter(layout.patches[static_cast<std::size_t>(patch)].parameters[local])});
+            sample.referenceVertex,
+            carrierVertex,
+            sample.patch,
+            normalizedParameter(sample.surfaceParameter)});
     }
     return mapped;
 }
@@ -499,7 +481,7 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
     for (std::size_t patch = 0; patch < knots.size(); ++patch) {
         const auto& parameterization = layout.patches[patch];
         if (parameterization.vertexIndices.size() < 3 ||
-            parameterization.parameters.size() !=
+            surfaceParameters(parameterization).size() !=
                 parameterization.vertexIndices.size()) {
             return std::nullopt;
         }
@@ -520,7 +502,7 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
              ++local) {
             const auto vertex = parameterization.vertexIndices[local];
             if (vertex >= layoutCarrier.vertices.size()) return std::nullopt;
-            const auto& uv = parameterization.parameters[local];
+            const auto& uv = surfaceParameters(parameterization)[local];
             const Eigen::Vector3d row(1.0, uv[0], uv[1]);
             const auto& point = layoutCarrier.vertices[vertex].point;
             const Eigen::Vector3d target(point.X(), point.Y(), point.Z());
@@ -554,7 +536,8 @@ std::optional<Eigen::MatrixXd> buildAffineControlBaseline(
             for (std::size_t corner = 0; corner < triangle.vertices.size(); ++corner) {
                 const auto found = localByGlobal.find(triangle.vertices[corner]);
                 if (found == localByGlobal.end()) return std::nullopt;
-                uv[corner] = parameterization.parameters[found->second];
+                uv[corner] =
+                    surfaceParameters(parameterization)[found->second];
             }
             const auto signedUvArea =
                 (uv[1][0] - uv[0][0]) * (uv[2][1] - uv[0][1]) -
@@ -785,12 +768,13 @@ std::vector<SeamSample> selectSeamConstraintSamples(
             const auto selectedSample = samples[selected.back()];
             const auto selectedLocal = lookups[firstPatch].localByGlobal.at(selectedSample->vertex);
             const auto selectedUv = normalizedParameter(
-                layout.patches[firstPatch].parameters[selectedLocal]);
+                surfaceParameters(layout.patches[firstPatch])[selectedLocal]);
             auto next = samples.size();
             auto maximumDistance = -1.0;
             for (std::size_t index = 0; index < samples.size(); ++index) {
                 const auto local = lookups[firstPatch].localByGlobal.at(samples[index]->vertex);
-                const auto uv = normalizedParameter(layout.patches[firstPatch].parameters[local]);
+                const auto uv = normalizedParameter(
+                    surfaceParameters(layout.patches[firstPatch])[local]);
                 const auto du = uv[0] - selectedUv[0];
                 const auto dv = uv[1] - selectedUv[1];
                 minimumDistances[index] = std::min(minimumDistances[index], du * du + dv * dv);
@@ -887,9 +871,13 @@ std::vector<LinearRow> buildSystemRows(
             continue;
         }
         const auto firstUv = normalizedParameter(
-            layout.patches[static_cast<std::size_t>(seam.firstPatch)].parameters[firstFound->second]);
+            surfaceParameters(
+                layout.patches[static_cast<std::size_t>(seam.firstPatch)])
+                    [firstFound->second]);
         const auto secondUv = normalizedParameter(
-            layout.patches[static_cast<std::size_t>(seam.secondPatch)].parameters[secondFound->second]);
+            surfaceParameters(
+                layout.patches[static_cast<std::size_t>(seam.secondPatch)])
+                    [secondFound->second]);
         const RegionCurveNetworkEdge* frozenEdge = nullptr;
         if (curveNetwork != nullptr) {
             const auto found = std::find_if(
@@ -1081,7 +1069,8 @@ std::vector<NormalRow> buildNormalRows(
                 }
             }
             if (smoothConstraint == nullptr) continue;
-            const auto uv = normalizedParameter(parameterization.parameters[local]);
+            const auto uv = normalizedParameter(
+                surfaceParameters(parameterization)[local]);
             constexpr double adjacentNormalWeight = 1.0;
             auto targetNormal = vertex.normal;
             if (smoothConstraint != nullptr &&
@@ -1220,7 +1209,8 @@ std::vector<LinearRow> buildBoundaryEqualityRows(
                 }
                 rows.push_back({
                     surfaceCoefficients(
-                        normalizedParameter(parameterization.parameters[local]),
+                        normalizedParameter(
+                            surfaceParameters(parameterization)[local]),
                         knots[patch],
                         variableOffsets[patch]),
                     target,
@@ -1275,8 +1265,10 @@ std::vector<LinearRow> buildBoundaryEqualityRows(
                 const auto curve = BRep_Tool::Curve(found->second->originalEdge, first, last);
                 const auto target = curve->Value(
                     std::clamp((firstParameter + secondParameter) * 0.5, first, last));
-                const auto firstUv = normalizedParameter(parameterization.parameters[local]);
-                const auto secondUv = normalizedParameter(parameterization.parameters[nextLocal]);
+                const auto firstUv = normalizedParameter(
+                    surfaceParameters(parameterization)[local]);
+                const auto secondUv = normalizedParameter(
+                    surfaceParameters(parameterization)[nextLocal]);
                 rows.push_back({
                     surfaceCoefficients(
                         {(firstUv[0] + secondUv[0]) * 0.5,
@@ -1479,18 +1471,23 @@ std::vector<LinearRow> buildSeamEqualityRows(
         parent[static_cast<std::size_t>(secondRoot)] = firstRoot;
 
         auto coefficients = surfaceCoefficients(
-            normalizedParameter(layout.patches[firstPatch].parameters[firstFound->second]),
+            normalizedParameter(
+                surfaceParameters(layout.patches[firstPatch])
+                    [firstFound->second]),
             knots[firstPatch],
             variableOffsets[firstPatch]);
         const auto secondCoefficients = surfaceCoefficients(
-            normalizedParameter(layout.patches[secondPatch].parameters[secondFound->second]),
+            normalizedParameter(
+                surfaceParameters(layout.patches[secondPatch])
+                    [secondFound->second]),
             knots[secondPatch],
             variableOffsets[secondPatch]);
         for (const auto& [column, value] : secondCoefficients) {
             coefficients.emplace_back(column, -value);
         }
         const auto firstUv = normalizedParameter(
-            layout.patches[firstPatch].parameters[firstFound->second]);
+            surfaceParameters(layout.patches[firstPatch])
+                [firstFound->second]);
         rows.push_back({
             std::move(coefficients),
             gp_Pnt(0.0, 0.0, 0.0),
@@ -1733,7 +1730,8 @@ bool evaluateLocalSupportDomain(
     std::string& reason) {
     if (surface.IsNull() ||
         parameterization.vertexIndices.empty() ||
-        parameterization.vertexIndices.size() != parameterization.parameters.size()) {
+        parameterization.vertexIndices.size() !=
+            surfaceParameters(parameterization).size()) {
         reason = "A local support domain has incomplete surface or parameterization data.";
         return false;
     }
@@ -1750,8 +1748,8 @@ bool evaluateLocalSupportDomain(
     for (std::size_t local = 0; local < parameterization.vertexIndices.size(); ++local) {
         const auto vertexIndex = parameterization.vertexIndices[local];
         if (vertexIndex >= carrier.vertices.size() ||
-            !std::isfinite(parameterization.parameters[local][0]) ||
-            !std::isfinite(parameterization.parameters[local][1])) {
+            !std::isfinite(surfaceParameters(parameterization)[local][0]) ||
+            !std::isfinite(surfaceParameters(parameterization)[local][1])) {
             reason = "A local support domain contains non-finite or invalid parameterization data.";
             return false;
         }
@@ -1816,7 +1814,8 @@ bool evaluateLocalSupportDomain(
                 reason = "A trim triangle references a vertex outside its patch parameterization.";
                 return false;
             }
-            trimTriangle.parameters[corner] = parameterization.parameters[found->second];
+            trimTriangle.parameters[corner] =
+                surfaceParameters(parameterization)[found->second];
         }
         const auto signedUvArea =
             (trimTriangle.parameters[1][0] - trimTriangle.parameters[0][0]) *
@@ -2503,6 +2502,595 @@ bool insertBoundaryFeasibilityKnots(
     return insertedAny;
 }
 
+std::vector<double> uniformUniqueKnots(const int controlCount) {
+    const auto uniqueCount = controlCount - kDegree + 1;
+    std::vector<double> knots(static_cast<std::size_t>(uniqueCount), 0.0);
+    for (int index = 0; index < uniqueCount; ++index) {
+        knots[static_cast<std::size_t>(index)] =
+            static_cast<double>(index) /
+            static_cast<double>(uniqueCount - 1);
+    }
+    return knots;
+}
+
+struct LogicalSideTargetSegment {
+    const RegionCurveNetworkEdge* edge = nullptr;
+    double sideFirst = 0.0;
+    double sideLast = 1.0;
+    bool forward = true;
+};
+
+struct LogicalSideTarget {
+    std::string key;
+    std::vector<LogicalSideTargetSegment> segments;
+    bool originalBoundary = false;
+    bool reverseForPatch = false;
+
+    gp_Pnt value(const double sideParameter) const {
+        const auto clamped = std::clamp(sideParameter, 0.0, 1.0);
+        const auto found = std::find_if(
+            segments.begin(), segments.end(),
+            [&](const auto& segment) {
+                return clamped <= segment.sideLast + 1.0e-14;
+            });
+        const auto& segment =
+            found == segments.end() ? segments.back() : *found;
+        const auto alpha = segment.sideLast > segment.sideFirst
+            ? std::clamp(
+                (clamped - segment.sideFirst) /
+                    (segment.sideLast - segment.sideFirst),
+                0.0,
+                1.0)
+            : 0.0;
+        const auto curveAlpha = segment.forward ? alpha : 1.0 - alpha;
+        const auto parameter =
+            segment.edge->firstParameter +
+            curveAlpha *
+                (segment.edge->lastParameter -
+                 segment.edge->firstParameter);
+        return segment.edge->curve->Value(parameter);
+    }
+};
+
+std::optional<LogicalSideTarget> logicalSideTarget(
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const int patch,
+    const std::size_t sideIndex) {
+    if (patch < 0 || patch >= layout.patchCount ||
+        sideIndex >= 4) {
+        return std::nullopt;
+    }
+    const auto loop = std::find_if(
+        network.patchLoops.begin(), network.patchLoops.end(),
+        [&](const auto& candidate) { return candidate.patch == patch; });
+    if (loop == network.patchLoops.end()) return std::nullopt;
+    const auto& parameterization =
+        layout.patches[static_cast<std::size_t>(patch)];
+    const auto& logicalSide = parameterization.logicalSides[sideIndex];
+    if (logicalSide.edgeUseOrders.empty()) return std::nullopt;
+
+    LogicalSideTarget target;
+    const auto singleOrder =
+        logicalSide.edgeUseOrders.size() == 1
+        ? logicalSide.edgeUseOrders.front()
+        : loop->edges.size();
+    if (singleOrder < loop->edges.size()) {
+        const auto& use = loop->edges[singleOrder];
+        if (use.edgeIndex < network.edges.size() &&
+            !network.edges[use.edgeIndex].originalBoundary) {
+            const auto& edge = network.edges[use.edgeIndex];
+            target.key = "internal-" + std::to_string(edge.id);
+            target.originalBoundary = false;
+            target.reverseForPatch = !use.forward;
+            target.segments.push_back({
+                &edge, 0.0, 1.0, true});
+            return target;
+        }
+    }
+
+    target.key =
+        "patch-" + std::to_string(patch) +
+        "-side-" + std::to_string(sideIndex);
+    target.originalBoundary = true;
+    for (const auto order : logicalSide.edgeUseOrders) {
+        if (order >= loop->edges.size()) return std::nullopt;
+        const auto& use = loop->edges[order];
+        if (use.edgeIndex >= network.edges.size()) return std::nullopt;
+        const auto pcurve = std::find_if(
+            parameterization.edgePcurves.begin(),
+            parameterization.edgePcurves.end(),
+            [&](const auto& candidate) {
+                return candidate.loopOrder == order &&
+                    candidate.edgeIndex == use.edgeIndex;
+            });
+        if (pcurve == parameterization.edgePcurves.end() ||
+            !(pcurve->sideLastParameter >
+                pcurve->sideFirstParameter)) {
+            return std::nullopt;
+        }
+        target.segments.push_back({
+            &network.edges[use.edgeIndex],
+            pcurve->sideFirstParameter,
+            pcurve->sideLastParameter,
+            use.forward});
+        target.originalBoundary =
+            target.originalBoundary &&
+            network.edges[use.edgeIndex].originalBoundary;
+    }
+    return target.segments.empty()
+        ? std::nullopt
+        : std::optional<LogicalSideTarget> {std::move(target)};
+}
+
+std::optional<std::vector<gp_Pnt>> fitLogicalSidePoles(
+    const LogicalSideTarget& target,
+    const std::vector<double>& knots,
+    const int validationSampleCount,
+    double& maximumDeviation) {
+    const auto controlCount =
+        static_cast<int>(knots.size()) + kDegree - 1;
+    if (controlCount < kDegree + 1 ||
+        target.segments.empty()) {
+        return std::nullopt;
+    }
+    const auto firstPoint = target.value(0.0);
+    const auto lastPoint = target.value(1.0);
+    const auto interiorCount = controlCount - 2;
+    const auto fitSampleCount = std::max(
+        validationSampleCount,
+        controlCount * (kDegree + 1));
+    Eigen::MatrixXd matrix(fitSampleCount, interiorCount);
+    Eigen::MatrixXd values(fitSampleCount, 3);
+    for (int sample = 0; sample < fitSampleCount; ++sample) {
+        const auto parameter =
+            (static_cast<double>(sample) + 0.5) /
+            static_cast<double>(fitSampleCount);
+        const auto basis = basisValues(knots, parameter);
+        const auto targetPoint = target.value(parameter);
+        for (int control = 1; control + 1 < controlCount; ++control) {
+            matrix(sample, control - 1) =
+                basis[static_cast<std::size_t>(control)];
+        }
+        const std::array<double, 3> coordinates {
+            targetPoint.X(), targetPoint.Y(), targetPoint.Z()};
+        const std::array<double, 3> first {
+            firstPoint.X(), firstPoint.Y(), firstPoint.Z()};
+        const std::array<double, 3> last {
+            lastPoint.X(), lastPoint.Y(), lastPoint.Z()};
+        for (int axis = 0; axis < 3; ++axis) {
+            values(sample, axis) =
+                coordinates[static_cast<std::size_t>(axis)] -
+                basis.front() * first[static_cast<std::size_t>(axis)] -
+                basis.back() * last[static_cast<std::size_t>(axis)];
+        }
+    }
+    const auto decomposition = matrix.colPivHouseholderQr();
+    if (decomposition.rank() < interiorCount) return std::nullopt;
+    const Eigen::MatrixXd interior = decomposition.solve(values);
+    if (!interior.allFinite()) return std::nullopt;
+    std::vector<gp_Pnt> poles(
+        static_cast<std::size_t>(controlCount));
+    poles.front() = firstPoint;
+    poles.back() = lastPoint;
+    for (int control = 1; control + 1 < controlCount; ++control) {
+        poles[static_cast<std::size_t>(control)] = gp_Pnt(
+            interior(control - 1, 0),
+            interior(control - 1, 1),
+            interior(control - 1, 2));
+    }
+    maximumDeviation = 0.0;
+    const auto denseCount = std::max(validationSampleCount, 257);
+    for (int sample = 0; sample < denseCount; ++sample) {
+        const auto parameter =
+            static_cast<double>(sample) /
+            static_cast<double>(denseCount - 1);
+        const auto basis = basisValues(knots, parameter);
+        gp_XYZ fitted {};
+        for (int control = 0; control < controlCount; ++control) {
+            fitted += poles[static_cast<std::size_t>(control)].XYZ() *
+                basis[static_cast<std::size_t>(control)];
+        }
+        maximumDeviation = std::max(
+            maximumDeviation,
+            gp_Pnt(fitted).Distance(target.value(parameter)));
+    }
+    return poles;
+}
+
+std::optional<BoundarySupportNetwork> buildBoundarySupportNetwork(
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options) {
+    BoundarySupportNetwork result;
+    if (!network.valid() ||
+        layout.patchCount != network.patchCount ||
+        layout.patches.size() !=
+            static_cast<std::size_t>(layout.patchCount)) {
+        result.message =
+            "Boundary-support construction received mismatched topology.";
+        return result;
+    }
+    std::vector<std::array<LogicalSideTarget, 4>> targets(
+        static_cast<std::size_t>(layout.patchCount));
+    std::vector<std::array<int, 4>> requiredCounts(
+        static_cast<std::size_t>(layout.patchCount));
+    const auto maximumSupportControlCount =
+        std::min(options.maximumControlPointsPerSide, 25);
+    for (int patch = 0; patch < layout.patchCount; ++patch) {
+        for (std::size_t side = 0; side < 4; ++side) {
+            const auto target =
+                logicalSideTarget(layout, network, patch, side);
+            if (!target.has_value()) {
+                result.message =
+                    "A logical side has no valid frozen support target.";
+                return result;
+            }
+            targets[static_cast<std::size_t>(patch)][side] = *target;
+            const auto tolerance = target->originalBoundary
+                ? options.curveOnSurfaceTolerance
+                : options.curveProjectionTolerance;
+            auto qualifiedCount = 0;
+            for (int controlCount = kDegree + 1;
+                 controlCount <= maximumSupportControlCount;
+                 ++controlCount) {
+                auto deviation = 0.0;
+                const auto poles = fitLogicalSidePoles(
+                    *target,
+                    uniformUniqueKnots(controlCount),
+                    options.curveValidationSampleCount,
+                    deviation);
+                if (poles.has_value() && std::isfinite(deviation) &&
+                    deviation <= tolerance) {
+                    qualifiedCount = controlCount;
+                    break;
+                }
+            }
+            if (qualifiedCount == 0) {
+                std::ostringstream stream;
+                stream
+                    << "A logical side could not meet its frozen-curve tolerance with at most "
+                    << maximumSupportControlCount
+                    << " cubic support control points.";
+                result.message = stream.str();
+                result.productQualified = false;
+                return result;
+            }
+            requiredCounts[static_cast<std::size_t>(patch)][side] =
+                qualifiedCount;
+        }
+    }
+
+    auto changed = true;
+    while (changed) {
+        changed = false;
+        for (auto& counts : requiredCounts) {
+            const auto uCount = std::max(counts[0], counts[2]);
+            const auto vCount = std::max(counts[1], counts[3]);
+            for (const auto side : {std::size_t {0}, std::size_t {2}}) {
+                if (counts[side] != uCount) {
+                    counts[side] = uCount;
+                    changed = true;
+                }
+            }
+            for (const auto side : {std::size_t {1}, std::size_t {3}}) {
+                if (counts[side] != vCount) {
+                    counts[side] = vCount;
+                    changed = true;
+                }
+            }
+        }
+        std::map<std::string, int> sharedCounts;
+        for (std::size_t patch = 0; patch < targets.size(); ++patch) {
+            for (std::size_t side = 0; side < 4; ++side) {
+                if (targets[patch][side].originalBoundary) continue;
+                sharedCounts[targets[patch][side].key] = std::max(
+                    sharedCounts[targets[patch][side].key],
+                    requiredCounts[patch][side]);
+            }
+        }
+        for (std::size_t patch = 0; patch < targets.size(); ++patch) {
+            for (std::size_t side = 0; side < 4; ++side) {
+                if (targets[patch][side].originalBoundary) continue;
+                const auto shared =
+                    sharedCounts.at(targets[patch][side].key);
+                if (requiredCounts[patch][side] != shared) {
+                    requiredCounts[patch][side] = shared;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    result.knots.resize(static_cast<std::size_t>(layout.patchCount));
+    std::vector<int> offsets(static_cast<std::size_t>(layout.patchCount));
+    auto fullControlCount = 0;
+    for (int patch = 0; patch < layout.patchCount; ++patch) {
+        auto& knots = result.knots[static_cast<std::size_t>(patch)];
+        knots.u = uniformUniqueKnots(
+            requiredCounts[static_cast<std::size_t>(patch)][0]);
+        knots.v = uniformUniqueKnots(
+            requiredCounts[static_cast<std::size_t>(patch)][1]);
+        offsets[static_cast<std::size_t>(patch)] = fullControlCount;
+        fullControlCount +=
+            knots.uControlCount() * knots.vControlCount();
+    }
+    result.fixedControls.resize(
+        static_cast<std::size_t>(fullControlCount));
+    std::map<std::pair<std::string, int>, std::vector<gp_Pnt>>
+        sharedPoles;
+    for (int patch = 0; patch < layout.patchCount; ++patch) {
+        const auto& patchKnots =
+            result.knots[static_cast<std::size_t>(patch)];
+        const auto uCount = patchKnots.uControlCount();
+        const auto vCount = patchKnots.vControlCount();
+        const auto offset = offsets[static_cast<std::size_t>(patch)];
+        for (std::size_t side = 0; side < 4; ++side) {
+            const auto& target =
+                targets[static_cast<std::size_t>(patch)][side];
+            const auto& sideKnots =
+                side == 0 || side == 2
+                ? patchKnots.u
+                : patchKnots.v;
+            const auto controlCount =
+                static_cast<int>(sideKnots.size()) + kDegree - 1;
+            auto& poles = sharedPoles[{target.key, controlCount}];
+            auto deviation = 0.0;
+            if (poles.empty()) {
+                const auto fitted = fitLogicalSidePoles(
+                    target,
+                    sideKnots,
+                    options.curveValidationSampleCount,
+                    deviation);
+                if (!fitted.has_value()) {
+                    result.message =
+                        "A compatible logical-side support fit failed.";
+                    return result;
+                }
+                poles = *fitted;
+            } else {
+                const auto fitted = fitLogicalSidePoles(
+                    target,
+                    sideKnots,
+                    options.curveValidationSampleCount,
+                    deviation);
+                if (!fitted.has_value()) return std::nullopt;
+            }
+            if (target.originalBoundary) {
+                result.maximumOuterBoundaryDeviation = std::max(
+                    result.maximumOuterBoundaryDeviation,
+                    deviation);
+            } else {
+                result.maximumInternalBoundaryDeviation = std::max(
+                    result.maximumInternalBoundaryDeviation,
+                    deviation);
+            }
+            auto orientedPoles = poles;
+            if (target.reverseForPatch) {
+                std::reverse(orientedPoles.begin(), orientedPoles.end());
+            }
+            for (int control = 0; control < controlCount; ++control) {
+                int u = 0;
+                int v = 0;
+                switch (side) {
+                case 0:
+                    u = control;
+                    v = 0;
+                    break;
+                case 1:
+                    u = uCount - 1;
+                    v = control;
+                    break;
+                case 2:
+                    u = uCount - 1 - control;
+                    v = vCount - 1;
+                    break;
+                case 3:
+                    u = 0;
+                    v = vCount - 1 - control;
+                    break;
+                }
+                const auto index =
+                    offset + u * vCount + v;
+                auto& fixed =
+                    result.fixedControls[static_cast<std::size_t>(index)];
+                const auto& pole =
+                    orientedPoles[static_cast<std::size_t>(control)];
+                if (fixed.has_value() &&
+                    fixed->Distance(pole) >
+                        options.curveOnSurfaceTolerance) {
+                    result.message =
+                        "Compatible logical sides disagree at a corner control point.";
+                    return result;
+                }
+                fixed = pole;
+            }
+        }
+    }
+    result.fixedControlCount = static_cast<int>(std::count_if(
+        result.fixedControls.begin(),
+        result.fixedControls.end(),
+        [](const auto& point) { return point.has_value(); }));
+    result.productQualified =
+        result.maximumOuterBoundaryDeviation <=
+            options.curveOnSurfaceTolerance &&
+        result.maximumInternalBoundaryDeviation <=
+            options.curveProjectionTolerance;
+    result.message = result.productQualified
+        ? "Built compatible bounded cubic logical-side supports."
+        : "Bounded logical-side supports exceeded a frozen-curve tolerance.";
+    return result;
+}
+
+std::optional<Eigen::MatrixXd> solveReducedBoundaryLockedSystem(
+    const std::vector<LinearRow>& rows,
+    const std::vector<NormalRow>& normalRows,
+    const BoundarySupportNetwork& support,
+    RegionFitIterationReport& report,
+    const RegionRefitOptions& options) {
+    const auto fullControlCount =
+        static_cast<int>(support.fixedControls.size());
+    std::vector<int> freeIndex(
+        static_cast<std::size_t>(fullControlCount), -1);
+    auto freeControlCount = 0;
+    for (int control = 0; control < fullControlCount; ++control) {
+        if (!support.fixedControls[static_cast<std::size_t>(control)]
+                 .has_value()) {
+            freeIndex[static_cast<std::size_t>(control)] =
+                freeControlCount++;
+        }
+    }
+    report.fixedBoundaryControlPointCount =
+        support.fixedControlCount;
+    report.interiorControlPointCount = freeControlCount;
+    report.reducedSpdSystemUsed = true;
+    Eigen::MatrixXd solution(fullControlCount, 3);
+    for (int control = 0; control < fullControlCount; ++control) {
+        const auto& fixed =
+            support.fixedControls[static_cast<std::size_t>(control)];
+        if (!fixed.has_value()) continue;
+        solution(control, 0) = fixed->X();
+        solution(control, 1) = fixed->Y();
+        solution(control, 2) = fixed->Z();
+    }
+    if (freeControlCount == 0) return solution;
+
+    const auto reducedVariableCount = freeControlCount * 3;
+    std::vector<Eigen::Triplet<double>> triplets;
+    Eigen::VectorXd targets = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(rows.size() * 3 +
+                                  normalRows.size()));
+    auto scalarRow = 0;
+    for (const auto& row : rows) {
+        const std::array<double, 3> target {
+            row.target.X(), row.target.Y(), row.target.Z()};
+        for (int axis = 0; axis < 3; ++axis) {
+            auto reducedTarget = target[static_cast<std::size_t>(axis)];
+            for (const auto& [control, coefficient] :
+                 row.coefficients) {
+                const auto& fixed = support.fixedControls[
+                    static_cast<std::size_t>(control)];
+                if (fixed.has_value()) {
+                    const std::array<double, 3> coordinates {
+                        fixed->X(), fixed->Y(), fixed->Z()};
+                    reducedTarget -= coefficient *
+                        coordinates[static_cast<std::size_t>(axis)];
+                } else {
+                    triplets.emplace_back(
+                        scalarRow,
+                        freeIndex[static_cast<std::size_t>(control)] *
+                                3 +
+                            axis,
+                        coefficient);
+                }
+            }
+            targets[scalarRow++] = reducedTarget;
+        }
+    }
+    constexpr double normalWeight = 0.25;
+    for (const auto& row : normalRows) {
+        const std::array<double, 3> normal {
+            row.normal.X(), row.normal.Y(), row.normal.Z()};
+        auto reducedTarget = 0.0;
+        for (const auto& [control, coefficient] : row.coefficients) {
+            const auto& fixed = support.fixedControls[
+                static_cast<std::size_t>(control)];
+            if (fixed.has_value()) {
+                reducedTarget -= coefficient * normalWeight *
+                    (fixed->X() * normal[0] +
+                     fixed->Y() * normal[1] +
+                     fixed->Z() * normal[2]);
+            } else {
+                for (int axis = 0; axis < 3; ++axis) {
+                    triplets.emplace_back(
+                        scalarRow,
+                        freeIndex[static_cast<std::size_t>(control)] *
+                                3 +
+                            axis,
+                        coefficient *
+                            normal[static_cast<std::size_t>(axis)] *
+                            normalWeight);
+                }
+            }
+        }
+        targets[scalarRow++] = reducedTarget;
+    }
+    Eigen::SparseMatrix<double> matrix(
+        scalarRow, reducedVariableCount);
+    matrix.setFromTriplets(triplets.begin(), triplets.end());
+    matrix.makeCompressed();
+    report.matrixRows = static_cast<std::size_t>(scalarRow);
+    report.matrixColumns =
+        static_cast<std::size_t>(reducedVariableCount);
+    report.matrixNonZeros =
+        static_cast<std::size_t>(matrix.nonZeros());
+    Eigen::VectorXd columnScales =
+        Eigen::VectorXd::Zero(reducedVariableCount);
+    for (int column = 0; column < matrix.outerSize(); ++column) {
+        for (Eigen::SparseMatrix<double>::InnerIterator value(
+                 matrix, column);
+             value;
+             ++value) {
+            columnScales[column] +=
+                value.value() * value.value();
+        }
+    }
+    Eigen::SparseMatrix<double> scaled = matrix;
+    for (int column = 0; column < scaled.outerSize(); ++column) {
+        columnScales[column] = std::sqrt(
+            std::max(columnScales[column], 1.0e-24));
+        for (Eigen::SparseMatrix<double>::InnerIterator value(
+                 scaled, column);
+             value;
+             ++value) {
+            value.valueRef() /= columnScales[column];
+        }
+    }
+    Eigen::SparseMatrix<double> normal =
+        scaled.transpose() * scaled;
+    for (int diagonal = 0; diagonal < reducedVariableCount;
+         ++diagonal) {
+        normal.coeffRef(diagonal, diagonal) += 1.0e-10;
+    }
+    normal.makeCompressed();
+    report.estimatedSolverBytes =
+        static_cast<std::uint64_t>(
+            matrix.nonZeros() + normal.nonZeros()) *
+            16ull * 8ull +
+        static_cast<std::uint64_t>(reducedVariableCount) * 256ull;
+    const auto preflightLimit =
+        static_cast<std::uint64_t>(
+            options.solverMemoryPreflightMiB) *
+        1024ull * 1024ull;
+    if (report.estimatedSolverBytes > preflightLimit) {
+        return std::nullopt;
+    }
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+    solver.compute(normal);
+    if (solver.info() != Eigen::Success) return std::nullopt;
+    Eigen::VectorXd reduced =
+        solver.solve(scaled.transpose() * targets);
+    if (solver.info() != Eigen::Success || !reduced.allFinite()) {
+        return std::nullopt;
+    }
+    for (int variable = 0; variable < reducedVariableCount;
+         ++variable) {
+        reduced[variable] /= columnScales[variable];
+    }
+    for (int control = 0; control < fullControlCount; ++control) {
+        const auto free =
+            freeIndex[static_cast<std::size_t>(control)];
+        if (free < 0) continue;
+        for (int axis = 0; axis < 3; ++axis) {
+            solution(control, axis) =
+                reduced[free * 3 + axis];
+        }
+    }
+    return solution.allFinite()
+        ? std::optional<Eigen::MatrixXd> {std::move(solution)}
+        : std::nullopt;
+}
+
 TopoDS_Shape inspectionShape(const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
     BRep_Builder builder;
     TopoDS_Compound compound;
@@ -2731,21 +3319,13 @@ std::vector<Handle(Geom_BSplineSurface)> makeBoundaryLockedCoonsNetwork(
                         }
                     }
                     if (boundaryDeviation >
-                        options.curveOnSurfaceTolerance) {
+                            options.curveOnSurfaceTolerance) {
                         std::ostringstream stream;
                         stream
                             << "A boundary-locked fallback surface boundary deviates by "
                             << boundaryDeviation
                             << " mm from its exact iso pcurve.";
                         lastSupportFailure = stream.str();
-                        continue;
-                    }
-                    if (!evaluateLocalSupportDomain(
-                            candidate,
-                            layoutCarrier,
-                            parameterization,
-                            options,
-                            lastSupportFailure)) {
                         continue;
                     }
                     surface = std::move(candidate);
@@ -2819,6 +3399,204 @@ std::vector<Handle(Geom_BSplineSurface)> makeBoundaryLockedCoonsNetwork(
 
 }
 
+RegionSurfaceParameterMappingResult mapRegionReferenceSamplesToSurfaceParameters(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout) {
+    RegionSurfaceParameterMappingResult result;
+    if (layout.trianglePatches.size() != layoutCarrier.triangles.size() ||
+        layout.patches.size() != static_cast<std::size_t>(layout.patchCount)) {
+        result.crossFaceFailureCount = fittingReference.vertices.size();
+        return result;
+    }
+
+    const auto lookups = buildLookups(layout);
+    const auto sourceForFace = [](const RegionReferenceVertex& vertex,
+                                  const FaceId faceId)
+        -> const RegionReferenceSourceSample* {
+        const auto found = std::find_if(
+            vertex.sources.begin(), vertex.sources.end(),
+            [&](const auto& source) { return source.faceId == faceId; });
+        return found == vertex.sources.end() ? nullptr : &*found;
+    };
+    const auto parameterAt = [&](const int patch,
+                                 const std::size_t globalVertex)
+        -> std::optional<std::array<double, 2>> {
+        if (patch < 0 || patch >= layout.patchCount) return std::nullopt;
+        const auto& parameterization =
+            layout.patches[static_cast<std::size_t>(patch)];
+        const auto found =
+            lookups[static_cast<std::size_t>(patch)].localByGlobal.find(
+                globalVertex);
+        if (found ==
+            lookups[static_cast<std::size_t>(patch)].localByGlobal.end()) {
+            return std::nullopt;
+        }
+        const auto local = found->second;
+        const auto& parameters =
+            parameterization.surfaceParameters.size() ==
+                parameterization.vertexIndices.size()
+            ? parameterization.surfaceParameters
+            : parameterization.parameters;
+        if (local >= parameters.size()) return std::nullopt;
+        return normalizedParameter(parameters[local]);
+    };
+    const auto barycentric = [](const gp_Pnt2d& point,
+                                const gp_Pnt2d& first,
+                                const gp_Pnt2d& second,
+                                const gp_Pnt2d& third)
+        -> std::optional<std::array<double, 3>> {
+        const auto denominator =
+            (second.Y() - third.Y()) * (first.X() - third.X()) +
+            (third.X() - second.X()) * (first.Y() - third.Y());
+        if (std::abs(denominator) <= 1.0e-20) return std::nullopt;
+        const auto firstWeight =
+            ((second.Y() - third.Y()) * (point.X() - third.X()) +
+             (third.X() - second.X()) * (point.Y() - third.Y())) /
+            denominator;
+        const auto secondWeight =
+            ((third.Y() - first.Y()) * (point.X() - third.X()) +
+             (first.X() - third.X()) * (point.Y() - third.Y())) /
+            denominator;
+        return std::array<double, 3> {
+            firstWeight, secondWeight, 1.0 - firstWeight - secondWeight};
+    };
+
+    result.samples.reserve(fittingReference.vertices.size());
+    for (std::size_t referenceVertex = 0;
+         referenceVertex < fittingReference.vertices.size();
+         ++referenceVertex) {
+        const auto& reference = fittingReference.vertices[referenceVertex];
+        std::vector<const RegionReferenceSourceSample*> sources;
+        sources.reserve(reference.sources.size());
+        for (const auto& source : reference.sources) sources.push_back(&source);
+        std::sort(
+            sources.begin(), sources.end(),
+            [](const auto* first, const auto* second) {
+                return std::tuple {
+                           first->faceId,
+                           first->uv.X(),
+                           first->uv.Y()} <
+                    std::tuple {
+                           second->faceId,
+                           second->uv.X(),
+                           second->uv.Y()};
+            });
+
+        std::optional<RegionSurfaceParameterMappingSample> exact;
+        for (const auto* source : sources) {
+            for (std::size_t triangleIndex = 0;
+                 triangleIndex < layoutCarrier.triangles.size();
+                 ++triangleIndex) {
+                const auto& triangle = layoutCarrier.triangles[triangleIndex];
+                if (triangle.faceId != source->faceId) continue;
+                const auto patch = layout.trianglePatches[triangleIndex];
+                if (patch < 0 || patch >= layout.patchCount) continue;
+                std::array<const RegionReferenceSourceSample*, 3>
+                    triangleSources {};
+                std::array<std::array<double, 2>, 3> surfaceParameters {};
+                auto usable = true;
+                for (std::size_t corner = 0; corner < 3; ++corner) {
+                    if (triangle.vertices[corner] >=
+                        layoutCarrier.vertices.size()) {
+                        usable = false;
+                        break;
+                    }
+                    triangleSources[corner] = sourceForFace(
+                        layoutCarrier.vertices[triangle.vertices[corner]],
+                        source->faceId);
+                    const auto surfaceParameter =
+                        parameterAt(patch, triangle.vertices[corner]);
+                    if (triangleSources[corner] == nullptr ||
+                        !surfaceParameter.has_value()) {
+                        usable = false;
+                        break;
+                    }
+                    surfaceParameters[corner] = *surfaceParameter;
+                }
+                if (!usable) continue;
+                const auto weights = barycentric(
+                    source->uv,
+                    triangleSources[0]->uv,
+                    triangleSources[1]->uv,
+                    triangleSources[2]->uv);
+                if (!weights.has_value()) continue;
+                constexpr double insideTolerance = 1.0e-10;
+                if (std::any_of(
+                        weights->begin(), weights->end(),
+                        [](const auto weight) {
+                            return weight < -insideTolerance ||
+                                weight > 1.0 + insideTolerance;
+                        })) {
+                    continue;
+                }
+                std::array<double, 2> parameter {};
+                for (std::size_t corner = 0; corner < 3; ++corner) {
+                    parameter[0] += (*weights)[corner] *
+                        surfaceParameters[corner][0];
+                    parameter[1] += (*weights)[corner] *
+                        surfaceParameters[corner][1];
+                }
+                exact = RegionSurfaceParameterMappingSample {
+                    referenceVertex,
+                    triangleIndex,
+                    patch,
+                    normalizedParameter(parameter)};
+                break;
+            }
+            if (exact.has_value()) break;
+        }
+        if (exact.has_value()) {
+            result.samples.push_back(*exact);
+            ++result.sameFaceBarycentricCount;
+            continue;
+        }
+
+        auto bestDistance = std::numeric_limits<double>::infinity();
+        std::optional<RegionSurfaceParameterMappingSample> fallback;
+        for (const auto* source : sources) {
+            for (std::size_t carrierVertex = 0;
+                 carrierVertex < layoutCarrier.vertices.size();
+                 ++carrierVertex) {
+                const auto* carrierSource = sourceForFace(
+                    layoutCarrier.vertices[carrierVertex], source->faceId);
+                if (carrierSource == nullptr) continue;
+                for (int patch = 0; patch < layout.patchCount; ++patch) {
+                    const auto surfaceParameter =
+                        parameterAt(patch, carrierVertex);
+                    if (!surfaceParameter.has_value()) continue;
+                    const auto dx =
+                        carrierSource->uv.X() - source->uv.X();
+                    const auto dy =
+                        carrierSource->uv.Y() - source->uv.Y();
+                    const auto distance = dx * dx + dy * dy;
+                    if (distance < bestDistance ||
+                        (distance == bestDistance &&
+                         (!fallback.has_value() ||
+                          std::tuple {carrierVertex, patch} <
+                              std::tuple {
+                                  fallback->carrierTriangle,
+                                  fallback->patch}))) {
+                        bestDistance = distance;
+                        fallback = RegionSurfaceParameterMappingSample {
+                            referenceVertex,
+                            carrierVertex,
+                            patch,
+                            *surfaceParameter};
+                    }
+                }
+            }
+        }
+        if (fallback.has_value()) {
+            result.samples.push_back(*fallback);
+            ++result.sameFaceFallbackCount;
+        } else {
+            ++result.crossFaceFailureCount;
+        }
+    }
+    return result;
+}
+
 bool regionLocalSupportDomainPassed(
     const Handle(Geom_BSplineSurface)& surface,
     const RegionReferenceMesh& carrier,
@@ -2846,6 +3624,305 @@ double normalizedViolationScore(
         metrics.seamMaximumCurvatureDifference / std::max(options.g2CurvatureTolerance, 1.0e-12)});
 }
 
+double percentile(
+    std::vector<double> values,
+    const double probability) {
+    if (values.empty()) return 0.0;
+    std::sort(values.begin(), values.end());
+    const auto index = static_cast<std::size_t>(std::ceil(
+        std::clamp(probability, 0.0, 1.0) *
+        static_cast<double>(values.size() - 1)));
+    return values[index];
+}
+
+RegionSurfaceQualityMetrics measureSurfaceQuality(
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& layout,
+    const std::vector<Handle(Geom_BSplineSurface)>& surfaces) {
+    RegionSurfaceQualityMetrics quality;
+    quality.minimumNormalizedJacobian =
+        std::numeric_limits<double>::infinity();
+    std::vector<double> conditionNumbers;
+    std::size_t fairnessTermCount = 0;
+    std::size_t curvatureTermCount = 0;
+    constexpr int sampleCount = 17;
+    constexpr double derivativeTolerance = 1.0e-14;
+    for (std::size_t patch = 0; patch < surfaces.size(); ++patch) {
+        const auto& surface = surfaces[patch];
+        if (surface.IsNull()) {
+            quality.hardFailure = true;
+            continue;
+        }
+        quality.surfaceComplexities.push_back({
+            static_cast<int>(patch),
+            surface->NbUPoles(),
+            surface->NbVPoles(),
+            surface->NbUKnots(),
+            surface->NbVKnots()});
+        quality.totalPoleCount +=
+            surface->NbUPoles() * surface->NbVPoles();
+        quality.maximumPoleCountPerSide = std::max({
+            quality.maximumPoleCountPerSide,
+            surface->NbUPoles(),
+            surface->NbVPoles()});
+        quality.totalKnotCount +=
+            surface->NbUKnots() + surface->NbVKnots();
+        const auto addFairnessTerm = [&](const gp_Pnt& previous,
+                                         const gp_Pnt& current,
+                                         const gp_Pnt& next) {
+            const gp_XYZ second =
+                previous.XYZ() - current.XYZ() * 2.0 + next.XYZ();
+            const auto value = second.SquareModulus();
+            if (!std::isfinite(value)) {
+                quality.hardFailure = true;
+                return;
+            }
+            quality.fairnessEnergy += value;
+            ++fairnessTermCount;
+        };
+        for (int u = 2; u < surface->NbUPoles(); ++u) {
+            for (int v = 1; v <= surface->NbVPoles(); ++v) {
+                addFairnessTerm(
+                    surface->Pole(u - 1, v),
+                    surface->Pole(u, v),
+                    surface->Pole(u + 1, v));
+            }
+        }
+        for (int u = 1; u <= surface->NbUPoles(); ++u) {
+            for (int v = 2; v < surface->NbVPoles(); ++v) {
+                addFairnessTerm(
+                    surface->Pole(u, v - 1),
+                    surface->Pole(u, v),
+                    surface->Pole(u, v + 1));
+            }
+        }
+
+        std::array<std::array<gp_Dir, sampleCount>, sampleCount> normals;
+        std::array<std::array<double, sampleCount>, sampleCount> curvatures {};
+        std::array<std::array<bool, sampleCount>, sampleCount> valid {};
+        for (int uIndex = 0; uIndex < sampleCount; ++uIndex) {
+            const auto u = static_cast<double>(uIndex) /
+                static_cast<double>(sampleCount - 1);
+            for (int vIndex = 0; vIndex < sampleCount; ++vIndex) {
+                const auto v = static_cast<double>(vIndex) /
+                    static_cast<double>(sampleCount - 1);
+                gp_Pnt point;
+                gp_Vec du;
+                gp_Vec dv;
+                gp_Vec duu;
+                gp_Vec duv;
+                gp_Vec dvv;
+                try {
+                    surface->D2(u, v, point, du, dv, duu, duv, dvv);
+                } catch (const Standard_Failure&) {
+                    quality.hardFailure = true;
+                    continue;
+                }
+                const auto du2 = du.SquareMagnitude();
+                const auto dv2 = dv.SquareMagnitude();
+                const auto dot = du.Dot(dv);
+                const auto determinant = du2 * dv2 - dot * dot;
+                if (!std::isfinite(du2) || !std::isfinite(dv2) ||
+                    !std::isfinite(determinant) ||
+                    du2 <= derivativeTolerance ||
+                    dv2 <= derivativeTolerance ||
+                    determinant <= derivativeTolerance *
+                        std::max(du2 * dv2, 1.0)) {
+                    quality.hardFailure = true;
+                    continue;
+                }
+                const auto trace = du2 + dv2;
+                const auto discriminant = std::sqrt(std::max(
+                    0.0,
+                    trace * trace - 4.0 * determinant));
+                const auto largest = 0.5 * (trace + discriminant);
+                const auto smallest = 0.5 * (trace - discriminant);
+                if (!(smallest > derivativeTolerance) ||
+                    !std::isfinite(largest)) {
+                    quality.hardFailure = true;
+                    continue;
+                }
+                const auto condition =
+                    std::sqrt(largest / smallest);
+                conditionNumbers.push_back(condition);
+                const auto normalizedJacobian =
+                    std::sqrt(determinant / (du2 * dv2));
+                quality.minimumNormalizedJacobian = std::min(
+                    quality.minimumNormalizedJacobian,
+                    normalizedJacobian);
+                gp_Vec normal = du.Crossed(dv);
+                if (normal.SquareMagnitude() <= derivativeTolerance) {
+                    quality.hardFailure = true;
+                    continue;
+                }
+                normals[uIndex][vIndex] = gp_Dir(normal);
+                const auto secondFundamentalU =
+                    duu.Dot(gp_Vec(normals[uIndex][vIndex]));
+                const auto secondFundamentalUv =
+                    duv.Dot(gp_Vec(normals[uIndex][vIndex]));
+                const auto secondFundamentalV =
+                    dvv.Dot(gp_Vec(normals[uIndex][vIndex]));
+                const auto meanCurvature =
+                    (dv2 * secondFundamentalU -
+                     2.0 * dot * secondFundamentalUv +
+                     du2 * secondFundamentalV) /
+                    (2.0 * determinant);
+                if (!std::isfinite(meanCurvature) ||
+                    !std::isfinite(condition) ||
+                    !std::isfinite(normalizedJacobian)) {
+                    quality.hardFailure = true;
+                    continue;
+                }
+                curvatures[uIndex][vIndex] = meanCurvature;
+                valid[uIndex][vIndex] = true;
+                if (uIndex > 0 && valid[uIndex - 1][vIndex]) {
+                    quality.maximumNormalVariationDegrees = std::max(
+                        quality.maximumNormalVariationDegrees,
+                        std::acos(std::clamp(
+                            normals[uIndex][vIndex].Dot(
+                                normals[uIndex - 1][vIndex]),
+                            -1.0,
+                            1.0)) * 180.0 / kPi);
+                }
+                if (vIndex > 0 && valid[uIndex][vIndex - 1]) {
+                    quality.maximumNormalVariationDegrees = std::max(
+                        quality.maximumNormalVariationDegrees,
+                        std::acos(std::clamp(
+                            normals[uIndex][vIndex].Dot(
+                                normals[uIndex][vIndex - 1]),
+                            -1.0,
+                            1.0)) * 180.0 / kPi);
+                }
+            }
+        }
+        for (int uIndex = 1; uIndex + 1 < sampleCount; ++uIndex) {
+            for (int vIndex = 1; vIndex + 1 < sampleCount; ++vIndex) {
+                if (valid[uIndex - 1][vIndex] &&
+                    valid[uIndex][vIndex] &&
+                    valid[uIndex + 1][vIndex]) {
+                    quality.curvatureOscillation += std::abs(
+                        curvatures[uIndex - 1][vIndex] -
+                        2.0 * curvatures[uIndex][vIndex] +
+                        curvatures[uIndex + 1][vIndex]);
+                    ++curvatureTermCount;
+                }
+                if (valid[uIndex][vIndex - 1] &&
+                    valid[uIndex][vIndex] &&
+                    valid[uIndex][vIndex + 1]) {
+                    quality.curvatureOscillation += std::abs(
+                        curvatures[uIndex][vIndex - 1] -
+                        2.0 * curvatures[uIndex][vIndex] +
+                        curvatures[uIndex][vIndex + 1]);
+                    ++curvatureTermCount;
+                }
+            }
+        }
+
+        if (patch >= layout.patches.size()) {
+            quality.hardFailure = true;
+            continue;
+        }
+        const auto& parameterization = layout.patches[patch];
+        std::unordered_map<std::size_t, std::size_t> localByGlobal;
+        for (std::size_t local = 0;
+             local < parameterization.vertexIndices.size();
+             ++local) {
+            localByGlobal.emplace(
+                parameterization.vertexIndices[local], local);
+        }
+        const auto& parameters =
+            parameterization.surfaceParameters.size() ==
+                parameterization.vertexIndices.size()
+            ? parameterization.surfaceParameters
+            : parameterization.parameters;
+        for (const auto triangleIndex : parameterization.triangleIndices) {
+            if (triangleIndex >= layoutCarrier.triangles.size()) {
+                quality.hardFailure = true;
+                continue;
+            }
+            const auto& triangle = layoutCarrier.triangles[triangleIndex];
+            std::array<std::size_t, 3> local {};
+            auto mapped = true;
+            for (std::size_t corner = 0; corner < local.size(); ++corner) {
+                const auto found =
+                    localByGlobal.find(triangle.vertices[corner]);
+                if (found == localByGlobal.end() ||
+                    found->second >= parameters.size() ||
+                    triangle.vertices[corner] >=
+                        layoutCarrier.vertices.size()) {
+                    mapped = false;
+                    break;
+                }
+                local[corner] = found->second;
+            }
+            if (!mapped) {
+                quality.hardFailure = true;
+                continue;
+            }
+            const auto uv = std::array<double, 2> {
+                (parameters[local[0]][0] +
+                 parameters[local[1]][0] +
+                 parameters[local[2]][0]) / 3.0,
+                (parameters[local[0]][1] +
+                 parameters[local[1]][1] +
+                 parameters[local[2]][1]) / 3.0};
+            gp_Pnt point;
+            gp_Vec du;
+            gp_Vec dv;
+            surface->D1(uv[0], uv[1], point, du, dv);
+            const auto surfaceNormal = du.Crossed(dv);
+            const auto first = layoutCarrier.vertices[
+                triangle.vertices[0]].point;
+            const auto referenceNormal = gp_Vec(
+                first,
+                layoutCarrier.vertices[triangle.vertices[1]].point)
+                .Crossed(gp_Vec(
+                    first,
+                    layoutCarrier.vertices[triangle.vertices[2]].point));
+            if (surfaceNormal.SquareMagnitude() <= derivativeTolerance ||
+                referenceNormal.SquareMagnitude() <= derivativeTolerance ||
+                surfaceNormal.Dot(referenceNormal) <= 0.0) {
+                quality.hardFailure = true;
+            }
+        }
+    }
+    if (fairnessTermCount > 0) {
+        quality.fairnessEnergy /=
+            static_cast<double>(fairnessTermCount);
+    }
+    if (curvatureTermCount > 0) {
+        quality.curvatureOscillation /=
+            static_cast<double>(curvatureTermCount);
+    }
+    if (!std::isfinite(quality.minimumNormalizedJacobian)) {
+        quality.minimumNormalizedJacobian = 0.0;
+        quality.hardFailure = true;
+    }
+    quality.conditionNumberP50 = percentile(conditionNumbers, 0.50);
+    quality.conditionNumberP95 = percentile(conditionNumbers, 0.95);
+    quality.conditionNumberP99 = percentile(conditionNumbers, 0.99);
+    return quality;
+}
+
+void recordSurfaceQuality(
+    RegionFitIterationReport& report,
+    const RegionSurfaceQualityMetrics& quality) {
+    report.actualTotalPoleCount = quality.totalPoleCount;
+    report.actualMaximumPoleCountPerSide =
+        quality.maximumPoleCountPerSide;
+    report.actualTotalKnotCount = quality.totalKnotCount;
+    report.fairnessEnergy = quality.fairnessEnergy;
+    report.maximumNormalVariationDegrees =
+        quality.maximumNormalVariationDegrees;
+    report.curvatureOscillation = quality.curvatureOscillation;
+    report.minimumNormalizedJacobian =
+        quality.minimumNormalizedJacobian;
+    report.conditionNumberP50 = quality.conditionNumberP50;
+    report.conditionNumberP95 = quality.conditionNumberP95;
+    report.conditionNumberP99 = quality.conditionNumberP99;
+    report.surfaceQualityHardFailure = quality.hardFailure;
+}
+
 bool fitGatesPassed(
     const ValidationMetrics& metrics,
     const RegionRefitOptions& options) {
@@ -2860,6 +3937,7 @@ bool fitGatesPassed(
 }
 
 std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
+    const RegionReferenceMesh& layoutCarrier,
     const RegionPatchLayout& layout,
     std::vector<Handle(Geom_BSplineSurface)> surfaces,
     const ValidationMetrics& metrics,
@@ -2870,6 +3948,8 @@ std::shared_ptr<RegionFittedPatchNetwork> fittedNetwork(
     auto network = std::make_shared<RegionFittedPatchNetwork>();
     network->layout = layout;
     network->surfaces = std::move(surfaces);
+    network->quality = measureSurfaceQuality(
+        layoutCarrier, layout, network->surfaces);
     network->inspectionShape = inspectionShape(network->surfaces);
     network->holdoutMaximumDistance = metrics.holdoutMaximumDistance;
     network->holdoutMaximumNormalDegrees = metrics.holdoutMaximumNormalDegrees;
@@ -2904,7 +3984,59 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const RegionRefitOptions& options,
     const std::chrono::steady_clock::time_point deadline) const {
     JointBSplineNetworkFitResult result;
-    double bestEffortScore = std::numeric_limits<double>::infinity();
+    const auto diagnosticRank = [&](const RegionFittedPatchNetwork& network) {
+        auto layoutHardPassed = true;
+        for (const auto& patch : network.layout.patches) {
+            layoutHardPassed = layoutHardPassed &&
+                patch.flippedTriangleCount == 0 &&
+                patch.pcurveSelfIntersectionCount == 0 &&
+                patch.pcurveNonAdjacentIntersectionCount == 0;
+        }
+        const auto hardPassed =
+            static_cast<int>(network.boundaryLocked) +
+            static_cast<int>(network.constructibleForBRep) +
+            static_cast<int>(!network.quality.hardFailure) +
+            static_cast<int>(layoutHardPassed);
+        const auto productPassed =
+            static_cast<int>(
+                network.holdoutMaximumDistance <= options.tolerance3d) +
+            static_cast<int>(
+                network.holdoutMaximumNormalDegrees <=
+                    options.normalToleranceDegrees) +
+            static_cast<int>(
+                network.boundaryMaximumDistance <=
+                    options.curveOnSurfaceTolerance) +
+            static_cast<int>(
+                network.seamMaximumDistance <=
+                    options.curveOnSurfaceTolerance) +
+            static_cast<int>(
+                network.seamMaximumCurveDeviation <=
+                    options.curveOnSurfaceTolerance) +
+            static_cast<int>(
+                network.seamMaximumNormalDegrees <=
+                    options.g1ToleranceDegrees) +
+            static_cast<int>(
+                !options.enableInternalSeamG2 ||
+                network.seamMaximumCurvatureDifference <=
+                    options.g2CurvatureTolerance) +
+            static_cast<int>(
+                network.quality.maximumPoleCountPerSide <=
+                    std::min(
+                        options.maximumControlPointsPerSide,
+                        25));
+        return std::tuple {
+            -hardPassed,
+            -productPassed,
+            network.normalizedViolationScore,
+            network.seamMaximumNormalDegrees,
+            network.holdoutMaximumDistance,
+            network.holdoutMaximumNormalDegrees,
+            network.quality.fairnessEnergy,
+            network.quality.curvatureOscillation,
+            network.quality.totalPoleCount,
+            network.layout.patchCount,
+            network.layout.hash};
+    };
     const auto maximumAttempts = std::min<std::size_t>(
         candidates.size(), static_cast<std::size_t>(options.maximumFullFitCount));
     for (std::size_t candidateIndex = 0; candidateIndex < maximumAttempts; ++candidateIndex) {
@@ -2940,10 +4072,32 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
             continue;
         }
         const auto lookups = buildLookups(layout);
+        std::size_t sameFaceBarycentricMappingCount = 0;
+        std::size_t sameFaceMappingFallbackCount = 0;
+        std::size_t crossFaceMappingFailureCount = 0;
         const auto mappedSamples = mapReferenceSamples(
-            fittingReference, layoutCarrier, layout, lookups);
+            fittingReference,
+            layoutCarrier,
+            layout,
+            lookups,
+            sameFaceBarycentricMappingCount,
+            sameFaceMappingFallbackCount,
+            crossFaceMappingFailureCount);
+        attempt.sameFaceBarycentricMappingCount =
+            sameFaceBarycentricMappingCount;
+        attempt.sameFaceMappingFallbackCount =
+            sameFaceMappingFallbackCount;
+        attempt.crossFaceMappingFailureCount =
+            crossFaceMappingFailureCount;
         if (mappedSamples.size() != fittingReference.vertices.size()) {
-            attempt.stopReason = "Not every fitting-reference sample could be mapped to the layout carrier.";
+            std::ostringstream stream;
+            stream
+                << "Not every fitting-reference sample could be mapped through a same-FaceId carrier triangle"
+                << " (same_face_fallbacks="
+                << sameFaceMappingFallbackCount
+                << ", cross_face_failures="
+                << crossFaceMappingFailureCount << ").";
+            attempt.stopReason = stream.str();
             result.attempts.push_back(std::move(attempt));
             continue;
         }
@@ -2953,6 +4107,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         int boundaryFeasibilityRefinementRounds = 0;
         std::vector<Handle(Geom_BSplineSurface)> bestSurfaces;
         ValidationMetrics bestMetrics;
+        RegionSurfaceQualityMetrics bestQuality;
         auto bestBoundaryLocked = false;
         std::string boundaryFallbackFailure;
         if (curveNetwork != nullptr) {
@@ -2977,38 +4132,41 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     *curveNetwork,
                     coonsSurfaces,
                     options);
-                if (fitGatesPassed(bestMetrics, options)) {
-                    attempt.success = true;
-                    attempt.stopReason =
-                        "The boundary-locked fallback passed all fitting gates.";
-                    attempt.wallMilliseconds =
-                        std::chrono::duration<double, std::milli>(
-                            std::chrono::steady_clock::now() -
-                            attemptStarted).count();
-                    result.attempts.push_back(attempt);
-                    result.network = fittedNetwork(
-                        layout,
-                        std::move(coonsSurfaces),
-                        bestMetrics,
-                        options,
-                        true,
-                        true,
-                        "ProductFit");
-                    result.status = RegionRefitStatus::Success;
-                    result.message =
-                        "The boundary-locked fallback passed all fitting gates.";
-                    return result;
-                }
+                bestQuality = measureSurfaceQuality(
+                    layoutCarrier, layout, coonsSurfaces);
                 bestSurfaces = std::move(coonsSurfaces);
                 bestBoundaryLocked = true;
             }
         }
 
-        const auto maximumIterations = std::min(options.maximumFitIterations, 20);
+        std::optional<BoundarySupportNetwork> boundedSupport;
+        if (curveNetwork != nullptr) {
+            boundedSupport = buildBoundarySupportNetwork(
+                layout, *curveNetwork, options);
+            if (boundedSupport.has_value() &&
+                boundedSupport->productQualified) {
+                knots = boundedSupport->knots;
+            } else {
+                attempt.stopReason = boundedSupport.has_value()
+                    ? boundedSupport->message
+                    : "Bounded cubic logical-side support construction failed.";
+            }
+        }
+        const auto maximumIterations = curveNetwork != nullptr
+            ? (boundedSupport.has_value() &&
+                    boundedSupport->productQualified
+                ? 1 : 0)
+            : std::min(options.maximumFitIterations, 20);
         for (int iteration = 0; iteration < maximumIterations; ++iteration) {
             const auto iterationStarted = std::chrono::steady_clock::now();
             RegionFitIterationReport iterationReport;
             iterationReport.iteration = iteration + 1;
+            iterationReport.sameFaceBarycentricMappingCount =
+                sameFaceBarycentricMappingCount;
+            iterationReport.sameFaceMappingFallbackCount =
+                sameFaceMappingFallbackCount;
+            iterationReport.crossFaceMappingFailureCount =
+                crossFaceMappingFailureCount;
             auto finalIterationForBudget = false;
             for (const auto& patchKnots : knots) {
                 iterationReport.uControlCount = std::max(
@@ -3073,6 +4231,291 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 representativeFitSamples,
                 adjacentNormalRowCount);
             iterationReport.adjacentNormalSoftConstraintCount = adjacentNormalRowCount;
+            if (curveNetwork != nullptr &&
+                boundedSupport.has_value() &&
+                boundedSupport->productQualified) {
+                iterationReport.boundaryHardConstraintCount =
+                    static_cast<std::size_t>(
+                        boundedSupport->fixedControlCount);
+                iterationReport.seamG0ConstraintCount =
+                    curveNetwork->report.internalEdgeCount;
+                iterationReport.seamG1SoftConstraintCount =
+                    seamG1RowCount;
+                iterationReport.seamG2SoftConstraintCount =
+                    seamG2RowCount;
+                iterationReport.constraintRowsBefore =
+                    static_cast<std::size_t>(
+                        boundedSupport->fixedControlCount);
+                iterationReport.constraintRowsAfter =
+                    iterationReport.constraintRowsBefore;
+                iterationReport.constraintEstimatedRank =
+                    iterationReport.constraintRowsBefore;
+                iterationReport.minimumFullHardConstraintResidual =
+                    std::max(
+                        boundedSupport->maximumOuterBoundaryDeviation,
+                        boundedSupport->maximumInternalBoundaryDeviation);
+                iterationReport.boundaryFeasibilityResidual =
+                    iterationReport.minimumFullHardConstraintResidual;
+                iterationReport.maximumHardConstraintResidual =
+                    iterationReport.minimumFullHardConstraintResidual;
+                iterationReport.hardConstraintFeasible = true;
+                iterationReport.hardConstraintStatus =
+                    "BoundaryControlElimination";
+                iterationReport.boundaryTargetMinimum = {
+                    std::numeric_limits<double>::infinity(),
+                    std::numeric_limits<double>::infinity(),
+                    std::numeric_limits<double>::infinity()};
+                iterationReport.boundaryTargetMaximum = {
+                    -std::numeric_limits<double>::infinity(),
+                    -std::numeric_limits<double>::infinity(),
+                    -std::numeric_limits<double>::infinity()};
+                for (const auto& fixed :
+                     boundedSupport->fixedControls) {
+                    if (!fixed.has_value()) continue;
+                    const std::array<double, 3> coordinates {
+                        fixed->X(), fixed->Y(), fixed->Z()};
+                    for (std::size_t axis = 0;
+                         axis < coordinates.size();
+                         ++axis) {
+                        iterationReport.boundaryTargetMinimum[axis] =
+                            std::min(
+                                iterationReport
+                                    .boundaryTargetMinimum[axis],
+                                coordinates[axis]);
+                        iterationReport.boundaryTargetMaximum[axis] =
+                            std::max(
+                                iterationReport
+                                    .boundaryTargetMaximum[axis],
+                                coordinates[axis]);
+                        if (std::abs(coordinates[axis]) > 1.0e-12) {
+                            ++iterationReport.nonZeroBoundaryRhsCount;
+                        }
+                    }
+                }
+                const auto solution =
+                    solveReducedBoundaryLockedSystem(
+                        rows,
+                        normalRows,
+                        *boundedSupport,
+                        iterationReport,
+                        options);
+                if (!solution.has_value()) {
+                    iterationReport.stopReason =
+                        iterationReport.estimatedSolverBytes >
+                            static_cast<std::uint64_t>(
+                                options.solverMemoryPreflightMiB) *
+                                1024ull * 1024ull
+                        ? "Reduced SPD joint-fit matrix exceeds the memory preflight limit."
+                        : "Reduced SPD joint-fit factorization or solve failed.";
+                    iterationReport.wallMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            iterationStarted).count();
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason =
+                        iterationReport.stopReason;
+                    break;
+                }
+                std::vector<Handle(Geom_BSplineSurface)> surfaces;
+                std::string supportFailure;
+                try {
+                    surfaces.reserve(
+                        static_cast<std::size_t>(layout.patchCount));
+                    for (int patch = 0;
+                         patch < layout.patchCount;
+                         ++patch) {
+                        surfaces.push_back(makeSurface(
+                            knots[static_cast<std::size_t>(patch)],
+                            *solution,
+                            variableOffsets[
+                                static_cast<std::size_t>(patch)]));
+                    }
+                    for (std::size_t patch = 0;
+                         patch < surfaces.size();
+                         ++patch) {
+                        if (!regionLocalSupportDomainPassed(
+                                surfaces[patch],
+                                layoutCarrier,
+                                layout.patches[patch],
+                                options,
+                                supportFailure)) {
+                            surfaces.clear();
+                            break;
+                        }
+                    }
+                } catch (const Standard_Failure&) {
+                    surfaces.clear();
+                    supportFailure =
+                        "Open CASCADE rejected the reduced SPD fitted network.";
+                }
+                if (surfaces.empty()) {
+                    iterationReport.stopReason =
+                        supportFailure.empty()
+                        ? "Reduced SPD fitting produced no constructible support surface."
+                        : supportFailure;
+                    iterationReport.wallMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            iterationStarted).count();
+                    attempt.iterations.push_back(iterationReport);
+                    attempt.stopReason =
+                        iterationReport.stopReason;
+                    break;
+                }
+                auto metrics = validateNetwork(
+                    fittingReference,
+                    layoutCarrier,
+                    layout,
+                    lookups,
+                    surfaces,
+                    options,
+                    mappedSamples);
+                validateFrozenCurveContinuity(
+                    metrics,
+                    layout,
+                    *curveNetwork,
+                    surfaces,
+                    options);
+                iterationReport.trainingMaximumDistance =
+                    metrics.trainingMaximumDistance;
+                iterationReport.projectionCount =
+                    metrics.projectionCount;
+                iterationReport.uvIterationCount =
+                    metrics.uvIterationCount;
+                iterationReport.projectionFallbackCount =
+                    metrics.projectionFallbackCount;
+                iterationReport.selectionMaximumDistance =
+                    metrics.selectionMaximumDistance;
+                iterationReport.holdoutMaximumDistance =
+                    metrics.holdoutMaximumDistance;
+                iterationReport.holdoutMaximumNormalDegrees =
+                    metrics.holdoutMaximumNormalDegrees;
+                iterationReport.holdout95Distance =
+                    metrics.holdout95Distance;
+                iterationReport.holdout95NormalDegrees =
+                    metrics.holdout95NormalDegrees;
+                iterationReport.holdoutWorstDistanceVertex =
+                    metrics.holdoutWorstDistanceVertex;
+                iterationReport.holdoutWorstNormalVertex =
+                    metrics.holdoutWorstNormalVertex;
+                iterationReport.holdoutWorstDistancePatch =
+                    metrics.holdoutWorstDistancePatch;
+                iterationReport.holdoutWorstNormalPatch =
+                    metrics.holdoutWorstNormalPatch;
+                iterationReport.holdoutWorstDistanceInternalSeam =
+                    metrics.holdoutWorstDistanceInternalSeam;
+                iterationReport.holdoutWorstNormalInternalSeam =
+                    metrics.holdoutWorstNormalInternalSeam;
+                iterationReport.boundaryMaximumDistance =
+                    metrics.boundaryMaximumDistance;
+                iterationReport.seamMaximumDistance =
+                    metrics.seamMaximumDistance;
+                iterationReport.seamMaximumCurveDeviation =
+                    metrics.seamMaximumCurveDeviation;
+                iterationReport.seamMaximumNormalDegrees =
+                    metrics.seamMaximumNormalDegrees;
+                iterationReport.seamMaximumCurvatureDifference =
+                    metrics.seamMaximumCurvatureDifference;
+                iterationReport.seamContinuityGatePassed =
+                    metrics.seamContinuityGatePassed;
+                const auto surfaceQuality = measureSurfaceQuality(
+                    layoutCarrier, layout, surfaces);
+                recordSurfaceQuality(iterationReport, surfaceQuality);
+                const auto accepted =
+                    fitGatesPassed(metrics, options) &&
+                    !surfaceQuality.hardFailure &&
+                    surfaceQuality.maximumPoleCountPerSide <=
+                        std::min(
+                            options.maximumControlPointsPerSide,
+                            25);
+                const auto diagnosticSurfaceRank =
+                    [&](const ValidationMetrics& candidateMetrics,
+                        const RegionSurfaceQualityMetrics&
+                            candidateQuality) {
+                        const auto productPassed =
+                            static_cast<int>(
+                                candidateMetrics.holdoutMaximumDistance <=
+                                    options.tolerance3d) +
+                            static_cast<int>(
+                                candidateMetrics
+                                    .holdoutMaximumNormalDegrees <=
+                                    options.normalToleranceDegrees) +
+                            static_cast<int>(
+                                candidateMetrics.boundaryMaximumDistance <=
+                                    options.curveOnSurfaceTolerance) +
+                            static_cast<int>(
+                                candidateMetrics.seamMaximumDistance <=
+                                    options.curveOnSurfaceTolerance) +
+                            static_cast<int>(
+                                candidateMetrics
+                                    .seamMaximumCurveDeviation <=
+                                    options.curveOnSurfaceTolerance) +
+                            static_cast<int>(
+                                candidateMetrics
+                                    .seamMaximumNormalDegrees <=
+                                    options.g1ToleranceDegrees) +
+                            static_cast<int>(
+                                candidateQuality
+                                    .maximumPoleCountPerSide <=
+                                    std::min(
+                                        options
+                                            .maximumControlPointsPerSide,
+                                        25));
+                        return std::tuple {
+                            candidateQuality.hardFailure ? 1 : 0,
+                            -productPassed,
+                            normalizedViolationScore(
+                                candidateMetrics, options),
+                            candidateMetrics
+                                .seamMaximumNormalDegrees,
+                            candidateMetrics.holdoutMaximumDistance,
+                            candidateMetrics
+                                .holdoutMaximumNormalDegrees,
+                            candidateQuality.fairnessEnergy,
+                            candidateQuality.curvatureOscillation,
+                            candidateQuality.totalPoleCount};
+                    };
+                if (bestSurfaces.empty() ||
+                    diagnosticSurfaceRank(metrics, surfaceQuality) <
+                        diagnosticSurfaceRank(
+                            bestMetrics, bestQuality)) {
+                    bestSurfaces = surfaces;
+                    bestMetrics = metrics;
+                    bestQuality = surfaceQuality;
+                    bestBoundaryLocked = true;
+                }
+                iterationReport.stopReason = accepted
+                    ? "Reduced SPD fairness fit passed all geometry gates."
+                    : "Reduced SPD fairness fit completed but did not pass every geometry gate.";
+                iterationReport.wallMilliseconds =
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() -
+                        iterationStarted).count();
+                attempt.iterations.push_back(iterationReport);
+                attempt.stopReason = iterationReport.stopReason;
+                if (accepted) {
+                    attempt.success = true;
+                    attempt.wallMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            attemptStarted).count();
+                    result.attempts.push_back(attempt);
+                    result.network = fittedNetwork(
+                        layoutCarrier,
+                        layout,
+                        std::move(surfaces),
+                        metrics,
+                        options,
+                        true,
+                        true,
+                        "ProductFit");
+                    result.status = RegionRefitStatus::Success;
+                    result.message =
+                        "The reduced SPD boundary-locked fairness fit passed all fitting gates.";
+                    return result;
+                }
+                break;
+            }
             auto equalityRows = curveNetwork != nullptr
                 ? buildFrozenCurveEqualityRows(
                     layout,
@@ -3911,8 +5354,17 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 }
                 iterationReport.correctedTrainingMaximumDistance = metrics.trainingMaximumDistance;
                 iterationReport.correctedBoundaryMaximumDistance = metrics.boundaryMaximumDistance;
-                const auto accepted = fitGatesPassed(metrics, options) &&
-                    iterationReport.hardConstraintFeasible;
+                const auto surfaceQuality = measureSurfaceQuality(
+                    layoutCarrier, layout, surfaces);
+                recordSurfaceQuality(iterationReport, surfaceQuality);
+                const auto accepted =
+                    fitGatesPassed(metrics, options) &&
+                    iterationReport.hardConstraintFeasible &&
+                    !surfaceQuality.hardFailure &&
+                    surfaceQuality.maximumPoleCountPerSide <=
+                        std::min(
+                            options.maximumControlPointsPerSide,
+                            25);
                 if (bestSurfaces.empty() || normalizedViolationScore(metrics, options) <
                         normalizedViolationScore(bestMetrics, options)) {
                     bestSurfaces = surfaces;
@@ -3931,6 +5383,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         std::chrono::steady_clock::now() - attemptStarted).count();
                     result.attempts.push_back(attempt);
                     result.network = fittedNetwork(
+                        layoutCarrier,
                         layout,
                         std::move(surfaces),
                         metrics,
@@ -3994,6 +5447,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         }
         if (!bestSurfaces.empty()) {
             auto candidate = fittedNetwork(
+                layoutCarrier,
                 layout,
                 std::move(bestSurfaces),
                 bestMetrics,
@@ -4003,8 +5457,9 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 bestBoundaryLocked
                     ? "BoundaryLockedDiagnostic"
                     : "UnconstrainedInspectionOnly");
-            if (candidate->normalizedViolationScore < bestEffortScore) {
-                bestEffortScore = candidate->normalizedViolationScore;
+            if (result.bestEffortNetwork == nullptr ||
+                diagnosticRank(*candidate) <
+                    diagnosticRank(*result.bestEffortNetwork)) {
                 result.bestEffortNetwork = std::move(candidate);
             }
         }
