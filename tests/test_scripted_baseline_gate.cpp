@@ -780,8 +780,9 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find(
-        "native-regional-refit-v40-fair-boundary-spd") !=
+        "native-regional-refit-v43-parameter-quality-adaptive-support") !=
         std::string::npos);
+    assert(probe.find("--fitting-mode") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);
     assert(probe.find("--requested-patch-count") != std::string::npos);
     assert(probe.find("--adaptive-safety-cap") != std::string::npos);
@@ -793,6 +794,8 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(probe.find("sewn_attempt.step") != std::string::npos);
     assert(probe.find("edge_consistency_report.json") != std::string::npos);
     assert(probe.find("output_complexity_report.json") != std::string::npos);
+    assert(probe.find("step_face_lineage_report.json") !=
+        std::string::npos);
     assert(probe.find("curve_network.json") != std::string::npos);
     assert(probe.find("artifact_status.json") != std::string::npos);
     assert(probe.find("ProductValidated") != std::string::npos);

@@ -47,6 +47,10 @@ StepEntityLineClassification classifyStepEntityLine(
     result.entity = true;
     const auto body = line.substr(equals + 1);
     result.edgeCurve = containsEntityName(body, "EDGE_CURVE");
+    result.advancedFace = containsEntityName(body, "ADVANCED_FACE");
+    result.bSplineSurface =
+        containsEntityName(body, "B_SPLINE_SURFACE_WITH_KNOTS") ||
+        containsEntityName(body, "B_SPLINE_SURFACE");
     static constexpr std::array<std::string_view, 10> surfaceNames {
         "PLANE",
         "CYLINDRICAL_SURFACE",
@@ -74,6 +78,10 @@ void accumulateStepEntityLine(
     statistics.entityCount += classification.entity ? 1 : 0;
     statistics.edgeCurveCount += classification.edgeCurve ? 1 : 0;
     statistics.surfaceCount += classification.surface ? 1 : 0;
+    statistics.advancedFaceCount +=
+        classification.advancedFace ? 1 : 0;
+    statistics.bSplineSurfaceCount +=
+        classification.bSplineSurface ? 1 : 0;
 }
 
 }

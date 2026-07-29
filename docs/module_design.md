@@ -197,7 +197,7 @@ src/reduction 实现当前原生曲面缩减产品合同。
 
 构造顺序是稳定合同：每个曲线节点只创建一个拓扑 Vertex，每条内部曲线只创建一个三维 Edge；builder 直接把布局保存的一级 pcurve 附着到该 Edge 的两侧支撑面，不允许重新投影、重新插值或生成诊断替代 pcurve。完成双侧附着后统一执行 `SameRange` 与 `SameParameter`，再严格按方向化 pcurve 闭环构造 Wire 与 Face。Face 构造后逐对执行 `BRepAlgoAPI_Section`，除预期共享 Edge 外的交线一律记为 `UnexpectedFaceIntersection`；内部 Edge 必须恰好被两张 Face 使用，replacement quilt 的自由边只能属于原 STEP 外边界。逐边报告必须区分拓扑开口、Curve-on-Surface 偏差、相邻曲面分离、法向/曲率连续性和三档显示三角化裂纹。
 
-四张 replacement Face 以唯一共享 Edge 直接组成单一 `TopoDS_Shell`，并逐 Shell、Face、Wire、Edge 保存具体 `BRepCheck` 状态。缝合且拓扑水密只表示诊断链完成。只要存在边界锁定且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向或连续性失败不会提高容差。运行先写暂存目录，完成后只发布单一 `final/`：五个状态文件始终存在，曲线网络、未裁剪支撑面、裁剪 Face 和最终整件 STEP 只在阶段确实完成时出现，`final_sewn.step` 与 `diagnostic_sewn.step` 互斥，不保留原始日志、中间目录或 `sewn_attempt`。manifest 最后生成并记录除自身外各文件的角色、大小和 SHA-256。缓存二进制版本为 11，算法指纹为 `native-regional-refit-v40-fair-boundary-spd`，旧布局和拟合缓存明确拒绝。只有全部产品门和 Creo 均通过时 `canApply` 才能为 true。
+四张 replacement Face 以唯一共享 Edge 直接组成单一 `TopoDS_Shell`，并逐 Shell、Face、Wire、Edge 保存具体 `BRepCheck` 状态。缝合且拓扑水密只表示诊断链完成。只要存在边界锁定且可构造的曲面网络，引擎就继续完成 B-Rep 构造、区域替换装配和固定 `0.001 mm` 容差诊断缝合；距离、法向或连续性失败不会提高容差。逻辑边支撑点不再按均匀数量盲目增加：相对逻辑边及共享 seam 先组成同一节点族，再按该族最大残差位置插入节点，统一保持相邻 patch 的节点结构。曲面样本 UV 可向严格凸载体参数混合；载体内部解在 mean-value、逆边长和 uniform 正权重之间按翻转、面积和畸变确定性选择，但精确逻辑边 pcurve 仍是 B-Rep 与边界约束的唯一真值。运行先写暂存目录，完成后只发布单一 `final/`：五个状态文件始终存在，曲线网络、未裁剪支撑面、裁剪 Face 和最终整件 STEP 只在阶段确实完成时出现，`final_sewn.step` 与 `diagnostic_sewn.step` 互斥，不保留原始日志、中间目录或 `sewn_attempt`。manifest 最后生成并记录除自身外各文件的角色、大小和 SHA-256。`StepFaceLineageReport` 分别核对原件、被替换区、replacement-only STEP 与整件 STEP 的 `ADVANCED_FACE`，所以显示等参线不会再被误报成拓扑面。缓存二进制版本为 14，算法指纹为 `native-regional-refit-v43-parameter-quality-adaptive-support`，旧布局和拟合缓存明确拒绝。只有全部产品门和 Creo 均通过时 `canApply` 才能为 true。
 
 ## patch：边界约束替换
 

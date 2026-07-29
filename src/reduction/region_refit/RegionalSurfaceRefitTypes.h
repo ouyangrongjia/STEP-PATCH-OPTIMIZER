@@ -46,11 +46,17 @@ enum class RegionRefitExecutionMode {
     BestEffortThroughSewing
 };
 
+enum class RegionalFittingMode {
+    GeomagicEquivalent,
+    FeaturePreserving
+};
+
 enum class RegionRefitStatus {
     NotStarted,
     Success,
     InvalidRequest,
     UnsupportedTopology,
+    UnsupportedFittingSpecification,
     TimeBudgetExceeded,
     MemoryBudgetExceeded,
     SamplingBudgetExceeded,
@@ -91,12 +97,15 @@ const char* toString(RegionRefitLayoutMode mode);
 const char* toString(RegionRefitAdaptiveObjective objective);
 const char* toString(RegionRefitSamplingMode mode);
 const char* toString(RegionRefitExecutionMode mode);
+const char* toString(RegionalFittingMode mode);
 const char* toString(RegionRefitStatus status);
 const char* toString(RegionRefitStage stage);
 const char* toString(RegionBoundaryContinuity continuity);
 const char* toString(RegionRefitCachePolicy policy);
 
 struct RegionRefitOptions {
+    RegionalFittingMode fittingMode =
+        RegionalFittingMode::FeaturePreserving;
     RegionRefitSamplingMode samplingMode = RegionRefitSamplingMode::AdaptiveOcct;
     RegionRefitSamplingMode layoutCarrierSamplingMode = RegionRefitSamplingMode::QualityBalanced;
     double tolerance3d = 0.03;
@@ -216,6 +225,7 @@ struct RegionLayoutCandidateReport {
     double minimumToMedianUvAreaRatio = 0.0;
     double distortionP995 = 0.0;
     double boundaryRepresentabilityResidual = 0.0;
+    double maximumSurfaceParameterCarrierBlend = 0.0;
     std::size_t logicalSideCandidateCount = 0;
     std::string selectedLogicalSideHash;
     std::string domainType;
@@ -295,6 +305,10 @@ struct RegionFitIterationReport {
     int interiorControlPointCount = 0;
     bool reducedSpdSystemUsed = false;
     double fairnessEnergy = 0.0;
+    double controlNetSecondDifferenceEnergy = 0.0;
+    double physicalSurfaceArea = 0.0;
+    double areaWeightedNormalGradientEnergy = 0.0;
+    double areaWeightedMeanCurvatureVariation = 0.0;
     double maximumNormalVariationDegrees = 0.0;
     double curvatureOscillation = 0.0;
     double minimumNormalizedJacobian = 0.0;
@@ -302,6 +316,11 @@ struct RegionFitIterationReport {
     double conditionNumberP95 = 0.0;
     double conditionNumberP99 = 0.0;
     bool surfaceQualityHardFailure = false;
+    int surfaceUvFlippedTriangleCount = 0;
+    int surfaceUvDegenerateTriangleCount = 0;
+    int surfaceJacobianDegenerateSampleCount = 0;
+    int surfaceJacobianOrientationFlipCount = 0;
+    std::string surfaceLegalityStatus = "NotEvaluated";
     double wallMilliseconds = 0.0;
     std::string stopReason;
 };
@@ -447,6 +466,11 @@ struct RegionRefitReport {
     std::vector<RegionFitAttemptReport> fitAttempts;
     bool layoutGatePassed = false;
     bool fitGatePassed = false;
+    RegionalFittingMode fittingMode =
+        RegionalFittingMode::FeaturePreserving;
+    std::string recoveredFittingSpecificationId;
+    std::string recoveredFittingSpecificationStatus = "NotEvaluated";
+    bool recoveredFittingBehaviorEquivalentReady = false;
     int boundaryFeasibilityRefinementRounds = 0;
     double boundaryFeasibilityResidual = 0.0;
     int fittedMaximumUControlCount = 0;
@@ -460,6 +484,10 @@ struct RegionRefitReport {
     std::size_t sameFaceMappingFallbackCount = 0;
     std::size_t crossFaceMappingFailureCount = 0;
     double fittedFairnessEnergy = 0.0;
+    double fittedControlNetSecondDifferenceEnergy = 0.0;
+    double fittedPhysicalSurfaceArea = 0.0;
+    double fittedAreaWeightedNormalGradientEnergy = 0.0;
+    double fittedAreaWeightedMeanCurvatureVariation = 0.0;
     double fittedMaximumNormalVariationDegrees = 0.0;
     double fittedCurvatureOscillation = 0.0;
     double fittedMinimumNormalizedJacobian = 0.0;
@@ -467,6 +495,17 @@ struct RegionRefitReport {
     double fittedConditionNumberP95 = 0.0;
     double fittedConditionNumberP99 = 0.0;
     bool fittedSurfaceQualityHardFailure = false;
+    int fittedSurfaceUvFlippedTriangleCount = 0;
+    int fittedSurfaceUvDegenerateTriangleCount = 0;
+    int fittedSurfaceJacobianDegenerateSampleCount = 0;
+    int fittedSurfaceJacobianOrientationFlipCount = 0;
+    std::string fittedSurfaceLegalityStatus = "NotEvaluated";
+    int originalTopologicalFaceCount = 0;
+    int replacedTopologicalFaceCount = 0;
+    int expectedWholeTopologicalFaceCount = 0;
+    int replacementStepAdvancedFaceCount = 0;
+    int wholeStepAdvancedFaceCount = 0;
+    bool stepFaceLineagePassed = false;
     int pcurveSelfIntersectionCount = 0;
     int pcurveNonAdjacentIntersectionCount = 0;
     bool bestEffortUsed = false;

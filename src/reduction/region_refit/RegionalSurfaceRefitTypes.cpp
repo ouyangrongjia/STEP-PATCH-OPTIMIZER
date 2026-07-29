@@ -59,12 +59,24 @@ const char* toString(const RegionRefitExecutionMode mode) {
     return "ValidatedOnly";
 }
 
+const char* toString(const RegionalFittingMode mode) {
+    switch (mode) {
+    case RegionalFittingMode::GeomagicEquivalent:
+        return "GeomagicEquivalent";
+    case RegionalFittingMode::FeaturePreserving:
+        return "FeaturePreserving";
+    }
+    return "FeaturePreserving";
+}
+
 const char* toString(const RegionRefitStatus status) {
     switch (status) {
     case RegionRefitStatus::NotStarted: return "NotStarted";
     case RegionRefitStatus::Success: return "Success";
     case RegionRefitStatus::InvalidRequest: return "InvalidRequest";
     case RegionRefitStatus::UnsupportedTopology: return "UnsupportedTopology";
+    case RegionRefitStatus::UnsupportedFittingSpecification:
+        return "UnsupportedFittingSpecification";
     case RegionRefitStatus::TimeBudgetExceeded: return "TimeBudgetExceeded";
     case RegionRefitStatus::MemoryBudgetExceeded: return "MemoryBudgetExceeded";
     case RegionRefitStatus::SamplingBudgetExceeded: return "SamplingBudgetExceeded";

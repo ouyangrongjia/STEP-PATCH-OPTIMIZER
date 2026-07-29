@@ -10,6 +10,8 @@ param(
     [int]$AdaptiveSafetyCap = 12,
     [ValidateSet("adaptive", "fixed")][string]$Layout = "adaptive",
     [int]$PatchCount = 0,
+    [ValidateSet("geomagic-equivalent", "feature-preserving")]
+    [string]$FittingMode = "feature-preserving",
     [ValidateSet("adaptive-occt", "quality-balanced", "uv-uniform")][string]$SamplingMode = "adaptive-occt",
     [long]$TargetSampleTriangles = 80000,
     [ValidateSet("adaptive-occt", "quality-balanced", "uv-uniform")][string]$LayoutCarrierSamplingMode = "quality-balanced",
@@ -123,6 +125,7 @@ if ($LockedEdgeIds.Count -gt 0) {
     $baseArguments += @("--locked-edges", ($LockedEdgeIds -join ","))
 }
 $baseArguments += @(
+    "--fitting-mode", $FittingMode,
     "--sampling-mode", $SamplingMode,
     "--target-sample-triangles", [string]$TargetSampleTriangles,
     "--layout-carrier-sampling-mode", $LayoutCarrierSamplingMode,
@@ -725,6 +728,9 @@ function Publish-NativeRegionRefitFinal {
                 output_complexity = Get-OptionalJson -Path (
                     Join-Path $StagingDirectory (
                         "diagnostics\output_complexity_report.json"))
+                step_face_lineage = Get-OptionalJson -Path (
+                    Join-Path $StagingDirectory (
+                        "diagnostics\step_face_lineage_report.json"))
             }
             sewing = Get-OptionalJson -Path (
                 Join-Path $StagingDirectory "diagnostics\sewing_report.json")

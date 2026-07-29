@@ -1,4 +1,5 @@
 #include "reduction/region_refit/JointBSplineNetworkFitter.h"
+#include "reduction/region_refit/RecoveredFittingSpecification.h"
 #include "reduction/region_refit/RegionalSurfaceRefitCache.h"
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
@@ -147,6 +148,42 @@ void test_joint_fitter_passes_planar_two_patch_network() {
     const auto& iteration = fitted.attempts.front().iterations.back();
     assert(iteration.seamG0ConstraintCount > 0);
     assert(iteration.seamG1SoftConstraintCount > 0);
+    assert(fitted.network->quality.legality.passed);
+    assert(fitted.network->quality.physicalSurfaceArea > 0.0);
+    assert(fitted.network->quality.fairnessEnergy <= 1.0e-8);
+    assert(std::isfinite(
+        fitted.network->quality.controlNetSecondDifferenceEnergy));
+}
+
+void test_geomagic_equivalent_refuses_partial_recovered_specification() {
+    const auto specification =
+        spo::geomagicWrap2021MechanicalSpecification();
+    assert(specification.degreeU == 3);
+    assert(specification.degreeV == 3);
+    assert(specification.nonAdaptiveMode == 1);
+    assert(specification.adaptiveMode == 19);
+    assert(!specification.behaviorEquivalentReady());
+    assert(
+        specification.storedFacetNormalHandling.evidence ==
+        spo::RecoveredEvidenceLevel::ConfirmedDynamic);
+    assert(!specification.normalTerm.recovered());
+
+    const auto mesh = makePlanarFitMesh(4);
+    spo::RegionRefitOptions options;
+    options.fittingMode =
+        spo::RegionalFittingMode::GeomagicEquivalent;
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        mesh,
+        {},
+        planarLayouts(mesh, 1),
+        options,
+        std::chrono::steady_clock::now() +
+            std::chrono::seconds(10));
+    assert(!fitted.success());
+    assert(
+        fitted.status ==
+        spo::RegionRefitStatus::UnsupportedFittingSpecification);
+    assert(fitted.attempts.empty());
 }
 
 void test_constrained_kkt_writes_nonzero_boundary_targets_to_rhs() {
@@ -509,11 +546,34 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
         .selectedLogicalSideHash = "logical-side-cache-v11";
     layouts.selectedCandidates.front().patches.front()
         .boundaryRepresentabilityResidual = 1.0e-9;
+    layouts.selectedCandidates.front().patches.front()
+        .surfaceParameterCarrierBlend = 0.375;
+    layouts.selectedCandidates.front().patches.front()
+        .carrierParameterWeightMode = "InverseEdgeLength";
+    layouts.candidates.front().distortionP995 = 4.5;
+    layouts.candidates.front().maximumSurfaceParameterCarrierBlend = 0.375;
+    layouts.candidates.front().logicalSideCandidateCount = 11;
+    layouts.candidates.front().selectedLogicalSideHash =
+        "candidate-logical-side-cache-v13";
     cache.saveLayouts(layouts);
     spo::RegionPatchLayoutGenerationResult loadedLayouts;
     spo::RegionRefitCacheEvent layoutRead;
     assert(cache.loadLayouts(loadedLayouts, layoutRead));
     assert(layoutRead.hit);
+    assert(std::abs(
+        loadedLayouts.candidates.front().distortionP995 - 4.5) <=
+        1.0e-15);
+    assert(std::abs(
+        loadedLayouts.candidates.front()
+                .maximumSurfaceParameterCarrierBlend -
+            0.375) <=
+        1.0e-15);
+    assert(
+        loadedLayouts.candidates.front().logicalSideCandidateCount ==
+        11);
+    assert(
+        loadedLayouts.candidates.front().selectedLogicalSideHash ==
+        "candidate-logical-side-cache-v13");
     assert(loadedLayouts.selectedCandidates.front().hash == layouts.selectedCandidates.front().hash);
     const auto& loadedPatch =
         loadedLayouts.selectedCandidates.front().patches.front();
@@ -531,6 +591,12 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     assert(loadedPatch.logicalSideCandidateCount == 7);
     assert(loadedPatch.selectedLogicalSideHash ==
         "logical-side-cache-v11");
+    assert(std::abs(
+        loadedPatch.surfaceParameterCarrierBlend - 0.375) <=
+        1.0e-15);
+    assert(
+        loadedPatch.carrierParameterWeightMode ==
+        "InverseEdgeLength");
 
     spo::RegionRefitOptions fitOptions = request.options;
     fitOptions.tolerance3d = 0.1;
@@ -615,6 +681,7 @@ void run_region_refit_fitting_tests() {
     test_inconsistent_dense_hard_constraints_are_reported_explicitly();
     test_trimmed_disk_jacobian_ignores_unused_rectangular_corners();
     test_joint_fitter_passes_planar_two_patch_network();
+    test_geomagic_equivalent_refuses_partial_recovered_specification();
     test_joint_fitter_honors_preflight_memory_budget();
     test_joint_fitter_honors_expired_deadline();
     test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails();

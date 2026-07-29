@@ -2,6 +2,7 @@
 
 #include "reduction/region_refit/RegionCurveNetwork.h"
 #include "reduction/region_refit/RegionPatchLayout.h"
+#include "reduction/region_refit/SurfaceDifferentialQuality.h"
 
 #include <Geom_BSplineSurface.hxx>
 #include <TopoDS_Shape.hxx>
@@ -38,6 +39,10 @@ struct RegionSurfaceQualityMetrics {
     int totalKnotCount = 0;
     std::vector<RegionSurfaceComplexityReport> surfaceComplexities;
     double fairnessEnergy = 0.0;
+    double controlNetSecondDifferenceEnergy = 0.0;
+    double physicalSurfaceArea = 0.0;
+    double areaWeightedNormalGradientEnergy = 0.0;
+    double areaWeightedMeanCurvatureVariation = 0.0;
     double maximumNormalVariationDegrees = 0.0;
     double curvatureOscillation = 0.0;
     double minimumNormalizedJacobian = 0.0;
@@ -45,6 +50,7 @@ struct RegionSurfaceQualityMetrics {
     double conditionNumberP95 = 0.0;
     double conditionNumberP99 = 0.0;
     bool hardFailure = false;
+    SurfaceLegalityReport legality;
 };
 
 struct RegionFittedPatchNetwork {

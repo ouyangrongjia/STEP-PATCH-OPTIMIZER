@@ -1,5 +1,6 @@
 #include "io/StepReader.h"
 #include "io/StepEntityStatistics.h"
+#include "io/StepFaceLineage.h"
 
 #include <cassert>
 
@@ -19,6 +20,7 @@ void run_step_io_tests() {
         "#42 = B_SPLINE_SURFACE_WITH_KNOTS ( 'surface', 3, 3 );");
     assert(spacedSurface.entity);
     assert(spacedSurface.surface);
+    assert(spacedSurface.bSplineSurface);
     const auto spacedEdge = spo::classifyStepEntityLine(
         "#43 = EDGE_CURVE ( 'edge', #1, #2, #3, .T. );");
     assert(spacedEdge.entity);
@@ -31,8 +33,23 @@ void run_step_io_tests() {
     spo::accumulateStepEntityLine(
         statistics,
         "#43 = EDGE_CURVE ( 'edge', #1, #2, #3, .T. );");
-    assert(statistics.entityCount == 2);
+    spo::accumulateStepEntityLine(
+        statistics,
+        "#44 = ADVANCED_FACE ( 'replacement', (#10), #42, .T. );");
+    assert(statistics.entityCount == 3);
     assert(statistics.surfaceCount == 1);
     assert(statistics.edgeCurveCount == 1);
+    assert(statistics.bSplineSurfaceCount == 1);
+    assert(statistics.advancedFaceCount == 1);
+    const auto lineage = spo::makeStepFaceLineageReport(
+        2739,
+        49,
+        4,
+        spo::StepEntityStatistics {0, 0, 4, 4, 4},
+        spo::StepEntityStatistics {0, 0, 2694, 2694, 4});
+    assert(lineage.expectedWholeFaceCount == 2694);
+    assert(lineage.replacementCountPassed);
+    assert(lineage.wholeCountPassed);
+    assert(lineage.passed);
     test_step_reader_accepts_step_extensions();
 }

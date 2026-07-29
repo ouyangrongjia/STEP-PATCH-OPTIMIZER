@@ -691,11 +691,18 @@ double halfAngleTangent(
     return sine / std::max(1.0 + cosine, 1.0e-12);
 }
 
+enum class InteriorParameterWeightMode {
+    MeanValue,
+    InverseEdgeLength,
+    Uniform
+};
+
 bool meanValueParameterizeInterior(
     const RegionReferenceMesh& mesh,
     RegionPatchParameterization& patch,
     const std::unordered_map<std::size_t, std::size_t>& localByGlobal,
     std::vector<std::array<double, 2>>& parameters,
+    const InteriorParameterWeightMode weightMode,
     std::string& message) {
     if (parameters.size() != patch.vertexIndices.size()) {
         message =
@@ -736,17 +743,30 @@ bool meanValueParameterizeInterior(
                 triangle.vertices[(corner + 1) % 3]);
             const auto second = localByGlobal.at(
                 triangle.vertices[(corner + 2) % 3]);
-            const auto tangent = halfAngleTangent(
-                mesh.vertices[patch.vertexIndices[center]].point,
-                mesh.vertices[patch.vertexIndices[first]].point,
-                mesh.vertices[patch.vertexIndices[second]].point);
-            if (!(tangent > 0.0) || !std::isfinite(tangent)) continue;
             const auto firstLength = mesh.vertices[patch.vertexIndices[center]].point.Distance(
                 mesh.vertices[patch.vertexIndices[first]].point);
             const auto secondLength = mesh.vertices[patch.vertexIndices[center]].point.Distance(
                 mesh.vertices[patch.vertexIndices[second]].point);
-            weights[center][first] += tangent / std::max(firstLength, 1.0e-12);
-            weights[center][second] += tangent / std::max(secondLength, 1.0e-12);
+            auto firstWeight = 1.0;
+            auto secondWeight = 1.0;
+            if (weightMode == InteriorParameterWeightMode::MeanValue) {
+                const auto tangent = halfAngleTangent(
+                    mesh.vertices[patch.vertexIndices[center]].point,
+                    mesh.vertices[patch.vertexIndices[first]].point,
+                    mesh.vertices[patch.vertexIndices[second]].point);
+                if (!(tangent > 0.0) || !std::isfinite(tangent)) continue;
+                firstWeight =
+                    tangent / std::max(firstLength, 1.0e-12);
+                secondWeight =
+                    tangent / std::max(secondLength, 1.0e-12);
+            } else if (
+                weightMode ==
+                InteriorParameterWeightMode::InverseEdgeLength) {
+                firstWeight = 1.0 / std::max(firstLength, 1.0e-12);
+                secondWeight = 1.0 / std::max(secondLength, 1.0e-12);
+            }
+            weights[center][first] += firstWeight;
+            weights[center][second] += secondWeight;
         }
     }
 
@@ -2099,12 +2119,14 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 patch,
                 localByGlobal,
                 patch.parameters,
+                InteriorParameterWeightMode::MeanValue,
                 message) ||
             !meanValueParameterizeInterior(
                 mesh,
                 patch,
                 localByGlobal,
                 patch.surfaceParameters,
+                InteriorParameterWeightMode::MeanValue,
                 message)) {
             return false;
         }
@@ -2114,6 +2136,245 @@ bool buildCurveConsistentParameterDomainWithBlend(
                 mesh, patch, triangleOrientations, message)) {
             return false;
         }
+        const auto exactSurfaceParameters = patch.surfaceParameters;
+        struct ParameterBlendQuality {
+            int flipped = 0;
+            double minimumArea = 0.0;
+            double minimumToMedianAreaRatio = 0.0;
+            double maximumDistortion =
+                std::numeric_limits<double>::infinity();
+            double distortionP995 =
+                std::numeric_limits<double>::infinity();
+        };
+        const auto blendQuality =
+            [&](const std::vector<std::array<double, 2>>& parameters) {
+                ParameterBlendQuality quality;
+                std::vector<double> areas;
+                std::vector<double> distortions;
+                areas.reserve(patch.triangleIndices.size());
+                distortions.reserve(patch.triangleIndices.size());
+                auto positiveCount = 0;
+                auto negativeCount = 0;
+                quality.maximumDistortion = 0.0;
+                for (const auto triangleIndex : patch.triangleIndices) {
+                    const auto& triangle = mesh.triangles[triangleIndex];
+                    const auto first =
+                        localByGlobal.at(triangle.vertices[0]);
+                    const auto second =
+                        localByGlobal.at(triangle.vertices[1]);
+                    const auto third =
+                        localByGlobal.at(triangle.vertices[2]);
+                    const auto area =
+                        static_cast<double>(
+                            triangleOrientations[triangleIndex]) *
+                        signedArea2d(
+                            parameters[first],
+                            parameters[second],
+                            parameters[third]);
+                    if (area > 1.0e-14) ++positiveCount;
+                    else if (area < -1.0e-14) ++negativeCount;
+                    areas.push_back(std::abs(area));
+                    const auto quality3d = normalizedTriangleQuality(
+                        mesh.vertices[triangle.vertices[0]].point,
+                        mesh.vertices[triangle.vertices[1]].point,
+                        mesh.vertices[triangle.vertices[2]].point);
+                    const auto quality2d = normalizedTriangleQuality(
+                        gp_Pnt(
+                            parameters[first][0],
+                            parameters[first][1],
+                            0.0),
+                        gp_Pnt(
+                            parameters[second][0],
+                            parameters[second][1],
+                            0.0),
+                        gp_Pnt(
+                            parameters[third][0],
+                            parameters[third][1],
+                            0.0));
+                    const auto distortion =
+                        quality3d > 1.0e-14 &&
+                            quality2d > 1.0e-14
+                        ? std::max(
+                            quality3d / quality2d,
+                            quality2d / quality3d)
+                        : std::numeric_limits<double>::infinity();
+                    distortions.push_back(distortion);
+                    quality.maximumDistortion = std::max(
+                        quality.maximumDistortion, distortion);
+                }
+                quality.flipped =
+                    static_cast<int>(areas.size()) -
+                    std::max(positiveCount, negativeCount);
+                if (areas.empty()) return quality;
+                quality.minimumArea = *std::min_element(
+                    areas.begin(), areas.end());
+                auto medianAreas = areas;
+                const auto median = medianAreas.begin() +
+                    static_cast<std::ptrdiff_t>(
+                        medianAreas.size() / 2);
+                std::nth_element(
+                    medianAreas.begin(),
+                    median,
+                    medianAreas.end());
+                quality.minimumToMedianAreaRatio =
+                    quality.minimumArea /
+                    std::max(*median, 1.0e-30);
+                std::sort(distortions.begin(), distortions.end());
+                const auto percentileIndex = std::min(
+                    distortions.size() - 1,
+                    static_cast<std::size_t>(std::ceil(
+                        0.995 *
+                        static_cast<double>(distortions.size()))) -
+                        1);
+                quality.distortionP995 =
+                    distortions[percentileIndex];
+                return quality;
+            };
+        const auto requiredRatio =
+            minimumUvAreaRatioLimit(mesh, patch, options);
+        auto selectedCarrier = patch.parameters;
+        auto selectedCarrierQuality = blendQuality(selectedCarrier);
+        auto selectedCarrierMode = std::string {"MeanValue"};
+        const auto alternativeWeightModes =
+            boundaryConvexityBlend >= 1.0
+            ? std::vector {
+                InteriorParameterWeightMode::InverseEdgeLength,
+                InteriorParameterWeightMode::Uniform}
+            : std::vector<InteriorParameterWeightMode> {};
+        for (const auto weightMode : alternativeWeightModes) {
+            auto candidate = patch.parameters;
+            std::string candidateMessage;
+            if (!meanValueParameterizeInterior(
+                    mesh,
+                    patch,
+                    localByGlobal,
+                    candidate,
+                    weightMode,
+                    candidateMessage)) {
+                continue;
+            }
+            const auto candidateQuality = blendQuality(candidate);
+            const auto candidateRank = std::tuple {
+                candidateQuality.flipped,
+                candidateQuality.minimumArea > 1.0e-14 ? 0 : 1,
+                candidateQuality.minimumToMedianAreaRatio >=
+                        requiredRatio
+                    ? 0 : 1,
+                candidateQuality.maximumDistortion <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                candidateQuality.distortionP995 <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                candidateQuality.maximumDistortion,
+                candidateQuality.distortionP995,
+                -candidateQuality.minimumToMedianAreaRatio};
+            const auto selectedRank = std::tuple {
+                selectedCarrierQuality.flipped,
+                selectedCarrierQuality.minimumArea > 1.0e-14 ? 0 : 1,
+                selectedCarrierQuality.minimumToMedianAreaRatio >=
+                        requiredRatio
+                    ? 0 : 1,
+                selectedCarrierQuality.maximumDistortion <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                selectedCarrierQuality.distortionP995 <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                selectedCarrierQuality.maximumDistortion,
+                selectedCarrierQuality.distortionP995,
+                -selectedCarrierQuality.minimumToMedianAreaRatio};
+            if (candidateRank < selectedRank) {
+                selectedCarrier = std::move(candidate);
+                selectedCarrierQuality = candidateQuality;
+                selectedCarrierMode =
+                    weightMode ==
+                        InteriorParameterWeightMode::InverseEdgeLength
+                    ? "InverseEdgeLength"
+                    : "Uniform";
+            }
+        }
+        patch.parameters = std::move(selectedCarrier);
+        patch.carrierParameterWeightMode =
+            std::move(selectedCarrierMode);
+        std::vector<double> carrierBlends {0.0};
+        for (int exponent = -24; exponent <= 0; exponent += 2) {
+            carrierBlends.push_back(std::ldexp(1.0, exponent));
+        }
+        if (carrierBlends.back() != 1.0) {
+            carrierBlends.push_back(1.0);
+        }
+        auto selectedBlend = 0.0;
+        auto selectedParameters = exactSurfaceParameters;
+        auto selectedQuality = blendQuality(selectedParameters);
+        for (const auto blend : carrierBlends) {
+            std::vector<std::array<double, 2>> candidate(
+                exactSurfaceParameters.size());
+            for (std::size_t local = 0;
+                 local < candidate.size();
+                 ++local) {
+                candidate[local] = {
+                    (1.0 - blend) *
+                            exactSurfaceParameters[local][0] +
+                        blend * patch.parameters[local][0],
+                    (1.0 - blend) *
+                            exactSurfaceParameters[local][1] +
+                        blend * patch.parameters[local][1]};
+            }
+            const auto candidateQuality = blendQuality(candidate);
+            const auto candidateRank = std::tuple {
+                candidateQuality.flipped,
+                candidateQuality.minimumArea > 1.0e-14 ? 0 : 1,
+                candidateQuality.minimumToMedianAreaRatio >=
+                        requiredRatio
+                    ? 0 : 1,
+                candidateQuality.maximumDistortion <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                candidateQuality.distortionP995 <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                candidateQuality.maximumDistortion,
+                candidateQuality.distortionP995,
+                -candidateQuality.minimumToMedianAreaRatio,
+                blend};
+            const auto selectedRank = std::tuple {
+                selectedQuality.flipped,
+                selectedQuality.minimumArea > 1.0e-14 ? 0 : 1,
+                selectedQuality.minimumToMedianAreaRatio >=
+                        requiredRatio
+                    ? 0 : 1,
+                selectedQuality.maximumDistortion <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                selectedQuality.distortionP995 <=
+                        options.maximumParameterDistortion
+                    ? 0 : 1,
+                selectedQuality.maximumDistortion,
+                selectedQuality.distortionP995,
+                -selectedQuality.minimumToMedianAreaRatio,
+                selectedBlend};
+            if (candidateRank < selectedRank) {
+                selectedBlend = blend;
+                selectedParameters = candidate;
+                selectedQuality = candidateQuality;
+            }
+            if (candidateQuality.flipped == 0 &&
+                candidateQuality.minimumArea > 1.0e-14 &&
+                candidateQuality.minimumToMedianAreaRatio >=
+                    requiredRatio &&
+                candidateQuality.maximumDistortion <=
+                    options.maximumParameterDistortion &&
+                candidateQuality.distortionP995 <=
+                    options.maximumParameterDistortion) {
+                selectedBlend = blend;
+                selectedParameters = std::move(candidate);
+                selectedQuality = candidateQuality;
+                break;
+            }
+        }
+        patch.surfaceParameters = std::move(selectedParameters);
+        patch.surfaceParameterCarrierBlend = selectedBlend;
         std::vector<double> uvAreas;
         std::vector<double> distortions;
         uvAreas.reserve(patch.triangleIndices.size());
@@ -2198,16 +2459,29 @@ bool buildCurveConsistentParameterDomainWithBlend(
             static_cast<std::size_t>(std::ceil(
                 0.995 * static_cast<double>(distortions.size()))) - 1);
         patch.distortionP995 = distortions[percentileIndex];
-        if (patch.flippedTriangleCount != 0 ||
-            !(patch.minimumSignedUvArea > 1.0e-14)) {
-            failedAreaRatio = patch.minimumToMedianUvAreaRatio;
-            requiredAreaRatio =
-                minimumUvAreaRatioLimit(mesh, patch, options);
+        const auto patchRequiredAreaRatio =
+            minimumUvAreaRatioLimit(mesh, patch, options);
+        const auto patchAreaFailed =
+            patch.flippedTriangleCount != 0 ||
+            !(patch.minimumSignedUvArea > 1.0e-14) ||
+            patch.minimumToMedianUvAreaRatio <
+                patchRequiredAreaRatio;
+        if (patchAreaFailed) {
+            retryableAreaFailure = true;
+            if (requiredAreaRatio == 0.0 ||
+                patch.minimumToMedianUvAreaRatio /
+                        patchRequiredAreaRatio <
+                    failedAreaRatio / requiredAreaRatio) {
+                failedAreaRatio =
+                    patch.minimumToMedianUvAreaRatio;
+                requiredAreaRatio = patchRequiredAreaRatio;
+            }
         }
-        requiredAreaRatio = minimumUvAreaRatioLimit(mesh, patch, options);
-        if (patch.minimumToMedianUvAreaRatio < requiredAreaRatio) {
-            failedAreaRatio = patch.minimumToMedianUvAreaRatio;
-        }
+    }
+    if (retryableAreaFailure && boundaryConvexityBlend < 1.0) {
+        message =
+            "The convex carrier boundary is too close to a degenerate parameter domain.";
+        return false;
     }
     layout.curveNetworkHash = network.hash;
     layout.hash = layoutHash(layout);
@@ -2425,6 +2699,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             layout.patches.assign(static_cast<std::size_t>(patchCount), {});
             report.maximumDistortion = 0.0;
             report.flippedTriangleCount = 0;
+            report.maximumSurfaceParameterCarrierBlend = 0.0;
             report.matrixRows = 0;
             report.matrixNonZeros = 0;
             report.rejectionReason.clear();
@@ -2473,6 +2748,9 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
             for (const auto& patch : layout.patches) {
                 report.maximumDistortion = std::max(report.maximumDistortion, patch.maximumDistortion);
                 report.flippedTriangleCount += patch.flippedTriangleCount;
+                report.maximumSurfaceParameterCarrierBlend = std::max(
+                    report.maximumSurfaceParameterCarrierBlend,
+                    patch.surfaceParameterCarrierBlend);
                 report.boundaryChainCount += patch.boundaryChainCount;
                 report.trimCornerCount += patch.trimCornerCount;
                 report.minimumSignedUvArea = report.minimumSignedUvArea == 0.0
@@ -2651,6 +2929,7 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                 std::numeric_limits<double>::infinity();
             report->distortionP995 = 0.0;
             report->boundaryRepresentabilityResidual = 0.0;
+            report->maximumSurfaceParameterCarrierBlend = 0.0;
             report->logicalSideCandidateCount = 0;
             report->selectedLogicalSideHash.clear();
             for (const auto& patch : layout.patches) {
@@ -2676,6 +2955,9 @@ RegionPatchLayoutGenerationResult RegionPatchLayoutGenerator::generate(
                 report->boundaryRepresentabilityResidual = std::max(
                     report->boundaryRepresentabilityResidual,
                     patch.boundaryRepresentabilityResidual);
+                report->maximumSurfaceParameterCarrierBlend = std::max(
+                    report->maximumSurfaceParameterCarrierBlend,
+                    patch.surfaceParameterCarrierBlend);
                 report->domainType = patch.domainType;
                 report->logicalSideCandidateCount +=
                     patch.logicalSideCandidateCount;

@@ -63,8 +63,10 @@ struct RegionPatchParameterization {
     // Strictly convex carrier coordinates used only for injective triangle
     // location and layout-quality diagnostics.
     std::vector<std::array<double, 2>> parameters;
-    // Rectangular surface coordinates whose boundary is exactly the four
-    // logical iso sides used by fitting and B-rep pcurves.
+    // Surface-sample coordinates used by fitting. Exact logical iso-boundary
+    // geometry is carried separately by edgePcurves; boundary samples may be
+    // blended toward the injective carrier map to avoid collapsed ear
+    // triangles without changing the B-rep pcurve truth.
     std::vector<std::array<double, 2>> surfaceParameters;
     std::vector<std::size_t> boundaryLoop;
     // Retained only for the legacy mesh-seam fitting path. Frozen curve-network
@@ -90,6 +92,11 @@ struct RegionPatchParameterization {
     double minimumToMedianUvAreaRatio = 0.0;
     double distortionP995 = 0.0;
     double boundaryRepresentabilityResidual = 0.0;
+    // Blend from exact rectangular sample coordinates toward the injective
+    // carrier map. Exact boundary pcurves remain the B-rep/fitting boundary
+    // truth when this is non-zero.
+    double surfaceParameterCarrierBlend = 0.0;
+    std::string carrierParameterWeightMode = "MeanValue";
     double maximumDistortion = 0.0;
     std::size_t logicalSideCandidateCount = 0;
     std::string selectedLogicalSideHash;

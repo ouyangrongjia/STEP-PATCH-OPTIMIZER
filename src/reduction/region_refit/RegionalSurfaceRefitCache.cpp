@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 11;
+constexpr quint32 kVersion = 14;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -248,13 +248,17 @@ void writeCandidateReport(QDataStream& stream, const RegionLayoutCandidateReport
            << quint64(report.boundaryChainCount) << report.trimCornerCount
            << report.minimumSignedUvArea
            << report.minimumToMedianUvAreaRatio
+           << report.distortionP995
            << report.boundaryRepresentabilityResidual
+           << report.maximumSurfaceParameterCarrierBlend
+           << quint64(report.logicalSideCandidateCount)
            << quint64(report.matrixRows) << quint64(report.matrixNonZeros)
            << quint64(report.estimatedSolverBytes)
            << quint64(report.estimatedOutputEntities) << report.wallMilliseconds;
     writeString(stream, report.layoutHash);
     writeString(stream, report.rejectionReason);
     writeString(stream, report.domainType);
+    writeString(stream, report.selectedLogicalSideHash);
 }
 
 bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& report) {
@@ -263,6 +267,7 @@ bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& repor
     quint64 bytes = 0;
     quint64 outputEntities = 0;
     quint64 boundaryChains = 0;
+    quint64 logicalSideCandidates = 0;
     stream >> report.patchCount >> report.topologyPassed >> report.parameterizationPassed
            >> report.constructibleParameterization >> report.coarseFitPassed
            >> report.selectedForFullFit >> report.proxyError
@@ -271,13 +276,19 @@ bool readCandidateReport(QDataStream& stream, RegionLayoutCandidateReport& repor
            >> report.pcurveNonAdjacentIntersectionCount
            >> boundaryChains >> report.trimCornerCount >> report.minimumSignedUvArea
            >> report.minimumToMedianUvAreaRatio
+           >> report.distortionP995
            >> report.boundaryRepresentabilityResidual
+           >> report.maximumSurfaceParameterCarrierBlend
+           >> logicalSideCandidates
            >> rows >> nonZeros
            >> bytes >> outputEntities >> report.wallMilliseconds;
     if (!readString(stream, report.layoutHash) ||
         !readString(stream, report.rejectionReason) ||
-        !readString(stream, report.domainType)) return false;
+        !readString(stream, report.domainType) ||
+        !readString(stream, report.selectedLogicalSideHash)) return false;
     report.boundaryChainCount = static_cast<std::size_t>(boundaryChains);
+    report.logicalSideCandidateCount =
+        static_cast<std::size_t>(logicalSideCandidates);
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     report.estimatedSolverBytes = bytes;
@@ -356,9 +367,11 @@ void writeLayout(QDataStream& stream, const RegionPatchLayout& layout) {
                << patch.minimumToMedianUvAreaRatio
                << patch.distortionP995
                << patch.boundaryRepresentabilityResidual
+               << patch.surfaceParameterCarrierBlend
                << patch.maximumDistortion
                << quint64(patch.logicalSideCandidateCount);
         writeString(stream, patch.selectedLogicalSideHash);
+        writeString(stream, patch.carrierParameterWeightMode);
     }
     stream << quint64(layout.seams.size());
     for (const auto& seam : layout.seams) {
@@ -501,12 +514,16 @@ bool readLayout(QDataStream& stream, RegionPatchLayout& layout) {
                >> patch.minimumToMedianUvAreaRatio
                >> patch.distortionP995
                >> patch.boundaryRepresentabilityResidual
+               >> patch.surfaceParameterCarrierBlend
                >> patch.maximumDistortion;
         quint64 logicalSideCandidateCount = 0;
         stream >> logicalSideCandidateCount;
         patch.logicalSideCandidateCount =
             static_cast<std::size_t>(logicalSideCandidateCount);
-        if (!readString(stream, patch.selectedLogicalSideHash)) return false;
+        if (!readString(stream, patch.selectedLogicalSideHash) ||
+            !readString(stream, patch.carrierParameterWeightMode)) {
+            return false;
+        }
         patch.matrixRows = static_cast<std::size_t>(rows);
         patch.matrixNonZeros = static_cast<std::size_t>(nonZeros);
     }
@@ -851,6 +868,10 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.interiorControlPointCount
            << report.reducedSpdSystemUsed
            << report.fairnessEnergy
+           << report.controlNetSecondDifferenceEnergy
+           << report.physicalSurfaceArea
+           << report.areaWeightedNormalGradientEnergy
+           << report.areaWeightedMeanCurvatureVariation
            << report.maximumNormalVariationDegrees
            << report.curvatureOscillation
            << report.minimumNormalizedJacobian
@@ -858,8 +879,13 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.conditionNumberP95
            << report.conditionNumberP99
            << report.surfaceQualityHardFailure
+           << report.surfaceUvFlippedTriangleCount
+           << report.surfaceUvDegenerateTriangleCount
+           << report.surfaceJacobianDegenerateSampleCount
+           << report.surfaceJacobianOrientationFlipCount
            << report.wallMilliseconds;
     writeString(stream, report.hardConstraintStatus);
+    writeString(stream, report.surfaceLegalityStatus);
     writeString(stream, report.stopReason);
 }
 
@@ -929,6 +955,10 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.interiorControlPointCount
            >> report.reducedSpdSystemUsed
            >> report.fairnessEnergy
+           >> report.controlNetSecondDifferenceEnergy
+           >> report.physicalSurfaceArea
+           >> report.areaWeightedNormalGradientEnergy
+           >> report.areaWeightedMeanCurvatureVariation
            >> report.maximumNormalVariationDegrees
            >> report.curvatureOscillation
            >> report.minimumNormalizedJacobian
@@ -936,6 +966,10 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.conditionNumberP95
            >> report.conditionNumberP99
            >> report.surfaceQualityHardFailure
+           >> report.surfaceUvFlippedTriangleCount
+           >> report.surfaceUvDegenerateTriangleCount
+           >> report.surfaceJacobianDegenerateSampleCount
+           >> report.surfaceJacobianOrientationFlipCount
            >> report.wallMilliseconds;
     report.matrixRows = static_cast<std::size_t>(rows);
     report.matrixColumns = static_cast<std::size_t>(columns);
@@ -962,6 +996,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.holdoutWorstDistanceVertex = static_cast<std::size_t>(worstDistance);
     report.holdoutWorstNormalVertex = static_cast<std::size_t>(worstNormal);
     return readString(stream, report.hardConstraintStatus) &&
+        readString(stream, report.surfaceLegalityStatus) &&
         readString(stream, report.stopReason) &&
         stream.status() == QDataStream::Ok;
 }
@@ -1044,9 +1079,10 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v40-fair-boundary-spd"
+                ? "native-regional-refit-v43-parameter-quality-adaptive-support"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
+         << '|' << static_cast<int>(request.options.fittingMode)
          << '|' << request.forceDiagnosticSewing << '|';
     for (const auto face : faces) text << face << ',';
     text << '|';
@@ -1391,13 +1427,27 @@ bool RegionalSurfaceRefitCache::loadFit(
                >> quality.maximumPoleCountPerSide
                >> quality.totalKnotCount
                >> quality.fairnessEnergy
+               >> quality.controlNetSecondDifferenceEnergy
+               >> quality.physicalSurfaceArea
+               >> quality.areaWeightedNormalGradientEnergy
+               >> quality.areaWeightedMeanCurvatureVariation
                >> quality.maximumNormalVariationDegrees
                >> quality.curvatureOscillation
                >> quality.minimumNormalizedJacobian
                >> quality.conditionNumberP50
                >> quality.conditionNumberP95
                >> quality.conditionNumberP99
-               >> quality.hardFailure;
+               >> quality.hardFailure
+               >> quality.legality.finiteControlNet
+               >> quality.legality.positiveWeights
+               >> quality.legality.validDegreesAndPoles
+               >> quality.legality.strictlyIncreasingKnots
+               >> quality.legality.uvFlippedTriangleCount
+               >> quality.legality.uvDegenerateTriangleCount
+               >> quality.legality.jacobianDegenerateSampleCount
+               >> quality.legality.jacobianOrientationFlipCount
+               >> quality.legality.minimumNormalizedJacobian
+               >> quality.legality.passed;
         if (!readString(stream, fitOutcome)) return false;
         result.status = static_cast<RegionRefitStatus>(status);
         return stream.status() == QDataStream::Ok;
@@ -1530,6 +1580,17 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
                << (result.success()
                     ? result.network->quality.fairnessEnergy : 0.0)
                << (result.success()
+                    ? result.network->quality
+                        .controlNetSecondDifferenceEnergy : 0.0)
+               << (result.success()
+                    ? result.network->quality.physicalSurfaceArea : 0.0)
+               << (result.success()
+                    ? result.network->quality
+                        .areaWeightedNormalGradientEnergy : 0.0)
+               << (result.success()
+                    ? result.network->quality
+                        .areaWeightedMeanCurvatureVariation : 0.0)
+               << (result.success()
                     ? result.network->quality.maximumNormalVariationDegrees
                     : 0.0)
                << (result.success()
@@ -1543,7 +1604,33 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
                << (result.success()
                     ? result.network->quality.conditionNumberP99 : 0.0)
                << (result.success() &&
-                    result.network->quality.hardFailure);
+                    result.network->quality.hardFailure)
+               << (!result.success() ||
+                    result.network->quality.legality.finiteControlNet)
+               << (!result.success() ||
+                    result.network->quality.legality.positiveWeights)
+               << (!result.success() ||
+                    result.network->quality.legality.validDegreesAndPoles)
+               << (!result.success() ||
+                    result.network->quality.legality
+                        .strictlyIncreasingKnots)
+               << (result.success()
+                    ? result.network->quality.legality
+                        .uvFlippedTriangleCount : 0)
+               << (result.success()
+                    ? result.network->quality.legality
+                        .uvDegenerateTriangleCount : 0)
+               << (result.success()
+                    ? result.network->quality.legality
+                        .jacobianDegenerateSampleCount : 0)
+               << (result.success()
+                    ? result.network->quality.legality
+                        .jacobianOrientationFlipCount : 0)
+               << (result.success()
+                    ? result.network->quality.legality
+                        .minimumNormalizedJacobian : 0.0)
+               << (result.success() &&
+                    result.network->quality.legality.passed);
         writeString(
             stream,
             result.success() ? result.network->fitOutcome : std::string {});

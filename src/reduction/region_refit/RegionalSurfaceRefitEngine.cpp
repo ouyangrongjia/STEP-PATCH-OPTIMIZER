@@ -9,6 +9,7 @@
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionRefitResourceMonitor.h"
 #include "reduction/region_refit/RegionalSurfaceRefitCache.h"
+#include "reduction/region_refit/RecoveredFittingSpecification.h"
 #include "reduction/region_refit/StepAdaptiveRegionSampler.h"
 #include "merge/RegionBoundaryAnalyzer.h"
 #include "patch/PatchReplacementAssembler.h"
@@ -186,7 +187,20 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const ShapeDocument& document,
     const RegionRefitRequest& request) const {
     RegionRefitResult result;
+    const auto recoveredSpecification =
+        geomagicWrap2021MechanicalSpecification();
+    result.report.fittingMode = request.options.fittingMode;
+    result.report.recoveredFittingSpecificationId =
+        recoveredSpecification.specificationId;
+    result.report.recoveredFittingSpecificationStatus =
+        recoveredSpecification.status;
+    result.report.recoveredFittingBehaviorEquivalentReady =
+        recoveredSpecification.behaviorEquivalentReady();
     result.report.inputFaceCount = static_cast<int>(request.selectedFaces.size());
+    result.report.originalTopologicalFaceCount =
+        document.stats().faces;
+    result.report.replacedTopologicalFaceCount =
+        static_cast<int>(request.selectedFaces.size());
     result.report.forceDiagnosticSewingRequested = request.forceDiagnosticSewing;
     result.report.requestedPatchCount = request.layoutMode == RegionRefitLayoutMode::TargetPatchCount
         ? request.options.requestedPatchCount
@@ -702,6 +716,17 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         fitted.bestEffortNetwork != nullptr &&
         fitted.bestEffortNetwork->constructibleForBRep;
     result.report.bestEffortUsed = useBestEffort;
+    if (fitted.status ==
+        RegionRefitStatus::UnsupportedFittingSpecification) {
+        result.report.status = fitted.status;
+        result.report.failureStage = RegionRefitStage::Fitting;
+        result.report.message = fitted.message;
+        result.report.selectionOutcome =
+            "UnsupportedFittingSpecification";
+        result.report.unattainableReason = fitted.message;
+        result.report.firstProductFailureGate = "FittingSpecification";
+        return result;
+    }
     if (!fitted.success() && !useBestEffort) {
         result.report.status = RegionRefitStatus::NoSewableGeometry;
         result.report.failureStage = RegionRefitStage::Fitting;
@@ -781,6 +806,14 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.fittedNetwork->quality.surfaceComplexities;
     result.report.fittedFairnessEnergy =
         result.fittedNetwork->quality.fairnessEnergy;
+    result.report.fittedControlNetSecondDifferenceEnergy =
+        result.fittedNetwork->quality.controlNetSecondDifferenceEnergy;
+    result.report.fittedPhysicalSurfaceArea =
+        result.fittedNetwork->quality.physicalSurfaceArea;
+    result.report.fittedAreaWeightedNormalGradientEnergy =
+        result.fittedNetwork->quality.areaWeightedNormalGradientEnergy;
+    result.report.fittedAreaWeightedMeanCurvatureVariation =
+        result.fittedNetwork->quality.areaWeightedMeanCurvatureVariation;
     result.report.fittedMaximumNormalVariationDegrees =
         result.fittedNetwork->quality.maximumNormalVariationDegrees;
     result.report.fittedCurvatureOscillation =
@@ -795,6 +828,23 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.fittedNetwork->quality.conditionNumberP99;
     result.report.fittedSurfaceQualityHardFailure =
         result.fittedNetwork->quality.hardFailure;
+    result.report.fittedSurfaceUvFlippedTriangleCount =
+        result.fittedNetwork->quality.legality.uvFlippedTriangleCount;
+    result.report.fittedSurfaceUvDegenerateTriangleCount =
+        result.fittedNetwork->quality.legality.uvDegenerateTriangleCount;
+    result.report.fittedSurfaceJacobianDegenerateSampleCount =
+        result.fittedNetwork->quality.legality
+            .jacobianDegenerateSampleCount;
+    result.report.fittedSurfaceJacobianOrientationFlipCount =
+        result.fittedNetwork->quality.legality
+            .jacobianOrientationFlipCount;
+    result.report.fittedSurfaceLegalityStatus =
+        result.fittedNetwork->quality.legality.passed
+        ? "Passed"
+        : result.fittedNetwork->quality.legality.rejectionReasons.empty()
+        ? "Rejected"
+        : result.fittedNetwork->quality.legality
+            .rejectionReasons.front();
     const auto fittedCurveNetwork = std::find_if(
         fitCurveNetworks.begin(),
         fitCurveNetworks.end(),
@@ -1163,6 +1213,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.repairPassed && strictReport.passed && roundtripReport.passed;
     result.report.productValidated = fullyValidated;
     result.report.outputFaceCount = roundtripReport.afterStats.faces;
+    result.report.expectedWholeTopologicalFaceCount =
+        result.report.originalTopologicalFaceCount -
+        result.report.replacedTopologicalFaceCount +
+        result.report.retrimReplacementFaceCount;
     if (fullyValidated) {
         if (request.layoutMode == RegionRefitLayoutMode::TargetPatchCount) {
             result.report.selectionOutcome = result.report.exactTargetReached

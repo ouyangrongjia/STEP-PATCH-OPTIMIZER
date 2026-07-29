@@ -51,6 +51,7 @@ add_library(spo_core STATIC
     src/external/geomagic/GeomagicAutoSurfaceBackend.cpp
     src/io/StepReader.cpp
     src/io/StepEntityStatistics.cpp
+    src/io/StepFaceLineage.cpp
     src/io/StepWriter.cpp
     src/io/StlReader.cpp
     src/io/StlWriter.cpp
@@ -76,6 +77,8 @@ add_library(spo_core STATIC
     src/reduction/SurfaceReductionFitCache.cpp
     src/reduction/SurfaceReductionEngine.cpp
     src/reduction/region_refit/RegionalSurfaceRefitTypes.cpp
+    src/reduction/region_refit/RecoveredFittingSpecification.cpp
+    src/reduction/region_refit/SurfaceDifferentialQuality.cpp
     src/reduction/region_refit/RegionRefitResourceMonitor.cpp
     src/reduction/region_refit/RegionalSurfaceRefitCache.cpp
     src/reduction/region_refit/RegionReferenceMesh.cpp

@@ -1,6 +1,7 @@
 #include "feature/FeatureEdgeDetector.h"
 #include "io/StepReader.h"
 #include "io/StepEntityStatistics.h"
+#include "io/StepFaceLineage.h"
 #include "io/StepWriter.h"
 #include "io/StlWriter.h"
 #include "merge/MergePlanner.h"
@@ -58,6 +59,8 @@ struct StepFileComplexity {
     std::uint64_t entityCount = 0;
     std::uint64_t edgeCurveCount = 0;
     std::uint64_t surfaceCount = 0;
+    std::uint64_t advancedFaceCount = 0;
+    std::uint64_t bSplineSurfaceCount = 0;
     std::string sha256;
 };
 
@@ -81,6 +84,8 @@ StepFileComplexity measureStepFile(const std::filesystem::path& path) {
     result.entityCount = statistics.entityCount;
     result.edgeCurveCount = statistics.edgeCurveCount;
     result.surfaceCount = statistics.surfaceCount;
+    result.advancedFaceCount = statistics.advancedFaceCount;
+    result.bSplineSurfaceCount = statistics.bSplineSurfaceCount;
     result.sha256 = hash.result().toHex().toStdString();
     return result;
 }
@@ -146,6 +151,10 @@ QJsonObject outputComplexityToJson(
             {"step_entity_count", QString::number(baseline.entityCount)},
             {"edge_curve_count", QString::number(baseline.edgeCurveCount)},
             {"surface_count", QString::number(baseline.surfaceCount)},
+            {"advanced_face_count",
+                QString::number(baseline.advancedFaceCount)},
+            {"b_spline_surface_count",
+                QString::number(baseline.bSplineSurfaceCount)},
             {"sha256", QString::fromStdString(baseline.sha256)}}},
         {"candidate", QJsonObject {
             {"present", candidate.present},
@@ -153,6 +162,10 @@ QJsonObject outputComplexityToJson(
             {"step_entity_count", QString::number(candidate.entityCount)},
             {"edge_curve_count", QString::number(candidate.edgeCurveCount)},
             {"surface_count", QString::number(candidate.surfaceCount)},
+            {"advanced_face_count",
+                QString::number(candidate.advancedFaceCount)},
+            {"b_spline_surface_count",
+                QString::number(candidate.bSplineSurfaceCount)},
             {"sha256", QString::fromStdString(candidate.sha256)}}},
         {"byte_increase_ratio", byteIncrease},
         {"entity_increase_ratio", entityIncrease},
@@ -167,6 +180,34 @@ QJsonObject outputComplexityToJson(
         {"surface_complexities", surfaceComplexitiesToJson(
             result.report.fittedSurfaceComplexities)},
         {"passed", passed}};
+}
+
+QJsonObject stepFaceLineageToJson(
+    const spo::StepFaceLineageReport& report) {
+    return {
+        {"schema_version", 1},
+        {"original_face_count",
+            QString::number(report.originalFaceCount)},
+        {"replaced_face_count",
+            QString::number(report.replacedFaceCount)},
+        {"replacement_face_count",
+            QString::number(report.replacementFaceCount)},
+        {"expected_whole_face_count",
+            QString::number(report.expectedWholeFaceCount)},
+        {"replacement_step_advanced_face_count",
+            QString::number(report.replacementStepAdvancedFaceCount)},
+        {"whole_step_advanced_face_count",
+            QString::number(report.wholeStepAdvancedFaceCount)},
+        {"replacement_unique_surface_count",
+            QString::number(report.replacementUniqueSurfaceCount)},
+        {"whole_unique_surface_count",
+            QString::number(report.wholeUniqueSurfaceCount)},
+        {"replacement_count_passed",
+            report.replacementCountPassed},
+        {"whole_count_passed", report.wholeCountPassed},
+        {"passed", report.passed},
+        {"failure_reason",
+            QString::fromStdString(report.failureReason)}};
 }
 
 std::vector<std::size_t> parseIds(std::string value) {
@@ -491,6 +532,8 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
                 QString::fromStdString(candidate.selectedLogicalSideHash)},
             {"boundary_representability_residual",
                 candidate.boundaryRepresentabilityResidual},
+            {"maximum_surface_parameter_carrier_blend",
+                candidate.maximumSurfaceParameterCarrierBlend},
             {"matrix_rows", QString::number(candidate.matrixRows)},
             {"matrix_nonzeros", QString::number(candidate.matrixNonZeros)},
             {"estimated_solver_bytes", QString::number(candidate.estimatedSolverBytes)},
@@ -615,6 +658,11 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
                 QString::fromStdString(patch.selectedLogicalSideHash)},
             {"boundary_representability_residual",
                 patch.boundaryRepresentabilityResidual},
+            {"surface_parameter_carrier_blend",
+                patch.surfaceParameterCarrierBlend},
+            {"carrier_parameter_weight_mode",
+                QString::fromStdString(
+                    patch.carrierParameterWeightMode)},
             {"maximum_distortion", patch.maximumDistortion}});
     }
     QJsonArray seams;
@@ -726,6 +774,14 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"reduced_spd_system_used",
                     iteration.reducedSpdSystemUsed},
                 {"fairness_energy", iteration.fairnessEnergy},
+                {"control_net_second_difference_energy",
+                    iteration.controlNetSecondDifferenceEnergy},
+                {"physical_surface_area",
+                    iteration.physicalSurfaceArea},
+                {"area_weighted_normal_gradient_energy",
+                    iteration.areaWeightedNormalGradientEnergy},
+                {"area_weighted_mean_curvature_variation",
+                    iteration.areaWeightedMeanCurvatureVariation},
                 {"maximum_normal_variation_degrees",
                     iteration.maximumNormalVariationDegrees},
                 {"curvature_oscillation",
@@ -737,6 +793,17 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"condition_number_p99", iteration.conditionNumberP99},
                 {"surface_quality_hard_failure",
                     iteration.surfaceQualityHardFailure},
+                {"surface_uv_flipped_triangle_count",
+                    iteration.surfaceUvFlippedTriangleCount},
+                {"surface_uv_degenerate_triangle_count",
+                    iteration.surfaceUvDegenerateTriangleCount},
+                {"surface_jacobian_degenerate_sample_count",
+                    iteration.surfaceJacobianDegenerateSampleCount},
+                {"surface_jacobian_orientation_flip_count",
+                    iteration.surfaceJacobianOrientationFlipCount},
+                {"surface_legality_status",
+                    QString::fromStdString(
+                        iteration.surfaceLegalityStatus)},
                 {"wall_ms", iteration.wallMilliseconds},
                 {"stop_reason", QString::fromStdString(iteration.stopReason)}});
         }
@@ -756,6 +823,15 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
     }
     return {
         {"status", result.report.fitGatePassed ? "Success" : spo::toString(result.report.status)},
+        {"fitting_mode", spo::toString(result.report.fittingMode)},
+        {"recovered_fitting_specification_id",
+            QString::fromStdString(
+                result.report.recoveredFittingSpecificationId)},
+        {"recovered_fitting_specification_status",
+            QString::fromStdString(
+                result.report.recoveredFittingSpecificationStatus)},
+        {"recovered_fitting_behavior_equivalent_ready",
+            result.report.recoveredFittingBehaviorEquivalentReady},
         {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
         {"boundary_feasibility_refinement_rounds",
@@ -782,6 +858,14 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             QString::number(result.report.crossFaceMappingFailureCount)},
         {"fairness_energy",
             result.report.fittedFairnessEnergy},
+        {"control_net_second_difference_energy",
+            result.report.fittedControlNetSecondDifferenceEnergy},
+        {"physical_surface_area",
+            result.report.fittedPhysicalSurfaceArea},
+        {"area_weighted_normal_gradient_energy",
+            result.report.fittedAreaWeightedNormalGradientEnergy},
+        {"area_weighted_mean_curvature_variation",
+            result.report.fittedAreaWeightedMeanCurvatureVariation},
         {"maximum_normal_variation_degrees",
             result.report.fittedMaximumNormalVariationDegrees},
         {"curvature_oscillation",
@@ -796,6 +880,17 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             result.report.fittedConditionNumberP99},
         {"surface_quality_hard_failure",
             result.report.fittedSurfaceQualityHardFailure},
+        {"surface_uv_flipped_triangle_count",
+            result.report.fittedSurfaceUvFlippedTriangleCount},
+        {"surface_uv_degenerate_triangle_count",
+            result.report.fittedSurfaceUvDegenerateTriangleCount},
+        {"surface_jacobian_degenerate_sample_count",
+            result.report.fittedSurfaceJacobianDegenerateSampleCount},
+        {"surface_jacobian_orientation_flip_count",
+            result.report.fittedSurfaceJacobianOrientationFlipCount},
+        {"surface_legality_status",
+            QString::fromStdString(
+                result.report.fittedSurfaceLegalityStatus)},
         {"best_effort_used", result.report.bestEffortUsed},
         {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
         {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
@@ -1242,6 +1337,14 @@ QJsonObject performanceToJson(
             {"surface_complexities", surfaceComplexitiesToJson(
                 result.report.fittedSurfaceComplexities)},
             {"fairness_energy", result.report.fittedFairnessEnergy},
+            {"control_net_second_difference_energy",
+                result.report.fittedControlNetSecondDifferenceEnergy},
+            {"physical_surface_area",
+                result.report.fittedPhysicalSurfaceArea},
+            {"area_weighted_normal_gradient_energy",
+                result.report.fittedAreaWeightedNormalGradientEnergy},
+            {"area_weighted_mean_curvature_variation",
+                result.report.fittedAreaWeightedMeanCurvatureVariation},
             {"maximum_normal_variation_degrees",
                 result.report.fittedMaximumNormalVariationDegrees},
             {"curvature_oscillation",
@@ -1256,6 +1359,17 @@ QJsonObject performanceToJson(
                 result.report.fittedConditionNumberP99},
             {"surface_quality_hard_failure",
                 result.report.fittedSurfaceQualityHardFailure},
+            {"surface_uv_flipped_triangle_count",
+                result.report.fittedSurfaceUvFlippedTriangleCount},
+            {"surface_uv_degenerate_triangle_count",
+                result.report.fittedSurfaceUvDegenerateTriangleCount},
+            {"surface_jacobian_degenerate_sample_count",
+                result.report.fittedSurfaceJacobianDegenerateSampleCount},
+            {"surface_jacobian_orientation_flip_count",
+                result.report.fittedSurfaceJacobianOrientationFlipCount},
+            {"surface_legality_status",
+                QString::fromStdString(
+                    result.report.fittedSurfaceLegalityStatus)},
             {"output_faces", result.report.outputFaceCount},
             {"after_solids", result.report.afterSolidCount},
             {"after_free_edges", result.report.afterFreeEdgeCount},
@@ -1344,6 +1458,7 @@ int main(int argc, char* argv[]) {
                      "[--requested-patch-count <数量>] [--patch-count-search-radius <数量>] "
                      "[--adaptive-objective <minimum-qualified>] [--adaptive-safety-cap <数量>] "
                      "[--layout <adaptive|fixed>] [--patch-count <数量>] [--wall-time-ms <毫秒>] "
+                     "[--fitting-mode <geomagic-equivalent|feature-preserving>] "
                      "[--sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
                      "[--layout-carrier-sampling-mode <adaptive-occt|quality-balanced|uv-uniform>] "
                      "[--target-sample-triangles <数量>] [--maximum-full-fit-count <数量>] "
@@ -1402,7 +1517,7 @@ int main(int argc, char* argv[]) {
     std::string commit;
     spo::RegionRefitRequest request;
     request.options.algorithmFingerprint =
-        "native-regional-refit-v40-fair-boundary-spd";
+        "native-regional-refit-v43-parameter-quality-adaptive-support";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1451,6 +1566,18 @@ int main(int argc, char* argv[]) {
                     request.options.samplingMode = spo::RegionRefitSamplingMode::QualityBalanced;
                 } else if (value == "uv-uniform") {
                     request.options.samplingMode = spo::RegionRefitSamplingMode::UniformUv;
+                } else {
+                    return 2;
+                }
+            } else if (argument == "--fitting-mode") {
+                if (++index >= argc) return 2;
+                const std::string value = argv[index];
+                if (value == "geomagic-equivalent") {
+                    request.options.fittingMode =
+                        spo::RegionalFittingMode::GeomagicEquivalent;
+                } else if (value == "feature-preserving") {
+                    request.options.fittingMode =
+                        spo::RegionalFittingMode::FeaturePreserving;
                 } else {
                     return 2;
                 }
@@ -1538,7 +1665,8 @@ int main(int argc, char* argv[]) {
 
     if (!algorithmFingerprintSpecified) {
         request.options.algorithmFingerprint = std::string(
-            "native-regional-refit-v40-fair-boundary-spd-") +
+            "native-regional-refit-v43-parameter-quality-adaptive-support-") +
+            spo::toString(request.options.fittingMode) + "-" +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
             spo::toString(request.layoutMode);
@@ -1751,12 +1879,13 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+    std::filesystem::path replacementQuiltPath;
     if (!performanceOnly && !result.replacementQuilt.IsNull()) {
-        const auto quiltPath =
+        replacementQuiltPath =
             outputDirectory / "artifacts" / "brep" / "replacement_quilt.step";
         const auto write = spo::StepWriter().write(
             spo::ShapeDocument(result.replacementQuilt, {}),
-            quiltPath);
+            replacementQuiltPath);
         if (!write.success()) {
             std::cerr << write.message() << '\n';
             return 1;
@@ -1787,14 +1916,54 @@ int main(int argc, char* argv[]) {
         const auto candidateComplexity = assemblyOutputPath.empty()
             ? StepFileComplexity {}
             : measureStepFile(assemblyOutputPath);
+        const auto replacementComplexity =
+            replacementQuiltPath.empty()
+            ? StepFileComplexity {}
+            : measureStepFile(replacementQuiltPath);
+        const auto lineage = spo::makeStepFaceLineageReport(
+            static_cast<std::uint64_t>(read.document.stats().faces),
+            static_cast<std::uint64_t>(request.selectedFaces.size()),
+            static_cast<std::uint64_t>(std::max(
+                0, result.report.retrimReplacementFaceCount)),
+            spo::StepEntityStatistics {
+                replacementComplexity.entityCount,
+                replacementComplexity.edgeCurveCount,
+                replacementComplexity.surfaceCount,
+                replacementComplexity.advancedFaceCount,
+                replacementComplexity.bSplineSurfaceCount},
+            spo::StepEntityStatistics {
+                candidateComplexity.entityCount,
+                candidateComplexity.edgeCurveCount,
+                candidateComplexity.surfaceCount,
+                candidateComplexity.advancedFaceCount,
+                candidateComplexity.bSplineSurfaceCount});
+        result.report.originalTopologicalFaceCount =
+            static_cast<int>(lineage.originalFaceCount);
+        result.report.replacedTopologicalFaceCount =
+            static_cast<int>(lineage.replacedFaceCount);
+        result.report.expectedWholeTopologicalFaceCount =
+            static_cast<int>(lineage.expectedWholeFaceCount);
+        result.report.replacementStepAdvancedFaceCount =
+            static_cast<int>(lineage.replacementStepAdvancedFaceCount);
+        result.report.wholeStepAdvancedFaceCount =
+            static_cast<int>(lineage.wholeStepAdvancedFaceCount);
+        result.report.stepFaceLineagePassed = lineage.passed;
         const auto complexityReport = outputComplexityToJson(
             baselineComplexity,
             candidateComplexity,
             result,
             request.options.maximumControlPointsPerSide);
-        outputComplexityPassed = complexityReport.value("passed").toBool();
+        outputComplexityPassed =
+            complexityReport.value("passed").toBool() &&
+            lineage.passed;
         if (!writeJson(diagnostics / "output_complexity_report.json", complexityReport)) {
             std::cerr << "无法写入输出复杂度报告。\n";
+            return 1;
+        }
+        if (!writeJson(
+                diagnostics / "step_face_lineage_report.json",
+                stepFaceLineageToJson(lineage))) {
+            std::cerr << "无法写入 STEP 面谱系报告。\n";
             return 1;
         }
         std::error_code removeError;
