@@ -2356,6 +2356,10 @@ void validateFrozenCurveContinuity(
     const RegionCurveNetwork& network,
     const std::vector<Handle(Geom_BSplineSurface)>& surfaces,
     const RegionRefitOptions& options) {
+    metrics.seamMaximumDistance = 0.0;
+    metrics.seamMaximumCurveDeviation = 0.0;
+    metrics.seamMaximumNormalDegrees = 0.0;
+    metrics.seamMaximumCurvatureDifference = 0.0;
     metrics.seamContinuityGatePassed = true;
     const auto sampleCount = std::max(97, options.curveValidationSampleCount);
     for (const auto& edge : network.edges) {

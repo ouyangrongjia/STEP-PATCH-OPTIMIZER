@@ -1,5 +1,6 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionCurveNetwork.h"
+#include "reduction/region_refit/SurfaceDifferentialQuality.h"
 
 #include <Eigen/Eigenvalues>
 #include <Eigen/IterativeLinearSolvers>
@@ -818,73 +819,6 @@ bool meanValueParameterizeInterior(
     for (const auto local : interior) {
         const auto row = interiorRow[local];
         parameters[local] = {solutionU[row], solutionV[row]};
-    }
-    return true;
-}
-
-bool orientPatchTriangles(
-    const RegionReferenceMesh& mesh,
-    const RegionPatchParameterization& patch,
-    std::vector<int>& orientations,
-    std::string& message) {
-    struct DirectedUse {
-        std::size_t triangle = 0;
-        int direction = 0;
-    };
-    std::map<MeshEdge, std::vector<DirectedUse>> uses;
-    for (const auto triangleIndex : patch.triangleIndices) {
-        if (triangleIndex >= mesh.triangles.size()) {
-            message = "A curve-consistent parameter domain references an invalid triangle.";
-            return false;
-        }
-        const auto& triangle = mesh.triangles[triangleIndex];
-        for (std::size_t edge = 0; edge < triangle.vertices.size(); ++edge) {
-            const auto first = triangle.vertices[edge];
-            const auto second =
-                triangle.vertices[(edge + 1) % triangle.vertices.size()];
-            uses[orderedEdge(first, second)].push_back({
-                triangleIndex,
-                first < second ? 1 : -1});
-        }
-    }
-    orientations.assign(mesh.triangles.size(), 0);
-    orientations[patch.triangleIndices.front()] = 1;
-    std::queue<std::size_t> pending;
-    pending.push(patch.triangleIndices.front());
-    while (!pending.empty()) {
-        const auto currentTriangle = pending.front();
-        pending.pop();
-        const auto& triangle = mesh.triangles[currentTriangle];
-        for (std::size_t edge = 0; edge < triangle.vertices.size(); ++edge) {
-            const auto key = orderedEdge(
-                triangle.vertices[edge],
-                triangle.vertices[(edge + 1) % triangle.vertices.size()]);
-            const auto& edgeUses = uses.at(key);
-            if (edgeUses.size() != 2) continue;
-            const auto current = edgeUses[0].triangle == currentTriangle
-                ? edgeUses[0] : edgeUses[1];
-            const auto other = edgeUses[0].triangle == currentTriangle
-                ? edgeUses[1] : edgeUses[0];
-            const auto expected =
-                -current.direction * orientations[currentTriangle] *
-                other.direction;
-            if (orientations[other.triangle] == 0) {
-                orientations[other.triangle] = expected;
-                pending.push(other.triangle);
-            } else if (orientations[other.triangle] != expected) {
-                message = "Curve-consistent patch triangles are not orientable.";
-                return false;
-            }
-        }
-    }
-    if (std::any_of(
-            patch.triangleIndices.begin(),
-            patch.triangleIndices.end(),
-            [&](const auto triangle) {
-                return orientations[triangle] == 0;
-            })) {
-        message = "Curve-consistent patch triangles are disconnected.";
-        return false;
     }
     return true;
 }

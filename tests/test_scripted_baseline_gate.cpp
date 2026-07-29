@@ -780,7 +780,7 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find(
-        "native-regional-refit-v43-parameter-quality-adaptive-support") !=
+        "native-regional-refit-v44-shared-edge-parameter-validator-gates") !=
         std::string::npos);
     assert(probe.find("--fitting-mode") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);

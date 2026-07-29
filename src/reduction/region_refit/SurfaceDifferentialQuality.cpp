@@ -8,6 +8,8 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <queue>
 #include <unordered_map>
 
 namespace spo {
@@ -66,6 +68,128 @@ void checkKnots(
     }
 }
 
+}
+
+bool orientPatchTriangles(
+    const RegionReferenceMesh& mesh,
+    const RegionPatchParameterization& patch,
+    std::vector<int>& orientations,
+    std::string& message) {
+    if (patch.triangleIndices.empty()) {
+        message = "Parameter domain contains no triangles.";
+        return false;
+    }
+    struct DirectedUse {
+        std::size_t triangle = 0;
+        int direction = 0;
+    };
+    std::map<std::array<std::size_t, 2>,
+             std::vector<DirectedUse>> uses;
+    for (const auto triangleIndex : patch.triangleIndices) {
+        if (triangleIndex >= mesh.triangles.size()) {
+            message =
+                "Parameter domain references an invalid triangle.";
+            return false;
+        }
+        const auto& triangle = mesh.triangles[triangleIndex];
+        for (std::size_t edge = 0;
+             edge < triangle.vertices.size();
+             ++edge) {
+            const auto first = triangle.vertices[edge];
+            const auto second = triangle.vertices[
+                (edge + 1) % triangle.vertices.size()];
+            const std::array<std::size_t, 2> key {
+                std::min(first, second),
+                std::max(first, second)};
+            uses[key].push_back({
+                triangleIndex,
+                first < second ? 1 : -1});
+        }
+    }
+    orientations.assign(mesh.triangles.size(), 0);
+    const auto seed = patch.triangleIndices.front();
+    orientations[seed] = 1;
+    std::queue<std::size_t> pending;
+    pending.push(seed);
+    while (!pending.empty()) {
+        const auto currentTriangle = pending.front();
+        pending.pop();
+        const auto& triangle = mesh.triangles[currentTriangle];
+        for (std::size_t edge = 0;
+             edge < triangle.vertices.size();
+             ++edge) {
+            const auto first = triangle.vertices[edge];
+            const auto second = triangle.vertices[
+                (edge + 1) % triangle.vertices.size()];
+            const std::array<std::size_t, 2> key {
+                std::min(first, second),
+                std::max(first, second)};
+            const auto& edgeUses = uses.at(key);
+            if (edgeUses.size() != 2) continue;
+            const auto& current =
+                edgeUses[0].triangle == currentTriangle
+                ? edgeUses[0]
+                : edgeUses[1];
+            const auto& other =
+                edgeUses[0].triangle == currentTriangle
+                ? edgeUses[1]
+                : edgeUses[0];
+            const auto expected =
+                -current.direction *
+                orientations[currentTriangle] *
+                other.direction;
+            if (orientations[other.triangle] == 0) {
+                orientations[other.triangle] = expected;
+                pending.push(other.triangle);
+            } else if (
+                orientations[other.triangle] != expected) {
+                message =
+                    "Parameter-domain triangles are not orientable.";
+                return false;
+            }
+        }
+    }
+    if (std::any_of(
+            patch.triangleIndices.begin(),
+            patch.triangleIndices.end(),
+            [&](const auto triangle) {
+                return orientations[triangle] == 0;
+            })) {
+        message =
+            "Parameter-domain triangles are disconnected.";
+        return false;
+    }
+    return true;
+}
+
+std::string classifySurfaceUvTopology(
+    const SurfaceLegalityReport& report) {
+    if (report.uvFlippedTriangleCount > 0 &&
+        report.uvDegenerateTriangleCount > 0) {
+        return "FlippedAndDegenerateUvTriangle";
+    }
+    if (report.uvFlippedTriangleCount > 0) {
+        return "FlippedUvTriangle";
+    }
+    if (report.uvDegenerateTriangleCount > 0) {
+        return "DegenerateUvTriangle";
+    }
+    return "Passed";
+}
+
+std::string classifySurfaceJacobianLegality(
+    const SurfaceLegalityReport& report) {
+    if (report.jacobianOrientationFlipCount > 0 &&
+        report.jacobianDegenerateSampleCount > 0) {
+        return "SurfaceOrientationFlipAndDegenerateJacobian";
+    }
+    if (report.jacobianOrientationFlipCount > 0) {
+        return "SurfaceOrientationFlip";
+    }
+    if (report.jacobianDegenerateSampleCount > 0) {
+        return "DegenerateSurfaceJacobian";
+    }
+    return "Passed";
 }
 
 SurfaceDifferentialQualityReport evaluateSurfaceDifferentialQuality(
@@ -302,6 +426,16 @@ SurfaceDifferentialQualityReport evaluateSurfaceDifferentialQuality(
              ++local) {
             localByGlobal.emplace(patch.vertexIndices[local], local);
         }
+        std::vector<int> triangleOrientations;
+        std::string orientationMessage;
+        if (!orientPatchTriangles(
+                layoutCarrier,
+                patch,
+                triangleOrientations,
+                orientationMessage)) {
+            reject(legality, "NonOrientableUvTriangleMesh");
+            continue;
+        }
         std::vector<double> signedAreas;
         for (const auto triangleIndex : patch.triangleIndices) {
             if (triangleIndex >= layoutCarrier.triangles.size()) continue;
@@ -327,8 +461,10 @@ SurfaceDifferentialQualityReport evaluateSurfaceDifferentialQuality(
             const auto& b = parameters[local[1]];
             const auto& c = parameters[local[2]];
             signedAreas.push_back(
-                (b[0] - a[0]) * (c[1] - a[1]) -
-                (b[1] - a[1]) * (c[0] - a[0]));
+                static_cast<double>(
+                    triangleOrientations[triangleIndex]) *
+                ((b[0] - a[0]) * (c[1] - a[1]) -
+                    (b[1] - a[1]) * (c[0] - a[0])));
         }
         const auto positive = std::count_if(
             signedAreas.begin(), signedAreas.end(),

@@ -845,6 +845,16 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         ? "Rejected"
         : result.fittedNetwork->quality.legality
             .rejectionReasons.front();
+    result.report.fittedUvTopologyStatus =
+        classifySurfaceUvTopology(
+            result.fittedNetwork->quality.legality);
+    result.report.fittedUvTopologyGatePassed =
+        result.report.fittedUvTopologyStatus == "Passed";
+    result.report.fittedSupportJacobianStatus =
+        classifySurfaceJacobianLegality(
+            result.fittedNetwork->quality.legality);
+    result.report.fittedSupportJacobianGatePassed =
+        result.report.fittedSupportJacobianStatus == "Passed";
     const auto fittedCurveNetwork = std::find_if(
         fitCurveNetworks.begin(),
         fitCurveNetworks.end(),
@@ -864,6 +874,8 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     }
     result.selectedCurveNetwork =
         std::make_shared<RegionCurveNetwork>(*fittedCurveNetwork);
+    result.report.seamParameterSemantic =
+        "SharedEdgeParameter";
     result.report.selectedCurveNetworkHash =
         result.selectedCurveNetwork->hash;
     const auto& fittedCurveReport = result.selectedCurveNetwork->report;
@@ -946,6 +958,41 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         *result.selectedCurveNetwork,
         request.options.curveOnSurfaceTolerance,
         true);
+    result.report.validatorConsistencyStatus =
+        classifyRegionValidatorConsistency(
+            result.fittedNetwork->seamMaximumDistance,
+            nativeBuild.edgeConsistency,
+            request.options.curveOnSurfaceTolerance);
+    const auto orientationFailure = std::find_if(
+        nativeBuild.brepCheckStatuses.begin(),
+        nativeBuild.brepCheckStatuses.end(),
+        [](const auto& status) {
+            return (status.shapeKind == "Face" ||
+                    status.shapeKind == "Wire") &&
+                (status.status == "BadOrientation" ||
+                    status.status == "BadOrientationOfSubshape" ||
+                    status.status == "UnorientableShape");
+        });
+    if (nativeBuild.brepCheckStatuses.empty()) {
+        result.report.fittedFaceWireOrientationStatus =
+            "NotEvaluated";
+        result.report.fittedFaceWireOrientationGatePassed =
+            false;
+    } else if (orientationFailure !=
+        nativeBuild.brepCheckStatuses.end()) {
+        result.report.fittedFaceWireOrientationStatus =
+            orientationFailure->status;
+        result.report.fittedFaceWireOrientationGatePassed =
+            false;
+    } else {
+        result.report.fittedFaceWireOrientationStatus =
+            "Passed";
+        result.report.fittedFaceWireOrientationGatePassed =
+            true;
+    }
+    const auto validatorsConsistent =
+        result.report.validatorConsistencyStatus !=
+        "ValidatorInconsistent";
     if (nativeBuild.constructible()) {
         result.replacementQuilt = nativeBuild.replacementShape;
     }
@@ -963,10 +1010,13 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto retrimEnded = std::chrono::steady_clock::now();
     RegionRefitStageReport retrimStage;
     retrimStage.stage = RegionRefitStage::Retrim;
-    retrimStage.success = nativeBuild.success() && boundary.valid && assembly.success;
+    retrimStage.success = nativeBuild.success() &&
+        validatorsConsistent && boundary.valid && assembly.success;
     retrimStage.wallMilliseconds = std::chrono::duration<double, std::milli>(
         retrimEnded - retrimStarted).count();
-    retrimStage.message = !nativeBuild.success()
+    retrimStage.message = !validatorsConsistent
+        ? "ValidatorInconsistent: fitted and B-rep seam validators disagree under the shared Edge parameter."
+        : !nativeBuild.success()
         ? nativeBuild.message
         : (!boundary.valid ? boundary.message : assembly.message);
     const auto retrimMemoryExceeded = finishStageResources(
@@ -998,6 +1048,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     if (!nativeBuild.success() &&
         result.report.firstProductFailureGate.empty()) {
         result.report.firstProductFailureGate = "Retrim";
+    } else if (!validatorsConsistent &&
+        result.report.firstProductFailureGate.empty()) {
+        result.report.firstProductFailureGate =
+            "ValidatorConsistency";
     }
     const auto retrimConstructed = nativeBuild.constructible() && boundary.valid && assembly.success &&
         !assembly.shape.IsNull();

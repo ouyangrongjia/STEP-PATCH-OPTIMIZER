@@ -1126,6 +1126,16 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
     assert(internal->actualFaceUseCount == 2);
     assert(internal->sameRange);
     assert(internal->sameParameter);
+    assert(internal->parameterSemantic == "SharedEdgeParameter");
+    assert(internal->commonParameterSampleCount == 257);
+    assert(internal->commonFirstParameter <=
+        internal->commonLastParameter);
+    assert(std::isfinite(internal->minimumFirstDerivativeScaleRatio));
+    assert(std::isfinite(internal->maximumFirstDerivativeScaleRatio));
+    assert(std::isfinite(internal->minimumSecondDerivativeScaleRatio));
+    assert(std::isfinite(internal->maximumSecondDerivativeScaleRatio));
+    assert(std::isfinite(internal->minimumAdjacentDerivativeScaleRatio));
+    assert(std::isfinite(internal->maximumAdjacentDerivativeScaleRatio));
     assert(internal->curveOnSurfaceMaximumDeviation <=
         options.curveOnSurfaceTolerance);
     for (const auto& face : built.replacementFaces) {

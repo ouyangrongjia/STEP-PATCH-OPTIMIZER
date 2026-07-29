@@ -442,6 +442,73 @@ void test_edge_consistency_classifies_geometry_and_display_cracks() {
 
     report.triangulationPolylineSeparations.assign(3, 0.0);
     assert(spo::classifyRegionEdgeConsistency(report, 0.001) == "Passed");
+
+    report.internalSeam = true;
+    report.parameterSemantic = "SharedEdgeParameter";
+    report.commonParameterSampleCount = 257;
+    assert(spo::classifyRegionValidatorConsistency(
+        4.96138,
+        std::vector<spo::RegionEdgeConsistencyReport> {report},
+        0.001) == "ValidatorInconsistent");
+    assert(spo::classifyRegionValidatorConsistency(
+        1.0e-14,
+        std::vector<spo::RegionEdgeConsistencyReport> {report},
+        0.001) == "Consistent");
+    report.parameterSemantic = "LegacyMeshVertexPair";
+    assert(spo::classifyRegionValidatorConsistency(
+        1.0e-14,
+        std::vector<spo::RegionEdgeConsistencyReport> {report},
+        0.001) == "ValidatorInconsistent");
+}
+
+void test_surface_legality_states_are_independent() {
+    spo::SurfaceLegalityReport legality;
+    assert(spo::classifySurfaceUvTopology(legality) == "Passed");
+    assert(spo::classifySurfaceJacobianLegality(legality) == "Passed");
+
+    legality.uvFlippedTriangleCount = 7;
+    assert(spo::classifySurfaceUvTopology(legality) ==
+        "FlippedUvTriangle");
+    assert(spo::classifySurfaceJacobianLegality(legality) == "Passed");
+
+    legality.jacobianOrientationFlipCount = 3;
+    assert(spo::classifySurfaceUvTopology(legality) ==
+        "FlippedUvTriangle");
+    assert(spo::classifySurfaceJacobianLegality(legality) ==
+        "SurfaceOrientationFlip");
+}
+
+void test_parameter_quality_uses_topological_triangle_orientation() {
+    auto mesh = makePlanarFitMesh(1);
+    std::swap(
+        mesh.triangles[1].vertices[1],
+        mesh.triangles[1].vertices[2]);
+    spo::RegionPatchParameterization patch;
+    patch.triangleIndices = {0, 1};
+    std::vector<int> orientations;
+    std::string message;
+    assert(spo::orientPatchTriangles(
+        mesh, patch, orientations, message));
+    assert(orientations[0] == 1);
+    assert(orientations[1] == -1);
+
+    const std::array<std::array<double, 2>, 4> uv {{
+        {0.0, 0.0},
+        {1.0, 0.0},
+        {0.0, 1.0},
+        {1.0, 1.0}}};
+    for (const auto triangleIndex : patch.triangleIndices) {
+        const auto& triangle = mesh.triangles[triangleIndex];
+        const auto& a = uv[triangle.vertices[0]];
+        const auto& b = uv[triangle.vertices[1]];
+        const auto& c = uv[triangle.vertices[2]];
+        const auto orientedArea =
+            static_cast<double>(
+                orientations[triangleIndex]) *
+            ((b[0] - a[0]) * (c[1] - a[1]) -
+                (b[1] - a[1]) * (c[0] - a[0]));
+        assert(orientedArea > 0.0);
+    }
 }
 
 void test_area_weighting_is_invariant_to_planar_sampling_density() {
@@ -686,6 +753,8 @@ void run_region_refit_fitting_tests() {
     test_joint_fitter_honors_expired_deadline();
     test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails();
     test_edge_consistency_classifies_geometry_and_display_cracks();
+    test_surface_legality_states_are_independent();
+    test_parameter_quality_uses_topological_triangle_orientation();
     test_area_weighting_is_invariant_to_planar_sampling_density();
     test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit();
 }

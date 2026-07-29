@@ -33,6 +33,7 @@
 #include <TopoDS_Vertex.hxx>
 #include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
+#include <gp_Vec2d.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -412,6 +413,9 @@ std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
         report.multipleEdge = report.actualFaceUseCount > report.expectedFaceUseCount;
         report.sameRange = BRep_Tool::SameRange(group.edge);
         report.sameParameter = BRep_Tool::SameParameter(group.edge);
+        report.parameterSemantic = group.internal
+            ? "SharedEdgeParameter"
+            : "EdgeParameter";
 
         double curveFirst = 0.0;
         double curveLast = 0.0;
@@ -458,18 +462,38 @@ std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
                 group.edge, group.faces[1], firstParameters[1], lastParameters[1]);
             const auto firstSurface = BRep_Tool::Surface(group.faces[0]);
             const auto secondSurface = BRep_Tool::Surface(group.faces[1]);
-            if (!firstPcurve.IsNull() && !secondPcurve.IsNull() &&
+            if (!curve.IsNull() &&
+                !firstPcurve.IsNull() && !secondPcurve.IsNull() &&
                 !firstSurface.IsNull() && !secondSurface.IsNull()) {
-                const auto first = std::max(
+                const auto first = std::max({
+                    std::min(curveFirst, curveLast),
                     std::min(firstParameters[0], lastParameters[0]),
-                    std::min(firstParameters[1], lastParameters[1]));
-                const auto last = std::min(
+                    std::min(firstParameters[1], lastParameters[1])});
+                const auto last = std::min({
+                    std::max(curveFirst, curveLast),
                     std::max(firstParameters[0], lastParameters[0]),
-                    std::max(firstParameters[1], lastParameters[1]));
+                    std::max(firstParameters[1], lastParameters[1])});
+                report.commonFirstParameter = first;
+                report.commonLastParameter = last;
+                report.minimumFirstDerivativeScaleRatio =
+                    std::numeric_limits<double>::infinity();
+                report.minimumSecondDerivativeScaleRatio =
+                    std::numeric_limits<double>::infinity();
+                report.minimumAdjacentDerivativeScaleRatio =
+                    std::numeric_limits<double>::infinity();
                 for (int sample = 0; sample < 257 && last >= first; ++sample) {
                     const auto parameter = first + (last - first) * static_cast<double>(sample) / 256.0;
-                    const auto firstUv = firstPcurve->Value(parameter);
-                    const auto secondUv = secondPcurve->Value(parameter);
+                    gp_Pnt curvePoint;
+                    gp_Vec curveDerivative;
+                    curve->D1(parameter, curvePoint, curveDerivative);
+                    gp_Pnt2d firstUv;
+                    gp_Pnt2d secondUv;
+                    gp_Vec2d firstPcurveDerivative;
+                    gp_Vec2d secondPcurveDerivative;
+                    firstPcurve->D1(
+                        parameter, firstUv, firstPcurveDerivative);
+                    secondPcurve->D1(
+                        parameter, secondUv, secondPcurveDerivative);
                     gp_Pnt firstPoint;
                     gp_Pnt secondPoint;
                     gp_Vec firstDu;
@@ -478,17 +502,89 @@ std::vector<RegionEdgeConsistencyReport> measureEdgeConsistency(
                     gp_Vec secondDv;
                     firstSurface->D1(firstUv.X(), firstUv.Y(), firstPoint, firstDu, firstDv);
                     secondSurface->D1(secondUv.X(), secondUv.Y(), secondPoint, secondDu, secondDv);
-                    report.adjacentSurfaceMaximumSeparation = std::max(
-                        report.adjacentSurfaceMaximumSeparation, firstPoint.Distance(secondPoint));
+                    ++report.commonParameterSampleCount;
+                    const auto firstDeviation =
+                        curvePoint.Distance(firstPoint);
+                    const auto secondDeviation =
+                        curvePoint.Distance(secondPoint);
+                    const auto separation =
+                        firstPoint.Distance(secondPoint);
+                    if (std::max(firstDeviation, secondDeviation) >
+                        report.curveOnSurfaceMaximumDeviation) {
+                        report.curveOnSurfaceMaximumDeviation =
+                            std::max(firstDeviation, secondDeviation);
+                        report.worstParameter = parameter;
+                    }
+                    if (separation >
+                        report.adjacentSurfaceMaximumSeparation) {
+                        report.adjacentSurfaceMaximumSeparation =
+                            separation;
+                        report.worstSeparationParameter = parameter;
+                    }
                     const auto firstNormal = firstDu.Crossed(firstDv);
                     const auto secondNormal = secondDu.Crossed(secondDv);
                     if (firstNormal.SquareMagnitude() > 1.0e-24 && secondNormal.SquareMagnitude() > 1.0e-24) {
                         const auto dot = std::clamp(
                             std::abs(gp_Dir(firstNormal).Dot(gp_Dir(secondNormal))), 0.0, 1.0);
-                        report.adjacentSurfaceMaximumNormalDegrees = std::max(
-                            report.adjacentSurfaceMaximumNormalDegrees,
-                            std::acos(dot) * 180.0 / 3.14159265358979323846);
+                        const auto normalDegrees =
+                            std::acos(dot) * 180.0 /
+                            3.14159265358979323846;
+                        if (normalDegrees >
+                            report.adjacentSurfaceMaximumNormalDegrees) {
+                            report.adjacentSurfaceMaximumNormalDegrees =
+                                normalDegrees;
+                            report.worstNormalParameter = parameter;
+                        }
                     }
+                    const auto firstTangent =
+                        firstDu.Multiplied(firstPcurveDerivative.X()) +
+                        firstDv.Multiplied(firstPcurveDerivative.Y());
+                    const auto secondTangent =
+                        secondDu.Multiplied(secondPcurveDerivative.X()) +
+                        secondDv.Multiplied(secondPcurveDerivative.Y());
+                    const auto curveMagnitude = curveDerivative.Magnitude();
+                    const auto firstMagnitude = firstTangent.Magnitude();
+                    const auto secondMagnitude = secondTangent.Magnitude();
+                    if (curveMagnitude > 1.0e-12 &&
+                        firstMagnitude > 1.0e-12 &&
+                        secondMagnitude > 1.0e-12) {
+                        const auto firstScale =
+                            firstMagnitude / curveMagnitude;
+                        const auto secondScale =
+                            secondMagnitude / curveMagnitude;
+                        const auto adjacentScale = std::max(
+                            firstMagnitude / secondMagnitude,
+                            secondMagnitude / firstMagnitude);
+                        report.minimumFirstDerivativeScaleRatio =
+                            std::min(
+                                report.minimumFirstDerivativeScaleRatio,
+                                firstScale);
+                        report.maximumFirstDerivativeScaleRatio =
+                            std::max(
+                                report.maximumFirstDerivativeScaleRatio,
+                                firstScale);
+                        report.minimumSecondDerivativeScaleRatio =
+                            std::min(
+                                report.minimumSecondDerivativeScaleRatio,
+                                secondScale);
+                        report.maximumSecondDerivativeScaleRatio =
+                            std::max(
+                                report.maximumSecondDerivativeScaleRatio,
+                                secondScale);
+                        report.minimumAdjacentDerivativeScaleRatio =
+                            std::min(
+                                report.minimumAdjacentDerivativeScaleRatio,
+                                adjacentScale);
+                        report.maximumAdjacentDerivativeScaleRatio =
+                            std::max(
+                                report.maximumAdjacentDerivativeScaleRatio,
+                                adjacentScale);
+                    }
+                }
+                if (report.commonParameterSampleCount == 0) {
+                    report.minimumFirstDerivativeScaleRatio = 0.0;
+                    report.minimumSecondDerivativeScaleRatio = 0.0;
+                    report.minimumAdjacentDerivativeScaleRatio = 0.0;
                 }
             }
         }

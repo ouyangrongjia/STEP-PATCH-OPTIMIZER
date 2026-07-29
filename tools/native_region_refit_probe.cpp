@@ -10,6 +10,7 @@
 #include "reduction/region_refit/RegionPatchLayout.h"
 #include "reduction/region_refit/RegionReferenceMesh.h"
 #include "reduction/region_refit/RegionalSurfaceRefitEngine.h"
+#include "reduction/region_refit/SurfaceDifferentialQuality.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -25,15 +26,20 @@
 #include <QThread>
 #include <Standard_Failure.hxx>
 #include <TopoDS_Compound.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -94,12 +100,28 @@ QJsonArray surfaceComplexitiesToJson(
     const std::vector<spo::RegionSurfaceComplexityReport>& surfaces) {
     QJsonArray result;
     for (const auto& surface : surfaces) {
+        const auto poleAspectRatio =
+            std::min(surface.uPoleCount, surface.vPoleCount) > 0
+            ? static_cast<double>(
+                std::max(surface.uPoleCount, surface.vPoleCount)) /
+                static_cast<double>(
+                    std::min(surface.uPoleCount, surface.vPoleCount))
+            : 0.0;
+        const auto knotAspectRatio =
+            std::min(surface.uKnotCount, surface.vKnotCount) > 0
+            ? static_cast<double>(
+                std::max(surface.uKnotCount, surface.vKnotCount)) /
+                static_cast<double>(
+                    std::min(surface.uKnotCount, surface.vKnotCount))
+            : 0.0;
         result.append(QJsonObject {
             {"patch_index", surface.patchIndex},
             {"u_poles", surface.uPoleCount},
             {"v_poles", surface.vPoleCount},
             {"u_knots", surface.uKnotCount},
-            {"v_knots", surface.vKnotCount}});
+            {"v_knots", surface.vKnotCount},
+            {"pole_aspect_ratio", poleAspectRatio},
+            {"knot_aspect_ratio", knotAspectRatio}});
     }
     return result;
 }
@@ -503,6 +525,281 @@ TopoDS_Shape curveNetworkShape(const spo::RegionCurveNetwork& network) {
     }
 }
 
+double diagnosticTriangleQuality(
+    const gp_Pnt& first,
+    const gp_Pnt& second,
+    const gp_Pnt& third) {
+    const auto area = gp_Vec(first, second).Crossed(
+        gp_Vec(first, third));
+    const auto maximumEdgeSquared = std::max({
+        first.SquareDistance(second),
+        second.SquareDistance(third),
+        third.SquareDistance(first)});
+    return maximumEdgeSquared > 1.0e-24
+        ? area.Magnitude() / maximumEdgeSquared
+        : 0.0;
+}
+
+double diagnosticSignedArea(
+    const std::array<double, 2>& first,
+    const std::array<double, 2>& second,
+    const std::array<double, 2>& third) {
+    return (second[0] - first[0]) *
+            (third[1] - first[1]) -
+        (second[1] - first[1]) *
+            (third[0] - first[0]);
+}
+
+QJsonValue finiteDiagnosticValue(const double value) {
+    return std::isfinite(value)
+        ? QJsonValue(value)
+        : QJsonValue(QStringLiteral("Infinity"));
+}
+
+QJsonObject parameterQualityEvidenceToJson(
+    const spo::RegionRefitResult& result) {
+    if (!result.layoutCarrierMesh || !result.selectedLayout) {
+        return {
+            {"status", "NotEvaluated"},
+            {"parameter_semantic", "SurfaceParameters"}};
+    }
+    struct TriangleEvidence {
+        int patch = -1;
+        std::size_t triangle = 0;
+        double signedUvArea = 0.0;
+        double distortion =
+            std::numeric_limits<double>::infinity();
+        std::array<double, 2> uvCentroid {};
+        std::array<double, 3> spatialCentroid {};
+        bool flipped = false;
+        bool degenerate = false;
+    };
+    const auto& mesh = *result.layoutCarrierMesh;
+    const auto& layout = *result.selectedLayout;
+    std::vector<TriangleEvidence> evidence;
+    auto flipCount = 0;
+    auto degenerateCount = 0;
+    auto maximumDistortion = -1.0;
+    std::size_t maximumDistortionEvidence = 0;
+    for (std::size_t patchIndex = 0;
+         patchIndex < layout.patches.size();
+         ++patchIndex) {
+        const auto& patch = layout.patches[patchIndex];
+        if (patch.surfaceParameters.size() !=
+            patch.vertexIndices.size()) {
+            continue;
+        }
+        std::unordered_map<std::size_t, std::size_t>
+            localByGlobal;
+        localByGlobal.reserve(patch.vertexIndices.size());
+        for (std::size_t local = 0;
+             local < patch.vertexIndices.size();
+             ++local) {
+            localByGlobal.emplace(
+                patch.vertexIndices[local], local);
+        }
+        const auto evidenceBegin = evidence.size();
+        auto positive = 0;
+        auto negative = 0;
+        std::vector<int> triangleOrientations;
+        std::string orientationMessage;
+        if (!spo::orientPatchTriangles(
+                mesh,
+                patch,
+                triangleOrientations,
+                orientationMessage)) {
+            return {
+                {"status", "ValidatorInconsistent"},
+                {"parameter_semantic", "SurfaceParameters"},
+                {"message",
+                    QString::fromStdString(
+                        orientationMessage)}};
+        }
+        for (const auto triangleIndex :
+             patch.triangleIndices) {
+            if (triangleIndex >= mesh.triangles.size()) {
+                continue;
+            }
+            const auto& triangle =
+                mesh.triangles[triangleIndex];
+            const auto first = localByGlobal.find(
+                triangle.vertices[0]);
+            const auto second = localByGlobal.find(
+                triangle.vertices[1]);
+            const auto third = localByGlobal.find(
+                triangle.vertices[2]);
+            if (first == localByGlobal.end() ||
+                second == localByGlobal.end() ||
+                third == localByGlobal.end()) {
+                continue;
+            }
+            const auto& firstUv =
+                patch.surfaceParameters[first->second];
+            const auto& secondUv =
+                patch.surfaceParameters[second->second];
+            const auto& thirdUv =
+                patch.surfaceParameters[third->second];
+            TriangleEvidence item;
+            item.patch = static_cast<int>(patchIndex);
+            item.triangle = triangleIndex;
+            item.signedUvArea =
+                static_cast<double>(
+                    triangleOrientations[triangleIndex]) *
+                diagnosticSignedArea(
+                    firstUv, secondUv, thirdUv);
+            if (item.signedUvArea > 1.0e-14) {
+                ++positive;
+            } else if (item.signedUvArea < -1.0e-14) {
+                ++negative;
+            } else {
+                item.degenerate = true;
+                ++degenerateCount;
+            }
+            item.uvCentroid = {
+                (firstUv[0] + secondUv[0] +
+                    thirdUv[0]) / 3.0,
+                (firstUv[1] + secondUv[1] +
+                    thirdUv[1]) / 3.0};
+            const auto& firstPoint =
+                mesh.vertices[triangle.vertices[0]].point;
+            const auto& secondPoint =
+                mesh.vertices[triangle.vertices[1]].point;
+            const auto& thirdPoint =
+                mesh.vertices[triangle.vertices[2]].point;
+            item.spatialCentroid = {
+                (firstPoint.X() + secondPoint.X() +
+                    thirdPoint.X()) / 3.0,
+                (firstPoint.Y() + secondPoint.Y() +
+                    thirdPoint.Y()) / 3.0,
+                (firstPoint.Z() + secondPoint.Z() +
+                    thirdPoint.Z()) / 3.0};
+            const auto quality3d =
+                diagnosticTriangleQuality(
+                    firstPoint,
+                    secondPoint,
+                    thirdPoint);
+            const auto quality2d =
+                diagnosticTriangleQuality(
+                    gp_Pnt(
+                        firstUv[0], firstUv[1], 0.0),
+                    gp_Pnt(
+                        secondUv[0], secondUv[1], 0.0),
+                    gp_Pnt(
+                        thirdUv[0], thirdUv[1], 0.0));
+            item.distortion =
+                quality3d > 1.0e-14 &&
+                    quality2d > 1.0e-14
+                ? std::max(
+                    quality3d / quality2d,
+                    quality2d / quality3d)
+                : std::numeric_limits<double>::infinity();
+            evidence.push_back(item);
+            if (!std::isfinite(item.distortion) ||
+                item.distortion > maximumDistortion) {
+                maximumDistortion = item.distortion;
+                maximumDistortionEvidence =
+                    evidence.size() - 1;
+            }
+        }
+        const auto majorityPositive = positive >= negative;
+        for (std::size_t index = evidenceBegin;
+             index < evidence.size();
+             ++index) {
+            auto& item = evidence[index];
+            item.flipped = !item.degenerate &&
+                ((item.signedUvArea > 0.0) !=
+                    majorityPositive);
+            if (item.flipped) ++flipCount;
+        }
+    }
+
+    QJsonArray heatmap;
+    QJsonArray flippedLocations;
+    const auto heatDenominator =
+        std::isfinite(maximumDistortion) &&
+            maximumDistortion > 0.0
+        ? std::log1p(maximumDistortion)
+        : 0.0;
+    for (const auto& item : evidence) {
+        const auto normalizedHeat =
+            std::isfinite(item.distortion) &&
+                heatDenominator > 0.0
+            ? std::clamp(
+                std::log1p(item.distortion) /
+                    heatDenominator,
+                0.0,
+                1.0)
+            : 1.0;
+        const QJsonObject json {
+            {"patch_index", item.patch},
+            {"triangle_index",
+                QString::number(item.triangle)},
+            {"signed_uv_area", item.signedUvArea},
+            {"distortion",
+                finiteDiagnosticValue(item.distortion)},
+            {"normalized_heat", normalizedHeat},
+            {"uv_centroid", QJsonArray {
+                item.uvCentroid[0],
+                item.uvCentroid[1]}},
+            {"spatial_centroid_mm", QJsonArray {
+                item.spatialCentroid[0],
+                item.spatialCentroid[1],
+                item.spatialCentroid[2]}},
+            {"classification",
+                item.degenerate
+                ? "DegenerateUvTriangle"
+                : item.flipped
+                ? "FlippedUvTriangle"
+                : "Passed"}};
+        heatmap.append(json);
+        if (item.flipped) {
+            flippedLocations.append(json);
+        }
+    }
+    QJsonObject maximumTriangle;
+    if (!evidence.empty()) {
+        const auto& item =
+            evidence[maximumDistortionEvidence];
+        maximumTriangle = {
+            {"patch_index", item.patch},
+            {"triangle_index",
+                QString::number(item.triangle)},
+            {"signed_uv_area", item.signedUvArea},
+            {"distortion",
+                finiteDiagnosticValue(item.distortion)},
+            {"uv_centroid", QJsonArray {
+                item.uvCentroid[0],
+                item.uvCentroid[1]}},
+            {"spatial_centroid_mm", QJsonArray {
+                item.spatialCentroid[0],
+                item.spatialCentroid[1],
+                item.spatialCentroid[2]}}};
+    }
+    const auto status =
+        flipCount > 0 && degenerateCount > 0
+        ? "FlippedAndDegenerateUvTriangle"
+        : flipCount > 0
+        ? "FlippedUvTriangle"
+        : degenerateCount > 0
+        ? "DegenerateUvTriangle"
+        : "Passed";
+    return {
+        {"status", status},
+        {"parameter_semantic", "SurfaceParameters"},
+        {"flipped_triangle_count", flipCount},
+        {"degenerate_triangle_count", degenerateCount},
+        {"reported_fitted_flipped_triangle_count",
+            result.report
+                .fittedSurfaceUvFlippedTriangleCount},
+        {"flip_count_matches_fitted_report",
+            flipCount ==
+                result.report
+                    .fittedSurfaceUvFlippedTriangleCount},
+        {"maximum_distortion_triangle", maximumTriangle},
+        {"uv_flip_locations", flippedLocations},
+        {"spatial_distortion_heatmap", heatmap}};
+}
+
 QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
     QJsonArray candidates;
     for (const auto& candidate : result.report.layoutCandidates) {
@@ -559,6 +856,8 @@ QJsonObject layoutReportToJson(const spo::RegionRefitResult& result) {
         {"selected_layout_hash", QString::fromStdString(result.report.selectedLayoutHash)},
         {"diagnostic_candidate_patch_count", result.report.diagnosticCandidatePatchCount},
         {"diagnostic_selection_reason", QString::fromStdString(result.report.diagnosticSelectionReason)},
+        {"parameter_quality_evidence",
+            parameterQualityEvidenceToJson(result)},
         {"candidates", candidates}};
 }
 
@@ -804,6 +1103,24 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 {"surface_legality_status",
                     QString::fromStdString(
                         iteration.surfaceLegalityStatus)},
+                {"surface_uv_topology_status",
+                    iteration.surfaceUvFlippedTriangleCount > 0 &&
+                            iteration.surfaceUvDegenerateTriangleCount > 0
+                        ? "FlippedAndDegenerateUvTriangle"
+                        : iteration.surfaceUvFlippedTriangleCount > 0
+                        ? "FlippedUvTriangle"
+                        : iteration.surfaceUvDegenerateTriangleCount > 0
+                        ? "DegenerateUvTriangle"
+                        : "Passed"},
+                {"surface_jacobian_status",
+                    iteration.surfaceJacobianOrientationFlipCount > 0 &&
+                            iteration.surfaceJacobianDegenerateSampleCount > 0
+                        ? "SurfaceOrientationFlipAndDegenerateJacobian"
+                        : iteration.surfaceJacobianOrientationFlipCount > 0
+                        ? "SurfaceOrientationFlip"
+                        : iteration.surfaceJacobianDegenerateSampleCount > 0
+                        ? "DegenerateSurfaceJacobian"
+                        : "Passed"},
                 {"wall_ms", iteration.wallMilliseconds},
                 {"stop_reason", QString::fromStdString(iteration.stopReason)}});
         }
@@ -891,6 +1208,27 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
         {"surface_legality_status",
             QString::fromStdString(
                 result.report.fittedSurfaceLegalityStatus)},
+        {"surface_uv_topology_gate_passed",
+            result.report.fittedUvTopologyGatePassed},
+        {"surface_uv_topology_status",
+            QString::fromStdString(
+                result.report.fittedUvTopologyStatus)},
+        {"support_surface_jacobian_gate_passed",
+            result.report.fittedSupportJacobianGatePassed},
+        {"support_surface_jacobian_status",
+            QString::fromStdString(
+                result.report.fittedSupportJacobianStatus)},
+        {"face_wire_orientation_gate_passed",
+            result.report.fittedFaceWireOrientationGatePassed},
+        {"face_wire_orientation_status",
+            QString::fromStdString(
+                result.report.fittedFaceWireOrientationStatus)},
+        {"seam_parameter_semantic",
+            QString::fromStdString(
+                result.report.seamParameterSemantic)},
+        {"validator_consistency_status",
+            QString::fromStdString(
+                result.report.validatorConsistencyStatus)},
         {"best_effort_used", result.report.bestEffortUsed},
         {"force_diagnostic_sewing_requested", result.report.forceDiagnosticSewingRequested},
         {"force_diagnostic_sewing_attempted", result.report.forceDiagnosticSewingAttempted},
@@ -942,6 +1280,14 @@ QJsonObject retrimReportToJson(const spo::RegionRefitResult& result) {
             result.report.unexpectedFaceIntersectionTotalLength},
         {"replacement_quilt_internal_free_edge_count",
             result.report.replacementQuiltInternalFreeEdgeCount},
+        {"face_wire_orientation_gate_passed",
+            result.report.fittedFaceWireOrientationGatePassed},
+        {"face_wire_orientation_status",
+            QString::fromStdString(
+                result.report.fittedFaceWireOrientationStatus)},
+        {"validator_consistency_status",
+            QString::fromStdString(
+                result.report.validatorConsistencyStatus)},
         {"brep_check_statuses", brepCheckStatuses},
         {"assembly_passed", result.report.assemblyPassed}};
 }
@@ -971,13 +1317,44 @@ QJsonObject edgeConsistencyToJson(
             {"adjacent_surface_maximum_separation", edge.adjacentSurfaceMaximumSeparation},
             {"adjacent_surface_maximum_normal_degrees", edge.adjacentSurfaceMaximumNormalDegrees},
             {"worst_parameter", edge.worstParameter},
+            {"parameter_semantic",
+                QString::fromStdString(
+                    edge.parameterSemantic)},
+            {"common_parameter_sample_count",
+                edge.commonParameterSampleCount},
+            {"common_first_parameter",
+                edge.commonFirstParameter},
+            {"common_last_parameter",
+                edge.commonLastParameter},
+            {"worst_separation_parameter",
+                edge.worstSeparationParameter},
+            {"worst_normal_parameter",
+                edge.worstNormalParameter},
+            {"minimum_first_derivative_scale_ratio",
+                edge.minimumFirstDerivativeScaleRatio},
+            {"maximum_first_derivative_scale_ratio",
+                edge.maximumFirstDerivativeScaleRatio},
+            {"minimum_second_derivative_scale_ratio",
+                edge.minimumSecondDerivativeScaleRatio},
+            {"maximum_second_derivative_scale_ratio",
+                edge.maximumSecondDerivativeScaleRatio},
+            {"minimum_adjacent_derivative_scale_ratio",
+                edge.minimumAdjacentDerivativeScaleRatio},
+            {"maximum_adjacent_derivative_scale_ratio",
+                edge.maximumAdjacentDerivativeScaleRatio},
             {"triangulation_deflections", deflections},
             {"triangulation_polyline_separations", separations},
             {"classification", QString::fromStdString(edge.classification)}});
     }
     return {
-        {"schema_version", 1},
+        {"schema_version", 2},
         {"curve_on_surface_tolerance", curveOnSurfaceTolerance},
+        {"fit_seam_parameter_semantic",
+            QString::fromStdString(
+                result.report.seamParameterSemantic)},
+        {"validator_consistency_status",
+            QString::fromStdString(
+                result.report.validatorConsistencyStatus)},
         {"edges", edges}};
 }
 
@@ -1258,6 +1635,27 @@ QJsonObject performanceToJson(
         {"first_product_failure_gate", QString::fromStdString(result.report.firstProductFailureGate)},
         {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
+        {"surface_uv_topology_gate_passed",
+            result.report.fittedUvTopologyGatePassed},
+        {"surface_uv_topology_status",
+            QString::fromStdString(
+                result.report.fittedUvTopologyStatus)},
+        {"support_surface_jacobian_gate_passed",
+            result.report.fittedSupportJacobianGatePassed},
+        {"support_surface_jacobian_status",
+            QString::fromStdString(
+                result.report.fittedSupportJacobianStatus)},
+        {"face_wire_orientation_gate_passed",
+            result.report.fittedFaceWireOrientationGatePassed},
+        {"face_wire_orientation_status",
+            QString::fromStdString(
+                result.report.fittedFaceWireOrientationStatus)},
+        {"seam_parameter_semantic",
+            QString::fromStdString(
+                result.report.seamParameterSemantic)},
+        {"validator_consistency_status",
+            QString::fromStdString(
+                result.report.validatorConsistencyStatus)},
         {"best_effort_used", result.report.bestEffortUsed},
         {"retrim_attempted", result.report.retrimAttempted},
         {"sewing_attempted", result.report.sewingAttempted},
@@ -1517,7 +1915,7 @@ int main(int argc, char* argv[]) {
     std::string commit;
     spo::RegionRefitRequest request;
     request.options.algorithmFingerprint =
-        "native-regional-refit-v43-parameter-quality-adaptive-support";
+        "native-regional-refit-v44-shared-edge-parameter-validator-gates";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -1665,7 +2063,7 @@ int main(int argc, char* argv[]) {
 
     if (!algorithmFingerprintSpecified) {
         request.options.algorithmFingerprint = std::string(
-            "native-regional-refit-v43-parameter-quality-adaptive-support-") +
+            "native-regional-refit-v44-shared-edge-parameter-validator-gates-") +
             spo::toString(request.options.fittingMode) + "-" +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +

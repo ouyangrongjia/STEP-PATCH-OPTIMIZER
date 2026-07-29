@@ -37,6 +37,18 @@ struct SurfaceDifferentialQualityReport {
     SurfaceLegalityReport legality;
 };
 
+std::string classifySurfaceUvTopology(
+    const SurfaceLegalityReport& report);
+
+std::string classifySurfaceJacobianLegality(
+    const SurfaceLegalityReport& report);
+
+bool orientPatchTriangles(
+    const RegionReferenceMesh& mesh,
+    const RegionPatchParameterization& patch,
+    std::vector<int>& orientations,
+    std::string& message);
+
 SurfaceDifferentialQualityReport evaluateSurfaceDifferentialQuality(
     const RegionReferenceMesh& layoutCarrier,
     const RegionPatchLayout& layout,

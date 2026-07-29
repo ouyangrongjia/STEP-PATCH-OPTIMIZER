@@ -26,6 +26,35 @@ std::string classifyRegionEdgeConsistency(
     return triangulationMismatch ? "TriangulationArtifact" : "Passed";
 }
 
+std::string classifyRegionValidatorConsistency(
+    const double fittedSeamMaximumDistance,
+    const std::vector<RegionEdgeConsistencyReport>& reports,
+    const double tolerance) {
+    auto foundInternalSeam = false;
+    auto brepMaximumSeparation = 0.0;
+    for (const auto& report : reports) {
+        if (!report.internalSeam) continue;
+        foundInternalSeam = true;
+        if (report.parameterSemantic != "SharedEdgeParameter" ||
+            report.commonParameterSampleCount <= 0) {
+            return "ValidatorInconsistent";
+        }
+        brepMaximumSeparation = std::max(
+            brepMaximumSeparation,
+            report.adjacentSurfaceMaximumSeparation);
+    }
+    if (!foundInternalSeam) return "NotEvaluated";
+    const auto fittedPassed =
+        std::isfinite(fittedSeamMaximumDistance) &&
+        fittedSeamMaximumDistance <= tolerance;
+    const auto brepPassed =
+        std::isfinite(brepMaximumSeparation) &&
+        brepMaximumSeparation <= tolerance;
+    return fittedPassed == brepPassed
+        ? "Consistent"
+        : "ValidatorInconsistent";
+}
+
 const char* toString(const RegionRefitLayoutMode mode) {
     switch (mode) {
     case RegionRefitLayoutMode::FixedPatchCount: return "FixedPatchCount";

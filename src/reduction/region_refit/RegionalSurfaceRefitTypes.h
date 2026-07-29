@@ -361,6 +361,18 @@ struct RegionEdgeConsistencyReport {
     double adjacentSurfaceMaximumSeparation = 0.0;
     double adjacentSurfaceMaximumNormalDegrees = 0.0;
     double worstParameter = 0.0;
+    std::string parameterSemantic = "NotEvaluated";
+    int commonParameterSampleCount = 0;
+    double commonFirstParameter = 0.0;
+    double commonLastParameter = 0.0;
+    double worstSeparationParameter = 0.0;
+    double worstNormalParameter = 0.0;
+    double minimumFirstDerivativeScaleRatio = 0.0;
+    double maximumFirstDerivativeScaleRatio = 0.0;
+    double minimumSecondDerivativeScaleRatio = 0.0;
+    double maximumSecondDerivativeScaleRatio = 0.0;
+    double minimumAdjacentDerivativeScaleRatio = 0.0;
+    double maximumAdjacentDerivativeScaleRatio = 0.0;
     std::vector<double> triangulationDeflections;
     std::vector<double> triangulationPolylineSeparations;
     std::string classification;
@@ -377,6 +389,11 @@ struct RegionBRepCheckStatusReport {
 
 std::string classifyRegionEdgeConsistency(
     const RegionEdgeConsistencyReport& report,
+    double tolerance);
+
+std::string classifyRegionValidatorConsistency(
+    double fittedSeamMaximumDistance,
+    const std::vector<RegionEdgeConsistencyReport>& reports,
     double tolerance);
 
 struct RegionRefitCacheEvent {
@@ -500,6 +517,14 @@ struct RegionRefitReport {
     int fittedSurfaceJacobianDegenerateSampleCount = 0;
     int fittedSurfaceJacobianOrientationFlipCount = 0;
     std::string fittedSurfaceLegalityStatus = "NotEvaluated";
+    bool fittedUvTopologyGatePassed = false;
+    std::string fittedUvTopologyStatus = "NotEvaluated";
+    bool fittedSupportJacobianGatePassed = false;
+    std::string fittedSupportJacobianStatus = "NotEvaluated";
+    bool fittedFaceWireOrientationGatePassed = false;
+    std::string fittedFaceWireOrientationStatus = "NotEvaluated";
+    std::string seamParameterSemantic = "NotEvaluated";
+    std::string validatorConsistencyStatus = "NotEvaluated";
     int originalTopologicalFaceCount = 0;
     int replacedTopologicalFaceCount = 0;
     int expectedWholeTopologicalFaceCount = 0;
