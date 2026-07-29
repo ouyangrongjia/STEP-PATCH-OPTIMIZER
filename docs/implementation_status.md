@@ -173,6 +173,8 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 四张裁剪 Face 的 38 次 `SameParameter` 检查仍为零失败，最大残差 `4.36e-14 mm`，Curve-on-Surface 最大偏差 `4.78e-14 mm`，内部自由边和意外交线均为 0。单 Shell 中两张 Face 报 `BadOrientationOfSubshape`，所以内存态 BRep 产品门仍失败；固定 `0.001 mm` 诊断缝合和 STEP 回读保持 1 个 Solid、0 条自由边、0 条多重边与有效 B-Rep。STEP 实体统计已恢复为非零：基线/候选 surface 为 2739/2694、edge curve 为 5478/5400。Creo 导入状态与评分为 `OK/PASS`，PRT 生成成功，ModelCHECK 未通过。最终仍为 `DiagnosticOnly`、`canApply=false`；水密实体不代表布局、拟合、复杂度或产品门通过。K=5/6/8 布局筛选均未在 900000 ms 预算和 30 秒硬退出宽限内完成，因此没有进入完整拟合，K=4 是唯一形成完整可比较证据的候选。
 
+当前可确认的能力边界仅是：该路线能够把边界锁定且可构造的四张替换面以固定 `0.001 mm` 容差缝合成水密实体，并完成 STEP 回读和 Creo 导入。替换曲面本身仍未达到可交付质量：实际参数域存在翻转和退化，正式公平求解未启动，距离、法向和内部接缝连续性超限，控制网最大单边 125 poles 且各向异性明显，光顺度和复杂度仍不足。Creo 中可见的密集参数线不是新增拓扑 Face 或 Edge，但其究竟由显示设置、曲面 knots/poles 密度还是参数化畸变主导，尚未完成隔离验证；在控制网简化、曲率/法向质量改善、异常密集参数线消除或明确归因为纯显示现象、两张 Face 的方向错误修复及 ModelCHECK 通过之前，本路线只能提供诊断产物，不能 Apply 或作为产品结果交付。
+
 ## 当前限制
 
 - MinimizeFaceCount 是预算搜索；除非达到可证明下界，否则不证明全局最优。
