@@ -784,7 +784,19 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find(
-        "native-regional-refit-v46-low-rank-boundary-violation-sewing") !=
+        "native-regional-refit-v48-stage1-closure-initialization") !=
+        std::string::npos);
+    assert(probe.find("closure_feasibility_prepass_entered") !=
+        std::string::npos);
+    assert(probe.find("closure_residual_vs_poles") !=
+        std::string::npos);
+    assert(probe.find("closure_routing_decision") !=
+        std::string::npos);
+    assert(probe.find("closure_initial_support_used") !=
+        std::string::npos);
+    assert(probe.find("--closure-initial-supports") !=
+        std::string::npos);
+    assert(script.find("ClosureInitialSupports") !=
         std::string::npos);
     assert(probe.find("independent_low_rank_support_attempted") !=
         std::string::npos);

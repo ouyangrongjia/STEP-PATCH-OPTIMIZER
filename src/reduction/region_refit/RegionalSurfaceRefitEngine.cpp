@@ -186,6 +186,8 @@ StepAdaptiveRegionSamplingResult remeshLayoutCarrier(
 RegionRefitResult RegionalSurfaceRefitEngine::run(
     const ShapeDocument& document,
     const RegionRefitRequest& request) const {
+    const auto engineStarted =
+        std::chrono::steady_clock::now();
     RegionRefitResult result;
     const auto recoveredSpecification =
         geomagicWrap2021MechanicalSpecification();
@@ -236,6 +238,9 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         request.options.maximumControlPointsPerSide < 6 ||
         request.options.initialControlPriorRelativeWeight <= 0.0 ||
         request.options.constraintCorrectionAnchorRelativeWeight <= 0.0 ||
+        (!request.closureInitialSupportSurfaces.empty() &&
+            request.options.cachePolicy !=
+                RegionRefitCachePolicy::Disabled) ||
         (request.layoutMode == RegionRefitLayoutMode::FixedPatchCount &&
             request.options.fixedPatchCount <= 0) ||
         (request.layoutMode == RegionRefitLayoutMode::TargetPatchCount &&
@@ -666,14 +671,38 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             fitted.status = RegionRefitStatus::TimeBudgetExceeded;
             fitted.message = "Insufficient wall-clock budget remains for fitting and reserved final validation.";
         } else {
+            const auto closureFeasibilityDeadline =
+                engineStarted +
+                std::chrono::milliseconds(
+                    request.options
+                        .maximumWallClockMilliseconds -
+                    reservedMilliseconds);
             fitted = JointBSplineNetworkFitter().fit(
                 *result.referenceMesh,
                 *result.layoutCarrierMesh,
                 result.constraints,
                 layouts.selectedCandidates,
                 fitCurveNetworks,
+                request.closureInitialSupportSurfaces,
                 request.options,
-                fittingStarted + std::chrono::milliseconds(fitBudgetMilliseconds));
+                fittingStarted +
+                    std::chrono::milliseconds(
+                        fitBudgetMilliseconds),
+                closureFeasibilityDeadline);
+            if (!request
+                    .closureInitialSupportProvenance
+                    .empty()) {
+                for (auto& attempt :
+                     fitted.attempts) {
+                    if (attempt
+                            .closureInitialSupportUsed) {
+                        attempt
+                            .closureInitialSupportProvenance =
+                            request
+                                .closureInitialSupportProvenance;
+                    }
+                }
+            }
             if (cache.enabled() && request.executionMode == RegionRefitExecutionMode::ValidatedOnly) {
                 const auto writeEvent = cache.saveFit(fitted);
                 fitCacheEvent.negativeEntry = writeEvent.negativeEntry;

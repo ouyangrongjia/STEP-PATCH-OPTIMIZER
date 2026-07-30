@@ -673,13 +673,35 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     fitOptions.curveOnSurfaceTolerance = 0.03;
     fitOptions.normalToleranceDegrees = 1.0;
     fitOptions.maximumFitIterations = 8;
-    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+    auto fitted = spo::JointBSplineNetworkFitter().fit(
         sampling.mesh,
         {},
         layouts.selectedCandidates,
         fitOptions,
         std::chrono::steady_clock::now() + std::chrono::seconds(10));
     assert(fitted.success());
+    auto& cachedAttempt = fitted.attempts.front();
+    cachedAttempt.closureFeasibilityPrepassEntered = true;
+    cachedAttempt.closureFeasibilityPassed = false;
+    cachedAttempt.closureInitialSupportUsed = true;
+    cachedAttempt.closureInitialSupportProvenance =
+        "CarryForwardFromStage1Artifact";
+    cachedAttempt.closureRoutingDecision = "Stage3";
+    auto& cachedIteration = cachedAttempt.iterations.front();
+    cachedIteration.closureFeasibilityPrepass = true;
+    cachedIteration.closureFeasibilityPassed = false;
+    cachedIteration.closureJacobianBarrierAcceptedScale = 0.375;
+    cachedIteration.closureResiduals.push_back({
+        2,
+        1,
+        7,
+        true,
+        11,
+        10,
+        0.0025,
+        0.0015,
+        0.625,
+        {0.25, 0.75}});
     cache.saveFit(fitted);
     spo::JointBSplineNetworkFitResult loadedFit;
     spo::RegionRefitCacheEvent fitRead;
@@ -699,6 +721,50 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
         fitted.network->fitOutcome);
     assert(loadedFit.attempts.front().resultProvenance ==
         fitted.attempts.front().resultProvenance);
+    assert(loadedFit.attempts.front()
+        .closureFeasibilityPrepassEntered);
+    assert(!loadedFit.attempts.front()
+        .closureFeasibilityPassed);
+    assert(loadedFit.attempts.front()
+        .closureInitialSupportUsed);
+    assert(loadedFit.attempts.front()
+        .closureInitialSupportProvenance ==
+        "CarryForwardFromStage1Artifact");
+    assert(loadedFit.attempts.front()
+        .closureRoutingDecision == "Stage3");
+    const auto& loadedClosureIteration =
+        loadedFit.attempts.front().iterations.front();
+    assert(loadedClosureIteration.closureFeasibilityPrepass);
+    assert(!loadedClosureIteration.closureFeasibilityPassed);
+    assert(std::abs(
+        loadedClosureIteration
+                .closureJacobianBarrierAcceptedScale -
+            0.375) <= 1.0e-15);
+    assert(loadedClosureIteration.closureResiduals.size() == 1);
+    const auto& loadedClosureResidual =
+        loadedClosureIteration.closureResiduals.front();
+    assert(loadedClosureResidual.round == 2);
+    assert(loadedClosureResidual.patchIndex == 1);
+    assert(loadedClosureResidual.edgeIndex == 7);
+    assert(loadedClosureResidual.internalSeam);
+    assert(loadedClosureResidual.uPoleCount == 11);
+    assert(loadedClosureResidual.vPoleCount == 10);
+    assert(std::abs(
+        loadedClosureResidual.maximumCurveOnSurfaceDeviation -
+            0.0025) <= 1.0e-15);
+    assert(std::abs(
+        loadedClosureResidual
+                .maximumAdjacentSurfaceSeparation -
+            0.0015) <= 1.0e-15);
+    assert(std::abs(
+        loadedClosureResidual.worstParameter - 0.625) <=
+        1.0e-15);
+    assert(std::abs(
+        loadedClosureResidual.worstUv[0] - 0.25) <=
+        1.0e-15);
+    assert(std::abs(
+        loadedClosureResidual.worstUv[1] - 0.75) <=
+        1.0e-15);
     assert(loadedFit.network->quality.totalPoleCount ==
         fitted.network->quality.totalPoleCount);
     assert(loadedFit.network->quality.maximumPoleCountPerSide ==

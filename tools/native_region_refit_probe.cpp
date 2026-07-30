@@ -14,6 +14,7 @@
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRep_Tool.hxx>
 #include <BRep_Builder.hxx>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -25,6 +26,10 @@
 #include <QTextStream>
 #include <QThread>
 #include <Standard_Failure.hxx>
+#include <TopAbs_ShapeEnum.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Vec.hxx>
 
@@ -1017,6 +1022,64 @@ QJsonArray lowRankSupportReportsToJson(
     return json;
 }
 
+QJsonArray closureResidualsToJson(
+    const std::vector<spo::RegionClosureResidualTrace>& traces) {
+    QJsonArray json;
+    for (const auto& trace : traces) {
+        json.append(QJsonObject {
+            {"round", trace.round},
+            {"patch_index", trace.patchIndex},
+            {"edge_index", trace.edgeIndex},
+            {"internal_seam", trace.internalSeam},
+            {"u_pole_count", trace.uPoleCount},
+            {"v_pole_count", trace.vPoleCount},
+            {"maximum_curve_on_surface_deviation_mm",
+                trace.maximumCurveOnSurfaceDeviation},
+            {"maximum_adjacent_surface_separation_mm",
+                trace.maximumAdjacentSurfaceSeparation},
+            {"worst_parameter_t", trace.worstParameter},
+            {"worst_uv",
+                QJsonArray {
+                    trace.worstUv[0],
+                    trace.worstUv[1]}}});
+    }
+    return json;
+}
+
+bool closureFeasibilityPrepassEntered(
+    const spo::RegionRefitReport& report) {
+    return std::any_of(
+        report.fitAttempts.begin(),
+        report.fitAttempts.end(),
+        [](const auto& attempt) {
+            return attempt.closureFeasibilityPrepassEntered;
+        });
+}
+
+bool closureFeasibilityPassed(
+    const spo::RegionRefitReport& report) {
+    return std::any_of(
+        report.fitAttempts.begin(),
+        report.fitAttempts.end(),
+        [](const auto& attempt) {
+            return attempt.closureFeasibilityPassed;
+        });
+}
+
+QString closureRoutingDecision(
+    const spo::RegionRefitReport& report) {
+    const auto attempt = std::find_if(
+        report.fitAttempts.rbegin(),
+        report.fitAttempts.rend(),
+        [](const auto& item) {
+            return item.closureFeasibilityPrepassEntered;
+        });
+    return attempt == report.fitAttempts.rend()
+        ? QStringLiteral("NotEvaluated")
+        : QString::fromStdString(
+            attempt->closureRoutingDecision);
+}
+
 QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
     QJsonArray attempts;
     for (const auto& attempt : result.report.fitAttempts) {
@@ -1112,6 +1175,15 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                     iteration.internalControlPointsSolved},
                 {"coons_diagnostic_fallback_used",
                     iteration.coonsDiagnosticFallbackUsed},
+                {"closure_feasibility_prepass",
+                    iteration.closureFeasibilityPrepass},
+                {"closure_feasibility_passed",
+                    iteration.closureFeasibilityPassed},
+                {"closure_jacobian_barrier_accepted_scale",
+                    iteration.closureJacobianBarrierAcceptedScale},
+                {"closure_residual_vs_poles",
+                    closureResidualsToJson(
+                        iteration.closureResiduals)},
                 {"result_provenance",
                     QString::fromStdString(
                         iteration.resultProvenance)},
@@ -1184,6 +1256,19 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                 attempt.internalControlPointsSolved},
             {"coons_diagnostic_fallback_used",
                 attempt.coonsDiagnosticFallbackUsed},
+            {"closure_feasibility_prepass_entered",
+                attempt.closureFeasibilityPrepassEntered},
+            {"closure_feasibility_passed",
+                attempt.closureFeasibilityPassed},
+            {"closure_initial_support_used",
+                attempt.closureInitialSupportUsed},
+            {"closure_initial_support_provenance",
+                QString::fromStdString(
+                    attempt
+                        .closureInitialSupportProvenance)},
+            {"closure_routing_decision",
+                QString::fromStdString(
+                    attempt.closureRoutingDecision)},
             {"independent_low_rank_support_attempted",
                 attempt.independentLowRankSupportAttempted},
             {"all_independent_low_rank_supports_constructible",
@@ -1218,6 +1303,12 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             result.report.internalControlPointsSolved},
         {"coons_diagnostic_fallback_used",
             result.report.coonsDiagnosticFallbackUsed},
+        {"closure_feasibility_prepass_entered",
+            closureFeasibilityPrepassEntered(result.report)},
+        {"closure_feasibility_passed",
+            closureFeasibilityPassed(result.report)},
+        {"closure_routing_decision",
+            closureRoutingDecision(result.report)},
         {"independent_low_rank_support_attempted",
             result.report.independentLowRankSupportAttempted},
         {"all_independent_low_rank_supports_constructible",
@@ -1718,6 +1809,12 @@ QJsonObject performanceToJson(
             result.report.internalControlPointsSolved},
         {"coons_diagnostic_fallback_used",
             result.report.coonsDiagnosticFallbackUsed},
+        {"closure_feasibility_prepass_entered",
+            closureFeasibilityPrepassEntered(result.report)},
+        {"closure_feasibility_passed",
+            closureFeasibilityPassed(result.report)},
+        {"closure_routing_decision",
+            closureRoutingDecision(result.report)},
         {"independent_low_rank_support_attempted",
             result.report.independentLowRankSupportAttempted},
         {"all_independent_low_rank_supports_constructible",
@@ -1938,6 +2035,51 @@ QJsonObject samplingToJson(const spo::RegionRefitResult& result) {
         {"layout_carrier", layoutCarrier}};
 }
 
+std::vector<Handle(Geom_BSplineSurface)>
+readClosureInitialSupports(
+    const std::filesystem::path& path,
+    std::string& message) {
+    const auto read = spo::StepReader().read(path);
+    if (!read.status.success()) {
+        message = read.status.message();
+        return {};
+    }
+    std::vector<Handle(Geom_BSplineSurface)> surfaces;
+    for (TopExp_Explorer explorer(
+             read.document.shape(),
+             TopAbs_FACE);
+         explorer.More();
+         explorer.Next()) {
+        const auto face =
+            TopoDS::Face(explorer.Current());
+        TopLoc_Location location;
+        auto surface =
+            BRep_Tool::Surface(face, location);
+        if (!location.IsIdentity()) {
+            surface =
+                Handle(Geom_Surface)::DownCast(
+                    surface->Transformed(
+                        location.Transformation()));
+        }
+        const auto bSpline =
+            Handle(Geom_BSplineSurface)::DownCast(
+                surface);
+        if (bSpline.IsNull()) {
+            message =
+                "阶段 1 初值 STEP 含有非 B-spline 支撑面。";
+            return {};
+        }
+        surfaces.push_back(
+            Handle(Geom_BSplineSurface)::DownCast(
+                bSpline->Copy()));
+    }
+    if (surfaces.empty()) {
+        message =
+            "阶段 1 初值 STEP 不含支撑面。";
+    }
+    return surfaces;
+}
+
 }
 
 int main(int argc, char* argv[]) {
@@ -1957,6 +2099,7 @@ int main(int argc, char* argv[]) {
                      "[--best-effort-through-sewing] [--force-diagnostic-sewing] "
                      "[--max-memory-mib <MiB>] [--cache-dir <目录>] "
                      "[--input-read-budget-ms <毫秒>] "
+                     "[--closure-initial-supports <阶段1支撑面.step>] "
                      "[--cache-policy <disabled|read-write|read-only|refresh>] "
                      "[--run-identity <名称>] [--commit <提交>] "
                      "[--constraints-only | --sampling-only | --layout-only | --fit-only]\n";
@@ -2006,9 +2149,11 @@ int main(int argc, char* argv[]) {
     bool algorithmFingerprintSpecified = false;
     std::string runIdentity = "single";
     std::string commit;
+    std::filesystem::path
+        closureInitialSupportsPath;
     spo::RegionRefitRequest request;
     request.options.algorithmFingerprint =
-        "native-regional-refit-v46-low-rank-boundary-violation-sewing";
+        "native-regional-refit-v48-stage1-closure-initialization";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -2109,6 +2254,13 @@ int main(int argc, char* argv[]) {
             } else if (argument == "--input-read-budget-ms") {
                 if (++index >= argc) return 2;
                 request.options.inputReadBudgetMilliseconds = std::stoll(argv[index]);
+            } else if (argument == "--closure-initial-supports") {
+                if (++index >= argc ||
+                    !closureInitialSupportsPath.empty()) {
+                    return 2;
+                }
+                closureInitialSupportsPath =
+                    std::filesystem::path(argv[index]);
             } else if (argument == "--cache-dir") {
                 if (++index >= argc) return 2;
                 request.options.cacheDirectory = std::filesystem::path(argv[index]);
@@ -2156,7 +2308,7 @@ int main(int argc, char* argv[]) {
 
     if (!algorithmFingerprintSpecified) {
         request.options.algorithmFingerprint = std::string(
-            "native-regional-refit-v46-low-rank-boundary-violation-sewing-") +
+            "native-regional-refit-v48-stage1-closure-initialization-") +
             spo::toString(request.options.fittingMode) + "-" +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +
@@ -2195,6 +2347,13 @@ int main(int argc, char* argv[]) {
         std::cerr << "启用缓存时必须指定 --cache-dir。\n";
         return 2;
     }
+    if (!closureInitialSupportsPath.empty() &&
+        request.options.cachePolicy !=
+            spo::RegionRefitCachePolicy::Disabled) {
+        std::cerr
+            << "阶段 1 支撑面初值只允许在禁用缓存时使用。\n";
+        return 2;
+    }
     const auto readStarted = std::chrono::steady_clock::now();
     const auto read = spo::StepReader().read(input);
     timing.inputReadMilliseconds = std::chrono::duration<double, std::milli>(
@@ -2202,6 +2361,25 @@ int main(int argc, char* argv[]) {
     if (!read.status.success()) {
         std::cerr << read.status.message() << '\n';
         return 1;
+    }
+    if (!closureInitialSupportsPath.empty()) {
+        std::string initialSupportMessage;
+        request.closureInitialSupportSurfaces =
+            readClosureInitialSupports(
+                closureInitialSupportsPath,
+                initialSupportMessage);
+        if (request
+                .closureInitialSupportSurfaces
+                .empty()) {
+            std::cerr
+                << "无法读取阶段 1 支撑面初值："
+                << initialSupportMessage << '\n';
+            return 1;
+        }
+        request.closureInitialSupportProvenance =
+            "CarryForwardFromStage1Artifact:" +
+            sha256File(
+                closureInitialSupportsPath);
     }
     const auto inputReadBudgetExceeded = timing.inputReadMilliseconds >
         static_cast<double>(request.options.inputReadBudgetMilliseconds);

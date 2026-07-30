@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 15;
+constexpr quint32 kVersion = 17;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -870,7 +870,24 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.formalFairnessSolveEntered
            << report.internalControlPointsSolved
            << report.coonsDiagnosticFallbackUsed
-           << report.fairnessEnergy
+           << report.closureFeasibilityPrepass
+           << report.closureFeasibilityPassed
+           << report.closureJacobianBarrierAcceptedScale
+           << quint64(report.closureResiduals.size());
+    for (const auto& trace : report.closureResiduals) {
+        stream << trace.round
+               << trace.patchIndex
+               << trace.edgeIndex
+               << trace.internalSeam
+               << trace.uPoleCount
+               << trace.vPoleCount
+               << trace.maximumCurveOnSurfaceDeviation
+               << trace.maximumAdjacentSurfaceSeparation
+               << trace.worstParameter
+               << trace.worstUv[0]
+               << trace.worstUv[1];
+    }
+    stream << report.fairnessEnergy
            << report.controlNetSecondDifferenceEnergy
            << report.physicalSurfaceArea
            << report.areaWeightedNormalGradientEnergy
@@ -915,6 +932,7 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     quint64 sameFaceBarycentricMappings = 0;
     quint64 sameFaceMappingFallbacks = 0;
     quint64 crossFaceMappingFailures = 0;
+    quint64 closureResidualCount = 0;
     stream >> report.iteration >> report.uControlCount >> report.vControlCount
            >> rows >> columns >> nonZeros >> bytes >> report.symbolicFactorizationReuseCount
            >> projectionCount >> uvIterations >> projectionFallbacks
@@ -961,7 +979,29 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.formalFairnessSolveEntered
            >> report.internalControlPointsSolved
            >> report.coonsDiagnosticFallbackUsed
-           >> report.fairnessEnergy
+           >> report.closureFeasibilityPrepass
+           >> report.closureFeasibilityPassed
+           >> report.closureJacobianBarrierAcceptedScale
+           >> closureResidualCount;
+    if (closureResidualCount > kMaximumSerializedCount) {
+        return false;
+    }
+    report.closureResiduals.resize(
+        static_cast<std::size_t>(closureResidualCount));
+    for (auto& trace : report.closureResiduals) {
+        stream >> trace.round
+               >> trace.patchIndex
+               >> trace.edgeIndex
+               >> trace.internalSeam
+               >> trace.uPoleCount
+               >> trace.vPoleCount
+               >> trace.maximumCurveOnSurfaceDeviation
+               >> trace.maximumAdjacentSurfaceSeparation
+               >> trace.worstParameter
+               >> trace.worstUv[0]
+               >> trace.worstUv[1];
+    }
+    stream >> report.fairnessEnergy
            >> report.controlNetSecondDifferenceEnergy
            >> report.physicalSurfaceArea
            >> report.areaWeightedNormalGradientEnergy
@@ -1068,12 +1108,19 @@ void writeAttempts(QDataStream& stream, const std::vector<RegionFitAttemptReport
                << attempt.formalFairnessSolveEntered
                << attempt.internalControlPointsSolved
                << attempt.coonsDiagnosticFallbackUsed
+               << attempt.closureFeasibilityPrepassEntered
+               << attempt.closureFeasibilityPassed
+               << attempt.closureInitialSupportUsed
                << attempt.independentLowRankSupportAttempted
                << attempt.allIndependentLowRankSupportsConstructible
                << quint64(attempt.independentLowRankSupports.size());
         for (const auto& report : attempt.independentLowRankSupports) {
             writeLowRankSupportPatchReport(stream, report);
         }
+        writeString(
+            stream,
+            attempt.closureInitialSupportProvenance);
+        writeString(stream, attempt.closureRoutingDecision);
         writeString(stream, attempt.resultProvenance);
         stream << attempt.success << attempt.wallMilliseconds;
         writeString(stream, attempt.stopReason);
@@ -1100,6 +1147,9 @@ bool readAttempts(QDataStream& stream, std::vector<RegionFitAttemptReport>& atte
                >> attempt.formalFairnessSolveEntered
                >> attempt.internalControlPointsSolved
                >> attempt.coonsDiagnosticFallbackUsed
+               >> attempt.closureFeasibilityPrepassEntered
+               >> attempt.closureFeasibilityPassed
+               >> attempt.closureInitialSupportUsed
                >> attempt.independentLowRankSupportAttempted
                >> attempt.allIndependentLowRankSupportsConstructible
                >> lowRankPatchCount;
@@ -1114,7 +1164,11 @@ bool readAttempts(QDataStream& stream, std::vector<RegionFitAttemptReport>& atte
         for (auto& report : attempt.independentLowRankSupports) {
             if (!readLowRankSupportPatchReport(stream, report)) return false;
         }
-        if (!readString(stream, attempt.resultProvenance)) {
+        if (!readString(
+                stream,
+                attempt.closureInitialSupportProvenance) ||
+            !readString(stream, attempt.closureRoutingDecision) ||
+            !readString(stream, attempt.resultProvenance)) {
             return false;
         }
         stream >> attempt.success >> attempt.wallMilliseconds;
@@ -1161,7 +1215,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v46-low-rank-boundary-violation-sewing"
+                ? "native-regional-refit-v48-stage1-closure-initialization"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << static_cast<int>(request.options.fittingMode)

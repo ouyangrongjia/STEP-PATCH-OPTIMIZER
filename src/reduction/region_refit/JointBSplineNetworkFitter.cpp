@@ -805,6 +805,69 @@ void appendWeightedRow(
         target.X() * weight, target.Y() * weight, target.Z() * weight)});
 }
 
+std::vector<LinearRow> buildClosureObjectiveRows(
+    const RegionPatchLayout& layout,
+    const std::vector<KnotConfiguration>& knots,
+    const std::vector<int>& variableOffsets,
+    const std::vector<Handle(Geom_BSplineSurface)>& referenceSurfaces) {
+    std::vector<LinearRow> rows;
+    if (referenceSurfaces.size() != layout.patches.size() ||
+        knots.size() != layout.patches.size() ||
+        variableOffsets.size() != layout.patches.size()) {
+        return rows;
+    }
+    constexpr double minimumDisplacementWeight = 1.0;
+    constexpr double weakFairnessWeight = 0.05;
+    for (std::size_t patch = 0; patch < layout.patches.size(); ++patch) {
+        if (referenceSurfaces[patch].IsNull()) {
+            rows.clear();
+            return rows;
+        }
+        const auto uParameters = grevilleParameters(knots[patch].u);
+        const auto vParameters = grevilleParameters(knots[patch].v);
+        for (const auto u : uParameters) {
+            for (const auto v : vParameters) {
+                appendWeightedRow(
+                    rows,
+                    surfaceCoefficients(
+                        {u, v},
+                        knots[patch],
+                        variableOffsets[patch]),
+                    referenceSurfaces[patch]->Value(u, v),
+                    minimumDisplacementWeight);
+            }
+        }
+        const auto uCount = knots[patch].uControlCount();
+        const auto vCount = knots[patch].vControlCount();
+        const auto offset = variableOffsets[patch];
+        for (int u = 1; u + 1 < uCount; ++u) {
+            for (int v = 0; v < vCount; ++v) {
+                appendWeightedRow(
+                    rows,
+                    {
+                        {offset + (u - 1) * vCount + v, 1.0},
+                        {offset + u * vCount + v, -2.0},
+                        {offset + (u + 1) * vCount + v, 1.0}},
+                    gp_Pnt(0.0, 0.0, 0.0),
+                    weakFairnessWeight);
+            }
+        }
+        for (int u = 0; u < uCount; ++u) {
+            for (int v = 1; v + 1 < vCount; ++v) {
+                appendWeightedRow(
+                    rows,
+                    {
+                        {offset + u * vCount + v - 1, 1.0},
+                        {offset + u * vCount + v, -2.0},
+                        {offset + u * vCount + v + 1, 1.0}},
+                    gp_Pnt(0.0, 0.0, 0.0),
+                    weakFairnessWeight);
+            }
+        }
+    }
+    return rows;
+}
+
 double positiveMedian(std::vector<double> values) {
     values.erase(std::remove_if(values.begin(), values.end(), [](const double value) {
         return !std::isfinite(value) || value <= 0.0;
@@ -4717,7 +4780,7 @@ void appendProjectedCurveRows(
         10000.0,
         1.0 /
             std::max(
-                options.curveProjectionTolerance,
+                options.curveOnSurfaceTolerance,
                 1.0e-6));
     for (std::size_t patchIndex = 0;
          patchIndex < layout.patches.size();
@@ -4812,6 +4875,116 @@ measureProjectedCurveResiduals(
         }
     }
     return residuals;
+}
+
+std::vector<RegionClosureResidualTrace>
+measureClosureResidualTrace(
+    const RegionPatchLayout& layout,
+    const RegionCurveNetwork& network,
+    const std::vector<Handle(Geom_BSplineSurface)>& surfaces,
+    const std::vector<KnotConfiguration>& knots,
+    const int round,
+    const int validationSampleCount) {
+    std::vector<RegionClosureResidualTrace> traces;
+    if (surfaces.size() != layout.patches.size()) {
+        return traces;
+    }
+    const auto sampleCount = std::max(257, validationSampleCount);
+    for (const auto& edge : network.edges) {
+        if (edge.curve.IsNull() || edge.firstPatch < 0 ||
+            (!edge.originalBoundary && edge.secondPatch < 0) ||
+            !(edge.lastParameter > edge.firstParameter)) {
+            continue;
+        }
+        const std::array<int, 2> patches {
+            edge.firstPatch, edge.secondPatch};
+        const auto sideCount = edge.originalBoundary ? 1 : 2;
+        std::array<RegionClosureResidualTrace, 2> edgeTraces;
+        for (int side = 0; side < sideCount; ++side) {
+            const auto patch = patches[static_cast<std::size_t>(side)];
+            auto& trace = edgeTraces[static_cast<std::size_t>(side)];
+            trace.round = round;
+            trace.patchIndex = patch;
+            trace.edgeIndex = static_cast<int>(edge.id);
+            trace.internalSeam = !edge.originalBoundary;
+            if (patch >= 0 &&
+                static_cast<std::size_t>(patch) < knots.size()) {
+                trace.uPoleCount =
+                    knots[static_cast<std::size_t>(patch)]
+                        .uControlCount();
+                trace.vPoleCount =
+                    knots[static_cast<std::size_t>(patch)]
+                        .vControlCount();
+            } else if (
+                patch >= 0 &&
+                static_cast<std::size_t>(patch) <
+                    surfaces.size() &&
+                !surfaces[static_cast<std::size_t>(patch)]
+                     .IsNull()) {
+                trace.uPoleCount =
+                    surfaces[static_cast<std::size_t>(patch)]->NbUPoles();
+                trace.vPoleCount =
+                    surfaces[static_cast<std::size_t>(patch)]->NbVPoles();
+            }
+        }
+        for (int sample = 0; sample < sampleCount; ++sample) {
+            const auto alpha =
+                static_cast<double>(sample) /
+                static_cast<double>(sampleCount - 1);
+            const auto parameter =
+                edge.firstParameter +
+                alpha * (edge.lastParameter - edge.firstParameter);
+            const auto target = edge.curve->Value(parameter);
+            std::array<gp_Pnt, 2> points;
+            std::array<bool, 2> evaluated {false, false};
+            for (int side = 0; side < sideCount; ++side) {
+                const auto patch = patches[static_cast<std::size_t>(side)];
+                if (patch < 0 ||
+                    static_cast<std::size_t>(patch) >= surfaces.size()) {
+                    continue;
+                }
+                const auto uv = curveParameterOnPatch(
+                    layout, edge, patch, parameter);
+                if (!uv.has_value()) {
+                    edgeTraces[static_cast<std::size_t>(side)]
+                        .maximumCurveOnSurfaceDeviation =
+                        std::numeric_limits<double>::infinity();
+                    continue;
+                }
+                points[static_cast<std::size_t>(side)] =
+                    surfaces[static_cast<std::size_t>(patch)]->Value(
+                        (*uv)[0], (*uv)[1]);
+                evaluated[static_cast<std::size_t>(side)] = true;
+                const auto deviation =
+                    points[static_cast<std::size_t>(side)].Distance(target);
+                auto& trace =
+                    edgeTraces[static_cast<std::size_t>(side)];
+                if (deviation >
+                    trace.maximumCurveOnSurfaceDeviation) {
+                    trace.maximumCurveOnSurfaceDeviation = deviation;
+                    trace.worstParameter = parameter;
+                    trace.worstUv = *uv;
+                }
+            }
+            if (!edge.originalBoundary &&
+                evaluated[0] && evaluated[1]) {
+                const auto separation = points[0].Distance(points[1]);
+                for (int side = 0; side < sideCount; ++side) {
+                    edgeTraces[static_cast<std::size_t>(side)]
+                        .maximumAdjacentSurfaceSeparation =
+                        std::max(
+                            edgeTraces[static_cast<std::size_t>(side)]
+                                .maximumAdjacentSurfaceSeparation,
+                            separation);
+                }
+            }
+        }
+        for (int side = 0; side < sideCount; ++side) {
+            traces.push_back(
+                edgeTraces[static_cast<std::size_t>(side)]);
+        }
+    }
+    return traces;
 }
 
 bool insertIndependentResidualKnots(
@@ -5288,7 +5461,7 @@ fitIndependentLowRankSupports(
                 report
                     .maximumInternalCurveOnSurfaceDeviation <=
                     options
-                        .curveProjectionTolerance;
+                        .curveOnSurfaceTolerance;
             if (!report.finitePassed) {
                 report.dominantViolation =
                     "NonFiniteSupport";
@@ -5312,7 +5485,7 @@ fitIndependentLowRankSupports(
             } else if (
                 report
                     .maximumInternalCurveOnSurfaceDeviation >
-                options.curveProjectionTolerance) {
+                options.curveOnSurfaceTolerance) {
                 report.dominantViolation =
                     "InternalCurveProjection";
             } else {
@@ -5350,7 +5523,7 @@ fitIndependentLowRankSupports(
                     options
                         .curveOnSurfaceTolerance,
                     options
-                        .curveProjectionTolerance))) {
+                        .curveOnSurfaceTolerance))) {
             result.message =
                 "At least one independent low-rank support remained outside a hard construction gate at the 25-pole or alternating-fit limit.";
             break;
@@ -5363,6 +5536,252 @@ fitIndependentLowRankSupports(
             ? "Independent low-rank support fitting reached its deadline."
             : "Independent low-rank support fitting stopped without a constructible four-patch result.";
     }
+    return result;
+}
+
+bool normalizeClosureInitialSurface(
+    Handle(Geom_BSplineSurface)& surface,
+    KnotConfiguration& knots) {
+    if (surface.IsNull() ||
+        surface->UDegree() != kDegree ||
+        surface->VDegree() != kDegree) {
+        return false;
+    }
+    const auto normalize = [](const int count,
+                              const auto knot,
+                              const auto setKnots,
+                              std::vector<double>& values) {
+        const auto first = knot(1);
+        const auto last = knot(count);
+        if (!std::isfinite(first) ||
+            !std::isfinite(last) ||
+            !(last > first)) {
+            return false;
+        }
+        TColStd_Array1OfReal normalized(1, count);
+        values.clear();
+        values.reserve(static_cast<std::size_t>(count));
+        for (int index = 1; index <= count; ++index) {
+            const auto value =
+                (knot(index) - first) /
+                (last - first);
+            if (!std::isfinite(value)) {
+                return false;
+            }
+            normalized.SetValue(index, value);
+            values.push_back(value);
+        }
+        setKnots(normalized);
+        return true;
+    };
+    if (!normalize(
+            surface->NbUKnots(),
+            [&](const int index) {
+                return surface->UKnot(index);
+            },
+            [&](const TColStd_Array1OfReal& values) {
+                surface->SetUKnots(values);
+            },
+            knots.u) ||
+        !normalize(
+            surface->NbVKnots(),
+            [&](const int index) {
+                return surface->VKnot(index);
+            },
+            [&](const TColStd_Array1OfReal& values) {
+                surface->SetVKnots(values);
+            },
+            knots.v)) {
+        return false;
+    }
+    return knots.uControlCount() ==
+            surface->NbUPoles() &&
+        knots.vControlCount() ==
+            surface->NbVPoles();
+}
+
+IndependentLowRankSupportResult
+carryForwardClosureInitialSupports(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionPatchLayout& initialLayout,
+    const RegionCurveNetwork& network,
+    const RegionRefitOptions& options,
+    const std::vector<MappedReferenceSample>& mappedSamples,
+    const std::vector<Handle(Geom_BSplineSurface)>&
+        initialSurfaces) {
+    IndependentLowRankSupportResult result;
+    result.attempted = true;
+    result.layout = initialLayout;
+    result.mappedSamples = mappedSamples;
+    result.patchReports.resize(
+        result.layout.patches.size());
+    result.knots.resize(
+        result.layout.patches.size());
+    if (initialSurfaces.size() !=
+        result.layout.patches.size()) {
+        result.message =
+            "The Stage 1 closure initialization does not match the selected patch count.";
+        return result;
+    }
+    result.surfaces.reserve(
+        initialSurfaces.size());
+    for (std::size_t patch = 0;
+         patch < initialSurfaces.size();
+         ++patch) {
+        if (initialSurfaces[patch].IsNull()) {
+            result.surfaces.clear();
+            result.message =
+                "A Stage 1 closure-initialization support is null.";
+            return result;
+        }
+        auto surface =
+            Handle(Geom_BSplineSurface)::DownCast(
+                initialSurfaces[patch]->Copy());
+        if (!normalizeClosureInitialSurface(
+                surface,
+                result.knots[patch])) {
+            result.surfaces.clear();
+            result.message =
+                "A Stage 1 closure-initialization surface is not a normalized cubic low-rank support.";
+            return result;
+        }
+        result.surfaces.push_back(
+            std::move(surface));
+        result.patchReports[patch].patchIndex =
+            static_cast<int>(patch);
+    }
+    std::string pcurveMessage;
+    if (!updateProjectedPcurves(
+            result.layout,
+            network,
+            result.surfaces,
+            options,
+            result.patchReports,
+            pcurveMessage)) {
+        result.surfaces.clear();
+        result.message =
+            "Stage 1 closure-initialization pcurve update failed: " +
+            pcurveMessage;
+        return result;
+    }
+    const auto lookups =
+        buildLookups(result.layout);
+    result.metrics = validateNetwork(
+        fittingReference,
+        layoutCarrier,
+        result.layout,
+        lookups,
+        result.surfaces,
+        options,
+        result.mappedSamples);
+    validateFrozenCurveContinuity(
+        result.metrics,
+        result.layout,
+        network,
+        result.surfaces,
+        options);
+    result.quality = measureSurfaceQuality(
+        layoutCarrier,
+        result.layout,
+        result.surfaces);
+    measureProjectedCurveResiduals(
+        result.layout,
+        network,
+        result.surfaces,
+        result.patchReports);
+    result.allConstructible = true;
+    for (std::size_t patch = 0;
+         patch < result.patchReports.size();
+         ++patch) {
+        auto& report =
+            result.patchReports[patch];
+        const auto& surface =
+            result.surfaces[patch];
+        report.finitePassed = !surface.IsNull();
+        for (int u = 1;
+             report.finitePassed &&
+             u <= surface->NbUPoles();
+             ++u) {
+            for (int v = 1;
+                 v <= surface->NbVPoles();
+                 ++v) {
+                const auto pole =
+                    surface->Pole(u, v);
+                report.finitePassed =
+                    std::isfinite(pole.X()) &&
+                    std::isfinite(pole.Y()) &&
+                    std::isfinite(pole.Z());
+            }
+        }
+        report.uPoleCount =
+            surface->NbUPoles();
+        report.vPoleCount =
+            surface->NbVPoles();
+        report.poleLimitPassed =
+            report.uPoleCount <=
+                std::min(
+                    options.maximumControlPointsPerSide,
+                    25) &&
+            report.vPoleCount <=
+                std::min(
+                    options.maximumControlPointsPerSide,
+                    25);
+        std::string supportReason;
+        report.positiveJacobianPassed =
+            report.finitePassed &&
+            regionLocalSupportDomainPassed(
+                surface,
+                layoutCarrier,
+                result.layout.patches[patch],
+                options,
+                supportReason);
+        report.trimConstructible =
+            report.positiveJacobianPassed &&
+            report.pcurveLoopPassed &&
+            report.poleLimitPassed &&
+            report
+                .maximumExternalCurveOnSurfaceDeviation <=
+                options.curveOnSurfaceTolerance &&
+            report
+                .maximumInternalCurveOnSurfaceDeviation <=
+                options.curveOnSurfaceTolerance;
+        if (!report.finitePassed) {
+            report.dominantViolation =
+                "NonFiniteSupport";
+        } else if (!report.poleLimitPassed) {
+            report.dominantViolation =
+                "PoleLimit";
+        } else if (!report.positiveJacobianPassed) {
+            report.dominantViolation =
+                supportReason.empty()
+                ? "JacobianBarrier"
+                : supportReason;
+        } else if (!report.pcurveLoopPassed) {
+            report.dominantViolation =
+                "ProjectedPcurveLoop";
+        } else if (
+            report
+                .maximumExternalCurveOnSurfaceDeviation >
+            options.curveOnSurfaceTolerance) {
+            report.dominantViolation =
+                "ExternalCurveOnSurface";
+        } else if (
+            report
+                .maximumInternalCurveOnSurfaceDeviation >
+            options.curveOnSurfaceTolerance) {
+            report.dominantViolation =
+                "InternalCurveOnSurface";
+        } else {
+            report.dominantViolation =
+                "None";
+        }
+        result.allConstructible =
+            result.allConstructible &&
+            report.trimConstructible;
+    }
+    result.message =
+        "Loaded the Stage 1 low-rank support artifact as the closure-feasibility initial network.";
     return result;
 }
 
@@ -5437,8 +5856,12 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
     const RegionTopologyConstraints& constraints,
     const std::vector<RegionPatchLayout>& candidates,
     const std::vector<RegionCurveNetwork>& curveNetworks,
+    const std::vector<Handle(Geom_BSplineSurface)>&
+        closureInitialSupportSurfaces,
     const RegionRefitOptions& options,
-    const std::chrono::steady_clock::time_point deadline) const {
+    const std::chrono::steady_clock::time_point deadline,
+    const std::chrono::steady_clock::time_point
+        closureFeasibilityDeadline) const {
     JointBSplineNetworkFitResult result;
     if (options.fittingMode ==
         RegionalFittingMode::GeomagicEquivalent) {
@@ -5662,9 +6085,27 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
 
         IndependentLowRankSupportResult
             independentSupport;
+        auto diagnosticLowRankSupportsReady = false;
         if (curveNetwork != nullptr) {
-            independentSupport =
-                fitIndependentLowRankSupports(
+            if (!closureInitialSupportSurfaces.empty()) {
+                independentSupport =
+                    carryForwardClosureInitialSupports(
+                        fittingReference,
+                        layoutCarrier,
+                        layout,
+                        *curveNetwork,
+                        options,
+                        mappedSamples,
+                        closureInitialSupportSurfaces);
+                attempt.closureInitialSupportUsed =
+                    !independentSupport.surfaces.empty();
+                attempt.closureInitialSupportProvenance =
+                    attempt.closureInitialSupportUsed
+                    ? "CarryForwardFromStage1Artifact"
+                    : "RejectedStage1Artifact";
+            } else {
+                independentSupport =
+                    fitIndependentLowRankSupports(
                     fittingReference,
                     layoutCarrier,
                     constraints,
@@ -5672,6 +6113,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     *curveNetwork,
                     options,
                     attemptDeadline);
+            }
             attempt.independentLowRankSupportAttempted =
                 independentSupport.attempted;
             attempt
@@ -5687,7 +6129,7 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 attempt.internalControlPointsSolved ||
                 independentSupport
                     .internalControlPointsSolved;
-            const auto diagnosticLowRankSupportsReady =
+            diagnosticLowRankSupportsReady =
                 independentSupport.surfaces.size() ==
                     layout.patches.size() &&
                 independentSupport.patchReports.size() ==
@@ -5740,15 +6182,36 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         }
 
         std::optional<BoundarySupportNetwork> boundedSupport;
+        const auto closureFeasibilityPrepass =
+            curveNetwork != nullptr &&
+            !independentSupport.allConstructible &&
+            diagnosticLowRankSupportsReady;
+        attempt.closureFeasibilityPrepassEntered =
+            closureFeasibilityPrepass;
+        if (closureFeasibilityPrepass) {
+            attempt.closureRoutingDecision = "Stage3";
+        }
+        const auto iterationDeadline =
+            closureFeasibilityPrepass
+            ? closureFeasibilityDeadline
+            : attemptDeadline;
         const auto maximumIterations = curveNetwork != nullptr
             ? (independentSupport.allConstructible
                 ? 1
+                : closureFeasibilityPrepass
+                ? std::min(options.maximumFitIterations, 20)
                 : 0)
             : std::min(options.maximumFitIterations, 20);
         for (int iteration = 0; iteration < maximumIterations; ++iteration) {
             const auto iterationStarted = std::chrono::steady_clock::now();
             RegionFitIterationReport iterationReport;
             iterationReport.iteration = iteration + 1;
+            iterationReport.closureFeasibilityPrepass =
+                closureFeasibilityPrepass;
+            if (closureFeasibilityPrepass) {
+                iterationReport.resultProvenance =
+                    "ClosureFeasibilityPrepass";
+            }
             iterationReport.sameFaceBarycentricMappingCount =
                 sameFaceBarycentricMappingCount;
             iterationReport.sameFaceMappingFallbackCount =
@@ -5766,11 +6229,13 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 const auto forecastMilliseconds = static_cast<long long>(std::ceil(
                     std::max(1.0, attempt.iterations.back().wallMilliseconds) * 2.5));
                 if (std::chrono::steady_clock::now() +
-                        std::chrono::milliseconds(forecastMilliseconds) >= attemptDeadline) {
+                        std::chrono::milliseconds(forecastMilliseconds) >=
+                        iterationDeadline) {
                     finalIterationForBudget = true;
                 }
             }
-            if (std::chrono::steady_clock::now() >= attemptDeadline) {
+            if (std::chrono::steady_clock::now() >=
+                iterationDeadline) {
                 iterationReport.stopReason = "Single-fit deadline reached before starting the iteration.";
                 attempt.iterations.push_back(iterationReport);
                 attempt.stopReason = iterationReport.stopReason;
@@ -5798,30 +6263,38 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 knots);
             std::size_t seamG1RowCount = 0;
             std::size_t seamG2RowCount = 0;
-            const auto rows = buildSystemRows(
-                fittingReference,
-                layoutCarrier,
-                layout,
-                knots,
-                variableOffsets,
-                lookups,
-                seamConstraintSamples,
-                representativeFitSamples,
-                curveNetwork,
-                options,
-                seamG1RowCount,
-                seamG2RowCount);
+            const auto rows = closureFeasibilityPrepass
+                ? buildClosureObjectiveRows(
+                    layout,
+                    knots,
+                    variableOffsets,
+                    bestSurfaces)
+                : buildSystemRows(
+                    fittingReference,
+                    layoutCarrier,
+                    layout,
+                    knots,
+                    variableOffsets,
+                    lookups,
+                    seamConstraintSamples,
+                    representativeFitSamples,
+                    curveNetwork,
+                    options,
+                    seamG1RowCount,
+                    seamG2RowCount);
             std::size_t adjacentNormalRowCount = 0;
-            const auto normalRows = buildNormalRows(
-                fittingReference,
-                layoutCarrier,
-                constraints,
-                layout,
-                knots,
-                variableOffsets,
-                representativeFitSamples,
-                curveNetwork,
-                adjacentNormalRowCount);
+            const auto normalRows = closureFeasibilityPrepass
+                ? std::vector<NormalRow> {}
+                : buildNormalRows(
+                    fittingReference,
+                    layoutCarrier,
+                    constraints,
+                    layout,
+                    knots,
+                    variableOffsets,
+                    representativeFitSamples,
+                    curveNetwork,
+                    adjacentNormalRowCount);
             iterationReport.adjacentNormalSoftConstraintCount = adjacentNormalRowCount;
             if (curveNetwork != nullptr &&
                 boundedSupport.has_value() &&
@@ -6163,20 +6636,38 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     : iterationReport.hardConstraintFeasible
                     ? "Feasible"
                     : "InfeasibleHardBoundaryConstraints";
+            if (closureFeasibilityPrepass) {
+                iterationReport.closureResiduals =
+                    measureClosureResidualTrace(
+                        layout,
+                        *curveNetwork,
+                        bestSurfaces,
+                        knots,
+                        iteration + 1,
+                        options.curveValidationSampleCount);
+            }
             if (!iterationReport.hardConstraintFeasible &&
                 !bestSurfaces.empty() &&
                 !finalIterationForBudget &&
                 iteration + 1 < maximumIterations &&
-                insertBoundaryFeasibilityKnots(
-                    fullConstraintFeasibility.residuals,
-                    knots,
-                    options.maximumControlPointsPerSide,
-                    options.curveOnSurfaceTolerance)) {
+                (closureFeasibilityPrepass
+                    ? insertIndependentResidualKnots(
+                        fullConstraintFeasibility.residuals,
+                        knots,
+                        options.maximumControlPointsPerSide,
+                        options.curveOnSurfaceTolerance)
+                    : insertBoundaryFeasibilityKnots(
+                        fullConstraintFeasibility.residuals,
+                        knots,
+                        options.maximumControlPointsPerSide,
+                        options.curveOnSurfaceTolerance))) {
                 ++boundaryFeasibilityRefinementRounds;
                 iterationReport.boundaryFeasibilityRefinementRounds =
                     boundaryFeasibilityRefinementRounds;
                 iterationReport.stopReason =
-                    "Refined U and V knots while retaining the previously constructible diagnostic network.";
+                    closureFeasibilityPrepass
+                    ? "Inserted one local hard-closure residual knot while retaining the previous diagnostic support."
+                    : "Refined U and V knots while retaining the previously constructible diagnostic network.";
                 iterationReport.wallMilliseconds =
                     std::chrono::duration<double, std::milli>(
                         std::chrono::steady_clock::now() -
@@ -6543,11 +7034,21 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     }
                     if (!finalIterationForBudget &&
                         iteration + 1 < maximumIterations &&
-                        insertBoundaryFeasibilityKnots(
-                            refinementSamples,
-                            knots,
-                            options.maximumControlPointsPerSide,
-                            options.curveOnSurfaceTolerance)) {
+                        (closureFeasibilityPrepass
+                            ? insertIndependentResidualKnots(
+                                refinementSamples,
+                                knots,
+                                options
+                                    .maximumControlPointsPerSide,
+                                options
+                                    .curveOnSurfaceTolerance)
+                            : insertBoundaryFeasibilityKnots(
+                                refinementSamples,
+                                knots,
+                                options
+                                    .maximumControlPointsPerSide,
+                                options
+                                    .curveOnSurfaceTolerance))) {
                         if (!initialDiagnosticSurfaces.empty()) {
                             bestSurfaces = initialDiagnosticSurfaces;
                             bestMetrics = initialDiagnosticMetrics;
@@ -6558,7 +7059,9 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         iterationReport.boundaryFeasibilityRefinementRounds =
                             boundaryFeasibilityRefinementRounds;
                         iterationReport.stopReason =
-                            "Refined U and V knots because the boundary-feasible control network was not constructible: " +
+                            (closureFeasibilityPrepass
+                                ? "Inserted one local constructibility-residual knot because the hard-closure solution was not constructible: "
+                                : "Refined U and V knots because the boundary-feasible control network was not constructible: ") +
                             initialDiagnosticFailure;
                         iterationReport.wallMilliseconds =
                             std::chrono::duration<double, std::milli>(
@@ -6688,7 +7191,8 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 result.message = "A selected layout exceeded the joint-fit memory preflight limit.";
                 return result;
             }
-            if (std::chrono::steady_clock::now() >= attemptDeadline) {
+            if (std::chrono::steady_clock::now() >=
+                iterationDeadline) {
                 if (!iterationReport.hardConstraintFeasible &&
                     !initialDiagnosticSurfaces.empty()) {
                     bestSurfaces = initialDiagnosticSurfaces;
@@ -6882,6 +7386,26 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     attempt.stopReason = iterationReport.stopReason;
                     break;
                 }
+                if (closureFeasibilityPrepass) {
+                    std::string pcurveMessage;
+                    if (!updateProjectedPcurves(
+                            layout,
+                            *curveNetwork,
+                            surfaces,
+                            options,
+                            attempt.independentLowRankSupports,
+                            pcurveMessage)) {
+                        iterationReport.stopReason =
+                            "Closure feasibility pcurve update failed: " +
+                            pcurveMessage;
+                        attempt.stopReason =
+                            iterationReport.stopReason;
+                        attempt.closureRoutingDecision = "Stage3";
+                        attempt.iterations.push_back(iterationReport);
+                        break;
+                    }
+                    lookups = buildLookups(layout);
+                }
                 auto metrics = validateNetwork(
                     fittingReference,
                     layoutCarrier,
@@ -6932,7 +7456,84 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 const auto surfaceQuality = measureSurfaceQuality(
                     layoutCarrier, layout, surfaces);
                 recordSurfaceQuality(iterationReport, surfaceQuality);
+                std::vector<ResidualSample> closureRefinementResiduals;
+                auto closureMaximumExternalDeviation = 0.0;
+                auto closureMaximumInternalDeviation = 0.0;
+                auto closureMaximumSeparation = 0.0;
+                auto closurePcurveLoopsPassed = true;
+                if (closureFeasibilityPrepass) {
+                    iterationReport.closureResiduals =
+                        measureClosureResidualTrace(
+                            layout,
+                            *curveNetwork,
+                            surfaces,
+                            knots,
+                            iteration + 1,
+                            options.curveValidationSampleCount);
+                    for (const auto& trace :
+                         iterationReport.closureResiduals) {
+                        if (trace.internalSeam) {
+                            closureMaximumInternalDeviation =
+                                std::max(
+                                    closureMaximumInternalDeviation,
+                                    trace
+                                        .maximumCurveOnSurfaceDeviation);
+                            closureMaximumSeparation =
+                                std::max(
+                                    closureMaximumSeparation,
+                                    trace
+                                        .maximumAdjacentSurfaceSeparation);
+                        } else {
+                            closureMaximumExternalDeviation =
+                                std::max(
+                                    closureMaximumExternalDeviation,
+                                    trace
+                                        .maximumCurveOnSurfaceDeviation);
+                        }
+                    }
+                    closurePcurveLoopsPassed =
+                        std::all_of(
+                            layout.patches.begin(),
+                            layout.patches.end(),
+                            [](const auto& patch) {
+                                return patch.pcurveLoopClosed &&
+                                    patch
+                                        .pcurveOrientationConsistent &&
+                                    patch
+                                        .pcurveSelfIntersectionCount ==
+                                        0 &&
+                                    patch
+                                        .pcurveNonAdjacentIntersectionCount ==
+                                        0;
+                            });
+                    closureRefinementResiduals =
+                        measureProjectedCurveResiduals(
+                            layout,
+                            *curveNetwork,
+                            surfaces,
+                            attempt
+                                .independentLowRankSupports);
+                    iterationReport
+                        .closureJacobianBarrierAcceptedScale =
+                        iterationReport
+                            .constraintCorrectionBlendAlpha;
+                    iterationReport.closureFeasibilityPassed =
+                        closureMaximumExternalDeviation <=
+                            options.curveOnSurfaceTolerance &&
+                        closureMaximumInternalDeviation <=
+                            options.curveOnSurfaceTolerance &&
+                        closureMaximumSeparation <=
+                            options.curveOnSurfaceTolerance &&
+                        closurePcurveLoopsPassed &&
+                        iterationReport.hardConstraintFeasible &&
+                        !surfaceQuality.hardFailure &&
+                        surfaceQuality.maximumPoleCountPerSide <=
+                            std::min(
+                                options.maximumControlPointsPerSide,
+                                25);
+                }
                 const auto accepted =
+                    !closureFeasibilityPrepass &&
                     fitGatesPassed(metrics, options) &&
                     iterationReport.hardConstraintFeasible &&
                     !surfaceQuality.hardFailure &&
@@ -6949,14 +7550,42 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                     bestMetrics = metrics;
                     bestQuality = surfaceQuality;
                     bestBoundaryLocked =
+                        closureFeasibilityPrepass ||
                         iterationReport.hardConstraintFeasible;
                     bestFitOutcome =
-                        iterationReport
-                            .hardConstraintFeasible
+                        closureFeasibilityPrepass
+                        ? "ClosureFeasibilityDiagnostic"
+                        : iterationReport
+                             .hardConstraintFeasible
                         ? "JointFairnessDiagnostic"
                         : curveNetwork != nullptr
                         ? "IndependentLowRankDiagnostic"
                         : "UnconstrainedInspectionOnly";
+                }
+                if (closureFeasibilityPrepass &&
+                    iterationReport.closureFeasibilityPassed) {
+                    bestSurfaces = surfaces;
+                    bestMetrics = metrics;
+                    bestQuality = surfaceQuality;
+                    bestBoundaryLocked = true;
+                    bestFitOutcome =
+                        "ClosureFeasibilityDiagnostic";
+                    attempt.closureFeasibilityPassed = true;
+                    attempt.closureRoutingDecision =
+                        "Stage2BPendingBRepValidation";
+                    attempt.resultProvenance =
+                        "ClosureFeasibilityDiagnostic";
+                    iterationReport.stopReason =
+                        "Closure feasibility prepass passed the 0.001 mm support and internal-separation gates; Stage 2B remains pending B-Rep, SameParameter, intersection and fixed-tolerance sewing validation.";
+                    iterationReport.wallMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() -
+                            iterationStarted).count();
+                    attempt.iterations.push_back(
+                        iterationReport);
+                    attempt.stopReason =
+                        iterationReport.stopReason;
+                    break;
                 }
                 if (accepted) {
                     iterationReport.stopReason = "All fit, boundary, seam, and holdout gates passed.";
@@ -6989,6 +7618,24 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                         iterationReport.hardConstraintStatus +
                         "; retained the maximum constructible correction blend for diagnostic sewing.";
                     attempt.stopReason = iterationReport.stopReason;
+                } else if (closureFeasibilityPrepass) {
+                    if (!finalIterationForBudget &&
+                        iteration + 1 < maximumIterations &&
+                        insertIndependentResidualKnots(
+                            closureRefinementResiduals,
+                            knots,
+                            options.maximumControlPointsPerSide,
+                            options.curveOnSurfaceTolerance)) {
+                        iterationReport.stopReason =
+                            "Inserted one local closure-residual knot while preserving the 25-pole hard limit.";
+                    } else {
+                        iterationReport.stopReason =
+                            "Closure feasibility remained outside the 0.001 mm gates at the local-knot, pole, or iteration limit.";
+                        attempt.stopReason =
+                            iterationReport.stopReason;
+                        attempt.closureRoutingDecision =
+                            "Stage3";
+                    }
                 } else {
                     const auto improvement = std::isfinite(previousSelection) && previousSelection > 0.0
                         ? (previousSelection - metrics.selectionMaximumScore) / previousSelection
@@ -7018,7 +7665,10 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
                 std::chrono::steady_clock::now() - iterationStarted).count();
             attempt.iterations.push_back(iterationReport);
             if (lowImprovementRounds >= 2 ||
-                iterationReport.stopReason != "Inserted one knot at the concentrated selection residual.") {
+                (iterationReport.stopReason !=
+                     "Inserted one knot at the concentrated selection residual." &&
+                 iterationReport.stopReason !=
+                     "Inserted one local closure-residual knot while preserving the 25-pole hard limit.")) {
                 break;
             }
         }
@@ -7066,13 +7716,37 @@ JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
         }
         result.attempts.push_back(std::move(attempt));
     }
-    result.status = std::chrono::steady_clock::now() >= deadline
+    result.status =
+        std::chrono::steady_clock::now() >=
+            std::max(
+                deadline,
+                closureFeasibilityDeadline)
         ? RegionRefitStatus::TimeBudgetExceeded
         : RegionRefitStatus::NoValidatedLayoutWithinBudget;
     result.message = result.status == RegionRefitStatus::TimeBudgetExceeded
         ? "Joint fitting reached its cumulative deadline."
         : "No coarse-screened layout passed the full joint fitting gates.";
     return result;
+}
+
+JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(
+    const RegionReferenceMesh& fittingReference,
+    const RegionReferenceMesh& layoutCarrier,
+    const RegionTopologyConstraints& constraints,
+    const std::vector<RegionPatchLayout>& candidates,
+    const std::vector<RegionCurveNetwork>& curveNetworks,
+    const RegionRefitOptions& options,
+    const std::chrono::steady_clock::time_point deadline) const {
+    return fit(
+        fittingReference,
+        layoutCarrier,
+        constraints,
+        candidates,
+        curveNetworks,
+        {},
+        options,
+        deadline,
+        deadline);
 }
 
 JointBSplineNetworkFitResult JointBSplineNetworkFitter::fit(

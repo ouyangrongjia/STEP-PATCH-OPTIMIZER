@@ -19,6 +19,7 @@ param(
     [int]$MaximumFullFitCount = 3,
     [switch]$BestEffortThroughSewing,
     [switch]$ForceDiagnosticSewing,
+    [string]$ClosureInitialSupports = "",
     [long[]]$LockedEdgeIds = @(),
     [long]$WallTimeMilliseconds = 900000,
     [long]$InputReadBudgetMilliseconds = 60000,
@@ -56,6 +57,10 @@ if ($PatchMode -eq "adaptive" -and $AdaptiveSafetyCap -le 0) {
 }
 if ($TargetSampleTriangles -le 0 -or $MaximumFullFitCount -le 0) {
     throw "Sampling target and maximum full fit count must be positive."
+}
+if ($ClosureInitialSupports -and
+    -not (Test-Path -LiteralPath $ClosureInitialSupports -PathType Leaf)) {
+    throw "Closure initial support STEP does not exist: $ClosureInitialSupports"
 }
 if ([int]$ConstraintsOnly.IsPresent + [int]$SamplingOnly.IsPresent +
         [int]$LayoutOnly.IsPresent + [int]$FitOnly.IsPresent -gt 1) {
@@ -139,6 +144,12 @@ if ($BestEffortThroughSewing) {
 }
 if ($ForceDiagnosticSewing) {
     $baseArguments += "--force-diagnostic-sewing"
+}
+if ($ClosureInitialSupports) {
+    $baseArguments += @(
+        "--closure-initial-supports",
+        [System.IO.Path]::GetFullPath(
+            $ClosureInitialSupports))
 }
 if ($ConstraintsOnly) {
     $baseArguments += "--constraints-only"

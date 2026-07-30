@@ -106,6 +106,30 @@ public:
         const RegionTopologyConstraints& constraints,
         const std::vector<RegionPatchLayout>& candidates,
         const std::vector<RegionCurveNetwork>& curveNetworks,
+        const std::vector<Handle(Geom_BSplineSurface)>&
+            closureInitialSupportSurfaces,
+        const RegionRefitOptions& options,
+        std::chrono::steady_clock::time_point deadline,
+        std::chrono::steady_clock::time_point
+            closureFeasibilityDeadline) const;
+
+    JointBSplineNetworkFitResult fit(
+        const RegionReferenceMesh& fittingReference,
+        const RegionReferenceMesh& layoutCarrier,
+        const RegionTopologyConstraints& constraints,
+        const std::vector<RegionPatchLayout>& candidates,
+        const std::vector<RegionCurveNetwork>& curveNetworks,
+        const RegionRefitOptions& options,
+        std::chrono::steady_clock::time_point deadline,
+        std::chrono::steady_clock::time_point
+            closureFeasibilityDeadline) const;
+
+    JointBSplineNetworkFitResult fit(
+        const RegionReferenceMesh& fittingReference,
+        const RegionReferenceMesh& layoutCarrier,
+        const RegionTopologyConstraints& constraints,
+        const std::vector<RegionPatchLayout>& candidates,
+        const std::vector<RegionCurveNetwork>& curveNetworks,
         const RegionRefitOptions& options,
         std::chrono::steady_clock::time_point deadline) const;
 

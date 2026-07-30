@@ -3,6 +3,7 @@
 #include "common/GeometryTypes.h"
 
 #include <Geom2d_Curve.hxx>
+#include <Geom_BSplineSurface.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
@@ -159,6 +160,9 @@ struct RegionRefitOptions {
 struct RegionRefitRequest {
     std::vector<FaceId> selectedFaces;
     std::vector<EdgeId> lockedEdges;
+    std::vector<Handle(Geom_BSplineSurface)>
+        closureInitialSupportSurfaces;
+    std::string closureInitialSupportProvenance;
     RegionRefitLayoutMode layoutMode = RegionRefitLayoutMode::Adaptive;
     RegionRefitExecutionMode executionMode = RegionRefitExecutionMode::ValidatedOnly;
     bool forceDiagnosticSewing = false;
@@ -238,6 +242,19 @@ struct RegionLayoutCandidateReport {
     std::string rejectionReason;
 };
 
+struct RegionClosureResidualTrace {
+    int round = 0;
+    int patchIndex = -1;
+    int edgeIndex = -1;
+    bool internalSeam = false;
+    int uPoleCount = 0;
+    int vPoleCount = 0;
+    double maximumCurveOnSurfaceDeviation = 0.0;
+    double maximumAdjacentSurfaceSeparation = 0.0;
+    double worstParameter = 0.0;
+    std::array<double, 2> worstUv {};
+};
+
 struct RegionFitIterationReport {
     int iteration = 0;
     int uControlCount = 0;
@@ -307,6 +324,10 @@ struct RegionFitIterationReport {
     bool formalFairnessSolveEntered = false;
     bool internalControlPointsSolved = false;
     bool coonsDiagnosticFallbackUsed = false;
+    bool closureFeasibilityPrepass = false;
+    bool closureFeasibilityPassed = false;
+    double closureJacobianBarrierAcceptedScale = 0.0;
+    std::vector<RegionClosureResidualTrace> closureResiduals;
     std::string resultProvenance = "NotEvaluated";
     double fairnessEnergy = 0.0;
     double controlNetSecondDifferenceEnergy = 0.0;
@@ -357,6 +378,12 @@ struct RegionFitAttemptReport {
     bool formalFairnessSolveEntered = false;
     bool internalControlPointsSolved = false;
     bool coonsDiagnosticFallbackUsed = false;
+    bool closureFeasibilityPrepassEntered = false;
+    bool closureFeasibilityPassed = false;
+    bool closureInitialSupportUsed = false;
+    std::string closureInitialSupportProvenance =
+        "NotProvided";
+    std::string closureRoutingDecision = "NotEvaluated";
     std::string resultProvenance = "NotEvaluated";
     bool independentLowRankSupportAttempted = false;
     bool allIndependentLowRankSupportsConstructible = false;

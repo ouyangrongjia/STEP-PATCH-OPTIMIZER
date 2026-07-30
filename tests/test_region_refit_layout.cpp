@@ -1245,7 +1245,7 @@ void test_boundary_gate_failure_preserves_low_rank_supports_for_diagnostic_sewin
     spo::RegionRefitOptions options;
     options.fixedPatchCount = 2;
     options.maximumParameterDistortion = 1000.0;
-    options.curveProjectionTolerance = 1.0e-16;
+    options.curveProjectionTolerance = 0.01;
     options.curveOnSurfaceTolerance = 1.0e-16;
     options.tolerance3d = 1.0e-6;
     options.normalToleranceDegrees = 1.0;
@@ -1282,17 +1282,50 @@ void test_boundary_gate_failure_preserves_low_rank_supports_for_diagnostic_sewin
     assert(fitted.bestEffortNetwork->formalFairnessSolveEntered);
     assert(fitted.bestEffortNetwork->internalControlPointsSolved);
     assert(!fitted.bestEffortNetwork->coonsDiagnosticFallbackUsed);
-    assert(fitted.bestEffortNetwork->fitOutcome ==
-        "IndependentLowRankBoundaryViolationDiagnostic");
+    assert(
+        fitted.bestEffortNetwork->fitOutcome ==
+            "IndependentLowRankBoundaryViolationDiagnostic" ||
+        fitted.bestEffortNetwork->fitOutcome ==
+            "ClosureFeasibilityDiagnostic");
     assert(!fitted.attempts.empty());
-    assert(!fitted.attempts.front()
-        .allIndependentLowRankSupportsConstructible);
+    const auto& attempt = fitted.attempts.front();
+    assert(!attempt.allIndependentLowRankSupportsConstructible);
+    assert(attempt.closureFeasibilityPrepassEntered);
+    assert(!attempt.closureFeasibilityPassed);
+    assert(attempt.closureRoutingDecision == "Stage3");
     assert(std::any_of(
-        fitted.attempts.front().independentLowRankSupports.begin(),
-        fitted.attempts.front().independentLowRankSupports.end(),
+        attempt.independentLowRankSupports.begin(),
+        attempt.independentLowRankSupports.end(),
         [](const auto& support) {
-            return !support.trimConstructible;
+            return
+                support
+                    .maximumInternalCurveOnSurfaceDeviation >
+                    1.0e-16 &&
+                support
+                    .maximumInternalCurveOnSurfaceDeviation <=
+                    0.01 &&
+                !support.trimConstructible;
         }));
+    assert(!attempt.iterations.empty());
+    auto closureResidualRecorded = false;
+    for (const auto& iteration : attempt.iterations) {
+        assert(iteration.closureFeasibilityPrepass);
+        assert(iteration.stopReason.find(
+            "Refined U and V knots") ==
+            std::string::npos);
+        assert(iteration.seamG1SoftConstraintCount == 0);
+        assert(iteration.seamG2SoftConstraintCount == 0);
+        assert(iteration.adjacentNormalSoftConstraintCount == 0);
+        for (const auto& trace : iteration.closureResiduals) {
+            closureResidualRecorded = true;
+            assert(trace.uPoleCount <= 25);
+            assert(trace.vPoleCount <= 25);
+            assert(std::isfinite(trace.worstParameter));
+            assert(std::isfinite(trace.worstUv[0]));
+            assert(std::isfinite(trace.worstUv[1]));
+        }
+    }
+    assert(closureResidualRecorded);
     for (const auto& surface :
          fitted.bestEffortNetwork->surfaces) {
         assert(!surface.IsNull());
