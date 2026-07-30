@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -170,9 +171,17 @@ Handle(Geom2d_Curve) storedPcurve(
     const RegionPatchEdgePcurve& source,
     double& first,
     double& last) {
-    if (source.parameters.size() != 2 ||
+    if (source.parameters.size() < 2 ||
         source.parameters.size() != source.uvPoints.size() ||
-        source.lastParameter <= source.firstParameter) {
+        source.lastParameter <= source.firstParameter ||
+        !std::is_sorted(
+            source.parameters.begin(),
+            source.parameters.end()) ||
+        std::adjacent_find(
+            source.parameters.begin(),
+            source.parameters.end(),
+            std::greater_equal<double> {}) !=
+            source.parameters.end()) {
         return {};
     }
     TColgp_Array1OfPnt2d poles(
@@ -208,38 +217,29 @@ Handle(Geom2d_Curve) storedPcurve(
     }
 }
 
-bool isExactIsoPcurve(const RegionPatchEdgePcurve& source) {
-    if (source.parameters.size() != 2 ||
-        source.uvPoints.size() != 2 ||
-        !(source.sideLastParameter > source.sideFirstParameter)) {
+bool isValidStoredPcurve(
+    const RegionPatchEdgePcurve& source) {
+    if (source.parameters.size() < 2 ||
+        source.parameters.size() !=
+            source.uvPoints.size() ||
+        !(source.lastParameter >
+            source.firstParameter) ||
+        std::any_of(
+            source.uvPoints.begin(),
+            source.uvPoints.end(),
+            [](const auto& uv) {
+                return !std::isfinite(uv[0]) ||
+                    !std::isfinite(uv[1]);
+            })) {
         return false;
     }
-    const auto sidePoint = [](const RegionPatchIsoSide side, const double value) {
-        switch (side) {
-        case RegionPatchIsoSide::VMin:
-            return std::array<double, 2> {value, 0.0};
-        case RegionPatchIsoSide::UMax:
-            return std::array<double, 2> {1.0, value};
-        case RegionPatchIsoSide::VMax:
-            return std::array<double, 2> {1.0 - value, 1.0};
-        case RegionPatchIsoSide::UMin:
-            return std::array<double, 2> {0.0, 1.0 - value};
-        }
-        return std::array<double, 2> {};
-    };
-    const auto loopFirst =
-        sidePoint(source.isoSide, source.sideFirstParameter);
-    const auto loopLast =
-        sidePoint(source.isoSide, source.sideLastParameter);
-    const auto expectedFirst = source.forward ? loopFirst : loopLast;
-    const auto expectedLast = source.forward ? loopLast : loopFirst;
-    constexpr double tolerance = 1.0e-12;
-    return std::hypot(
-               source.uvPoints.front()[0] - expectedFirst[0],
-               source.uvPoints.front()[1] - expectedFirst[1]) <= tolerance &&
-        std::hypot(
-               source.uvPoints.back()[0] - expectedLast[0],
-               source.uvPoints.back()[1] - expectedLast[1]) <= tolerance;
+    return std::equal(
+        source.parameters.begin() + 1,
+        source.parameters.end(),
+        source.parameters.begin(),
+        [](const auto current, const auto previous) {
+            return current > previous;
+        });
 }
 
 double sectionCurveLength(const TopoDS_Edge& edge) {
@@ -742,8 +742,7 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
         }
         const auto patch = static_cast<std::size_t>(loop.patch);
         const auto& parameterization = network.layout.patches[patch];
-        if (!parameterization.rectangularIsoBoundary ||
-            !parameterization.pcurveLoopClosed ||
+        if (!parameterization.pcurveLoopClosed ||
             !parameterization.pcurveOrientationConsistent ||
             parameterization.pcurveSelfIntersectionCount != 0 ||
             parameterization.pcurveNonAdjacentIntersectionCount != 0 ||
@@ -771,9 +770,9 @@ NativeRegionPatchNetworkBuildResult NativeRegionPatchNetworkBuilder::build(
                     "A patch loop has no matching frozen parameter-domain pcurve.";
                 return result;
             }
-            if (!isExactIsoPcurve(*stored)) {
+            if (!isValidStoredPcurve(*stored)) {
                 result.message =
-                    "A patch loop pcurve is not an exact rectangular iso segment.";
+                    "A patch loop has no finite, strictly parameterized stored pcurve.";
                 return result;
             }
             double pcurveFirst = 0.0;

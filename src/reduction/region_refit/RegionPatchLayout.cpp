@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <map>
@@ -1649,6 +1650,140 @@ std::optional<std::array<double, 2>> evaluateRegionPatchEdgePcurve(
             alpha * pcurve.uvPoints[second][0],
         (1.0 - alpha) * pcurve.uvPoints[first][1] +
             alpha * pcurve.uvPoints[second][1]};
+}
+
+bool validateRegionPatchPcurveLoop(
+    RegionPatchParameterization& patch,
+    std::string& message) {
+    patch.pcurveLoopClosed = patch.edgePcurves.size() >= 3;
+    patch.pcurveOrientationConsistent =
+        patch.pcurveLoopClosed;
+    patch.pcurveSelfIntersectionCount = 0;
+    patch.pcurveNonAdjacentIntersectionCount = 0;
+    for (auto& pcurve : patch.edgePcurves) {
+        if (pcurve.parameters.size() < 2 ||
+            pcurve.parameters.size() !=
+                pcurve.uvPoints.size() ||
+            !std::is_sorted(
+                pcurve.parameters.begin(),
+                pcurve.parameters.end()) ||
+            std::adjacent_find(
+                pcurve.parameters.begin(),
+                pcurve.parameters.end(),
+                std::greater_equal<double> {}) !=
+                pcurve.parameters.end() ||
+            std::any_of(
+                pcurve.uvPoints.begin(),
+                pcurve.uvPoints.end(),
+                [](const auto& uv) {
+                    return !std::isfinite(uv[0]) ||
+                        !std::isfinite(uv[1]);
+                })) {
+            patch.pcurveLoopClosed = false;
+            patch.pcurveOrientationConsistent = false;
+            continue;
+        }
+        pcurve.hash = pcurveHash(pcurve);
+    }
+    for (std::size_t order = 0;
+         order < patch.edgePcurves.size();
+         ++order) {
+        const auto& current = patch.edgePcurves[order];
+        const auto& next = patch.edgePcurves[
+            (order + 1) % patch.edgePcurves.size()];
+        if (current.uvPoints.empty() ||
+            next.uvPoints.empty()) {
+            patch.pcurveLoopClosed = false;
+            continue;
+        }
+        const auto currentEnd = current.forward
+            ? current.uvPoints.back()
+            : current.uvPoints.front();
+        const auto nextStart = next.forward
+            ? next.uvPoints.front()
+            : next.uvPoints.back();
+        if (std::hypot(
+                currentEnd[0] - nextStart[0],
+                currentEnd[1] - nextStart[1]) >
+            1.0e-10) {
+            patch.pcurveLoopClosed = false;
+        }
+    }
+    for (std::size_t first = 0;
+         first < patch.edgePcurves.size();
+         ++first) {
+        const auto& firstCurve =
+            patch.edgePcurves[first];
+        for (std::size_t firstSegment = 0;
+             firstSegment + 1 <
+                firstCurve.uvPoints.size();
+             ++firstSegment) {
+            for (std::size_t secondSegment =
+                     firstSegment + 2;
+                 secondSegment + 1 <
+                    firstCurve.uvPoints.size();
+                 ++secondSegment) {
+                if (segmentsIntersectStrictly(
+                        firstCurve.uvPoints[firstSegment],
+                        firstCurve.uvPoints[firstSegment + 1],
+                        firstCurve.uvPoints[secondSegment],
+                        firstCurve.uvPoints[secondSegment + 1])) {
+                    ++patch.pcurveSelfIntersectionCount;
+                }
+            }
+        }
+        for (std::size_t second = first + 1;
+             second < patch.edgePcurves.size();
+             ++second) {
+            const auto adjacent =
+                second == first + 1 ||
+                (first == 0 &&
+                 second + 1 ==
+                    patch.edgePcurves.size());
+            if (adjacent) continue;
+            const auto& secondCurve =
+                patch.edgePcurves[second];
+            for (std::size_t firstSegment = 0;
+                 firstSegment + 1 <
+                    firstCurve.uvPoints.size();
+                 ++firstSegment) {
+                for (std::size_t secondSegment = 0;
+                     secondSegment + 1 <
+                        secondCurve.uvPoints.size();
+                     ++secondSegment) {
+                    if (segmentsIntersectStrictly(
+                            firstCurve.uvPoints[firstSegment],
+                            firstCurve.uvPoints[firstSegment + 1],
+                            secondCurve.uvPoints[secondSegment],
+                            secondCurve.uvPoints[secondSegment + 1])) {
+                        ++patch
+                            .pcurveNonAdjacentIntersectionCount;
+                    }
+                }
+            }
+        }
+    }
+    const auto passed =
+        patch.pcurveLoopClosed &&
+        patch.pcurveOrientationConsistent &&
+        patch.pcurveSelfIntersectionCount == 0 &&
+        patch.pcurveNonAdjacentIntersectionCount == 0;
+    if (!passed) {
+        message =
+            "A projected general pcurve loop is open, "
+            "misoriented, or self-intersecting.";
+    }
+    return passed;
+}
+
+void refreshRegionPatchLayoutHash(
+    RegionPatchLayout& layout) {
+    for (auto& patch : layout.patches) {
+        for (auto& pcurve : patch.edgePcurves) {
+            pcurve.hash = pcurveHash(pcurve);
+        }
+    }
+    layout.hash = layoutHash(layout);
 }
 
 double minimumUvAreaRatioLimit(

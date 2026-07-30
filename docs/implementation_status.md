@@ -167,13 +167,15 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 状态：独立实验分支，命令行纵向链已改为曲线网络先行，尚未产品验收。
 
-当前实现先生成并冻结显式 `RegionCurveNetwork`。内部界面使用端点固定、正则化的 C2 三次 B-spline；每个 patch 仍保存载体 `parameters` 和矩形 `surfaceParameters`，四逻辑边从确定性合法分组中选择。拟合样本以原始 `FaceId/UV` 在同面载体三角形内做重心映射；四条逻辑边使用共享节点兼容、每侧不超过 25 个控制点的三次 B-spline 支撑，四周控制点冻结后以 `SimplicialLDLT` 求解内部变量的约化 SPD 法方程。布局与曲面质量评价共享拓扑传播后的三角形方向，STEP Face 的局部绕序不再被误报为 UV 翻转。Coons 仅可作为 `BoundaryLockedDiagnostic`。
+当前实现先生成显式 `RegionCurveNetwork`，内部界面仍使用唯一三维曲线和共同参数 `t`。每张 patch 先独立拟合 6×6 三次低秩延展支撑面，原始 STEP Edge 和内部曲线投影为一般 pcurve；第二轮起交替更新样本参数与 pcurve，并使用 Cauchy 稳健权重、二阶控制网公平项、法向项和 Jacobian barrier。残差驱动 knot 只在失败 patch/方向局部插入，实际 U/V poles 硬限为 `min(配置上限, 25)`。只有全部独立支撑面有限、正 Jacobian、pcurve 闭合且达到外部 `0.001 mm` 与内部 `0.03 mm` 曲线投影门，才进入四面联合公平系统；内部 seam 的 G0/G1/G2 使用共同参数采样约束，不传播 knot family。STEP Face 的局部绕序继续通过拓扑方向传播处理。
 
-拟合仍分为双轨：`GeomagicEquivalent` 在恢复规格为 `ResearchPartial` 时明确返回 `UnsupportedFittingSpecification`；`FeaturePreserving` 保持原 STEP Edge、共享 Edge/pcurve、`SameParameter`、G0 和固定质量门不变。P0 沿唯一共享三维 Edge 的共同参数 `t` 同时评价 `Edge(t)` 与双侧 `Surface(pcurve(t))`，统一 seam 距离、法向和导数比例的取样真值。UV 拓扑、支撑曲面 Jacobian、Face/Wire 方向分别判定；拟合与 B-Rep seam 验证冲突时报告 `ValidatorInconsistent` 并阻断产品资格。缓存二进制版本保持 14，算法指纹为 `native-regional-refit-v44-shared-edge-parameter-validator-gates`。
+拟合仍分为双轨：`GeomagicEquivalent` 在恢复规格为 `ResearchPartial` 时明确返回 `UnsupportedFittingSpecification`；`FeaturePreserving` 保持原 STEP Edge、共享 Edge/pcurve、`SameParameter`、G0 和固定质量门不变。报告新增 `formalFairnessSolveEntered`、`internalControlPointsSolved`、`coonsDiagnosticFallbackUsed` 和 `resultProvenance`，独立支撑面还逐 patch 报告交替轮数、稳健降权样本数、barrier 接受比例、实际 poles 与外/内部 Curve-on-Surface 偏差。若独立低秩面有限、一般 pcurve 闭合且满足 poles 真门，但因 Jacobian 或边界投影门失败，则以 `IndependentLowRankBoundaryViolationDiagnostic` 保留实际面片并继续固定 `0.001 mm` 诊断缝合；它不能取得 `ProductFit`。Coons 只能作为初始化或 `BoundaryLockedDiagnostic`，不能取得 `ProductFit`。UV 拓扑、支撑曲面 Jacobian、Face/Wire 方向分别判定；验证器冲突仍以 `ValidatorInconsistent` 阻断产品资格。缓存二进制版本为 15，算法指纹为 `native-regional-refit-v46-low-rank-boundary-violation-sewing`。
 
 P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260729_212344_628__native-region-refit__03_配件_Clay__cand-0179__target\final\`。旧 `4.96138 mm` seam 距离来自 mesh-vertex 配对污染；共同参数下双侧支撑面最大分离为 `4.36e-14 mm`，Curve-on-Surface 偏差为 `4.80e-14 mm`。7 个原始三角形符号变化经拓扑方向传播后判定为 STEP Face 局部绕序，不是 UV 翻转。4 张裁剪 Face 的 38 次 `SameParameter` 检查无失败，内部自由边和意外交线为 0；固定 `0.001 mm` 诊断缝合与 STEP 回读得到 1 个 Solid、0 条自由边和 0 条多重边。Creo 导入成功，但 Face/Wire 仍有 `BadOrientationOfSubshape` 且 ModelCHECK 失败，因此结果为 `DiagnosticOnly`、`canApply=false`。
 
-当前代码不包含 P1 的 `TrimmedConvexSupportChart` 支撑面解耦，也不包含 P2 的边界可表示性预检和定向增片；相关既有运行目录仅作为历史失败证据保留。P0 只修正验证真值和错误分类，不改善拟合曲面的距离、法向、接缝、公平性或控制网复杂度，因此不能转化为 `ProductFit`。
+阶段 1 当前证据位于 `data/runs/20260730_104812_470__native-region-refit__03_配件_Clay__cand-0179__target/final/`。本次明确记录 `formalFairnessSolveEntered=true`、`internalControlPointsSolved=true`、`coonsDiagnosticFallbackUsed=false` 和 `resultProvenance=IndependentLowRankBoundaryViolationDiagnostic`。四张实际低秩支撑面均有限、一般 pcurve 闭合、正 Jacobian 并满足 25 poles 真门，实际为 9×12、11×10、11×10、9×12，共 436 poles / 68 knots；外部 Curve-on-Surface 最大误差为 `0.160706 mm`，38 次 SameParameter 检查全部失败，最大偏差 `0.160708 mm`。尽管如此，固定 `0.001 mm` 强制诊断缝合和 STEP 回读仍得到 1 个 Solid、0 条自由边和 0 条多重边。这证明边界不合格的实际低秩面可以被当前拓扑链强制缝成水密实体，但不证明曲线落面、SameParameter、Face/Wire 方向或产品质量合格；Face/Wire 仍为 `BadOrientationOfSubshape`，ModelCHECK 失败，故仍为 `DiagnosticOnly`、`canApply=false`。
+
+旧 P1 的固定 `TrimmedConvexSupportChart`、全局网格加密，以及旧 P2 在冻结曲线网络上的事后 split 均未恢复。下一入口是阶段 3：根据本次逐 patch 失败热区，在曲线网络最终冻结前枚举 K=4 角点、seam 和 U/V 方向；只有明确局部 K=4 不可行时才定向 K=5，选定布局后重新生成曲线网络并回到低秩与联合拟合。P0 只修正验证真值和错误分类，仍是不可覆盖的对照基线。
 
 ## 当前限制
 

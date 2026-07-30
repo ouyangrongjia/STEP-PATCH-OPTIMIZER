@@ -983,6 +983,40 @@ QJsonObject selectedLayoutToJson(const spo::RegionPatchLayout& layout) {
         {"seams", seams}};
 }
 
+QJsonArray lowRankSupportReportsToJson(
+    const std::vector<spo::RegionLowRankSupportPatchReport>& reports) {
+    QJsonArray json;
+    for (const auto& report : reports) {
+        json.append(QJsonObject {
+            {"patch_index", report.patchIndex},
+            {"finite_passed", report.finitePassed},
+            {"positive_jacobian_passed",
+                report.positiveJacobianPassed},
+            {"pcurve_loop_passed", report.pcurveLoopPassed},
+            {"trim_constructible", report.trimConstructible},
+            {"pole_limit_passed", report.poleLimitPassed},
+            {"u_pole_count", report.uPoleCount},
+            {"v_pole_count", report.vPoleCount},
+            {"alternating_projection_rounds",
+                report.alternatingProjectionRounds},
+            {"projected_pcurve_sample_count",
+                QString::number(
+                    report.projectedPcurveSampleCount)},
+            {"robust_downweighted_sample_count",
+                QString::number(
+                    report.robustDownweightedSampleCount)},
+            {"jacobian_barrier_accepted_scale",
+                report.jacobianBarrierAcceptedScale},
+            {"maximum_external_curve_on_surface_deviation_mm",
+                report.maximumExternalCurveOnSurfaceDeviation},
+            {"maximum_internal_curve_on_surface_deviation_mm",
+                report.maximumInternalCurveOnSurfaceDeviation},
+            {"dominant_violation",
+                QString::fromStdString(report.dominantViolation)}});
+    }
+    return json;
+}
+
 QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
     QJsonArray attempts;
     for (const auto& attempt : result.report.fitAttempts) {
@@ -1072,6 +1106,15 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
                     iteration.interiorControlPointCount},
                 {"reduced_spd_system_used",
                     iteration.reducedSpdSystemUsed},
+                {"formal_fairness_solve_entered",
+                    iteration.formalFairnessSolveEntered},
+                {"internal_control_points_solved",
+                    iteration.internalControlPointsSolved},
+                {"coons_diagnostic_fallback_used",
+                    iteration.coonsDiagnosticFallbackUsed},
+                {"result_provenance",
+                    QString::fromStdString(
+                        iteration.resultProvenance)},
                 {"fairness_energy", iteration.fairnessEnergy},
                 {"control_net_second_difference_energy",
                     iteration.controlNetSecondDifferenceEnergy},
@@ -1127,12 +1170,30 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
         attempts.append(QJsonObject {
             {"patch_count", attempt.patchCount},
             {"layout_hash", QString::fromStdString(attempt.layoutHash)},
+            {"fitted_layout_hash",
+                QString::fromStdString(attempt.fittedLayoutHash)},
             {"same_face_barycentric_mapping_count",
                 QString::number(attempt.sameFaceBarycentricMappingCount)},
             {"same_face_mapping_fallback_count",
                 QString::number(attempt.sameFaceMappingFallbackCount)},
             {"cross_face_mapping_failure_count",
                 QString::number(attempt.crossFaceMappingFailureCount)},
+            {"formal_fairness_solve_entered",
+                attempt.formalFairnessSolveEntered},
+            {"internal_control_points_solved",
+                attempt.internalControlPointsSolved},
+            {"coons_diagnostic_fallback_used",
+                attempt.coonsDiagnosticFallbackUsed},
+            {"independent_low_rank_support_attempted",
+                attempt.independentLowRankSupportAttempted},
+            {"all_independent_low_rank_supports_constructible",
+                attempt.allIndependentLowRankSupportsConstructible},
+            {"independent_low_rank_support_patches",
+                lowRankSupportReportsToJson(
+                    attempt.independentLowRankSupports)},
+            {"result_provenance",
+                QString::fromStdString(
+                    attempt.resultProvenance)},
             {"success", attempt.success},
             {"wall_ms", attempt.wallMilliseconds},
             {"stop_reason", QString::fromStdString(attempt.stopReason)},
@@ -1151,6 +1212,22 @@ QJsonObject fitReportToJson(const spo::RegionRefitResult& result) {
             result.report.recoveredFittingBehaviorEquivalentReady},
         {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
+        {"formal_fairness_solve_entered",
+            result.report.formalFairnessSolveEntered},
+        {"internal_control_points_solved",
+            result.report.internalControlPointsSolved},
+        {"coons_diagnostic_fallback_used",
+            result.report.coonsDiagnosticFallbackUsed},
+        {"independent_low_rank_support_attempted",
+            result.report.independentLowRankSupportAttempted},
+        {"all_independent_low_rank_supports_constructible",
+            result.report.allIndependentLowRankSupportsConstructible},
+        {"independent_low_rank_support_patches",
+            lowRankSupportReportsToJson(
+                result.report.fittedIndependentLowRankSupports)},
+        {"result_provenance",
+            QString::fromStdString(
+                result.report.fittedResultProvenance)},
         {"boundary_feasibility_refinement_rounds",
             result.report.boundaryFeasibilityRefinementRounds},
         {"boundary_feasibility_residual",
@@ -1635,6 +1712,22 @@ QJsonObject performanceToJson(
         {"first_product_failure_gate", QString::fromStdString(result.report.firstProductFailureGate)},
         {"layout_gate_passed", result.report.layoutGatePassed},
         {"fit_gate_passed", result.report.fitGatePassed},
+        {"formal_fairness_solve_entered",
+            result.report.formalFairnessSolveEntered},
+        {"internal_control_points_solved",
+            result.report.internalControlPointsSolved},
+        {"coons_diagnostic_fallback_used",
+            result.report.coonsDiagnosticFallbackUsed},
+        {"independent_low_rank_support_attempted",
+            result.report.independentLowRankSupportAttempted},
+        {"all_independent_low_rank_supports_constructible",
+            result.report.allIndependentLowRankSupportsConstructible},
+        {"independent_low_rank_support_patches",
+            lowRankSupportReportsToJson(
+                result.report.fittedIndependentLowRankSupports)},
+        {"fitted_result_provenance",
+            QString::fromStdString(
+                result.report.fittedResultProvenance)},
         {"surface_uv_topology_gate_passed",
             result.report.fittedUvTopologyGatePassed},
         {"surface_uv_topology_status",
@@ -1915,7 +2008,7 @@ int main(int argc, char* argv[]) {
     std::string commit;
     spo::RegionRefitRequest request;
     request.options.algorithmFingerprint =
-        "native-regional-refit-v44-shared-edge-parameter-validator-gates";
+        "native-regional-refit-v46-low-rank-boundary-violation-sewing";
     try {
         for (int index = 3; index < argc; ++index) {
             const std::string argument = argv[index];
@@ -2063,7 +2156,7 @@ int main(int argc, char* argv[]) {
 
     if (!algorithmFingerprintSpecified) {
         request.options.algorithmFingerprint = std::string(
-            "native-regional-refit-v44-shared-edge-parameter-validator-gates-") +
+            "native-regional-refit-v46-low-rank-boundary-violation-sewing-") +
             spo::toString(request.options.fittingMode) + "-" +
             spo::toString(request.options.samplingMode) + "-" +
             spo::toString(request.options.layoutCarrierSamplingMode) + "-" +

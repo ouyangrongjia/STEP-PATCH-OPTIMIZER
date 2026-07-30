@@ -33,7 +33,7 @@ constexpr quint32 kSamplingMagic = 0x52534653u;
 constexpr quint32 kCurveNetworkMagic = 0x52534643u;
 constexpr quint32 kLayoutMagic = 0x5253464cu;
 constexpr quint32 kFitMagic = 0x52534646u;
-constexpr quint32 kVersion = 14;
+constexpr quint32 kVersion = 15;
 constexpr quint64 kMaximumSerializedCount = 100000000ull;
 
 void configure(QDataStream& stream) {
@@ -867,6 +867,9 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.fixedBoundaryControlPointCount
            << report.interiorControlPointCount
            << report.reducedSpdSystemUsed
+           << report.formalFairnessSolveEntered
+           << report.internalControlPointsSolved
+           << report.coonsDiagnosticFallbackUsed
            << report.fairnessEnergy
            << report.controlNetSecondDifferenceEnergy
            << report.physicalSurfaceArea
@@ -885,6 +888,7 @@ void writeIteration(QDataStream& stream, const RegionFitIterationReport& report)
            << report.surfaceJacobianOrientationFlipCount
            << report.wallMilliseconds;
     writeString(stream, report.hardConstraintStatus);
+    writeString(stream, report.resultProvenance);
     writeString(stream, report.surfaceLegalityStatus);
     writeString(stream, report.stopReason);
 }
@@ -954,6 +958,9 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
            >> report.fixedBoundaryControlPointCount
            >> report.interiorControlPointCount
            >> report.reducedSpdSystemUsed
+           >> report.formalFairnessSolveEntered
+           >> report.internalControlPointsSolved
+           >> report.coonsDiagnosticFallbackUsed
            >> report.fairnessEnergy
            >> report.controlNetSecondDifferenceEnergy
            >> report.physicalSurfaceArea
@@ -996,8 +1003,56 @@ bool readIteration(QDataStream& stream, RegionFitIterationReport& report) {
     report.holdoutWorstDistanceVertex = static_cast<std::size_t>(worstDistance);
     report.holdoutWorstNormalVertex = static_cast<std::size_t>(worstNormal);
     return readString(stream, report.hardConstraintStatus) &&
+        readString(stream, report.resultProvenance) &&
         readString(stream, report.surfaceLegalityStatus) &&
         readString(stream, report.stopReason) &&
+        stream.status() == QDataStream::Ok;
+}
+
+void writeLowRankSupportPatchReport(
+    QDataStream& stream,
+    const RegionLowRankSupportPatchReport& report) {
+    stream << report.patchIndex
+           << report.finitePassed
+           << report.positiveJacobianPassed
+           << report.pcurveLoopPassed
+           << report.trimConstructible
+           << report.poleLimitPassed
+           << report.uPoleCount
+           << report.vPoleCount
+           << report.alternatingProjectionRounds
+           << quint64(report.projectedPcurveSampleCount)
+           << quint64(report.robustDownweightedSampleCount)
+           << report.jacobianBarrierAcceptedScale
+           << report.maximumExternalCurveOnSurfaceDeviation
+           << report.maximumInternalCurveOnSurfaceDeviation;
+    writeString(stream, report.dominantViolation);
+}
+
+bool readLowRankSupportPatchReport(
+    QDataStream& stream,
+    RegionLowRankSupportPatchReport& report) {
+    quint64 projectedPcurveSamples = 0;
+    quint64 robustDownweightedSamples = 0;
+    stream >> report.patchIndex
+           >> report.finitePassed
+           >> report.positiveJacobianPassed
+           >> report.pcurveLoopPassed
+           >> report.trimConstructible
+           >> report.poleLimitPassed
+           >> report.uPoleCount
+           >> report.vPoleCount
+           >> report.alternatingProjectionRounds
+           >> projectedPcurveSamples
+           >> robustDownweightedSamples
+           >> report.jacobianBarrierAcceptedScale
+           >> report.maximumExternalCurveOnSurfaceDeviation
+           >> report.maximumInternalCurveOnSurfaceDeviation;
+    report.projectedPcurveSampleCount =
+        static_cast<std::size_t>(projectedPcurveSamples);
+    report.robustDownweightedSampleCount =
+        static_cast<std::size_t>(robustDownweightedSamples);
+    return readString(stream, report.dominantViolation) &&
         stream.status() == QDataStream::Ok;
 }
 
@@ -1006,9 +1061,20 @@ void writeAttempts(QDataStream& stream, const std::vector<RegionFitAttemptReport
     for (const auto& attempt : attempts) {
         stream << attempt.patchCount;
         writeString(stream, attempt.layoutHash);
+        writeString(stream, attempt.fittedLayoutHash);
         stream << quint64(attempt.sameFaceBarycentricMappingCount)
                << quint64(attempt.sameFaceMappingFallbackCount)
-               << quint64(attempt.crossFaceMappingFailureCount);
+               << quint64(attempt.crossFaceMappingFailureCount)
+               << attempt.formalFairnessSolveEntered
+               << attempt.internalControlPointsSolved
+               << attempt.coonsDiagnosticFallbackUsed
+               << attempt.independentLowRankSupportAttempted
+               << attempt.allIndependentLowRankSupportsConstructible
+               << quint64(attempt.independentLowRankSupports.size());
+        for (const auto& report : attempt.independentLowRankSupports) {
+            writeLowRankSupportPatchReport(stream, report);
+        }
+        writeString(stream, attempt.resultProvenance);
         stream << attempt.success << attempt.wallMilliseconds;
         writeString(stream, attempt.stopReason);
         stream << quint64(attempt.iterations.size());
@@ -1022,19 +1088,35 @@ bool readAttempts(QDataStream& stream, std::vector<RegionFitAttemptReport>& atte
     attempts.resize(count);
     for (auto& attempt : attempts) {
         stream >> attempt.patchCount;
-        if (!readString(stream, attempt.layoutHash)) return false;
+        if (!readString(stream, attempt.layoutHash) ||
+            !readString(stream, attempt.fittedLayoutHash)) return false;
         quint64 sameFaceBarycentricMappings = 0;
         quint64 sameFaceMappingFallbacks = 0;
         quint64 crossFaceMappingFailures = 0;
+        quint64 lowRankPatchCount = 0;
         stream >> sameFaceBarycentricMappings
                >> sameFaceMappingFallbacks
-               >> crossFaceMappingFailures;
+               >> crossFaceMappingFailures
+               >> attempt.formalFairnessSolveEntered
+               >> attempt.internalControlPointsSolved
+               >> attempt.coonsDiagnosticFallbackUsed
+               >> attempt.independentLowRankSupportAttempted
+               >> attempt.allIndependentLowRankSupportsConstructible
+               >> lowRankPatchCount;
         attempt.sameFaceBarycentricMappingCount =
             static_cast<std::size_t>(sameFaceBarycentricMappings);
         attempt.sameFaceMappingFallbackCount =
             static_cast<std::size_t>(sameFaceMappingFallbacks);
         attempt.crossFaceMappingFailureCount =
             static_cast<std::size_t>(crossFaceMappingFailures);
+        attempt.independentLowRankSupports.resize(
+            static_cast<std::size_t>(lowRankPatchCount));
+        for (auto& report : attempt.independentLowRankSupports) {
+            if (!readLowRankSupportPatchReport(stream, report)) return false;
+        }
+        if (!readString(stream, attempt.resultProvenance)) {
+            return false;
+        }
         stream >> attempt.success >> attempt.wallMilliseconds;
         if (!readString(stream, attempt.stopReason) || !readCount(stream, count)) return false;
         attempt.iterations.resize(count);
@@ -1079,7 +1161,7 @@ std::string makeKey(const RegionRefitRequest& request) {
     text << std::setprecision(17)
          << "native-regional-refit-cache-v2|" << request.options.inputStepSha256 << '|'
          << (request.options.algorithmFingerprint.empty()
-                ? "native-regional-refit-v44-shared-edge-parameter-validator-gates"
+                ? "native-regional-refit-v46-low-rank-boundary-violation-sewing"
                 : request.options.algorithmFingerprint)
          << '|' << static_cast<int>(request.layoutMode)
          << '|' << static_cast<int>(request.options.fittingMode)
@@ -1393,7 +1475,7 @@ bool RegionalSurfaceRefitCache::loadFit(
         event = disabledEvent("FitCache");
         return false;
     }
-    std::string layoutHash;
+    RegionPatchLayout cachedLayout;
     bool hasNetwork = false;
     double holdoutDistance = 0.0;
     double holdoutNormal = 0.0;
@@ -1405,6 +1487,9 @@ bool RegionalSurfaceRefitCache::loadFit(
     bool seamContinuityGatePassed = false;
     bool boundaryLocked = false;
     bool constructibleForBRep = false;
+    bool formalFairnessSolveEntered = false;
+    bool internalControlPointsSolved = false;
+    bool coonsDiagnosticFallbackUsed = false;
     double normalizedViolationScore = 0.0;
     RegionSurfaceQualityMetrics quality;
     std::string fitOutcome;
@@ -1417,11 +1502,14 @@ bool RegionalSurfaceRefitCache::loadFit(
         if (magic != kFitMagic || version != kVersion || !readString(stream, result.message) ||
             !readAttempts(stream, result.attempts)) return false;
         stream >> hasNetwork;
-        if (!readString(stream, layoutHash)) return false;
+        if (hasNetwork && !readLayout(stream, cachedLayout)) return false;
         stream >> holdoutDistance >> holdoutNormal >> boundaryDistance
                >> seamDistance >> seamCurveDeviation >> seamNormalDegrees
                >> seamCurvatureDifference >> seamContinuityGatePassed
                >> boundaryLocked >> constructibleForBRep
+               >> formalFairnessSolveEntered
+               >> internalControlPointsSolved
+               >> coonsDiagnosticFallbackUsed
                >> normalizedViolationScore
                >> quality.totalPoleCount
                >> quality.maximumPoleCountPerSide
@@ -1466,9 +1554,29 @@ bool RegionalSurfaceRefitCache::loadFit(
         event.message = "Negative joint-fit cache hit.";
         return true;
     }
-    const auto layout = std::find_if(candidates.begin(), candidates.end(), [&](const auto& candidate) {
-        return candidate.hash == layoutHash;
-    });
+    auto sourceLayoutHash =
+        cachedLayout.hash;
+    const auto sourceAttempt = std::find_if(
+        result.attempts.begin(),
+        result.attempts.end(),
+        [&](const auto& attempt) {
+            return attempt.fittedLayoutHash ==
+                    cachedLayout.hash ||
+                (attempt.success &&
+                 attempt.patchCount ==
+                    cachedLayout.patchCount);
+        });
+    if (sourceAttempt != result.attempts.end()) {
+        sourceLayoutHash =
+            sourceAttempt->layoutHash;
+    }
+    const auto layout = std::find_if(
+        candidates.begin(),
+        candidates.end(),
+        [&](const auto& candidate) {
+            return candidate.hash ==
+                sourceLayoutHash;
+        });
     if (layout == candidates.end()) {
         event.message = "Joint-fit cache layout is not present in the selected candidate family.";
         return false;
@@ -1483,7 +1591,7 @@ bool RegionalSurfaceRefitCache::loadFit(
         return false;
     }
     auto network = std::make_shared<RegionFittedPatchNetwork>();
-    network->layout = *layout;
+    network->layout = std::move(cachedLayout);
     network->inspectionShape = shape;
     for (TopExp_Explorer explorer(shape, TopAbs_FACE); explorer.More(); explorer.Next()) {
         const auto surface = Handle(Geom_BSplineSurface)::DownCast(
@@ -1502,6 +1610,12 @@ bool RegionalSurfaceRefitCache::loadFit(
     network->seamContinuityGatePassed = seamContinuityGatePassed;
     network->boundaryLocked = boundaryLocked;
     network->constructibleForBRep = constructibleForBRep;
+    network->formalFairnessSolveEntered =
+        formalFairnessSolveEntered;
+    network->internalControlPointsSolved =
+        internalControlPointsSolved;
+    network->coonsDiagnosticFallbackUsed =
+        coonsDiagnosticFallbackUsed;
     network->normalizedViolationScore = normalizedViolationScore;
     network->quality = quality;
     network->quality.surfaceComplexities.clear();
@@ -1558,7 +1672,7 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
         writeString(stream, result.message);
         writeAttempts(stream, result.attempts);
         stream << result.success();
-        writeString(stream, result.success() ? result.network->layout.hash : std::string {});
+        if (result.success()) writeLayout(stream, result.network->layout);
         stream << (result.success() ? result.network->holdoutMaximumDistance : 0.0)
                << (result.success() ? result.network->holdoutMaximumNormalDegrees : 0.0)
                << (result.success() ? result.network->boundaryMaximumDistance : 0.0)
@@ -1569,6 +1683,12 @@ RegionRefitCacheEvent RegionalSurfaceRefitCache::saveFit(
                << (result.success() && result.network->seamContinuityGatePassed)
                << (result.success() && result.network->boundaryLocked)
                << (result.success() && result.network->constructibleForBRep)
+               << (result.success() &&
+                    result.network->formalFairnessSolveEntered)
+               << (result.success() &&
+                    result.network->internalControlPointsSolved)
+               << (result.success() &&
+                    result.network->coonsDiagnosticFallbackUsed)
                << (result.success()
                     ? result.network->normalizedViolationScore : 0.0)
                << (result.success()

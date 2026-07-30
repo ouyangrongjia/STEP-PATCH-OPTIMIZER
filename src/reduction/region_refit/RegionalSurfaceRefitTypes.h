@@ -304,6 +304,10 @@ struct RegionFitIterationReport {
     int fixedBoundaryControlPointCount = 0;
     int interiorControlPointCount = 0;
     bool reducedSpdSystemUsed = false;
+    bool formalFairnessSolveEntered = false;
+    bool internalControlPointsSolved = false;
+    bool coonsDiagnosticFallbackUsed = false;
+    std::string resultProvenance = "NotEvaluated";
     double fairnessEnergy = 0.0;
     double controlNetSecondDifferenceEnergy = 0.0;
     double physicalSurfaceArea = 0.0;
@@ -325,12 +329,39 @@ struct RegionFitIterationReport {
     std::string stopReason;
 };
 
+struct RegionLowRankSupportPatchReport {
+    int patchIndex = -1;
+    bool finitePassed = false;
+    bool positiveJacobianPassed = false;
+    bool pcurveLoopPassed = false;
+    bool trimConstructible = false;
+    bool poleLimitPassed = false;
+    int uPoleCount = 0;
+    int vPoleCount = 0;
+    int alternatingProjectionRounds = 0;
+    std::size_t projectedPcurveSampleCount = 0;
+    std::size_t robustDownweightedSampleCount = 0;
+    double jacobianBarrierAcceptedScale = 0.0;
+    double maximumExternalCurveOnSurfaceDeviation = 0.0;
+    double maximumInternalCurveOnSurfaceDeviation = 0.0;
+    std::string dominantViolation = "NotEvaluated";
+};
+
 struct RegionFitAttemptReport {
     int patchCount = 0;
     std::string layoutHash;
+    std::string fittedLayoutHash;
     std::size_t sameFaceBarycentricMappingCount = 0;
     std::size_t sameFaceMappingFallbackCount = 0;
     std::size_t crossFaceMappingFailureCount = 0;
+    bool formalFairnessSolveEntered = false;
+    bool internalControlPointsSolved = false;
+    bool coonsDiagnosticFallbackUsed = false;
+    std::string resultProvenance = "NotEvaluated";
+    bool independentLowRankSupportAttempted = false;
+    bool allIndependentLowRankSupportsConstructible = false;
+    std::vector<RegionLowRankSupportPatchReport>
+        independentLowRankSupports;
     bool success = false;
     double wallMilliseconds = 0.0;
     std::string stopReason;
@@ -483,6 +514,14 @@ struct RegionRefitReport {
     std::vector<RegionFitAttemptReport> fitAttempts;
     bool layoutGatePassed = false;
     bool fitGatePassed = false;
+    bool formalFairnessSolveEntered = false;
+    bool internalControlPointsSolved = false;
+    bool coonsDiagnosticFallbackUsed = false;
+    std::string fittedResultProvenance = "NotEvaluated";
+    bool independentLowRankSupportAttempted = false;
+    bool allIndependentLowRankSupportsConstructible = false;
+    std::vector<RegionLowRankSupportPatchReport>
+        fittedIndependentLowRankSupports;
     RegionalFittingMode fittingMode =
         RegionalFittingMode::FeaturePreserving;
     std::string recoveredFittingSpecificationId;

@@ -760,6 +760,10 @@ void test_native_region_refit_best_effort_artifact_contract() {
         std::string::npos);
     assert(script.find("\"trimmed_patch_faces.step\"") !=
         std::string::npos);
+    assert(script.find("\"sewing_attempt.json\"") !=
+        std::string::npos);
+    assert(script.find("\"SewingAttemptEvidence\"") !=
+        std::string::npos);
     assert(script.find("manifest_self_excluded = $true") !=
         std::string::npos);
     assert(script.find("role = $role") != std::string::npos);
@@ -780,7 +784,15 @@ void test_native_region_refit_best_effort_artifact_contract() {
     assert(creoScript.find("$process.WaitForExit()") != std::string::npos);
     assert(creoScript.find("$process.Dispose()") != std::string::npos);
     assert(probe.find(
-        "native-regional-refit-v44-shared-edge-parameter-validator-gates") !=
+        "native-regional-refit-v46-low-rank-boundary-violation-sewing") !=
+        std::string::npos);
+    assert(probe.find("independent_low_rank_support_attempted") !=
+        std::string::npos);
+    assert(probe.find("alternating_projection_rounds") !=
+        std::string::npos);
+    assert(probe.find("jacobian_barrier_accepted_scale") !=
+        std::string::npos);
+    assert(probe.find("robust_downweighted_sample_count") !=
         std::string::npos);
     assert(probe.find("--fitting-mode") != std::string::npos);
     assert(probe.find("--patch-mode") != std::string::npos);

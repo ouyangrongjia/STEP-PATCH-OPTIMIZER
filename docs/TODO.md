@@ -19,13 +19,15 @@
 - `windows-msvc-debug` 下 candidate-179 算法缓存冷运行不超过 15 分钟、暖运行不超过 5 分钟、峰值内存不超过 8 GiB，完整联合拟合最多三次。
 - 保持现有 candidate-179 49→46 和 12 区域回归不变；失败不得提交模型或回退到 Geomagic。
 
-当前阶段：命令行纵向链保留原有矩形 `surfaceParameters`、四逻辑边、每侧最多 25 控制点的兼容三次 B-spline 支撑和内部变量约化 SPD 求解。P0 已统一内部 seam 的共同参数语义：沿唯一共享三维 Edge 的同一参数 `t` 同时评价 `Edge(t)` 与双侧 `Surface(pcurve(t))`；UV 拓扑、支撑曲面 Jacobian、Face/Wire 方向和验证器一致性分别判定。Coons 仍只允许作为 `BoundaryLockedDiagnostic`。
+当前阶段：P0 已统一内部 seam 的共同参数语义，并增加正式公平求解是否进入、是否解出内部控制点、是否选用 Coons 诊断回退及最终来源的机器可读合同。阶段 1 已实现四张独立 6×6 低秩延展支撑面、一般 pcurve、至少两轮交替投影、Cauchy 稳健权重、二阶公平项、法向项、Jacobian barrier 和失败 patch/方向局部 knot 插入；实际 U/V poles 硬限为 `min(配置上限, 25)`。只有四张面都有限、正 Jacobian、可裁剪且满足外部 `0.001 mm`、内部 `0.03 mm` 曲线投影门，才进入不传播 seam knot family 的四面联合公平系统。Coons 仍只允许作为初始化或 `BoundaryLockedDiagnostic`。
 
-永久产物由运行脚本先写 `data\.native-region-refit-staging\<run-id>\`，成功包装后原子发布到 `data\runs\<run-id>\final\`，异常退出清理暂存目录，已有 run 冲突时拒绝覆盖。正式目录始终只含 `run.json`、`RUN.md`、`artifact_status.json`、`validation_summary.json`、`evidence_manifest.json`，以及阶段确实完成时的 `curve_network.json`、`curve_network.step`、`untrimmed_support_surfaces.step`、`trimmed_patch_faces.step` 和互斥的 `final_sewn.step` 或 `diagnostic_sewn.step`。manifest 最后生成且不记录自身。缓存二进制版本为 14，算法指纹为 `native-regional-refit-v44-shared-edge-parameter-validator-gates`，旧缓存明确拒绝。
+永久产物由运行脚本先写 `data\.native-region-refit-staging\<run-id>\`，成功包装后原子发布到 `data\runs\<run-id>\final\`，异常退出清理暂存目录，已有 run 冲突时拒绝覆盖。正式目录始终只含 `run.json`、`RUN.md`、`artifact_status.json`、`validation_summary.json`、`evidence_manifest.json`，以及阶段确实完成时的 `curve_network.json`、`curve_network.step`、`untrimmed_support_surfaces.step`、`trimmed_patch_faces.step` 和互斥的 `final_sewn.step` 或 `diagnostic_sewn.step`；没有缝合几何时保留 `sewing_attempt.json`。manifest 最后生成且不记录自身。缓存二进制版本为 15，算法指纹为 `native-regional-refit-v46-low-rank-boundary-violation-sewing`，旧缓存明确拒绝。
 
 P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-regional-refit\data\runs\20260729_212344_628__native-region-refit__03_配件_Clay__cand-0179__target\final\`。旧 `4.96138 mm` seam 距离来自 mesh-vertex 配对污染；共同参数下双侧支撑面最大分离为 `4.36e-14 mm`，Curve-on-Surface 偏差为 `4.80e-14 mm`。7 个原始三角形符号变化来自 STEP Face 局部绕序，不应归类为 UV 翻转。Face/Wire 仍有 `BadOrientationOfSubshape`；固定 `0.001 mm` 诊断缝合、STEP 回读和 Creo 导入成功，但 ModelCHECK 失败，因此仍为 `DiagnosticOnly`、`canApply=false`。
 
-当前未完成项仍是拟合曲面的距离、法向、接缝连续性、控制网复杂度和物理公平性产品门。当前实现不包含 P1 支撑面解耦或 P2 边界预检与定向增片；其既有运行目录只作为历史失败证据保留。不得以水密、STEP 可回读或 Creo 可导入替代几何与 Apply 验收，也不得放宽 Curve-on-Surface、`SameParameter` 或固定缝合容差制造成功。
+阶段 1 当前证据位于 `data/runs/20260730_104812_470__native-region-refit__03_配件_Clay__cand-0179__target/final/`。正式公平求解已进入并解出内部控制点；即使边界门失败，有限、一般 pcurve 闭合且满足 poles 真门的实际低秩面仍以 `IndependentLowRankBoundaryViolationDiagnostic` 保留并进入固定容差诊断链，不再被 P0 Coons 对照替换。四张实际控制网为 9×12、11×10、11×10、9×12，共 436 poles / 68 knots，均为正 Jacobian；最大外部 Curve-on-Surface 误差依次为 `0.103737`、`0.160706`、`0.075830`、`0.079820 mm`，所以四张面仍不可作为产品裁剪面，阶段 2 继续跳过。38 次 SameParameter 检查全部失败、最大偏差 `0.160708 mm`，但固定 `0.001 mm` 诊断缝合仍形成 1 个 Solid、0 条自由边和 0 条多重边。该水密结果只回答“边界不合格时能否强制缝合”，不得称为几何或 Apply 验收。
+
+当前未完成项进入阶段 3：在曲线网络最终冻结前，以 patch 0 的 Jacobian 翻转和 patch 1–3 的外边界投影热区枚举 K=4 角点、seam 和 U/V 方向，评分同时纳入单面支撑可行性、真实 trim corner、复合转角、knot 传播长度、控制网纵横比、局部畸变、Jacobian 和预期 G1 可达性；仅在明确局部 K=4 不可行时定向 K=5。选定布局后重新生成与冻结曲线网络，再回到独立低秩和联合公平拟合。不得恢复固定 `TrimmedConvexSupportChart`、全局加密或冻结网络后的事后 split。不得以水密、STEP 可回读或 Creo 可导入替代几何与 Apply 验收，也不得放宽 Curve-on-Surface、`SameParameter` 或固定缝合容差制造成功。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

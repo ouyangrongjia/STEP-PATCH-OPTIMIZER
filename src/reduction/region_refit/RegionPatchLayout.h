@@ -142,6 +142,12 @@ std::optional<std::array<double, 2>> evaluateRegionPatchEdgePcurve(
     const RegionPatchEdgePcurve& pcurve,
     double parameter);
 
+bool validateRegionPatchPcurveLoop(
+    RegionPatchParameterization& patch,
+    std::string& message);
+
+void refreshRegionPatchLayoutHash(RegionPatchLayout& layout);
+
 bool buildCurveConsistentParameterDomain(
     const RegionReferenceMesh& mesh,
     const RegionCurveNetwork& network,

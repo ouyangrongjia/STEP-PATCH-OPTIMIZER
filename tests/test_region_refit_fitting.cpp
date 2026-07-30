@@ -418,7 +418,10 @@ void test_joint_fitter_preserves_best_effort_network_when_normal_gate_fails() {
     assert(fitted.bestEffortNetwork->boundaryLocked);
     assert(!fitted.bestEffortNetwork->constructibleForBRep);
     assert(fitted.bestEffortNetwork->fitOutcome ==
-        "BoundaryLockedDiagnostic");
+        "JointFairnessDiagnostic");
+    assert(fitted.bestEffortNetwork->formalFairnessSolveEntered);
+    assert(fitted.bestEffortNetwork->internalControlPointsSolved);
+    assert(!fitted.bestEffortNetwork->coonsDiagnosticFallbackUsed);
     assert(fitted.bestEffortNetwork->normalizedViolationScore > 1.0);
 }
 
@@ -686,6 +689,16 @@ void test_regional_refit_cache_roundtrips_sampling_layout_and_positive_fit() {
     assert(loadedFit.success());
     assert(loadedFit.network->surfaces.size() == fitted.network->surfaces.size());
     assert(loadedFit.network->layout.hash == fitted.network->layout.hash);
+    assert(loadedFit.network->formalFairnessSolveEntered ==
+        fitted.network->formalFairnessSolveEntered);
+    assert(loadedFit.network->internalControlPointsSolved ==
+        fitted.network->internalControlPointsSolved);
+    assert(loadedFit.network->coonsDiagnosticFallbackUsed ==
+        fitted.network->coonsDiagnosticFallbackUsed);
+    assert(loadedFit.network->fitOutcome ==
+        fitted.network->fitOutcome);
+    assert(loadedFit.attempts.front().resultProvenance ==
+        fitted.attempts.front().resultProvenance);
     assert(loadedFit.network->quality.totalPoleCount ==
         fitted.network->quality.totalPoleCount);
     assert(loadedFit.network->quality.maximumPoleCountPerSide ==

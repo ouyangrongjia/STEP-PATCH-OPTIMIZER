@@ -751,9 +751,17 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     result.fittedNetwork =
         fittedProductConstructible ? fitted.network : fitted.bestEffortNetwork;
     result.report.sewableGeometryAvailable = result.fittedNetwork != nullptr;
+    result.report.formalFairnessSolveEntered =
+        result.fittedNetwork->formalFairnessSolveEntered;
+    result.report.internalControlPointsSolved =
+        result.fittedNetwork->internalControlPointsSolved;
+    result.report.coonsDiagnosticFallbackUsed =
+        result.fittedNetwork->coonsDiagnosticFallbackUsed;
+    result.report.fittedResultProvenance =
+        result.fittedNetwork->fitOutcome;
     result.report.diagnosticCandidatePatchCount = result.fittedNetwork->layout.patchCount;
     result.report.diagnosticSelectionReason =
-        "Selected the constructible fitted network by hard-gate count, product-gate count, normalized violation, seam normal, holdout distance and normal, fairness energy, curvature oscillation, actual poles, patch count, and stable hash.";
+        "Selected the constructible fitted network by hard-gate count, product-gate count, normalized violation, external Curve-on-Surface deviation, seam normal, holdout distance and normal, fairness energy, curvature oscillation, actual poles, patch count, and stable hash.";
     result.report.diagnosticSewingCandidateCount = 1;
     result.selectedLayout = std::make_shared<RegionPatchLayout>(result.fittedNetwork->layout);
     result.fittedPatchNetwork = result.fittedNetwork->inspectionShape;
@@ -773,7 +781,10 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
     const auto selectedAttempt = std::find_if(
         fitted.attempts.begin(), fitted.attempts.end(),
         [&](const auto& attempt) {
-            return attempt.layoutHash == result.report.selectedLayoutHash;
+            return attempt.fittedLayoutHash ==
+                    result.report.selectedLayoutHash ||
+                attempt.layoutHash ==
+                    result.report.selectedLayoutHash;
         });
     if (selectedAttempt != fitted.attempts.end() &&
         selectedAttempt != fitted.attempts.end()) {
@@ -783,6 +794,16 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
             selectedAttempt->sameFaceMappingFallbackCount;
         result.report.crossFaceMappingFailureCount =
             selectedAttempt->crossFaceMappingFailureCount;
+        result.report.independentLowRankSupportAttempted =
+            selectedAttempt
+                ->independentLowRankSupportAttempted;
+        result.report
+            .allIndependentLowRankSupportsConstructible =
+            selectedAttempt
+                ->allIndependentLowRankSupportsConstructible;
+        result.report.fittedIndependentLowRankSupports =
+            selectedAttempt
+                ->independentLowRankSupports;
     }
     if (selectedAttempt != fitted.attempts.end() &&
         !selectedAttempt->iterations.empty()) {
@@ -926,7 +947,12 @@ RegionRefitResult RegionalSurfaceRefitEngine::run(
         result.report.layoutCandidates.begin(),
         result.report.layoutCandidates.end(),
         [&](const auto& candidate) {
-            return candidate.layoutHash == result.report.selectedLayoutHash;
+            return candidate.layoutHash ==
+                (selectedAttempt !=
+                        fitted.attempts.end()
+                    ? selectedAttempt->layoutHash
+                    : result.report
+                          .selectedLayoutHash);
         });
     result.report.layoutGatePassed =
         fittedLayoutReport != result.report.layoutCandidates.end() &&

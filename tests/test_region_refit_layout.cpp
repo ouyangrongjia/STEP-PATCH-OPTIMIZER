@@ -17,6 +17,7 @@
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Pnt2d.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <cassert>
@@ -1005,6 +1006,9 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
     assert(fitted.network->boundaryLocked);
     assert(fitted.network->constructibleForBRep);
     assert(fitted.network->fitOutcome == "ProductFit");
+    assert(fitted.network->formalFairnessSolveEntered);
+    assert(fitted.network->internalControlPointsSolved);
+    assert(!fitted.network->coonsDiagnosticFallbackUsed);
     assert(fitted.network->layout.curveNetworkHash == curveNetwork.hash);
     assert(fitted.network->seamMaximumCurveDeviation <=
         options.curveOnSurfaceTolerance);
@@ -1020,9 +1024,45 @@ void test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge() {
     assert(iteration.seamG1SoftConstraintCount > 0);
     assert(iteration.seamG2SoftConstraintCount > 0);
     assert(iteration.seamContinuityGatePassed);
-    assert(iteration.reducedSpdSystemUsed);
-    assert(iteration.fixedBoundaryControlPointCount > 0);
+    assert(iteration.formalFairnessSolveEntered);
+    assert(iteration.internalControlPointsSolved);
+    assert(!iteration.coonsDiagnosticFallbackUsed);
+    assert(fitted.attempts.front().independentLowRankSupportAttempted);
+    assert(!fitted.attempts.front().coonsDiagnosticFallbackUsed);
+    assert(fitted.attempts.front()
+        .allIndependentLowRankSupportsConstructible);
+    assert(fitted.attempts.front().independentLowRankSupports.size() ==
+        fitted.network->surfaces.size());
+    assert(iteration.fixedBoundaryControlPointCount == 0);
     assert(iteration.interiorControlPointCount > 0);
+    for (const auto& support :
+         fitted.attempts.front().independentLowRankSupports) {
+        assert(support.finitePassed);
+        assert(support.positiveJacobianPassed);
+        assert(support.pcurveLoopPassed);
+        assert(support.trimConstructible);
+        assert(support.poleLimitPassed);
+        assert(support.uPoleCount <= 25);
+        assert(support.vPoleCount <= 25);
+        assert(support.alternatingProjectionRounds >= 2);
+        assert(support.projectedPcurveSampleCount > 0);
+        assert(support.jacobianBarrierAcceptedScale > 0.0);
+        assert(support.jacobianBarrierAcceptedScale <= 1.0);
+        assert(support.dominantViolation == "None");
+    }
+    for (const auto& patch : fitted.network->layout.patches) {
+        assert(!patch.rectangularIsoBoundary);
+        assert(patch.pcurveLoopClosed);
+        assert(patch.pcurveOrientationConsistent);
+        assert(std::all_of(
+            patch.edgePcurves.begin(),
+            patch.edgePcurves.end(),
+            [](const auto& pcurve) {
+                return pcurve.parameters.size() > 2 &&
+                    pcurve.parameters.size() ==
+                        pcurve.uvPoints.size();
+            }));
+    }
     assert(iteration.sameFaceBarycentricMappingCount ==
         fixture.mesh.vertices.size());
     assert(iteration.sameFaceMappingFallbackCount == 0);
@@ -1169,6 +1209,9 @@ void test_repeated_data_constraints_do_not_break_reduced_spd_fit() {
         repeatedReference.vertices.end(),
         fixture.mesh.vertices.begin(),
         fixture.mesh.vertices.end());
+    repeatedReference.vertices[
+        fixture.mesh.vertices.size() / 2].point.Translate(
+        gp_Vec(0.0, 0.0, 0.01));
     const auto fitted = spo::JointBSplineNetworkFitter().fit(
         repeatedReference,
         fixture.mesh,
@@ -1184,9 +1227,78 @@ void test_repeated_data_constraints_do_not_break_reduced_spd_fit() {
     assert(!fitted.attempts.front().iterations.empty());
     const auto& iteration =
         fitted.attempts.front().iterations.back();
-    assert(iteration.reducedSpdSystemUsed);
+    assert(iteration.formalFairnessSolveEntered);
+    assert(iteration.internalControlPointsSolved);
+    assert(fitted.attempts.front().independentLowRankSupportAttempted);
+    assert(std::any_of(
+        fitted.attempts.front().independentLowRankSupports.begin(),
+        fitted.attempts.front().independentLowRankSupports.end(),
+        [](const auto& support) {
+            return support.robustDownweightedSampleCount > 0;
+        }));
     assert(iteration.stopReason.find("factorization") ==
         std::string::npos);
+}
+
+void test_boundary_gate_failure_preserves_low_rank_supports_for_diagnostic_sewing() {
+    const auto fixture = makePlanarCurveFixture(8);
+    spo::RegionRefitOptions options;
+    options.fixedPatchCount = 2;
+    options.maximumParameterDistortion = 1000.0;
+    options.curveProjectionTolerance = 1.0e-16;
+    options.curveOnSurfaceTolerance = 1.0e-16;
+    options.tolerance3d = 1.0e-6;
+    options.normalToleranceDegrees = 1.0;
+    options.g1ToleranceDegrees = 1.0;
+    options.maximumFitIterations = 2;
+    const auto generated = spo::RegionCurveNetworkGenerator().generate(
+        fixture.mesh,
+        fixture.constraints,
+        spo::RegionRefitLayoutMode::FixedPatchCount,
+        options);
+    assert(generated.success());
+    const auto layouts = spo::RegionPatchLayoutGenerator().generate(
+        fixture.mesh, generated, options);
+    assert(layouts.success());
+    auto contaminatedReference = fixture.mesh;
+    contaminatedReference.vertices[
+        contaminatedReference.vertices.size() / 2].point.Translate(
+            gp_Vec(0.0, 0.0, 0.1));
+    const auto fitted = spo::JointBSplineNetworkFitter().fit(
+        contaminatedReference,
+        fixture.mesh,
+        fixture.constraints,
+        layouts.selectedCandidates,
+        std::vector<spo::RegionCurveNetwork> {
+            generated.selectedCandidates.front().network},
+        options,
+        std::chrono::steady_clock::now() +
+            std::chrono::seconds(20));
+
+    assert(!fitted.success());
+    assert(!fitted.network);
+    assert(fitted.bestEffortNetwork);
+    assert(fitted.bestEffortNetwork->constructibleForBRep);
+    assert(fitted.bestEffortNetwork->formalFairnessSolveEntered);
+    assert(fitted.bestEffortNetwork->internalControlPointsSolved);
+    assert(!fitted.bestEffortNetwork->coonsDiagnosticFallbackUsed);
+    assert(fitted.bestEffortNetwork->fitOutcome ==
+        "IndependentLowRankBoundaryViolationDiagnostic");
+    assert(!fitted.attempts.empty());
+    assert(!fitted.attempts.front()
+        .allIndependentLowRankSupportsConstructible);
+    assert(std::any_of(
+        fitted.attempts.front().independentLowRankSupports.begin(),
+        fitted.attempts.front().independentLowRankSupports.end(),
+        [](const auto& support) {
+            return !support.trimConstructible;
+        }));
+    for (const auto& surface :
+         fitted.bestEffortNetwork->surfaces) {
+        assert(!surface.IsNull());
+        assert(surface->NbUPoles() <= 25);
+        assert(surface->NbVPoles() <= 25);
+    }
 }
 
 void test_coons_fallback_is_diagnostic_only() {
@@ -1223,6 +1335,14 @@ void test_coons_fallback_is_diagnostic_only() {
     assert(fitted.bestEffortNetwork->boundaryLocked);
     assert(fitted.bestEffortNetwork->constructibleForBRep);
     assert(fitted.bestEffortNetwork->fitOutcome ==
+        "BoundaryLockedDiagnostic");
+    assert(!fitted.bestEffortNetwork->formalFairnessSolveEntered);
+    assert(!fitted.bestEffortNetwork->internalControlPointsSolved);
+    assert(fitted.bestEffortNetwork->coonsDiagnosticFallbackUsed);
+    assert(!fitted.attempts.front().formalFairnessSolveEntered);
+    assert(!fitted.attempts.front().internalControlPointsSolved);
+    assert(fitted.attempts.front().coonsDiagnosticFallbackUsed);
+    assert(fitted.attempts.front().resultProvenance ==
         "BoundaryLockedDiagnostic");
     assert(fitted.attempts.front().iterations.empty());
 }
@@ -1351,6 +1471,7 @@ void run_region_refit_layout_tests() {
     test_four_patch_curve_network_keeps_closed_oriented_patch_loops();
     test_curve_network_drives_hard_g0_fit_and_one_shared_brep_edge();
     test_repeated_data_constraints_do_not_break_reduced_spd_fit();
+    test_boundary_gate_failure_preserves_low_rank_supports_for_diagnostic_sewing();
     test_coons_fallback_is_diagnostic_only();
     test_curve_network_cache_roundtrip_is_deterministic();
 }

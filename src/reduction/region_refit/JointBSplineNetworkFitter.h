@@ -69,6 +69,9 @@ struct RegionFittedPatchNetwork {
     bool fitGatePassed = false;
     bool boundaryLocked = false;
     bool constructibleForBRep = false;
+    bool formalFairnessSolveEntered = false;
+    bool internalControlPointsSolved = false;
+    bool coonsDiagnosticFallbackUsed = false;
     RegionSurfaceQualityMetrics quality;
     std::string fitOutcome = "NotEvaluated";
 };

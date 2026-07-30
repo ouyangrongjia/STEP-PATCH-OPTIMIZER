@@ -645,6 +645,13 @@ function Publish-NativeRegionRefitFinal {
                 -Source $sewnSource `
                 -Destination (Join-Path $packageFinalDirectory $sewnName) |
                 Out-Null
+        } else {
+            Copy-PublishedFile `
+                -Source (Join-Path $StagingDirectory (
+                    "diagnostics\sewing_report.json")) `
+                -Destination (Join-Path $packageFinalDirectory (
+                    "sewing_attempt.json")) |
+                Out-Null
         }
 
         $publishedSewnPath = if ($sewnName) {
@@ -845,6 +852,7 @@ function Publish-NativeRegionRefitFinal {
                         }
                         "final_sewn.step" { "ProductSewnShape" }
                         "diagnostic_sewn.step" { "DiagnosticSewnShape" }
+                        "sewing_attempt.json" { "SewingAttemptEvidence" }
                         default { "Unexpected" }
                     }
                     [ordered]@{
