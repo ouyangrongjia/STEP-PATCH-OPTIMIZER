@@ -167,6 +167,12 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 状态：独立实验分支，命令行纵向链已改为曲线网络先行，尚未产品验收。
 
+当前采用的结果基线由用户选定为 `data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/final/` 中的四面片结果，实际曲面位于 `evidence/previous_full_diagnostic_20260729_032156/`。流程为先构造曲线骨架和分片布局，再拟合曲面、裁剪与缝合。该选择基于用户对形状效果的评估；结果仍为 `DiagnosticOnly`、`can_apply=false`，面内褶皱和完整质量门未通过的问题仍未解决。
+
+远程交付入口见[四面片结果归档](../data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/README.md)，包含可直接查看的面片 STEP、指标与可视化，以及完整原始证据压缩包。
+
+该汇总包另含尚未生成新曲面的参数布局实验，应与上述四面片几何按运行编号区分。后续单面片自适应减面实验保留为探索证据，不替代当前采用的结果基线；以下实现说明反映当前代码状态。
+
 当前实现先生成显式 `RegionCurveNetwork`，内部界面仍使用唯一三维曲线和共同参数 `t`。每张 patch 先独立拟合 6×6 三次低秩延展支撑面，原始 STEP Edge 和内部曲线投影为一般 pcurve；第二轮起交替更新样本参数与 pcurve，并使用 Cauchy 稳健权重、二阶控制网公平项、法向项和 Jacobian barrier。残差驱动 knot 只在失败 patch/方向局部插入，实际 U/V poles 硬限为 `min(配置上限, 25)`。当独立支撑面未达到构造门时，不再把联合迭代直接置零，而是先执行独立的闭合可行性预求解：外部与内部 Curve-on-Surface / `SameParameter` 使用 `0.001 mm` 硬门，内部曲线相对原区域的 `0.03 mm` 投影门保持独立；预求解只启用最小位移、弱公平和 Jacobian barrier，交替更新一般 pcurve 与控制点，并仅对失败 patch 的主导方向局部插 knot。只有闭合预求解通过后，才允许进入 G1/G2、数据、法向与公平项的四面联合系统。STEP Face 的局部绕序继续通过拓扑方向传播处理。
 
 拟合仍分为双轨：`GeomagicEquivalent` 在恢复规格为 `ResearchPartial` 时明确返回 `UnsupportedFittingSpecification`；`FeaturePreserving` 保持原 STEP Edge、共享 Edge/pcurve、`SameParameter`、G0 和固定质量门不变。报告除正式公平求解和最终来源外，还记录闭合预求解是否进入、是否通过、阶段路由、逐 patch/逐 seam 的 `residual-vs-poles`、最坏 `t`/UV 和 Jacobian barrier 接受比例。探针可显式导入阶段 1 的 `untrimmed_support_surfaces.step` 作为闭合初值，并把文件 SHA-256 写入 `CarryForwardFromStage1Artifact` provenance；若阶段 2A 未形成新的可构造闭合面，最终面片必须明确携带阶段 1 产物，不能冒充新结果。Coons 只能作为初始化或 `BoundaryLockedDiagnostic`，不能取得 `ProductFit`。UV 拓扑、支撑曲面 Jacobian、Face/Wire 方向分别判定；验证器冲突仍以 `ValidatorInconsistent` 阻断产品资格。缓存二进制版本为 17，算法指纹为 `native-regional-refit-v48-stage1-closure-initialization`。

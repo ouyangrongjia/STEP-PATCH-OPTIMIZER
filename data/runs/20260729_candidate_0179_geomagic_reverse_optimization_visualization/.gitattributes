@@ -1,0 +1,4 @@
+# 保留原始证据的字节内容；STEP 与压缩包按二进制文件处理。
+final/** -text
+final/**/*.step binary
+evidence_bundle.zip binary

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "status": "DiagnosticOnly",
+  "artifact_type": "CompositeEvidencePackage",
+  "product_validated": false,
+  "can_apply": false,
+  "latest_result": {
+    "status": "NoSewableGeometry",
+    "parameter_layout_improved": true,
+    "parameterization_passed": false,
+    "full_fit_count": 0,
+    "new_support_surfaces_available": false,
+    "new_replacement_faces_available": false,
+    "new_surface_step_available": false,
+    "current_curve_network_json": "curve_network.json"
+  },
+  "historical_geometry": {
+    "clearly_labeled_as_old": true,
+    "previous_full_diagnostic_directory": "evidence/previous_full_diagnostic_20260729_032156",
+    "sewable_baseline_directory": "evidence/sewable_baseline_20260728_205420",
+    "diagnostic_sewn_step": "evidence/previous_full_diagnostic_20260729_032156/diagnostic_sewn.step",
+    "trimmed_patch_faces_step": "evidence/previous_full_diagnostic_20260729_032156/trimmed_patch_faces.step",
+    "untrimmed_support_surfaces_step": "evidence/previous_full_diagnostic_20260729_032156/untrimmed_support_surfaces.step"
+  },
+  "message": "The package contains the latest layout evidence and clearly labeled historical diagnostic STEP geometry. No new fitted surface STEP exists for the latest run."
+}

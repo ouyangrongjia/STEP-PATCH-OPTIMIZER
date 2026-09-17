@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "snapshot_type": "derived_audit_snapshot",
+  "original_run_id": "20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target",
+  "original_source_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final",
+  "original_source_available_when_visualizations_were_generated": true,
+  "original_source_available_when_evidence_bundle_was_augmented": false,
+  "preserved_exact_files": [
+    {
+      "name": "curve_network.json",
+      "sha256": "D26ABF7DCB17ECFED954E7173819507FD73046A69089C223CCB0243946CB383C",
+      "bytes": 919399,
+      "provenance": "The identical byte stream also exists in the retained 20260728_205420 baseline and was copied from there after the original latest run directory was no longer present."
+    }
+  ],
+  "original_file_hashes_recorded_at_visualization_time": {
+    "validation_summary.json": "D09139B2F2246CB3B1A92B69549A959718BCA986075A4DA178D746B3AB57A8DC",
+    "curve_network.json": "D26ABF7DCB17ECFED954E7173819507FD73046A69089C223CCB0243946CB383C",
+    "curve_network.step": "0D9253990FDD4B8886BB9C8F9E7BF2CEE78F25310C4396937F04B89B3EA8D769",
+    "artifact_status.json": "E69388AF529B43FB7A6D140652B12E29001161CD7DD41CB787A009AD42852392"
+  },
+  "metrics": {
+    "curve_network": {
+      "node_count": 30,
+      "edge_count": 33,
+      "boundary_edge_count": 28,
+      "internal_edge_count": 5,
+      "regularized_cubic_edge_count": 5,
+      "projection_passed": true,
+      "intersection_passed": true,
+      "maximum_projection_error_mm": 0.02987049077678744
+    },
+    "parameter_layout": {
+      "surface_parameter_flipped_triangle_count": 0,
+      "surface_parameter_degenerate_triangle_count": 0,
+      "distortion_p99_5": 69.053646067785,
+      "maximum_distortion": 201.44210253158627,
+      "maximum_distortion_product_gate": 100,
+      "minimum_to_median_uv_area_ratio": 0.000024927691097346116,
+      "parameterization_passed": false
+    },
+    "fitting": {
+      "full_fit_count": 0,
+      "status": "NoSewableGeometry",
+      "surface_legality_status": "NotEvaluated",
+      "sewable_geometry_available": false
+    },
+    "downstream": {
+      "new_support_surfaces_available": false,
+      "new_replacement_faces_available": false,
+      "new_brep_available": false,
+      "sewing_attempted": false,
+      "new_surface_step_available": false,
+      "step_roundtrip_executed": false,
+      "creo_attempted": false,
+      "product_validated": false,
+      "can_apply": false
+    }
+  },
+  "claim_boundary": "This snapshot records the latest layout result. It is not a replacement for the missing original JSON files and does not contain a new fitted surface STEP."
+}

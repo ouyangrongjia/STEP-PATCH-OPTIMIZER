@@ -1,0 +1,17 @@
+﻿{
+    "schema_version":  2,
+    "status":  "DiagnosticOnly",
+    "product_gates_passed_before_creo":  false,
+    "creo_attempted":  true,
+    "creo_validation_passed":  false,
+    "product_validated":  false,
+    "diagnostic_only":  true,
+    "can_apply":  false,
+    "constructible_geometry":  true,
+    "sewn_step":  "diagnostic_sewn.step",
+    "sha256":  "2243FE799DD417D931E810BCDA885E49A215DECDEC97E31BEC0E9CEB9C14F5B9",
+    "sewing_tolerance_mm":  0.001,
+    "first_product_failure_gate":  "Layout",
+    "unavailable_reason":  null,
+    "message":  "Best-effort regional refit completed through sewing and validation but did not pass all product gates."
+}

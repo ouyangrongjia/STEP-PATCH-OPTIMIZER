@@ -1,0 +1,61 @@
+﻿{
+    "schema_version":  3,
+    "run_id":  "20260729_032156_431__native-region-refit__03_配件_Clay__cand-0179__target",
+    "manifest_self_excluded":  true,
+    "evidence":  [
+                     {
+                         "name":  "artifact_status.json",
+                         "role":  "ArtifactStatus",
+                         "size_bytes":  682,
+                         "sha256":  "5A3D1781E376E167939C78E72F7C71CF6EDDF77351F08407CAF602838A540C8E"
+                     },
+                     {
+                         "name":  "curve_network.json",
+                         "role":  "CurveNetworkData",
+                         "size_bytes":  919399,
+                         "sha256":  "D26ABF7DCB17ECFED954E7173819507FD73046A69089C223CCB0243946CB383C"
+                     },
+                     {
+                         "name":  "curve_network.step",
+                         "role":  "CurveNetworkGeometry",
+                         "size_bytes":  128261,
+                         "sha256":  "D1C36379A3C8BB749D683EB40409AFBED6CDA39137C853B315BDA1519683CFCD"
+                     },
+                     {
+                         "name":  "diagnostic_sewn.step",
+                         "role":  "DiagnosticSewnShape",
+                         "size_bytes":  100970786,
+                         "sha256":  "2243FE799DD417D931E810BCDA885E49A215DECDEC97E31BEC0E9CEB9C14F5B9"
+                     },
+                     {
+                         "name":  "run.json",
+                         "role":  "RunMetadata",
+                         "size_bytes":  3224,
+                         "sha256":  "911DA6E905D45ED52AE2B9106EC472FE32003AD24014396077050013F9C0CB6E"
+                     },
+                     {
+                         "name":  "RUN.md",
+                         "role":  "RunSummary",
+                         "size_bytes":  827,
+                         "sha256":  "9E5FEFA756D01F041C3343F1C5BEA99556536DC2D0179D628CC2EB9B16603BDD"
+                     },
+                     {
+                         "name":  "trimmed_patch_faces.step",
+                         "role":  "TrimmedReplacementFaces",
+                         "size_bytes":  963658,
+                         "sha256":  "A5AA1E70A584155FDE7E97A5F5B65FF1BA827712EE5E32A1E68863896A895E50"
+                     },
+                     {
+                         "name":  "untrimmed_support_surfaces.step",
+                         "role":  "UntrimmedSupportSurfaces",
+                         "size_bytes":  1004984,
+                         "sha256":  "DE5E82954CC09661B78E1C56098BB3CD5C3B6BFEA38E821129288AEE4B3FA4AB"
+                     },
+                     {
+                         "name":  "validation_summary.json",
+                         "role":  "ValidationSummary",
+                         "size_bytes":  5441351,
+                         "sha256":  "EB27D5D581258515F7B9E021B3D4D4BB110C84408EFEC412F024DB6E0A50B7AE"
+                     }
+                 ]
+}

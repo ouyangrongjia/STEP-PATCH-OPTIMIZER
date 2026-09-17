@@ -1,0 +1,314 @@
+{
+  "schema_version": 1,
+  "artifact_type": "candidate_179_geomagic_reverse_optimization_visualization",
+  "created_at": "2026-07-29T13:58:17.5193759+08:00",
+  "output_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_candidate_0179_geomagic_reverse_optimization_visualization\\final",
+  "repository": {
+    "cwd": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit",
+    "branch": "native-regional-refit",
+    "head": "b43c0f1b6bb9ee241fea4e24bca8da4aec3e223d",
+    "dirty_before_task": true,
+    "algorithm_code_modified_by_task": false,
+    "commit_created": false,
+    "merge_performed": false,
+    "push_performed": false
+  },
+  "conclusion": {
+    "summary": "参数布局改善，但新曲面尚未拟合。",
+    "latest_status": "NoSewableGeometry",
+    "product_validated": false,
+    "can_apply": false,
+    "claim_boundary": "最新运行只证明参数布局子目标改善；没有新支撑曲面、替换 Face、B-Rep、缝合结果或可回读 STEP。旧基线诊断几何不是本次新结果。"
+  },
+  "source_availability_note": "最新 20260729_131649_203 原始运行目录在生成可视化时存在并已完成解析及哈希校验，但在补充完整 STEP 证据包时已不在工作树内。字节相同的 curve_network.json 已保存在本目录；没有用其他运行的 curve_network.step、曲面或整件 STEP 替换最新结果。",
+  "inputs": [
+    {
+      "role": "latest_validation",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final\\validation_summary.json",
+      "bytes": 5263243,
+      "sha256": "D09139B2F2246CB3B1A92B69549A959718BCA986075A4DA178D746B3AB57A8DC",
+      "used_for_rendering": true,
+      "original_path_available_at_bundle_augmentation": false
+    },
+    {
+      "role": "latest_curve_network_json",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final\\curve_network.json",
+      "bytes": 919399,
+      "sha256": "D26ABF7DCB17ECFED954E7173819507FD73046A69089C223CCB0243946CB383C",
+      "used_for_rendering": true,
+      "original_path_available_at_bundle_augmentation": false,
+      "exact_hash_copy_preserved_at": "curve_network.json"
+    },
+    {
+      "role": "latest_curve_network_step_reference",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final\\curve_network.step",
+      "bytes": 128261,
+      "sha256": "0D9253990FDD4B8886BB9C8F9E7BF2CEE78F25310C4396937F04B89B3EA8D769",
+      "used_for_rendering": false,
+      "original_path_available_at_bundle_augmentation": false,
+      "note": "曲线图采用信息更完整的 JSON edge.samples；原始最新 curve_network.step 只保留生成时哈希，没有用历史 STEP 替换。"
+    },
+    {
+      "role": "latest_artifact_status",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final\\artifact_status.json",
+      "bytes": 660,
+      "sha256": "E69388AF529B43FB7A6D140652B12E29001161CD7DD41CB787A009AD42852392",
+      "used_for_rendering": true,
+      "original_path_available_at_bundle_augmentation": false
+    },
+    {
+      "role": "sewable_baseline_validation",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\\final\\validation_summary.json",
+      "bytes": 1697587,
+      "sha256": "B5ABCF59184211F3DBB94E61B37ED364E102AB9F24A552A020B549011EEE3820",
+      "used_for_rendering": true
+    },
+    {
+      "role": "sewable_baseline_artifact_status",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\\final\\artifact_status.json",
+      "bytes": 634,
+      "sha256": "77D97FFB087394FA1FE000A39C077C669926AD566F84A0D9DCE6C05CB0B08BFA",
+      "used_for_rendering": true
+    },
+    {
+      "role": "sewable_baseline_trimmed_faces_reference",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\\final\\trimmed_patch_faces.step",
+      "bytes": 1267287,
+      "sha256": "D2F51AA38AE253A0AE7C62A47ED14F7F0AABE14429C738F0C7840D09C84951C1",
+      "used_for_rendering": false,
+      "note": "未使用未经核验的无头 STEP 近似渲染，避免把旧曲面冒充本次结果。"
+    },
+    {
+      "role": "sewable_baseline_whole_shape_reference",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\data\\runs\\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\\final\\diagnostic_sewn.step",
+      "bytes": 101273828,
+      "sha256": "F1C861CE49495481EC836D6E968D0F9FCB6BE9B4BE45464D0A4C606F97C65512",
+      "used_for_rendering": false,
+      "note": "仅作为旧的可缝合诊断基线引用。"
+    },
+    {
+      "role": "recovered_fitting_specification",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\geomagic-autosurface-oracle-candidate-0179\\data\\runs\\20260729_recovered_fitting_specification_v8\\recovered_fitting_specification.json",
+      "bytes": 22227,
+      "sha256": "F6F075BC2C8C91C371C8381624D20D3B2C927E3F72C9806CF4EAD22F02761C84",
+      "used_for_rendering": true
+    },
+    {
+      "role": "geomagic_reverse_engineering_explanation",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\geomagic-autosurface-oracle-candidate-0179\\docs\\geomagic_autosurface_oracle.md",
+      "bytes": 20627,
+      "sha256": "2BF86DC6D5D58CDA9F5A338A3C336CD9B6CDBE0FD9201B4D9483F92A80F5FC13",
+      "used_for_rendering": false,
+      "note": "用于审阅 ResearchPartial 与行为等价边界。"
+    },
+    {
+      "role": "previous_full_diagnostic_and_latest_layout_record",
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\native-regional-refit\\docs\\implementation_status.md",
+      "bytes": 14660,
+      "sha256": "E3602101AF24D8A5A524B7704D04EF93873AEC2A21B4B903A998B1771BE0CA61",
+      "used_for_rendering": true,
+      "note": "第 174 至 176 行记录此前 surfaceParameters 的 116 个翻转或退化三角形，以及最新零翻转、零退化。"
+    }
+  ],
+  "metric_sources": [
+    {
+      "metric": "curve_network_counts",
+      "value": {
+        "node_count": 30,
+        "edge_count": 33,
+        "boundary_edge_count": 28,
+        "internal_edge_count": 5,
+        "regularized_cubic_edge_count": 5
+      },
+      "source_role": "latest_curve_network_json",
+      "json_pointers": [
+        "/node_count",
+        "/edge_count",
+        "/boundary_edge_count",
+        "/internal_edge_count",
+        "/regularized_cubic_edge_count"
+      ]
+    },
+    {
+      "metric": "curve_network_gates",
+      "value": {
+        "projection_passed": true,
+        "intersection_passed": true,
+        "maximum_projection_error_mm": 0.02987049077678744
+      },
+      "source_role": "latest_curve_network_json",
+      "json_pointers": [
+        "/projection_passed",
+        "/intersection_passed",
+        "/maximum_projection_error"
+      ]
+    },
+    {
+      "metric": "surface_parameters_previous_flip_or_degenerate_count",
+      "value": 116,
+      "source_role": "previous_full_diagnostic_and_latest_layout_record",
+      "location": "docs/implementation_status.md:174"
+    },
+    {
+      "metric": "latest_surface_parameters_flipped_triangle_count",
+      "value": 0,
+      "source_role": "latest_validation",
+      "json_pointer": "/layout/candidates/0/flipped_triangles"
+    },
+    {
+      "metric": "latest_surface_parameters_degenerate_triangle_count",
+      "value": 0,
+      "source_role": "previous_full_diagnostic_and_latest_layout_record",
+      "location": "docs/implementation_status.md:176",
+      "note": "不使用未执行 fitting 阶段的默认 0 字段作为证据。"
+    },
+    {
+      "metric": "latest_layout_distortion",
+      "value": {
+        "p99_5": 69.053646067785,
+        "maximum": 201.44210253158627,
+        "maximum_product_gate": 100,
+        "minimum_to_median_uv_area_ratio": 0.000024927691097346116,
+        "parameterization_passed": false
+      },
+      "source_role": "latest_validation",
+      "json_pointers": [
+        "/layout/candidates/0/distortion_p995",
+        "/layout/candidates/0/maximum_distortion",
+        "/layout/candidates/0/minimum_to_median_uv_area_ratio",
+        "/layout/candidates/0/parameterization_passed"
+      ]
+    },
+    {
+      "metric": "latest_fitting_result",
+      "value": {
+        "full_fit_count": 0,
+        "status": "NoSewableGeometry",
+        "sewable_geometry_available": false,
+        "surface_legality_status": "NotEvaluated"
+      },
+      "source_role": "latest_validation",
+      "json_pointers": [
+        "/fitting/full_fit_count",
+        "/fitting/status",
+        "/fitting/sewable_geometry_available",
+        "/fitting/surface_legality_status"
+      ]
+    },
+    {
+      "metric": "baseline_diagnostic_geometry",
+      "value": {
+        "full_fit_count": 1,
+        "replacement_faces": 4,
+        "sewing_tolerance_mm": 0.001,
+        "roundtrip_solids": 1,
+        "roundtrip_free_edges": 0,
+        "step_roundtrip_passed": true,
+        "creo_import_status": "OK",
+        "creo_import_score": "PASS",
+        "creo_modelcheck_passed": false,
+        "can_apply": false
+      },
+      "source_roles": [
+        "sewable_baseline_validation",
+        "sewable_baseline_artifact_status"
+      ]
+    },
+    {
+      "metric": "reverse_engineering_specification_boundary",
+      "value": {
+        "status": "ResearchPartial",
+        "behavior_equivalent_ready": false,
+        "commercial_runtime_dependency": false
+      },
+      "source_role": "recovered_fitting_specification",
+      "json_pointers": [
+        "/status",
+        "/behavior_equivalent_ready",
+        "/commercial_runtime_dependency"
+      ]
+    }
+  ],
+  "latest_stage_status": {
+    "curve_network": "Passed",
+    "parameter_layout": "ImprovedButFailed",
+    "fitting_geometry": "NotExecuted",
+    "brep_topology": "NotExecuted",
+    "sewing": "NotExecuted",
+    "step_roundtrip": "NotExecuted",
+    "creo": "NotExecuted",
+    "product_apply": "Failed"
+  },
+  "rendering": {
+    "script": "render_visualizations.js",
+    "node_executable": "C:\\Users\\27836\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe",
+    "node_modules": "C:\\Users\\27836\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules",
+    "sharp_version": "0.34.5",
+    "command": "$node = 'C:\\Users\\27836\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe'; $env:NODE_PATH = 'C:\\Users\\27836\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules'; & $node 'data\\runs\\20260729_candidate_0179_geomagic_reverse_optimization_visualization\\final\\render_visualizations.js' --latest 'data\\runs\\20260729_131649_203__native-region-refit__03_配件_Clay__cand-0179__target\\final' --baseline 'data\\runs\\20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target\\final' --spec 'D:\\pyProject\\step-patch-optimizer-worktrees\\geomagic-autosurface-oracle-candidate-0179\\data\\runs\\20260729_recovered_fitting_specification_v8\\recovered_fitting_specification.json' --previous-flips 116 --latest-degenerate 0 --output 'data\\runs\\20260729_candidate_0179_geomagic_reverse_optimization_visualization\\final'"
+  },
+  "generated_files": [
+    {
+      "name": "01_overview_comparison.png",
+      "role": "high_resolution_overview",
+      "dimensions": "3200x1800",
+      "bytes": 468016,
+      "sha256": "2B1E889DCC1656C84D44F031D146E949B19BCE06F69C23D2AD1724617468AF35"
+    },
+    {
+      "name": "02_latest_curve_network.png",
+      "role": "latest_curve_network_projection",
+      "dimensions": "3000x2200",
+      "bytes": 404963,
+      "sha256": "AB4B39225261B183512D199945D615E2D5980A065EA6F33D66F7CED073289932"
+    },
+    {
+      "name": "03_layout_gating_matrix.png",
+      "role": "layout_and_gate_status_matrix",
+      "dimensions": "3200x2100",
+      "bytes": 463788,
+      "sha256": "9BF809AC154D8C92C10264C51F436136FF464597C29C9045867B3726FB884F9F"
+    },
+    {
+      "name": "render_visualizations.js",
+      "role": "reproducible_renderer",
+      "bytes": 19257,
+      "sha256": "A154AF9A1F08246A3720BEB2A83BB9EF43BA84C8D89A9A4A4A6417EC4297997B"
+    },
+    {
+      "name": "RUN.md",
+      "role": "human_readable_review_record",
+      "bytes": 4946,
+      "sha256": "C35DE064A904C7026CE791478AEEBE4859487427A2B0D9C15FD2874FD2389EE0"
+    },
+    {
+      "name": "visualization_manifest.json",
+      "role": "machine_readable_manifest",
+      "sha256": null,
+      "self_hash_excluded": true
+    }
+  ],
+  "verification": {
+    "input_json_parse": "Passed",
+    "manifest_json_parse": "Passed",
+    "png_visual_inspection": {
+      "tool": "local_image_viewer",
+      "detail": "original",
+      "checked_files": [
+        "01_overview_comparison.png",
+        "02_latest_curve_network.png",
+        "03_layout_gating_matrix.png"
+      ],
+      "font_clipping_legend_status": "Passed"
+    },
+    "old_baseline_step_render": {
+      "attempted": false,
+      "reason": "没有经核验的无头 STEP 渲染器；拒绝使用不可靠近似或把旧几何冒充本次新结果。"
+    }
+  },
+  "limitations": [
+    "曲线网络图是 edge.samples 的二维投影，不是支撑曲面渲染。",
+    "最新运行未进入正式拟合，未执行阶段的默认数值 0 不构成质量证据。",
+    "旧基线水密拓扑不代表几何质量门、Creo ModelCHECK 或产品 Apply 通过。",
+    "恢复规格为 ResearchPartial，不能宣称已复现 Geomagic 的完整拟合行为。"
+  ]
+}

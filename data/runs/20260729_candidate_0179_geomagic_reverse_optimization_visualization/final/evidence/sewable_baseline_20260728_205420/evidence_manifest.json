@@ -1,0 +1,61 @@
+{
+  "schema_version": 3,
+  "run_id": "20260728_205420_144__native-region-refit__03_配件_Clay__cand-0179__target",
+  "manifest_self_excluded": true,
+  "evidence": [
+    {
+      "name": "artifact_status.json",
+      "role": "ArtifactStatus",
+      "size_bytes": 634,
+      "sha256": "77D97FFB087394FA1FE000A39C077C669926AD566F84A0D9DCE6C05CB0B08BFA"
+    },
+    {
+      "name": "curve_network.json",
+      "role": "CurveNetworkData",
+      "size_bytes": 919399,
+      "sha256": "D26ABF7DCB17ECFED954E7173819507FD73046A69089C223CCB0243946CB383C"
+    },
+    {
+      "name": "curve_network.step",
+      "role": "CurveNetworkGeometry",
+      "size_bytes": 128261,
+      "sha256": "0F604551F2D00A16C6157C3CCFC10E98DF6B377E136B81A7B8816A7A3F55BE55"
+    },
+    {
+      "name": "diagnostic_sewn.step",
+      "role": "DiagnosticSewnShape",
+      "size_bytes": 101273828,
+      "sha256": "F1C861CE49495481EC836D6E968D0F9FCB6BE9B4BE45464D0A4C606F97C65512"
+    },
+    {
+      "name": "run.json",
+      "role": "RunMetadata",
+      "size_bytes": 2624,
+      "sha256": "6F90AD85A857C06CE1EBDCA20568E9E2302760D529A6B3661DB48D2CFBB08586"
+    },
+    {
+      "name": "RUN.md",
+      "role": "RunSummary",
+      "size_bytes": 774,
+      "sha256": "FB98F5AAA7E2D7A97B29398855EC00186F782DE2C04990BAAC4D8F93D9B280E9"
+    },
+    {
+      "name": "trimmed_patch_faces.step",
+      "role": "TrimmedReplacementFaces",
+      "size_bytes": 1267287,
+      "sha256": "D2F51AA38AE253A0AE7C62A47ED14F7F0AABE14429C738F0C7840D09C84951C1"
+    },
+    {
+      "name": "untrimmed_support_surfaces.step",
+      "role": "UntrimmedSupportSurfaces",
+      "size_bytes": 1295723,
+      "sha256": "B4A3AEC952D41C2536728C9F113EF8860DD29847F050BFB2F6A34FE033E130C0"
+    },
+    {
+      "name": "validation_summary.json",
+      "role": "ValidationSummary",
+      "size_bytes": 1697587,
+      "sha256": "B5ABCF59184211F3DBB94E61B37ED364E102AB9F24A552A020B549011EEE3820"
+    }
+  ]
+}
