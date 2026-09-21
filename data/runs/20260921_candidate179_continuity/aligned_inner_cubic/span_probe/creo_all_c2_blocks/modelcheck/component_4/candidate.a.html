@@ -1,0 +1,66 @@
+<HTML>
+<HEAD>
+
+<META http-equiv="Content-Type" content="text/html; charset=utf-8">
+<TITLE>PTC ModelCHECK</TITLE>
+<LINK REL=stylesheet HREF="mc.css" TYPE="text/css">
+<DIV ID="tooltip" STYLE="position:absolute;visibility:hidden;top:0;left:0;z-index:1" ALIGN=LEFT></DIV>
+</HEAD>
+<BODY leftmargin=5 topmargin=5 marginwidth=5 marginheight=5 onLoad="javascript:mcOnLoad(0)">
+
+<script>
+
+ function mcOnLoad (tab) { 
+
+ mcShowTopBanner( tab ); } 
+</script>
+
+
+<script>
+function ProExec(cmd) {
+  try {return top.external.ptc(cmd);} catch (e) {}
+  return null;
+}
+function ProECommandVoid(cmd) { ProExec("0" + cmd); }
+function ProECommand(cmd) { return ProExec("1" + cmd); }
+function sendMCMsgToCreo(msg)
+{
+  ProECommandVoid("MCMsgSend?message=" + msg);
+}
+</script>
+
+<script language='JavaScript'>
+<!-- hide
+
+function mcShowHelp(desc)
+{
+     myWin=window.open('file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/text/usascii/info/checks/' + desc + '.html','Help','left=10,top=25,alwaysRaised=yes, width=500,height=500,resizable=yes,copyhistory=no,location=no,directories=no,scrollbars=yes,status=no,toolbar=no,menubar=no')
+}
+// -->
+</script>
+<script language="JavaScript" SRC="candidate.a.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mctopban.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mchead.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mctabarea.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mcdetfunc1.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mcdetfunc2.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mcdetfunc3.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/mcdetfunc4.js"></script>
+<script language="JavaScript" SRC="file:///E:\Proe\Creo 11.0.0.0\Common Files/modchk/templates_new/tooltip.js"></script>
+
+<div id="page">
+     <div id="mcreptheader"></div>    
+     <div style="overflow-y:auto;height:93%">
+         <div id="mcheadie4ns6">
+         </div>
+         <div id="mcheadbottomie4ns6">
+         </div>
+         <div id="mctabie4ns6">
+         </div>
+         <div id="mchelpie4ns6">
+         </div>
+     </div>
+</div>
+
+ </BODY>
+ </HTML>

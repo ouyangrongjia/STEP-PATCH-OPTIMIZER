@@ -1,0 +1,571 @@
+{
+  "samples_per_knot": 1005,
+  "records": {
+    "control": [
+      {
+        "patch": 0,
+        "u_knot": 0.172311050543,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 0.0,
+        "maximum_physical_height_hessian_jump_per_mm": 0.2623977918824261,
+        "worst_v": 0.04,
+        "worst_xyz": [
+          -24.03980902964031,
+          42.847169849429086,
+          -8.841918799981876
+        ],
+        "max_raw_parameter_duu_jump_mm": 4.375790227829199
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.344312569001,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.8952691742124321,
+        "worst_v": 0.018000000000000002,
+        "worst_xyz": [
+          -23.503628813893464,
+          42.663154508174614,
+          -8.392678570468568
+        ],
+        "max_raw_parameter_duu_jump_mm": 14.704715190924071
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.677779747329,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.2734847263974834,
+        "worst_v": 0.036000000000000004,
+        "worst_xyz": [
+          -22.42179786750684,
+          42.075718416034604,
+          -7.623588134272368
+        ],
+        "max_raw_parameter_duu_jump_mm": 11.128877960517098
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.839620890846,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.3697998344783386,
+        "worst_v": 0.014,
+        "worst_xyz": [
+          -21.837212588155836,
+          41.78473390907314,
+          -7.2956166386050425
+        ],
+        "max_raw_parameter_duu_jump_mm": 10.765242743763814
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.250499616628,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.4280555318091862,
+        "worst_v": 0.009000000000000001,
+        "worst_xyz": [
+          -21.604161034898254,
+          40.80021700043981,
+          -6.948073054284239
+        ],
+        "max_raw_parameter_duu_jump_mm": 4.763451531192205
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.500674516566,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.1655104256385049,
+        "worst_v": 0.029,
+        "worst_xyz": [
+          -21.997683234881578,
+          40.205541428590934,
+          -6.90032415006557
+        ],
+        "max_raw_parameter_duu_jump_mm": 2.1068678931504907
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.750811917279,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.147393631354715,
+        "worst_v": 0.0,
+        "worst_xyz": [
+          -22.326188028078064,
+          39.60574399848883,
+          -6.810134420876137
+        ],
+        "max_raw_parameter_duu_jump_mm": 1.3289533750190456
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.126969707403,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.16291414541713548,
+        "worst_v": 0.041,
+        "worst_xyz": [
+          -23.470949677395385,
+          38.979976064190964,
+          -6.950684332247559
+        ],
+        "max_raw_parameter_duu_jump_mm": 6.46882048698968
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.254234630306,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.2506611087668833,
+        "worst_v": 0.117,
+        "worst_xyz": [
+          -24.215452427669156,
+          39.01256456011153,
+          -7.161775269842298
+        ],
+        "max_raw_parameter_duu_jump_mm": 9.705556939161543
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.381666173527,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.37521762180009793,
+        "worst_v": 0.023,
+        "worst_xyz": [
+          -24.994448383701812,
+          38.842726408821505,
+          -7.307865236870717
+        ],
+        "max_raw_parameter_duu_jump_mm": 11.612623864216532
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.509132164339,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.39828848676311024,
+        "worst_v": 0.018000000000000002,
+        "worst_xyz": [
+          -25.75913016565962,
+          38.7670062721749,
+          -7.518466042772361
+        ],
+        "max_raw_parameter_duu_jump_mm": 12.991597828046231
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.636456798011,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 1.4030595472144842,
+        "worst_v": 0.008,
+        "worst_xyz": [
+          -26.519952021052767,
+          38.6813410350692,
+          -7.75072299285319
+        ],
+        "max_raw_parameter_duu_jump_mm": 42.1786431791283
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.883020010779,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.6573225528380563,
+        "worst_v": 0.009000000000000001,
+        "worst_xyz": [
+          -27.977176690312962,
+          38.548623999692715,
+          -8.361214112724449
+        ],
+        "max_raw_parameter_duu_jump_mm": 25.737266816521995
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.129291067907,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.4977054904708752,
+        "worst_v": 0.045,
+        "worst_xyz": [
+          -27.872469660600476,
+          39.493597592628724,
+          -8.844361290225333
+        ],
+        "max_raw_parameter_duu_jump_mm": 9.437698059309156
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.258769154496,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 3.9353035781460606,
+        "worst_v": 0.0,
+        "worst_xyz": [
+          -27.447295453269753,
+          40.03980618237013,
+          -8.888701509071886
+        ],
+        "max_raw_parameter_duu_jump_mm": 81.73680794424932
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.383979317384,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.6956592822734803,
+        "worst_v": 0.106,
+        "worst_xyz": [
+          -26.8394997648881,
+          40.54617205925465,
+          -8.883014106114842
+        ],
+        "max_raw_parameter_duu_jump_mm": 18.754645914060298
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.506725472452,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.35421576805538535,
+        "worst_v": 0.08700000000000001,
+        "worst_xyz": [
+          -26.404055824201333,
+          41.051700908041724,
+          -8.966087238520856
+        ],
+        "max_raw_parameter_duu_jump_mm": 11.246277047790137
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.631692558631,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 4.752346354389623,
+        "worst_v": 0.034,
+        "worst_xyz": [
+          -25.959419011599728,
+          41.59814088536287,
+          -9.08813153003748
+        ],
+        "max_raw_parameter_duu_jump_mm": 157.5966209306219
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.753270697608,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 1.4649983259213495,
+        "worst_v": 0.042,
+        "worst_xyz": [
+          -25.494779815629876,
+          42.06970021647729,
+          -9.157503913958719
+        ],
+        "max_raw_parameter_duu_jump_mm": 50.632649839961736
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.877586200165,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 2.2780094962581265,
+        "worst_v": 0.005,
+        "worst_xyz": [
+          -25.0344074984372,
+          42.599388415339206,
+          -9.274844873404982
+        ],
+        "max_raw_parameter_duu_jump_mm": 70.87919644110629
+      }
+    ],
+    "aligned_inner_cubic": [
+      {
+        "patch": 0,
+        "u_knot": 0.172311050543,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 0.0,
+        "maximum_physical_height_hessian_jump_per_mm": 0.32908902953920605,
+        "worst_v": 0.036000000000000004,
+        "worst_xyz": [
+          -24.026815329673504,
+          42.849838308527964,
+          -8.834341905147328
+        ],
+        "max_raw_parameter_duu_jump_mm": 4.928858218203444
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.344312569001,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 1.2355816505588353,
+        "worst_v": 0.029,
+        "worst_xyz": [
+          -23.506189824271104,
+          42.6493290855992,
+          -8.389124486487134
+        ],
+        "max_raw_parameter_duu_jump_mm": 20.613350954516577
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.677779747329,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.18272479326902394,
+        "worst_v": 0.004,
+        "worst_xyz": [
+          -22.396306116869237,
+          42.12157821227793,
+          -7.60855342972286
+        ],
+        "max_raw_parameter_duu_jump_mm": 11.09761355756579
+      },
+      {
+        "patch": 0,
+        "u_knot": 0.839620890846,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.9468652526311123,
+        "worst_v": 0.036000000000000004,
+        "worst_xyz": [
+          -21.86949553687464,
+          41.76603929919285,
+          -7.317778931582576
+        ],
+        "max_raw_parameter_duu_jump_mm": 12.217632244272652
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.250499616628,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.44079287526007715,
+        "worst_v": 0.01,
+        "worst_xyz": [
+          -21.60589322442748,
+          40.7992288974789,
+          -6.948882113893212
+        ],
+        "max_raw_parameter_duu_jump_mm": 4.672137796502659
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.500674516566,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.20122617130595447,
+        "worst_v": 0.031,
+        "worst_xyz": [
+          -21.9990920774325,
+          40.20505866037114,
+          -6.900779408084059
+        ],
+        "max_raw_parameter_duu_jump_mm": 2.272490073893787
+      },
+      {
+        "patch": 1,
+        "u_knot": 0.750811917279,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.14975257592194838,
+        "worst_v": 0.0,
+        "worst_xyz": [
+          -22.326188028078064,
+          39.60574399848883,
+          -6.810134420876137
+        ],
+        "max_raw_parameter_duu_jump_mm": 1.328953375030935
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.126969707403,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.1181454625738744,
+        "worst_v": 0.041,
+        "worst_xyz": [
+          -23.49263661033629,
+          38.97382044190198,
+          -6.95261668086912
+        ],
+        "max_raw_parameter_duu_jump_mm": 5.1610013219795725
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.254234630306,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.09480243109962916,
+        "worst_v": 0.201,
+        "worst_xyz": [
+          -24.28744492296616,
+          39.078075292785556,
+          -7.1986045127735645
+        ],
+        "max_raw_parameter_duu_jump_mm": 7.568618543077756
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.381666173527,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.4534794040095033,
+        "worst_v": 0.013000000000000001,
+        "worst_xyz": [
+          -25.01109594853692,
+          38.825774094515026,
+          -7.296729519593682
+        ],
+        "max_raw_parameter_duu_jump_mm": 17.345610913951674
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.509132164339,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 0.6345759024199423,
+        "worst_v": 0.023,
+        "worst_xyz": [
+          -25.759691805253013,
+          38.76474360611989,
+          -7.5174005916112385
+        ],
+        "max_raw_parameter_duu_jump_mm": 19.126216945929457
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.636456798011,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 2.1352633832592773,
+        "worst_v": 0.011,
+        "worst_xyz": [
+          -26.51597625718822,
+          38.68299319674777,
+          -7.752394965737918
+        ],
+        "max_raw_parameter_duu_jump_mm": 46.53847138208899
+      },
+      {
+        "patch": 2,
+        "u_knot": 0.883020010779,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 1.1230037659686158,
+        "worst_v": 0.015,
+        "worst_xyz": [
+          -27.965234721540213,
+          38.554056049554816,
+          -8.359906083069262
+        ],
+        "max_raw_parameter_duu_jump_mm": 25.92895828699697
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.129291067907,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.31938986788881873,
+        "worst_v": 0.013000000000000001,
+        "worst_xyz": [
+          -27.922055147036637,
+          39.49665388254061,
+          -8.854443614602491
+        ],
+        "max_raw_parameter_duu_jump_mm": 9.437698059309156
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.258769154496,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 2.7736250559309767,
+        "worst_v": 0.0,
+        "worst_xyz": [
+          -27.447295453269753,
+          40.03980618237013,
+          -8.888701509071886
+        ],
+        "max_raw_parameter_duu_jump_mm": 27.630798828609286
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.383979317384,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 8.537736462515939e-07,
+        "maximum_physical_height_hessian_jump_per_mm": 1.456888100087758,
+        "worst_v": 0.033,
+        "worst_xyz": [
+          -26.907516997360435,
+          40.56634253267002,
+          -8.94047947395006
+        ],
+        "max_raw_parameter_duu_jump_mm": 32.173622906704004
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.506725472452,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.5916605923048258,
+        "worst_v": 0.108,
+        "worst_xyz": [
+          -26.385510338468258,
+          41.051085956750384,
+          -8.952950666413269
+        ],
+        "max_raw_parameter_duu_jump_mm": 15.907275954712036
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.631692558631,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 5.145145175299262,
+        "worst_v": 0.035,
+        "worst_xyz": [
+          -25.96733434513321,
+          41.592074165076895,
+          -9.08760029549526
+        ],
+        "max_raw_parameter_duu_jump_mm": 168.90034700288942
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.753270697608,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 0.5872496791240119,
+        "worst_v": 0.111,
+        "worst_xyz": [
+          -25.483020123721424,
+          42.00344261208782,
+          -9.09592292150946
+        ],
+        "max_raw_parameter_duu_jump_mm": 15.158958210842435
+      },
+      {
+        "patch": 3,
+        "u_knot": 0.877586200165,
+        "multiplicity": 2,
+        "max_normal_jump_degrees": 1.2074182697257333e-06,
+        "maximum_physical_height_hessian_jump_per_mm": 2.9423638027450436,
+        "worst_v": 0.011,
+        "worst_xyz": [
+          -25.032054405919638,
+          42.591489092880586,
+          -9.272991432033965
+        ],
+        "max_raw_parameter_duu_jump_mm": 72.56695498472183
+      }
+    ]
+  },
+  "meaning": "Physical height-Hessian differences include XY map curvature correction. They measure a second-derivative discontinuity at a C1 knot; not a C0 normal crease or a CAD error code.",
+  "scope": "Numerical one-sided limits, no formal G2 claim."
+}

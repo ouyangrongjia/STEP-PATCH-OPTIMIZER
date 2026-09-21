@@ -1,0 +1,12 @@
+{
+  "samples": 30000,
+  "projected_residual_mm": {
+    "max": 9.930136612989092e-16,
+    "rms": 1.8373937457481217e-16,
+    "p95": 4.440892098500626e-16,
+    "p99": 4.965068306494546e-16
+  },
+  "outside_1e_6mm": 0,
+  "kernel_corrections": [],
+  "method": "Invert immutable baseline XY maps; independent kernel fallback for unresolved samples; original heights and normals only"
+}

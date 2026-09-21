@@ -1,0 +1,26 @@
+Projected coordinates 0 0.0
+Projected coordinates 1 0.4948033407478929
+Projected coordinates 2 0.0
+Projected coordinates 3 0.0667189158663445
+Projected coordinates 4 0.4288071450118903
+local projection 0
+Traceback (most recent call last):
+  File "D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\tools\candidate179_research\continuity_local.py", line 42, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\tools\candidate179_research\continuity_local.py", line 35, in main
+    patch,uv=parameterize(fresh,shapes(shape,TopAbs_FACE),target);report=evaluate_shape(shape,fresh,target,patch,uv)
+                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\tools\candidate179_research\hard_boundary_audit.py", line 31, in evaluate_shape
+    d,n,q,_=closest(points[mask],p,tu,tv,degree,initial_uv[mask],iterations=40)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\tools\candidate179_research\evaluate.py", line 38, in closest
+    if np.max(np.linalg.norm(uv-previous_uv,axis=1))<1e-10:break
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\3d_engineering\astra_modeling_test\.venv\Lib\site-packages\numpy\_core\fromnumeric.py", line 3123, in max
+    return _wrapreduction(a, np.maximum, 'max', axis, None, out,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\3d_engineering\astra_modeling_test\.venv\Lib\site-packages\numpy\_core\fromnumeric.py", line 83, in _wrapreduction
+    return ufunc.reduce(obj, axis, dtype, out, **passkwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: zero-size array to reduction operation maximum which has no identity

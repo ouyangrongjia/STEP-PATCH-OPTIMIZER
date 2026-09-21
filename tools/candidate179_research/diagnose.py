@@ -43,10 +43,10 @@ def seam_quality(shape):
     return result
 
 
-def sample_shape(shape,count=6000):
+def sample_shape(shape,count=6000,seed=181):
     p,t,uv,tf=tessellate(shape,.001)
     area=np.linalg.norm(np.cross(p[t[:,1]]-p[t[:,0]],p[t[:,2]]-p[t[:,0]]),axis=1)
-    rng=np.random.default_rng(181);choose=rng.choice(len(t),count,p=area/area.sum())
+    rng=np.random.default_rng(seed);choose=rng.choice(len(t),count,p=area/area.sum())
     r=np.sqrt(rng.random(count));s=rng.random(count);w=np.c_[1-r,r*(1-s),r*s]
     q=np.einsum('ij,ijk->ik',w,uv[t[choose]])
     points=np.zeros((count,3));faces=shapes(shape,TopAbs_FACE)
@@ -56,8 +56,8 @@ def sample_shape(shape,count=6000):
     return points
 
 
-def reverse_distance(shape,original,data):
-    points=sample_shape(shape)
+def reverse_distance(shape,original,data,count=6000,seed=181):
+    points=sample_shape(shape,count,seed)
     centers=data['mesh_points'][data['mesh_triangles']].mean(axis=1)
     _,idx=cKDTree(centers).query(points,k=24)
     candidates=data['mesh_triangle_face'][idx]
@@ -74,7 +74,7 @@ def reverse_distance(shape,original,data):
     for i in indices:
         query=BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(gp_Pnt(*points[i])).Vertex(),original)
         if query.IsDone():checks.append(dict(sample=int(i),numeric_mm=float(result[i]),occt_mm=query.Value()))
-    return dict(distance_mm=stats(result),sample_count=len(points),seed=181,
+    return dict(distance_mm=stats(result),sample_count=len(points),seed=seed,
                 method='area sampling of actual candidate triangulation, exact candidate surfaces; nearest original rectangular supports from 24 nearby triangle centroids',
                 occt_global_checks=checks),points,result
 

@@ -1,0 +1,26 @@
+{
+  "source_faces": [
+    {
+      "original_face_id": 1706,
+      "grid": [
+        161,
+        161
+      ],
+      "xyz_bounds": [
+        [
+          -26.956001277150012,
+          40.4440212243,
+          -9.004557146033404
+        ],
+        [
+          -26.15463604539,
+          41.09082672683,
+          -8.652231122774
+        ]
+      ]
+    }
+  ],
+  "samples": 25921,
+  "selection": "Independent confirmation worst-normal original face; post-selection localization only.",
+  "used_for_fitting": false
+}

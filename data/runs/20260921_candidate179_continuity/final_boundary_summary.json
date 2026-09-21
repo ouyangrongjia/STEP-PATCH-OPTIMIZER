@@ -1,0 +1,18 @@
+{
+  "control": {
+    "original_boundary_max_mm": 8.836483883763103e-12,
+    "requested_g1_max_normal_degrees": 0.5935002942784893
+  },
+  "aligned_inner_cubic": {
+    "original_boundary_max_mm": 8.126431830867263e-12,
+    "requested_g1_max_normal_degrees": 0.37066630574228265
+  },
+  "aligned_refined_control": {
+    "original_boundary_max_mm": 8.836483883763103e-12,
+    "requested_g1_max_normal_degrees": 0.30921095704533064
+  },
+  "linear_xy_soft": {
+    "original_boundary_max_mm": 8.836483883763103e-12,
+    "requested_g1_max_normal_degrees": 0.30921095446515967
+  }
+}

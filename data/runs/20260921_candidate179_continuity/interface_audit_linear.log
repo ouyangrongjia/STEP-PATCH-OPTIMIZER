@@ -1,0 +1,2 @@
+control passed True boundary edges 26 curve-on-surface 9.500244059194137e-12 SameParameter false 0 max edge tolerance 1e-07
+linear_xy_soft passed True boundary edges 26 curve-on-surface 1.0097953685539014e-11 SameParameter false 0 max edge tolerance 1e-07

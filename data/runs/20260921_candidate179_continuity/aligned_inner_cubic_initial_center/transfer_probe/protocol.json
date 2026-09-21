@@ -1,0 +1,29 @@
+{
+  "source": "data\\runs\\20260921_candidate179_continuity\\aligned_inner_cubic\\patch_faces.step",
+  "face": 1,
+  "source_topology": {
+    "faces": 1,
+    "solids": 0,
+    "free_edges": 7,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true
+    ]
+  },
+  "support_topology": {
+    "faces": 1,
+    "solids": 0,
+    "free_edges": 4,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true
+    ]
+  },
+  "writer_setting": {
+    "write.surfacecurve.mode": 0
+  },
+  "cad_template_changed": false,
+  "engineering_acceptance": "Unvalidated diagnostic probes; no acceptance implied by an import result."
+}

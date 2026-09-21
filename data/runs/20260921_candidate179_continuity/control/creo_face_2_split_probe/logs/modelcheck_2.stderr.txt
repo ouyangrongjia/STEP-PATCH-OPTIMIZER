@@ -1,0 +1,5 @@
+此时不应有 11.0.0.0\Common。
+PhoneHome error 0 while ProNotificationSet status 0
+PhoneHome error 0 while ProNotificationSet status 0
+ModelCHECK is Processing OPEN_CASCADE_STEP_TRANSLATOR-10.ASM -- model 1 of 3 in CANDIDATE.ASMModelCHECK is Processing OPEN_CASCADE_STEP_TRANSLATOR-36.PRT -- model 2 of 3 in CANDIDATE.ASMModelCHECK is Processing OPEN_CASCADE_STEP_TRANSLAT-1345.PRT -- model 3 of 3 in CANDIDATE.ASM
+ ModelCHECK is Processing CANDIDATE.ASM 

@@ -1,0 +1,5 @@
+此时不应有 11.0.0.0\Common。
+PhoneHome error 0 while ProNotificationSet status 0
+PhoneHome error 0 while ProNotificationSet status 0
+
+ ModelCHECK is Processing OPEN_CASCADE_STEP_TRANSLATO-670.PRT 

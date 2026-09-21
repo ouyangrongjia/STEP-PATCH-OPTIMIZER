@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DXC>
+  <WINDCHILL/>
+  <Group TTD="E:\Proe\Creo 11.0.0.0\Common Files\text\ttds\step_3d_import.ttd" DSQM="_LOCAL" Name="STEP 3D Import" Output="2" OutputDir="D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\data\runs\20260921_candidate179_continuity\aligned_inner_cubic\span_probe\creo_all_c2_blocks\import" VaultResults="0" PrimaryContent="0">
+    <Object>D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\data\runs\20260921_candidate179_continuity\aligned_inner_cubic\span_probe\creo_all_c2_blocks\stage\candidate.step</Object>
+  </Group>
+</DXC>

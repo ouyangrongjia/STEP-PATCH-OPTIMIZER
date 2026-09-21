@@ -1,0 +1,22 @@
+Projected coordinates 0 0.0
+Projected coordinates 1 0.4948033407478929
+Projected coordinates 2 0.0
+Projected coordinates 3 0.0667189158663445
+Projected coordinates 4 0.4288071450118903
+local projection 0
+local projection 1
+local projection 2
+local projection 3
+local projection 4
+control local {'max': 0.018657939370138685, 'rms': 0.0016018889416257547, 'p95': 0.0022200407477874543, 'p99': 0.008985757908513338} {'max': 31.643502377479905, 'rms': 2.2895492875436187, 'p95': 3.6307156980679833, 'p99': 9.849744888653161}
+Projected coordinates 0 0.0
+Projected coordinates 1 0.4948033407477977
+Projected coordinates 2 0.0
+Projected coordinates 3 0.06671891586796805
+Projected coordinates 4 0.42880714500975536
+local projection 0
+local projection 1
+local projection 2
+local projection 3
+local projection 4
+aligned_inner_cubic local {'max': 0.004127116774644608, 'rms': 0.000827099806063456, 'p95': 0.001906622758885504, 'p99': 0.00279339193822545} {'max': 4.639238210214454, 'rms': 1.0180777222960604, 'p95': 2.206607417350326, 'p99': 3.1527858095989094}

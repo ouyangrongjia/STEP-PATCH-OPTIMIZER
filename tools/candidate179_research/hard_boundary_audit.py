@@ -28,9 +28,10 @@ def evaluate_shape(shape,data,out,initial_patch,initial_uv):
         p,tu,tv,degree=from_occt(BRep_Tool.Surface_s(face))
         distance,normal,uv,_=closest(points,p,tu,tv,degree,iterations=40)
         mask=initial_patch==fi
-        d,n,q,_=closest(points[mask],p,tu,tv,degree,initial_uv[mask],iterations=40)
-        better=d<distance[mask];ids=np.flatnonzero(mask)[better]
-        distance[ids]=d[better];normal[ids]=n[better];uv[ids]=q[better]
+        if np.any(mask):
+            d,n,q,_=closest(points[mask],p,tu,tv,degree,initial_uv[mask],iterations=40)
+            better=d<distance[mask];ids=np.flatnonzero(mask)[better]
+            distance[ids]=d[better];normal[ids]=n[better];uv[ids]=q[better]
         if face.Orientation()==TopAbs_REVERSED:normal*=-1
         distances.append(distance);normals.append(normal);parameters.append(uv)
         print(out.name,'projection',fi,flush=True)

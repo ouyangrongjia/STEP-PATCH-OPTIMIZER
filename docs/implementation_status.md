@@ -4,7 +4,7 @@
 
 ## 分支
 
-本工作树是基于 `native-regional-refit` 归档提交 `bfe1412` 的独立研究分支 `experiment/candidate179-evidence-20260921`；产品主线和原研究工作树的既有修改均未合并或改写。
+本工作树是基于上一轮归档提交 `3c810bf` 的独立研究分支 `experiment/candidate179-continuity-20260921`；产品主线和原研究工作树的既有修改均未合并或改写。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
 
@@ -187,7 +187,7 @@ P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-
 
 ## 当前限制
 
-candidate-179 独立研究以原外边界硬保持和整件水密作为前置门。基线机制与自由重建见 [首轮实证](../data/runs/20260921_candidate179_evidence/RUN.md)，冻结旧曲线的四片闭合对照见 [水密优先补充实证](../data/runs/20260921_candidate179_hard_boundary/RUN.md)。最新 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md) 已放开旧人工缝及控制网，获得控制点更少、形状与接缝明显改善的五片闭合诊断；最大法向、方向控制点预算和 Creo 几何检查仍未通过。初始 Coons 参数映射随主曲线节点改变，相关收益不能只归因于接缝自由度；单独的节点光顺项对照已保留。所有结果仍无产品 Apply 资格，不代表现有 C++ 能力或既有回归基线变化。
+candidate-179 独立研究以原外边界硬保持和整件水密作为前置门。基线机制与自由重建见 [首轮实证](../data/runs/20260921_candidate179_evidence/RUN.md)，冻结旧曲线的四片闭合对照见 [水密优先补充实证](../data/runs/20260921_candidate179_hard_boundary/RUN.md)，上一轮直接对照见 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md)。最新 [连续性与节点传播实证](../data/runs/20260921_candidate179_continuity/RUN.md) 在保持原边和整件闭合的前提下，使用显式外围 XY 映射及同几何起点的节点兼容对照，进一步改善局部法向、节点跳变和参数尺度分布，并减少控制点。最大法向、方向控制点预算和 Creo 几何检查仍未通过；CAD 等几何分段与加密探针将后续重点缩小到复合拼接的实际连续性/表示。原始 CAD 报告及修正前的证据均保留。所有结果仍为 DiagnosticOnly，无产品 Apply 资格，不代表现有 C++ 能力或既有回归基线变化。
 
 - MinimizeFaceCount 是预算搜索；除非达到可证明下界，否则不证明全局最优。
 - GUI 默认参数与锁定的 candidate-179 49→46 比例回归不同。

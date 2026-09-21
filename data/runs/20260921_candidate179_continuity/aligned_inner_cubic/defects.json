@@ -1,0 +1,967 @@
+{
+  "patches": [
+    {
+      "patch": 0,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 99,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 91,
+        "v_knots": 8,
+        "rational": false
+      },
+      "physical_u_spans": [
+        {
+          "v": 0.0,
+          "minimum_span_chord_mm": 0.04007670183994029,
+          "median_span_chord_mm": 0.04868385895338799,
+          "maximum_span_chord_mm": 0.054119094448957,
+          "maximum_adjacent_span_ratio": 1.2173485986014616,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.297235509723954,
+              41.4355299064792,
+              -7.046027553659874
+            ],
+            [
+              -21.26746583771,
+              41.41285117525,
+              -7.031689359618
+            ]
+          ]
+        },
+        {
+          "v": 0.01,
+          "minimum_span_chord_mm": 0.039880090155047426,
+          "median_span_chord_mm": 0.04839741498571537,
+          "maximum_span_chord_mm": 0.0537021250176433,
+          "maximum_adjacent_span_ratio": 1.2162687232269647,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.31316622931862,
+              41.42766694991718,
+              -7.0578653462275325
+            ],
+            [
+              -21.28353237631997,
+              41.4051282756941,
+              -7.043573232615646
+            ]
+          ]
+        },
+        {
+          "v": 0.02,
+          "minimum_span_chord_mm": 0.03954384977739501,
+          "median_span_chord_mm": 0.04813838810123751,
+          "maximum_span_chord_mm": 0.05332082848269016,
+          "maximum_adjacent_span_ratio": 1.2240636547554353,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.329973147092844,
+              41.420805158097046,
+              -7.067463305119215
+            ],
+            [
+              -21.300795724919777,
+              41.3987728795068,
+              -7.052397688946167
+            ]
+          ]
+        },
+        {
+          "v": 0.06,
+          "minimum_span_chord_mm": 0.03871597234553428,
+          "median_span_chord_mm": 0.04702333135903609,
+          "maximum_span_chord_mm": 0.05182708052903169,
+          "maximum_adjacent_span_ratio": 1.2362403342800707,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.402246854382952,
+              41.399123711002524,
+              -7.092955910719509
+            ],
+            [
+              -21.373732225180316,
+              41.37778822326389,
+              -7.077769094099459
+            ]
+          ]
+        },
+        {
+          "v": 0.2,
+          "minimum_span_chord_mm": 0.036329964893519924,
+          "median_span_chord_mm": 0.04323019940059254,
+          "maximum_span_chord_mm": 0.04725148064332944,
+          "maximum_adjacent_span_ratio": 1.197283619106786,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.66769445978917,
+              41.337509592389694,
+              -7.150252671524157
+            ],
+            [
+              -21.64026570279447,
+              41.31720298569904,
+              -7.137795891699455
+            ]
+          ]
+        },
+        {
+          "v": 0.5,
+          "minimum_span_chord_mm": 0.030386956261842474,
+          "median_span_chord_mm": 0.03499026599024058,
+          "maximum_span_chord_mm": 0.03789150793882382,
+          "maximum_adjacent_span_ratio": 1.156998011582058,
+          "smallest_span_uv": [
+            0.98930805939,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -22.24172990374251,
+              41.211442858506246,
+              -7.259689690811446
+            ],
+            [
+              -22.21853503744067,
+              41.19552000494764,
+              -7.2482080523112105
+            ]
+          ]
+        },
+        {
+          "v": 1.0,
+          "minimum_span_chord_mm": 0.020823141735310476,
+          "median_span_chord_mm": 0.02162421867151393,
+          "maximum_span_chord_mm": 0.022536999814111183,
+          "maximum_adjacent_span_ratio": 1.060595025676072,
+          "smallest_span_uv": [
+            0.839620890846,
+            0.850312831456
+          ],
+          "smallest_span_xyz": [
+            [
+              -23.422392943883573,
+              41.11967871315137,
+              -7.585187098908652
+            ],
+            [
+              -23.405888504068336,
+              41.110643848297585,
+              -7.576266453461833
+            ]
+          ]
+        }
+      ],
+      "normalized_uv_xy_jacobian_condition": {
+        "max": 3.514475618948396,
+        "rms": 2.79551825014221,
+        "p95": 3.342601617410865,
+        "p99": 3.437004513727977
+      },
+      "condition_note": "Depends on normalized UV units; interpreted together with physical span lengths, not as an invariant quality score."
+    },
+    {
+      "patch": 1,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 66,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 61,
+        "v_knots": 8,
+        "rational": false
+      },
+      "physical_u_spans": [
+        {
+          "v": 0.0,
+          "minimum_span_chord_mm": 0.038348655513648994,
+          "median_span_chord_mm": 0.047047187534504306,
+          "maximum_span_chord_mm": 0.047399346287656366,
+          "maximum_adjacent_span_ratio": 1.232764056423221,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.26746583771,
+              41.41285117525,
+              -7.031689359618
+            ],
+            [
+              -21.277762676990857,
+              41.37592417243994,
+              -7.032684821317165
+            ]
+          ]
+        },
+        {
+          "v": 0.01,
+          "minimum_span_chord_mm": 0.037522185326396174,
+          "median_span_chord_mm": 0.04678068088482795,
+          "maximum_span_chord_mm": 0.04714605958388378,
+          "maximum_adjacent_span_ratio": 1.2506640199312498,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.28353237631997,
+              41.4051282756941,
+              -7.043573232615646
+            ],
+            [
+              -21.294630333760736,
+              41.36930086772025,
+              -7.04250245243916
+            ]
+          ]
+        },
+        {
+          "v": 0.02,
+          "minimum_span_chord_mm": 0.0372248313248556,
+          "median_span_chord_mm": 0.04651315790666573,
+          "maximum_span_chord_mm": 0.04688616279964358,
+          "maximum_adjacent_span_ratio": 1.25163223087782,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.300795724919777,
+              41.3987728795068,
+              -7.052397688946167
+            ],
+            [
+              -21.312068185013253,
+              41.363329080685354,
+              -7.050862490030807
+            ]
+          ]
+        },
+        {
+          "v": 0.06,
+          "minimum_span_chord_mm": 0.036166374904471145,
+          "median_span_chord_mm": 0.045465438199824265,
+          "maximum_span_chord_mm": 0.045845510320144396,
+          "maximum_adjacent_span_ratio": 1.2516840181852795,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.373732225180316,
+              41.37778822326389,
+              -7.077769094099459
+            ],
+            [
+              -21.385611952218454,
+              41.34377517519522,
+              -7.07460818911698
+            ]
+          ]
+        },
+        {
+          "v": 0.2,
+          "minimum_span_chord_mm": 0.03341286382251667,
+          "median_span_chord_mm": 0.041822688044234224,
+          "maximum_span_chord_mm": 0.042140007919918405,
+          "maximum_adjacent_span_ratio": 1.2374868860911588,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -21.64026570279447,
+              41.31720298569904,
+              -7.137795891699455
+            ],
+            [
+              -21.653400722072327,
+              41.28720332038257,
+              -7.131169367852679
+            ]
+          ]
+        },
+        {
+          "v": 0.5,
+          "minimum_span_chord_mm": 0.028736824122785828,
+          "median_span_chord_mm": 0.03398976910516615,
+          "maximum_span_chord_mm": 0.03419472206270592,
+          "maximum_adjacent_span_ratio": 1.1736320198718984,
+          "smallest_span_uv": [
+            0.0,
+            0.0166999744419
+          ],
+          "smallest_span_xyz": [
+            [
+              -22.21853503744067,
+              41.19552000494764,
+              -7.2482080523112105
+            ],
+            [
+              -22.23057978427662,
+              41.16980111753204,
+              -7.243818523358638
+            ]
+          ]
+        },
+        {
+          "v": 1.0,
+          "minimum_span_chord_mm": 0.020915877696731745,
+          "median_span_chord_mm": 0.020987807257040823,
+          "maximum_span_chord_mm": 0.02100792002438252,
+          "maximum_adjacent_span_ratio": 1.003780401460184,
+          "smallest_span_uv": [
+            0.750811917279,
+            0.767424456127
+          ],
+          "smallest_span_xyz": [
+            [
+              -23.665991658442117,
+              40.18444165633031,
+              -7.341528437393741
+            ],
+            [
+              -23.676805160604168,
+              40.16668532143633,
+              -7.339236128088916
+            ]
+          ]
+        }
+      ],
+      "normalized_uv_xy_jacobian_condition": {
+        "max": 2.349273928536848,
+        "rms": 1.7972583507315676,
+        "p95": 2.1123112398636246,
+        "p99": 2.187425268446026
+      },
+      "condition_note": "Depends on normalized UV units; interpreted together with physical span lengths, not as an invariant quality score."
+    },
+    {
+      "patch": 2,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 131,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 121,
+        "v_knots": 8,
+        "rational": false
+      },
+      "physical_u_spans": [
+        {
+          "v": 0.0,
+          "minimum_span_chord_mm": 0.04324997644397032,
+          "median_span_chord_mm": 0.05299397501690774,
+          "maximum_span_chord_mm": 0.058883262338780364,
+          "maximum_adjacent_span_ratio": 1.2209194887501702,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -28.395811068624997,
+              38.874890543616665,
+              -8.784022259053167
+            ],
+            [
+              -28.4051596251,
+              38.91054590815,
+              -8.806646580794
+            ]
+          ]
+        },
+        {
+          "v": 0.01,
+          "minimum_span_chord_mm": 0.042978953632382605,
+          "median_span_chord_mm": 0.0526965690517292,
+          "maximum_span_chord_mm": 0.05854140099214672,
+          "maximum_adjacent_span_ratio": 1.2195863377226037,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -28.373116075718396,
+              38.88197922504026,
+              -8.784758095485826
+            ],
+            [
+              -28.382188332612156,
+              38.91683647600246,
+              -8.808207118185003
+            ]
+          ]
+        },
+        {
+          "v": 0.02,
+          "minimum_span_chord_mm": 0.04269035351597407,
+          "median_span_chord_mm": 0.05239103896473002,
+          "maximum_span_chord_mm": 0.05820421180232418,
+          "maximum_adjacent_span_ratio": 1.218724265734067,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -28.35182208172467,
+              38.890668720925405,
+              -8.78191254516968
+            ],
+            [
+              -28.360769517747222,
+              38.92490094146967,
+              -8.805799042371023
+            ]
+          ]
+        },
+        {
+          "v": 0.06,
+          "minimum_span_chord_mm": 0.041649240814943866,
+          "median_span_chord_mm": 0.05116628321994942,
+          "maximum_span_chord_mm": 0.056802330485340335,
+          "maximum_adjacent_span_ratio": 1.211427973701488,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -28.27105088917233,
+              38.93045971407962,
+              -8.75927035446253
+            ],
+            [
+              -28.27951984742529,
+              38.96221558604655,
+              -8.784853563842722
+            ]
+          ]
+        },
+        {
+          "v": 0.2,
+          "minimum_span_chord_mm": 0.03682159100139194,
+          "median_span_chord_mm": 0.046968493960115806,
+          "maximum_span_chord_mm": 0.05181790104473568,
+          "maximum_adjacent_span_ratio": 1.2021982247037795,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -27.99263050530159,
+              39.07461723673528,
+              -8.669084775576174
+            ],
+            [
+              -28.00273704565393,
+              39.10149054870349,
+              -8.692139330654067
+            ]
+          ]
+        },
+        {
+          "v": 0.5,
+          "minimum_span_chord_mm": 0.027546055308315758,
+          "median_span_chord_mm": 0.03801643231398147,
+          "maximum_span_chord_mm": 0.04093484711783813,
+          "maximum_adjacent_span_ratio": 1.1591468657400728,
+          "smallest_span_uv": [
+            0.992201334052,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -27.39163397168987,
+              39.378519893756824,
+              -8.48703024259108
+            ],
+            [
+              -27.405554890023033,
+              39.39527938986748,
+              -8.503885879212906
+            ]
+          ]
+        },
+        {
+          "v": 1.0,
+          "minimum_span_chord_mm": 0.02129209563581664,
+          "median_span_chord_mm": 0.02315589763972649,
+          "maximum_span_chord_mm": 0.023211387933768552,
+          "maximum_adjacent_span_ratio": 1.0672275858545326,
+          "smallest_span_uv": [
+            0.883020010779,
+            0.890818676727
+          ],
+          "smallest_span_xyz": [
+            [
+              -26.103375541523707,
+              39.88329243720459,
+              -8.099177045021685
+            ],
+            [
+              -26.122930875540835,
+              39.882369592696584,
+              -8.107549058283583
+            ]
+          ]
+        }
+      ],
+      "normalized_uv_xy_jacobian_condition": {
+        "max": 6.10898331971097,
+        "rms": 4.579597586661691,
+        "p95": 5.729727676292486,
+        "p99": 6.018622911951696
+      },
+      "condition_note": "Depends on normalized UV units; interpreted together with physical span lengths, not as an invariant quality score."
+    },
+    {
+      "patch": 3,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 130,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 121,
+        "v_knots": 8,
+        "rational": false
+      },
+      "physical_u_spans": [
+        {
+          "v": 0.0,
+          "minimum_span_chord_mm": 0.04088499654551372,
+          "median_span_chord_mm": 0.048953949448933456,
+          "maximum_span_chord_mm": 0.05018332911701881,
+          "maximum_adjacent_span_ratio": 1.143619424822011,
+          "smallest_span_uv": [
+            0.704639442017,
+            0.712744651283
+          ],
+          "smallest_span_xyz": [
+            [
+              -25.715601075144512,
+              41.9153521152771,
+              -9.1213645836684
+            ],
+            [
+              -25.687536973442214,
+              41.9445565941012,
+              -9.126940205138917
+            ]
+          ]
+        },
+        {
+          "v": 0.01,
+          "minimum_span_chord_mm": 0.040669951446205374,
+          "median_span_chord_mm": 0.04864324869890527,
+          "maximum_span_chord_mm": 0.04987140035507232,
+          "maximum_adjacent_span_ratio": 1.160468730984842,
+          "smallest_span_uv": [
+            0.704639442017,
+            0.712744651283
+          ],
+          "smallest_span_xyz": [
+            [
+              -25.70613772534871,
+              41.903618747514095,
+              -9.124200561907406
+            ],
+            [
+              -25.67828355857939,
+              41.93276465643557,
+              -9.12955839144599
+            ]
+          ]
+        },
+        {
+          "v": 0.02,
+          "minimum_span_chord_mm": 0.040453501143406755,
+          "median_span_chord_mm": 0.04837332949599679,
+          "maximum_span_chord_mm": 0.04959154334805232,
+          "maximum_adjacent_span_ratio": 1.152258015673653,
+          "smallest_span_uv": [
+            0.704639442017,
+            0.712744651283
+          ],
+          "smallest_span_xyz": [
+            [
+              -25.697850082814757,
+              41.89322877064401,
+              -9.12403106858372
+            ],
+            [
+              -25.670219949926253,
+              41.92233221945755,
+              -9.129135064908235
+            ]
+          ]
+        },
+        {
+          "v": 0.06,
+          "minimum_span_chord_mm": 0.038969229771525844,
+          "median_span_chord_mm": 0.04727616839076251,
+          "maximum_span_chord_mm": 0.04847018818269037,
+          "maximum_adjacent_span_ratio": 1.1505477639901511,
+          "smallest_span_uv": [
+            0.991839080011,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.555641292382173,
+              42.98316937739594,
+              -9.307958727992583
+            ],
+            [
+              -24.5241648441256,
+              43.003199510879796,
+              -9.29670582495576
+            ]
+          ]
+        },
+        {
+          "v": 0.2,
+          "minimum_span_chord_mm": 0.03556239139522406,
+          "median_span_chord_mm": 0.04341180417279984,
+          "maximum_span_chord_mm": 0.044566672428705434,
+          "maximum_adjacent_span_ratio": 1.1474813544070512,
+          "smallest_span_uv": [
+            0.991839080011,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.577321545417053,
+              42.803648927173654,
+              -9.16741748004944
+            ],
+            [
+              -24.546851298302453,
+              42.821201678849185,
+              -9.162111951693145
+            ]
+          ]
+        },
+        {
+          "v": 0.5,
+          "minimum_span_chord_mm": 0.02968579749056672,
+          "median_span_chord_mm": 0.03512641439267765,
+          "maximum_span_chord_mm": 0.03617735014744786,
+          "maximum_adjacent_span_ratio": 1.1157664190764365,
+          "smallest_span_uv": [
+            0.991839080011,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.624626711016624,
+              42.41993059939857,
+              -8.864091240560468
+            ],
+            [
+              -24.600017089133658,
+              42.43640750205988,
+              -8.862060289522635
+            ]
+          ]
+        },
+        {
+          "v": 1.0,
+          "minimum_span_chord_mm": 0.020891655520022163,
+          "median_span_chord_mm": 0.021420421577443383,
+          "maximum_span_chord_mm": 0.022248046889110414,
+          "maximum_adjacent_span_ratio": 1.0340886513076284,
+          "smallest_span_uv": [
+            0.631692558631,
+            0.639797767896
+          ],
+          "smallest_span_xyz": [
+            [
+              -25.3075687633749,
+              41.07425388846673,
+              -8.337398334634818
+            ],
+            [
+              -25.293484202546765,
+              41.08958706952464,
+              -8.339124595128238
+            ]
+          ]
+        }
+      ],
+      "normalized_uv_xy_jacobian_condition": {
+        "max": 5.674697292341924,
+        "rms": 4.525815075704337,
+        "p95": 5.468108380909611,
+        "p99": 5.592930905118537
+      },
+      "condition_note": "Depends on normalized UV units; interpreted together with physical span lengths, not as an invariant quality score."
+    },
+    {
+      "patch": 4,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 8,
+        "v_poles": 8,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 6,
+        "v_knots": 6,
+        "rational": false
+      },
+      "physical_u_spans": [
+        {
+          "v": 0.0,
+          "minimum_span_chord_mm": 0.38871788978251937,
+          "median_span_chord_mm": 0.38941743064501305,
+          "maximum_span_chord_mm": 0.39115831691427,
+          "maximum_adjacent_span_ratio": 1.004470488818062,
+          "smallest_span_uv": [
+            0.4,
+            0.6
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.086574985619997,
+              41.47467569940116,
+              -7.988869167990834
+            ],
+            [
+              -23.787999525634998,
+              41.317271516953994,
+              -7.796052633741667
+            ]
+          ]
+        },
+        {
+          "v": 0.01,
+          "minimum_span_chord_mm": 0.389868474419391,
+          "median_span_chord_mm": 0.39047810411462097,
+          "maximum_span_chord_mm": 0.39181040885421303,
+          "maximum_adjacent_span_ratio": 1.003411983221474,
+          "smallest_span_uv": [
+            0.4,
+            0.6
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.099969934447543,
+              41.45900099504596,
+              -7.986716098626889
+            ],
+            [
+              -23.7987230407022,
+              41.30360516846011,
+              -7.794102824332035
+            ]
+          ]
+        },
+        {
+          "v": 0.02,
+          "minimum_span_chord_mm": 0.3910207801445269,
+          "median_span_chord_mm": 0.3912693761290608,
+          "maximum_span_chord_mm": 0.39249919388470256,
+          "maximum_adjacent_span_ratio": 1.002435284053125,
+          "smallest_span_uv": [
+            0.4,
+            0.6
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.113336002901566,
+              41.4433434167584,
+              -7.984571230659739
+            ],
+            [
+              -23.809469749509255,
+              41.28991519621659,
+              -7.792159350320901
+            ]
+          ]
+        },
+        {
+          "v": 0.06,
+          "minimum_span_chord_mm": 0.39458274355752276,
+          "median_span_chord_mm": 0.3956128238895008,
+          "maximum_span_chord_mm": 0.39588069415225585,
+          "maximum_adjacent_span_ratio": 1.0023949032859345,
+          "smallest_span_uv": [
+            0.8,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -23.533571316099106,
+              41.08159197214223,
+              -7.608075913221806
+            ],
+            [
+              -23.212889780000364,
+              40.91889116000581,
+              -7.445634109338434
+            ]
+          ]
+        },
+        {
+          "v": 0.2,
+          "minimum_span_chord_mm": 0.4100201824767642,
+          "median_span_chord_mm": 0.41195374242244753,
+          "maximum_span_chord_mm": 0.41214923987604857,
+          "maximum_adjacent_span_ratio": 1.0047157677312455,
+          "smallest_span_uv": [
+            0.8,
+            1.0
+          ],
+          "smallest_span_xyz": [
+            [
+              -23.65549366248153,
+              40.91070314126326,
+              -7.583927058263465
+            ],
+            [
+              -23.305298378915833,
+              40.770713638402746,
+              -7.423045883182333
+            ]
+          ]
+        },
+        {
+          "v": 0.5,
+          "minimum_span_chord_mm": 0.4536926253418308,
+          "median_span_chord_mm": 0.454278072037575,
+          "maximum_span_chord_mm": 0.45517443466800317,
+          "maximum_adjacent_span_ratio": 1.0019731584806806,
+          "smallest_span_uv": [
+            0.4,
+            0.6
+          ],
+          "smallest_span_xyz": [
+            [
+              -24.74012544243757,
+              40.695717770844674,
+              -7.892135633661539
+            ],
+            [
+              -24.332969207152328,
+              40.620717895869724,
+              -7.706566732410136
+            ]
+          ]
+        },
+        {
+          "v": 1.0,
+          "minimum_span_chord_mm": 0.5454996031751047,
+          "median_span_chord_mm": 0.5461173252206081,
+          "maximum_span_chord_mm": 0.5471935242273079,
+          "maximum_adjacent_span_ratio": 1.001704141244851,
+          "smallest_span_uv": [
+            0.2,
+            0.4
+          ],
+          "smallest_span_xyz": [
+            [
+              -25.894514371541668,
+              39.89233198789841,
+              -8.0118086417075
+            ],
+            [
+              -25.38647033325833,
+              39.90852659231667,
+              -7.813821755736
+            ]
+          ]
+        }
+      ],
+      "normalized_uv_xy_jacobian_condition": {
+        "max": 2.333621584579478,
+        "rms": 1.5281826442881328,
+        "p95": 2.0552237104432844,
+        "p99": 2.26840086962111
+      },
+      "condition_note": "Depends on normalized UV units; interpreted together with physical span lengths, not as an invariant quality score."
+    }
+  ],
+  "knot_profiles": [
+    {
+      "patch": 0,
+      "axis": 0,
+      "knot": 0.51594732703,
+      "multiplicity": 3,
+      "max_normal_jump_degrees": 0.2473027984488157,
+      "worst_transverse_parameter": 0.0,
+      "worst_xyz": [
+        -22.94765946521877,
+        42.43269410807508,
+        -7.964781228103101
+      ],
+      "parameter_offset_epsilon": 1.078882802000003e-09,
+      "sample_offset_position_difference_mm": 1.1893705024726176e-08,
+      "boundary_tangent_jump_degrees": [
+        31.79922766706826,
+        0.0
+      ],
+      "boundary_normal_jump_degrees": [
+        0.2473027984488157,
+        0.0
+      ]
+    },
+    {
+      "patch": 2,
+      "axis": 0,
+      "knot": 0.763749682092,
+      "multiplicity": 3,
+      "max_normal_jump_degrees": 0.3519170814871483,
+      "worst_transverse_parameter": 0.057,
+      "worst_xyz": [
+        -27.18212291558463,
+        38.66036915368231,
+        -8.040934690799705
+      ],
+      "parameter_offset_epsilon": 7.951355245000013e-10,
+      "sample_offset_position_difference_mm": 1.3054359189948506e-08,
+      "boundary_tangent_jump_degrees": [
+        30.26144854698179,
+        0.0
+      ],
+      "boundary_normal_jump_degrees": [
+        0.2418337552155502,
+        0.0
+      ]
+    }
+  ]
+}

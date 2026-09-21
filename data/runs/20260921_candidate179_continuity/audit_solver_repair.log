@@ -1,0 +1,13 @@
+hard_g1 projection 0
+hard_g1 projection 1
+hard_g1 projection 2
+hard_g1 projection 3
+hard_g1 projection 4
+hard_g1 {'max': 0.2802272732016069, 'rms': 0.03278804742116616, 'p95': 0.0724931612046445, 'p99': 0.1499714859665067} {'max': 82.56816851240681, 'rms': 25.013510076143387, 'p95': 66.24416948809568, 'p99': 77.01960940817406} knot jump 0.00015227358751824615
+hard_g1_normal projection 0
+hard_g1_normal projection 1
+hard_g1_normal projection 2
+hard_g1_normal projection 3
+hard_g1_normal projection 4
+hard_g1_normal {'max': 0.2943296214826106, 'rms': 0.03382550011313214, 'p95': 0.07573392016887046, 'p99': 0.15480779670809827} {'max': 80.36352779192855, 'rms': 23.80908446928552, 'p95': 63.62181742188822, 'p99': 74.87446034625728} knot jump 0.00014039060902369218
+Completed 159.67006929998752

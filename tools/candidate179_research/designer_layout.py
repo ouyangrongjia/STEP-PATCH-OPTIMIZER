@@ -164,7 +164,7 @@ def variable_maps(layout):
     return matrices,seam_maps,total
 
 
-def solve(data,layout,maps,parameters,protocol):
+def assemble(data,layout,maps,parameters,protocol):
     total=maps[0].shape[1];points=(data['train_points']-data['center'])@data['axes'].T;normals=data['train_normals']@data['axes'].T
     matrices=[];targets=[];patchdata=[];n=len(points)
     mesh=data['mesh_points'];tri=data['mesh_triangles']
@@ -220,7 +220,12 @@ def solve(data,layout,maps,parameters,protocol):
             for k in [0,1]:
                 op=a[k]-b[k]
                 append(op,-op@z,np.sqrt(knot_weight/(len(knot_records)*193)),maps[fi])
-    matrix=sparse.vstack(matrices).tocsc();target=np.concatenate(targets)
+    return sparse.vstack(matrices).tocsc(),np.concatenate(targets),knot_records
+
+
+def solve(data,layout,maps,parameters,protocol):
+    matrix,target,knot_records=assemble(data,layout,maps,parameters,protocol)
+    total=maps[0].shape[1];knot_weight=protocol.get('internal_knot_gradient_weight_mm2',0.)
     scale=1/np.maximum(np.sqrt(np.asarray(matrix.power(2).sum(axis=0)).ravel()),1e-15)
     scaled=matrix@sparse.diags(scale);normal=(scaled.T@scaled).tocsc()+sparse.diags(1e-12*scale*scale,format='csc')
     rhs=scaled.T@target;x=splu(normal).solve(rhs);delta=scale*x

@@ -1,0 +1,10 @@
+{
+  "python_compileall": "passed",
+  "powershell_runner_parse_errors": 0,
+  "run_relative_links": "passed",
+  "git_diff_check": "passed",
+  "associated_creo_models_verified": 25,
+  "cpp_tests": "not run; product C++ unchanged",
+  "full_wrapper_rerun": false,
+  "git_diff_check_scope": "Edited source, docs, run metadata; generated vendor reports retained without whitespace edits."
+}

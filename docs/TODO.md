@@ -29,7 +29,7 @@ P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-
 
 阶段 2A 证据位于 `data/runs/20260730_151521_082__native-region-refit__03_配件_Clay__cand-0179__target/final/`。闭合预求解已进入但未通过：最低硬残差为 `0.0164339 mm`，继续局部增点后出现 trim 域内 Jacobian 翻转；最坏热区为 patch 1、edge 30、`t=0`、UV=`(1, 0.4002505)`，Curve-on-Surface 偏差 `0.161957 mm`、内部双侧分离 `0.163864 mm`。阶段 2B 未执行，路由为 `Stage3`。最终面片明确携带阶段 1 产物，固定 `0.001 mm` 缝合、STEP 回读和 Creo 诊断继续执行，但 `SameParameter` 38 次全部失败、存在 1 条约 `0.369118 mm` 的意外交线且 ModelCHECK 失败，仍为 `DiagnosticOnly`、`canApply=false`。
 
-当前未完成项是原外边硬保持、满足形状与连续性要求的低复杂度局部替换。下一步根据 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md)，固定同一起始支撑面后独立验证接缝表达空间，隔离 Coons 参数映射变化；定位 Creo 新增 GEOM_CHECKS 及边界最坏法向，再处理外边节点向面内传播和连续性约束。人工缝与布局允许改变，四片仍作为选项，不预先锁死面数。整体水密保持前置要求；只有通过原有距离、法向、复杂度、Curve-on-Surface、SameParameter、固定容差缝合、StrictTopologyGate、STEP 往返及适用的外部 CAD 检查，才可进入产品资格讨论。不得加大容差换闭合，不扩展其他区域，也未证明低复杂度四片表示不可能。
+当前未完成项是满足形状、连续性、复杂度及跨 CAD 检查的局部替换。下一步依据 [连续性与节点传播实证](../data/runs/20260921_candidate179_continuity/RUN.md)，保留已验证的原边硬保持、显式外围 XY 和人工内边节点兼容处理，优先解决复合拼接处实际二阶连续性/表示与剩余外边窄带法向误差。需要用原始 Creo 几何报告进一步明确错误类型；开放分段探针通过不能替代五面整件验收。人工缝与布局允许改变，四片仍作为选项，不预先锁死面数。只有通过原有距离、法向、复杂度、Curve-on-Surface、SameParameter、固定容差缝合、StrictTopologyGate、STEP 往返及适用外部 CAD 检查，才可进入产品资格讨论。不得加大容差换闭合，不扩展其他区域，也未证明低复杂度四片表示不可能。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

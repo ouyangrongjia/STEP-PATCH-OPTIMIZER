@@ -14,7 +14,7 @@ def polydata(points, triangles):
     obj.SetPolys(cells);return obj
 
 
-def render(points,triangles,shape,center,axes,path,tilt=False,color=(.70,.76,.84)):
+def render(points,triangles,shape,center,axes,path,tilt=False,color=(.70,.76,.84),parallel_scale=3.5):
     poly=polydata(points,triangles)
     normals=vtk.vtkPolyDataNormals();normals.SetInputData(poly);normals.SetFeatureAngle(180);normals.SplittingOff();normals.ConsistencyOn()
     mapper=vtk.vtkPolyDataMapper();mapper.SetInputConnection(normals.GetOutputPort())
@@ -28,7 +28,7 @@ def render(points,triangles,shape,center,axes,path,tilt=False,color=(.70,.76,.84
         line.SetLines(cells);lm=vtk.vtkPolyDataMapper();lm.SetInputData(line);la=vtk.vtkActor();la.SetMapper(lm)
         la.GetProperty().SetColor(.10,.17,.26);la.GetProperty().SetLineWidth(1.1);renderer.AddActor(la)
     cam=renderer.GetActiveCamera();direction=axes[2]+(.62*axes[0]-.35*axes[1] if tilt else 0)
-    cam.SetPosition(*(center+direction*20));cam.SetFocalPoint(*center);cam.SetViewUp(*axes[1]);cam.ParallelProjectionOn();cam.SetParallelScale(3.5)
+    cam.SetPosition(*(center+direction*20));cam.SetFocalPoint(*center);cam.SetViewUp(*axes[1]);cam.ParallelProjectionOn();cam.SetParallelScale(parallel_scale)
     win=vtk.vtkRenderWindow();win.SetOffScreenRendering(1);win.SetSize(1100,900);win.AddRenderer(renderer);win.SetMultiSamples(8);win.Render()
     capture=vtk.vtkWindowToImageFilter();capture.SetInput(win);capture.SetInputBufferTypeToRGB();capture.ReadFrontBufferOff();capture.Update()
     writer=vtk.vtkPNGWriter();writer.SetFileName(str(path));writer.SetInputConnection(capture.GetOutputPort());writer.Write();win.Finalize()

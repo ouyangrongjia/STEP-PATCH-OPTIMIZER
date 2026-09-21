@@ -1,0 +1,52 @@
+control projection 0
+control projection 1
+control projection 2
+control projection 3
+control projection 4
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260921_candidate179_continuity\control\face_0.step(1300 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260921_candidate179_continuity\control\face_1.step(910 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260921_candidate179_continuity\control\face_2.step(1680 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260921_candidate179_continuity\control\face_3.step(1670 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260921_candidate179_continuity\control\face_4.step(170 ents)  Write  Done
+control {'max': 0.013146186254246852, 'rms': 0.0009697942136072192, 'p95': 0.0015598911975659687, 'p99': 0.004561635188962976} {'max': 25.7687090023747, 'rms': 1.3774468322127278, 'p95': 2.039463566173129, 'p99': 6.439231956789399}
+worst {'sample': 16984, 'xyz': [-27.223248395340875, 38.647705954255294, -8.050425225598191], 'patch': 2, 'uv': [0.7625832406012858, 0.02783623965780713], 'normal_degrees': 25.7687090023747, 'distance_mm': 0.005890843168564599} knots [{'patch': 0, 'axis': 0, 'knot': 0.51594732703, 'multiplicity': 3, 'max_normal_jump_degrees': 0.3088281957590428, 'worst_transverse_parameter': 0.0, 'worst_xyz': [-22.94765946521877, 42.43269410807508, -7.964781228103101], 'position_limit_gap_mm': 1.2750010675765195e-08, 'boundary_tangent_jump_degrees': [31.79922766706826, 0.0], 'boundary_normal_jump_degrees': [0.3088281957590428, 0.0]}, {'patch': 2, 'axis': 0, 'knot': 0.763749682092, 'multiplicity': 3, 'max_normal_jump_degrees': 1.086070159250025, 'worst_transverse_parameter': 0.002, 'worst_xyz': [-27.269804971398806, 38.59621962381357, -8.025739802525777], 'position_limit_gap_mm': 1.5282874916073165e-08, 'boundary_tangent_jump_degrees': [30.26144854698179, 0.0], 'boundary_normal_jump_degrees': [0.24313252479270425, 0.0]}]

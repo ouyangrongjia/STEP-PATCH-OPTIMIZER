@@ -1,0 +1,13 @@
+aligned_inner_cubic projection 0
+aligned_inner_cubic projection 1
+aligned_inner_cubic projection 2
+aligned_inner_cubic projection 3
+aligned_inner_cubic projection 4
+aligned_inner_cubic {'max': 0.010543497676702067, 'rms': 0.0009043333939880808, 'p95': 0.001614412367958127, 'p99': 0.004179229524372311} {'max': 17.467179804521006, 'rms': 1.217575707392897, 'p95': 1.8873149313551927, 'p99': 5.288845805730977} knot jump 0.35122249208586914
+aligned_refined_control projection 0
+aligned_refined_control projection 1
+aligned_refined_control projection 2
+aligned_refined_control projection 3
+aligned_refined_control projection 4
+aligned_refined_control {'max': 0.010542802510344262, 'rms': 0.0009052335360733253, 'p95': 0.0016114397337222638, 'p99': 0.004175905446023265} {'max': 17.466654219669362, 'rms': 1.218507745879745, 'p95': 1.892452830877652, 'p99': 5.291246000254876} knot jump 0.3510333775510326
+Completed 92.70873870002106

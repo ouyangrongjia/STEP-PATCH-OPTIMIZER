@@ -5,3 +5,6 @@
 20260921_candidate179_*/**/*.step binary
 20260921_candidate179_*/**/*.npz binary
 20260921_candidate179_*/**/*.png binary
+20260921_candidate179_continuity/**/*.prt.* binary
+20260921_candidate179_continuity/**/*.asm.* binary
+20260921_candidate179_continuity/**/modelcheck/** -text

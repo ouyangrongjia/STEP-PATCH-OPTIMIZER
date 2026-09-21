@@ -1,0 +1,2 @@
+control 20 C1 knots; max physical Hessian jump 4.752346354389623
+aligned_inner_cubic 20 C1 knots; max physical Hessian jump 5.145145175299262

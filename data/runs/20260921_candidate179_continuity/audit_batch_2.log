@@ -1,0 +1,19 @@
+soft_normal10 projection 0
+soft_normal10 projection 1
+soft_normal10 projection 2
+soft_normal10 projection 3
+soft_normal10 projection 4
+soft_normal10 {'max': 0.012621415118856002, 'rms': 0.0008928343499831439, 'p95': 0.0015068819318170687, 'p99': 0.004078761275964707} {'max': 24.36062593733196, 'rms': 1.247923759908133, 'p95': 1.815624838006742, 'p99': 5.756163799180398} knot jump 1.2105452795446778
+linear_xy_soft projection 0
+linear_xy_soft projection 1
+linear_xy_soft projection 2
+linear_xy_soft projection 3
+linear_xy_soft projection 4
+linear_xy_soft {'max': 0.010542802668282369, 'rms': 0.0009052543701149304, 'p95': 0.0016114397543576318, 'p99': 0.00417590556838967} {'max': 17.46665891296708, 'rms': 1.218523191251244, 'p95': 1.8924529116358206, 'p99': 5.291245691088763} knot jump 0.35097739096647723
+linear_xy_g1 projection 0
+linear_xy_g1 projection 1
+linear_xy_g1 projection 2
+linear_xy_g1 projection 3
+linear_xy_g1 projection 4
+linear_xy_g1 {'max': 0.07520901477077291, 'rms': 0.006212503727783564, 'p95': 0.00796161489068555, 'p99': 0.03175038706765661} {'max': 52.15503081683597, 'rms': 5.685737449120067, 'p95': 9.309106210709158, 'p99': 32.5158753600034} knot jump 3.267845816718501e-05
+Completed 127.69650399999227

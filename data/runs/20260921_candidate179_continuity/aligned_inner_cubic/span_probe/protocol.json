@@ -1,0 +1,65 @@
+{
+  "source_patch": 1,
+  "source_geometry": "Final aligned_inner_cubic",
+  "u_cuts": [
+    0.0,
+    0.250499616628,
+    0.500674516566,
+    0.750811917279,
+    1.0
+  ],
+  "blocks": [
+    {
+      "type": "Geom_BSplineSurface",
+      "u_poles": 18,
+      "v_poles": 10,
+      "u_degree": 3,
+      "v_degree": 3,
+      "u_knots": 16,
+      "v_knots": 8,
+      "rational": false
+    },
+    {
+      "type": "Geom_BSplineSurface",
+      "u_poles": 18,
+      "v_poles": 10,
+      "u_degree": 3,
+      "v_degree": 3,
+      "u_knots": 16,
+      "v_knots": 8,
+      "rational": false
+    },
+    {
+      "type": "Geom_BSplineSurface",
+      "u_poles": 18,
+      "v_poles": 10,
+      "u_degree": 3,
+      "v_degree": 3,
+      "u_knots": 16,
+      "v_knots": 8,
+      "rational": false
+    },
+    {
+      "type": "Geom_BSplineSurface",
+      "u_poles": 18,
+      "v_poles": 10,
+      "u_degree": 3,
+      "v_degree": 3,
+      "u_knots": 16,
+      "v_knots": 8,
+      "rational": false
+    }
+  ],
+  "dense_block": {
+    "type": "Geom_BSplineSurface",
+    "u_poles": 84,
+    "v_poles": 10,
+    "u_degree": 3,
+    "v_degree": 3,
+    "u_knots": 82,
+    "v_knots": 8,
+    "rational": false
+  },
+  "dense_same_geometry_max_mm": 2.864289338439558e-14,
+  "purpose": "Separate a long compound support from its existing C2 blocks; dense first block isolates control count from actual geometry. Open-surface probes, not original-boundary replacement candidates."
+}
