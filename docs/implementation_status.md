@@ -4,7 +4,7 @@
 
 ## 分支
 
-当前开发分支为 native-regional-refit。
+本工作树是基于 `native-regional-refit` 归档提交 `bfe1412` 的独立研究分支 `experiment/candidate179-evidence-20260921`；产品主线和原研究工作树的既有修改均未合并或改写。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
 
@@ -186,6 +186,8 @@ P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-
 旧 P1 的固定 `TrimmedConvexSupportChart`、全局网格加密，以及旧 P2 在冻结曲线网络上的事后 split 均未恢复。下一入口是阶段 3：根据阶段 2A 闭合热区和 Jacobian 翻转，在曲线网络最终冻结前枚举 K=4 角点、seam 和 U/V 方向；只有全部合理 K=4 变体明确局部不可行时才定向 K=5，选定布局后重新生成曲线网络并回到阶段 2A，硬闭合通过后才进入阶段 2B。P0 只修正验证真值和错误分类，仍是不可覆盖的对照基线。
 
 ## 当前限制
+
+candidate-179 独立研究以原外边界硬保持和整件水密作为前置门。基线机制与自由重建见 [首轮实证](../data/runs/20260921_candidate179_evidence/RUN.md)，冻结旧曲线的四片闭合对照见 [水密优先补充实证](../data/runs/20260921_candidate179_hard_boundary/RUN.md)。最新 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md) 已放开旧人工缝及控制网，获得控制点更少、形状与接缝明显改善的五片闭合诊断；最大法向、方向控制点预算和 Creo 几何检查仍未通过。初始 Coons 参数映射随主曲线节点改变，相关收益不能只归因于接缝自由度；单独的节点光顺项对照已保留。所有结果仍无产品 Apply 资格，不代表现有 C++ 能力或既有回归基线变化。
 
 - MinimizeFaceCount 是预算搜索；除非达到可证明下界，否则不证明全局最优。
 - GUI 默认参数与锁定的 candidate-179 49→46 比例回归不同。

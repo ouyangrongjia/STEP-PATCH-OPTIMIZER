@@ -1,0 +1,580 @@
+{
+  "config": {
+    "name": "hard_c1",
+    "frozen_boundary_control_rings": 2
+  },
+  "can_apply": false,
+  "status": "BoundaryLockedDiagnostic",
+  "patches": [
+    {
+      "frozen_rings": 2,
+      "free_height_coefficients": 1210,
+      "samples": 3211,
+      "matrix_rows": 24153,
+      "quadrature_samples": 4840,
+      "fairness_weight_mm4": 1e-06,
+      "normal_weight_mm2": 0.0001,
+      "maximum_height_control_change_mm": 0.10960329491622853,
+      "relative_linear_residual": 1.0215034732915638e-15,
+      "training_vertical_distance_before_mm": {
+        "max": 0.05696722192450561,
+        "rms": 0.01980631768677811,
+        "p95": 0.04131768466494004,
+        "p99": 0.05312925237970627
+      },
+      "training_vertical_distance_after_mm": {
+        "max": 0.03069613420681963,
+        "rms": 0.005457181784182656,
+        "p95": 0.01178846138792263,
+        "p99": 0.023860457042114373
+      },
+      "patch": 0,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 125,
+        "v_poles": 14,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 111,
+        "v_knots": 12,
+        "rational": false
+      },
+      "whole_boundary_change_mm": 0.0,
+      "whole_boundary_normal_change_degrees": 1.4787793334710982e-06,
+      "differential": {
+        "samples": 57323,
+        "minimum_jacobian_mm2": 0.4580508256788288,
+        "minimum_normalized_jacobian": 0.20866680680699773,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "frozen_rings": 2,
+      "free_height_coefficients": 5390,
+      "samples": 3082,
+      "matrix_rows": 63846,
+      "quadrature_samples": 18200,
+      "fairness_weight_mm4": 1e-06,
+      "normal_weight_mm2": 0.0001,
+      "maximum_height_control_change_mm": 0.03416635883311386,
+      "relative_linear_residual": 4.8918926896401e-15,
+      "training_vertical_distance_before_mm": {
+        "max": 0.035031140406678235,
+        "rms": 0.015234543002693477,
+        "p95": 0.025414790820375587,
+        "p99": 0.029420491863553302
+      },
+      "training_vertical_distance_after_mm": {
+        "max": 0.024883895726740365,
+        "rms": 0.002557805680957994,
+        "p95": 0.00510226130295493,
+        "p99": 0.009429873294011468
+      },
+      "patch": 1,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 81,
+        "v_poles": 74,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 71,
+        "v_knots": 66,
+        "rational": false
+      },
+      "whole_boundary_change_mm": 0.0,
+      "whole_boundary_normal_change_degrees": 1.7075472925031877e-06,
+      "differential": {
+        "samples": 92056,
+        "minimum_jacobian_mm2": 0.6248809780196779,
+        "minimum_normalized_jacobian": 0.2532537182577401,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "frozen_rings": 2,
+      "free_height_coefficients": 798,
+      "samples": 3212,
+      "matrix_rows": 19524,
+      "quadrature_samples": 3296,
+      "fairness_weight_mm4": 1e-06,
+      "normal_weight_mm2": 0.0001,
+      "maximum_height_control_change_mm": 0.08552412287648183,
+      "relative_linear_residual": 1.4980577976279335e-15,
+      "training_vertical_distance_before_mm": {
+        "max": 0.0620012518333079,
+        "rms": 0.031209786501161407,
+        "p95": 0.016890751256410316,
+        "p99": 0.02569461773645806
+      },
+      "training_vertical_distance_after_mm": {
+        "max": 0.047968050257145595,
+        "rms": 0.004990926957446123,
+        "p95": 0.011949514868212885,
+        "p99": 0.019983762078954744
+      },
+      "patch": 2,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 118,
+        "v_poles": 11,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 104,
+        "v_knots": 9,
+        "rational": false
+      },
+      "whole_boundary_change_mm": 0.0,
+      "whole_boundary_normal_change_degrees": 1.7075472925031877e-06,
+      "differential": {
+        "samples": 51250,
+        "minimum_jacobian_mm2": 1.8112193432754786,
+        "minimum_normalized_jacobian": 0.5045254567478408,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "frozen_rings": 2,
+      "free_height_coefficients": 315,
+      "samples": 2495,
+      "matrix_rows": 11661,
+      "quadrature_samples": 1392,
+      "fairness_weight_mm4": 1e-06,
+      "normal_weight_mm2": 0.0001,
+      "maximum_height_control_change_mm": 0.03816133369006948,
+      "relative_linear_residual": 5.628017659563337e-16,
+      "training_vertical_distance_before_mm": {
+        "max": 0.03138039629203214,
+        "rms": 0.01697008978476061,
+        "p95": 0.023373209780566912,
+        "p99": 0.027748062971222946
+      },
+      "training_vertical_distance_after_mm": {
+        "max": 0.02962864744254906,
+        "rms": 0.008129508786983935,
+        "p95": 0.021360402794602416,
+        "p99": 0.02616627734336155
+      },
+      "patch": 3,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 9,
+        "v_poles": 67,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 7,
+        "v_knots": 59,
+        "rational": false
+      },
+      "whole_boundary_change_mm": 0.0,
+      "whole_boundary_normal_change_degrees": 1.7075472925031877e-06,
+      "differential": {
+        "samples": 32450,
+        "minimum_jacobian_mm2": 2.794339468113109,
+        "minimum_normalized_jacobian": 0.6231706985238467,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    }
+  ],
+  "actual_control_points": 9645,
+  "before_write": {
+    "faces": 4,
+    "solids": 0,
+    "free_edges": 28,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "after_read": {
+    "faces": 4,
+    "solids": 0,
+    "free_edges": 28,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "edge_checks": {
+    "checks": 38,
+    "samples_per_use": 385,
+    "max_curve_on_surface_mm": 8.05544595183608e-12,
+    "failed_001mm": 0,
+    "same_parameter_false": 0,
+    "maximum_edge_tolerance_mm": 1e-07,
+    "records": [
+      {
+        "face": 0,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.301596431869121e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.192139579623723e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.5893948222729813e-13,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.813569522404373e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.26042127782997e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.608869578631419e-13,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.05544595183608e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.148840160420244e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.055267401647715e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.999537406740026e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.887254209760209e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.826038582322181e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.4143158606973028e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.427714060747705e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.796066404891356e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.36816368506441e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.06369637327196e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.684739983543271e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.053775229542997e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.639784980041243e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.1405538948886447e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.281985233097287e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.44230429049946e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.3833046549182336e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.0721936189262403e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.445111790624091e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.378281893639068e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.6856044644102793e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.6241299259961564e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.971007870865935e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.026281590877412e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.655944793979217e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.573929580681947e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.022996675791437e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.4923322483099744e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.7211267988888765e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.467511591522657e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.17720714173911e-12,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "seams": [
+    {
+      "edge": 0,
+      "normal_degrees": {
+        "max": 6.514681056607592,
+        "rms": 4.418760670834108,
+        "p95": 6.4850880440791085,
+        "p99": 6.513461613109849
+      },
+      "separation_mm": 5.298545888169837e-12
+    },
+    {
+      "edge": 9,
+      "normal_degrees": {
+        "max": 18.3658002072999,
+        "rms": 13.38246236346216,
+        "p95": 18.31049596032162,
+        "p99": 18.36483389204901
+      },
+      "separation_mm": 4.049982959570978e-12
+    },
+    {
+      "edge": 17,
+      "normal_degrees": {
+        "max": 5.165022130070812,
+        "rms": 2.8839744235402356,
+        "p95": 5.0836075705905435,
+        "p99": 5.160228433727198
+      },
+      "separation_mm": 7.310380324722989e-12
+    },
+    {
+      "edge": 18,
+      "normal_degrees": {
+        "max": 7.511427025145988,
+        "rms": 4.985846896813524,
+        "p95": 7.354917350519941,
+        "p99": 7.500370665927543
+      },
+      "separation_mm": 7.299691771155968e-12
+    },
+    {
+      "edge": 24,
+      "normal_degrees": {
+        "max": 5.664820631045919,
+        "rms": 3.9698828739360157,
+        "p95": 5.652222215363104,
+        "p99": 5.664324263838803
+      },
+      "separation_mm": 7.274412028247213e-12
+    }
+  ],
+  "seconds": 2.381824099982623
+}

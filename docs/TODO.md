@@ -29,7 +29,7 @@ P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-
 
 阶段 2A 证据位于 `data/runs/20260730_151521_082__native-region-refit__03_配件_Clay__cand-0179__target/final/`。闭合预求解已进入但未通过：最低硬残差为 `0.0164339 mm`，继续局部增点后出现 trim 域内 Jacobian 翻转；最坏热区为 patch 1、edge 30、`t=0`、UV=`(1, 0.4002505)`，Curve-on-Surface 偏差 `0.161957 mm`、内部双侧分离 `0.163864 mm`。阶段 2B 未执行，路由为 `Stage3`。最终面片明确携带阶段 1 产物，固定 `0.001 mm` 缝合、STEP 回读和 Creo 诊断继续执行，但 `SameParameter` 38 次全部失败、存在 1 条约 `0.369118 mm` 的意外交线且 ModelCHECK 失败，仍为 `DiagnosticOnly`、`canApply=false`。
 
-当前未完成项进入阶段 3：在曲线网络最终冻结前，以阶段 2A 的 patch 1 / edge 30 闭合热区和 Jacobian 翻转为主要证据，枚举 K=4 角点、seam 和 U/V 方向，评分同时纳入闭合可行性、真实 trim corner、复合转角、knot 传播长度、控制网纵横比、局部畸变、Jacobian 和预期 G1 可达性；仅在全部合理 K=4 变体明确局部不可行时定向 K=5。选定布局后重新生成并冻结匹配的曲线网络，再回到阶段 2A；仅在硬闭合通过后进入阶段 2B。不得恢复固定 `TrimmedConvexSupportChart`、全局加密或冻结网络后的事后 split，不得以水密、STEP 可回读或 Creo 可导入替代几何与 Apply 验收，也不得放宽 Curve-on-Surface、`SameParameter` 或固定缝合容差制造成功。
+当前未完成项是原外边硬保持、满足形状与连续性要求的低复杂度局部替换。下一步根据 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md)，固定同一起始支撑面后独立验证接缝表达空间，隔离 Coons 参数映射变化；定位 Creo 新增 GEOM_CHECKS 及边界最坏法向，再处理外边节点向面内传播和连续性约束。人工缝与布局允许改变，四片仍作为选项，不预先锁死面数。整体水密保持前置要求；只有通过原有距离、法向、复杂度、Curve-on-Surface、SameParameter、固定容差缝合、StrictTopologyGate、STEP 往返及适用的外部 CAD 检查，才可进入产品资格讨论。不得加大容差换闭合，不扩展其他区域，也未证明低复杂度四片表示不可能。
 
 事实来源：`src/reduction/region_refit/`、`native_region_refit_probe` 和 `data/runs/<run-id>/`。
 

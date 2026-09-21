@@ -1,0 +1,48 @@
+{
+  "config": {
+    "name": "g17_exterior_fair",
+    "n": 17,
+    "fairness": 0.001,
+    "fairness_domain": "outside trim only",
+    "boundary_weight": 0.0,
+    "seam_weight": 0.0
+  },
+  "solve": {
+    "normal_equation_relative_residual": 5.639378032977588e-16,
+    "solver_method": "normal",
+    "rows": 16953,
+    "unknowns": 289,
+    "nnz": 271008
+  },
+  "unique_support_poles": 289,
+  "maximum_pole_change_mm": 71.4978286143273,
+  "train_graph_distance_mm": {
+    "max": 0.04056083654662701,
+    "rms": 0.002879203022198506,
+    "p95": 0.005535744565328211,
+    "p99": 0.012833113822831971
+  },
+  "test_graph_distance_mm": {
+    "max": 0.03854240467538316,
+    "rms": 0.002975482051371174,
+    "p95": 0.005618453482910922,
+    "p99": 0.01380147185089238
+  },
+  "test_correspondence_normal_degrees": {
+    "max": 69.05190139242126,
+    "rms": 5.260338948948809,
+    "p95": 9.405546669408523,
+    "p99": 26.04612575924715
+  },
+  "boundary_graph_distance_mm": {
+    "max": 0.05197261884326874,
+    "rms": 0.020070431558243597,
+    "p95": 0.03215875004723077,
+    "p99": 0.040068578023828905
+  },
+  "untrimmed_height_range_mm": [
+    -0.12607378026296776,
+    0.5845947259224037
+  ],
+  "seconds": 0.13722979999147356
+}

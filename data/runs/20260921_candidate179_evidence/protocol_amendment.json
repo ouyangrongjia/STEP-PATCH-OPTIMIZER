@@ -1,0 +1,13 @@
+{
+  "reason": "First six fits revealed 30 mm extrapolation outside trims. Exact support cropping failed to remove it.",
+  "maximum_additional_fits": 2,
+  "total_maximum_fits": 8,
+  "wall_budget_minutes": 90,
+  "controls": [
+    "Same g17_data objective solved by augmented SVD instead of normal equations",
+    "Same g17_data solver, with physical bending penalty only outside trimmed region; weight reused from initial fairing ablation"
+  ],
+  "fairness_outside_samples": 1651,
+  "fairness_total_grid_samples": 3721,
+  "no_change_to_acceptance_gates": true
+}

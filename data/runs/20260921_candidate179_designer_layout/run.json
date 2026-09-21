@@ -1,0 +1,1131 @@
+{
+  "status": "ClosedLowerComplexityDiagnostics",
+  "can_apply": false,
+  "candidate_id": 179,
+  "units": "mm",
+  "source": {
+    "source": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_配件_Clay.stp",
+    "source_bytes": 98478416,
+    "selected_face_ids": [
+      1702,
+      1703,
+      1704,
+      1705,
+      1706,
+      1707,
+      1708,
+      1709,
+      1710,
+      1711,
+      1712,
+      1713,
+      1714,
+      1715,
+      1716,
+      1717,
+      1718,
+      1719,
+      1720,
+      1721,
+      1722,
+      1723,
+      1724,
+      1725,
+      1726,
+      1727,
+      1728,
+      1729,
+      1730,
+      1731,
+      1732,
+      1733,
+      1734,
+      1735,
+      1736,
+      1737,
+      1738,
+      1739,
+      1740,
+      1741,
+      1742,
+      1743,
+      1744,
+      1745,
+      1746,
+      1747,
+      1748,
+      1749,
+      1750
+    ],
+    "face_id_convention": "TopExp.MapShapes zero-based, same as TopologyGraph.cpp",
+    "input_faces": 2739,
+    "original_region": {
+      "faces": 49,
+      "solids": 0,
+      "free_edges": 26,
+      "multiple_edges": 0,
+      "brep_valid": true,
+      "face_valid": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "boundary_edges": 26,
+    "bounding_box": [
+      [
+        -28.4051596251,
+        38.53563784541564,
+        -9.356504239437092
+      ],
+      [
+        -21.26746583771,
+        43.10749882087,
+        -6.760982238955
+      ]
+    ],
+    "tessellation": {
+      "deflection_mm": 0.003,
+      "angular_deflection_rad": 0.1,
+      "triangles": 15836,
+      "area_mm2": 22.24225419760066
+    },
+    "sampling": {
+      "train_count": 12000,
+      "train_seed": 179,
+      "test_count": 18000,
+      "test_seed": 180,
+      "method": "area-weighted random triangle choice; UV barycentric then exact original surface evaluation",
+      "boundary_samples_per_edge": 193
+    },
+    "pca_singular_values": [
+      190.34375346259787,
+      119.91540491992362,
+      9.541660732537494
+    ],
+    "projection_normal_dot_quantiles": [
+      0.5323642495941592,
+      0.9102155929196164,
+      0.9916987795437284,
+      0.9999993880041252
+    ],
+    "baseline": {
+      "faces": 4,
+      "solids": 0,
+      "free_edges": 28,
+      "multiple_edges": 0,
+      "brep_valid": true,
+      "face_valid": [
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "baseline_surfaces": [
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 125,
+        "v_poles": 14,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 111,
+        "v_knots": 12,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 81,
+        "v_poles": 74,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 71,
+        "v_knots": 66,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 118,
+        "v_poles": 11,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 104,
+        "v_knots": 9,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 9,
+        "v_poles": 67,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 7,
+        "v_knots": 59,
+        "rational": false
+      }
+    ],
+    "elapsed_seconds": 10.845170900051016,
+    "original_region_step_readback": {
+      "faces": 49,
+      "solids": 0,
+      "free_edges": 26,
+      "multiple_edges": 0,
+      "brep_valid": true,
+      "face_valid": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "baseline": {
+    "archive_commit": "bfe1412574a623225657543cf1af140b0ae3b294",
+    "geometry_run": "20260729_032156_431",
+    "original_runtime_commit": "90282b948bc073c3b6f7e8804c25526780626807",
+    "original_runtime_dirty": true
+  },
+  "protocol": {
+    "source_run": "data\\runs\\20260921_candidate179_evidence",
+    "hard_boundary_run": "data/runs/20260921_candidate179_hard_boundary",
+    "baseline": "data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/final/evidence/previous_full_diagnostic_20260729_032156",
+    "objective": "Keep only original outer curves fixed. Replace artificial seams, layout, knot structure and shared interior controls. Closed solid at original tolerance is prerequisite.",
+    "budget_minutes": 75,
+    "max_fit_configurations": 7,
+    "corner_edge_indices": [
+      0,
+      6,
+      10,
+      18
+    ],
+    "inner_scale": 0.45,
+    "seam_control_points": 8,
+    "normal_weight_mm2": 0.0001,
+    "fairness_weight_mm4": 1e-06,
+    "boundary_normal_weight_mm2": 0.01,
+    "seam_gradient_weight_mm2": 1.0,
+    "configurations": [
+      {
+        "name": "five_balanced",
+        "boundary_layers": []
+      },
+      {
+        "name": "five_boundary_layers",
+        "boundary_layers": [
+          0.02,
+          0.06
+        ]
+      },
+      {
+        "name": "five_compact_seams",
+        "boundary_layers": [
+          0.02,
+          0.06
+        ],
+        "seam_control_points": 4
+      },
+      {
+        "name": "five_coherent_layers",
+        "boundary_layers": [
+          0.02,
+          0.06
+        ],
+        "radial_refinement": [
+          0.02,
+          0.06
+        ]
+      },
+      {
+        "name": "five_knot_smooth",
+        "boundary_layers": [
+          0.02,
+          0.06
+        ],
+        "radial_refinement": [
+          0.02,
+          0.06
+        ],
+        "internal_knot_gradient_weight_mm2": 0.1
+      },
+      {
+        "name": "five_compact_coherent",
+        "boundary_layers": [
+          0.02,
+          0.06
+        ],
+        "radial_refinement": [
+          0.02,
+          0.06
+        ],
+        "seam_control_points": 4
+      },
+      {
+        "name": "five_large_panel",
+        "inner_scale": 0.75,
+        "inner_seam_control_points": 12,
+        "seam_control_points": 4,
+        "boundary_layers": [
+          0.02,
+          0.06
+        ],
+        "radial_refinement": [
+          0.02,
+          0.06
+        ],
+        "internal_knot_gradient_weight_mm2": 0.1
+      }
+    ],
+    "gates": {
+      "curve_on_surface_mm": 0.001,
+      "sewing_mm": 0.001,
+      "distance_mm": 0.03,
+      "normal_degrees": 15,
+      "seam_normal_degrees": 5,
+      "max_control_points_per_direction": 25
+    },
+    "source_curve_join_tolerance_mm": 1e-10,
+    "alter_original_edge_tolerances": false,
+    "preflight": {
+      "source_boundary_edges": 26,
+      "poles_per_source_curve": 18,
+      "exact_knot_removal_counts_at_1e_7": [
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18,
+        18
+      ],
+      "balanced_four_coons_grids": [
+        [
+          54,
+          70
+        ],
+        [
+          38,
+          54
+        ],
+        [
+          70,
+          38
+        ],
+        [
+          70,
+          71
+        ]
+      ],
+      "balanced_four_total_poles": 13462,
+      "decision": "Four balanced tensor-product patches spread both complex outer boundaries into each control net. Test five broad patches with only one complex outer side on each peripheral patch; preserve original curves exactly."
+    },
+    "parameter_policy": "These are declared development configurations, not independent confirmation; retain failed candidates and all gates.",
+    "third_configuration_reason": "After 3600/4484 pole layouts gave valid faces and sub-degree internal seams, test whether simpler cubic Bezier artificial seams retain that benefit with fewer support poles. Same outer curves, corners, objectives and gates.",
+    "final_configuration_reason": "Apply the independently verified shared-seam refinement fix to the previously failed 2572-pole compact configuration. This last control keeps its support count and other objectives unchanged; stop after this comparison.",
+    "layout_amendment": "Footprint audit showed baseline Face outlines were already compact, while the screenshot largely showed dense isoparametrics. Test one larger central panel with a 12x12 regular core and localized exact-boundary supports. This combined layout/basis candidate is not an isolated one-factor attribution. Final configuration; no more fitting after it."
+  },
+  "protocol_amendment": {
+    "trigger": "Refining only patch interiors reduced RMS but left max error 0.05639 mm near radial seams; shared seams still used coarse uniform knots. Independent audit also found a 14.49 degree internal C0-knot crease.",
+    "additional_parameter_search": false,
+    "controls": [
+      "Same patch geometry/control count, enrich only shared radial-seam parameter space at already inserted boundary-layer knots.",
+      "Then add physical-gradient continuity only at the two detected internal C0 knots."
+    ],
+    "unchanged": [
+      "original curves",
+      "samples",
+      "layout",
+      "acceptance gates",
+      "existing results"
+    ],
+    "initial_additional_configurations": 2,
+    "final_fit_configurations": 7,
+    "later_amendments": [
+      {
+        "configuration": "five_compact_coherent",
+        "reason": "Apply the shared-curve refinement to the failed compact basis at unchanged support count."
+      },
+      {
+        "configuration": "five_large_panel",
+        "reason": "Final combined layout/basis experiment with a larger center; explicitly not a one-factor control."
+      }
+    ],
+    "implementation_corrections": [
+      {
+        "issue": "Joined curve domains not normalized before side mapping",
+        "fix": "Normalize original composite-curve knots to [0,1] without moving the curve",
+        "preserved": "initial_build_failure"
+      },
+      {
+        "issue": "Already imported knots inserted again with Add=True",
+        "fix": "Use Add=False for patch boundary layers",
+        "preserved": "initial_insert_multiplicity_diagnostic"
+      }
+    ],
+    "postfit_attribution_correction": {
+      "evidence": "initial_equivalence.json",
+      "finding": "Coons initialization changes its XY map when radial curve knots are inserted before filling. Same support counts and same exterior curves do not imply the same parameterization.",
+      "consequence": "B/D and C/F comparisons support the combined construction/seam-space change; they do not isolate shared-seam freedom. D/E is an isolated knot-continuity penalty comparison.",
+      "additional_fits": 0
+    },
+    "budget_scope": "75-minute fitting/diagnostic search window; documentation, packaging and final checks are separate. All seven declared final configurations completed; no further parameter search."
+  },
+  "comparison": [
+    {
+      "name": "baseline",
+      "faces": 4,
+      "step_poles": 9645,
+      "forward_max_mm": 0.07679150238626326,
+      "forward_rms_mm": 0.021587704642228873,
+      "normal_p95_deg": 13.575776269913753,
+      "normal_max_deg": 65.29823506346166,
+      "original_boundary_mm": 6.41272003141103e-12,
+      "seam_normal_max_deg": 18.3658002072999,
+      "external_requested_G1_max_deg": 67.6271608081039,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.07679775571251833,
+      "knot_normal_jump_max_deg": null,
+      "fit_seconds": null
+    },
+    {
+      "name": "hard_c0",
+      "faces": 4,
+      "step_poles": 9645,
+      "forward_max_mm": 0.022598954469924312,
+      "forward_rms_mm": 0.0020648957369714454,
+      "normal_p95_deg": 5.650088749375762,
+      "normal_max_deg": 38.13297704815794,
+      "original_boundary_mm": 6.41272003141103e-12,
+      "seam_normal_max_deg": 65.26696197513121,
+      "external_requested_G1_max_deg": 59.871998124410936,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.02392062225297742,
+      "knot_normal_jump_max_deg": null,
+      "fit_seconds": null
+    },
+    {
+      "name": "hard_c1",
+      "faces": 4,
+      "step_poles": 9645,
+      "forward_max_mm": 0.04469159661983897,
+      "forward_rms_mm": 0.005498318442578584,
+      "normal_p95_deg": 10.805671464490667,
+      "normal_max_deg": 65.24825874322717,
+      "original_boundary_mm": 6.41272003141103e-12,
+      "seam_normal_max_deg": 18.3658002072999,
+      "external_requested_G1_max_deg": 67.62716080809396,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.04402993810540063,
+      "knot_normal_jump_max_deg": null,
+      "fit_seconds": null
+    },
+    {
+      "name": "five_balanced",
+      "faces": 5,
+      "step_poles": 3600,
+      "forward_max_mm": 0.06409543009274919,
+      "forward_rms_mm": 0.0051533143575861785,
+      "normal_p95_deg": 10.688850264556882,
+      "normal_max_deg": 50.378485529118514,
+      "original_boundary_mm": 8.836483883763103e-12,
+      "seam_normal_max_deg": 0.9310568413064806,
+      "external_requested_G1_max_deg": 1.114894397578748,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.07863568824423285,
+      "knot_normal_jump_max_deg": 8.800914987887381,
+      "fit_seconds": 19.950128700002097
+    },
+    {
+      "name": "five_boundary_layers",
+      "faces": 5,
+      "step_poles": 4484,
+      "forward_max_mm": 0.05639488768861468,
+      "forward_rms_mm": 0.002366431549109755,
+      "normal_p95_deg": 3.6091386848479314,
+      "normal_max_deg": 51.8751614892595,
+      "original_boundary_mm": 8.836483883763103e-12,
+      "seam_normal_max_deg": 0.9841397110072125,
+      "external_requested_G1_max_deg": 0.5955947625666764,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.07982280024079196,
+      "knot_normal_jump_max_deg": 14.487363864900098,
+      "fit_seconds": 22.526997400040273
+    },
+    {
+      "name": "five_compact_seams",
+      "faces": 5,
+      "step_poles": 2572,
+      "forward_max_mm": 0.0954556959347192,
+      "forward_rms_mm": 0.009868498005607492,
+      "normal_p95_deg": 16.08307241757032,
+      "normal_max_deg": 64.82599183957406,
+      "original_boundary_mm": 8.126431830867263e-12,
+      "seam_normal_max_deg": 18.490199536517757,
+      "external_requested_G1_max_deg": 0.5849835871817629,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.23389798586237,
+      "knot_normal_jump_max_deg": 15.675365660520043,
+      "fit_seconds": 17.824830400000792
+    },
+    {
+      "name": "five_coherent_layers",
+      "faces": 5,
+      "step_poles": 4484,
+      "forward_max_mm": 0.011033186080472006,
+      "forward_rms_mm": 0.0009106573278214801,
+      "normal_p95_deg": 1.9301293850629524,
+      "normal_max_deg": 18.41125456865984,
+      "original_boundary_mm": 8.836483883763103e-12,
+      "seam_normal_max_deg": 0.9640729562676441,
+      "external_requested_G1_max_deg": 0.5935002942453276,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.01130702085098053,
+      "knot_normal_jump_max_deg": 7.269195454672702,
+      "fit_seconds": 20.80287989997305
+    },
+    {
+      "name": "five_knot_smooth",
+      "faces": 5,
+      "step_poles": 4484,
+      "forward_max_mm": 0.013146186254248023,
+      "forward_rms_mm": 0.0009697942136071999,
+      "normal_p95_deg": 2.039463984170808,
+      "normal_max_deg": 25.7687090023747,
+      "original_boundary_mm": 8.836483883763103e-12,
+      "seam_normal_max_deg": 0.9640750029589823,
+      "external_requested_G1_max_deg": 0.5935002942784893,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.015550723562922678,
+      "knot_normal_jump_max_deg": 1.0773418639960248,
+      "fit_seconds": 20.876500399957877
+    },
+    {
+      "name": "five_compact_coherent",
+      "faces": 5,
+      "step_poles": 2572,
+      "forward_max_mm": 0.02537569244195581,
+      "forward_rms_mm": 0.0016586899407035542,
+      "normal_p95_deg": 4.9013098584214365,
+      "normal_max_deg": 29.684529756542982,
+      "original_boundary_mm": 8.126431830867263e-12,
+      "seam_normal_max_deg": 1.7556363159722037,
+      "external_requested_G1_max_deg": 0.6181472878110977,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.027828469097828785,
+      "knot_normal_jump_max_deg": 12.692507043215185,
+      "fit_seconds": 18.1684491999913
+    },
+    {
+      "name": "five_large_panel",
+      "faces": 5,
+      "step_poles": 2892,
+      "forward_max_mm": 0.03527551200749443,
+      "forward_rms_mm": 0.0018768958069162397,
+      "normal_p95_deg": 4.58034309123883,
+      "normal_max_deg": 41.41493405558677,
+      "original_boundary_mm": 8.909204037615454e-12,
+      "seam_normal_max_deg": 1.3052103039479102,
+      "external_requested_G1_max_deg": 0.6089298393049324,
+      "solids": 1,
+      "free_edges": 0,
+      "brep_valid": true,
+      "reverse_max_mm": 0.051220006877920374,
+      "knot_normal_jump_max_deg": 3.745438194564548,
+      "fit_seconds": 32.18787159997737
+    }
+  ],
+  "gates": {
+    "five_balanced": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.836483883763103e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 9.500244059194137e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": false,
+      "distance_reverse_pass": false,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 135,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": "NotRun"
+    },
+    "five_boundary_layers": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.836483883763103e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 9.500244059194137e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": false,
+      "distance_reverse_pass": false,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 135,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": "NotRun"
+    },
+    "five_compact_seams": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.126431830867263e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 8.097220790814545e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": false,
+      "distance_reverse_pass": false,
+      "normal_pass": false,
+      "internal_seam_pass": false,
+      "maximum_poles_per_direction": 131,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": "NotRun"
+    },
+    "five_coherent_layers": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.836483883763103e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 9.500244059194137e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": true,
+      "distance_reverse_pass": true,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 135,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": "NotRun"
+    },
+    "five_knot_smooth": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.836483883763103e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 9.500244059194137e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": true,
+      "distance_reverse_pass": true,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 135,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": {
+        "passed": true,
+        "original_boundary_edges": 26,
+        "neighbour_faces": 26,
+        "curve_on_surface_max_mm": 9.500244059194137e-12,
+        "same_parameter_false": 0,
+        "maximum_edge_tolerance_mm": 1e-07
+      }
+    },
+    "five_compact_coherent": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.126431830867263e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 8.097220790814545e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": true,
+      "distance_reverse_pass": true,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 131,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": "NotRun"
+    },
+    "five_large_panel": {
+      "original_curves_hard_preserved": true,
+      "original_boundary_max_mm": 8.909204037615454e-12,
+      "original_edge_tolerance_mm": 1e-07,
+      "maximum_patch_edge_tolerance_mm": 1e-07,
+      "curve_on_surface_max_mm": 9.463919957652233e-12,
+      "same_parameter_false": 0,
+      "local_face_valid": true,
+      "local_brep_valid": true,
+      "full_model_faces": 2695,
+      "closed_solid_at_001mm": true,
+      "distance_forward_pass": false,
+      "distance_reverse_pass": false,
+      "normal_pass": false,
+      "internal_seam_pass": true,
+      "maximum_poles_per_direction": 139,
+      "poles_per_direction_25_pass": false,
+      "support_degeneracy_samples": 0,
+      "support_projection_reversal_samples": 0,
+      "mesh_uv_flips": "N/A: no mesh UV optimization in this prototype; sampled support maps audited separately",
+      "exact_global_fold_free_proof": false,
+      "product_StrictTopologyGate": "Not invoked",
+      "can_apply": false,
+      "integrated_boundary_audit": {
+        "passed": true,
+        "original_boundary_edges": 26,
+        "neighbour_faces": 26,
+        "curve_on_surface_max_mm": 9.463919957652233e-12,
+        "same_parameter_false": 0,
+        "maximum_edge_tolerance_mm": 1e-07
+      }
+    }
+  },
+  "creo": {
+    "five_balanced": {
+      "status": "NotRun",
+      "validated": false,
+      "components": []
+    },
+    "five_boundary_layers": {
+      "status": "NotRun",
+      "validated": false,
+      "components": []
+    },
+    "five_compact_seams": {
+      "status": "NotRun",
+      "validated": false,
+      "components": []
+    },
+    "five_coherent_layers": {
+      "status": "NotRun",
+      "validated": false,
+      "components": []
+    },
+    "five_knot_smooth": {
+      "status": "ReportReady",
+      "validated": false,
+      "components": [
+        {
+          "object": "candidate.prt.1",
+          "parsed": true,
+          "checks": [
+            {
+              "name": "GEOM_CHECKS",
+              "status": "ERROR",
+              "answer": "1"
+            },
+            {
+              "name": "SHORT_EDGES",
+              "status": "ERROR",
+              "answer": "1492"
+            },
+            {
+              "name": "IMPORT_FEAT",
+              "status": "WARNING",
+              "answer": "1"
+            },
+            {
+              "name": "ACCURACY_INFO",
+              "status": "WARNING",
+              "answer": "0.004240749674"
+            },
+            {
+              "name": "PARAM_INFO",
+              "status": "INFO",
+              "answer": "13"
+            }
+          ],
+          "import_validation": {
+            "PTC_VAL_IMP_PART_STATUS": "OK",
+            "PTC_MP_VAL_IMP_VOLUME": "690.045403",
+            "PTC_MP_VAL_IMP_AREA": "1074.258720",
+            "PTC_VAL_IMP_SCORE": "PASS"
+          },
+          "diagnostic_passed": false
+        }
+      ]
+    },
+    "five_compact_coherent": {
+      "status": "NotRun",
+      "validated": false,
+      "components": []
+    },
+    "five_large_panel": {
+      "status": "ReportReady",
+      "validated": false,
+      "components": [
+        {
+          "object": "candidate.prt.1",
+          "parsed": true,
+          "checks": [
+            {
+              "name": "GEOM_CHECKS",
+              "status": "ERROR",
+              "answer": "1"
+            },
+            {
+              "name": "SHORT_EDGES",
+              "status": "ERROR",
+              "answer": "1488"
+            },
+            {
+              "name": "IMPORT_FEAT",
+              "status": "WARNING",
+              "answer": "1"
+            },
+            {
+              "name": "ACCURACY_INFO",
+              "status": "WARNING",
+              "answer": "0.004240749674"
+            },
+            {
+              "name": "PARAM_INFO",
+              "status": "INFO",
+              "answer": "13"
+            }
+          ],
+          "import_validation": {
+            "PTC_VAL_IMP_PART_STATUS": "OK",
+            "PTC_MP_VAL_IMP_VOLUME": "690.045761",
+            "PTC_MP_VAL_IMP_AREA": "1074.265978",
+            "PTC_VAL_IMP_SCORE": "PASS"
+          },
+          "diagnostic_passed": false
+        }
+      ]
+    },
+    "original_model_control": {
+      "status": "ReportReady",
+      "validated": false,
+      "components": [
+        {
+          "object": "candidate.prt.1",
+          "parsed": true,
+          "checks": [
+            {
+              "name": "GEOM_CHECKS",
+              "status": "PASS",
+              "answer": "0"
+            },
+            {
+              "name": "SHORT_EDGES",
+              "status": "ERROR",
+              "answer": "1501"
+            },
+            {
+              "name": "IMPORT_FEAT",
+              "status": "WARNING",
+              "answer": "1"
+            },
+            {
+              "name": "ACCURACY_INFO",
+              "status": "WARNING",
+              "answer": "0.004240749674"
+            },
+            {
+              "name": "PARAM_INFO",
+              "status": "INFO",
+              "answer": "13"
+            }
+          ],
+          "import_validation": {
+            "PTC_VAL_IMP_PART_STATUS": "OK",
+            "PTC_MP_VAL_IMP_VOLUME": "690.041490",
+            "PTC_MP_VAL_IMP_AREA": "1074.236976",
+            "PTC_VAL_IMP_SCORE": "PASS"
+          },
+          "diagnostic_passed": false
+        }
+      ]
+    }
+  },
+  "preferred_continuity_diagnostic": "five_knot_smooth",
+  "shape_priority_control": "five_coherent_layers",
+  "compactness_control": "five_compact_coherent",
+  "rejected_large_panel_control": "five_large_panel",
+  "attribution": [
+    {
+      "first": "five_boundary_layers",
+      "second": "five_coherent_layers",
+      "grid_per_patch": [
+        41,
+        41
+      ],
+      "maximum_co_parameter_position_difference_mm": 0.11808634984585616,
+      "maximum_xy_map_difference_mm": 0.11112761139404896,
+      "maximum_co_parameter_height_difference_mm": 0.05698328581911729,
+      "patch_errors_mm": [
+        0.07362905098027345,
+        0.03686413391506492,
+        0.11808634984585616,
+        0.07811617998712911,
+        0.0
+      ],
+      "note": "Same-UV comparison, not nearest-surface distance. A changed XY map confounds seam-space attribution."
+    },
+    {
+      "first": "five_compact_seams",
+      "second": "five_compact_coherent",
+      "grid_per_patch": [
+        41,
+        41
+      ],
+      "maximum_co_parameter_position_difference_mm": 0.2046296528527209,
+      "maximum_xy_map_difference_mm": 0.19132256917722876,
+      "maximum_co_parameter_height_difference_mm": 0.09872668193207251,
+      "patch_errors_mm": [
+        0.1256767213648191,
+        0.0628292203096465,
+        0.2046296528527209,
+        0.13566339696492086,
+        0.0
+      ],
+      "note": "Same-UV comparison, not nearest-surface distance. A changed XY map confounds seam-space attribution."
+    },
+    {
+      "first": "five_coherent_layers",
+      "second": "five_knot_smooth",
+      "grid_per_patch": [
+        41,
+        41
+      ],
+      "maximum_co_parameter_position_difference_mm": 0.0,
+      "maximum_xy_map_difference_mm": 0.0,
+      "maximum_co_parameter_height_difference_mm": 0.0,
+      "patch_errors_mm": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "note": "Same-UV comparison, not nearest-surface distance. A changed XY map confounds seam-space attribution."
+    }
+  ],
+  "dependencies": {
+    "cadquery-ocp": "7.9.3.1.1",
+    "cadquery-ocp-proxy": "7.9.3.1.1",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "vtk": "9.6.2",
+    "matplotlib": "3.11.1",
+    "pillow": "12.3.0",
+    "shapely": "2.1.2"
+  },
+  "implementation": {
+    "base_commit": "bfe1412574a623225657543cf1af140b0ae3b294",
+    "worktree": "D:\\pyProject\\step-patch-optimizer-worktrees\\candidate179-evidence-20260921",
+    "branch": "experiment/candidate179-evidence-20260921",
+    "committed": false,
+    "merged": false,
+    "pushed": false,
+    "product_cpp_modified": false,
+    "state_scope": "State at experiment execution; archival publication is recorded by Git history."
+  },
+  "verification": {
+    "unit_tests": 4,
+    "unit_test_result": "Passed",
+    "log": "tests.log",
+    "primary_forward_samples": 18000,
+    "fit_samples": 12000,
+    "reverse_samples": 6000,
+    "original_boundary_samples_per_edge": 385,
+    "curve_on_surface_samples_per_use": 385,
+    "cad_control_and_candidates": [
+      "original_model_control",
+      "five_knot_smooth",
+      "five_large_panel"
+    ]
+  },
+  "next_decision": "Retain exact outer curves and shared C0 variables; isolate basis changes from Coons initialization, then redesign boundary parameterization/supports and enforce interior smoothness. No product adoption yet.",
+  "completed_at": "2026-09-21T12:34:27.127987+00:00",
+  "artifact_retention": {
+    "cleanup_date": "2026-09-21",
+    "requested_by_user": true,
+    "selected_geometry": "five_knot_smooth",
+    "current_archive": "../20260921_candidate179_designer_layout/RUN.md",
+    "policy": "Preserve metric JSON/CSV and protocols; retain only current geometry and comparison image; shared original samples are stored once in the latest run.",
+    "removed": [
+      "superseded candidate geometry",
+      "duplicate original data",
+      "Creo native/import resources",
+      "logs",
+      "ZIP bundles",
+      "intermediate rendering images"
+    ],
+    "metric_values_changed": false,
+    "historical_file_paths": "Execution records may point to intentionally pruned artifacts; these paths are historical, not current download links."
+  }
+}

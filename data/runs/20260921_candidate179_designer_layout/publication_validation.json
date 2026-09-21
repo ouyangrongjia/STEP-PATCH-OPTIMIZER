@@ -1,0 +1,20 @@
+{
+  "date": "2026-09-21",
+  "unit_tests": 4,
+  "unit_tests_passed": true,
+  "python_compileall_passed": true,
+  "retained_json_parse_passed": true,
+  "retained_markdown_links_passed": true,
+  "comparison_csv_matches_record": true,
+  "selected_candidate_acceptance_unchanged": true,
+  "baseline_archive_modified": false,
+  "main_worktree_modified": false,
+  "archive_cleanup": "Windows Recycle Bin",
+  "product_cpp_tests": "Not run: no product C++ modification",
+  "staged_scope_reviewed": true,
+  "staged_whitespace_check_passed": true,
+  "git_text_normalization_preserves_json_values": true,
+  "geometry_files_in_archive": 4,
+  "comparison_images_in_archive": 1,
+  "superseded_geometry_recycled": true
+}

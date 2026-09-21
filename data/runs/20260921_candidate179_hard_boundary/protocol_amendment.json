@@ -1,0 +1,8 @@
+{
+  "reason": "Independent OCCT check found three failed numerical XY inversions, including one training sample. Corrected correspondence, kept original samples and both fitting configurations.",
+  "additional_configurations": 0,
+  "additional_fit_executions": 2,
+  "initial_artifacts": "initial_parameterization_diagnostic",
+  "acceptance_limits_unchanged": true,
+  "final_unresolved_inversions": 0
+}

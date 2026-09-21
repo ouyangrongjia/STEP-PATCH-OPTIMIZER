@@ -1,0 +1,61 @@
+{
+  "units": "mm",
+  "configurations": [
+    {
+      "name": "g17_data",
+      "n": 17,
+      "fairness": 0.0,
+      "boundary_weight": 0.0,
+      "seam_weight": 0.0
+    },
+    {
+      "name": "g17_fair",
+      "n": 17,
+      "fairness": 0.001,
+      "boundary_weight": 0.0,
+      "seam_weight": 0.0
+    },
+    {
+      "name": "g17_outer",
+      "n": 17,
+      "fairness": 0.001,
+      "boundary_weight": 100.0,
+      "seam_weight": 0.0
+    },
+    {
+      "name": "g17_frozen_seams",
+      "n": 17,
+      "fairness": 0.001,
+      "boundary_weight": 100.0,
+      "seam_weight": 100.0
+    },
+    {
+      "name": "g25_outer",
+      "n": 25,
+      "fairness": 0.001,
+      "boundary_weight": 100.0,
+      "seam_weight": 0.0
+    },
+    {
+      "name": "g25_strict_outer",
+      "n": 25,
+      "fairness": 0.001,
+      "boundary_weight": 100000.0,
+      "seam_weight": 0.0
+    }
+  ],
+  "maximum_fits": 6,
+  "execution_budget_minutes": 90,
+  "source_truth": "Original STEP FaceIds 1702..1750; baseline only provides comparison and artificial seam layout",
+  "primary_constraints": {
+    "distance_mm": 0.03,
+    "boundary_mm": 0.001,
+    "normal_degrees": 15,
+    "seam_normal_degrees": 5,
+    "max_poles_per_direction": 25
+  },
+  "boundary_semantics": "Penalty experiments. No hard-boundary or Apply success is inferred from a low residual.",
+  "development": "All six planned configurations reported; candidate179 is a development case, not independent confirmation.",
+  "fairness": "Mean squared physical second derivatives of graph height; coefficient in mm^4; 61x61 midpoint quadrature",
+  "geometry_plan": "Four trimmed faces on a shared graph support; preserve projected baseline partition, allow artificial seam height to change"
+}

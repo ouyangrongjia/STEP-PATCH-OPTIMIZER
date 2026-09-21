@@ -1,0 +1,328 @@
+{
+  "baseline": {
+    "distance_mm": {
+      "max": 0.07679150238626326,
+      "rms": 0.02158770464222887,
+      "p95": 0.046293681467398026,
+      "p99": 0.06485211933950652
+    },
+    "normal_degrees": {
+      "max": 65.29823506346166,
+      "rms": 6.519643139299265,
+      "p95": 13.575776269913753,
+      "p99": 26.535878413538953
+    },
+    "differential": [
+      {
+        "samples": 57323,
+        "minimum_jacobian_mm2": 0.4580508256788288,
+        "minimum_normalized_jacobian": 0.20866680680699773,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      },
+      {
+        "samples": 92056,
+        "minimum_jacobian_mm2": 1.955640320255375,
+        "minimum_normalized_jacobian": 0.6138005882086236,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      },
+      {
+        "samples": 51250,
+        "minimum_jacobian_mm2": 1.8112193432754786,
+        "minimum_normalized_jacobian": 0.5045254567478408,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      },
+      {
+        "samples": 32450,
+        "minimum_jacobian_mm2": 2.794339468113109,
+        "minimum_normalized_jacobian": 0.6231706985238467,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    ],
+    "basis_occt_max_disagreement_mm": 3.726117541341095e-14,
+    "occt_projection_checks": [
+      {
+        "sample": 0,
+        "numeric_mm": 0.01493390003851291,
+        "occt_mm": 0.014933900038517751
+      },
+      {
+        "sample": 782,
+        "numeric_mm": 0.005120597027443878,
+        "occt_mm": 0.005120597027450235
+      },
+      {
+        "sample": 1565,
+        "numeric_mm": 0.010213956140395804,
+        "occt_mm": 0.010213956140399157
+      },
+      {
+        "sample": 2347,
+        "numeric_mm": 0.015789016883636618,
+        "occt_mm": 0.015789016883639793
+      },
+      {
+        "sample": 3130,
+        "numeric_mm": 0.054830873154951866,
+        "occt_mm": 0.05483087315495931
+      },
+      {
+        "sample": 3912,
+        "numeric_mm": 0.04049171126887851,
+        "occt_mm": 0.040491711268881535
+      },
+      {
+        "sample": 4695,
+        "numeric_mm": 0.0029379905156139566,
+        "occt_mm": 0.0029379905156182856
+      },
+      {
+        "sample": 5477,
+        "numeric_mm": 0.0018349773246910807,
+        "occt_mm": 0.0018349773246992692
+      },
+      {
+        "sample": 6260,
+        "numeric_mm": 0.0005528124949141306,
+        "occt_mm": 0.0005528124949253899
+      },
+      {
+        "sample": 7043,
+        "numeric_mm": 0.04813502113113665,
+        "occt_mm": 0.048135021131139884
+      },
+      {
+        "sample": 7825,
+        "numeric_mm": 0.0036725692529833596,
+        "occt_mm": 0.0036725692529919634
+      },
+      {
+        "sample": 8608,
+        "numeric_mm": 0.05906158028443176,
+        "occt_mm": 0.059061580284444325
+      },
+      {
+        "sample": 9390,
+        "numeric_mm": 0.003490458952224754,
+        "occt_mm": 0.0034904589522372852
+      },
+      {
+        "sample": 10031,
+        "numeric_mm": 0.07679150238626326,
+        "occt_mm": 0.0767915023862653
+      },
+      {
+        "sample": 10173,
+        "numeric_mm": 0.04883205778547186,
+        "occt_mm": 0.048832057785479596
+      },
+      {
+        "sample": 10955,
+        "numeric_mm": 0.0010527841483834646,
+        "occt_mm": 0.001052784148384483
+      },
+      {
+        "sample": 11738,
+        "numeric_mm": 0.03741466678795235,
+        "occt_mm": 0.037414666787959946
+      },
+      {
+        "sample": 12521,
+        "numeric_mm": 0.0027109153551661044,
+        "occt_mm": 0.0027109153551712244
+      },
+      {
+        "sample": 12589,
+        "numeric_mm": 0.00011417839120854093,
+        "occt_mm": 0.00011417839121753213
+      },
+      {
+        "sample": 13303,
+        "numeric_mm": 0.02282089481431548,
+        "occt_mm": 0.02282089481432025
+      },
+      {
+        "sample": 14086,
+        "numeric_mm": 0.003345890368436643,
+        "occt_mm": 0.0033458903684431213
+      },
+      {
+        "sample": 14868,
+        "numeric_mm": 0.01803100393263612,
+        "occt_mm": 0.01803100393264337
+      },
+      {
+        "sample": 15651,
+        "numeric_mm": 0.015357083752300243,
+        "occt_mm": 0.015357083752301178
+      },
+      {
+        "sample": 16433,
+        "numeric_mm": 0.0019887532680777273,
+        "occt_mm": 0.0019887532680837924
+      },
+      {
+        "sample": 17216,
+        "numeric_mm": 0.003404728584409321,
+        "occt_mm": 0.003404728584422996
+      },
+      {
+        "sample": 17999,
+        "numeric_mm": 0.004896947290538715,
+        "occt_mm": 0.004896947290545081
+      }
+    ],
+    "seconds": 19.897245900006965
+  },
+  "g17_data": {
+    "support_projection_distance_mm": {
+      "max": 0.017855131547501575,
+      "rms": 0.0012050088713640474,
+      "p95": 0.0024030047298661617,
+      "p99": 0.004630944845146445
+    },
+    "support_projection_normal_degrees": {
+      "max": 49.67485875849305,
+      "rms": 2.621943150678898,
+      "p95": 3.319086409981792,
+      "p99": 11.247151988185864
+    },
+    "differential": {
+      "samples": 19881,
+      "minimum_jacobian_mm2": 39.536383073938886,
+      "minimum_normalized_jacobian": 0.023223269994306173,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.27298370003700256
+  },
+  "g17_fair": {
+    "support_projection_distance_mm": {
+      "max": 0.040974493489991874,
+      "rms": 0.0031619055074365346,
+      "p95": 0.005948551218087521,
+      "p99": 0.014661309097949363
+    },
+    "support_projection_normal_degrees": {
+      "max": 69.49987093386171,
+      "rms": 5.4845601534605555,
+      "p95": 10.409799291874013,
+      "p99": 27.46130239391731
+    },
+    "differential": {
+      "samples": 19881,
+      "minimum_jacobian_mm2": 39.536385388256114,
+      "minimum_normalized_jacobian": 0.9995551928969517,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.2768521999823861
+  },
+  "g17_frozen_seams": {
+    "support_projection_distance_mm": {
+      "max": 0.032959934318859754,
+      "rms": 0.009241277225621057,
+      "p95": 0.020802822585453355,
+      "p99": 0.027161108641079165
+    },
+    "support_projection_normal_degrees": {
+      "max": 65.48183982965249,
+      "rms": 5.13999091507708,
+      "p95": 8.082361830280997,
+      "p99": 23.31442517424001
+    },
+    "differential": {
+      "samples": 19881,
+      "minimum_jacobian_mm2": 39.536383814978265,
+      "minimum_normalized_jacobian": 0.9951310387508466,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.2583959000185132
+  },
+  "g17_outer": {
+    "support_projection_distance_mm": {
+      "max": 0.0306888585547148,
+      "rms": 0.00683100173528947,
+      "p95": 0.017497218163808084,
+      "p99": 0.023227716025759633
+    },
+    "support_projection_normal_degrees": {
+      "max": 63.35005336134135,
+      "rms": 4.842113062975517,
+      "p95": 7.709824677355012,
+      "p99": 22.371396356126212
+    },
+    "differential": {
+      "samples": 19881,
+      "minimum_jacobian_mm2": 39.536385629956726,
+      "minimum_normalized_jacobian": 0.9952406657649289,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.2748802999849431
+  },
+  "g25_outer": {
+    "support_projection_distance_mm": {
+      "max": 0.031647435337076125,
+      "rms": 0.006341450017700779,
+      "p95": 0.016350541989686572,
+      "p99": 0.022352211922340926
+    },
+    "support_projection_normal_degrees": {
+      "max": 63.81723620455881,
+      "rms": 4.715259916358988,
+      "p95": 7.361483543387361,
+      "p99": 21.563643956423093
+    },
+    "differential": {
+      "samples": 27225,
+      "minimum_jacobian_mm2": 39.53641067674411,
+      "minimum_normalized_jacobian": 0.9942333545642663,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.337153899949044
+  },
+  "g25_strict_outer": {
+    "support_projection_distance_mm": {
+      "max": 0.33416912948712035,
+      "rms": 0.05327783610252917,
+      "p95": 0.13142843118899844,
+      "p99": 0.18555612250993903
+    },
+    "support_projection_normal_degrees": {
+      "max": 113.09938927529473,
+      "rms": 21.03406016960169,
+      "p95": 47.686120011243325,
+      "p99": 71.61138290209054
+    },
+    "differential": {
+      "samples": 27225,
+      "minimum_jacobian_mm2": 39.536387417866855,
+      "minimum_normalized_jacobian": 0.6439798059161363,
+      "degeneracy_samples": 0,
+      "projection_reversal_samples": 0,
+      "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+    },
+    "seconds": 0.336185900028795
+  },
+  "original_mesh_projection": {
+    "triangles": 15836,
+    "negative": 0,
+    "degenerate": 0,
+    "minimum_signed_double_area_mm2": 5.345801230209839e-07
+  }
+}

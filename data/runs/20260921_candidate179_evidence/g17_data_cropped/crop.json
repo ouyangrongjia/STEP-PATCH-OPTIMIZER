@@ -1,0 +1,517 @@
+{
+  "status": "FreeReconstructionDiagnostic",
+  "can_apply": false,
+  "operation": "Exact knot-insertion restriction to each Face UV box; no refit",
+  "source": "g17_data",
+  "patches": [
+    {
+      "patch": 0,
+      "bounds": [
+        1.288318116964e-06,
+        0.373827989126,
+        1.963269636199e-06,
+        0.693371589283
+      ],
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 9,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 7,
+        "v_knots": 11,
+        "rational": false
+      },
+      "maximum_geometry_change_mm": 2.6645352591003757e-14,
+      "support_height_range_mm": [
+        -25.75033474685234,
+        0.2528374895938381
+      ],
+      "differential": {
+        "samples": 15589,
+        "minimum_jacobian_mm2": 39.53638307538511,
+        "minimum_normalized_jacobian": 0.023216051543738896,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 1,
+      "bounds": [
+        0.566094765169,
+        1.0,
+        0.158727220254,
+        0.759262257087
+      ],
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 10,
+        "v_poles": 12,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 8,
+        "v_knots": 10,
+        "rational": false
+      },
+      "maximum_geometry_change_mm": 4.162137128766112e-14,
+      "support_height_range_mm": [
+        -30.28427787418718,
+        0.14292110419395146
+      ],
+      "differential": {
+        "samples": 15616,
+        "minimum_jacobian_mm2": 39.53642490814509,
+        "minimum_normalized_jacobian": 0.02482908282663896,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 2,
+      "bounds": [
+        0.175457636795,
+        0.640790294954,
+        0.483293376806,
+        1.0
+      ],
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 10,
+        "v_poles": 11,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 8,
+        "v_knots": 9,
+        "rational": false
+      },
+      "maximum_geometry_change_mm": 2.1628557899130955e-14,
+      "support_height_range_mm": [
+        -24.302492998842666,
+        0.3144929340758889
+      ],
+      "differential": {
+        "samples": 15250,
+        "minimum_jacobian_mm2": 39.53638536626846,
+        "minimum_normalized_jacobian": 0.024345759585654287,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 3,
+      "bounds": [
+        0.319591909852,
+        0.66473216664,
+        0.01404232571696,
+        0.522072400507
+      ],
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 9,
+        "v_poles": 11,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 7,
+        "v_knots": 9,
+        "rational": false
+      },
+      "maximum_geometry_change_mm": 2.3898437090739062e-14,
+      "support_height_range_mm": [
+        -9.90720385251073,
+        0.20755839449393862
+      ],
+      "differential": {
+        "samples": 14875,
+        "minimum_jacobian_mm2": 39.5363850923716,
+        "minimum_normalized_jacobian": 0.09930744989275067,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    }
+  ],
+  "after_read": {
+    "faces": 4,
+    "solids": 0,
+    "free_edges": 28,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "edge_checks": {
+    "checks": 38,
+    "samples_per_use": 193,
+    "max_curve_on_surface_mm": 9.465567180024352e-08,
+    "failed_001mm": 0,
+    "same_parameter_false": 0,
+    "maximum_edge_tolerance_mm": 1e-07,
+    "records": [
+      {
+        "face": 0,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.344258512308315e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.148979387070989e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.957489136308183e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.5737128752147297e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.80840617794619e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.5896126410608115e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.867562478083255e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.0531213168448876e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.3052797417975293e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.409894170845671e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.642388856554199e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.1322600444923055e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.52451926206842e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.8623192386815704e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.129516616099396e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.136800330190177e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.131676161955704e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.7648719280981636e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.038208352303238e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.517669155431728e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.369282725964121e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.6876247894143797e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.662613447647291e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 9.465567180024352e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.121237661607389e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.277125382865265e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.148998857023853e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.334028266944761e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.8623963663100955e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.132374557929069e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.518293741951094e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.129441166293673e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.334052831754979e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.344235956011292e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.192069053628719e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.283474733697192e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.623385363470425e-08,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.07763192721342e-08,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "seams": [
+    {
+      "edge": 0,
+      "normal_degrees": {
+        "max": 1.2074182697257333e-06,
+        "rms": 4.26332064186906e-07,
+        "p95": 1.2074182697257333e-06,
+        "p99": 1.2074182697257333e-06
+      },
+      "separation_mm": 4.326858507281014e-12
+    },
+    {
+      "edge": 1,
+      "normal_degrees": {
+        "max": 1.4787793334710982e-06,
+        "rms": 4.6661779874002647e-07,
+        "p95": 1.2074182697257333e-06,
+        "p99": 1.2074182697257333e-06
+      },
+      "separation_mm": 5.027937241248695e-12
+    },
+    {
+      "edge": 13,
+      "normal_degrees": {
+        "max": 1.4787793334710982e-06,
+        "rms": 4.2186773106902734e-07,
+        "p95": 8.537736462515939e-07,
+        "p99": 1.2074182697257333e-06
+      },
+      "separation_mm": 3.272007348111279e-12
+    },
+    {
+      "edge": 14,
+      "normal_degrees": {
+        "max": 1.2074182697257333e-06,
+        "rms": 4.5636121001859977e-07,
+        "p95": 1.2074182697257333e-06,
+        "p99": 1.2074182697257333e-06
+      },
+      "separation_mm": 2.1180433438544734e-12
+    },
+    {
+      "edge": 26,
+      "normal_degrees": {
+        "max": 1.2074182697257333e-06,
+        "rms": 4.2186773106902734e-07,
+        "p95": 1.2074182697257333e-06,
+        "p99": 1.2074182697257333e-06
+      },
+      "separation_mm": 3.7519247930367665e-12
+    }
+  ],
+  "actual_support_poles": 446,
+  "seconds": 1.2214785999967717
+}

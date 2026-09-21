@@ -1,0 +1,157 @@
+{
+  "source_run": "data\\runs\\20260921_candidate179_evidence",
+  "hard_boundary_run": "data/runs/20260921_candidate179_hard_boundary",
+  "baseline": "data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/final/evidence/previous_full_diagnostic_20260729_032156",
+  "objective": "Keep only original outer curves fixed. Replace artificial seams, layout, knot structure and shared interior controls. Closed solid at original tolerance is prerequisite.",
+  "budget_minutes": 75,
+  "max_fit_configurations": 7,
+  "corner_edge_indices": [
+    0,
+    6,
+    10,
+    18
+  ],
+  "inner_scale": 0.45,
+  "seam_control_points": 8,
+  "normal_weight_mm2": 0.0001,
+  "fairness_weight_mm4": 1e-06,
+  "boundary_normal_weight_mm2": 0.01,
+  "seam_gradient_weight_mm2": 1.0,
+  "configurations": [
+    {
+      "name": "five_balanced",
+      "boundary_layers": []
+    },
+    {
+      "name": "five_boundary_layers",
+      "boundary_layers": [
+        0.02,
+        0.06
+      ]
+    },
+    {
+      "name": "five_compact_seams",
+      "boundary_layers": [
+        0.02,
+        0.06
+      ],
+      "seam_control_points": 4
+    },
+    {
+      "name": "five_coherent_layers",
+      "boundary_layers": [
+        0.02,
+        0.06
+      ],
+      "radial_refinement": [
+        0.02,
+        0.06
+      ]
+    },
+    {
+      "name": "five_knot_smooth",
+      "boundary_layers": [
+        0.02,
+        0.06
+      ],
+      "radial_refinement": [
+        0.02,
+        0.06
+      ],
+      "internal_knot_gradient_weight_mm2": 0.1
+    },
+    {
+      "name": "five_compact_coherent",
+      "boundary_layers": [
+        0.02,
+        0.06
+      ],
+      "radial_refinement": [
+        0.02,
+        0.06
+      ],
+      "seam_control_points": 4
+    },
+    {
+      "name": "five_large_panel",
+      "inner_scale": 0.75,
+      "inner_seam_control_points": 12,
+      "seam_control_points": 4,
+      "boundary_layers": [
+        0.02,
+        0.06
+      ],
+      "radial_refinement": [
+        0.02,
+        0.06
+      ],
+      "internal_knot_gradient_weight_mm2": 0.1
+    }
+  ],
+  "gates": {
+    "curve_on_surface_mm": 0.001,
+    "sewing_mm": 0.001,
+    "distance_mm": 0.03,
+    "normal_degrees": 15,
+    "seam_normal_degrees": 5,
+    "max_control_points_per_direction": 25
+  },
+  "source_curve_join_tolerance_mm": 1e-10,
+  "alter_original_edge_tolerances": false,
+  "preflight": {
+    "source_boundary_edges": 26,
+    "poles_per_source_curve": 18,
+    "exact_knot_removal_counts_at_1e_7": [
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18,
+      18
+    ],
+    "balanced_four_coons_grids": [
+      [
+        54,
+        70
+      ],
+      [
+        38,
+        54
+      ],
+      [
+        70,
+        38
+      ],
+      [
+        70,
+        71
+      ]
+    ],
+    "balanced_four_total_poles": 13462,
+    "decision": "Four balanced tensor-product patches spread both complex outer boundaries into each control net. Test five broad patches with only one complex outer side on each peripheral patch; preserve original curves exactly."
+  },
+  "parameter_policy": "These are declared development configurations, not independent confirmation; retain failed candidates and all gates.",
+  "third_configuration_reason": "After 3600/4484 pole layouts gave valid faces and sub-degree internal seams, test whether simpler cubic Bezier artificial seams retain that benefit with fewer support poles. Same outer curves, corners, objectives and gates.",
+  "final_configuration_reason": "Apply the independently verified shared-seam refinement fix to the previously failed 2572-pole compact configuration. This last control keeps its support count and other objectives unchanged; stop after this comparison.",
+  "layout_amendment": "Footprint audit showed baseline Face outlines were already compact, while the screenshot largely showed dense isoparametrics. Test one larger central panel with a 12x12 regular core and localized exact-boundary supports. This combined layout/basis candidate is not an isolated one-factor attribution. Final configuration; no more fitting after it."
+}

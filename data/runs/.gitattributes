@@ -1,0 +1,7 @@
+# Normalize report text; keep geometry and measured arrays binary.
+20260921_candidate179_*/**/*.json text eol=lf
+20260921_candidate179_*/**/*.csv text eol=lf
+20260921_candidate179_*/**/*.md text eol=lf
+20260921_candidate179_*/**/*.step binary
+20260921_candidate179_*/**/*.npz binary
+20260921_candidate179_*/**/*.png binary

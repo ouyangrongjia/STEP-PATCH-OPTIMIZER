@@ -1,0 +1,1291 @@
+{
+  "config": {
+    "name": "five_coherent_layers",
+    "boundary_layers": [
+      0.02,
+      0.06
+    ],
+    "radial_refinement": [
+      0.02,
+      0.06
+    ]
+  },
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "solver": {
+    "unknowns": 3568,
+    "rows": 83528,
+    "nnz": 1179332,
+    "relative_linear_residual": 2.7467400119452467e-15,
+    "maximum_free_height_change_mm": 0.07549012065033227,
+    "internal_c0_knots": 2,
+    "internal_knot_gradient_weight_mm2": 0.0
+  },
+  "patches": [
+    {
+      "patch": 0,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 103,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 95,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 42513,
+        "minimum_jacobian_mm2": 2.5332724616618925,
+        "minimum_normalized_jacobian": 0.6582642928116677,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 1,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 70,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 65,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 32523,
+        "minimum_jacobian_mm2": 1.8779119205158348,
+        "minimum_normalized_jacobian": 0.7556687271434356,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 2,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 135,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 125,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 52503,
+        "minimum_jacobian_mm2": 2.4546180765615913,
+        "minimum_normalized_jacobian": 0.3497683383117972,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 3,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 134,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 125,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 52503,
+        "minimum_jacobian_mm2": 2.83360322923717,
+        "minimum_normalized_jacobian": 0.4789118725465236,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 4,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 8,
+        "v_poles": 8,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 6,
+        "v_knots": 6,
+        "rational": false
+      },
+      "differential": {
+        "samples": 10816,
+        "minimum_jacobian_mm2": 2.455531271814831,
+        "minimum_normalized_jacobian": 0.7847571682589632,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    }
+  ],
+  "actual_control_points": 4484,
+  "before_write": {
+    "faces": 5,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "after_read": {
+    "faces": 5,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "edge_checks": {
+    "checks": 42,
+    "samples_per_use": 385,
+    "max_curve_on_surface_mm": 9.500244059194137e-12,
+    "failed_001mm": 0,
+    "same_parameter_false": 0,
+    "maximum_edge_tolerance_mm": 1e-07,
+    "records": [
+      {
+        "face": 0,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.609455694815873e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.754304449373785e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.48934847891402e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.663304699805453e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.942530043094033e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.1620677592358825e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.429224691837732e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.32801609963406e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.5805013842626135e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.010633071098829e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.071494389035459e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5888218580782548e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.45912296230081e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.687277461489815e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.687277461489815e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.121904629685346e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 9.500244059194137e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.128834044101349e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.907665390305567e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.392389909543111e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.884712172121856e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.475552811121985e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.201943533083089e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5888218580782548e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.097220790814545e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 9.21688230508323e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.4249561143815014e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.0503446320161224e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.084047553811008e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.681724162263555e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.5890022818335792e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.6199799776031026e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.384640105761047e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.475552811121985e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.1334777765716796e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.591302455776226e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "seams": [
+    {
+      "edge": 6,
+      "normal_degrees": {
+        "max": 0.48750285959682854,
+        "rms": 0.08057623336529506,
+        "p95": 0.1760996913131138,
+        "p99": 0.3484045935122483
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 7,
+      "normal_degrees": {
+        "max": 0.02032308684550878,
+        "rms": 0.002350082151418463,
+        "p95": 0.0018019819702486176,
+        "p99": 0.012684099801390226
+      },
+      "separation_mm": 6.437005985187476e-12
+    },
+    {
+      "edge": 8,
+      "normal_degrees": {
+        "max": 0.9640729562676441,
+        "rms": 0.13534313990843144,
+        "p95": 0.2724334845597721,
+        "p99": 0.5895541961131645
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 13,
+      "normal_degrees": {
+        "max": 0.42103112653607244,
+        "rms": 0.07057831667673088,
+        "p95": 0.15838059968012502,
+        "p99": 0.30687760665720465
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 14,
+      "normal_degrees": {
+        "max": 0.020979906378336983,
+        "rms": 0.0024633823106822677,
+        "p95": 0.0032587903761858794,
+        "p99": 0.014267261952223078
+      },
+      "separation_mm": 5.464054292072067e-12
+    },
+    {
+      "edge": 23,
+      "normal_degrees": {
+        "max": 0.6025915497895508,
+        "rms": 0.08935650538204157,
+        "p95": 0.20998486264567418,
+        "p99": 0.41053988620989534
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 24,
+      "normal_degrees": {
+        "max": 0.04206955328357517,
+        "rms": 0.003142564000124389,
+        "p95": 0.0010266228208936276,
+        "p99": 0.01455504349501475
+      },
+      "separation_mm": 6.198042293358466e-12
+    },
+    {
+      "edge": 33,
+      "normal_degrees": {
+        "max": 0.04366058802109858,
+        "rms": 0.003158811981563732,
+        "p95": 0.0011554396366247979,
+        "p99": 0.015087036727374546
+      },
+      "separation_mm": 5.381380913437193e-12
+    }
+  ],
+  "boundary_mapping": [
+    {
+      "edge": 0,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.17231105054264087
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.590761848311694e-12
+    },
+    {
+      "edge": 1,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.17231105054264087,
+        0.344312569001094
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.589428546356157e-12
+    },
+    {
+      "edge": 2,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.344312569001094,
+        0.5159473270303163
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.5238787452045624e-12
+    },
+    {
+      "edge": 3,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5159473270303163,
+        0.6777797473292488
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.66047081532451e-12
+    },
+    {
+      "edge": 4,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.6777797473292488,
+        0.8396208908456227
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.142036891537399e-12
+    },
+    {
+      "edge": 5,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        1.0,
+        0.8396208908456227
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.141327871760147e-12
+    },
+    {
+      "edge": 6,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.250499616628418
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.203021791498048e-12
+    },
+    {
+      "edge": 7,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.250499616628418,
+        0.5006745165658735
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.1988209957137935e-12
+    },
+    {
+      "edge": 8,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5006745165658735,
+        0.7508119172792818
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.259774638826269e-12
+    },
+    {
+      "edge": 9,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7508119172792818,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.259774638826269e-12
+    },
+    {
+      "edge": 10,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.126969707402811
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.677951945806997e-12
+    },
+    {
+      "edge": 11,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.126969707402811,
+        0.254234630306254
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.677951945806997e-12
+    },
+    {
+      "edge": 12,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.254234630306254,
+        0.38166617352707494
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 5.03982708257699e-12
+    },
+    {
+      "edge": 13,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.38166617352707494,
+        0.5091321643392388
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.0816009134378114e-12
+    },
+    {
+      "edge": 14,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5091321643392388,
+        0.6364567980110628
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.0806867633656898e-12
+    },
+    {
+      "edge": 15,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7637496820916513,
+        0.6364567980110628
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.2085732621901284e-12
+    },
+    {
+      "edge": 16,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7637496820916513,
+        0.8830200107787551
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.089383052389688e-12
+    },
+    {
+      "edge": 17,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        1.0,
+        0.8830200107787551
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.089158771577174e-12
+    },
+    {
+      "edge": 18,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.12929106790686934
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 8.101440668816783e-12
+    },
+    {
+      "edge": 19,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.12929106790686934,
+        0.25876915449584187
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 8.101440668816783e-12
+    },
+    {
+      "edge": 20,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.25876915449584187,
+        0.3839793173843965
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.463312694242729e-12
+    },
+    {
+      "edge": 21,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.3839793173843965,
+        0.5067254724517011
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.4479128075151465e-12
+    },
+    {
+      "edge": 22,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5067254724517011,
+        0.631692558631115
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.658972330866089e-12
+    },
+    {
+      "edge": 23,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.631692558631115,
+        0.7532706976084144
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.658972330866089e-12
+    },
+    {
+      "edge": 24,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7532706976084144,
+        0.8775862001653878
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.5360259380729663e-12
+    },
+    {
+      "edge": 25,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.8775862001653878,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.542728843223435e-12
+    }
+  ],
+  "sides": [
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 1,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 4,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 0,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 2,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 5,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 1,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 3,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 6,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 2,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 0,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 7,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 3,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": false,
+        "seam": 4,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 5,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 6,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": true
+        }
+      },
+      {
+        "outer": false,
+        "seam": 7,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": true
+        }
+      }
+    ]
+  ],
+  "inner_corners_initial": [
+    [
+      -24.664208573004736,
+      41.76718309891713,
+      -8.424394578051924
+    ],
+    [
+      -23.173287920464904,
+      40.98239789821051,
+      -7.455310110635649
+    ],
+    [
+      -23.82803945934223,
+      39.91791983303432,
+      -7.307539339452202
+    ],
+    [
+      -26.39558551082861,
+      39.86816998431228,
+      -8.227620415254231
+    ]
+  ],
+  "inner_corners_final": [
+    [
+      -24.664118189033044,
+      41.767079824055436,
+      -8.42462562745212
+    ],
+    [
+      -23.17322669199634,
+      40.98232793711559,
+      -7.455466629547926
+    ],
+    [
+      -23.82786313460057,
+      39.91771836021821,
+      -7.307990080054071
+    ],
+    [
+      -26.395421560700882,
+      39.867982651022444,
+      -8.22803952251367
+    ]
+  ],
+  "seconds": 20.80287989997305
+}

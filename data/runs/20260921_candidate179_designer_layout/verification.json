@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-09-21T12:29:45.164627+00:00",
+  "numerical_tests": 4,
+  "tests_passed": true,
+  "python_compileall_passed": true,
+  "report_local_links_resolve": true,
+  "csv_matches_run_json": true,
+  "seven_closed_solid_diagnostics_confirmed": true,
+  "all_can_apply_false": true,
+  "actual_step_faces_and_poles_read_back": true,
+  "original_boundary_tolerances_preserved": true,
+  "archive_records_and_members_verified": true,
+  "rendered_geometry_and_measurement_figures_visually_reviewed": true,
+  "product_cpp_tests": "Not run: no product C++ modification",
+  "record_scope": "Verification performed during the experiment; ZIP and log references predate the user-requested archive cleanup."
+}

@@ -1,0 +1,78 @@
+{
+  "g17_data": {
+    "samples_per_curve": 385,
+    "all_polygons_valid": true,
+    "pairwise_interior_overlap_mm2": [
+      {
+        "a": 0,
+        "b": 1,
+        "area": 0.0
+      },
+      {
+        "a": 0,
+        "b": 2,
+        "area": 0.0
+      },
+      {
+        "a": 0,
+        "b": 3,
+        "area": 0.0
+      },
+      {
+        "a": 1,
+        "b": 2,
+        "area": 3.180665582108574e-16
+      },
+      {
+        "a": 1,
+        "b": 3,
+        "area": 0.0
+      },
+      {
+        "a": 2,
+        "b": 3,
+        "area": 0.0
+      }
+    ],
+    "symmetric_footprint_difference_mm2": 2.7112883096340104e-07,
+    "note": "Polyline approximation of exact trim curves; footprint discrepancy includes curve sampling error. Graph injectivity prevents off-plane intersections."
+  },
+  "g17_outer_cropped": {
+    "samples_per_curve": 385,
+    "all_polygons_valid": true,
+    "pairwise_interior_overlap_mm2": [
+      {
+        "a": 0,
+        "b": 1,
+        "area": 0.0
+      },
+      {
+        "a": 0,
+        "b": 2,
+        "area": 0.0
+      },
+      {
+        "a": 0,
+        "b": 3,
+        "area": 0.0
+      },
+      {
+        "a": 1,
+        "b": 2,
+        "area": 2.1365135631477854e-14
+      },
+      {
+        "a": 1,
+        "b": 3,
+        "area": 0.0
+      },
+      {
+        "a": 2,
+        "b": 3,
+        "area": 0.0
+      }
+    ],
+    "symmetric_footprint_difference_mm2": 2.958056326747691e-07,
+    "note": "Polyline approximation of exact trim curves; footprint discrepancy includes curve sampling error. Graph injectivity prevents off-plane intersections."
+  }
+}

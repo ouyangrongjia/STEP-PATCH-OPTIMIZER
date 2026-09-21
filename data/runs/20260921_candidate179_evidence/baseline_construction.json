@@ -1,0 +1,193 @@
+{
+  "samples_per_surface": 961,
+  "boundary_only_reconstruction": [
+    {
+      "patch": 0,
+      "styles": {
+        "Coons": {
+          "max_difference_mm": 9.948849641539136e-12,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 125,
+            "v_poles": 14,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 111,
+            "v_knots": 12,
+            "rational": false
+          }
+        },
+        "Stretch": {
+          "max_difference_mm": 0.19137383237749836,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 125,
+            "v_poles": 14,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 111,
+            "v_knots": 12,
+            "rational": false
+          }
+        },
+        "Curved": {
+          "max_difference_mm": 0.8909094202415659,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 125,
+            "v_poles": 14,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 111,
+            "v_knots": 12,
+            "rational": false
+          }
+        }
+      }
+    },
+    {
+      "patch": 1,
+      "styles": {
+        "Coons": {
+          "max_difference_mm": 1.1135358618026796e-11,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 81,
+            "v_poles": 74,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 71,
+            "v_knots": 66,
+            "rational": false
+          }
+        },
+        "Stretch": {
+          "max_difference_mm": 0.03376648738576193,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 81,
+            "v_poles": 74,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 71,
+            "v_knots": 66,
+            "rational": false
+          }
+        },
+        "Curved": {
+          "max_difference_mm": 0.22637497073500726,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 81,
+            "v_poles": 74,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 71,
+            "v_knots": 66,
+            "rational": false
+          }
+        }
+      }
+    },
+    {
+      "patch": 2,
+      "styles": {
+        "Coons": {
+          "max_difference_mm": 8.057520944726006e-12,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 118,
+            "v_poles": 11,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 104,
+            "v_knots": 9,
+            "rational": false
+          }
+        },
+        "Stretch": {
+          "max_difference_mm": 0.17427309456647325,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 118,
+            "v_poles": 11,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 104,
+            "v_knots": 9,
+            "rational": false
+          }
+        },
+        "Curved": {
+          "max_difference_mm": 0.7567193313370436,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 118,
+            "v_poles": 11,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 104,
+            "v_knots": 9,
+            "rational": false
+          }
+        }
+      }
+    },
+    {
+      "patch": 3,
+      "styles": {
+        "Coons": {
+          "max_difference_mm": 1.1974743894001513e-11,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 9,
+            "v_poles": 67,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 7,
+            "v_knots": 59,
+            "rational": false
+          }
+        },
+        "Stretch": {
+          "max_difference_mm": 0.017396949527328162,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 9,
+            "v_poles": 67,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 7,
+            "v_knots": 59,
+            "rational": false
+          }
+        },
+        "Curved": {
+          "max_difference_mm": 0.20404623382916964,
+          "complexity": {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 9,
+            "v_poles": 67,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 7,
+            "v_knots": 59,
+            "rational": false
+          }
+        }
+      }
+    }
+  ],
+  "historical_attempts": [
+    {
+      "stop_reason": "A logical side could not meet its frozen-curve tolerance with at most 25 cubic support control points.",
+      "iterations": 0,
+      "wall_ms": 342.3284
+    }
+  ],
+  "archived_run_source": {
+    "commit": "90282b948bc073c3b6f7e8804c25526780626807",
+    "dirty": true
+  },
+  "interpretation": "Exact numerical match to a boundary-only fill establishes the construction form, not bitwise identity of unavailable dirty source."
+}
