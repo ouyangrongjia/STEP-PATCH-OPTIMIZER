@@ -49,6 +49,14 @@ def to_occt(poles, tu, tv, degrees=(3,3)):
 def from_occt(surface):
     if surface.IsURational() or surface.IsVRational():
         raise ValueError('This experiment supports non-rational spline surfaces only')
+    if surface.IsUPeriodic() or surface.IsVPeriodic():
+        # STEP readers may periodize a closed support. SciPy needs a full
+        # clamped knot sequence; make an exact evaluation copy, leaving the
+        # native STEP representation (and its reported pole count) unchanged.
+        bounds=surface.Bounds();surface=surface.Copy()
+        if surface.IsUPeriodic():surface.SetUNotPeriodic()
+        if surface.IsVPeriodic():surface.SetVNotPeriodic()
+        surface.Segment(*bounds)
     poles = np.array([[[surface.Pole(i,j).X(),surface.Pole(i,j).Y(),surface.Pole(i,j).Z()]
                        for j in range(1,surface.NbVPoles()+1)] for i in range(1,surface.NbUPoles()+1)])
     tu = np.repeat([surface.UKnot(i) for i in range(1,surface.NbUKnots()+1)],

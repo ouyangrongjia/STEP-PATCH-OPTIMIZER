@@ -14,6 +14,15 @@ from OCP.BRepTools import BRepTools
 
 def closest(points, poles, tu, tv, degrees, uv=None, iterations=18):
     limits=np.array([[tu[degrees[0]],tv[degrees[1]]],[tu[-degrees[0]-1],tv[-degrees[1]-1]]])
+    closed=(np.max(np.linalg.norm(poles[0]-poles[-1],axis=1))<1e-9,
+            np.max(np.linalg.norm(poles[:,0]-poles[:,-1],axis=1))<1e-9)
+    def domain(q):
+        result=np.clip(q,limits[0],limits[1])
+        for axis,periodic in enumerate(closed):
+            if periodic:
+                outside=(q[:,axis]<limits[0,axis])|(q[:,axis]>limits[1,axis])
+                result[outside,axis]=limits[0,axis]+np.mod(q[outside,axis]-limits[0,axis],limits[1,axis]-limits[0,axis])
+        return result
     def ev(q,du=0,dv=0):return spline_evaluate(poles,tu,tv,q,du,dv,degrees)
     if uv is None:
         u=np.unique(np.r_[np.linspace(*limits[:,0],161),tu,(tu[:-1]+tu[1:])/2])
@@ -32,7 +41,7 @@ def closest(points, poles, tu, tv, degrees, uv=None, iterations=18):
         step=np.clip(step,-.08*(limits[1]-limits[0]),.08*(limits[1]-limits[0]))
         old=np.einsum('ij,ij->i',r,r)
         for scale in [1.,.5,.25,.125,.0625]:
-            trial=np.clip(uv-scale*step,limits[0],limits[1]);delta=ev(trial)-points
+            trial=domain(uv-scale*step);delta=ev(trial)-points
             val=np.einsum('ij,ij->i',delta,delta);mask=val<old
             uv[mask]=trial[mask];old[mask]=val[mask];step[mask]=0
         if np.max(np.linalg.norm(uv-previous_uv,axis=1))<1e-10:break

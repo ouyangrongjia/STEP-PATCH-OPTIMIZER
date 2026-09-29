@@ -1,6 +1,6 @@
 # candidate-179 独立实证工具
 
-这是针对指定四片基线的独立 OCP/SciPy 原型，不接入产品 Apply，也不改变原生 C++ 质量门。当前保留策略与产物见 [最新实证](../../data/runs/20260921_candidate179_designer_layout/RUN.md)。前两轮继续保留数值对照，当前几何为五片、4484 控制点的 `five_knot_smooth`。
+这是 candidate-179 的独立 OCP/SciPy 研究工具，不接入产品 Apply，也不改变原生 C++ 质量门。当前直接对照为五片、4324 控制点的 `aligned_inner_cubic`，见 [五片基线](../../data/runs/20260921_candidate179_continuity/RUN.md)；历史四片保留。未成功的自适应布局实现和候选模型已移除，后续探索仍开放，见 [回退记录](../../data/runs/20260928_baseline_retention/RUN.md)。
 
 按用户要求，归档仅保留当前策略的局部面、支撑面、缝合整件 STEP，原始区域和三方对比图，以及各轮协议和指标。旧候选几何、ZIP、日志和 Creo 临时资源已清理，原始共享样本仅保留在最新运行目录。下面的工具用于在新目录重现实验，会生成中间产物；不要在精简归档目录直接重跑汇总或拟合入口。原始整件需要另外提供，指定基线归档保持原样。
 
@@ -34,3 +34,26 @@
 `integrated_boundary_audit.py` 从完整整件 STEP 回读中匹配替换面及外侧邻面，再查双侧曲线落面和边容差，补充缝合前的局部检查。
 
 运行全部独立数值测试：`<python.exe> -m unittest discover -s tools/candidate179_research -p 'test_*.py'`。先复制输入与协议到新的运行目录，再执行报告内命令；拟合入口拒绝覆盖已有候选目录。当前五片结果都是诊断，不能以闭合、平均误差或少控制点替代完整验收。
+
+## 保留的校验与辅助工具
+
+`validation.py` 对两个真实 STEP 区域做独立双向距离、法向、面内节点、接缝和实际表达成本核对。周期支撑只在评估副本中展开，控制点统计读取原生 STEP；C0 查询图和多根投影不增加输出 Face。`geometry.py`、`integrate.py`、`diagnose.py` 正确处理闭合缝的两个使用及两个 pcurve。保持原有诊断状态；这些检查不代替原接口/未替换区核对或 Creo。
+
+```powershell
+python -B tools/candidate179_research/validation.py `
+  --reference data/runs/20260921_candidate179_continuity/original_region.step `
+  --candidate data/runs/20260921_candidate179_continuity/aligned_inner_cubic/patch_faces.step `
+  --seed 260930179 --output data/runs/new_validation.json
+
+python -B tools/candidate179_research/profile_baseline.py `
+  --source '<原始整件 STEP>' `
+  --reference data/runs/20260921_candidate179_continuity `
+  --baseline data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/final/evidence/previous_full_diagnostic_20260729_032156 `
+  --output data/runs/new_baseline_profile
+```
+
+计时入口复算既有五片，分开采样、布局、参数化、装配、求解、B-Rep 和 STEP 读写；完整生成耗时包含准备及导出，独立确认和 CAD 另测。输出必须使用新路径。
+
+`support_merge.py` 仅保留参数相容支撑的精确合面算子 `compact()`，可显式作为后续研究的辅助工具调用；调用方通过 `protected_edges` 提供必须保留的边，它不自动检测特征。没有拟合、布局生成或产品替换入口。合面可能增加单方向控制点并改变参数条件，返回值仍需独立验证；当前五片拟合不会调用它。退役的环带布局、控制网压缩搜索和各版自适应运行入口均不保留。
+
+回归：`python -B -m unittest discover -s tools/candidate179_research -p 'test_*.py' -v`。测试夹具独立构造平面网格和闭合样条面，不依赖已经删除的布局生成代码或候选 STEP。

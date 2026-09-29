@@ -1,0 +1,76 @@
+{
+  "status": "RemovedFromWorkspaceToRecycleBin",
+  "targets": [
+    {
+      "bytes": 521902.0,
+      "exists_after": false,
+      "path": "tools/adaptive_layout",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\tools\\adaptive_layout",
+      "files": 40
+    },
+    {
+      "bytes": 523719127.0,
+      "exists_after": false,
+      "path": "data/runs/20260927_adaptive_layout",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\runs\\20260927_adaptive_layout",
+      "files": 79
+    },
+    {
+      "bytes": 110306344.0,
+      "exists_after": false,
+      "path": "data/runs/20260928_adaptive_layout_balanced",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\runs\\20260928_adaptive_layout_balanced",
+      "files": 31
+    },
+    {
+      "bytes": 217817478.0,
+      "exists_after": false,
+      "path": "data/runs/20260928_editable_layout",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\runs\\20260928_editable_layout",
+      "files": 104
+    },
+    {
+      "bytes": 672768624.0,
+      "exists_after": false,
+      "path": "data/runs/20260928_watertight_compaction",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\runs\\20260928_watertight_compaction",
+      "files": 139
+    },
+    {
+      "bytes": 1951565963.0,
+      "exists_after": false,
+      "path": "data/cache/adaptive_layout_20260927_intermediates",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\cache\\adaptive_layout_20260927_intermediates",
+      "files": 592
+    },
+    {
+      "bytes": 27506764.0,
+      "exists_after": false,
+      "path": "data/cache/adaptive_layout_20260928_editable",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\cache\\adaptive_layout_20260928_editable",
+      "files": 333
+    },
+    {
+      "bytes": 19290189.0,
+      "exists_after": false,
+      "path": "data/cache/adaptive_layout_20260928_intermediates",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\cache\\adaptive_layout_20260928_intermediates",
+      "files": 182
+    },
+    {
+      "bytes": 2640636045.0,
+      "exists_after": false,
+      "path": "data/cache/compact_retained_cache",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\cache\\compact_retained_cache",
+      "files": 881
+    },
+    {
+      "bytes": 108541060.0,
+      "exists_after": false,
+      "path": "data/cache/baseline_retention_validation",
+      "absolute": "D:\\pyProject\\step-patch-optimizer-worktrees\\adaptive-layout-20260927\\data\\cache\\baseline_retention_validation",
+      "files": 30
+    }
+  ],
+  "reason": "Permanent removal was rejected by automatic approval review; used reversible Windows Recycle Bin instead"
+}

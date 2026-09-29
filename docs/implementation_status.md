@@ -4,9 +4,15 @@
 
 ## 分支
 
-本工作树是基于上一轮归档提交 `3c810bf` 的独立研究分支 `experiment/candidate179-continuity-20260921`；产品主线和原研究工作树的既有修改均未合并或改写。
+本工作树分支为 `experiment/adaptive-layout-20260927`，以 `5e6dcd3` 的五片连续性基线为基础。未成功的自适应实现已移除，保留基线及少量校验/辅助工具；主工作树的 STL 工程修改不在本次提交范围。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
+
+## 当前几何对照与保留工具
+
+candidate-179 的直接对照恢复为 `aligned_inner_cubic`：5 面、4324 个实际支撑控制点；历史四片继续保留。两者仍按各自原质量门报告，基线不因回退而变为合格替换。后续自适应探索继续开放，当前没有采用新的自适应布局结果。
+
+`tools/candidate179_research/` 保留周期 B-spline 评估、闭合缝有向使用与双 pcurve 检查、独立裁剪域距离核对、实际 STEP 表达统计、五片分阶段计时，以及显式调用的精确支撑合并辅助算子。它们不改变基线拟合策略或产品 Apply 门。失败方案、其余区域输出和缓存已按用户要求清理，精简结论与本次验证见 [回退记录](../data/runs/20260928_baseline_retention/RUN.md)。
 
 ## 产品入口
 

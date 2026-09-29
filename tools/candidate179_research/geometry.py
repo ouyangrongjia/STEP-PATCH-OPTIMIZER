@@ -44,6 +44,13 @@ def compound(items):
     return result
 
 
+def shell(faces):
+    from OCP.TopoDS import TopoDS_Shell
+    result=TopoDS_Shell();builder=BRep_Builder();builder.MakeShell(result)
+    for face in faces:builder.Add(result,face)
+    return result
+
+
 def write_step(path, shape):
     writer = STEPControl_Writer()
     writer.Transfer(shape, STEPControl_AsIs)
@@ -107,9 +114,16 @@ def edge_samples(edge, count=97):
 def topology(shape):
     faces = shapes(shape, TopAbs_FACE)
     uses = edge_uses(faces)
+    # A closed support uses its self seam twice on the same face. Unique
+    # owning-face counts alone incorrectly classify that seam as a free edge.
+    counts=[sum(2 if BRep_Tool.IsClosed_s(edge,faces[fi]) else 1 for fi in owners)
+            for edge,owners in uses if not BRep_Tool.Degenerated_s(edge)]
     return dict(faces=len(faces), solids=len(shapes(shape, TopAbs_SOLID)),
-                free_edges=sum(len(u) == 1 for e, u in uses),
-                multiple_edges=sum(len(u) > 2 for e, u in uses),
+                free_edges=sum(n == 1 for n in counts),
+                multiple_edges=sum(n > 2 for n in counts),
+                self_seam_edges=sum(BRep_Tool.IsClosed_s(e,faces[fi]) for e,u in uses
+                                    if not BRep_Tool.Degenerated_s(e) for fi in u),
+                degenerate_edges=sum(BRep_Tool.Degenerated_s(e) for e,u in uses),
                 brep_valid=BRepCheck_Analyzer(shape, True).IsValid(),
                 face_valid=[BRepCheck_Analyzer(f, True).IsValid() for f in faces])
 

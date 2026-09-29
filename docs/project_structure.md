@@ -108,6 +108,7 @@ tools 提供面向单一问题的命令行入口，例如：
 - Surface Reduction 探针。
 - patch Apply 与角部基线探针。
 - Creo Toolkit 实验探针。
+- `candidate179_research/`：五片研究基线及其独立数值、STEP/闭合缝校验、计时和显式精确合面辅助工具。
 
 探针用于生成证据和定位失败，不应绕过产品命令的质量合同。
 

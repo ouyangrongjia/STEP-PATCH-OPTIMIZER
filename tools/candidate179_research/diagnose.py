@@ -13,7 +13,7 @@ from OCP.BRepAdaptor import BRepAdaptor_Curve2d
 from OCP.BRepClass import BRepClass_FaceClassifier
 from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
-from OCP.TopAbs import TopAbs_IN, TopAbs_ON
+from OCP.TopAbs import TopAbs_IN, TopAbs_ON, TopAbs_FORWARD
 from OCP.gp import gp_Pnt2d
 
 
@@ -30,16 +30,20 @@ def curvature(p,tu,tv,degree,uv):
 def seam_quality(shape):
     faces=shapes(shape,TopAbs_FACE);result=[]
     for ei,(edge,use) in enumerate(edge_uses(faces)):
-        if len(use)!=2:continue
+        if BRep_Tool.Degenerated_s(edge):continue
+        self_seam=len(use)==1 and BRep_Tool.IsClosed_s(edge,faces[use[0]])
+        if len(use)!=2 and not self_seam:continue
         t,_=edge_samples(edge,385);normals=[];points=[]
-        for fi in use:
-            face=faces[fi];pc=BRepAdaptor_Curve2d(edge,face)
+        traces=[(use[0],TopoDS.Edge_s(edge.Oriented(o))) for o in (TopAbs_FORWARD,TopAbs_REVERSED)] if self_seam else [(fi,edge) for fi in use]
+        for fi,oriented in traces:
+            face=faces[fi];pc=BRepAdaptor_Curve2d(oriented,face)
             uv=np.array([[pc.Value(float(x)).X(),pc.Value(float(x)).Y()] for x in t])
             p,n=evaluate(BRep_Tool.Surface_s(face),uv)
             if face.Orientation()==TopAbs_REVERSED:n*=-1
             normals.append(n);points.append(p)
         angle=np.degrees(np.arccos(np.clip(np.sum(normals[0]*normals[1],axis=1),-1,1)))
         result.append(dict(edge=ei,normal_degrees=stats(angle),separation_mm=float(np.max(np.linalg.norm(points[0]-points[1],axis=1)))))
+        if self_seam:result[-1]['self_seam']=True
     return result
 
 

@@ -1,0 +1,825 @@
+{
+  "status": "BaselineRetained_ToolsVerified",
+  "can_apply": false,
+  "regression_tests": {
+    "passed": 8,
+    "failed": 0,
+    "entry": "python -B -m unittest discover -s tools/candidate179_research -p test_*.py -v",
+    "passed_after_retired_code_removal": true
+  },
+  "baseline_regeneration": {
+    "faces": 5,
+    "actual_controls": 4324,
+    "maximum_control_change_mm": 0.0,
+    "knot_vectors_unchanged": true,
+    "whole": {
+      "faces": 2695,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "self_seam_edges": 0,
+      "degenerate_edges": 0,
+      "brep_valid": true
+    }
+  },
+  "frozen_sample_replays": {
+    "five": {
+      "count": 30000,
+      "distance_array_max_difference_mm": 1.9399397385255583e-14,
+      "forward_max_mm": 0.010589733671070597,
+      "maximum_normal_degrees": 20.769076652567332,
+      "kernel_agreement_pass": true,
+      "seconds": 7.860516999848187
+    },
+    "periodic": {
+      "count": 30000,
+      "distance_array_max_difference_mm": 0.0,
+      "forward_max_mm": 0.024627532876182644,
+      "maximum_normal_degrees": 35.03060766780375,
+      "kernel_agreement_pass": true,
+      "seconds": 21.484292899956927
+    }
+  },
+  "optional_exact_merge": {
+    "faces_before": 5,
+    "faces_after": 2,
+    "original_interface_edges": 26,
+    "matched_interface_edges": 26,
+    "maximum_boundary_change_mm": 0.0,
+    "sampled_preservation_mm": {
+      "max": 2.416106516409301e-14,
+      "rms": 4.981327109689438e-15,
+      "p95": 8.702335715267317e-15,
+      "p99": 1.1925097209590608e-14
+    },
+    "kernel_agreement_pass": true,
+    "brep_valid": true,
+    "written_bytes_before": 480657,
+    "written_bytes_after": 471021,
+    "adopted": false,
+    "can_apply": false
+  },
+  "independent_new_sampling": {
+    "five": {
+      "seed": 260930179,
+      "forward": {
+        "distance_mm": {
+          "max": 0.010850866672624972,
+          "rms": 0.0008664581408803424,
+          "p95": 0.0015918685429776676,
+          "p99": 0.003974924821517198
+        },
+        "sample_count": 30000,
+        "kernel_checks": [
+          {
+            "sample": 0,
+            "numerical_mm": 0.0013171935681773588,
+            "kernel_mm": 0.0013171935681895758,
+            "difference_mm": 1.2217006920001161e-14
+          },
+          {
+            "sample": 612,
+            "numerical_mm": 0.003575671196895531,
+            "kernel_mm": 0.003575671196902658,
+            "difference_mm": 7.127111401050712e-15
+          },
+          {
+            "sample": 2093,
+            "numerical_mm": 0.009151256232860889,
+            "kernel_mm": 0.009151256232875066,
+            "difference_mm": 1.4177894969158444e-14
+          },
+          {
+            "sample": 2727,
+            "numerical_mm": 0.0005178320530649356,
+            "kernel_mm": 0.000517832053064789,
+            "difference_mm": 1.465841337200402e-16
+          },
+          {
+            "sample": 3512,
+            "numerical_mm": 0.0055611811652816305,
+            "kernel_mm": 0.005561181165284755,
+            "difference_mm": 3.1242369802342296e-15
+          },
+          {
+            "sample": 5454,
+            "numerical_mm": 0.0002480166516877168,
+            "kernel_mm": 0.000248016651690605,
+            "difference_mm": 2.8882061672841353e-15
+          },
+          {
+            "sample": 6206,
+            "numerical_mm": 0.010295462208775823,
+            "kernel_mm": 0.01029546220877701,
+            "difference_mm": 1.186550857568136e-15
+          },
+          {
+            "sample": 8181,
+            "numerical_mm": 0.00030535934340989265,
+            "kernel_mm": 0.00030535934341901914,
+            "difference_mm": 9.12648862733123e-15
+          },
+          {
+            "sample": 10908,
+            "numerical_mm": 0.0005744209417601773,
+            "kernel_mm": 0.0005744209417646895,
+            "difference_mm": 4.512232601450172e-15
+          },
+          {
+            "sample": 13009,
+            "numerical_mm": 0.00460937672269662,
+            "kernel_mm": 0.004609376722706289,
+            "difference_mm": 9.669348655094723e-15
+          },
+          {
+            "sample": 13635,
+            "numerical_mm": 0.00018546535541872112,
+            "kernel_mm": 0.0001854653554207151,
+            "difference_mm": 1.9939833204724033e-15
+          },
+          {
+            "sample": 16155,
+            "numerical_mm": 0.009906200495984088,
+            "kernel_mm": 0.00990620049598731,
+            "difference_mm": 3.2231162183649076e-15
+          },
+          {
+            "sample": 16363,
+            "numerical_mm": 0.0003703567634474808,
+            "kernel_mm": 0.00037035676344827114,
+            "difference_mm": 7.903291736333085e-16
+          },
+          {
+            "sample": 16481,
+            "numerical_mm": 0.00452521826126886,
+            "kernel_mm": 0.004525218261268772,
+            "difference_mm": 8.760353553682876e-17
+          },
+          {
+            "sample": 16806,
+            "numerical_mm": 0.009114960171167088,
+            "kernel_mm": 0.009114960171170363,
+            "difference_mm": 3.2751579226442118e-15
+          },
+          {
+            "sample": 17097,
+            "numerical_mm": 0.010721265536570232,
+            "kernel_mm": 0.010721265536576341,
+            "difference_mm": 6.1096960823903146e-15
+          },
+          {
+            "sample": 19090,
+            "numerical_mm": 0.0002599214762714127,
+            "kernel_mm": 0.00025992147627524784,
+            "difference_mm": 3.835148344732975e-15
+          },
+          {
+            "sample": 19817,
+            "numerical_mm": 0.01045131517582064,
+            "kernel_mm": 0.010451315175822557,
+            "difference_mm": 1.916869440954372e-15
+          },
+          {
+            "sample": 21817,
+            "numerical_mm": 0.00010554386533180913,
+            "kernel_mm": 0.00010554386533592348,
+            "difference_mm": 4.114357509202304e-15
+          },
+          {
+            "sample": 22927,
+            "numerical_mm": 0.0050453673168361175,
+            "kernel_mm": 0.005045367316835769,
+            "difference_mm": 3.4867941867133823e-16
+          },
+          {
+            "sample": 24544,
+            "numerical_mm": 0.00023310372965981515,
+            "kernel_mm": 0.00023310372965830426,
+            "difference_mm": 1.5108899374671747e-15
+          },
+          {
+            "sample": 25182,
+            "numerical_mm": 0.005031584212566982,
+            "kernel_mm": 0.005031584212571917,
+            "difference_mm": 4.935288289154016e-15
+          },
+          {
+            "sample": 26793,
+            "numerical_mm": 0.003362914675190607,
+            "kernel_mm": 0.0033629146751941916,
+            "difference_mm": 3.584806063106072e-15
+          },
+          {
+            "sample": 27271,
+            "numerical_mm": 0.0004009548822356101,
+            "kernel_mm": 0.00040095488223811896,
+            "difference_mm": 2.5088438271314573e-15
+          },
+          {
+            "sample": 27621,
+            "numerical_mm": 0.010850866672624972,
+            "kernel_mm": 0.010850866672625642,
+            "difference_mm": 6.696032617270475e-16
+          },
+          {
+            "sample": 28186,
+            "numerical_mm": 0.009355310641998772,
+            "kernel_mm": 0.009355310642001222,
+            "difference_mm": 2.4494295480792516e-15
+          },
+          {
+            "sample": 28394,
+            "numerical_mm": 0.003792541245582352,
+            "kernel_mm": 0.003792541245591211,
+            "difference_mm": 8.85879911094456e-15
+          },
+          {
+            "sample": 29999,
+            "numerical_mm": 0.00022191041563544525,
+            "kernel_mm": 0.00022191041563821815,
+            "difference_mm": 2.772901266240302e-15
+          }
+        ],
+        "kernel_agreement_pass": true,
+        "trim_corrections": 0,
+        "chart_boundary_kernel_queries": 1563,
+        "chart_boundary_kernel_corrections": 136,
+        "evaluation_charts": 7,
+        "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split.",
+        "normal_degrees": {
+          "max": 21.409588103148756,
+          "rms": 1.2659003209733786,
+          "p95": 1.909319014244935,
+          "p99": 5.369854866108687
+        }
+      },
+      "reverse": {
+        "distance_mm": {
+          "max": 0.010588840367197004,
+          "rms": 0.0009079115291274071,
+          "p95": 0.001671468888149878,
+          "p99": 0.004120892509044286
+        },
+        "sample_count": 12000,
+        "kernel_checks": [
+          {
+            "sample": 0,
+            "numerical_mm": 0.0005740196816067846,
+            "kernel_mm": 0.0005740196816089427,
+            "difference_mm": 2.1581044243323966e-15
+          },
+          {
+            "sample": 263,
+            "numerical_mm": 0.009041379288329727,
+            "kernel_mm": 0.009041379288331498,
+            "difference_mm": 1.77115266897232e-15
+          },
+          {
+            "sample": 1090,
+            "numerical_mm": 0.00045876185330455676,
+            "kernel_mm": 0.0004587618533101685,
+            "difference_mm": 5.6117220245677224e-15
+          },
+          {
+            "sample": 2181,
+            "numerical_mm": 2.3779960800146407e-05,
+            "kernel_mm": 2.3779960804989952e-05,
+            "difference_mm": 4.8435444565710084e-15
+          },
+          {
+            "sample": 3225,
+            "numerical_mm": 0.008404446245836078,
+            "kernel_mm": 0.008404446245840698,
+            "difference_mm": 4.619568616526237e-15
+          },
+          {
+            "sample": 3272,
+            "numerical_mm": 0.0002662614759193967,
+            "kernel_mm": 0.0002662614759265774,
+            "difference_mm": 7.180670988371496e-15
+          },
+          {
+            "sample": 4363,
+            "numerical_mm": 0.0008525776226719511,
+            "kernel_mm": 0.0008525776226829129,
+            "difference_mm": 1.0961826064914693e-14
+          },
+          {
+            "sample": 5454,
+            "numerical_mm": 0.00014753404421782976,
+            "kernel_mm": 0.00014753404422312844,
+            "difference_mm": 5.298685752316845e-15
+          },
+          {
+            "sample": 6010,
+            "numerical_mm": 0.009395275220998396,
+            "kernel_mm": 0.009395275221003821,
+            "difference_mm": 5.424480309379476e-15
+          },
+          {
+            "sample": 6473,
+            "numerical_mm": 0.009096564265770274,
+            "kernel_mm": 0.009096564265772494,
+            "difference_mm": 2.220446049250313e-15
+          },
+          {
+            "sample": 6544,
+            "numerical_mm": 0.00023848361959275593,
+            "kernel_mm": 0.00023848361960303872,
+            "difference_mm": 1.0282790244287021e-14
+          },
+          {
+            "sample": 7579,
+            "numerical_mm": 0.010588840367197004,
+            "kernel_mm": 0.010588840367203818,
+            "difference_mm": 6.813993813636898e-15
+          },
+          {
+            "sample": 7635,
+            "numerical_mm": 3.851640190185715e-05,
+            "kernel_mm": 3.851640190997078e-05,
+            "difference_mm": 8.11363373405885e-15
+          },
+          {
+            "sample": 8726,
+            "numerical_mm": 0.00021689813983101112,
+            "kernel_mm": 0.0002168981398341134,
+            "difference_mm": 3.102281886241398e-15
+          },
+          {
+            "sample": 9005,
+            "numerical_mm": 0.009456957649369357,
+            "kernel_mm": 0.009456957649375104,
+            "difference_mm": 5.747138875911162e-15
+          },
+          {
+            "sample": 9209,
+            "numerical_mm": 0.008868243474264426,
+            "kernel_mm": 0.00886824347427567,
+            "difference_mm": 1.1244477571281664e-14
+          },
+          {
+            "sample": 9554,
+            "numerical_mm": 0.008331589194232585,
+            "kernel_mm": 0.008331589194237904,
+            "difference_mm": 5.3186621773448906e-15
+          },
+          {
+            "sample": 9817,
+            "numerical_mm": 0.000329669611782171,
+            "kernel_mm": 0.00032966961178257094,
+            "difference_mm": 3.999621814299026e-16
+          },
+          {
+            "sample": 10908,
+            "numerical_mm": 0.0002768416732864284,
+            "kernel_mm": 0.00027684167329720217,
+            "difference_mm": 1.0773771198097082e-14
+          },
+          {
+            "sample": 11999,
+            "numerical_mm": 0.0005239037321294589,
+            "kernel_mm": 0.0005239037321336424,
+            "difference_mm": 4.1835025027525674e-15
+          }
+        ],
+        "kernel_agreement_pass": true,
+        "trim_corrections": 0,
+        "chart_boundary_kernel_queries": 0,
+        "chart_boundary_kernel_corrections": 0,
+        "evaluation_charts": 49,
+        "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split."
+      },
+      "representation": {
+        "faces": 5,
+        "surfaces": [
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 99,
+            "v_poles": 10,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 91,
+            "v_knots": 8,
+            "rational": false
+          },
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 66,
+            "v_poles": 10,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 61,
+            "v_knots": 8,
+            "rational": false
+          },
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 131,
+            "v_poles": 10,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 121,
+            "v_knots": 8,
+            "rational": false
+          },
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 130,
+            "v_poles": 10,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 121,
+            "v_knots": 8,
+            "rational": false
+          },
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 8,
+            "v_poles": 8,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 6,
+            "v_knots": 6,
+            "rational": false
+          }
+        ],
+        "actual_support_control_points": 4324,
+        "maximum_direction_poles": 131,
+        "unique_3d_curve_controls": 524,
+        "pcurve_controls": 84,
+        "curve_types": {
+          "Geom_BSplineCurve": 34
+        },
+        "pcurve_types": {
+          "GeomAbs_CurveType.GeomAbs_BSplineCurve": 42
+        }
+      },
+      "direction_budget_pass": false,
+      "wall_seconds": 14.38877320010215
+    },
+    "periodic": {
+      "seed": 260930179,
+      "forward": {
+        "distance_mm": {
+          "max": 0.02281026431434947,
+          "rms": 0.005434108223409679,
+          "p95": 0.010124629944845321,
+          "p99": 0.012757746645054868
+        },
+        "sample_count": 30000,
+        "kernel_checks": [
+          {
+            "sample": 0,
+            "numerical_mm": 0.0014605550526643491,
+            "kernel_mm": 0.0014605550526723982,
+            "difference_mm": 8.049116928532385e-15
+          },
+          {
+            "sample": 1092,
+            "numerical_mm": 0.014786501851903307,
+            "kernel_mm": 0.014786501851910614,
+            "difference_mm": 7.306655280814311e-15
+          },
+          {
+            "sample": 2727,
+            "numerical_mm": 0.0014391830700220605,
+            "kernel_mm": 0.0014391830700303879,
+            "difference_mm": 8.327323205992165e-15
+          },
+          {
+            "sample": 3796,
+            "numerical_mm": 0.021627850641124893,
+            "kernel_mm": 0.021627850641133928,
+            "difference_mm": 9.034439862887211e-15
+          },
+          {
+            "sample": 4198,
+            "numerical_mm": 0.018146068495700267,
+            "kernel_mm": 0.01814606849570874,
+            "difference_mm": 8.472389456670726e-15
+          },
+          {
+            "sample": 4681,
+            "numerical_mm": 0.004454216010435451,
+            "kernel_mm": 0.004454216010438429,
+            "difference_mm": 2.9785202082521778e-15
+          },
+          {
+            "sample": 5454,
+            "numerical_mm": 0.0016604632485529354,
+            "kernel_mm": 0.0016604632485556963,
+            "difference_mm": 2.7608124120170885e-15
+          },
+          {
+            "sample": 5791,
+            "numerical_mm": 0.02262116638807901,
+            "kernel_mm": 0.022621166388081804,
+            "difference_mm": 2.7929047963226594e-15
+          },
+          {
+            "sample": 6793,
+            "numerical_mm": 0.02157226931207381,
+            "kernel_mm": 0.021572269312074583,
+            "difference_mm": 7.73686670285656e-16
+          },
+          {
+            "sample": 7410,
+            "numerical_mm": 0.011456488279137145,
+            "kernel_mm": 0.01145648827914328,
+            "difference_mm": 6.135716934529967e-15
+          },
+          {
+            "sample": 8181,
+            "numerical_mm": 0.0056160563082050755,
+            "kernel_mm": 0.005616056308211526,
+            "difference_mm": 6.450569245419757e-15
+          },
+          {
+            "sample": 8314,
+            "numerical_mm": 0.02117368289182027,
+            "kernel_mm": 0.021173682891832517,
+            "difference_mm": 1.2247147740396258e-14
+          },
+          {
+            "sample": 8646,
+            "numerical_mm": 0.004181094631771634,
+            "kernel_mm": 0.004181094631779124,
+            "difference_mm": 7.489668607529865e-15
+          },
+          {
+            "sample": 10908,
+            "numerical_mm": 0.0023059949679619446,
+            "kernel_mm": 0.0023059949679630565,
+            "difference_mm": 1.1119577481011333e-15
+          },
+          {
+            "sample": 13635,
+            "numerical_mm": 0.0010123108348645848,
+            "kernel_mm": 0.0010123108348675982,
+            "difference_mm": 3.013431518206211e-15
+          },
+          {
+            "sample": 14039,
+            "numerical_mm": 0.021472993287455833,
+            "kernel_mm": 0.021472993287463365,
+            "difference_mm": 7.532169332691296e-15
+          },
+          {
+            "sample": 16363,
+            "numerical_mm": 0.0013387667438481531,
+            "kernel_mm": 0.00133876674385635,
+            "difference_mm": 8.19678526442491e-15
+          },
+          {
+            "sample": 19090,
+            "numerical_mm": 0.006884600990121049,
+            "kernel_mm": 0.006884600990124247,
+            "difference_mm": 3.197962727963244e-15
+          },
+          {
+            "sample": 21817,
+            "numerical_mm": 0.0018163602859679936,
+            "kernel_mm": 0.0018163602859731607,
+            "difference_mm": 5.167090713631417e-15
+          },
+          {
+            "sample": 22730,
+            "numerical_mm": 0.021558119695087606,
+            "kernel_mm": 0.02155811969509438,
+            "difference_mm": 6.772360450213455e-15
+          },
+          {
+            "sample": 24544,
+            "numerical_mm": 0.0008933517363763263,
+            "kernel_mm": 0.0008933517363797387,
+            "difference_mm": 3.4124179176808767e-15
+          },
+          {
+            "sample": 24985,
+            "numerical_mm": 0.02281026431434947,
+            "kernel_mm": 0.022810264314369545,
+            "difference_mm": 2.0074220064003612e-14
+          },
+          {
+            "sample": 27271,
+            "numerical_mm": 0.0014660238171473152,
+            "kernel_mm": 0.0014660238171499422,
+            "difference_mm": 2.6270218639323772e-15
+          },
+          {
+            "sample": 28095,
+            "numerical_mm": 0.022185331207911548,
+            "kernel_mm": 0.022185331207916853,
+            "difference_mm": 5.304784389537076e-15
+          },
+          {
+            "sample": 29096,
+            "numerical_mm": 0.010063982727117868,
+            "kernel_mm": 0.010063982727124533,
+            "difference_mm": 6.664807594702893e-15
+          },
+          {
+            "sample": 29741,
+            "numerical_mm": 0.022366081440853506,
+            "kernel_mm": 0.022366081440855105,
+            "difference_mm": 1.5994150448506161e-15
+          },
+          {
+            "sample": 29999,
+            "numerical_mm": 0.002106683897180307,
+            "kernel_mm": 0.0021066838971818447,
+            "difference_mm": 1.5378323614534395e-15
+          }
+        ],
+        "kernel_agreement_pass": true,
+        "trim_corrections": 0,
+        "chart_boundary_kernel_queries": 8604,
+        "chart_boundary_kernel_corrections": 513,
+        "evaluation_charts": 7,
+        "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split.",
+        "normal_degrees": {
+          "max": 35.030608318095695,
+          "rms": 3.3711236895606023,
+          "p95": 6.624332215464156,
+          "p99": 10.894180992558685
+        }
+      },
+      "reverse": {
+        "distance_mm": {
+          "max": 0.02423733285142132,
+          "rms": 0.00544922207233383,
+          "p95": 0.010100255223550587,
+          "p99": 0.013207385491453734
+        },
+        "sample_count": 12000,
+        "kernel_checks": [
+          {
+            "sample": 0,
+            "numerical_mm": 0.008595045012446715,
+            "kernel_mm": 0.008595045012454646,
+            "difference_mm": 7.931155732165962e-15
+          },
+          {
+            "sample": 1090,
+            "numerical_mm": 0.007602881950536076,
+            "kernel_mm": 0.007602881950542015,
+            "difference_mm": 5.938825820006599e-15
+          },
+          {
+            "sample": 1730,
+            "numerical_mm": 0.02423733285142132,
+            "kernel_mm": 0.024237332851423724,
+            "difference_mm": 2.4043267377038546e-15
+          },
+          {
+            "sample": 2181,
+            "numerical_mm": 0.0028689054430299397,
+            "kernel_mm": 0.0028689054430356934,
+            "difference_mm": 5.753644088946075e-15
+          },
+          {
+            "sample": 3099,
+            "numerical_mm": 0.021959398306956167,
+            "kernel_mm": 0.021959398306957353,
+            "difference_mm": 1.186550857568136e-15
+          },
+          {
+            "sample": 3105,
+            "numerical_mm": 0.02034576644520196,
+            "kernel_mm": 0.020345766445212278,
+            "difference_mm": 1.0318135235110049e-14
+          },
+          {
+            "sample": 3272,
+            "numerical_mm": 0.004630117522259765,
+            "kernel_mm": 0.004630117522272302,
+            "difference_mm": 1.2536846560884385e-14
+          },
+          {
+            "sample": 4337,
+            "numerical_mm": 0.019719351062155513,
+            "kernel_mm": 0.019719351062159687,
+            "difference_mm": 4.173744683200198e-15
+          },
+          {
+            "sample": 4363,
+            "numerical_mm": 0.00846781345836965,
+            "kernel_mm": 0.008467813458372376,
+            "difference_mm": 2.725250580759564e-15
+          },
+          {
+            "sample": 4870,
+            "numerical_mm": 0.020174189054423277,
+            "kernel_mm": 0.020174189054433245,
+            "difference_mm": 9.967721092962734e-15
+          },
+          {
+            "sample": 5222,
+            "numerical_mm": 0.02415997919660958,
+            "kernel_mm": 0.024159979196613002,
+            "difference_mm": 3.4208746946262636e-15
+          },
+          {
+            "sample": 5454,
+            "numerical_mm": 0.008405972566311678,
+            "kernel_mm": 0.008405972566314993,
+            "difference_mm": 3.3150565625916784e-15
+          },
+          {
+            "sample": 6544,
+            "numerical_mm": 0.00421199313262527,
+            "kernel_mm": 0.004211993132634353,
+            "difference_mm": 9.083012120214562e-15
+          },
+          {
+            "sample": 7322,
+            "numerical_mm": 0.021365187545459564,
+            "kernel_mm": 0.02136518754546772,
+            "difference_mm": 8.156669784042947e-15
+          },
+          {
+            "sample": 7635,
+            "numerical_mm": 0.008189345452570607,
+            "kernel_mm": 0.008189345452572416,
+            "difference_mm": 1.8093165854438098e-15
+          },
+          {
+            "sample": 7675,
+            "numerical_mm": 0.019575720700935464,
+            "kernel_mm": 0.019575720700936276,
+            "difference_mm": 8.118505867571457e-16
+          },
+          {
+            "sample": 8726,
+            "numerical_mm": 0.007862037697046262,
+            "kernel_mm": 0.007862037697051688,
+            "difference_mm": 5.4262150328554526e-15
+          },
+          {
+            "sample": 9817,
+            "numerical_mm": 0.003680599629671092,
+            "kernel_mm": 0.003680599629676776,
+            "difference_mm": 5.684255149907003e-15
+          },
+          {
+            "sample": 10908,
+            "numerical_mm": 0.00100568798988688,
+            "kernel_mm": 0.0010056879898896218,
+            "difference_mm": 2.7417304537813436e-15
+          },
+          {
+            "sample": 11999,
+            "numerical_mm": 0.006504153850613926,
+            "kernel_mm": 0.006504153850620102,
+            "difference_mm": 6.175615574477433e-15
+          }
+        ],
+        "kernel_agreement_pass": true,
+        "trim_corrections": 0,
+        "chart_boundary_kernel_queries": 0,
+        "chart_boundary_kernel_corrections": 0,
+        "evaluation_charts": 49,
+        "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split."
+      },
+      "representation": {
+        "faces": 2,
+        "surfaces": [
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 8,
+            "v_poles": 8,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 6,
+            "v_knots": 6,
+            "rational": false
+          },
+          {
+            "type": "Geom_BSplineSurface",
+            "u_poles": 422,
+            "v_poles": 5,
+            "u_degree": 3,
+            "v_degree": 3,
+            "u_knots": 391,
+            "v_knots": 3,
+            "rational": false
+          }
+        ],
+        "actual_support_control_points": 2174,
+        "maximum_direction_poles": 422,
+        "unique_3d_curve_controls": 489,
+        "pcurve_controls": 72,
+        "curve_types": {
+          "Geom_BSplineCurve": 31
+        },
+        "pcurve_types": {
+          "GeomAbs_CurveType.GeomAbs_BSplineCurve": 36
+        }
+      },
+      "direction_budget_pass": false,
+      "wall_seconds": 27.55055580008775
+    }
+  },
+  "note": "Standalone CLI samples the serialized original-region STEP, so its triangulation order differs from the original whole-model samples. Frozen-coordinate replay verifies the unchanged distance results separately. Retired STEP was used only as a checker regression fixture before deletion. Creo is not rerun because no new geometry is adopted."
+}
