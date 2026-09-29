@@ -1,5 +1,7 @@
 # 网格参数化与纯网格 B-Rep：双路线验证
 
+只查看 A/B 最终模型时，使用 [精简产物入口](final/README.md)。该入口按当前 Creo 实体/水密优先级说明结果；下文保留本轮原始实验协议和测量。
+
 **本轮保留 B 的给定分区纯网格后端，旧五片继续作为诊断对照。** A 证实对应关系可明显加速，但没有证实曲面质量改善；B 已脱离 CAD 重建并导出真实 STEP，在闭合自由曲面夹具上得到有效 Solid。candidate-179 的 B 距离和表达预算改善，最坏法向及人工接缝光顺变差，仍为 `DiagnosticOnly/can_apply=false`。
 
 代码和命令见 [工具说明](../../../tools/mesh_brep/README.md)。机器事实：[run.json](run.json)、[完整指标 CSV](comparison.csv)、[分阶段计时 CSV](timing.csv)、[预先记录的协议](protocol.json)、[选型冻结记录](selection_freeze.json)、[环境](environment.json)。本分支从 `6efff7e` 开始；主工作区已有 STL 与文档修改保持，历史四片、`aligned_inner_cubic` 和原输入均保留。
