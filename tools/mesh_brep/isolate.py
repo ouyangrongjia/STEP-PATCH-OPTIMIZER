@@ -21,12 +21,13 @@ def main():
     p = argparse.ArgumentParser(); p.add_argument('--stl', required=True); p.add_argument('--layout', required=True)
     p.add_argument('--output', required=True); p.add_argument('--deny-root', action='append', required=True)
     p.add_argument('--probe', action='append', required=True); p.add_argument('--controls', type=int, default=29)
+    p.add_argument('--backend', choices=['uniform', 'compact'], default='uniform')
     a = p.parse_args()
     if os.name != 'nt':
         raise RuntimeError('Exclusive-handle replay is implemented for Windows')
     out = Path(a.output).resolve(); out.mkdir(parents=True, exist_ok=False)
     code = out/'code'/'mesh_brep'; code.mkdir(parents=True)
-    for name in ['__init__.py', 'mesh.py', 'splines.py', 'cad.py', 'reconstruct.py']:
+    for name in ['__init__.py', 'mesh.py', 'splines.py', 'cad.py', 'reconstruct.py', 'compact.py']:
         shutil.copy2(Path(__file__).parent/name, code/name)
     inputs = out/'input'; inputs.mkdir()
     shutil.copy2(a.stl, inputs/'input.stl'); shutil.copy2(a.layout, inputs/'layout.json')
@@ -41,6 +42,7 @@ def main():
         raise ValueError('Every probe must be included in OS-locked files')
     manifest = dict(roots=[str(x) for x in roots], files=[str(x) for x in forbidden], probes=probes,
                     actual_data_inputs=['input/input.stl', 'input/layout.json'], controls=a.controls,
+                    backend=a.backend,
                     mechanism='CreateFileW GENERIC_READ, share mode 0; originals unmodified; all handles held until child exits')
     (out/'lock_manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding='utf-8')
     worker = out/'worker.py'
@@ -80,7 +82,11 @@ def guarded_reader(path):
     return original_reader(path)
 cad.read_generated=guarded_reader
 started=time.perf_counter()
-report=reconstruct.reconstruct(root/'input/input.stl',root/'input/layout.json',output,manifest['controls'])
+if manifest.get('backend','uniform')=='compact':
+    from mesh_brep import compact
+    report=compact.reconstruct(root/'input/input.stl',root/'input/layout.json',output)
+else:
+    report=reconstruct.reconstruct(root/'input/input.stl',root/'input/layout.json',output,manifest['controls'])
 evidence=dict(probes=probes,opened_data_files=sorted(opened),denied_unexpected_reads=denied,locked_files=len(manifest['files']),
               reconstruction_seconds=time.perf_counter()-started,completed=True,
               limitation='No adversarial native-code sandbox claim; audited trusted backend plus actual OS sharing-denial of CAD/cache files.')

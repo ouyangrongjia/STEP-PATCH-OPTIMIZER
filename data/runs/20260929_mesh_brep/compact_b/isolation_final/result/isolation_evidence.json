@@ -1,0 +1,34 @@
+{
+  "probes": [
+    {
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\original_region.step",
+      "python_denied": true,
+      "winerror": null,
+      "native_step_reader_denied": true
+    },
+    {
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\fair_B_corners\\patch_0.npz",
+      "python_denied": true,
+      "winerror": null
+    },
+    {
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\reference.npz",
+      "python_denied": true,
+      "winerror": null
+    },
+    {
+      "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\A\\mesh_correspondence.npz",
+      "python_denied": true,
+      "winerror": null
+    }
+  ],
+  "opened_data_files": [
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\compact_b\\isolation_final\\input\\input.stl",
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\compact_b\\isolation_final\\input\\layout.json"
+  ],
+  "denied_unexpected_reads": [],
+  "locked_files": 1881,
+  "reconstruction_seconds": 3.600669100182131,
+  "completed": true,
+  "limitation": "No adversarial native-code sandbox claim; audited trusted backend plus actual OS sharing-denial of CAD/cache files."
+}

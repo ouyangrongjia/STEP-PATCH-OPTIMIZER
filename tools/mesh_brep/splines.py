@@ -38,7 +38,7 @@ def side_indices(n, side):
     return [grid[:, 0], grid[-1, :], grid[::-1, -1], grid[0, ::-1]][side]
 
 
-def shared_maps(vertices, charts, n):
+def shared_maps(vertices, charts, n, fixed_vertex_ids=None):
     total = len(charts)*n*n; parents = np.arange(total)
     def root(i):
         while parents[i] != i:
@@ -67,7 +67,8 @@ def shared_maps(vertices, charts, n):
                     join(index, corner_uses[vertex])
                 corner_uses[vertex] = index
     roots = np.array([root(i) for i in range(total)])
-    fixed = {root(index): vertices[v] for v, index in corner_uses.items()}
+    fixed = {root(index): vertices[v] for v, index in corner_uses.items()
+             if fixed_vertex_ids is None or v in fixed_vertex_ids}
     free = [x for x in np.unique(roots) if x not in fixed]; lookup = {x: i for i, x in enumerate(free)}
     maps, offsets = [], []
     for fi in range(len(charts)):
@@ -93,7 +94,7 @@ def quadrature(tu, tv, order=4):
 
 
 def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairness=1e-6, seam_weight=.01,
-              quadrature_order=1, hard_tangents=()):
+              quadrature_order=1, hard_tangents=(), hard_positions=()):
     """Shared by A ablations and B. specs contain explicit XYZ/normal/UV data.
 
     It has no access to source geometry; fixed coefficients are eliminated.
@@ -117,7 +118,7 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
             tangent(tensor(uv, tu, tv, du, dv), mapping, initial, normals, np.sqrt(normal_weight/count)/length)
         if 'boundary_uv' in spec:
             buv, bp = spec['boundary_uv'], spec['boundary_points']
-            coordinates(tensor(buv, tu, tv), mapping, initial, bp, np.sqrt(10./len(bp)))
+            coordinates(tensor(buv, tu, tv), mapping, initial, bp, np.sqrt(spec.get('boundary_weight', 10.)/len(bp)))
         # Four Gauss points integrate the squared bicubic derivative terms.
         # Order one remains available to reproduce the original experiment.
         quad, areas = quadrature(tu, tv, quadrature_order)
@@ -142,24 +143,41 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
         q = op@mapping
         constraints.append(sparse.hstack([q.multiply(normal[:, k, None]) for k in range(3)], format='csr'))
         values.append(-np.einsum('ij,ij->i', op@initial, normal))
+    for fi, uv, points in hard_positions:
+        spec, mapping, initial = specs[fi], maps[fi], offsets[fi]
+        op = tensor(uv, spec['tu'], spec['tv'])
+        q = op@mapping
+        constraints.append(sparse.block_diag([q, q, q], format='csr'))
+        values.append((points-op@initial).T.ravel())
     system, system_rhs = h, g
     if constraints:
         constraint = sparse.vstack(constraints, format='csc'); value = np.concatenate(values)
         scaled_constraint = constraint@sparse.diags(scale)
         row_scale = 1/np.maximum(np.sqrt(np.asarray(scaled_constraint.power(2).sum(axis=1)).ravel()), 1e-15)
         c = sparse.diags(row_scale)@scaled_constraint
+        # Shared derivatives can give the same corner-plane equation twice.
+        # Select independent rows and verify all equations after the solve.
+        from scipy.linalg import qr
+        _, r, pivot = qr(c.toarray().T, pivoting=True, mode='economic')
+        rank = int(np.sum(abs(np.diag(r)) > 1e-10))
+        selected = pivot[:rank]
+        c = c[selected]
         system = sparse.bmat([[h, c.T], [c, None]], format='csc')
-        system_rhs = np.r_[g, value*row_scale]
+        system_rhs = np.r_[g, (value*row_scale)[selected]]
     assembled = time.perf_counter()
     factor = splu(system); solution = factor.solve(system_rhs); x = solution[:unknowns*3]
     solved = time.perf_counter()
     coeff = (x*scale).reshape(3, unknowns).T
+    hard_residual = float(np.max(abs(constraint@(scale*x)-value))) if constraints else None
+    if hard_residual is not None and hard_residual > 1e-8:
+        raise ValueError(f'Inconsistent or unresolved hard constraints: {hard_residual}')
     poles = [(m@coeff+p0).reshape(len(s['tu'])-4, len(s['tv'])-4, 3) for s, m, p0 in zip(specs, maps, offsets)]
     report = dict(independent_scalar_variables=unknowns*3, matrix_rows=matrix.shape[0], matrix_nnz=matrix.nnz,
                   normal_weight=normal_weight, fairness=fairness, seam_weight=seam_weight, quadrature_order=quadrature_order,
                   relative_linear_residual=float(np.linalg.norm(system@solution-system_rhs)/max(np.linalg.norm(system_rhs), 1e-30)),
                   hard_tangent_constraints=sum(len(v) for v in values),
-                  hard_tangent_max_residual=float(np.max(abs(constraint@(scale*x)-value))) if constraints else None,
+                  independent_hard_constraints=rank if constraints else 0,
+                  hard_tangent_max_residual=hard_residual,
                   weighted_residual_norm=float(np.linalg.norm(matrix@(scale*x)-target)),
                   matrix_assembly_seconds=assembled-started, solve_seconds=solved-assembled)
     return poles, report

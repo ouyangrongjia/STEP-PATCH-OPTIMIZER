@@ -1,0 +1,11 @@
+{"controls": 41, "boundary_mm": {"rms": 0.0008090588615075144, "p50": 0.00037829192157818193, "p95": 0.001653338187302289, "max": 0.004801012335564967, "min": 5.0242958677880805e-15}, "uv": {"distortion": {"flipped": 0, "zero": 0, "orientation": 1, "stretch_ratio": {"rms": 1.5205520351479587, "p50": 1.5205286614264024, "p95": 1.5239905706079717, "max": 1.5433646918604387, "min": 1.496736882653503}, "area_scale": {"rms": 0.021254676826385047, "p50": 0.02124511541988679, "p95": 0.02143207288729105, "max": 0.02364678599051303, "min": 0.01956622253117739}}, "energy": 2.3390508422772342e-07, "linear_residual": 2.1432319689873673e-13, "anchors": [7074, 9283]}}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 4                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260929_mesh_brep\compact_b\conformal41\network.step(9114 ents)  Write  Done
+{"topology": {"faces": 1, "edges": 4, "solids": 0, "free_edges": 4, "multiple_edges": 0, "brep_valid": true, "maximum_edge_tolerance_mm": 1e-07}, "expression": {"faces": [{"u": 41, "v": 41, "degree_u": 3, "degree_v": 3}], "actual_support_control_points": 1681, "max_direction": 41}, "wall_seconds": 3.084349900018424}

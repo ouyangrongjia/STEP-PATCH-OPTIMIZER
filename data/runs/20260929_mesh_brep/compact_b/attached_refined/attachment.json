@@ -1,0 +1,979 @@
+{
+  "stage": "CAD-assisted boundary attachment; mesh supports unchanged",
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "inputs": {
+    "mesh_result": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\compact_b\\compact13_refined",
+    "interface": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\original_region.step"
+  },
+  "tolerance_mm": 0.001,
+  "corner_error_mm": [
+    1.066228126667479e-06,
+    1.7767045701865441e-06,
+    1.5853795449995844e-06,
+    8.730328346620136e-07
+  ],
+  "boundary": [
+    {
+      "original_edge": 0,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        1.645030558252098e-07,
+        0.16590600865999403
+      ],
+      "error_mm": {
+        "rms": 0.00011097290952738324,
+        "p50": 0.00010317547020341521,
+        "p95": 0.0001708855043546926,
+        "max": 0.00019261117288985394,
+        "min": 7.802091892855172e-07
+      }
+    },
+    {
+      "original_edge": 1,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.16590600865999403,
+        0.3327081201269617
+      ],
+      "error_mm": {
+        "rms": 9.753670020240362e-05,
+        "p50": 9.249664084513708e-05,
+        "p95": 0.0001479794969589387,
+        "max": 0.000162018248788403,
+        "min": 2.514947064173516e-06
+      }
+    },
+    {
+      "original_edge": 2,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.3327081201269617,
+        0.500595112758241
+      ],
+      "error_mm": {
+        "rms": 9.669138898251578e-05,
+        "p50": 7.669605602458684e-05,
+        "p95": 0.0001512549001702903,
+        "max": 0.0005534936286303914,
+        "min": 1.0475978410836697e-06
+      }
+    },
+    {
+      "original_edge": 3,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.500595112758241,
+        0.6674813977067361
+      ],
+      "error_mm": {
+        "rms": 7.388400103072538e-05,
+        "p50": 5.80201589461843e-05,
+        "p95": 0.00013798078688957615,
+        "max": 0.00029854501018760103,
+        "min": 2.076879638482406e-06
+      }
+    },
+    {
+      "original_edge": 4,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.6674813977067361,
+        0.8346873705374561
+      ],
+      "error_mm": {
+        "rms": 8.532856583033593e-05,
+        "p50": 7.016010672343161e-05,
+        "p95": 0.00014920353742882376,
+        "max": 0.0002071691314309298,
+        "min": 2.3312171620161364e-06
+      }
+    },
+    {
+      "original_edge": 5,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.9999997028782841,
+        0.8346873705374561
+      ],
+      "error_mm": {
+        "rms": 0.0001445180806603035,
+        "p50": 0.00013555658384299403,
+        "p95": 0.00022659256741344006,
+        "max": 0.0002707425417415596,
+        "min": 1.2008485524731593e-06
+      }
+    },
+    {
+      "original_edge": 6,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.0,
+        0.2494594964839601
+      ],
+      "error_mm": {
+        "rms": 8.12564217676079e-05,
+        "p50": 7.639353493988716e-05,
+        "p95": 0.0001257029486658361,
+        "max": 0.00013944401533977954,
+        "min": 1.7767045701865441e-06
+      }
+    },
+    {
+      "original_edge": 7,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.2494594964839601,
+        0.5004722054808965
+      ],
+      "error_mm": {
+        "rms": 0.00013790820671760626,
+        "p50": 0.00010769079749798396,
+        "p95": 0.0002647411797319599,
+        "max": 0.0003272301545689386,
+        "min": 1.1676289029774683e-06
+      }
+    },
+    {
+      "original_edge": 8,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.5004722054808965,
+        0.7518034834625494
+      ],
+      "error_mm": {
+        "rms": 6.995914051726171e-05,
+        "p50": 4.6140970317553935e-05,
+        "p95": 0.00014731309895118087,
+        "max": 0.00017255656797324993,
+        "min": 8.26357376409302e-08
+      }
+    },
+    {
+      "original_edge": 9,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.7518034834625494,
+        0.9999994551178262
+      ],
+      "error_mm": {
+        "rms": 0.00014499566429470527,
+        "p50": 0.00012028621617051484,
+        "p95": 0.0002666598018674178,
+        "max": 0.0003123556203644914,
+        "min": 3.611769788570867e-07
+      }
+    },
+    {
+      "original_edge": 10,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.0,
+        0.12477891185644815
+      ],
+      "error_mm": {
+        "rms": 0.00011281314091787598,
+        "p50": 8.95420618412921e-05,
+        "p95": 0.0001907817341907983,
+        "max": 0.00023725580561322483,
+        "min": 1.1308158143794278e-06
+      }
+    },
+    {
+      "original_edge": 11,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.12477891185644815,
+        0.25057645429545256
+      ],
+      "error_mm": {
+        "rms": 9.268064307713565e-05,
+        "p50": 6.828386849732368e-05,
+        "p95": 0.00017373336046829012,
+        "max": 0.00019061865685946193,
+        "min": 2.706725400716749e-06
+      }
+    },
+    {
+      "original_edge": 12,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.25057645429545256,
+        0.3760560834275086
+      ],
+      "error_mm": {
+        "rms": 4.500260675651109e-05,
+        "p50": 3.039134490309038e-05,
+        "p95": 7.072712844059936e-05,
+        "max": 0.00014517693809123556,
+        "min": 7.899670800208817e-07
+      }
+    },
+    {
+      "original_edge": 13,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.3760560834275086,
+        0.5013670246021423
+      ],
+      "error_mm": {
+        "rms": 8.91585172285754e-05,
+        "p50": 4.326744070918989e-05,
+        "p95": 0.0001943952777841892,
+        "max": 0.00027317154900998895,
+        "min": 5.766683856813186e-07
+      }
+    },
+    {
+      "original_edge": 14,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.5013670246021423,
+        0.6264142249892383
+      ],
+      "error_mm": {
+        "rms": 8.004850608309078e-05,
+        "p50": 6.256755148402487e-05,
+        "p95": 0.00014522247803720254,
+        "max": 0.0001972380033910687,
+        "min": 5.300932669821583e-07
+      }
+    },
+    {
+      "original_edge": 15,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.7522278341450355,
+        0.6264142249892383
+      ],
+      "error_mm": {
+        "rms": 0.00012196671125550991,
+        "p50": 5.3218187908004557e-05,
+        "p95": 0.00024067533259858448,
+        "max": 0.0005132718707144277,
+        "min": 9.236675880928594e-07
+      }
+    },
+    {
+      "original_edge": 16,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.7522278341450355,
+        0.8780216585470636
+      ],
+      "error_mm": {
+        "rms": 8.007651565400137e-05,
+        "p50": 5.3275411350575456e-05,
+        "p95": 0.00013996920293415574,
+        "max": 0.0005132718707144277,
+        "min": 3.0757132341799047e-06
+      }
+    },
+    {
+      "original_edge": 17,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        1.0,
+        0.8780216585470636
+      ],
+      "error_mm": {
+        "rms": 9.773521774830246e-05,
+        "p50": 7.106206111876603e-05,
+        "p95": 0.00019064267439620008,
+        "max": 0.000296675874610399,
+        "min": 8.730328346620136e-07
+      }
+    },
+    {
+      "original_edge": 18,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        3.686051625871562e-08,
+        0.1291128903928873
+      ],
+      "error_mm": {
+        "rms": 0.00015456530040040668,
+        "p50": 0.00013727905208461982,
+        "p95": 0.00028576760162691975,
+        "max": 0.0003223923644492398,
+        "min": 8.468324323397641e-07
+      }
+    },
+    {
+      "original_edge": 19,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.1291128903928873,
+        0.2579064898735842
+      ],
+      "error_mm": {
+        "rms": 0.00018694401553868617,
+        "p50": 0.0001851836108547704,
+        "p95": 0.00025923346181060965,
+        "max": 0.00028220721809291165,
+        "min": 2.9316290987313792e-05
+      }
+    },
+    {
+      "original_edge": 20,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.2579064898735842,
+        0.38431028469961315
+      ],
+      "error_mm": {
+        "rms": 7.592962326595322e-05,
+        "p50": 5.152500621183628e-05,
+        "p95": 0.0001636748054504612,
+        "max": 0.00019257602640208253,
+        "min": 5.805798438382808e-06
+      }
+    },
+    {
+      "original_edge": 21,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.38431028469961315,
+        0.5041844546955374
+      ],
+      "error_mm": {
+        "rms": 8.999065164578644e-05,
+        "p50": 6.861405322932952e-05,
+        "p95": 0.0001564441756956245,
+        "max": 0.0002217766412779322,
+        "min": 1.9495429666341786e-06
+      }
+    },
+    {
+      "original_edge": 22,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.5041844546955374,
+        0.6317691021395431
+      ],
+      "error_mm": {
+        "rms": 0.00011166887935262624,
+        "p50": 0.0001045182800538421,
+        "p95": 0.00018365177516112952,
+        "max": 0.00020002365204617854,
+        "min": 4.221543682347102e-06
+      }
+    },
+    {
+      "original_edge": 23,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.6317691021395431,
+        0.7482684347282219
+      ],
+      "error_mm": {
+        "rms": 6.42984335515868e-05,
+        "p50": 5.147503681486669e-05,
+        "p95": 0.00011910996889856461,
+        "max": 0.00014211876109759787,
+        "min": 3.3690270852804514e-07
+      }
+    },
+    {
+      "original_edge": 24,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.7482684347282219,
+        0.8737745407275239
+      ],
+      "error_mm": {
+        "rms": 6.106901440124934e-05,
+        "p50": 3.195141907292098e-05,
+        "p95": 0.00012565214650935098,
+        "max": 0.00014456701238276987,
+        "min": 6.428758478112675e-07
+      }
+    },
+    {
+      "original_edge": 25,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "projected_endpoints": [
+        0.8737745407275239,
+        1.0
+      ],
+      "error_mm": {
+        "rms": 0.00011969870958756016,
+        "p50": 7.320532471785784e-05,
+        "p95": 0.00025601044083155706,
+        "max": 0.0002758024742170271,
+        "min": 8.338549155390129e-07
+      }
+    }
+  ],
+  "boundary_error_mm": {
+    "rms": 0.00010601973843347195,
+    "p50": 7.258294851989887e-05,
+    "p95": 0.0002041978298332177,
+    "max": 0.0005534936286303914,
+    "min": 8.26357376409302e-08
+  },
+  "topology": {
+    "faces": 5,
+    "edges": 34,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "maximum_edge_tolerance_mm": 0.00043991529423232
+  },
+  "cad_checks": {
+    "max_curve_on_surface_mm": 0.0005775366023898638,
+    "same_parameter_or_range_failures": 0,
+    "edges": [
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0001926111738880469
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017917929087764192
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00016201824934252012
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.000148777070750901
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0005775366023898638
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017339342130678678
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0001733916873872923
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017339342130678678
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00020716913423233355
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00018573969882847908
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00027074254596833443
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.0002417290737438161
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          2.1334777765716796e-14,
+          2.1334777765716796e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          7.693113541210064e-12,
+          1.5888218580782548e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          2.1316282072803006e-14,
+          2.1316282072803006e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00013944401621720162
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00013180692408247804
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0003272301523204959
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.0003257314082800832
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00017255656556432845
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00016035751678609942
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00031235561759341093
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00029153498831546487
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          2.1628557899130955e-14,
+          2.1628557899130955e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          6.756941067531269e-12,
+          1.5888218580782548e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00023725580701242853
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017549998986693177
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0001906186574836909
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00018988848720095176
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0001451769393539745
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00013820252304947342
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00027317154788096656
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00021712070386820082
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00019723800430404605
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017748653493480427
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00043991089512417406
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00043991529423232
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00043991089512417406
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00043991529423232
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0002966758693400809
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.0002959389898204488
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          1.5987211554602254e-14,
+          1.5987211554602254e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          6.581093317875241e-12,
+          2.1334777765716796e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00032239236253082173
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.0003167776009961944
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0002822072124800429
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00026518309482600154
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00019257602486837482
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00017828944530110693
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00022177664083898564
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00021007445856609166
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00020002365089426507
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.0001999671492184734
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00014211876258281642
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00013909917482043065
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.00014456701087695687
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00012083039518390156
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0002758024736335818
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 0.00026505145532799464
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          7.152534949020191e-12,
+          2.161031364628563e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "wall_seconds": 1.1030714998487383
+}

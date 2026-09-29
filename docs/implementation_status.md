@@ -10,9 +10,9 @@
 
 ## 给定分区的纯网格后端
 
-当前范围收敛为 candidate-179 局部面片及拼回原模型的整件，要求水密且不能有明显可见褶皱。查看位置统一见 [四个 STEP 入口](../data/runs/20260929_mesh_brep/candidate179/README.md)。
+当前范围收敛为 candidate-179 局部面片及拼回原模型的整件，要求水密且不能有明显可见褶皱。当前 B 的模型、图片、指标和复跑入口统一见 [最终目录](../data/runs/20260929_mesh_brep/candidate179_B_final/README.md)。
 
-`tools/mesh_brep/` 已实际运行 STL、离散布局、网格 UV、共享边界 XYZ 样条网络、STEP 的链路，并完成原 CAD/缓存不可读时的重跑。当前支持四边盘状图和声明光顺的内部接缝；结构标签仍需提供。新增的独立接口适配阶段使用原 CAD 边界硬约束，再以网格位置/法向重拟合并缝合整件。A、B 整件已通过 OCCT 有效 Solid、往返和 Creo 实体导入；B 成排褶皱明显降低，残余接缝、控制点预算和 Creo ModelCHECK 仍有未通过项。全部结果继续为 `DiagnosticOnly/can_apply=false`。本次修正的准确参数和证据统一见 [接口与光顺记录](../data/runs/20260929_mesh_brep/candidate179_assembly/RUN.md)，原双路线对照见 [原实验](../data/runs/20260929_mesh_brep/RUN.md)。C++ 产品与 GUI 未改变。
+`tools/mesh_brep/compact.py` 已实际运行 STL、离散布局、网格 UV、不同基底的共享三维接缝、C2 曲面及 STEP 的完整链路，并完成原 CAD/旧候选/缓存不可读时的相同结果重跑。该原型保留给定五片布局，以较小径向和中央控制网配合自适应边界曲线。后续接口挂接只读取原 CAD 边界，不再修改网格拟合出的支撑曲面；整件已通过有效 Solid、STEP 往返和 Creo 实体导入，并消除了此前 Creo 中的额外拆面和该整件的 GEOM_CHECKS。最大方向预算、原邻面 G1、短边提示及局部曲率峰值仍有未通过或待优化项，保持 `DiagnosticOnly/can_apply=false`。参数与证据见 [本轮 B 记录](../data/runs/20260929_mesh_brep/compact_b/RUN.md)，原 A/B 对照与旧接口版按各自冻结协议保留。C++ 产品与 GUI 未改变。
 
 ## 当前几何对照与保留工具
 

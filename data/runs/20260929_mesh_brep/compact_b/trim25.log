@@ -1,0 +1,14 @@
+{"iteration": 0, "boundary_max_mm": [0.0045593436743941, 0.0021148757118026537, 0.00661494307048228, 0.009366195445085733]}
+{"iteration": 1, "boundary_max_mm": [0.004550235548190479, 0.002038287223877983, 0.006038644533100946, 0.009311185757617333]}
+{"iteration": 2, "boundary_max_mm": [0.004547748314732592, 0.00198310184020978, 0.006026948708637275, 0.009070637006098762]}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\trimmed.py", line 254, in <module>
+    main()
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\trimmed.py", line 249, in main
+    a = p.parse_args(); r = reconstruct(a.stl, a.layout, a.output, a.controls, iterations=a.iterations)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\trimmed.py", line 219, in reconstruct
+    raise ValueError('Floating-trim correspondence flipped the chart')
+ValueError: Floating-trim correspondence flipped the chart

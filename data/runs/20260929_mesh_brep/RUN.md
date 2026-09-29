@@ -1,6 +1,6 @@
 # 网格参数化与纯网格 B-Rep：双路线验证
 
-当前只交付 **candidate-179 的 A/B 局部面片与缝合整件**，见 [四个 STEP](candidate179/README.md)。B 已追加精确原接口约束、光顺重拟合和整件 Creo 检查；截图中的成排褶皱已明显降低，残余接缝和 Creo ModelCHECK 仍未通过。最新数值见 [本次修正](candidate179_assembly/RUN.md)。
+当前按用户后续要求集中推进 **candidate-179 的 B 路线**，唯一交付入口为 [最终 B 目录](candidate179_B_final/README.md)：纯网格局部、原接口局部、缝合整件、Creo 原生件、同视角对比图与指标。自适应 C2 边界和较小共享接缝基底已实际减少控制点，并消除此前 Creo 往返的额外拆面；结果及未通过项见 [本轮 B 记录](compact_b/RUN.md)。旧 [A/B 四个 STEP](candidate179/README.md) 和 [精确接口版](candidate179_assembly/RUN.md) 作为历史对照保留，不能混用指标。
 
 以下保留最初 A/B 参数化对照的测量口径，数值不是新修正版的指标。原纯网格后端仍保留，后加的 CAD 接口适配明确独立记账；原始四片和五片基线不变。
 

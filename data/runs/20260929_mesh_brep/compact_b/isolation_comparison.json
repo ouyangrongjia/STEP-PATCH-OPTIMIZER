@@ -1,0 +1,5 @@
+{
+  "maximum_control_point_difference_mm": 0.0,
+  "patches": 5,
+  "comparison": "original run vs OS-denied CAD/cache replay"
+}

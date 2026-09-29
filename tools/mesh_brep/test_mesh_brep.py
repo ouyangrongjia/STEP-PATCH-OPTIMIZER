@@ -31,6 +31,54 @@ class MeshBRepTests(unittest.TestCase):
         self.assertLess(abs(derivative[0, 2]), 1e-10)
         self.assertLess(report['hard_tangent_max_residual'], 1e-10)
 
+    def test_inconsistent_hard_positions_are_rejected(self):
+        from scipy import sparse
+        t = knots(4); q, _ = quadrature(t, t, 5)
+        spec = dict(uv=q, points=np.c_[q, q[:, 0]*0], normals=np.tile([0., 0., 1.], (len(q), 1)),
+                    tu=t, tv=t, lengths=[1., 1.])
+        uv = np.array([[.5, .5]])
+        with self.assertRaisesRegex(ValueError, 'hard constraints'):
+            joint_fit([spec], [sparse.eye(16)], [np.zeros((16, 3))], [],
+                      hard_positions=[(0, uv, np.array([[.5, .5, 0.]])), (0, uv, np.array([[.5, .5, 1.]]))])
+
+    def test_compact_network_preserves_shared_geometry_with_unequal_bases(self):
+        from .compact import build, variable_maps, unpack, side_uv as mapped_side
+        from .generate import emit
+        outer = np.array([[0., 0.], [2., 0.], [2., 2.], [0., 2.]])
+        inner = .5+.5*outer
+        polygons = [np.array([outer[i], outer[(i+1) % 4], inner[(i+1) % 4], inner[i]]) for i in range(4)]+[inner]
+        vertices, triangles, labels, corners = [], [], [], []
+        for fi, poly in enumerate(polygons):
+            q = np.linspace(0, 1, 17); u, v = np.meshgrid(q, q, indexing='ij')
+            p = ((1-u)*(1-v))[..., None]*poly[0]+(u*(1-v))[..., None]*poly[1]+(u*v)[..., None]*poly[2]+((1-u)*v)[..., None]*poly[3]
+            xyz = np.dstack([p, .07*np.sin(p[:, :, 0]*2)*np.cos(p[:, :, 1])])
+            idx = np.arange(17*17).reshape(17, 17)+len(vertices); vertices.extend(xyz.reshape(-1, 3))
+            for i in range(16):
+                for j in range(16):
+                    a, b, c, d = idx[i, j], idx[i+1, j], idx[i+1, j+1], idx[i, j+1]
+                    triangles.extend([[a, b, c], [a, c, d]]); labels.extend([fi, fi])
+            corners.append(idx[[0, -1, -1, 0], [0, 0, -1, -1]].tolist())
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)/'mesh'; emit(folder, vertices, triangles, labels, corners, {'kind': 'unit-test-only'})
+            v, tri = read_stl(folder/'input.stl'); meta = json.loads((folder/'layout.json').read_text())
+            atlas = charts(v, tri, meta); layout = build(v, atlas, 9, 7); maps = variable_maps(layout)
+            delta = np.random.default_rng(81).normal(scale=.05, size=(maps[0].shape[1], 3))
+            values = []
+            for surface, mapping in zip(layout['surfaces'], maps):
+                p, tu, tv = unpack(surface); values.append(((p.reshape(-1, 3)+mapping@delta).reshape(p.shape), tu, tv))
+            for sid in range(8):
+                curves = []
+                for fi, sides in enumerate(layout['sides']):
+                    for side in sides:
+                        if not side['outer'] and side['seam'] == sid:
+                            p, tu, tv = values[fi]
+                            curves.append(evaluate(p, tu, tv, mapped_side(side['mapping'], np.linspace(0, 1, 137)))[0])
+                np.testing.assert_allclose(curves[0], curves[1], atol=1e-11)
+            for fi in range(4):
+                uv = mapped_side(layout['sides'][fi][0]['mapping'], np.linspace(0, 1, 137))
+                initial, tu, tv = unpack(layout['surfaces'][fi]); changed = values[fi][0]
+                np.testing.assert_allclose(evaluate(initial, tu, tv, uv)[0], evaluate(changed, tu, tv, uv)[0], atol=1e-12)
+
     def test_stl_does_not_weld_thin_wall(self):
         p = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]])
         vertices = np.r_[p, p+np.array([0, 0, 1e-5])]

@@ -12,10 +12,15 @@ def main():
     p = argparse.ArgumentParser()
     for name in ['reference', 'mesh-result', 'candidate', 'output']:
         p.add_argument('--'+name, required=True)
+    p.add_argument('--attachment', help='Use actual STEP pcurves from a compact boundary attachment report')
     a = p.parse_args(); reference, output = Path(a.reference), Path(a.output)
     if output.exists() or output.with_suffix('.summary.json').exists():
         raise FileExistsError(output)
-    layout, _, _, _ = make_layout(a.mesh_result, read_step(reference/'original_region.step'))
+    if a.attachment:
+        attached = json.loads(Path(a.attachment).read_text(encoding='utf-8'))
+        layout = {'boundary': [dict(edge=r['original_edge'], patch=r['patch'], project_edge=True) for r in attached['boundary']]}
+    else:
+        layout, _, _, _ = make_layout(a.mesh_result, read_step(reference/'original_region.step'))
     protocol = json.loads((reference/'protocol.json').read_text(encoding='utf-8'))
     report = original_boundaries(reference, protocol, {'candidate': read_step(a.candidate)},
                                  {'candidate': {'boundary_mapping': layout['boundary']}}, output=output)

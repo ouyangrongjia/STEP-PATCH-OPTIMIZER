@@ -1,0 +1,10 @@
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 3                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260929_mesh_brep\compact_b\attached_final\network.step(6525 ents)  Write  Done
+{"boundary": {"rms": 0.00010601979382425925, "p50": 7.258297243596222e-05, "p95": 0.00020419783369984964, "max": 0.0005534945159152584, "min": 9.035978513242185e-08}, "topology": {"faces": 5, "edges": 34, "solids": 0, "free_edges": 26, "multiple_edges": 0, "brep_valid": true, "maximum_edge_tolerance_mm": 0.00043991529423232}, "wall_seconds": 0.8893528999760747}

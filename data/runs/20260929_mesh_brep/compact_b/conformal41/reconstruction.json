@@ -1,0 +1,138 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "mode": "given smooth disk region; mesh-only LSCM and trimmed XYZ spline",
+  "inputs": [
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\input.stl",
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\layout.json"
+  ],
+  "supplied_patches": 5,
+  "reconstructed_patches": 1,
+  "controls": 41,
+  "samples": 36000,
+  "seed": 2910100,
+  "parameterization": {
+    "distortion": {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 1.5205520351479587,
+        "p50": 1.5205286614264024,
+        "p95": 1.5239905706079717,
+        "max": 1.5433646918604387,
+        "min": 1.496736882653503
+      },
+      "area_scale": {
+        "rms": 0.021254676826385047,
+        "p50": 0.02124511541988679,
+        "p95": 0.02143207288729105,
+        "max": 0.02364678599051303,
+        "min": 0.01956622253117739
+      }
+    },
+    "energy": 2.3390508422772342e-07,
+    "linear_residual": 2.1432319689873673e-13,
+    "anchors": [
+      7074,
+      9283
+    ]
+  },
+  "solver": {
+    "independent_scalar_variables": 5043,
+    "matrix_rows": 389502,
+    "matrix_nnz": 8536032,
+    "normal_weight": 0.003,
+    "fairness": 1e-06,
+    "seam_weight": 0.01,
+    "quadrature_order": 4,
+    "relative_linear_residual": 8.275641263389623e-16,
+    "hard_tangent_constraints": 12,
+    "independent_hard_constraints": 12,
+    "hard_tangent_max_residual": 2.1316282072803006e-14,
+    "weighted_residual_norm": 0.009588953976288152,
+    "matrix_assembly_seconds": 1.6192298999521881,
+    "solve_seconds": 0.20455770008265972
+  },
+  "boundary_sample_error_mm": {
+    "rms": 0.0008090588615075144,
+    "p50": 0.00037829192157818193,
+    "p95": 0.001653338187302289,
+    "max": 0.004801012335564967,
+    "min": 5.0242958677880805e-15
+  },
+  "topology": {
+    "faces": 1,
+    "edges": 4,
+    "solids": 0,
+    "free_edges": 4,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "maximum_edge_tolerance_mm": 1e-07
+  },
+  "cad_checks": {
+    "max_curve_on_surface_mm": 9.398258603360653e-09,
+    "same_parameter_or_range_failures": 0,
+    "edges": [
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          9.398258603360653e-09
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.81953254444874e-09
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          9.045422324489817e-09
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.925791419031928e-09
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "expression": {
+    "faces": [
+      {
+        "u": 41,
+        "v": 41,
+        "degree_u": 3,
+        "degree_v": 3
+      }
+    ],
+    "actual_support_control_points": 1681,
+    "max_direction": 41
+  },
+  "timing_seconds": {
+    "read_index": 0.09552330011501908,
+    "uv": 0.12145259999670088,
+    "mesh_normals": 0.8476402999367565,
+    "correspondence": 0.012908499920740724,
+    "matrix_assembly": 1.6192298999521881,
+    "solve": 0.20455770008265972,
+    "brep_write": 0.05271290009841323,
+    "reread_checks": 0.0835969999898225
+  },
+  "wall_seconds": 3.084349900018424
+}

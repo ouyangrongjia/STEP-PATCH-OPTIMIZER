@@ -1,0 +1,35 @@
+{
+  "removed_generated_copies": [
+    {
+      "bytes": 100457171,
+      "path": "creo/stage/b179_compact.step",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    },
+    {
+      "bytes": 25415207,
+      "path": "creo/import/b179_compact.prt.1",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    },
+    {
+      "bytes": 100457149,
+      "path": "creo_final/stage/b179_c2.step",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    },
+    {
+      "bytes": 98478416,
+      "path": "creo_original/stage/b179_original.step",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    },
+    {
+      "bytes": 25695020,
+      "path": "creo_original/import/b179_original.prt.1",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    },
+    {
+      "bytes": 100457171,
+      "path": "sewn/sewn.step",
+      "reason": "Redundant intermediate full-model copy created in this run; numerical and CAD-check evidence retained"
+    }
+  ],
+  "kept": "Selected STEP, native Creo part and actual Creo round-trip STEP retained; original CAD and earlier experiments unchanged"
+}

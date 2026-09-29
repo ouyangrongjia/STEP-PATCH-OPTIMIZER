@@ -1,0 +1,350 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "mode": "given-partition pure mesh C2 network with independent boundary and seam bases",
+  "inputs": [
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\input.stl",
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\layout.json"
+  ],
+  "radial_controls": 13,
+  "inner_controls": 13,
+  "samples": 36000,
+  "seed": 2910100,
+  "boundary_fits": [
+    {
+      "face": 0,
+      "controls": 64,
+      "sample_error_mm": {
+        "rms": 0.00010054686206075536,
+        "p50": 5.10671857452169e-05,
+        "p95": 0.00021049844622871976,
+        "max": 0.00025590745821567356,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 1,
+      "controls": 30,
+      "sample_error_mm": {
+        "rms": 9.968084205013579e-05,
+        "p50": 6.46726069741472e-05,
+        "p95": 0.00020234182589235416,
+        "max": 0.0003227609996088893,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 2,
+      "controls": 78,
+      "sample_error_mm": {
+        "rms": 9.935149103285413e-05,
+        "p50": 5.933061920411721e-05,
+        "p95": 0.00019520787043020212,
+        "max": 0.0003269694477528296,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 3,
+      "controls": 75,
+      "sample_error_mm": {
+        "rms": 0.00010022313663064158,
+        "p50": 6.464665381205269e-05,
+        "p95": 0.0002135872872040937,
+        "max": 0.00027917859012106545,
+        "min": 0.0
+      }
+    }
+  ],
+  "solver": {
+    "independent_scalar_variables": 9714,
+    "matrix_rows": 592345,
+    "matrix_nnz": 11604549,
+    "normal_weight": 0.01,
+    "fairness": 1e-05,
+    "seam_weight": 1.0,
+    "quadrature_order": 4,
+    "relative_linear_residual": 3.0610379727194056e-15,
+    "hard_tangent_constraints": 28,
+    "independent_hard_constraints": 16,
+    "hard_tangent_max_residual": 1.5834250577384523e-11,
+    "weighted_residual_norm": 0.029129598608377535,
+    "matrix_assembly_seconds": 1.5439704000018537,
+    "solve_seconds": 1.5866843000985682
+  },
+  "topology": {
+    "faces": 5,
+    "edges": 12,
+    "solids": 0,
+    "free_edges": 4,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "maximum_edge_tolerance_mm": 1e-07
+  },
+  "cad_checks": {
+    "max_curve_on_surface_mm": 7.914046712881047e-12,
+    "same_parameter_or_range_failures": 0,
+    "edges": [
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          5.2461788195098745e-12,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          7.694013184880468e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          6.351282401331175e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          7.914046712881047e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "expression": {
+    "faces": [
+      {
+        "u": 73,
+        "v": 13,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 39,
+        "v": 13,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 87,
+        "v": 13,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 84,
+        "v": 13,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 13,
+        "v": 13,
+        "degree_u": 3,
+        "degree_v": 3
+      }
+    ],
+    "actual_support_control_points": 3848,
+    "max_direction": 87
+  },
+  "uv": [
+    {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 3.5618823619285416,
+        "p50": 3.3474766219832337,
+        "p95": 4.524613564957907,
+        "max": 5.030211463748809,
+        "min": 1.668764436393377
+      },
+      "area_scale": {
+        "rms": 0.22879828904595065,
+        "p50": 0.2141073815152966,
+        "p95": 0.3613454727811709,
+        "max": 0.5319071534535786,
+        "min": 0.11067460458106808
+      }
+    },
+    {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 2.0137551848266178,
+        "p50": 2.0466943545692233,
+        "p95": 2.260810406044672,
+        "max": 2.399340370635937,
+        "min": 1.2640745846129737
+      },
+      "area_scale": {
+        "rms": 0.3039887796229524,
+        "p50": 0.268739607826574,
+        "p95": 0.44019170603778823,
+        "max": 0.5037203562740443,
+        "min": 0.20966159410344218
+      }
+    },
+    {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 4.972848576665259,
+        "p50": 4.60979259467585,
+        "p95": 7.9125453583523315,
+        "max": 11.961279645705845,
+        "min": 1.6826550536425073
+      },
+      "area_scale": {
+        "rms": 0.1723790058832335,
+        "p50": 0.14515868705510138,
+        "p95": 0.29869117261516676,
+        "max": 0.42609129717467586,
+        "min": 0.03597235681671926
+      }
+    },
+    {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 4.237246735039924,
+        "p50": 4.400586236872677,
+        "p95": 4.796645278918981,
+        "max": 5.050213405935234,
+        "min": 1.7982975209467025
+      },
+      "area_scale": {
+        "rms": 0.14602852274102696,
+        "p50": 0.13308404373102323,
+        "p95": 0.24163367197156843,
+        "max": 0.3327801238393809,
+        "min": 0.06565443269528719
+      }
+    },
+    {
+      "flipped": 0,
+      "zero": 0,
+      "orientation": 1,
+      "stretch_ratio": {
+        "rms": 1.5304550571536517,
+        "p50": 1.534967421145708,
+        "p95": 1.6905837837592046,
+        "max": 1.942121924745026,
+        "min": 1.2872808020095878
+      },
+      "area_scale": {
+        "rms": 0.22317429229040095,
+        "p50": 0.2126924956785664,
+        "p95": 0.26943922545855503,
+        "max": 0.2809039078285012,
+        "min": 0.1897122715923588
+      }
+    }
+  ],
+  "timing_seconds": {
+    "read_index": 0.02758839982561767,
+    "mesh_uv": 0.12192389997653663,
+    "boundary_and_shared_maps": 0.05148879997432232,
+    "correspondence": 0.07687890017405152,
+    "matrix_assembly": 1.5439704000018537,
+    "solve": 1.5866843000985682,
+    "brep_write": 0.03071349998936057,
+    "reread_checks": 0.07929409993812442
+  },
+  "wall_seconds": 3.6075990998651832
+}

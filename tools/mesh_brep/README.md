@@ -1,5 +1,17 @@
 # 给定分区的纯网格曲面网络实验
 
+当前 candidate-179 推荐入口为 `compact.py`，交付统一见 [最终 B 目录](../../data/runs/20260929_mesh_brep/candidate179_B_final/README.md)。它保留五片连接关系，用 C2 自适应外链、较小的共享接缝基底和 XYZ 联合拟合减少支撑控制点，避免把原 CAD 的重复节点直接传入曲面。独立接口挂接 `attach_boundary.py` 只生成与原 3D 曲线相容的 pcurve，不改变网格重建的支撑系数。具体数值、失败方案和两档网格复核见 [本轮记录](../../data/runs/20260929_mesh_brep/compact_b/RUN.md)。
+
+```powershell
+python -B -m tools.mesh_brep.compact --stl <input.stl> --layout <layout.json> --output <新目录>
+python -B -m tools.mesh_brep.attach_boundary --mesh-result <新目录> --region <原接口区域.step> --output <接口目录>
+python -B -m tools.mesh_brep.assemble_candidate --audit <原整件输入记录.json> --patch <接口目录/network.step> --output <整件目录>
+```
+
+默认径向与中央方向各 13 点；外链平滑残差预算取输入接口公差的 1/10。所有表面为三次简单节点样条，G1 仍按实际法向检查。`isolate.py --backend compact` 复跑此入口；`creo_export.ps1` 与 `creo_topology.py` 核对 Creo 往返后的真实面数。此专用原型要求已声明的五片布局，并非任意拓扑或无标签 STL 的自动分区。
+
+以下为保留的原双路线与精确 CAD 接口对照；它们继续用于复现实验历史。
+
 `reconstruct.py` 接收二进制 STL 和离散布局 JSON，运行真实网格邻接上的 mean-value 参数化、共享边界系数的三维 B-spline 联合拟合、OCCT 构造与 STEP 往返。输出始终为 `DiagnosticOnly/can_apply=false`；公差验收由独立评估给出。当前证据见 [本轮报告](../../data/runs/20260929_mesh_brep/RUN.md)。这不是无标签 STL 的自动分区器，也不调用原 CAD 或既有高度场拟合入口。
 
 ## 复跑 B

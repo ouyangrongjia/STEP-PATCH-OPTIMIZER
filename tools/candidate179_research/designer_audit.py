@@ -72,9 +72,30 @@ def original_boundaries(out,protocol,variants,fits,output=None):
             original_normal_degrees=stats(np.degrees(np.arccos(np.clip(np.sum(original_normal*normal,axis=1),-1,1)))),variants={})
         for name,shape in variants.items():
             record=next(r for r in fits[name]['boundary_mapping'] if r['edge']==ri)
-            s=(ts-ts[0])/(ts[-1]-ts[0]);s=1-s if reverse else s
-            a,b=record['normalized_endpoints'];uv=uv_on_side(record['mapping'],a+s*(b-a))
-            face=shapes(shape,TopAbs_FACE)[record['patch']];p,n=evaluate(BRep_Tool.Surface_s(face),uv)
+            face=shapes(shape,TopAbs_FACE)[record['patch']]
+            if record.get('project_edge',False):
+                # Attached boundaries retain their 3D curve but have a new,
+                # generally nonlinear pcurve. Audit the actual STEP pcurve.
+                from OCP.GeomAPI import GeomAPI_ProjectPointOnCurve
+                candidates=[]
+                for candidate in shapes(face,TopAbs_EDGE):
+                    _,ep=edge_samples(candidate,2)
+                    error=min(np.linalg.norm(ep-target,axis=1).max(),np.linalg.norm(ep[::-1]-target,axis=1).max())
+                    candidates.append((error,candidate))
+                error,candidate=min(candidates,key=lambda x:x[0])
+                if error>1e-5:raise ValueError('Attached STEP boundary cannot be identified')
+                a,b=BRep_Tool.Range_s(candidate);curve=BRep_Tool.Curve_s(candidate,a,b)
+                pc=BRep_Tool.CurveOnSurface_s(candidate,face,a,b);uv=[]
+                for point in points:
+                    gp=gp_Pnt(*point);query=GeomAPI_ProjectPointOnCurve(gp,curve,a,b)
+                    options=[(gp.Distance(curve.Value(a)),a),(gp.Distance(curve.Value(b)),b)]
+                    if query.NbPoints():options.append((query.LowerDistance(),query.LowerDistanceParameter()))
+                    uv.append(pc.Value(min(options)[1]).Coord())
+                uv=np.asarray(uv)
+            else:
+                s=(ts-ts[0])/(ts[-1]-ts[0]);s=1-s if reverse else s
+                a,b=record['normalized_endpoints'];uv=uv_on_side(record['mapping'],a+s*(b-a))
+            p,n=evaluate(BRep_Tool.Surface_s(face),uv)
             if face.Orientation()==TopAbs_REVERSED:n*=-1
             row['variants'][name]=dict(original_curve_to_surface_mm=stats(np.linalg.norm(p-points,axis=1)),
                 adjacent_normal_degrees=stats(np.degrees(np.arccos(np.clip(np.sum(n*normal,axis=1),-1,1)))))

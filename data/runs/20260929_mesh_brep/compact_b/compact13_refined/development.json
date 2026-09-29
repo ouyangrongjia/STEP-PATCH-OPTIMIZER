@@ -1,0 +1,712 @@
+{
+  "mesh": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\compact_b\\input_refined\\input.stl",
+  "candidate": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\compact_b\\compact13_refined\\network.step",
+  "seed": 2910200,
+  "count": 12000,
+  "reverse_count": 6000,
+  "mesh_to_surface": {
+    "distance_mm": {
+      "rms": 0.0006368555268612384,
+      "p50": 0.0001740616668201915,
+      "p95": 0.001531065380065556,
+      "max": 0.003987834803803262,
+      "min": 8.153327962034875e-09
+    },
+    "sample_count": 12000,
+    "kernel_checks": [
+      {
+        "sample": 0,
+        "numerical_mm": 0.00025317857192528465,
+        "kernel_mm": 0.00025317857193290225,
+        "difference_mm": 7.617604463883154e-15
+      },
+      {
+        "sample": 300,
+        "numerical_mm": 0.000271571601382707,
+        "kernel_mm": 0.00027157160138398126,
+        "difference_mm": 1.2742628133222134e-15
+      },
+      {
+        "sample": 376,
+        "numerical_mm": 0.00025945440671532044,
+        "kernel_mm": 0.00025945440672115366,
+        "difference_mm": 5.833224528406511e-15
+      },
+      {
+        "sample": 377,
+        "numerical_mm": 0.003987834803803262,
+        "kernel_mm": 0.00398783480381476,
+        "difference_mm": 1.1498614560512266e-14
+      },
+      {
+        "sample": 650,
+        "numerical_mm": 0.0006975200856239577,
+        "kernel_mm": 0.000697520085629722,
+        "difference_mm": 5.7643776904536814e-15
+      },
+      {
+        "sample": 1090,
+        "numerical_mm": 8.83112948492802e-05,
+        "kernel_mm": 8.831129486465994e-05,
+        "difference_mm": 1.5379733077358626e-14
+      },
+      {
+        "sample": 1539,
+        "numerical_mm": 0.0005764921541184118,
+        "kernel_mm": 0.0005764921541219956,
+        "difference_mm": 3.583830281150835e-15
+      },
+      {
+        "sample": 2181,
+        "numerical_mm": 0.0009219070456442535,
+        "kernel_mm": 0.0009219070456498273,
+        "difference_mm": 5.57377494853073e-15
+      },
+      {
+        "sample": 3060,
+        "numerical_mm": 0.001138288749706858,
+        "kernel_mm": 0.0011382887497147342,
+        "difference_mm": 7.876295102238196e-15
+      },
+      {
+        "sample": 3272,
+        "numerical_mm": 2.0733835812064466e-05,
+        "kernel_mm": 2.0733835813564745e-05,
+        "difference_mm": 1.5002783087039728e-15
+      },
+      {
+        "sample": 3855,
+        "numerical_mm": 0.0005169478876913903,
+        "kernel_mm": 0.0005169478876980686,
+        "difference_mm": 6.678360121858962e-15
+      },
+      {
+        "sample": 4363,
+        "numerical_mm": 0.00024222945405932383,
+        "kernel_mm": 0.00024222945407276027,
+        "difference_mm": 1.343643620844992e-14
+      },
+      {
+        "sample": 5454,
+        "numerical_mm": 0.00012045088220134302,
+        "kernel_mm": 0.0001204508822005877,
+        "difference_mm": 7.553229959891827e-16
+      },
+      {
+        "sample": 5725,
+        "numerical_mm": 0.003500398021964945,
+        "kernel_mm": 0.0035003980219713363,
+        "difference_mm": 6.3911549663675515e-15
+      },
+      {
+        "sample": 5783,
+        "numerical_mm": 0.003316258962707618,
+        "kernel_mm": 0.00331625896271358,
+        "difference_mm": 5.962244586932286e-15
+      },
+      {
+        "sample": 6386,
+        "numerical_mm": 0.003601459481221883,
+        "kernel_mm": 0.0036014594812319094,
+        "difference_mm": 1.0026268010276951e-14
+      },
+      {
+        "sample": 6544,
+        "numerical_mm": 0.0001563538311768883,
+        "kernel_mm": 0.0001563538311765466,
+        "difference_mm": 3.4171341971311886e-16
+      },
+      {
+        "sample": 7422,
+        "numerical_mm": 0.0031928415393096764,
+        "kernel_mm": 0.0031928415393175425,
+        "difference_mm": 7.866103601816832e-15
+      },
+      {
+        "sample": 7635,
+        "numerical_mm": 2.2397801449482567e-05,
+        "kernel_mm": 2.2397801454296398e-05,
+        "difference_mm": 4.8138305407813275e-15
+      },
+      {
+        "sample": 8179,
+        "numerical_mm": 0.003353409805343785,
+        "kernel_mm": 0.003353409805357363,
+        "difference_mm": 1.3578114327339463e-14
+      },
+      {
+        "sample": 8726,
+        "numerical_mm": 0.00019424634876012836,
+        "kernel_mm": 0.00019424634875962537,
+        "difference_mm": 5.029884928703376e-16
+      },
+      {
+        "sample": 9273,
+        "numerical_mm": 0.0033583246186106373,
+        "kernel_mm": 0.003358324618618334,
+        "difference_mm": 7.696534382040099e-15
+      },
+      {
+        "sample": 9636,
+        "numerical_mm": 0.000677753980867739,
+        "kernel_mm": 0.0006777539808786326,
+        "difference_mm": 1.0893521328048106e-14
+      },
+      {
+        "sample": 9817,
+        "numerical_mm": 0.001795037731178502,
+        "kernel_mm": 0.0017950377311839682,
+        "difference_mm": 5.466113672802919e-15
+      },
+      {
+        "sample": 9843,
+        "numerical_mm": 0.0032169899026548406,
+        "kernel_mm": 0.0032169899026650104,
+        "difference_mm": 1.0169816377914032e-14
+      },
+      {
+        "sample": 10908,
+        "numerical_mm": 0.0008812624211191289,
+        "kernel_mm": 0.0008812624211270561,
+        "difference_mm": 7.927252604345014e-15
+      },
+      {
+        "sample": 11726,
+        "numerical_mm": 0.0008028208748490912,
+        "kernel_mm": 0.0008028208748572125,
+        "difference_mm": 8.12132479321992e-15
+      },
+      {
+        "sample": 11999,
+        "numerical_mm": 0.00017131858916619102,
+        "kernel_mm": 0.0001713185891713404,
+        "difference_mm": 5.149391113165591e-15
+      }
+    ],
+    "kernel_agreement_pass": true,
+    "trim_corrections": 0,
+    "chart_boundary_kernel_queries": 0,
+    "chart_boundary_kernel_corrections": 0,
+    "evaluation_charts": 5,
+    "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split.",
+    "normal_degrees": {
+      "rms": 0.5121279347168232,
+      "p50": 0.203250791694631,
+      "p95": 0.9904188563564685,
+      "max": 6.201152684975038,
+      "min": 0.0013116061343239236
+    },
+    "boundary_stationarity_audit": {
+      "queried": 0,
+      "corrections": [],
+      "initial_report": {
+        "distance_mm": {
+          "max": 0.003987834803803262,
+          "rms": 0.0006368555268612384,
+          "p95": 0.001531065380065556,
+          "p99": 0.002255787455002043
+        },
+        "kernel_agreement_pass": true,
+        "kernel_checks": [
+          {
+            "sample": 0,
+            "numerical_mm": 0.00025317857192528465,
+            "kernel_mm": 0.00025317857193290225,
+            "difference_mm": 7.617604463883154e-15
+          },
+          {
+            "sample": 300,
+            "numerical_mm": 0.000271571601382707,
+            "kernel_mm": 0.00027157160138398126,
+            "difference_mm": 1.2742628133222134e-15
+          },
+          {
+            "sample": 376,
+            "numerical_mm": 0.00025945440671532044,
+            "kernel_mm": 0.00025945440672115366,
+            "difference_mm": 5.833224528406511e-15
+          },
+          {
+            "sample": 377,
+            "numerical_mm": 0.003987834803803262,
+            "kernel_mm": 0.00398783480381476,
+            "difference_mm": 1.1498614560512266e-14
+          },
+          {
+            "sample": 650,
+            "numerical_mm": 0.0006975200856239577,
+            "kernel_mm": 0.000697520085629722,
+            "difference_mm": 5.7643776904536814e-15
+          },
+          {
+            "sample": 1090,
+            "numerical_mm": 8.83112948492802e-05,
+            "kernel_mm": 8.831129486465994e-05,
+            "difference_mm": 1.5379733077358626e-14
+          },
+          {
+            "sample": 1539,
+            "numerical_mm": 0.0005764921541184118,
+            "kernel_mm": 0.0005764921541219956,
+            "difference_mm": 3.583830281150835e-15
+          },
+          {
+            "sample": 2181,
+            "numerical_mm": 0.0009219070456442535,
+            "kernel_mm": 0.0009219070456498273,
+            "difference_mm": 5.57377494853073e-15
+          },
+          {
+            "sample": 3060,
+            "numerical_mm": 0.001138288749706858,
+            "kernel_mm": 0.0011382887497147342,
+            "difference_mm": 7.876295102238196e-15
+          },
+          {
+            "sample": 3272,
+            "numerical_mm": 2.0733835812064466e-05,
+            "kernel_mm": 2.0733835813564745e-05,
+            "difference_mm": 1.5002783087039728e-15
+          },
+          {
+            "sample": 3855,
+            "numerical_mm": 0.0005169478876913903,
+            "kernel_mm": 0.0005169478876980686,
+            "difference_mm": 6.678360121858962e-15
+          },
+          {
+            "sample": 4363,
+            "numerical_mm": 0.00024222945405932383,
+            "kernel_mm": 0.00024222945407276027,
+            "difference_mm": 1.343643620844992e-14
+          },
+          {
+            "sample": 5454,
+            "numerical_mm": 0.00012045088220134302,
+            "kernel_mm": 0.0001204508822005877,
+            "difference_mm": 7.553229959891827e-16
+          },
+          {
+            "sample": 5725,
+            "numerical_mm": 0.003500398021964945,
+            "kernel_mm": 0.0035003980219713363,
+            "difference_mm": 6.3911549663675515e-15
+          },
+          {
+            "sample": 5783,
+            "numerical_mm": 0.003316258962707618,
+            "kernel_mm": 0.00331625896271358,
+            "difference_mm": 5.962244586932286e-15
+          },
+          {
+            "sample": 6386,
+            "numerical_mm": 0.003601459481221883,
+            "kernel_mm": 0.0036014594812319094,
+            "difference_mm": 1.0026268010276951e-14
+          },
+          {
+            "sample": 6544,
+            "numerical_mm": 0.0001563538311768883,
+            "kernel_mm": 0.0001563538311765466,
+            "difference_mm": 3.4171341971311886e-16
+          },
+          {
+            "sample": 7422,
+            "numerical_mm": 0.0031928415393096764,
+            "kernel_mm": 0.0031928415393175425,
+            "difference_mm": 7.866103601816832e-15
+          },
+          {
+            "sample": 7635,
+            "numerical_mm": 2.2397801449482567e-05,
+            "kernel_mm": 2.2397801454296398e-05,
+            "difference_mm": 4.8138305407813275e-15
+          },
+          {
+            "sample": 8179,
+            "numerical_mm": 0.003353409805343785,
+            "kernel_mm": 0.003353409805357363,
+            "difference_mm": 1.3578114327339463e-14
+          },
+          {
+            "sample": 8726,
+            "numerical_mm": 0.00019424634876012836,
+            "kernel_mm": 0.00019424634875962537,
+            "difference_mm": 5.029884928703376e-16
+          },
+          {
+            "sample": 9273,
+            "numerical_mm": 0.0033583246186106373,
+            "kernel_mm": 0.003358324618618334,
+            "difference_mm": 7.696534382040099e-15
+          },
+          {
+            "sample": 9636,
+            "numerical_mm": 0.000677753980867739,
+            "kernel_mm": 0.0006777539808786326,
+            "difference_mm": 1.0893521328048106e-14
+          },
+          {
+            "sample": 9817,
+            "numerical_mm": 0.001795037731178502,
+            "kernel_mm": 0.0017950377311839682,
+            "difference_mm": 5.466113672802919e-15
+          },
+          {
+            "sample": 9843,
+            "numerical_mm": 0.0032169899026548406,
+            "kernel_mm": 0.0032169899026650104,
+            "difference_mm": 1.0169816377914032e-14
+          },
+          {
+            "sample": 10908,
+            "numerical_mm": 0.0008812624211191289,
+            "kernel_mm": 0.0008812624211270561,
+            "difference_mm": 7.927252604345014e-15
+          },
+          {
+            "sample": 11726,
+            "numerical_mm": 0.0008028208748490912,
+            "kernel_mm": 0.0008028208748572125,
+            "difference_mm": 8.12132479321992e-15
+          },
+          {
+            "sample": 11999,
+            "numerical_mm": 0.00017131858916619102,
+            "kernel_mm": 0.0001713185891713404,
+            "difference_mm": 5.149391113165591e-15
+          }
+        ],
+        "normal_degrees": {
+          "max": 6.201152684975038,
+          "rms": 0.5121279347168232,
+          "p95": 0.9904188563564685,
+          "p99": 1.9339166857143892
+        }
+      }
+    }
+  },
+  "surface_to_mesh": {
+    "distance_mm": {
+      "rms": 0.0006367044664923744,
+      "p50": 0.0001735317645783486,
+      "p95": 0.001533068339755628,
+      "max": 0.003963957781132248,
+      "min": 1.630438996094186e-08
+    },
+    "normal_degrees": {
+      "rms": 0.5318321767044877,
+      "p50": 0.20407722540856615,
+      "p95": 1.0111432483758875,
+      "max": 6.4492724704390865,
+      "min": 0.0015799009234444869
+    },
+    "sample_count": 6000,
+    "facet_normal_degrees": {
+      "rms": 0.6452695181412621,
+      "p50": 0.2594645722115708,
+      "p95": 1.2895350822306875,
+      "max": 8.9252882669101,
+      "min": 0.0013517658235699828
+    }
+  },
+  "internal_seams": [
+    {
+      "edge": 0,
+      "normal_degrees": {
+        "max": 0.7714979570962573,
+        "rms": 0.1703340020550285,
+        "p95": 0.4324583802062454,
+        "p99": 0.6871216532232298
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 2,
+      "normal_degrees": {
+        "max": 0.9119048117897872,
+        "rms": 0.16752019218716202,
+        "p95": 0.4196215708983272,
+        "p99": 0.6841200491543044
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 3,
+      "normal_degrees": {
+        "max": 0.31046592328369776,
+        "rms": 0.09298983810226188,
+        "p95": 0.19237913180998772,
+        "p99": 0.26278225153828505
+      },
+      "separation_mm": 7.679482356121017e-12
+    },
+    {
+      "edge": 5,
+      "normal_degrees": {
+        "max": 0.43797899032138726,
+        "rms": 0.0931230876836782,
+        "p95": 0.14804586611297227,
+        "p99": 0.3749229198248886
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 6,
+      "normal_degrees": {
+        "max": 0.1906126732252164,
+        "rms": 0.06261318847419955,
+        "p95": 0.12404241348310514,
+        "p99": 0.1778990834359871
+      },
+      "separation_mm": 6.750053380960485e-12
+    },
+    {
+      "edge": 8,
+      "normal_degrees": {
+        "max": 1.25689405361392,
+        "rms": 0.17199727377974264,
+        "p95": 0.3281573700055157,
+        "p99": 0.5674880550015635
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 9,
+      "normal_degrees": {
+        "max": 0.6034425547658383,
+        "rms": 0.16197229204727376,
+        "p95": 0.3351522024987067,
+        "p99": 0.5319391672991394
+      },
+      "separation_mm": 6.5846354158643575e-12
+    },
+    {
+      "edge": 11,
+      "normal_degrees": {
+        "max": 0.31804706253867154,
+        "rms": 0.10213244828353849,
+        "p95": 0.18912610471236235,
+        "p99": 0.29206495487956957
+      },
+      "separation_mm": 7.13406668511781e-12
+    }
+  ],
+  "interior_continuity": {
+    "knot_records": [],
+    "maximum_sampled_normal_jump_degrees": 0.0,
+    "note": "Cubic simple knots are C2 by construction. Reported finite-offset jumps at repeated knots are sampled diagnostics, not a continuous-domain proof."
+  },
+  "regularity": {
+    "faces": [
+      {
+        "face": 0,
+        "samples": 27674,
+        "jacobian_mm2": {
+          "rms": 4.008391318307745,
+          "p50": 3.747500456222885,
+          "p95": 5.774104442433224,
+          "max": 7.808026276200239,
+          "min": 1.385057131943381
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 3.0526670343299696,
+          "p50": 2.871165194398514,
+          "p95": 4.38824339431552,
+          "max": 11.008579428949131,
+          "min": 1.5576977931664153
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 1.1871513925919188,
+          "p50": 0.09354074992534048,
+          "p95": 2.1295207583735243,
+          "max": 107.21779345824221,
+          "min": 2.3841933014441505e-05
+        }
+      },
+      {
+        "face": 1,
+        "samples": 23701,
+        "jacobian_mm2": {
+          "rms": 3.1903885993083234,
+          "p50": 3.161651809936003,
+          "p95": 4.011833681037825,
+          "max": 4.834815223961306,
+          "min": 0.23100207189790908
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 1.8870013410299369,
+          "p50": 1.8840822244291058,
+          "p95": 2.212874181810988,
+          "max": 34.75230433019628,
+          "min": 1.22478206639108
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 1.147106967969634,
+          "p50": 0.044187974273833766,
+          "p95": 1.7980179835101588,
+          "max": 126.0156204390224,
+          "min": 6.100178581206073e-07
+        }
+      },
+      {
+        "face": 2,
+        "samples": 30551,
+        "jacobian_mm2": {
+          "rms": 6.272627896456253,
+          "p50": 4.876722856638238,
+          "p95": 10.814267901823786,
+          "max": 25.55621635337781,
+          "min": 0.5007777430868805
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 4.107280372499147,
+          "p50": 3.650092519034064,
+          "p95": 6.700933241387421,
+          "max": 80.72370002933104,
+          "min": 1.748833633335453
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 1.2699071797670887,
+          "p50": 0.07913012999953248,
+          "p95": 2.023311831892741,
+          "max": 159.42221630141614,
+          "min": 1.2165066342195861e-06
+        }
+      },
+      {
+        "face": 3,
+        "samples": 29455,
+        "jacobian_mm2": {
+          "rms": 5.7216753726448735,
+          "p50": 5.199342492328366,
+          "p95": 8.618376226104814,
+          "max": 14.215890518078684,
+          "min": 2.833800578056921
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 3.3806290848655616,
+          "p50": 3.202043497322467,
+          "p95": 4.616096228924605,
+          "max": 9.002692801132111,
+          "min": 1.61299176739192
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 2.210526208713272,
+          "p50": 0.09370063009524487,
+          "p95": 3.034554726988009,
+          "max": 43.62007435218619,
+          "min": 1.1652897127500649e-05
+        }
+      },
+      {
+        "face": 4,
+        "samples": 18769,
+        "jacobian_mm2": {
+          "rms": 4.360716985453519,
+          "p50": 4.324817776383964,
+          "p95": 5.026632427694926,
+          "max": 6.735795044701229,
+          "min": 3.1766837136252106
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 1.5368395922992666,
+          "p50": 1.5285365004208475,
+          "p95": 1.736252814065925,
+          "max": 2.3512244712005814,
+          "min": 1.1526930173620968
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 0.08069706184484757,
+          "p50": 0.06924155396651695,
+          "p95": 0.1416419065074351,
+          "max": 0.268845185213633,
+          "min": 2.5807898199543172e-06
+        }
+      }
+    ],
+    "continuous_self_intersection_proof": false,
+    "note": "Dense derivative checks and kernel BRepCheck do not prove continuous injectivity."
+  },
+  "expression": {
+    "faces": 5,
+    "surfaces": [
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 78,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 76,
+        "v_knots": 11,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 49,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 47,
+        "v_knots": 11,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 99,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 97,
+        "v_knots": 11,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 91,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 89,
+        "v_knots": 11,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 13,
+        "v_poles": 13,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 11,
+        "v_knots": 11,
+        "rational": false
+      }
+    ],
+    "actual_support_control_points": 4290,
+    "maximum_direction_poles": 99,
+    "unique_3d_curve_controls": 522,
+    "pcurve_controls": 4,
+    "curve_types": {
+      "Geom_BSplineCurve": 12
+    },
+    "pcurve_types": {
+      "GeomAbs_CurveType.GeomAbs_Line": 18,
+      "GeomAbs_CurveType.GeomAbs_BSplineCurve": 2
+    }
+  },
+  "step_bytes": 461040,
+  "normal_source": "Area-weighted mesh vertex normals; reverse facet normals separately reported",
+  "max_is_continuous_bound": false,
+  "timing_seconds": {
+    "read_and_sample": 0.41175239998847246,
+    "mesh_to_surface": 2.60116000007838,
+    "surface_to_mesh": 0.8975728000514209,
+    "seams_and_differentials": 0.8445673999376595
+  },
+  "wall_seconds": 4.756480099866167
+}

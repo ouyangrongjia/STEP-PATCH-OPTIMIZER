@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\attach_boundary.py", line 137, in <module>
+    main()
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\attach_boundary.py", line 133, in main
+    a = p.parse_args(); attach(a.mesh_result, a.region, a.output)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\attach_boundary.py", line 96, in attach
+    raise ValueError(f'CAD interface exceeds fixed tolerance: edge {k}, {maximum} mm')
+ValueError: CAD interface exceeds fixed tolerance: edge 3, 0.0010380751146379379 mm
