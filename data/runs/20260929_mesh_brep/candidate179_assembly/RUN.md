@@ -40,6 +40,8 @@ A 整件和修正版 B 整件均实际运行 Creo 11 导入及 ModelCHECK。B �
 
 Creo 证据在 `creo_A/result.json`、`creo_B/result.json`、`creo_final_B/result.json` 及对应 XML。当前导入后的原生文件为 `creo_final_B/import/b179_smooth.prt.1`，保留本机。A 本轮只补齐整件检查，不宣称其起伏被此修正解决。
 
+用户随后指出 Creo 中分界线仍多。补做的 [Creo 拆面核对](creo_face_audit/RUN.md) 确認发生了实际拆分；本报告的面数和控制点数仍为输入 STEP 的表达统计，不能当作 Creo 往返后的面数。
+
 ## 时间与失败保留
 
 | 当前 B 阶段 | 秒 |

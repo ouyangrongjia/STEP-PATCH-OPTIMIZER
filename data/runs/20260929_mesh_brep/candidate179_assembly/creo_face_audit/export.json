@@ -1,0 +1,21 @@
+{
+  "purpose": "Read-only STEP re-export of the already imported Creo B model to count retained surface partitions",
+  "part": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\creo_final_B\\import\\b179_smooth.prt.1",
+  "export_directory": "C:\\Users\\27836\\AppData\\Local\\Temp\\candidate179_creo_face_audit_20260929",
+  "process": {
+    "file_path": "E:\\Proe\\Creo 11.0.0.0\\Common Files\\x86e_win64\\obj\\dbatchc.exe",
+    "arguments": [
+      "-nographics",
+      "-process",
+      "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\creo_face_audit\\export.dxc"
+    ],
+    "working_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\creo_face_audit",
+    "started_at": "2026-09-29T07:58:02.2272353-07:00",
+    "ended_at": "2026-09-29T07:58:43.8341247-07:00",
+    "timeout_seconds": 240,
+    "timed_out": false,
+    "exit_code": 0,
+    "stdout_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\creo_face_audit\\export.stdout.txt",
+    "stderr_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\candidate179_assembly\\creo_face_audit\\export.stderr.txt"
+  }
+}

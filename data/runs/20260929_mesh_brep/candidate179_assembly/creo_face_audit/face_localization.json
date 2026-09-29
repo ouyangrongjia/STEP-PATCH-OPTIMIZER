@@ -1,0 +1,339 @@
+{
+  "exported_total_faces": 2703,
+  "input_total_faces": 2695,
+  "input_local_faces": 5,
+  "local_creo_roundtrip_faces": 13,
+  "per_original_patch": {
+    "0": 3,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 1
+  },
+  "localized_faces": [
+    {
+      "face": 427,
+      "area_mm2": 1.1232556782243517,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 3.484392253235013e-09,
+      "parent_faces": [
+        0
+      ],
+      "parent_face": 0,
+      "original_uv_min": [
+        0.51594732703,
+        0.0
+      ],
+      "original_uv_max": [
+        0.8396208908464425,
+        1.0
+      ]
+    },
+    {
+      "face": 428,
+      "area_mm2": 2.1742380770458065,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 2.2299027896515836e-10,
+      "parent_faces": [
+        0
+      ],
+      "parent_face": 0,
+      "original_uv_min": [
+        0.0,
+        0.0
+      ],
+      "original_uv_max": [
+        0.515947327030212,
+        1.0
+      ]
+    },
+    {
+      "face": 434,
+      "area_mm2": 0.693866842780809,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 1.6965054122242798e-12,
+      "parent_faces": [
+        3
+      ],
+      "parent_face": 3,
+      "original_uv_min": [
+        0.877586200165302,
+        0.0
+      ],
+      "original_uv_max": [
+        1.0,
+        0.9999999999994621
+      ]
+    },
+    {
+      "face": 435,
+      "area_mm2": 1.1783692254331912,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 1.2530418066359226e-08,
+      "parent_faces": [
+        3
+      ],
+      "parent_face": 3,
+      "original_uv_min": [
+        0.631691329414514,
+        0.0
+      ],
+      "original_uv_max": [
+        0.8775862001654556,
+        0.9999999999994621
+      ]
+    },
+    {
+      "face": 436,
+      "area_mm2": 1.827864293740241,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 4.156129694936187e-07,
+      "parent_faces": [
+        3
+      ],
+      "parent_face": 3,
+      "original_uv_min": [
+        0.25876915449595206,
+        0.0
+      ],
+      "original_uv_max": [
+        0.631692558630701,
+        0.9999974172727666
+      ]
+    },
+    {
+      "face": 437,
+      "area_mm2": 1.7740136143228364,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 1.2664992042950575e-07,
+      "parent_faces": [
+        3
+      ],
+      "parent_face": 3,
+      "original_uv_min": [
+        0.0,
+        0.0
+      ],
+      "original_uv_max": [
+        0.2587696775158906,
+        1.0
+      ]
+    },
+    {
+      "face": 500,
+      "area_mm2": 0.5985656492409878,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 7.458604868240966e-13,
+      "parent_faces": [
+        0
+      ],
+      "parent_face": 0,
+      "original_uv_min": [
+        0.8396208908446825,
+        0.0
+      ],
+      "original_uv_max": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "face": 501,
+      "area_mm2": 4.379263847712123,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 9.308330185457162e-13,
+      "parent_faces": [
+        4
+      ],
+      "parent_face": 4,
+      "original_uv_min": [
+        0.0,
+        0.0
+      ],
+      "original_uv_max": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "face": 502,
+      "area_mm2": 1.909587717839065,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 7.004265363790655e-08,
+      "parent_faces": [
+        2
+      ],
+      "parent_face": 2,
+      "original_uv_min": [
+        0.7637496820905182,
+        0.0
+      ],
+      "original_uv_max": [
+        1.0,
+        0.9999999999980307
+      ]
+    },
+    {
+      "face": 503,
+      "area_mm2": 1.3358168471715834,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 7.652793457261928e-10,
+      "parent_faces": [
+        2
+      ],
+      "parent_face": 2,
+      "original_uv_min": [
+        0.5091321643372801,
+        0.0
+      ],
+      "original_uv_max": [
+        0.763749682092,
+        1.0
+      ]
+    },
+    {
+      "face": 504,
+      "area_mm2": 2.111842722034837,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 5.750463916565667e-08,
+      "parent_faces": [
+        2
+      ],
+      "parent_face": 2,
+      "original_uv_min": [
+        0.0,
+        0.0
+      ],
+      "original_uv_max": [
+        0.509132164339,
+        1.0
+      ]
+    },
+    {
+      "face": 588,
+      "area_mm2": 2.321429341783591,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 1.0587761363510644e-10,
+      "parent_faces": [
+        1
+      ],
+      "parent_face": 1,
+      "original_uv_min": [
+        0.0,
+        0.0
+      ],
+      "original_uv_max": [
+        0.7508119172795024,
+        1.0
+      ]
+    },
+    {
+      "face": 589,
+      "area_mm2": 0.8100973284264833,
+      "surface_type": "Geom_BSplineSurface",
+      "max_probe_distance_mm": 4.840075307865081e-13,
+      "parent_faces": [
+        1
+      ],
+      "parent_face": 1,
+      "original_uv_min": [
+        0.750811917277822,
+        0.0
+      ],
+      "original_uv_max": [
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "classification": "7 interior samples per nearby face, each constrained distance to the original 5-face network < 0.001 mm; midpoint bounding filter only selects candidates.",
+  "full_reexport_brep_validity": "Not completed: unrestricted whole-shape BRepCheck was stopped after >120 CPU seconds. Not needed for this face-count audit; no new validity pass claimed.",
+  "split_knot_correspondence": [
+    {
+      "parent_patch": 0,
+      "creo_faces": 3,
+      "cuts": [
+        {
+          "cut_u": 0.51594732703,
+          "nearest_original_knot": 0.5159473270303163,
+          "multiplicity": 3,
+          "nominal_continuity": 0,
+          "difference": 3.163025397157071e-13
+        },
+        {
+          "cut_u": 0.8396208908446825,
+          "nearest_original_knot": 0.8396208908456227,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 9.40247879555045e-13
+        }
+      ]
+    },
+    {
+      "parent_patch": 1,
+      "creo_faces": 2,
+      "cuts": [
+        {
+          "cut_u": 0.750811917277822,
+          "nearest_original_knot": 0.7508119172792818,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 1.4597212327771558e-12
+        }
+      ]
+    },
+    {
+      "parent_patch": 2,
+      "creo_faces": 3,
+      "cuts": [
+        {
+          "cut_u": 0.5091321643372801,
+          "nearest_original_knot": 0.5091321643392388,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 1.958655460043701e-12
+        },
+        {
+          "cut_u": 0.7637496820905182,
+          "nearest_original_knot": 0.7637496820916513,
+          "multiplicity": 3,
+          "nominal_continuity": 0,
+          "difference": 1.1330936189324348e-12
+        }
+      ]
+    },
+    {
+      "parent_patch": 3,
+      "creo_faces": 4,
+      "cuts": [
+        {
+          "cut_u": 0.25876915449595206,
+          "nearest_original_knot": 0.25876915449584187,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 1.1018963519404679e-13
+        },
+        {
+          "cut_u": 0.631691329414514,
+          "nearest_original_knot": 0.631692558631115,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 1.2292166009508776e-06
+        },
+        {
+          "cut_u": 0.877586200165302,
+          "nearest_original_knot": 0.8775862001653878,
+          "multiplicity": 2,
+          "nominal_continuity": 1,
+          "difference": 8.58202398035246e-14
+        }
+      ]
+    },
+    {
+      "parent_patch": 4,
+      "creo_faces": 1,
+      "cuts": []
+    }
+  ],
+  "explanation": "All observed new cuts coincide, within recovered projection uncertainty, with repeated original U knots inherited from composite outer CAD boundary chains. This establishes the location of the partitions, not Creo internal decision thresholds; not every repeated knot was split."
+}
