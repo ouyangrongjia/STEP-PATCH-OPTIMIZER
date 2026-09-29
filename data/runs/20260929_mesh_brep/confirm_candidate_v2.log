@@ -1,0 +1,5 @@
+{"candidate": "data\\runs\\20260929_mesh_brep\\baseline_cold\\aligned_inner_cubic\\patch_faces.step", "forward_mm": 0.011011479090270813, "reverse_mm": 0.009528473446778533, "normal_deg": 23.417001795865286, "seconds": 24.519332400057465}
+{"candidate": "data\\runs\\20260929_mesh_brep\\A\\inverse_xyz\\network.step", "forward_mm": 0.011560607888917685, "reverse_mm": 0.009644498245120557, "normal_deg": 33.76288411109071, "seconds": 25.819626899901778}
+{"candidate": "data\\runs\\20260929_mesh_brep\\A\\mesh_uv_xyz\\network.step", "forward_mm": 0.01162582828901468, "reverse_mm": 0.015685812668599298, "normal_deg": 33.34459317922845, "seconds": 26.5221818999853}
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_coarse_29_global\\network.step", "forward_mm": 0.006274420495311908, "reverse_mm": 0.006688231494409124, "normal_deg": 24.966059711880927, "seconds": 25.022167899878696}
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_fine_25\\network.step", "forward_mm": 0.007149332641929159, "reverse_mm": 0.006653339853483013, "normal_deg": 23.078474036961456, "seconds": 21.370105099864304}

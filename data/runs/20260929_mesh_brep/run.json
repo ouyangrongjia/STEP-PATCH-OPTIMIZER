@@ -1,0 +1,1261 @@
+{
+  "status": "completed_diagnostic_experiment",
+  "can_apply": false,
+  "base_commit": "6efff7e59dd2a0d8f0e713f34019d88216c01568",
+  "branch": "experiment/mesh-brep-20260929",
+  "generated_at": "2026-09-29T10:45:38.227349+00:00",
+  "comparison": [
+    {
+      "case": "baseline_cold",
+      "mode": "height_CAD",
+      "evaluation_mesh_vertices": 8631,
+      "evaluation_mesh_triangles": 16766,
+      "reconstruction_mesh_vertices": null,
+      "faces": 5,
+      "surface_controls": 4324,
+      "scalar_variables": 3424,
+      "max_direction": 131,
+      "curve_controls": 524,
+      "pcurve_controls": 84,
+      "step_bytes": 480657,
+      "step_mesh_max_mm": 0.0031688597387073947,
+      "mesh_step_max_mm": 0.0031689864835614833,
+      "mesh_surface_max_mm": 0.011011479090270813,
+      "surface_mesh_max_mm": 0.009528473446778533,
+      "mesh_surface_normal_max_deg": 23.417001795865286,
+      "reverse_mesh_facet_normal_max_deg": 23.67449668261532,
+      "step_surface_max_mm": 0.010859487405104475,
+      "surface_step_max_mm": 0.009646739566279348,
+      "step_surface_rms_mm": 0.0008890447651971387,
+      "step_surface_normal_p95_deg": 1.895426876969185,
+      "step_surface_normal_max_deg": 20.879202442926058,
+      "internal_gap_max_mm": 1.2841052760622574e-11,
+      "internal_normal_max_deg": 0.8486579316072407,
+      "inside_knot_normal_jump_deg": 0.35122249207964285,
+      "curvature_max_per_mm": 44.57193981348871,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 26,
+      "curve_on_surface_mm": 1.0248035233014194e-11,
+      "creo_geom_checks": "1",
+      "creo_diagnostic_passed": false,
+      "confirmation_seconds": 24.519332400057465,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": null,
+      "uv_zero": null,
+      "uv_max_stretch": null,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": true,
+      "direction_budget_gate": false
+    },
+    {
+      "case": "A/inverse_xyz",
+      "mode": "XYZ_CAD_inverse",
+      "evaluation_mesh_vertices": 8631,
+      "evaluation_mesh_triangles": 16766,
+      "reconstruction_mesh_vertices": null,
+      "faces": 5,
+      "surface_controls": 4324,
+      "scalar_variables": 10272,
+      "max_direction": 131,
+      "curve_controls": 524,
+      "pcurve_controls": 84,
+      "step_bytes": 480642,
+      "step_mesh_max_mm": 0.0031688597387073947,
+      "mesh_step_max_mm": 0.0031689864835614833,
+      "mesh_surface_max_mm": 0.011560607888917685,
+      "surface_mesh_max_mm": 0.009644498245120557,
+      "mesh_surface_normal_max_deg": 33.76288411109071,
+      "reverse_mesh_facet_normal_max_deg": 26.056242706843793,
+      "step_surface_max_mm": 0.01439346684015224,
+      "surface_step_max_mm": 0.009393664567491244,
+      "step_surface_rms_mm": 0.0004617648469763757,
+      "step_surface_normal_p95_deg": 1.6822495592054774,
+      "step_surface_normal_max_deg": 35.07635002030804,
+      "internal_gap_max_mm": 1.4447780142660125e-11,
+      "internal_normal_max_deg": 16.282174699183763,
+      "inside_knot_normal_jump_deg": 6.675007075279158,
+      "curvature_max_per_mm": 17950.020706029503,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 26,
+      "curve_on_surface_mm": 1.3025667997845349e-11,
+      "creo_geom_checks": null,
+      "creo_diagnostic_passed": null,
+      "confirmation_seconds": 25.819626899901778,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": null,
+      "uv_zero": null,
+      "uv_max_stretch": null,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": false,
+      "direction_budget_gate": false
+    },
+    {
+      "case": "A/mesh_uv_xyz",
+      "mode": "XYZ_CAD_mesh_UV",
+      "evaluation_mesh_vertices": 8631,
+      "evaluation_mesh_triangles": 16766,
+      "reconstruction_mesh_vertices": null,
+      "faces": 5,
+      "surface_controls": 4324,
+      "scalar_variables": 10272,
+      "max_direction": 131,
+      "curve_controls": 524,
+      "pcurve_controls": 84,
+      "step_bytes": 480550,
+      "step_mesh_max_mm": 0.0031688597387073947,
+      "mesh_step_max_mm": 0.0031689864835614833,
+      "mesh_surface_max_mm": 0.01162582828901468,
+      "surface_mesh_max_mm": 0.015685812668599298,
+      "mesh_surface_normal_max_deg": 33.34459317922845,
+      "reverse_mesh_facet_normal_max_deg": 34.58752682429895,
+      "step_surface_max_mm": 0.014308368410208952,
+      "surface_step_max_mm": 0.01530810152468831,
+      "step_surface_rms_mm": 0.0004859293382800414,
+      "step_surface_normal_p95_deg": 1.7840970103003255,
+      "step_surface_normal_max_deg": 34.61285519871919,
+      "internal_gap_max_mm": 1.260691449421509e-11,
+      "internal_normal_max_deg": 28.34889440691338,
+      "inside_knot_normal_jump_deg": 9.987549093208619,
+      "curvature_max_per_mm": 27314.25864422611,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 26,
+      "curve_on_surface_mm": 1.1672390374522661e-11,
+      "creo_geom_checks": "1",
+      "creo_diagnostic_passed": false,
+      "confirmation_seconds": 26.5221818999853,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": null,
+      "uv_zero": null,
+      "uv_max_stretch": null,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": false,
+      "direction_budget_gate": false
+    },
+    {
+      "case": "B_coarse_29_global",
+      "mode": "mesh_only",
+      "evaluation_mesh_vertices": 8631,
+      "evaluation_mesh_triangles": 16766,
+      "reconstruction_mesh_vertices": 8631,
+      "faces": 5,
+      "surface_controls": 4205,
+      "scalar_variables": 11907,
+      "max_direction": 29,
+      "curve_controls": 348,
+      "pcurve_controls": 4,
+      "step_bytes": 433533,
+      "step_mesh_max_mm": 0.0031688597387073947,
+      "mesh_step_max_mm": 0.0031689864835614833,
+      "mesh_surface_max_mm": 0.006274420495311908,
+      "surface_mesh_max_mm": 0.006688231494409124,
+      "mesh_surface_normal_max_deg": 24.966059711880927,
+      "reverse_mesh_facet_normal_max_deg": 30.779689693932514,
+      "step_surface_max_mm": 0.00639228535726957,
+      "surface_step_max_mm": 0.006876986935553902,
+      "step_surface_rms_mm": 0.0005712642548303804,
+      "step_surface_normal_p95_deg": 1.809265135695731,
+      "step_surface_normal_max_deg": 28.139793479409,
+      "internal_gap_max_mm": 3.4811155800465885e-13,
+      "internal_normal_max_deg": 7.806491313169167,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 9746.142011382433,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 4,
+      "curve_on_surface_mm": 3.4206863231013666e-13,
+      "creo_geom_checks": "0",
+      "creo_diagnostic_passed": true,
+      "confirmation_seconds": 25.022167899878696,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 11.597584959693446,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": false,
+      "direction_budget_gate": false
+    },
+    {
+      "case": "B_coarse_25",
+      "mode": "mesh_only",
+      "evaluation_mesh_vertices": 8631,
+      "evaluation_mesh_triangles": 16766,
+      "reconstruction_mesh_vertices": 8631,
+      "faces": 5,
+      "surface_controls": 3125,
+      "scalar_variables": 8763,
+      "max_direction": 25,
+      "curve_controls": 300,
+      "pcurve_controls": 4,
+      "step_bytes": 330061,
+      "step_mesh_max_mm": 0.0031688597387073947,
+      "mesh_step_max_mm": 0.0031689864835614833,
+      "mesh_surface_max_mm": 0.008098180666758582,
+      "surface_mesh_max_mm": 0.006245366747161374,
+      "mesh_surface_normal_max_deg": 25.709941110729595,
+      "reverse_mesh_facet_normal_max_deg": 26.196948129018573,
+      "step_surface_max_mm": 0.008099136435073767,
+      "surface_step_max_mm": 0.006305375835556757,
+      "step_surface_rms_mm": 0.0005903534582429783,
+      "step_surface_normal_p95_deg": 1.7957273127235198,
+      "step_surface_normal_max_deg": 26.284568166053074,
+      "internal_gap_max_mm": 3.300249194561748e-13,
+      "internal_normal_max_deg": 9.39025671612104,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 722.0576493078818,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 4,
+      "curve_on_surface_mm": 3.3329302007333127e-13,
+      "creo_geom_checks": "0",
+      "creo_diagnostic_passed": true,
+      "confirmation_seconds": 23.215854899957776,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 11.597584959693446,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": false,
+      "direction_budget_gate": true
+    },
+    {
+      "case": "B_fine_25",
+      "mode": "mesh_only",
+      "evaluation_mesh_vertices": 10730,
+      "evaluation_mesh_triangles": 20936,
+      "reconstruction_mesh_vertices": 10730,
+      "faces": 5,
+      "surface_controls": 3125,
+      "scalar_variables": 8763,
+      "max_direction": 25,
+      "curve_controls": 300,
+      "pcurve_controls": 4,
+      "step_bytes": 329996,
+      "step_mesh_max_mm": 0.001111297429082443,
+      "mesh_step_max_mm": 0.0011366196401294724,
+      "mesh_surface_max_mm": 0.007149332641929159,
+      "surface_mesh_max_mm": 0.006653339853483013,
+      "mesh_surface_normal_max_deg": 23.078474036961456,
+      "reverse_mesh_facet_normal_max_deg": 25.89920731420169,
+      "step_surface_max_mm": 0.008069407189424341,
+      "surface_step_max_mm": 0.006702664743623346,
+      "step_surface_rms_mm": 0.00045764479551640616,
+      "step_surface_normal_p95_deg": 1.6006994159348475,
+      "step_surface_normal_max_deg": 24.7593337128386,
+      "internal_gap_max_mm": 3.3090338331346405e-13,
+      "internal_normal_max_deg": 9.386241417150702,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 23.779396536276355,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 4,
+      "curve_on_surface_mm": 3.3090338331346405e-13,
+      "creo_geom_checks": "0",
+      "creo_diagnostic_passed": true,
+      "confirmation_seconds": 21.370105099864304,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 11.961279645705845,
+      "distance_gate": true,
+      "normal_gate": false,
+      "internal_normal_gate": false,
+      "direction_budget_gate": true
+    },
+    {
+      "case": "B_closed32_13_global",
+      "mode": "mesh_only_fixture",
+      "evaluation_mesh_vertices": 6146,
+      "evaluation_mesh_triangles": 12288,
+      "reconstruction_mesh_vertices": 6146,
+      "faces": 6,
+      "surface_controls": 1014,
+      "scalar_variables": 2574,
+      "max_direction": 13,
+      "curve_controls": 156,
+      "pcurve_controls": 12,
+      "step_bytes": 119484,
+      "step_mesh_max_mm": null,
+      "mesh_step_max_mm": null,
+      "mesh_surface_max_mm": 0.0013947519863634224,
+      "surface_mesh_max_mm": 0.0013102590788648654,
+      "mesh_surface_normal_max_deg": 0.7767751810361125,
+      "reverse_mesh_facet_normal_max_deg": 3.504333700813826,
+      "step_surface_max_mm": null,
+      "surface_step_max_mm": null,
+      "step_surface_rms_mm": null,
+      "step_surface_normal_p95_deg": null,
+      "step_surface_normal_max_deg": null,
+      "internal_gap_max_mm": 6.286500016609089e-16,
+      "internal_normal_max_deg": 0.7678925314135306,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 0.9478586877161328,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 1,
+      "free_edges": 0,
+      "curve_on_surface_mm": 8.005932084973442e-16,
+      "creo_geom_checks": null,
+      "creo_diagnostic_passed": null,
+      "confirmation_seconds": 4.980474000098184,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 2.038437551209948,
+      "distance_gate": true,
+      "normal_gate": true,
+      "internal_normal_gate": true,
+      "direction_budget_gate": true
+    },
+    {
+      "case": "B_closed64_13",
+      "mode": "mesh_only_fixture",
+      "evaluation_mesh_vertices": 24578,
+      "evaluation_mesh_triangles": 49152,
+      "reconstruction_mesh_vertices": 24578,
+      "faces": 6,
+      "surface_controls": 1014,
+      "scalar_variables": 2574,
+      "max_direction": 13,
+      "curve_controls": 156,
+      "pcurve_controls": 12,
+      "step_bytes": 119524,
+      "step_mesh_max_mm": null,
+      "mesh_step_max_mm": null,
+      "mesh_surface_max_mm": 0.00040582881999573836,
+      "surface_mesh_max_mm": 0.00041742062695620846,
+      "mesh_surface_normal_max_deg": 0.3954350588129196,
+      "reverse_mesh_facet_normal_max_deg": 1.7290662851353935,
+      "step_surface_max_mm": null,
+      "surface_step_max_mm": null,
+      "step_surface_rms_mm": null,
+      "step_surface_normal_p95_deg": null,
+      "step_surface_normal_max_deg": null,
+      "internal_gap_max_mm": 6.304854800243424e-16,
+      "internal_normal_max_deg": 0.36101879380031204,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 0.9477184307685129,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 1,
+      "free_edges": 0,
+      "curve_on_surface_mm": 7.108895957933346e-16,
+      "creo_geom_checks": "0",
+      "creo_diagnostic_passed": true,
+      "confirmation_seconds": 4.088923200033605,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 2.0426688786452623,
+      "distance_gate": true,
+      "normal_gate": true,
+      "internal_normal_gate": true,
+      "direction_budget_gate": true
+    },
+    {
+      "case": "B_wrapped32_17",
+      "mode": "mesh_only_fixture",
+      "evaluation_mesh_vertices": 1089,
+      "evaluation_mesh_triangles": 2048,
+      "reconstruction_mesh_vertices": 1089,
+      "faces": 1,
+      "surface_controls": 289,
+      "scalar_variables": 855,
+      "max_direction": 17,
+      "curve_controls": 68,
+      "pcurve_controls": 0,
+      "step_bytes": 36433,
+      "step_mesh_max_mm": null,
+      "mesh_step_max_mm": null,
+      "mesh_surface_max_mm": 0.004184107550690918,
+      "surface_mesh_max_mm": 0.004064386939875993,
+      "mesh_surface_normal_max_deg": 2.864099895168613,
+      "reverse_mesh_facet_normal_max_deg": 4.605240514883079,
+      "step_surface_max_mm": null,
+      "surface_step_max_mm": null,
+      "step_surface_rms_mm": null,
+      "step_surface_normal_p95_deg": null,
+      "step_surface_normal_max_deg": null,
+      "internal_gap_max_mm": null,
+      "internal_normal_max_deg": null,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 0.3701417276995423,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 4,
+      "curve_on_surface_mm": 0.0,
+      "creo_geom_checks": null,
+      "creo_diagnostic_passed": null,
+      "confirmation_seconds": 2.3496809999924153,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 3.0030051316046618,
+      "distance_gate": true,
+      "normal_gate": true,
+      "internal_normal_gate": null,
+      "direction_budget_gate": true
+    },
+    {
+      "case": "B_wrapped64_17",
+      "mode": "mesh_only_fixture",
+      "evaluation_mesh_vertices": 4225,
+      "evaluation_mesh_triangles": 8192,
+      "reconstruction_mesh_vertices": 4225,
+      "faces": 1,
+      "surface_controls": 289,
+      "scalar_variables": 855,
+      "max_direction": 17,
+      "curve_controls": 68,
+      "pcurve_controls": 0,
+      "step_bytes": 36421,
+      "step_mesh_max_mm": null,
+      "mesh_step_max_mm": null,
+      "mesh_surface_max_mm": 0.001108338948350713,
+      "surface_mesh_max_mm": 0.0010258794575193381,
+      "mesh_surface_normal_max_deg": 1.895900373941156,
+      "reverse_mesh_facet_normal_max_deg": 2.3508993986340854,
+      "step_surface_max_mm": null,
+      "surface_step_max_mm": null,
+      "step_surface_rms_mm": null,
+      "step_surface_normal_p95_deg": null,
+      "step_surface_normal_max_deg": null,
+      "internal_gap_max_mm": null,
+      "internal_normal_max_deg": null,
+      "inside_knot_normal_jump_deg": 0.0,
+      "curvature_max_per_mm": 0.3576596909147619,
+      "sampled_singular_count": 0,
+      "brep_valid": true,
+      "local_solids": 0,
+      "free_edges": 4,
+      "curve_on_surface_mm": 0.0,
+      "creo_geom_checks": "0",
+      "creo_diagnostic_passed": true,
+      "confirmation_seconds": 2.3980584999080747,
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "uv_flipped": 0,
+      "uv_zero": 0,
+      "uv_max_stretch": 3.0145826797403927,
+      "distance_gate": true,
+      "normal_gate": true,
+      "internal_normal_gate": null,
+      "direction_budget_gate": true
+    }
+  ],
+  "stage_timings": [
+    {
+      "case": "A/inverse_xyz",
+      "shared_layout_read": 0.7127873999997973,
+      "mapping": 28.858171799918637,
+      "matrix_assembly": 0.33361049997620285,
+      "solve": 0.5503754001110792,
+      "brep_io_checks": 0.25734529993496835,
+      "independent_confirmation": 25.819626899901778,
+      "creo": null
+    },
+    {
+      "case": "A/mesh_uv_xyz",
+      "shared_layout_read": 0.7127873999997973,
+      "mapping": 2.838704099878669,
+      "matrix_assembly": 0.35911779990419745,
+      "solve": 0.40920750005170703,
+      "brep_io_checks": 0.2593067002017051,
+      "independent_confirmation": 26.5221818999853,
+      "creo": 73.130455
+    },
+    {
+      "case": "B_coarse_29_global",
+      "stl_read_index_audit": 0.056663700146600604,
+      "uv_solve": 0.09327890002168715,
+      "correspondence": 0.014805400045588613,
+      "matrix_assembly": 0.7405430001672357,
+      "solve": 1.245517399860546,
+      "brep_construct": 0.012546499958261847,
+      "step_write": 0.021345500135794282,
+      "step_read": 0.05038510006852448,
+      "cad_checks": 0.03207670012488961,
+      "bookkeeping": 0.05484399967826903,
+      "wall": 2.3220062002073973,
+      "generation": 1.9966678000055254,
+      "independent_confirmation": 25.022167899878696,
+      "creo": 73.407604
+    },
+    {
+      "case": "B_coarse_25",
+      "stl_read_index_audit": 0.0571552999317646,
+      "uv_solve": 0.11589409993030131,
+      "correspondence": 0.01175840012729168,
+      "matrix_assembly": 0.6644582999870181,
+      "solve": 0.5999791999347508,
+      "brep_construct": 0.01033560000360012,
+      "step_write": 0.014848800143226981,
+      "step_read": 0.050827099941670895,
+      "cad_checks": 0.03587240003980696,
+      "bookkeeping": 0.040445399936288595,
+      "wall": 1.60157459997572,
+      "generation": 1.9966678000055254,
+      "independent_confirmation": 23.215854899957776,
+      "creo": 63.072361
+    },
+    {
+      "case": "B_fine_25",
+      "stl_read_index_audit": 0.1118041998706758,
+      "uv_solve": 0.11969050019979477,
+      "correspondence": 0.012597399996593595,
+      "matrix_assembly": 0.663185200188309,
+      "solve": 0.5983045999892056,
+      "brep_construct": 0.011086999904364347,
+      "step_write": 0.015488599892705679,
+      "step_read": 0.04475340014323592,
+      "cad_checks": 0.03176349983550608,
+      "bookkeeping": 0.04430089984089136,
+      "wall": 1.652975299861282,
+      "generation": 2.5275779999792576,
+      "independent_confirmation": 21.370105099864304,
+      "creo": 68.106424
+    },
+    {
+      "case": "B_closed32_13_global",
+      "stl_read_index_audit": 0.04643480014055967,
+      "uv_solve": 0.06855960004031658,
+      "correspondence": 0.010186900151893497,
+      "matrix_assembly": 0.6575908998493105,
+      "solve": 0.11213170015253127,
+      "brep_construct": 0.010171700036153197,
+      "step_write": 0.007613099878653884,
+      "step_read": 0.02807640004903078,
+      "cad_checks": 0.03688300005160272,
+      "bookkeeping": 0.038136399583891034,
+      "wall": 1.0157844999339432,
+      "generation": 0.09315090021118522,
+      "independent_confirmation": 4.980474000098184,
+      "creo": null
+    },
+    {
+      "case": "B_closed64_13",
+      "stl_read_index_audit": 0.217115200124681,
+      "uv_solve": 0.2835093999747187,
+      "correspondence": 0.013966400176286697,
+      "matrix_assembly": 0.5682220000308007,
+      "solve": 0.11540059978142381,
+      "brep_construct": 0.009189100004732609,
+      "step_write": 0.008690800052136183,
+      "step_read": 0.028847399866208434,
+      "cad_checks": 0.037609999999403954,
+      "bookkeeping": 0.0706576001830399,
+      "wall": 1.353208500193432,
+      "generation": 0.34190599992871284,
+      "independent_confirmation": 4.088923200033605,
+      "creo": 63.114775
+    },
+    {
+      "case": "B_wrapped32_17",
+      "stl_read_index_audit": 0.025516699999570847,
+      "uv_solve": 0.011471900157630444,
+      "correspondence": 0.007904099998995662,
+      "matrix_assembly": 0.744996199849993,
+      "solve": 0.009671000065281987,
+      "brep_construct": 0.001868200022727251,
+      "step_write": 0.0045622000470757484,
+      "step_read": 0.016089400043711066,
+      "cad_checks": 0.00665690004825592,
+      "bookkeeping": 0.015828099800273776,
+      "wall": 0.8445647000335157,
+      "generation": 0.04312480008229613,
+      "independent_confirmation": 2.3496809999924153,
+      "creo": null
+    },
+    {
+      "case": "B_wrapped64_17",
+      "stl_read_index_audit": 0.05541779985651374,
+      "uv_solve": 0.04518269980326295,
+      "correspondence": 0.00788960000500083,
+      "matrix_assembly": 0.8027338001411408,
+      "solve": 0.009325099876150489,
+      "brep_construct": 0.0017691999673843384,
+      "step_write": 0.005091800121590495,
+      "step_read": 0.02156920009292662,
+      "cad_checks": 0.006361099891364574,
+      "bookkeeping": 0.018241700250655413,
+      "wall": 0.9735820000059903,
+      "generation": 0.06793039990589023,
+      "independent_confirmation": 2.3980584999080747,
+      "creo": 73.086392
+    },
+    {
+      "case": "baseline_cold",
+      "step_read": 27.746899699792266,
+      "step_write": 5.1209073998034,
+      "topology_check": 1.1121138997841626,
+      "sampling_and_reference_preparation": 2.256951699964702,
+      "layout": 0.5277619999833405,
+      "matrix_assembly": 0.5456095999106765,
+      "brep_construct": 1.8271170002408326,
+      "parameterization": 31.34161529992707,
+      "solve": 0.11152189993299544,
+      "geometry_check": 0.7363040999043733,
+      "fit_bookkeeping": 0.11650790087878704,
+      "wall": 71.5249826000072
+    },
+    {
+      "case": "baseline_warm",
+      "step_read": 26.059286499861628,
+      "step_write": 4.571058199508116,
+      "topology_check": 1.0808505997993052,
+      "sampling_and_reference_preparation": 1.935811600415036,
+      "layout": 0.41763620008714497,
+      "matrix_assembly": 0.4659269996918738,
+      "brep_construct": 1.789844100130722,
+      "parameterization": 28.788151300046593,
+      "solve": 0.10758719989098608,
+      "geometry_check": 0.6664094000589103,
+      "fit_bookkeeping": 0.10192630020901561,
+      "wall": 66.00589059991762
+    }
+  ],
+  "all_B_executions": [
+    {
+      "case": "B_closed32_13",
+      "wall_seconds": 1.028391300002113,
+      "controls": 13,
+      "normal_policy": "chart"
+    },
+    {
+      "case": "B_closed32_13_global",
+      "wall_seconds": 1.0157844999339432,
+      "controls": 13,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_closed64_13",
+      "wall_seconds": 1.353208500193432,
+      "controls": 13,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_coarse_17",
+      "wall_seconds": 1.0662215000484139,
+      "controls": 17,
+      "normal_policy": "chart"
+    },
+    {
+      "case": "B_coarse_25",
+      "wall_seconds": 1.60157459997572,
+      "controls": 25,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_coarse_29",
+      "wall_seconds": 1.9423070999328047,
+      "controls": 29,
+      "normal_policy": "chart"
+    },
+    {
+      "case": "B_coarse_29_global",
+      "wall_seconds": 2.3220062002073973,
+      "controls": 29,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_fine_25",
+      "wall_seconds": 1.652975299861282,
+      "controls": 25,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_wrapped32_17",
+      "wall_seconds": 0.8445647000335157,
+      "controls": 17,
+      "normal_policy": "global"
+    },
+    {
+      "case": "B_wrapped64_17",
+      "wall_seconds": 0.9735820000059903,
+      "controls": 17,
+      "normal_policy": "global"
+    }
+  ],
+  "total_B_reconstruction_seconds": 13.800615700194612,
+  "cad": {
+    "A_mesh_region": {
+      "status": "ReportReady",
+      "diagnostic_passed": false,
+      "checks": [
+        {
+          "geom_checks": "1",
+          "short_edges": "2",
+          "absolute_accuracy": "0.000889881827",
+          "error_count": 2,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\A_mesh_region\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 73.130455
+    },
+    "baseline_region": {
+      "status": "ReportReady",
+      "diagnostic_passed": false,
+      "checks": [
+        {
+          "geom_checks": "1",
+          "short_edges": "2",
+          "absolute_accuracy": "0.000889870544",
+          "error_count": 2,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\baseline_region\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 68.522656
+    },
+    "B_closed64_13": {
+      "status": "ReportReady",
+      "diagnostic_passed": true,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "0",
+          "absolute_accuracy": "0.000618431796",
+          "error_count": 0,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\B_closed64_13\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 63.114775
+    },
+    "B_coarse_25": {
+      "status": "ReportReady",
+      "diagnostic_passed": true,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "0",
+          "absolute_accuracy": "0.000889761672",
+          "error_count": 0,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\B_coarse_25\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 63.072361
+    },
+    "B_coarse_29_global": {
+      "status": "ReportReady",
+      "diagnostic_passed": true,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "0",
+          "absolute_accuracy": "0.000889625993",
+          "error_count": 0,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\B_coarse_29_global\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 73.407604
+    },
+    "B_fine_25": {
+      "status": "ReportReady",
+      "diagnostic_passed": true,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "0",
+          "absolute_accuracy": "0.000889763107",
+          "error_count": 0,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\B_fine_25\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 68.106424
+    },
+    "B_wrapped64_17": {
+      "status": "ReportReady",
+      "diagnostic_passed": true,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "0",
+          "absolute_accuracy": "0.000590648823",
+          "error_count": 0,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\B_wrapped64_17\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 73.086392
+    },
+    "original_region": {
+      "status": "ReportReady",
+      "diagnostic_passed": false,
+      "checks": [
+        {
+          "geom_checks": "0",
+          "short_edges": "14",
+          "absolute_accuracy": "0.000889885735",
+          "error_count": 1,
+          "warning_count": 3,
+          "xml_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\creo\\original_region\\modelcheck\\component_0\\candidate.p.xml"
+        }
+      ],
+      "seconds": 80.6682
+    }
+  },
+  "evaluation_executions": [
+    {
+      "path": "A\\inverse_xyz\\confirmation.json",
+      "seconds": 36.322799999965355
+    },
+    {
+      "path": "A\\inverse_xyz\\confirmation_v2.json",
+      "seconds": 25.819626899901778
+    },
+    {
+      "path": "A\\inverse_xyz\\development.json",
+      "seconds": 4.9437174999620765
+    },
+    {
+      "path": "A\\mesh_uv_xyz\\confirmation.json",
+      "seconds": 37.14126219996251
+    },
+    {
+      "path": "A\\mesh_uv_xyz\\confirmation_v2.json",
+      "seconds": 26.5221818999853
+    },
+    {
+      "path": "A\\mesh_uv_xyz\\development.json",
+      "seconds": 4.7824631000403315
+    },
+    {
+      "path": "baseline_cold\\confirmation.json",
+      "seconds": 27.415278099942952
+    },
+    {
+      "path": "baseline_cold\\confirmation_v2.json",
+      "seconds": 24.519332400057465
+    },
+    {
+      "path": "B_closed32_13\\development.json",
+      "seconds": 2.6384819000959396
+    },
+    {
+      "path": "B_closed32_13_global\\confirmation_v2.json",
+      "seconds": 4.980474000098184
+    },
+    {
+      "path": "B_closed64_13\\confirmation.json",
+      "seconds": 4.936579399975017
+    },
+    {
+      "path": "B_closed64_13\\confirmation_v2.json",
+      "seconds": 4.088923200033605
+    },
+    {
+      "path": "B_coarse_17\\development.json",
+      "seconds": 3.1392820000182837
+    },
+    {
+      "path": "B_coarse_25\\confirmation.json",
+      "seconds": 27.78606759989634
+    },
+    {
+      "path": "B_coarse_25\\confirmation_v2.json",
+      "seconds": 23.215854899957776
+    },
+    {
+      "path": "B_coarse_25\\development.json",
+      "seconds": 3.458171700127423
+    },
+    {
+      "path": "B_coarse_29\\development.json",
+      "seconds": 3.553457099944353
+    },
+    {
+      "path": "B_coarse_29_global\\confirmation.json",
+      "seconds": 33.6843081000261
+    },
+    {
+      "path": "B_coarse_29_global\\confirmation_v2.json",
+      "seconds": 25.022167899878696
+    },
+    {
+      "path": "B_coarse_29_global\\development.json",
+      "seconds": 3.613831200171262
+    },
+    {
+      "path": "B_fine_25\\confirmation.json",
+      "seconds": 29.439762300113216
+    },
+    {
+      "path": "B_fine_25\\confirmation_v2.json",
+      "seconds": 21.370105099864304
+    },
+    {
+      "path": "B_wrapped32_17\\confirmation.json",
+      "seconds": 3.1407292000949383
+    },
+    {
+      "path": "B_wrapped32_17\\confirmation_v2.json",
+      "seconds": 2.3496809999924153
+    },
+    {
+      "path": "B_wrapped32_17\\development.json",
+      "seconds": 1.5514209000393748
+    },
+    {
+      "path": "B_wrapped64_17\\confirmation.json",
+      "seconds": 3.21608699997887
+    },
+    {
+      "path": "B_wrapped64_17\\confirmation_v2.json",
+      "seconds": 2.3980584999080747
+    }
+  ],
+  "total_evaluation_seconds": 391.05010510003194,
+  "total_creo_seconds": 563.1088669999999,
+  "baseline_replay": [
+    {
+      "max_control_point_change_mm": 0.0,
+      "knots_same": true
+    },
+    {
+      "max_control_point_change_mm": 0.0,
+      "knots_same": true
+    },
+    {
+      "max_control_point_change_mm": 0.0,
+      "knots_same": true
+    },
+    {
+      "max_control_point_change_mm": 0.0,
+      "knots_same": true
+    },
+    {
+      "max_control_point_change_mm": 0.0,
+      "knots_same": true
+    }
+  ],
+  "input_generation_profile": {
+    "stages_seconds": {
+      "full_step_read": 8.27725199982524,
+      "region_extract": 0.004946199944242835,
+      "region_step_write": 0.06662909989245236,
+      "region_step_read": 0.23837770009413362,
+      "mesh_and_layout": 1.7809886001050472
+    },
+    "total_seconds": 10.676742000039667,
+    "note": "Full original CAD import and region extraction included. No reconstruction or geometry tuning."
+  },
+  "isolation": {
+    "isolation_candidate": {
+      "probes": [
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_配件_Clay.stp",
+          "python_denied": true,
+          "winerror": null,
+          "native_step_reader_denied": true
+        },
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260921_candidate179_continuity\\aligned_inner_cubic\\patch_faces.step",
+          "python_denied": true,
+          "winerror": null,
+          "native_step_reader_denied": true
+        },
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\reference.npz",
+          "python_denied": true,
+          "winerror": null
+        },
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\A\\mesh_correspondence.npz",
+          "python_denied": true,
+          "winerror": null
+        }
+      ],
+      "opened_data_files": [
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\isolation_candidate\\input\\input.stl",
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\isolation_candidate\\input\\layout.json"
+      ],
+      "denied_unexpected_reads": [],
+      "locked_files": 1593,
+      "reconstruction_seconds": 1.5357810000423342,
+      "completed": true,
+      "limitation": "No adversarial native-code sandbox claim; audited trusted backend plus actual OS sharing-denial of CAD/cache files."
+    },
+    "isolation_closed": {
+      "probes": [
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_配件_Clay.stp",
+          "python_denied": true,
+          "winerror": null,
+          "native_step_reader_denied": true
+        },
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260921_candidate179_continuity\\aligned_inner_cubic\\patch_faces.step",
+          "python_denied": true,
+          "winerror": null,
+          "native_step_reader_denied": true
+        },
+        {
+          "path": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\reference.npz",
+          "python_denied": true,
+          "winerror": null
+        }
+      ],
+      "opened_data_files": [
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\isolation_closed\\input\\input.stl",
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\isolation_closed\\input\\layout.json"
+      ],
+      "denied_unexpected_reads": [],
+      "locked_files": 727,
+      "reconstruction_seconds": 1.2816222000401467,
+      "completed": true,
+      "limitation": "No adversarial native-code sandbox claim; audited trusted backend plus actual OS sharing-denial of CAD/cache files."
+    }
+  },
+  "A_mapping": {
+    "mesh_preparation_seconds": 1.60841350001283,
+    "uv_solve_seconds": 0.2055891000200063,
+    "correspondence_seconds": 1.0247014998458326,
+    "patches": [
+      {
+        "patch": 0,
+        "topology": {
+          "vertices": 1211,
+          "triangles": 2099,
+          "edges": 3309,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 321,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 4.43821201238938
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 2.8808186068616792,
+            "p50": 3.034179792983876,
+            "p95": 3.3560864592110593,
+            "max": 3.5418726202507504,
+            "min": 1.2094400311690447
+          },
+          "area_scale": {
+            "rms": 0.19618907151946036,
+            "p50": 0.1643357265827815,
+            "p95": 0.3486314803134036,
+            "max": 0.38900335930540647,
+            "min": 0.07116594588441728
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 7.609972908100815e-12,
+        "linear_residual": 9.094947017729282e-13
+      },
+      {
+        "patch": 1,
+        "topology": {
+          "vertices": 1109,
+          "triangles": 1977,
+          "edges": 3085,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 239,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 3.185088695171483
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 1.7874953244510159,
+            "p50": 1.7809139233013729,
+            "p95": 2.115426856932013,
+            "max": 2.611708210812314,
+            "min": 1.02716577849133
+          },
+          "area_scale": {
+            "rms": 0.2929582665570272,
+            "p50": 0.25693733786928813,
+            "p95": 0.45681003847845103,
+            "max": 0.5236245966187099,
+            "min": 0.19170034169680836
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 5.448210813800136e-12,
+        "linear_residual": 4.547473508864641e-13
+      },
+      {
+        "patch": 2,
+        "topology": {
+          "vertices": 1688,
+          "triangles": 3002,
+          "edges": 4689,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 372,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 5.758566873328702
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 4.4492898961761576,
+            "p50": 4.672567651889284,
+            "p95": 5.864249371983368,
+            "max": 6.1020861656589656,
+            "min": 1.284543748557691
+          },
+          "area_scale": {
+            "rms": 0.1650285201791821,
+            "p50": 0.14393399840726837,
+            "p95": 0.28850031488375844,
+            "max": 0.4063468354718093,
+            "min": 0.03431784618878993
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+        "linear_residual": 6.821210263296962e-13
+      },
+      {
+        "patch": 3,
+        "topology": {
+          "vertices": 4110,
+          "triangles": 7818,
+          "edges": 11927,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 400,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 4.870885268420044
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 4.798541674437388,
+            "p50": 4.87962724320114,
+            "p95": 5.547573413648275,
+            "max": 5.788471809452364,
+            "min": 1.6998856420300597
+          },
+          "area_scale": {
+            "rms": 0.16271562499083864,
+            "p50": 0.15003311479448322,
+            "p95": 0.2626101177043548,
+            "max": 0.35284158601323373,
+            "min": 0.07618539229776365
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+        "linear_residual": 2.0445867221496883e-12
+      },
+      {
+        "patch": 4,
+        "topology": {
+          "vertices": 1118,
+          "triangles": 2002,
+          "edges": 3119,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 232,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 3.98950134829105
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 1.7139847613527661,
+            "p50": 1.6882660225926842,
+            "p95": 2.102888088813781,
+            "max": 2.576604373009652,
+            "min": 1.1292314412710998
+          },
+          "area_scale": {
+            "rms": 0.24031741505688278,
+            "p50": 0.22684426507189184,
+            "p95": 0.3265543830930996,
+            "max": 0.40736059978330186,
+            "min": 0.18073816087581104
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 1.4929893163484904e-11,
+        "linear_residual": 1.3820056210533949e-12
+      }
+    ],
+    "exact_point_to_discrete_mesh_mm": {
+      "rms": 0.0004481904698441913,
+      "p50": 0.00012563898169636511,
+      "p95": 0.0010046180441115053,
+      "max": 0.0030072471669873395,
+      "min": 4.04879855147298e-09
+    },
+    "vertices": 8697,
+    "triangles": 16898,
+    "truth": "Exact original CAD samples; their nearest discrete triangle barycentrics supply UV only. XYZ/normal truth is not silently replaced.",
+    "boundary": "Mesh boundary vertices projected onto flattened seed boundary curves; full original curve parameter, not arclength. Original affine curve-to-pcurve mapping retained."
+  },
+  "A_interfaces": {
+    "inverse_xyz": {
+      "original_boundary_max_mm": 8.126431830867263e-12,
+      "requested_g1_max_normal_degrees": 46.36101451115191
+    },
+    "mesh_uv_xyz": {
+      "original_boundary_max_mm": 8.126431830867263e-12,
+      "requested_g1_max_normal_degrees": 43.33850717166256
+    }
+  },
+  "tests": {
+    "mesh_backend": 5,
+    "retained_numerical": 8,
+    "status": "passed",
+    "cpp_product_tests": "not applicable; no C++ product changes"
+  },
+  "caveats": [
+    "Maxima are sampled, not continuous bounds.",
+    "Closed fixtures have no source CAD; STEP-to-source-CAD metrics are N/A.",
+    "B requires supplied partitions/corners/chains and all internal seams declared smooth.",
+    "No algorithm cache is used; warm reruns do not claim physical disk-cache cold measurements.",
+    "Legacy evaluator boundary errors corrected without modifying reconstruction; initial confirmations retained.",
+    "Original outer-edge identity does not apply to B; new shared boundaries use exact common coefficients.",
+    "Same-face global self-intersection is not certified; sampled regularity and pairwise OCCT checks are reported.",
+    "CAD regional import checks do not certify local replacement into the original whole part."
+  ]
+}

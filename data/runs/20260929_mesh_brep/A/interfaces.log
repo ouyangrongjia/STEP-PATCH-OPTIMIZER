@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\extra_checks.py", line 109, in <module>
+    main()
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\extra_checks.py", line 96, in main
+    a_interfaces(a.a_run); return
+    ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\extra_checks.py", line 80, in a_interfaces
+    source = read_step(input_audit['source']); selected = set(input_audit['selected_face_ids'])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\candidate179_research\geometry.py", line 33, in read_step
+    raise RuntimeError(f"Cannot read {path}")
+RuntimeError: Cannot read D:\pyProject\step-patch-optimizer\data\stp\03_配件_Clay.stp

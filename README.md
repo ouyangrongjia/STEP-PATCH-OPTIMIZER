@@ -219,6 +219,10 @@ scripts/test.ps1 会打印本次 data/runs 目录。优先检查其中 logs/buil
 
 按跨内核失败处理。检查边界距离、法向、缝边、SameParameter、支撑曲面包络和 STEP 往返证据，不得只保留内部内核结果。
 
+## 网格重建实验
+
+给定分区的 STL→B-Rep 研究入口、输入合同和复跑命令见 [tools/mesh_brep](tools/mesh_brep/README.md)。这是独立诊断后端；当前实测能力与限制由 [实现状态](docs/implementation_status.md) 维护。
+
 ## 许可证
 
 许可证和第三方依赖声明以仓库实际文件及依赖清单为准。

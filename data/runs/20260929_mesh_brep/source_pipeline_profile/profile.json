@@ -1,0 +1,11 @@
+{
+  "stages_seconds": {
+    "full_step_read": 8.27725199982524,
+    "region_extract": 0.004946199944242835,
+    "region_step_write": 0.06662909989245236,
+    "region_step_read": 0.23837770009413362,
+    "mesh_and_layout": 1.7809886001050472
+  },
+  "total_seconds": 10.676742000039667,
+  "note": "Full original CAD import and region extraction included. No reconstruction or geometry tuning."
+}

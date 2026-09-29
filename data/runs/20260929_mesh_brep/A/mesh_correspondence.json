@@ -1,0 +1,198 @@
+{
+  "mesh_preparation_seconds": 1.60841350001283,
+  "uv_solve_seconds": 0.2055891000200063,
+  "correspondence_seconds": 1.0247014998458326,
+  "patches": [
+    {
+      "patch": 0,
+      "topology": {
+        "vertices": 1211,
+        "triangles": 2099,
+        "edges": 3309,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 321,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 4.43821201238938
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 2.8808186068616792,
+          "p50": 3.034179792983876,
+          "p95": 3.3560864592110593,
+          "max": 3.5418726202507504,
+          "min": 1.2094400311690447
+        },
+        "area_scale": {
+          "rms": 0.19618907151946036,
+          "p50": 0.1643357265827815,
+          "p95": 0.3486314803134036,
+          "max": 0.38900335930540647,
+          "min": 0.07116594588441728
+        }
+      },
+      "maximum_boundary_planar_projection_mm": 7.609972908100815e-12,
+      "linear_residual": 9.094947017729282e-13
+    },
+    {
+      "patch": 1,
+      "topology": {
+        "vertices": 1109,
+        "triangles": 1977,
+        "edges": 3085,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 239,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 3.185088695171483
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 1.7874953244510159,
+          "p50": 1.7809139233013729,
+          "p95": 2.115426856932013,
+          "max": 2.611708210812314,
+          "min": 1.02716577849133
+        },
+        "area_scale": {
+          "rms": 0.2929582665570272,
+          "p50": 0.25693733786928813,
+          "p95": 0.45681003847845103,
+          "max": 0.5236245966187099,
+          "min": 0.19170034169680836
+        }
+      },
+      "maximum_boundary_planar_projection_mm": 5.448210813800136e-12,
+      "linear_residual": 4.547473508864641e-13
+    },
+    {
+      "patch": 2,
+      "topology": {
+        "vertices": 1688,
+        "triangles": 3002,
+        "edges": 4689,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 372,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 5.758566873328702
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 4.4492898961761576,
+          "p50": 4.672567651889284,
+          "p95": 5.864249371983368,
+          "max": 6.1020861656589656,
+          "min": 1.284543748557691
+        },
+        "area_scale": {
+          "rms": 0.1650285201791821,
+          "p50": 0.14393399840726837,
+          "p95": 0.28850031488375844,
+          "max": 0.4063468354718093,
+          "min": 0.03431784618878993
+        }
+      },
+      "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+      "linear_residual": 6.821210263296962e-13
+    },
+    {
+      "patch": 3,
+      "topology": {
+        "vertices": 4110,
+        "triangles": 7818,
+        "edges": 11927,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 400,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 4.870885268420044
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 4.798541674437388,
+          "p50": 4.87962724320114,
+          "p95": 5.547573413648275,
+          "max": 5.788471809452364,
+          "min": 1.6998856420300597
+        },
+        "area_scale": {
+          "rms": 0.16271562499083864,
+          "p50": 0.15003311479448322,
+          "p95": 0.2626101177043548,
+          "max": 0.35284158601323373,
+          "min": 0.07618539229776365
+        }
+      },
+      "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+      "linear_residual": 2.0445867221496883e-12
+    },
+    {
+      "patch": 4,
+      "topology": {
+        "vertices": 1118,
+        "triangles": 2002,
+        "edges": 3119,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 232,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 3.98950134829105
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 1.7139847613527661,
+          "p50": 1.6882660225926842,
+          "p95": 2.102888088813781,
+          "max": 2.576604373009652,
+          "min": 1.1292314412710998
+        },
+        "area_scale": {
+          "rms": 0.24031741505688278,
+          "p50": 0.22684426507189184,
+          "p95": 0.3265543830930996,
+          "max": 0.40736059978330186,
+          "min": 0.18073816087581104
+        }
+      },
+      "maximum_boundary_planar_projection_mm": 1.4929893163484904e-11,
+      "linear_residual": 1.3820056210533949e-12
+    }
+  ],
+  "exact_point_to_discrete_mesh_mm": {
+    "rms": 0.0004481904698441913,
+    "p50": 0.00012563898169636511,
+    "p95": 0.0010046180441115053,
+    "max": 0.0030072471669873395,
+    "min": 4.04879855147298e-09
+  },
+  "vertices": 8697,
+  "triangles": 16898,
+  "truth": "Exact original CAD samples; their nearest discrete triangle barycentrics supply UV only. XYZ/normal truth is not silently replaced.",
+  "boundary": "Mesh boundary vertices projected onto flattened seed boundary curves; full original curve parameter, not arclength. Original affine curve-to-pcurve mapping retained."
+}

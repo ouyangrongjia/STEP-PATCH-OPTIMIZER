@@ -1,0 +1,28 @@
+{
+  "source": {
+    "kind": "closed",
+    "intervals": 32,
+    "provenance": "Independent mesh fixture; formulas used only by generation; no CAD caps"
+  },
+  "input_files": [
+    "input.stl",
+    "layout.json"
+  ],
+  "topology": {
+    "vertices": 6146,
+    "triangles": 12288,
+    "edges": 18432,
+    "euler": 2,
+    "components": 1,
+    "boundary_edges": 0,
+    "nonmanifold_edges": 0,
+    "inconsistent_edges": 0,
+    "degenerate_triangles": 0,
+    "area_mm2": 38.80543128372186
+  },
+  "quantization_max_mm": 1.0588734805751816e-07,
+  "collapsed_triangles_removed": 0,
+  "indexing": "Exact binary STL float32 equality; no proximity weld",
+  "prohibited_fields": "No UV, exact normals, CAD points beyond mesh vertices, curves, control points or archived map",
+  "generation_seconds": 0.09315090021118522
+}

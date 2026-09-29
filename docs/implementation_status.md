@@ -4,9 +4,13 @@
 
 ## 分支
 
-本工作树分支为 `experiment/adaptive-layout-20260927`，以 `5e6dcd3` 的五片连续性基线为基础。未成功的自适应实现已移除，保留基线及少量校验/辅助工具；主工作树的 STL 工程修改不在本次提交范围。
+本工作树分支为 `experiment/mesh-brep-20260929`，从回退提交 `6efff7e` 开展网格参数化与纯网格重建的隔离实验。主工作树的 STL 工程修改保留，未合并或推送本实验。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
+
+## 给定分区的纯网格后端
+
+`tools/mesh_brep/` 已实际运行 STL、离散布局、网格 UV、共享边界 XYZ 样条网络、STEP 的链路，并完成原 CAD/缓存不可读时的重跑。当前支持四边盘状图和声明光顺的内部接缝；结构标签仍需提供。闭合自由曲面夹具已通过 Solid、往返和本轮 Creo 检查；candidate-179 的法向及接缝仍失败，A 也未形成基线替换资格。全部结果继续为 `DiagnosticOnly/can_apply=false`。准确参数、独立确认、失败原因及分阶段耗时统一见 [本轮证据](../data/runs/20260929_mesh_brep/RUN.md)。C++ 产品与 GUI 未改变。
 
 ## 当前几何对照与保留工具
 

@@ -1,0 +1,10 @@
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : data\runs\20260929_mesh_brep\B_closed32_13_global\network.step(1454 ents)  Write  Done
+{"status": "DiagnosticOnly", "expression": {"faces": [{"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}, {"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}, {"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}, {"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}, {"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}, {"u": 13, "v": 13, "degree_u": 3, "degree_v": 3}], "actual_support_control_points": 1014, "max_direction": 13}, "topology": {"faces": 6, "edges": 12, "solids": 1, "free_edges": 0, "multiple_edges": 0, "brep_valid": true, "maximum_edge_tolerance_mm": 1e-07}, "timing_seconds": {"stl_read_index_audit": 0.04643480014055967, "uv_solve": 0.06855960004031658, "correspondence": 0.010186900151893497, "matrix_assembly": 0.6575908998493105, "solve": 0.11213170015253127, "brep_construct": 0.010171700036153197, "step_write": 0.007613099878653884, "step_read": 0.02807640004903078, "cad_checks": 0.03688300005160272, "bookkeeping": 0.038136399583891034}, "wall_seconds": 1.0157844999339432}

@@ -1,0 +1,1125 @@
+{
+  "configurations": [
+    {
+      "name": "inverse_xyz",
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "mapping_seconds": 28.858171799918637,
+      "preparation_shared_seconds": 0.7127873999997973,
+      "solver": {
+        "independent_scalar_variables": 10272,
+        "matrix_rows": 90971,
+        "matrix_nnz": 2210472,
+        "normal_weight": 0.0001,
+        "fairness": 1e-06,
+        "seam_weight": 0.01,
+        "relative_linear_residual": 1.8921940207998554e-15,
+        "weighted_residual_norm": 0.0036344532582014777,
+        "matrix_assembly_seconds": 0.33361049997620285,
+        "solve_seconds": 0.5503754001110792
+      },
+      "actual_support_control_points": 4324,
+      "cad_checks": {
+        "checks": 42,
+        "samples_per_use": 385,
+        "max_curve_on_surface_mm": 1.3025667997845349e-11,
+        "failed_001mm": 0,
+        "same_parameter_false": 0,
+        "maximum_edge_tolerance_mm": 1e-07,
+        "records": [
+          {
+            "face": 0,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.609455694815873e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.609455694815873e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.533464442539731e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.663304699805453e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.1620677592358825e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.1620677592358825e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.591302455776226e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 9.450739925613248e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.7852165294699933e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.205742401295979e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.205742401295979e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.2669628035988923e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.2669628035988923e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.1628557899130955e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 7.459314730545931e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.591302455776226e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.687277461489815e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.687277461489815e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 5.121904629685346e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.1101187871881838e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.1101187871881838e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.907665390305567e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.639694477735223e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.884712172121856e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.7763568394002505e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 9,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.940865432393258e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 10,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.1628557899130955e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.097220790814545e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.097220790814545e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.4249561143815014e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.8252410123473813e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.681724162263555e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.681724162263555e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.099644958137502e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.6199799776031026e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.7852165294699933e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 9,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0027443101403341e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 10,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.7763568394002505e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0440979476706041e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0440979476706041e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0247343034298246e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.3025667997845349e-11,
+            "tolerance_mm": 1e-07
+          }
+        ],
+        "closed_self_seams": []
+      },
+      "topology": {
+        "faces": 5,
+        "edges": 34,
+        "solids": 0,
+        "free_edges": 26,
+        "multiple_edges": 0,
+        "brep_valid": true,
+        "maximum_edge_tolerance_mm": 1e-07
+      },
+      "seams": [
+        {
+          "edge": 6,
+          "normal_degrees": {
+            "max": 4.297774120323595,
+            "rms": 0.39127348995958583,
+            "p95": 0.7457657453042055,
+            "p99": 1.3451933592607515
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 7,
+          "normal_degrees": {
+            "max": 0.3836694855656386,
+            "rms": 0.1262424240572719,
+            "p95": 0.3132095285169428,
+            "p99": 0.3730314521589197
+          },
+          "separation_mm": 1.4159028063570096e-11
+        },
+        {
+          "edge": 8,
+          "normal_degrees": {
+            "max": 16.282174699183763,
+            "rms": 1.6519161791533954,
+            "p95": 2.3222258484687077,
+            "p99": 6.755760760072451
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 13,
+          "normal_degrees": {
+            "max": 1.970497642747632,
+            "rms": 0.2354411539559411,
+            "p95": 0.44332544729655343,
+            "p99": 0.5156928094935483
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 14,
+          "normal_degrees": {
+            "max": 0.38220519222782634,
+            "rms": 0.09801373850390602,
+            "p95": 0.20368820299690454,
+            "p99": 0.3194670825523094
+          },
+          "separation_mm": 1.2392387309194001e-11
+        },
+        {
+          "edge": 23,
+          "normal_degrees": {
+            "max": 7.20692075131819,
+            "rms": 0.45203122325099093,
+            "p95": 0.37228935852009326,
+            "p99": 0.977623834720711
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 24,
+          "normal_degrees": {
+            "max": 0.8027215562084242,
+            "rms": 0.1863259684523267,
+            "p95": 0.3357833432223091,
+            "p99": 0.6629557732832896
+          },
+          "separation_mm": 1.4447780142660125e-11
+        },
+        {
+          "edge": 33,
+          "normal_degrees": {
+            "max": 0.8682913422392106,
+            "rms": 0.1848716592248543,
+            "p95": 0.33141881544573626,
+            "p99": 0.5683532106129953
+          },
+          "separation_mm": 1.2898526140666685e-11
+        }
+      ],
+      "brep_io_check_seconds": 0.25734529993496835,
+      "train_assignment_difference": 1,
+      "limitations": "Both XYZ controls change the old height-only objective, but share knots, constraints, target points, normals, fairness and shared variables with each other."
+    },
+    {
+      "name": "mesh_uv_xyz",
+      "status": "DiagnosticOnly",
+      "can_apply": false,
+      "mapping_seconds": 2.838704099878669,
+      "preparation_shared_seconds": 0.7127873999997973,
+      "solver": {
+        "independent_scalar_variables": 10272,
+        "matrix_rows": 90971,
+        "matrix_nnz": 2210220,
+        "normal_weight": 0.0001,
+        "fairness": 1e-06,
+        "seam_weight": 0.01,
+        "relative_linear_residual": 1.4426322267886801e-15,
+        "weighted_residual_norm": 0.004536131669824903,
+        "matrix_assembly_seconds": 0.35911779990419745,
+        "solve_seconds": 0.40920750005170703
+      },
+      "actual_support_control_points": 4324,
+      "cad_checks": {
+        "checks": 42,
+        "samples_per_use": 385,
+        "max_curve_on_surface_mm": 1.1672390374522661e-11,
+        "failed_001mm": 0,
+        "same_parameter_false": 0,
+        "maximum_edge_tolerance_mm": 1e-07,
+        "records": [
+          {
+            "face": 0,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.609455694815873e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.609455694815873e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.533464442539731e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.663304699805453e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.1620677592358825e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.1620677592358825e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.161031364628563e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.287261343148339e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 0,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.475552811121985e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.205742401295979e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 4.205742401295979e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.2669628035988923e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.2669628035988923e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.591302455776226e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.926521870511498e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 1,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.161031364628563e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.687277461489815e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.687277461489815e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 5.121904629685346e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.1101187871881838e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.1101187871881838e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.907665390305567e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.639694477735223e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.884712172121856e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.5987211554602254e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 9,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.1653419139542543e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 2,
+            "edge": 10,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.591302455776226e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.097220790814545e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 8.097220790814545e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 2.4249561143815014e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.8252410123473813e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 4,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.681724162263555e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 5,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 6.681724162263555e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 6,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 3.099644958137502e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 7,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.6199799776031026e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 8,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.475552811121985e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 9,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 9.816073959742632e-12,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 3,
+            "edge": 10,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.5987211554602254e-14,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 0,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0440979476706041e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 1,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.1474982501825446e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 2,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.0247861918295156e-11,
+            "tolerance_mm": 1e-07
+          },
+          {
+            "face": 4,
+            "edge": 3,
+            "same_parameter": true,
+            "same_range": true,
+            "max_curve_on_surface_mm": 1.1672390374522661e-11,
+            "tolerance_mm": 1e-07
+          }
+        ],
+        "closed_self_seams": []
+      },
+      "topology": {
+        "faces": 5,
+        "edges": 34,
+        "solids": 0,
+        "free_edges": 26,
+        "multiple_edges": 0,
+        "brep_valid": true,
+        "maximum_edge_tolerance_mm": 1e-07
+      },
+      "seams": [
+        {
+          "edge": 6,
+          "normal_degrees": {
+            "max": 4.169604640531789,
+            "rms": 0.39019110183789674,
+            "p95": 0.6778504171014671,
+            "p99": 1.5080605664549844
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 7,
+          "normal_degrees": {
+            "max": 0.35592708971886894,
+            "rms": 0.10721638346495985,
+            "p95": 0.2437443358449335,
+            "p99": 0.28670451192285945
+          },
+          "separation_mm": 1.1759672019457501e-11
+        },
+        {
+          "edge": 8,
+          "normal_degrees": {
+            "max": 28.34889440691338,
+            "rms": 2.3046718152977306,
+            "p95": 2.238106485168301,
+            "p99": 8.091926255724388
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 13,
+          "normal_degrees": {
+            "max": 1.714722067548103,
+            "rms": 0.23165017156606482,
+            "p95": 0.48128711783800643,
+            "p99": 0.5359065241103617
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 14,
+          "normal_degrees": {
+            "max": 0.3540020735874982,
+            "rms": 0.09228810252883685,
+            "p95": 0.1833360419292808,
+            "p99": 0.29676879725579747
+          },
+          "separation_mm": 1.0440979476706041e-11
+        },
+        {
+          "edge": 23,
+          "normal_degrees": {
+            "max": 6.608414306066563,
+            "rms": 0.4411211410648817,
+            "p95": 0.4539414971662973,
+            "p99": 0.9001677445116115
+          },
+          "separation_mm": 0.0
+        },
+        {
+          "edge": 24,
+          "normal_degrees": {
+            "max": 0.7573939842376607,
+            "rms": 0.16561045603691715,
+            "p95": 0.2644092408668236,
+            "p99": 0.5709438539962376
+          },
+          "separation_mm": 1.2468874755833292e-11
+        },
+        {
+          "edge": 33,
+          "normal_degrees": {
+            "max": 0.4037372420688271,
+            "rms": 0.14200388292981891,
+            "p95": 0.2524037392920152,
+            "p99": 0.3143488275328712
+          },
+          "separation_mm": 1.260691449421509e-11
+        }
+      ],
+      "brep_io_check_seconds": 0.2593067002017051,
+      "train_assignment_difference": 1,
+      "limitations": "Both XYZ controls change the old height-only objective, but share knots, constraints, target points, normals, fairness and shared variables with each other."
+    }
+  ],
+  "mesh_mapping": {
+    "mesh_preparation_seconds": 1.60841350001283,
+    "uv_solve_seconds": 0.2055891000200063,
+    "correspondence_seconds": 1.0247014998458326,
+    "patches": [
+      {
+        "patch": 0,
+        "topology": {
+          "vertices": 1211,
+          "triangles": 2099,
+          "edges": 3309,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 321,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 4.43821201238938
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 2.8808186068616792,
+            "p50": 3.034179792983876,
+            "p95": 3.3560864592110593,
+            "max": 3.5418726202507504,
+            "min": 1.2094400311690447
+          },
+          "area_scale": {
+            "rms": 0.19618907151946036,
+            "p50": 0.1643357265827815,
+            "p95": 0.3486314803134036,
+            "max": 0.38900335930540647,
+            "min": 0.07116594588441728
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 7.609972908100815e-12,
+        "linear_residual": 9.094947017729282e-13
+      },
+      {
+        "patch": 1,
+        "topology": {
+          "vertices": 1109,
+          "triangles": 1977,
+          "edges": 3085,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 239,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 3.185088695171483
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 1.7874953244510159,
+            "p50": 1.7809139233013729,
+            "p95": 2.115426856932013,
+            "max": 2.611708210812314,
+            "min": 1.02716577849133
+          },
+          "area_scale": {
+            "rms": 0.2929582665570272,
+            "p50": 0.25693733786928813,
+            "p95": 0.45681003847845103,
+            "max": 0.5236245966187099,
+            "min": 0.19170034169680836
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 5.448210813800136e-12,
+        "linear_residual": 4.547473508864641e-13
+      },
+      {
+        "patch": 2,
+        "topology": {
+          "vertices": 1688,
+          "triangles": 3002,
+          "edges": 4689,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 372,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 5.758566873328702
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 4.4492898961761576,
+            "p50": 4.672567651889284,
+            "p95": 5.864249371983368,
+            "max": 6.1020861656589656,
+            "min": 1.284543748557691
+          },
+          "area_scale": {
+            "rms": 0.1650285201791821,
+            "p50": 0.14393399840726837,
+            "p95": 0.28850031488375844,
+            "max": 0.4063468354718093,
+            "min": 0.03431784618878993
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+        "linear_residual": 6.821210263296962e-13
+      },
+      {
+        "patch": 3,
+        "topology": {
+          "vertices": 4110,
+          "triangles": 7818,
+          "edges": 11927,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 400,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 4.870885268420044
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 4.798541674437388,
+            "p50": 4.87962724320114,
+            "p95": 5.547573413648275,
+            "max": 5.788471809452364,
+            "min": 1.6998856420300597
+          },
+          "area_scale": {
+            "rms": 0.16271562499083864,
+            "p50": 0.15003311479448322,
+            "p95": 0.2626101177043548,
+            "max": 0.35284158601323373,
+            "min": 0.07618539229776365
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 8.149872168031937e-12,
+        "linear_residual": 2.0445867221496883e-12
+      },
+      {
+        "patch": 4,
+        "topology": {
+          "vertices": 1118,
+          "triangles": 2002,
+          "edges": 3119,
+          "euler": 1,
+          "components": 1,
+          "boundary_edges": 232,
+          "nonmanifold_edges": 0,
+          "inconsistent_edges": 0,
+          "degenerate_triangles": 0,
+          "area_mm2": 3.98950134829105
+        },
+        "distortion": {
+          "flipped": 0,
+          "zero": 0,
+          "orientation": 1,
+          "stretch_ratio": {
+            "rms": 1.7139847613527661,
+            "p50": 1.6882660225926842,
+            "p95": 2.102888088813781,
+            "max": 2.576604373009652,
+            "min": 1.1292314412710998
+          },
+          "area_scale": {
+            "rms": 0.24031741505688278,
+            "p50": 0.22684426507189184,
+            "p95": 0.3265543830930996,
+            "max": 0.40736059978330186,
+            "min": 0.18073816087581104
+          }
+        },
+        "maximum_boundary_planar_projection_mm": 1.4929893163484904e-11,
+        "linear_residual": 1.3820056210533949e-12
+      }
+    ],
+    "exact_point_to_discrete_mesh_mm": {
+      "rms": 0.0004481904698441913,
+      "p50": 0.00012563898169636511,
+      "p95": 0.0010046180441115053,
+      "max": 0.0030072471669873395,
+      "min": 4.04879855147298e-09
+    },
+    "vertices": 8697,
+    "triangles": 16898,
+    "truth": "Exact original CAD samples; their nearest discrete triangle barycentrics supply UV only. XYZ/normal truth is not silently replaced.",
+    "boundary": "Mesh boundary vertices projected onto flattened seed boundary curves; full original curve parameter, not arclength. Original affine curve-to-pcurve mapping retained."
+  },
+  "inverse_mapping_seconds": 28.858171799918637
+}

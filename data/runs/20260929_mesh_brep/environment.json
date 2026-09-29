@@ -1,0 +1,37 @@
+{
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "executable": "D:\\pyProject\\3d_engineering\\astra_modeling_test\\.venv\\Scripts\\python.exe",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "packages": {
+    "numpy": {
+      "version": "2.4.6",
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
+    },
+    "scipy": {
+      "version": "1.17.1",
+      "license": "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers."
+    },
+    "cadquery-ocp": {
+      "version": "7.9.3.1.1",
+      "license": "Apache-2.0"
+    },
+    "vtk": {
+      "version": "9.6.2",
+      "license": "BSD"
+    },
+    "matplotlib": {
+      "version": "3.11.1",
+      "license": "License agreement for matplotlib versions 1.3.0 and later"
+    },
+    "pillow": {
+      "version": "12.3.0",
+      "license": "MIT-CMU"
+    },
+    "shapely": {
+      "version": "2.1.2",
+      "license": "BSD 3-Clause"
+    }
+  },
+  "new_installations": [],
+  "algorithm_implementation": "Independent mean-value formula; no CGAL code copied"
+}

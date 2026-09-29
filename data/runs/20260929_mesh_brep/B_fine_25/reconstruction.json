@@ -1,0 +1,396 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "mode": "given-partition pure mesh reconstruction",
+  "inputs": [
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\input.stl",
+    "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_fine\\layout.json"
+  ],
+  "input_topology": {
+    "vertices": 10730,
+    "triangles": 20936,
+    "edges": 31665,
+    "euler": 1,
+    "components": 1,
+    "boundary_edges": 522,
+    "nonmanifold_edges": 0,
+    "inconsistent_edges": 0,
+    "degenerate_triangles": 0,
+    "area_mm2": 22.242989905537712
+  },
+  "controls": 25,
+  "samples": 24000,
+  "seed": 2909179,
+  "solver": {
+    "independent_scalar_variables": 8763,
+    "matrix_rows": 171041,
+    "matrix_nnz": 4000923,
+    "normal_weight": 0.0001,
+    "fairness": 1e-06,
+    "seam_weight": 0.01,
+    "relative_linear_residual": 1.242978568674763e-15,
+    "weighted_residual_norm": 0.006749560991817792,
+    "matrix_assembly_seconds": 0.663185200188309,
+    "solve_seconds": 0.5983045999892056,
+    "correspondence_and_shared_map_seconds": 0.012597399996593595,
+    "training_samples": 23997
+  },
+  "topology": {
+    "faces": 5,
+    "edges": 12,
+    "solids": 0,
+    "free_edges": 4,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "maximum_edge_tolerance_mm": 1e-07
+  },
+  "cad_checks": {
+    "max_curve_on_surface_mm": 3.3090338331346405e-13,
+    "same_parameter_or_range_failures": 0,
+    "edges": [
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          0.0,
+          3.3090338331346405e-13
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          3.1537213404209506e-13,
+          0.0
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "expression": {
+    "faces": [
+      {
+        "u": 25,
+        "v": 25,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 25,
+        "v": 25,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 25,
+        "v": 25,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 25,
+        "v": 25,
+        "degree_u": 3,
+        "degree_v": 3
+      },
+      {
+        "u": 25,
+        "v": 25,
+        "degree_u": 3,
+        "degree_v": 3
+      }
+    ],
+    "actual_support_control_points": 3125,
+    "max_direction": 25
+  },
+  "uv": [
+    {
+      "topology": {
+        "vertices": 1658,
+        "triangles": 2969,
+        "edges": 4626,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 345,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 3.897255830002665
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 3.5618823619285416,
+          "p50": 3.3474766219832337,
+          "p95": 4.524613564957907,
+          "max": 5.030211463748809,
+          "min": 1.668764436393377
+        },
+        "area_scale": {
+          "rms": 0.22879828904595065,
+          "p50": 0.2141073815152966,
+          "p95": 0.3613454727811709,
+          "max": 0.5319071534535786,
+          "min": 0.11067460458106808
+        }
+      },
+      "residual": 9.094947017729282e-13
+    },
+    {
+      "topology": {
+        "vertices": 1186,
+        "triangles": 2130,
+        "edges": 3315,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 240,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 3.1343029502474686
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 2.0137551848266178,
+          "p50": 2.0466943545692233,
+          "p95": 2.260810406044672,
+          "max": 2.399340370635937,
+          "min": 1.2640745846129737
+        },
+        "area_scale": {
+          "rms": 0.3039887796229524,
+          "p50": 0.268739607826574,
+          "p95": 0.44019170603778823,
+          "max": 0.5037203562740443,
+          "min": 0.20966159410344218
+        }
+      },
+      "residual": 3.410605131648481e-13
+    },
+    {
+      "topology": {
+        "vertices": 2258,
+        "triangles": 4123,
+        "edges": 6380,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 391,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 5.356647248448918
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 4.972848576665259,
+          "p50": 4.60979259467585,
+          "p95": 7.9125453583523315,
+          "max": 11.961279645705845,
+          "min": 1.6826550536425073
+        },
+        "area_scale": {
+          "rms": 0.1723790058832335,
+          "p50": 0.14515868705510138,
+          "p95": 0.29869117261516676,
+          "max": 0.42609129717467586,
+          "min": 0.03597235681671926
+        }
+      },
+      "residual": 7.958078640513122e-13
+    },
+    {
+      "topology": {
+        "vertices": 4960,
+        "triangles": 9458,
+        "edges": 14417,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 460,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 5.475798971694321
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 4.237246735039924,
+          "p50": 4.400586236872677,
+          "p95": 4.796645278918981,
+          "max": 5.050213405935234,
+          "min": 1.7982975209467025
+        },
+        "area_scale": {
+          "rms": 0.14602852274102696,
+          "p50": 0.13308404373102323,
+          "p95": 0.24163367197156843,
+          "max": 0.3327801238393809,
+          "min": 0.06565443269528719
+        }
+      },
+      "residual": 3.410605131648481e-12
+    },
+    {
+      "topology": {
+        "vertices": 1253,
+        "triangles": 2256,
+        "edges": 3508,
+        "euler": 1,
+        "components": 1,
+        "boundary_edges": 248,
+        "nonmanifold_edges": 0,
+        "inconsistent_edges": 0,
+        "degenerate_triangles": 0,
+        "area_mm2": 4.378984905144341
+      },
+      "distortion": {
+        "flipped": 0,
+        "zero": 0,
+        "orientation": 1,
+        "stretch_ratio": {
+          "rms": 1.5304550571536517,
+          "p50": 1.534967421145708,
+          "p95": 1.6905837837592046,
+          "max": 1.942121924745026,
+          "min": 1.2872808020095878
+        },
+        "area_scale": {
+          "rms": 0.22317429229040095,
+          "p50": 0.2126924956785664,
+          "p95": 0.26943922545855503,
+          "max": 0.2809039078285012,
+          "min": 0.1897122715923588
+        }
+      },
+      "residual": 9.094947017729282e-13
+    }
+  ],
+  "timing_seconds": {
+    "stl_read_index_audit": 0.1118041998706758,
+    "uv_solve": 0.11969050019979477,
+    "correspondence": 0.012597399996593595,
+    "matrix_assembly": 0.663185200188309,
+    "solve": 0.5983045999892056,
+    "brep_construct": 0.011086999904364347,
+    "step_write": 0.015488599892705679,
+    "step_read": 0.04475340014323592,
+    "cad_checks": 0.03176349983550608,
+    "bookkeeping": 0.04430089984089136
+  },
+  "wall_seconds": 1.652975299861282,
+  "gates_pending": "Independent geometry, normals, within-face regularity, seams and external CAD",
+  "tolerances": {
+    "tolerance_mm": 0.03,
+    "seam_tolerance_mm": 0.001,
+    "construction_tolerance_mm": 1e-07
+  }
+}

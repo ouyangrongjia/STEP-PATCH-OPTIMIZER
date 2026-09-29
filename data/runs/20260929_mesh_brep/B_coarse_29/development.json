@@ -1,0 +1,521 @@
+{
+  "mesh": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\candidate_coarse\\input.stl",
+  "candidate": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\B_coarse_29\\network.step",
+  "seed": 2909180,
+  "count": 9000,
+  "reverse_count": 6000,
+  "mesh_to_surface": {
+    "distance_mm": {
+      "max": 0.007347445127601642,
+      "rms": 0.0004229991339078472,
+      "p95": 0.0006350488259740039,
+      "p99": 0.001855056131097431
+    },
+    "sample_count": 9000,
+    "kernel_checks": [
+      {
+        "sample": 0,
+        "numerical_mm": 7.328801011426112e-05,
+        "kernel_mm": 7.328801011943047e-05,
+        "difference_mm": 5.1693539856664805e-15
+      },
+      {
+        "sample": 31,
+        "numerical_mm": 0.0021190864793567223,
+        "kernel_mm": 0.002118715214206969,
+        "difference_mm": 3.7126514975316036e-07
+      },
+      {
+        "sample": 235,
+        "numerical_mm": 0.0014620431581477997,
+        "kernel_mm": 0.0014620431581515438,
+        "difference_mm": 3.744183782461441e-15
+      },
+      {
+        "sample": 818,
+        "numerical_mm": 3.3120934563597545e-05,
+        "kernel_mm": 3.3120934571898346e-05,
+        "difference_mm": 8.300800910347739e-15
+      },
+      {
+        "sample": 839,
+        "numerical_mm": 0.004064213294500232,
+        "kernel_mm": 0.004064213294507288,
+        "difference_mm": 7.055987738535663e-15
+      },
+      {
+        "sample": 1009,
+        "numerical_mm": 0.0009099993117792867,
+        "kernel_mm": 0.000909999311788182,
+        "difference_mm": 8.895228303940073e-15
+      },
+      {
+        "sample": 1337,
+        "numerical_mm": 0.005445314846630135,
+        "kernel_mm": 0.005445314846634914,
+        "difference_mm": 4.7791631763161035e-15
+      },
+      {
+        "sample": 1636,
+        "numerical_mm": 9.23102366376838e-05,
+        "kernel_mm": 9.231023664362614e-05,
+        "difference_mm": 5.942335924540021e-15
+      },
+      {
+        "sample": 1952,
+        "numerical_mm": 0.006659478211295214,
+        "kernel_mm": 0.006659478211302115,
+        "difference_mm": 6.900729987435739e-15
+      },
+      {
+        "sample": 2454,
+        "numerical_mm": 0.00012461649845679223,
+        "kernel_mm": 0.00012461649845996121,
+        "difference_mm": 3.1689874249035688e-15
+      },
+      {
+        "sample": 3272,
+        "numerical_mm": 0.0016508237559061986,
+        "kernel_mm": 0.001650823755909905,
+        "difference_mm": 3.7064535468589455e-15
+      },
+      {
+        "sample": 4090,
+        "numerical_mm": 0.0002282128925597373,
+        "kernel_mm": 0.00022821289256738742,
+        "difference_mm": 7.65013052905772e-15
+      },
+      {
+        "sample": 4159,
+        "numerical_mm": 0.006566656515467414,
+        "kernel_mm": 0.0034559385105586856,
+        "difference_mm": 0.0031107180049087285
+      },
+      {
+        "sample": 4322,
+        "numerical_mm": 0.005433316688467476,
+        "kernel_mm": 0.005433316688466097,
+        "difference_mm": 1.3791051634015616e-15
+      },
+      {
+        "sample": 4908,
+        "numerical_mm": 4.110899812304191e-05,
+        "kernel_mm": 4.1108998122255345e-05,
+        "difference_mm": 7.865615710839213e-16
+      },
+      {
+        "sample": 5060,
+        "numerical_mm": 0.00324148295598207,
+        "kernel_mm": 0.003241482955986015,
+        "difference_mm": 3.9451948652402535e-15
+      },
+      {
+        "sample": 5555,
+        "numerical_mm": 0.007347445127601642,
+        "kernel_mm": 0.0038633771904499977,
+        "difference_mm": 0.0034840679371516445
+      },
+      {
+        "sample": 5604,
+        "numerical_mm": 0.005292271230637044,
+        "kernel_mm": 0.005292271230642831,
+        "difference_mm": 5.7870375158586285e-15
+      },
+      {
+        "sample": 5712,
+        "numerical_mm": 0.005322017221330728,
+        "kernel_mm": 0.00532201722133127,
+        "difference_mm": 5.421010862427522e-16
+      },
+      {
+        "sample": 5726,
+        "numerical_mm": 4.326214726898473e-05,
+        "kernel_mm": 4.326214726980687e-05,
+        "difference_mm": 8.2214373113218e-16
+      },
+      {
+        "sample": 6038,
+        "numerical_mm": 1.3499686299857179e-05,
+        "kernel_mm": 1.3499686300428462e-05,
+        "difference_mm": 5.712830653415574e-16
+      },
+      {
+        "sample": 6544,
+        "numerical_mm": 2.658781931196326e-05,
+        "kernel_mm": 2.658781932493969e-05,
+        "difference_mm": 1.2976429555455055e-14
+      },
+      {
+        "sample": 7362,
+        "numerical_mm": 0.00022853739691987103,
+        "kernel_mm": 0.0002285373969146083,
+        "difference_mm": 5.262744450298951e-15
+      },
+      {
+        "sample": 7418,
+        "numerical_mm": 0.001648623059755777,
+        "kernel_mm": 0.0016486230597618189,
+        "difference_mm": 6.041825026392722e-15
+      },
+      {
+        "sample": 7500,
+        "numerical_mm": 0.006152309388104881,
+        "kernel_mm": 0.006152309388106867,
+        "difference_mm": 1.986258379993444e-15
+      },
+      {
+        "sample": 8180,
+        "numerical_mm": 8.369431627727692e-06,
+        "kernel_mm": 8.36943163517846e-06,
+        "difference_mm": 7.450767772394264e-15
+      },
+      {
+        "sample": 8526,
+        "numerical_mm": 0.0005271042439147067,
+        "kernel_mm": 0.0005271042439141515,
+        "difference_mm": 5.552199325298268e-16
+      },
+      {
+        "sample": 8999,
+        "numerical_mm": 4.135536893585265e-05,
+        "kernel_mm": 4.135536894162983e-05,
+        "difference_mm": 5.7771780523525884e-15
+      }
+    ],
+    "kernel_agreement_pass": false,
+    "trim_corrections": 0,
+    "chart_boundary_kernel_queries": 0,
+    "chart_boundary_kernel_corrections": 0,
+    "evaluation_charts": 5,
+    "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split.",
+    "normal_degrees": {
+      "max": 26.615752706378657,
+      "rms": 1.2825015046776964,
+      "p95": 1.8943346382870025,
+      "p99": 5.868525888055878
+    }
+  },
+  "surface_to_mesh": {
+    "distance_mm": {
+      "rms": 0.00036932517791168847,
+      "p50": 5.859831165630288e-05,
+      "p95": 0.0006199228285358097,
+      "max": 0.005309096990279042,
+      "min": 2.1277177504746072e-08
+    },
+    "normal_degrees": {
+      "rms": 1.2496217637453455,
+      "p50": 0.13735855189740678,
+      "p95": 1.8426912266916013,
+      "max": 23.944042349799133,
+      "min": 0.0007878295495366881
+    },
+    "sample_count": 6000,
+    "facet_normal_degrees": {
+      "rms": 1.4633770721374244,
+      "p50": 0.22847984855950473,
+      "p95": 2.484160842855617,
+      "max": 25.761608051943526,
+      "min": 0.0007471641423001357
+    }
+  },
+  "internal_seams": [
+    {
+      "edge": 0,
+      "normal_degrees": {
+        "max": 1.8901994579379724,
+        "rms": 0.3166605424246498,
+        "p95": 0.7348476076818721,
+        "p99": 1.2610196433499894
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 2,
+      "normal_degrees": {
+        "max": 1.7845111528795086,
+        "rms": 0.31041239252859987,
+        "p95": 0.6892861276621713,
+        "p99": 1.5148777342112556
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 3,
+      "normal_degrees": {
+        "max": 0.2731624029214172,
+        "rms": 0.04650432832717917,
+        "p95": 0.10867977076459459,
+        "p99": 0.15822596103277933
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 5,
+      "normal_degrees": {
+        "max": 7.846747747063572,
+        "rms": 0.5008683944345377,
+        "p95": 0.3177912988243,
+        "p99": 0.7384722846165988
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 6,
+      "normal_degrees": {
+        "max": 0.20160772581095202,
+        "rms": 0.019299343999352295,
+        "p95": 0.03934954742613177,
+        "p99": 0.06875653857297201
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 8,
+      "normal_degrees": {
+        "max": 4.9157858820818365,
+        "rms": 0.33790507303377165,
+        "p95": 0.37347322443174874,
+        "p99": 0.4785661490868962
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 9,
+      "normal_degrees": {
+        "max": 0.2698783948112382,
+        "rms": 0.03214508775661107,
+        "p95": 0.05883630977591231,
+        "p99": 0.0718424597521066
+      },
+      "separation_mm": 3.4470477946789437e-13
+    },
+    {
+      "edge": 11,
+      "normal_degrees": {
+        "max": 0.27914800847958054,
+        "rms": 0.03203346194316654,
+        "p95": 0.054564791448142705,
+        "p99": 0.11796545334220002
+      },
+      "separation_mm": 3.253013330282669e-13
+    }
+  ],
+  "interior_continuity": {
+    "knot_records": [],
+    "maximum_sampled_normal_jump_degrees": 0.0,
+    "note": "Cubic simple knots are C2 by construction. Reported finite-offset jumps at repeated knots are sampled diagnostics, not a continuous-domain proof."
+  },
+  "regularity": {
+    "faces": [
+      {
+        "face": 0,
+        "samples": 23409,
+        "jacobian_mm2": {
+          "rms": 4.073485729195867,
+          "p50": 3.831302689000798,
+          "p95": 5.905746663756617,
+          "max": 7.9245542516144205,
+          "min": 1.9112447101944985
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 2.9552635056094982,
+          "p50": 2.7869401600224797,
+          "p95": 4.332134366960883,
+          "max": 5.224670220896114,
+          "min": 1.6451615533478086
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 0.7235376877315305,
+          "p50": 0.09683011905362023,
+          "p95": 1.6818517476775403,
+          "max": 10.868046810459788,
+          "min": 3.598095599943747e-06
+        }
+      },
+      {
+        "face": 1,
+        "samples": 23409,
+        "jacobian_mm2": {
+          "rms": 3.2033919584699655,
+          "p50": 3.1522533982333623,
+          "p95": 4.036367898156841,
+          "max": 4.842191431608382,
+          "min": 1.8831688063131662
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 1.873681674343135,
+          "p50": 1.8959622796271434,
+          "p95": 2.2077850557886687,
+          "max": 2.483721720437978,
+          "min": 1.2672524615692693
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 0.6239369387755527,
+          "p50": 0.05696321603102215,
+          "p95": 1.362855867648152,
+          "max": 8.994189890310755,
+          "min": 4.73735227626045e-06
+        }
+      },
+      {
+        "face": 2,
+        "samples": 23409,
+        "jacobian_mm2": {
+          "rms": 5.894035377723977,
+          "p50": 4.619833875516992,
+          "p95": 10.144299740956527,
+          "max": 26.594510283422157,
+          "min": 0.26381525765178876
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 4.371861323855483,
+          "p50": 3.7330699869812607,
+          "p95": 7.178519706635925,
+          "max": 153.89326665214318,
+          "min": 1.6458550822990266
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 85.19799492748905,
+          "p50": 0.07660892158754237,
+          "p95": 1.8369094699149846,
+          "max": 12712.423000472441,
+          "min": 1.457939173160889e-06
+        }
+      },
+      {
+        "face": 3,
+        "samples": 23409,
+        "jacobian_mm2": {
+          "rms": 5.7637765388356215,
+          "p50": 5.274494632955022,
+          "p95": 8.694630942044482,
+          "max": 15.608270516938477,
+          "min": 2.9363143320995646
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 3.3695617457482965,
+          "p50": 3.2681681335093344,
+          "p95": 4.585146877339874,
+          "max": 5.897736430704132,
+          "min": 1.787323385996821
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 1.0512301894487837,
+          "p50": 0.10547774016265743,
+          "p95": 1.9309145537802592,
+          "max": 12.83849860397267,
+          "min": 1.6493479252928404e-06
+        }
+      },
+      {
+        "face": 4,
+        "samples": 23409,
+        "jacobian_mm2": {
+          "rms": 4.399080857024848,
+          "p50": 4.377729765290143,
+          "p95": 5.03001945530161,
+          "max": 5.24231147839252,
+          "min": 3.5138316921634924
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 1.5180769343275213,
+          "p50": 1.5025318977982738,
+          "p95": 1.7393657430866725,
+          "max": 1.8971292080885027,
+          "min": 1.2953986640749378
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 0.08696060261914779,
+          "p50": 0.07190460820947943,
+          "p95": 0.1512582707741869,
+          "max": 0.31526883872928446,
+          "min": 3.0279179518146927e-06
+        }
+      }
+    ],
+    "continuous_self_intersection_proof": false,
+    "note": "Dense derivative checks and kernel BRepCheck do not prove continuous injectivity."
+  },
+  "expression": {
+    "faces": 5,
+    "surfaces": [
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 29,
+        "v_poles": 29,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 27,
+        "v_knots": 27,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 29,
+        "v_poles": 29,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 27,
+        "v_knots": 27,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 29,
+        "v_poles": 29,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 27,
+        "v_knots": 27,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 29,
+        "v_poles": 29,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 27,
+        "v_knots": 27,
+        "rational": false
+      },
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 29,
+        "v_poles": 29,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 27,
+        "v_knots": 27,
+        "rational": false
+      }
+    ],
+    "actual_support_control_points": 4205,
+    "maximum_direction_poles": 29,
+    "unique_3d_curve_controls": 348,
+    "pcurve_controls": 4,
+    "curve_types": {
+      "Geom_BSplineCurve": 12
+    },
+    "pcurve_types": {
+      "GeomAbs_CurveType.GeomAbs_Line": 18,
+      "GeomAbs_CurveType.GeomAbs_BSplineCurve": 2
+    }
+  },
+  "step_bytes": 433466,
+  "normal_source": "Area-weighted mesh vertex normals; reverse facet normals separately reported",
+  "max_is_continuous_bound": false,
+  "timing_seconds": {
+    "read_and_sample": 0.18949329992756248,
+    "mesh_to_surface": 1.6378627000376582,
+    "surface_to_mesh": 0.901574700139463,
+    "seams_and_differentials": 0.8219491997733712
+  },
+  "wall_seconds": 3.553457099944353
+}

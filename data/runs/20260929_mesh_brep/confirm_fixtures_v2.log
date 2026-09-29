@@ -1,0 +1,4 @@
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_closed32_13_global\\network.step", "forward_mm": 0.0013947519863634224, "reverse_mm": 0.0013102590788648654, "normal_deg": 0.7767751810361125, "seconds": 4.980474000098184}
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_closed64_13\\network.step", "forward_mm": 0.00040582881999573836, "reverse_mm": 0.00041742062695620846, "normal_deg": 0.3954350588129196, "seconds": 4.088923200033605}
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_wrapped32_17\\network.step", "forward_mm": 0.004184107550690918, "reverse_mm": 0.004064386939875993, "normal_deg": 2.864099895168613, "seconds": 2.3496809999924153}
+{"candidate": "data\\runs\\20260929_mesh_brep\\B_wrapped64_17\\network.step", "forward_mm": 0.001108338948350713, "reverse_mm": 0.0010258794575193381, "normal_deg": 1.895900373941156, "seconds": 2.3980584999080747}

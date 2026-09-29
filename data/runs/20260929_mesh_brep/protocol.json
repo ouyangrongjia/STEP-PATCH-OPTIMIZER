@@ -1,0 +1,16 @@
+{
+  "status": "preregistered_development",
+  "branch": "experiment/mesh-brep-20260929",
+  "base": "6efff7e59dd2a0d8f0e713f34019d88216c01568",
+  "wall_budget_minutes": 180,
+  "candidate_limit": {"A": 2, "B_candidate179": 3, "B_fixtures": 2},
+  "budget_policy": "Implementation corrections and resolution/independent replays are recorded separately. Stop uninformative tuning. Reserve final third for independent validation and delivery.",
+  "gates": {"distance_mm": 0.03, "normal_degrees": 15, "seam_normal_degrees": 5, "curve_on_surface_mm": 0.001, "sewing_mm": 0.001, "construction_tolerance_mm": 1e-7, "max_control_points_per_direction": 25},
+  "sampling": {"train_count": 24000, "train_seed": 2909179, "development_count": 9000, "development_seed": 2909180, "confirmation_count": 30000, "confirmation_seed": 2909280, "reverse_count": 12000, "reverse_seed": 2909281, "seam_samples": 385},
+  "resolution": {"candidate179_deflection_mm": [0.003, 0.001], "fixture_intervals": [32, 64]},
+  "B_input_contract": "Binary STL vertices and triangles, millimetres, tolerances, discrete triangle partition labels, indexed corners and ordered edge chains, explicit smooth/feature seam declarations. No original CAD, UV, normals, control nets, XY map or CAD-assisted cache.",
+  "B_boundary_policy": "Shared spline coefficients and consistent chain arclength parameters enforce C0 before sewing. Outer boundary approximation error is separate from interpatch gap. Feature sides keep separate mesh normals.",
+  "A_policy": "CAD-assisted, original outer curves and their affine parameter correspondence retained. Same 4324-pole space for inverse-UV and mesh-UV 3D fits; differs from historical height-only objective and hence is a small attribution control, not a pure comparison to historical height fitting.",
+  "final_evaluation_policy": "Original-CAD holdout used only after all B configurations are frozen. Fresh samples, no cached distances. Sampled maxima are not continuous bounds.",
+  "acceptance": "All outputs DiagnosticOnly and can_apply=false until every applicable product and external CAD gate passes. Open regions are not capped."
+}

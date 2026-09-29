@@ -1,0 +1,295 @@
+{
+  "mesh": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\inputs\\wrapped32\\input.stl",
+  "candidate": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\B_wrapped32_17\\network.step",
+  "seed": 2909180,
+  "count": 9000,
+  "reverse_count": 6000,
+  "mesh_to_surface": {
+    "distance_mm": {
+      "max": 0.0040981655920496,
+      "rms": 0.0013360284652407638,
+      "p95": 0.0024800507917067073,
+      "p99": 0.0030622151266405167
+    },
+    "sample_count": 9000,
+    "kernel_checks": [
+      {
+        "sample": 0,
+        "numerical_mm": 0.001357893577758049,
+        "kernel_mm": 0.001357893577758475,
+        "difference_mm": 4.2587461335230614e-16
+      },
+      {
+        "sample": 547,
+        "numerical_mm": 0.003818617337053613,
+        "kernel_mm": 0.0038186173370542797,
+        "difference_mm": 6.665674956440881e-16
+      },
+      {
+        "sample": 818,
+        "numerical_mm": 0.0002552809951092787,
+        "kernel_mm": 0.00025528099510948725,
+        "difference_mm": 2.0854628787758678e-16
+      },
+      {
+        "sample": 1095,
+        "numerical_mm": 0.0007194678845363574,
+        "kernel_mm": 0.0007194678845373515,
+        "difference_mm": 9.94104971951959e-16
+      },
+      {
+        "sample": 1390,
+        "numerical_mm": 0.0007687960249093666,
+        "kernel_mm": 0.0007687960249105484,
+        "difference_mm": 1.1817803680091998e-15
+      },
+      {
+        "sample": 1636,
+        "numerical_mm": 0.00027210207566683215,
+        "kernel_mm": 0.00027210207566703625,
+        "difference_mm": 2.041010589703962e-16
+      },
+      {
+        "sample": 2454,
+        "numerical_mm": 0.00046825757431474596,
+        "kernel_mm": 0.0004682575743154414,
+        "difference_mm": 6.954614835408268e-16
+      },
+      {
+        "sample": 2986,
+        "numerical_mm": 0.0003600123212377209,
+        "kernel_mm": 0.00036001232123833524,
+        "difference_mm": 6.143631610389111e-16
+      },
+      {
+        "sample": 3272,
+        "numerical_mm": 0.0004168716144260192,
+        "kernel_mm": 0.00041687161442669423,
+        "difference_mm": 6.750242725894751e-16
+      },
+      {
+        "sample": 3953,
+        "numerical_mm": 0.000492890042586561,
+        "kernel_mm": 0.0004928900425870555,
+        "difference_mm": 4.945046108706386e-16
+      },
+      {
+        "sample": 4090,
+        "numerical_mm": 0.0008500355498386865,
+        "kernel_mm": 0.0008500355498393152,
+        "difference_mm": 6.28728839824344e-16
+      },
+      {
+        "sample": 4527,
+        "numerical_mm": 0.00363042727428519,
+        "kernel_mm": 0.0036304272742859675,
+        "difference_mm": 7.775897981066038e-16
+      },
+      {
+        "sample": 4908,
+        "numerical_mm": 0.0007884526552506863,
+        "kernel_mm": 0.0007884526552508924,
+        "difference_mm": 2.061068329894944e-16
+      },
+      {
+        "sample": 5284,
+        "numerical_mm": 0.003794906378645318,
+        "kernel_mm": 0.003794906378645636,
+        "difference_mm": 3.178880769727499e-16
+      },
+      {
+        "sample": 5321,
+        "numerical_mm": 0.0040981655920496,
+        "kernel_mm": 0.004098165592049557,
+        "difference_mm": 4.336808689942018e-17
+      },
+      {
+        "sample": 5691,
+        "numerical_mm": 0.003907417109806244,
+        "kernel_mm": 0.003907417109806808,
+        "difference_mm": 5.637851296924623e-16
+      },
+      {
+        "sample": 5726,
+        "numerical_mm": 0.0011419112562021975,
+        "kernel_mm": 0.0011419112562030978,
+        "difference_mm": 9.003214840319629e-16
+      },
+      {
+        "sample": 6544,
+        "numerical_mm": 0.0005655015953903442,
+        "kernel_mm": 0.0005655015953910307,
+        "difference_mm": 6.865168156178214e-16
+      },
+      {
+        "sample": 6656,
+        "numerical_mm": 0.0006279373986253853,
+        "kernel_mm": 0.0006279373986258811,
+        "difference_mm": 4.958056534776212e-16
+      },
+      {
+        "sample": 7272,
+        "numerical_mm": 0.0038122659472621125,
+        "kernel_mm": 0.003812265947262443,
+        "difference_mm": 3.3046482217358175e-16
+      },
+      {
+        "sample": 7362,
+        "numerical_mm": 0.0018339044126368103,
+        "kernel_mm": 0.0018339044126381473,
+        "difference_mm": 1.337038119109124e-15
+      },
+      {
+        "sample": 7609,
+        "numerical_mm": 0.00400403876251968,
+        "kernel_mm": 0.0040040387625199765,
+        "difference_mm": 2.96637714392034e-16
+      },
+      {
+        "sample": 7779,
+        "numerical_mm": 0.0010010119423471226,
+        "kernel_mm": 0.0010010119423477027,
+        "difference_mm": 5.800481622797449e-16
+      },
+      {
+        "sample": 7902,
+        "numerical_mm": 0.00018662897942393742,
+        "kernel_mm": 0.000186628979424701,
+        "difference_mm": 7.635764850272286e-16
+      },
+      {
+        "sample": 8180,
+        "numerical_mm": 0.00017327512036677267,
+        "kernel_mm": 0.0001732751203673988,
+        "difference_mm": 6.261267546103788e-16
+      },
+      {
+        "sample": 8186,
+        "numerical_mm": 9.241032015576317e-05,
+        "kernel_mm": 9.241032015665306e-05,
+        "difference_mm": 8.89899590648946e-16
+      },
+      {
+        "sample": 8499,
+        "numerical_mm": 0.00400193168758116,
+        "kernel_mm": 0.0040019316875818025,
+        "difference_mm": 6.42715047849407e-16
+      },
+      {
+        "sample": 8999,
+        "numerical_mm": 0.0020139622340407024,
+        "kernel_mm": 0.0020139622340410866,
+        "difference_mm": 3.8424124992886277e-16
+      }
+    ],
+    "kernel_agreement_pass": true,
+    "trim_corrections": 0,
+    "chart_boundary_kernel_queries": 0,
+    "chart_boundary_kernel_corrections": 0,
+    "evaluation_charts": 1,
+    "method": "Exact in-memory charts split at C0 parameter knots, coarse seeds, Newton projection, convex-control-hull AABB fallback, original face classifier and exact trim correction; sampled OCCT whole-region cross-check. Exported B-Rep faces are not split.",
+    "normal_degrees": {
+      "max": 2.8417068595713517,
+      "rms": 0.3955155558254585,
+      "p95": 0.9242080155122298,
+      "p99": 1.9442645582688163
+    }
+  },
+  "surface_to_mesh": {
+    "distance_mm": {
+      "rms": 0.0013351356910523535,
+      "p50": 0.0010648852913640891,
+      "p95": 0.0025393630608632803,
+      "max": 0.0039736295688141045,
+      "min": 4.028667163661063e-07
+    },
+    "normal_degrees": {
+      "rms": 0.4159230251771727,
+      "p50": 0.09862542321556486,
+      "p95": 1.0120738766167725,
+      "max": 2.8308298118700854,
+      "min": 0.002415880428952122
+    },
+    "sample_count": 6000,
+    "facet_normal_degrees": {
+      "rms": 2.2198795251127597,
+      "p50": 1.8841526423007373,
+      "p95": 3.7702777445709628,
+      "max": 4.557725266750679,
+      "min": 0.0340945900340672
+    }
+  },
+  "internal_seams": [],
+  "interior_continuity": {
+    "knot_records": [],
+    "maximum_sampled_normal_jump_degrees": 0.0,
+    "note": "Cubic simple knots are C2 by construction. Reported finite-offset jumps at repeated knots are sampled diagnostics, not a continuous-domain proof."
+  },
+  "regularity": {
+    "faces": [
+      {
+        "face": 0,
+        "samples": 19881,
+        "jacobian_mm2": {
+          "rms": 25.198311440567927,
+          "p50": 25.16212605542441,
+          "p95": 26.52103991044411,
+          "max": 27.03473228601788,
+          "min": 23.252348210884293
+        },
+        "singular_samples": 0,
+        "tangent_condition": {
+          "rms": 2.7900261715582046,
+          "p50": 2.7892784796149312,
+          "p95": 2.892943646188742,
+          "max": 3.0102905497419847,
+          "min": 2.5891358931748316
+        },
+        "absolute_mean_curvature_per_mm": {
+          "rms": 0.2524084847184433,
+          "p50": 0.24906967015406373,
+          "p95": 0.3351601181628046,
+          "max": 0.3701417276995423,
+          "min": 0.10535715745888188
+        }
+      }
+    ],
+    "continuous_self_intersection_proof": false,
+    "note": "Dense derivative checks and kernel BRepCheck do not prove continuous injectivity."
+  },
+  "expression": {
+    "faces": 1,
+    "surfaces": [
+      {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 17,
+        "v_poles": 17,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 15,
+        "v_knots": 15,
+        "rational": false
+      }
+    ],
+    "actual_support_control_points": 289,
+    "maximum_direction_poles": 17,
+    "unique_3d_curve_controls": 68,
+    "pcurve_controls": 0,
+    "curve_types": {
+      "Geom_BSplineCurve": 4
+    },
+    "pcurve_types": {
+      "GeomAbs_CurveType.GeomAbs_Line": 4
+    }
+  },
+  "step_bytes": 36433,
+  "normal_source": "Area-weighted mesh vertex normals; reverse facet normals separately reported",
+  "max_is_continuous_bound": false,
+  "timing_seconds": {
+    "read_and_sample": 0.1287581000942737,
+    "mesh_to_surface": 0.47807740001007915,
+    "surface_to_mesh": 0.8476323999930173,
+    "seams_and_differentials": 0.09541320009157062
+  },
+  "wall_seconds": 1.5514209000393748
+}

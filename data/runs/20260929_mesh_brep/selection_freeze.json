@@ -1,0 +1,33 @@
+{
+  "status": "frozen_before_CAD_holdout",
+  "final_candidates": [
+    {
+      "case": "B_coarse_29_global",
+      "controls": 29,
+      "seed": 2909179
+    },
+    {
+      "case": "B_coarse_25",
+      "controls": 25,
+      "seed": 2909179
+    },
+    {
+      "case": "B_fine_25",
+      "controls": 25,
+      "seed": 2909179
+    },
+    {
+      "case": "B_closed64_13",
+      "controls": 13,
+      "seed": 2909179
+    },
+    {
+      "case": "B_wrapped64_17",
+      "controls": 17,
+      "seed": 2909179
+    }
+  ],
+  "no_further_B_tuning": true,
+  "reason": "Keep matched-cost B29 and within-direction-budget B25; B17 loses seam quality; fixture controls fixed before independent confirmation.",
+  "normal_fix": "Global one-ring for explicitly smooth chart cuts; initial local-one-ring candidates retained."
+}

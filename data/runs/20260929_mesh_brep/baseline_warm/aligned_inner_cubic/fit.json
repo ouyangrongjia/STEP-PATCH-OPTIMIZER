@@ -1,0 +1,1296 @@
+{
+  "config": {
+    "common_compact_seed": "coarse",
+    "hard_g1": false,
+    "name": "aligned_inner_cubic",
+    "linear_xy_blend": true,
+    "internal_knot_gradient_weight_mm2": 0.1
+  },
+  "start": {
+    "initial_surfaces": "Common coarse seed, archived central XY map restored, followed by geometry-preserving post-construction refinement for the matched fine control.",
+    "seed_mode": "coarse",
+    "mapping_change": "Linear transverse XY blend; same original and artificial boundary curves, knot vectors, height start and objective.",
+    "maximum_xy_pole_shift_mm": 0.09418327840411808
+  },
+  "solver": {
+    "unknowns": 3424,
+    "rows": 82956,
+    "constraints": {},
+    "maximum_free_height_change_mm": 0.08058692524191503,
+    "weighted_residual_norm": 0.0037477736077882345
+  },
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "patches": [
+    {
+      "patch": 0,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 99,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 91,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 41181,
+        "minimum_jacobian_mm2": 2.5170672447402147,
+        "minimum_normalized_jacobian": 0.6585035482595366,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 1,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 66,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 61,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 31191,
+        "minimum_jacobian_mm2": 1.8758031005075395,
+        "minimum_normalized_jacobian": 0.7557217462418782,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 2,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 131,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 121,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 51171,
+        "minimum_jacobian_mm2": 2.460870630063183,
+        "minimum_normalized_jacobian": 0.39214721096757965,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 3,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 130,
+        "v_poles": 10,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 121,
+        "v_knots": 8,
+        "rational": false
+      },
+      "differential": {
+        "samples": 51171,
+        "minimum_jacobian_mm2": 2.8340616116113764,
+        "minimum_normalized_jacobian": 0.4789803768309771,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    },
+    {
+      "patch": 4,
+      "complexity": {
+        "type": "Geom_BSplineSurface",
+        "u_poles": 8,
+        "v_poles": 8,
+        "u_degree": 3,
+        "v_degree": 3,
+        "u_knots": 6,
+        "v_knots": 6,
+        "rational": false
+      },
+      "differential": {
+        "samples": 10816,
+        "minimum_jacobian_mm2": 2.455442264297927,
+        "minimum_normalized_jacobian": 0.7848520970301825,
+        "degeneracy_samples": 0,
+        "projection_reversal_samples": 0,
+        "projection_reversal_is_not_itself_a_proof_of_3d_self_intersection": true
+      }
+    }
+  ],
+  "actual_control_points": 4324,
+  "before_write": {
+    "faces": 5,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "self_seam_edges": 0,
+    "degenerate_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "after_read": {
+    "faces": 5,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "self_seam_edges": 0,
+    "degenerate_edges": 0,
+    "brep_valid": true,
+    "face_valid": [
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "edge_checks": {
+    "checks": 42,
+    "samples_per_use": 385,
+    "max_curve_on_surface_mm": 1.0248035233014194e-11,
+    "failed_001mm": 0,
+    "same_parameter_false": 0,
+    "maximum_edge_tolerance_mm": 1e-07,
+    "records": [
+      {
+        "face": 0,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.609455694815873e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.609455694815873e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.533464442539731e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.663304699805453e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.1620677592358825e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.1620677592358825e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.1683198553528097e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.0537086548051985e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 0,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.1683198553528097e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.205742401295979e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 4.205742401295979e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.2669628035988923e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.2669628035988923e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.591302455776226e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.010053863417383e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 1,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.1683198553528097e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.687277461489815e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.687277461489815e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 5.121904629685346e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.1101187871881838e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.1101187871881838e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.907665390305567e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.639694477735223e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.884712172121856e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 7.512864110427651e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 2,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.591302455776226e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.097220790814545e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 8.097220790814545e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.4249561143815014e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.8252410123473813e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 4,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.681724162263555e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 5,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.681724162263555e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 6,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 3.099644958137502e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 7,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.6199799776031026e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 8,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 2.1683198553528097e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 9,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 6.6178066173433975e-12,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 3,
+        "edge": 10,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.5987211554602254e-14,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 0,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.0248035233014194e-11,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 1,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.0248035233014194e-11,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 2,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.0248035233014194e-11,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "face": 4,
+        "edge": 3,
+        "same_parameter": true,
+        "same_range": true,
+        "max_curve_on_surface_mm": 1.0100578830438199e-11,
+        "tolerance_mm": 1e-07
+      }
+    ],
+    "closed_self_seams": []
+  },
+  "seams": [
+    {
+      "edge": 6,
+      "normal_degrees": {
+        "max": 0.4668688496823082,
+        "rms": 0.07867561448513358,
+        "p95": 0.17109897416438458,
+        "p99": 0.3383878444778757
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 7,
+      "normal_degrees": {
+        "max": 0.022663446867802063,
+        "rms": 0.002190712148035467,
+        "p95": 0.002189335250782975,
+        "p99": 0.010892740182664076
+      },
+      "separation_mm": 1.0248035233014194e-11
+    },
+    {
+      "edge": 8,
+      "normal_degrees": {
+        "max": 0.8486579316072407,
+        "rms": 0.12524385829173063,
+        "p95": 0.2637391207616407,
+        "p99": 0.5560716877056688
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 13,
+      "normal_degrees": {
+        "max": 0.4172859959287566,
+        "rms": 0.07002293851661696,
+        "p95": 0.1594647090539218,
+        "p99": 0.3054160389089196
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 14,
+      "normal_degrees": {
+        "max": 0.006575683372825515,
+        "rms": 0.0006912575341693971,
+        "p95": 0.0005399641560844282,
+        "p99": 0.0034660077164628818
+      },
+      "separation_mm": 1.2841052760622574e-11
+    },
+    {
+      "edge": 23,
+      "normal_degrees": {
+        "max": 0.5538351423530486,
+        "rms": 0.08472277643095362,
+        "p95": 0.20099917443093454,
+        "p99": 0.3923317971690238
+      },
+      "separation_mm": 0.0
+    },
+    {
+      "edge": 24,
+      "normal_degrees": {
+        "max": 0.03609179956095816,
+        "rms": 0.002548515794317248,
+        "p95": 0.0010287471736937378,
+        "p99": 0.009192518814508019
+      },
+      "separation_mm": 1.0833421772406836e-11
+    },
+    {
+      "edge": 33,
+      "normal_degrees": {
+        "max": 0.02635916436591493,
+        "rms": 0.001779278056914072,
+        "p95": 0.000592410247005413,
+        "p99": 0.0056085400236703924
+      },
+      "separation_mm": 1.0503363063827042e-11
+    }
+  ],
+  "boundary_mapping": [
+    {
+      "edge": 0,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.17231105054264087
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.590761848311694e-12
+    },
+    {
+      "edge": 1,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.17231105054264087,
+        0.344312569001094
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.589428546356157e-12
+    },
+    {
+      "edge": 2,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.344312569001094,
+        0.5159473270303163
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.5238787452045624e-12
+    },
+    {
+      "edge": 3,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5159473270303163,
+        0.6777797473292488
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.66047081532451e-12
+    },
+    {
+      "edge": 4,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.6777797473292488,
+        0.8396208908456227
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.142036891537399e-12
+    },
+    {
+      "edge": 5,
+      "patch": 0,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        1.0,
+        0.8396208908456227
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.141327871760147e-12
+    },
+    {
+      "edge": 6,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.250499616628418
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.203021791498048e-12
+    },
+    {
+      "edge": 7,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.250499616628418,
+        0.5006745165658735
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 4.1988209957137935e-12
+    },
+    {
+      "edge": 8,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5006745165658735,
+        0.7508119172792818
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.259774638826269e-12
+    },
+    {
+      "edge": 9,
+      "patch": 1,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7508119172792818,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.259774638826269e-12
+    },
+    {
+      "edge": 10,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.126969707402811
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.677951945806997e-12
+    },
+    {
+      "edge": 11,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.126969707402811,
+        0.254234630306254
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.677951945806997e-12
+    },
+    {
+      "edge": 12,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.254234630306254,
+        0.38166617352707494
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 5.03982708257699e-12
+    },
+    {
+      "edge": 13,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.38166617352707494,
+        0.5091321643392388
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.0816009134378114e-12
+    },
+    {
+      "edge": 14,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5091321643392388,
+        0.6364567980110628
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 3.0806867633656898e-12
+    },
+    {
+      "edge": 15,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7637496820916513,
+        0.6364567980110628
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.2085732621901284e-12
+    },
+    {
+      "edge": 16,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7637496820916513,
+        0.8830200107787551
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.089383052389688e-12
+    },
+    {
+      "edge": 17,
+      "patch": 2,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        1.0,
+        0.8830200107787551
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 2.089158771577174e-12
+    },
+    {
+      "edge": 18,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.0,
+        0.12929106790686934
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 8.101440668816783e-12
+    },
+    {
+      "edge": 19,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.12929106790686934,
+        0.25876915449584187
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 8.101440668816783e-12
+    },
+    {
+      "edge": 20,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.25876915449584187,
+        0.3839793173843965
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.463312694242729e-12
+    },
+    {
+      "edge": 21,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.3839793173843965,
+        0.5067254724517011
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.4479128075151465e-12
+    },
+    {
+      "edge": 22,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.5067254724517011,
+        0.631692558631115
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.658972330866089e-12
+    },
+    {
+      "edge": 23,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.631692558631115,
+        0.7532706976084144
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 6.658972330866089e-12
+    },
+    {
+      "edge": 24,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.7532706976084144,
+        0.8775862001653878
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.5360259380729663e-12
+    },
+    {
+      "edge": 25,
+      "patch": 3,
+      "range": [
+        0.0,
+        1.0
+      ],
+      "normalized_endpoints": [
+        0.8775862001653878,
+        1.0
+      ],
+      "mapping": {
+        "axis": 1,
+        "fixed": 0.0,
+        "reverse": false
+      },
+      "initial_error_mm": 1.542728843223435e-12
+    }
+  ],
+  "sides": [
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 1,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 4,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 0,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 2,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 5,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 1,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 3,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 6,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 2,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": true,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 0,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 7,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 3,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      }
+    ],
+    [
+      {
+        "outer": false,
+        "seam": 4,
+        "mapping": {
+          "axis": 1,
+          "fixed": 0.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 5,
+        "mapping": {
+          "axis": 0,
+          "fixed": 1.0,
+          "reverse": false
+        }
+      },
+      {
+        "outer": false,
+        "seam": 6,
+        "mapping": {
+          "axis": 1,
+          "fixed": 1.0,
+          "reverse": true
+        }
+      },
+      {
+        "outer": false,
+        "seam": 7,
+        "mapping": {
+          "axis": 0,
+          "fixed": 0.0,
+          "reverse": true
+        }
+      }
+    ]
+  ],
+  "inner_corners_initial": [
+    [
+      -24.664208573004736,
+      41.76718309891713,
+      -8.424394578051924
+    ],
+    [
+      -23.173287920464904,
+      40.98239789821051,
+      -7.455310110635649
+    ],
+    [
+      -23.82803945934223,
+      39.91791983303432,
+      -7.307539339452202
+    ],
+    [
+      -26.39558551082861,
+      39.86816998431228,
+      -8.227620415254231
+    ]
+  ],
+  "inner_corners_final": [
+    [
+      -24.664219833556988,
+      41.7671959654902,
+      -8.424365792595886
+    ],
+    [
+      -23.173186981814236,
+      40.982282563323224,
+      -7.455568141061364
+    ],
+    [
+      -23.827837533112703,
+      39.917689107353254,
+      -7.308055525379218
+    ],
+    [
+      -26.39550075624306,
+      39.86807314172021,
+      -8.227837074201478
+    ]
+  ],
+  "seconds": 30.83487580018118
+}

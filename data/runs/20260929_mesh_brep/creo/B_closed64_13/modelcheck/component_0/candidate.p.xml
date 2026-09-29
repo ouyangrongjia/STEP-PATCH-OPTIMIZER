@@ -1,0 +1,634 @@
+<?xml version='1.0'?>
+<!-- Date: Tue Sep 29 2026 03:21:41  -->
+
+<!-- DOCTYPE -->
+<!DOCTYPE mc_report [
+<!ELEMENT mc_report ( mc_head, mc_strtabs, mc_checks, mc_lists)>
+<!ATTLIST mc_report type ( PRT | ASM | DRW ) #REQUIRED>
+<!ELEMENT mc_head ( model_path, model_title, model, date_title,
+                    date, mode_title, mode, config_title,
+                    config, checked_by_title, checked_by,
+                    last_saved_title, last_saved, 
+                    created_title, created )>
+<!ELEMENT model_path (#PCDATA) >
+<!ELEMENT model_title (#PCDATA) >
+<!ELEMENT model (#PCDATA) >
+<!ELEMENT date_title (#PCDATA) >
+<!ELEMENT date (#PCDATA) >
+<!ELEMENT mode_title (#PCDATA) >
+<!ELEMENT mode (#PCDATA) >
+<!ELEMENT config_title (#PCDATA) >
+<!ELEMENT config (#PCDATA) >
+<!ELEMENT checked_by_title (#PCDATA) >
+<!ELEMENT checked_by (#PCDATA) >
+<!ELEMENT last_saved_title (#PCDATA) >
+<!ELEMENT last_saved (#PCDATA) >
+<!ELEMENT created_title (#PCDATA) >
+<!ELEMENT created (#PCDATA) >
+<!ELEMENT mc_strtabs ( port, cnfg, err, wrn, pass, stt, chk, res, all, tab*, misc_str* ) >
+<!ELEMENT port (#PCDATA) >
+<!ELEMENT cnfg (#PCDATA) >
+<!ELEMENT err (#PCDATA) >
+<!ELEMENT wrn (#PCDATA) >
+<!ELEMENT pass (#PCDATA) >
+<!ELEMENT stt (#PCDATA) >
+<!ELEMENT chk (#PCDATA) >
+<!ELEMENT res (#PCDATA) >
+<!ELEMENT all (#PCDATA) >
+<!ELEMENT tab (tabn, tabn_en) >
+<!ELEMENT tabn (#PCDATA) >
+<!ELEMENT tabn_en (#PCDATA) >
+<!ELEMENT misc_str (misc, misc_en) >
+<!ELEMENT misc (#PCDATA) >
+<!ELEMENT misc_en (#PCDATA) >
+<!ELEMENT mc_checks (check*) >
+<!ELEMENT check (stat, desc, msg, ans, 
+          title1?, title2?, func?, func_str?, item*) >
+<!ATTLIST check name NMTOKEN #REQUIRED
+ tab (INFO | FEATURE | PARAMETER | LAYER | RELATION | VIEWS | NOTES | DATUM | MISC | VDA | CUSTOM | FAILED) #REQUIRED
+ type (INFO | ACTION | UPDATE | HIGHLIGHT | PREVIEW | COLLAPSE | NONE) #REQUIRED
+ mult (YES | NO) 'NO' >
+<!ELEMENT stat (#PCDATA) >
+<!ELEMENT desc (#PCDATA) >
+<!ELEMENT msg (#PCDATA) >
+<!ELEMENT ans (#PCDATA) >
+<!ELEMENT title1 (#PCDATA) >
+<!ELEMENT title2 (#PCDATA) >
+<!ELEMENT func (#PCDATA) >
+<!ELEMENT func_str (#PCDATA) >
+<!ELEMENT item (info1, info2) >
+<!ELEMENT info1 (#PCDATA) >
+<!ELEMENT info2 (#PCDATA) >
+<!ELEMENT mc_lists (userlist*) >
+<!ELEMENT userlist (choice*) >
+<!ATTLIST userlist name NMTOKEN #REQUIRED >
+<!ELEMENT choice (#PCDATA) >
+]>
+
+<!-- MC HEADER -->
+<mc_report type='PRT'>
+ <mc_head>
+  <model_path>D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\data\runs\20260929_mesh_brep\creo\B_closed64_13\import\</model_path>
+  <model_title>MODEL:</model_title>
+  <model>CANDIDATE.PRT</model>
+  <pro_type>PRT</pro_type>
+  <date_title>DATE:</date_title>
+  <date>Tue Sep 29 2026 03:21:41</date>
+  <mode_title>MODE:</mode_title>
+  <mode>Batch</mode>
+  <config_title>CONFIG:</config_title>
+  <config>check/default_checks.mch, start/nostart.mcs, constant/mm.mcn, status/sample_status.mcq</config>
+  <checked_by_title>CHECKED BY:</checked_by_title>
+  <checked_by>27836</checked_by>
+  <last_saved_title>LAST SAVED BY:</last_saved_title>
+  <last_saved>27836 - Pro/E v. 4200 b. 2024063</last_saved>
+  <created_title>CREATION DATE:</created_title>
+  <created>Sep 29 2026</created>
+ </mc_head>
+
+ <mc_strtabs>
+  <port>3001</port>
+  <cnfg>Config Word</cnfg>
+  <err>ERROR</err>
+  <wrn>WARNING</wrn>
+  <pass>PASS</pass>
+  <stt>Status</stt>
+  <chk>Check Description</chk>
+  <res>Result</res>
+  <all>All of the Above</all>
+  <tab><tabn>SUMM</tabn><tabn_en>SUMMARY</tabn_en></tab>
+  <tab><tabn>REPT</tabn><tabn_en>REPORT</tabn_en></tab>
+  <tab><tabn>INFO</tabn><tabn_en>INFO</tabn_en></tab>
+  <tab><tabn>PARM</tabn><tabn_en>PARAMETER</tabn_en></tab>
+  <tab><tabn>LAYR</tabn><tabn_en>LAYER</tabn_en></tab>
+  <tab><tabn>FEAT</tabn><tabn_en>FEATURE</tabn_en></tab>
+  <tab><tabn>REL</tabn><tabn_en>RELATION</tabn_en></tab>
+  <tab><tabn>DTM</tabn><tabn_en>DATUM</tabn_en></tab>
+  <tab><tabn>MISC</tabn><tabn_en>MISC</tabn_en></tab>
+  <tab><tabn>VDA</tabn><tabn_en>VDA</tabn_en></tab>
+  <misc_str><misc>Highlight Color</misc><misc_en>Highlight Color</misc_en></misc_str>
+  <misc_str><misc>Yellow</misc><misc_en>Yellow</misc_en></misc_str>
+  <misc_str><misc>Red</misc><misc_en>Red</misc_en></misc_str>
+  <misc_str><misc>Blue</misc><misc_en>Blue</misc_en></misc_str>
+  <misc_str><misc>Grey</misc><misc_en>Grey</misc_en></misc_str>
+  <misc_str><misc>Magenta</misc><misc_en>Magenta</misc_en></misc_str>
+  <misc_str><misc>Cyan</misc><misc_en>Cyan</misc_en></misc_str>
+  <misc_str><misc>Green</misc><misc_en>Green</misc_en></misc_str>
+  <misc_str><misc>Brown</misc><misc_en>Brown</misc_en></misc_str>
+  <misc_str><misc>means Model should be saved to ensure this check's accuracy</misc><misc_en>means Model should be saved to ensure this check's accuracy</misc_en></misc_str>
+  <misc_str><misc>Get Input</misc><misc_en>Get Input</misc_en></misc_str>
+  <misc_str><misc>Right Mouse-click to change highlight color</misc><misc_en>Right Mouse-click to change highlight color</misc_en></misc_str>
+  <misc_str><misc>Format: follow a format from list below</misc><misc_en>Format: avoid formats from list below</misc_en></misc_str>
+  <misc_str><misc>Ok</misc><misc_en>Ok</misc_en></misc_str>
+  <misc_str><misc>Cancel</misc><misc_en>Cancel</misc_en></misc_str>
+  <misc_str><misc>Enter a number</misc><misc_en>Enter a number</misc_en></misc_str>
+  <misc_str><misc>Enter a string</misc><misc_en>Enter a string</misc_en></misc_str>
+  <misc_str><misc>Select</misc><misc_en>Select</misc_en></misc_str>
+  <misc_str><misc>Enter reason for IGNORE</misc><misc_en>Enter reason for IGNORE</misc_en></misc_str>
+  <misc_str><misc>Enter density</misc><misc_en>Enter density</misc_en></misc_str>
+ </mc_strtabs>
+
+
+<mc_bom>
+</mc_bom>
+ <mc_checks>
+  <check name='ACCURACY_INFO' tab='MISC' type='UPDATE'>
+   <stat>WARNING</stat>
+   <desc>Model Accuracy</desc>
+   <msg>Model accuracy (Absolute):</msg>
+   <ans>0.000618431796</ans>
+   <func>UPDATE</func>
+   <func_str>Modify Accuracy</func_str>
+   <item><info1>0.00</info1><info2> </info2></item>
+  </check>
+  <check name='BURIED_FEAT' tab='FEATURE' type='ACTION'>
+   <stat>PASS</stat>
+   <desc>Buried Features</desc>
+   <msg>Number of buried features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|DELETE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|Delete|View References</func_str>
+  </check>
+  <check name='CHAMFER_CHILD' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Chamfer Children</desc>
+   <msg>Number of features that are children of chamfers:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='CHILDREN_EXIST' tab='MISC' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Named Children</desc>
+   <msg>Number of features missing specific named children:</msg>
+   <ans>0</ans>
+   <title1>Parent</title1>
+   <title2>Child</title2>
+  </check>
+  <check name='COSMETIC_FEAT' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Cosmetic Features</desc>
+   <msg>Number of cosmetic features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='DATUM_RENAME' tab='DATUM' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Datum Rename Specifications</desc>
+   <msg>Number of datum rename specifications:</msg>
+   <ans>0</ans>
+   <func>RENAME</func>
+   <func_str>Rename Datums</func_str>
+  </check>
+  <check name='DEF_DENSITY' tab='MISC' type='MISC'>
+   <stat>INFO</stat>
+   <desc>Default Densities</desc>
+   <msg>Model densities are not defined:</msg>
+   <ans>2</ans>
+   <item><info1>PTC_SYSTEM_MTRL_PROPS</info1><info2>Master</info2></item>
+   <item><info1>PTC_SYSTEM_MTRL_PROPS (Master)</info1><info2>Body 1</info2></item>
+  </check>
+  <check name='DEFAULT_CHILD' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Default Datum Plane Children</desc>
+   <msg>Number of resumed features that are children of the default datum planes:</msg>
+   <ans>1</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+   <item><info1>Feature id 4</info1><info2> </info2></item>
+  </check>
+  <check name='DTM_AXES_INFO' tab='DATUM' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Datum Axes Information</desc>
+   <msg>Datum axes information:</msg>
+   <ans>0</ans>
+   <title1>Datum</title1>
+  </check>
+  <check name='DTM_CSYS_INFO' tab='DATUM' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Datum Coordinate System Information</desc>
+   <msg>Datum coordinate system information:</msg>
+   <ans>1</ans>
+   <title1>Datum</title1>
+   <title2>Type</title2>
+   <item><info1>CANDIDATE</info1><info2>DEFAULT</info2></item>
+  </check>
+  <check name='DTM_CURVE_INFO' tab='DATUM' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Datum Curve Information</desc>
+   <msg>Datum curve information:</msg>
+   <ans>0</ans>
+   <title1>Datum</title1>
+  </check>
+  <check name='DTM_PLANE_INFO' tab='DATUM' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Datum Plane Information</desc>
+   <msg>Datum plane information:</msg>
+   <ans>0</ans>
+   <title1>Datum</title1>
+   <title2>Type</title2>
+  </check>
+  <check name='DTM_POINT_INFO' tab='DATUM' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Datum Point Information</desc>
+   <msg>Datum point information:</msg>
+   <ans>0</ans>
+   <title1>Datum</title1>
+  </check>
+  <check name='EARLY_CHAMFER' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Early Chamfers</desc>
+   <msg>Number of chamfers within first 25.00% of features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='EARLY_ROUND' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Early Rounds</desc>
+   <msg>Number of rounds within first 25.00% of features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='EDGE_REFERENCES' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Features with Edge References</desc>
+   <msg>Number of features with dimensions referencing an edge:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='FAMILY_INFO' tab='INFO' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Family Table Info/Verify Status</desc>
+   <msg>Family table information:</msg>
+   <ans>NO INSTANCE TABLE</ans>
+   <title1>Instance|Verified|Succeeded</title1>
+  </check>
+  <check name='FEATURE_INFO' tab='FEATURE' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Feature Information</desc>
+   <msg>Number of Feature types:</msg>
+   <ans>2</ans>
+   <title1>Type</title1>
+   <title2>Count</title2>
+   <item><info1>CSYS</info1><info2>1</info2></item>
+   <item><info1>IMPORT</info1><info2>1</info2></item>
+  </check>
+  <check name='FILE_SIZE' tab='INFO' type='NONE'>
+   <stat>INFO</stat>
+   <desc>File Size</desc>
+   <msg>File size:</msg>
+   <ans>102584</ans>
+  </check>
+  <check name='FREEFORM' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Freeform Features</desc>
+   <msg>Number of freeform features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='FT_DEF_VALS' tab='MISC' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Family Table Default Values</desc>
+   <msg>Number of instances having family table items with a value of '*':</msg>
+   <ans>0</ans>
+   <func>UPDATE</func>
+   <func_str>Convert instance items to generic values</func_str>
+  </check>
+  <check name='GEOM_CHECKS' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Geom Checks</desc>
+   <msg>Part contains GEOM CHECKS:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='GEOMETRIC_TOL' tab='MISC' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Geometric Tolerances</desc>
+   <msg>Number of geometric tolerances:</msg>
+   <ans>0</ans>
+  </check>
+  <check name='IGNORE_FEAT' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Ignore Features</desc>
+   <msg>Number of features with ignore parameters:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|RESET|GLBREFVIEW</func>
+   <func_str>Highlight|Reset|View References</func_str>
+  </check>
+  <check name='IMPORT_FEAT' tab='FEATURE' type='HIGHLIGHT'>
+   <stat>WARNING</stat>
+   <desc>Imported Features</desc>
+   <msg>Number of imported features:</msg>
+   <ans>1</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+   <item><info1>Feature id 4</info1><info2> </info2></item>
+  </check>
+  <check name='INCOMPLETE_FEAT' tab='FEATURE' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Incomplete Features</desc>
+   <msg>Number of incomplete features:</msg>
+   <ans>0</ans>
+   <func>DELETE|IGNORE</func>
+   <func_str>Delete|Ignore in future</func_str>
+  </check>
+  <check name='INSERT_MODE' tab='MISC' type='NONE'>
+   <stat>PASS</stat>
+   <desc>Insert Mode</desc>
+   <msg>Insert mode is active:</msg>
+   <ans>NO</ans>
+  </check>
+  <check name='LAYER_DISPSTAT' tab='LAYER' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Layers with 'Isolate' Status</desc>
+   <msg>Number of Active Object layers stored with 'Isolate' status:</msg>
+   <ans>0</ans>
+   <title1>Layer</title1>
+  </check>
+  <check name='LAYER_DTM_BLANK' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>WARNING</stat>
+   <desc>Datum Features on Unblanked Layers</desc>
+   <msg>Number of Datum features that are on unblanked layers:</msg>
+   <ans>1</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+   <item><info1>Feature id 2</info1><info2>DATUM CSYS-CANDIDATE</info2></item>
+  </check>
+  <check name='LAYER_EXT_ITEMS' tab='LAYER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Extra items on Layers</desc>
+   <msg>Number of non-standard items on layers:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|REMOVE</func>
+   <func_str>Highlight|Remove Item from layer</func_str>
+  </check>
+  <check name='LAYER_INFO' tab='LAYER' type='COLLAPSE'>
+   <stat>INFO</stat>
+   <desc>Layer Information</desc>
+   <msg>Number of Layers in Active Object:</msg>
+   <ans>0</ans>
+  </check>
+  <check name='LAYER_MOVE' tab='LAYER' type='ACTION' mult='YES'>
+   <stat>INFO</stat>
+   <desc>Layer Move Specifications</desc>
+   <msg>Number of layer move specifications:</msg>
+   <ans>0</ans>
+   <func>RENAME</func>
+   <func_str>Rename Layer</func_str>
+  </check>
+  <check name='LAYER_PLACE' tab='LAYER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Layer Place</desc>
+   <msg>Number of Active Object layers with items to be added:</msg>
+   <ans>0</ans>
+   <func>PLACE</func>
+   <func_str>Add Required Items to Layer</func_str>
+  </check>
+  <check name='LAYER_STATUS' tab='LAYER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Layer Status</desc>
+   <msg>Number of Active Object layers that are not correct status:</msg>
+   <ans>0</ans>
+   <func>STATUS</func>
+   <func_str>Change Layer Status (from/to)</func_str>
+  </check>
+  <check name='LAYOUT_INFO' tab='INFO' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Notebook Information</desc>
+   <msg>Notebook information:</msg>
+   <ans>0</ans>
+   <title1>Notebook Name</title1>
+  </check>
+  <check name='LOW_TOLERANCE' tab='MISC' type='HIGHLIGHT'>
+   <stat>INFO</stat>
+   <desc>Low Linear Tolerance</desc>
+   <msg>Number of dimensions with linear tolerance less than 0.100000:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT</func>
+   <func_str>Highlight</func_str>
+  </check>
+  <check name='MEMORY_SPACE' tab='INFO' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Memory Space</desc>
+   <msg>Memory space:</msg>
+   <ans>NA</ans>
+  </check>
+  <check name='MERGE_FEAT' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Merged or Cutout Features</desc>
+   <msg>Number of merged or cutout features:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='MINMAXTOL_INFO' tab='INFO' type='HIGHLIGHT'>
+   <stat>INFO</stat>
+   <desc>Minumum Maximum Linear Tolerance</desc>
+   <msg>Minumum and maximum linear tolerance information:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT</func>
+   <func_str>Highlight</func_str>
+  </check>
+  <check name='MODEL_NAME' tab='MISC' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Model Name Errors</desc>
+   <msg>Model name specification errors:</msg>
+   <ans>0</ans>
+   <title1>Error</title1>
+  </check>
+  <check name='MODEL_NAME_STR' tab='MISC' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Model Name</desc>
+   <msg>Model Name:</msg>
+   <ans>CANDIDATE.PRT</ans>
+  </check>
+  <check name='NAMED_FEAT' tab='FEATURE' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Named Features</desc>
+   <msg>Number of named features and the percentage of total features:</msg>
+   <ans>1 [50.00%]</ans>
+   <title1>Named Features</title1>
+   <item><info1>CANDIDATE</info1><info2> </info2></item>
+  </check>
+  <check name='OVERALL_SIZE' tab='INFO' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Model Overall Size</desc>
+   <msg>Model overall size:</msg>
+   <ans>4.00 x 3.01 x 3.59</ans>
+  </check>
+  <check name='PARAM_INFO' tab='PARAMETER' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Parameter Information</desc>
+   <msg>Parameter information:</msg>
+   <ans>13</ans>
+   <title1>Parameter</title1>
+   <title2>Value</title2>
+   <item><info1>PTC_VAL_IMP_PART_STATUS</info1><info2>OK</info2></item>
+   <item><info1>PTC_MP_VAL_IMP_VOLUME</info1><info2>22.291222</info2></item>
+   <item><info1>PTC_MP_VAL_IMP_AREA</info1><info2>38.820794</info2></item>
+   <item><info1>PTC_VAL_IMP_SCORE</info1><info2>PASS</info2></item>
+   <item><info1>PTC_MASTER_MATERIAL</info1><info2>PTC_SYSTEM_MTRL_PROPS</info2></item>
+   <item><info1>PTC_REPORTED_MATERIAL</info1><info2> </info2></item>
+   <item><info1>PTC_MATERIAL_NAME</info1><info2> </info2></item>
+   <item><info1>PTC_UNITS_LENGTH</info1><info2>in</info2></item>
+   <item><info1>PTC_UNITS_MASS</info1><info2>lbm</info2></item>
+   <item><info1>PTC_UNITS_FORCE</info1><info2>in lbm / sec^2</info2></item>
+   <item><info1>PTC_UNITS_TIME</info1><info2>sec</info2></item>
+   <item><info1>PTC_UNITS_TEMPERATURE</info1><info2>F</info2></item>
+   <item><info1>PTC_UNITS_SYSTEM_TYPE</info1><info2>Mass length time (MLT)</info2></item>
+  </check>
+  <check name='PARAM_RENAME' tab='PARAMETER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Parameter Rename Specifications</desc>
+   <msg>Number of parameter rename specifications:</msg>
+   <ans>0</ans>
+   <func>RENAME</func>
+   <func_str>Rename Parameters</func_str>
+  </check>
+  <check name='PARAMCHECK' tab='PARAMETER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Parameter Errors</desc>
+   <msg>Part parameter errors:</msg>
+   <ans>0</ans>
+   <func>UPDATE</func>
+   <func_str>Update Parameter</func_str>
+  </check>
+  <check name='PLANE_PARENT' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>INFO</stat>
+   <desc>Datum Planes with one Parent</desc>
+   <msg>Number of datum planes having 1 parent, also a datum plane:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='PRO_VERSION' tab='INFO' type='NONE'>
+   <stat>PASS</stat>
+   <desc>Last saved Version and Build of Creo Parametric</desc>
+   <msg>Version and Build of Creo Parametric in which the model was last saved:</msg>
+   <ans>4200 2024063 [11.0.0.0]</ans>
+  </check>
+  <check name='REG_FEATURES' tab='FEATURE' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Regular Features</desc>
+   <msg>Number of resumed features:</msg>
+   <ans>2</ans>
+  </check>
+  <check name='RELATION_INFO' tab='RELATION' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Relation Information</desc>
+   <msg>Relation information:</msg>
+   <ans>0</ans>
+  </check>
+  <check name='ROUND_CHILD' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Round Children</desc>
+   <msg>Number of features that are children of rounds:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='SHORT_EDGES' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Short Edges</desc>
+   <msg>Number of edges shorter than 0.500000:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='SIMPREP_INFO' tab='INFO' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Simplified Representation Information</desc>
+   <msg>Simplified representation information:</msg>
+   <ans>0</ans>
+   <title1>Simp Rep Name</title1>
+  </check>
+  <check name='SMALL_CYLSRF' tab='FEATURE' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>Cylindrical Surfaces</desc>
+   <msg>Number of cylindrical surfaces with radius less than 0.500000:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT|IGNORE|GLBREFVIEW</func>
+   <func_str>Highlight|Ignore in future|View References</func_str>
+  </check>
+  <check name='STARTCHECK' tab='MISC' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Start Items</desc>
+   <msg>Number of missing start items (part):</msg>
+   <ans>0</ans>
+   <title1>Missing Items</title1>
+  </check>
+  <check name='STARTPARM' tab='PARAMETER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Missing Parameters</desc>
+   <msg>Start Part Missing parameters:</msg>
+   <ans>0</ans>
+   <func>ADD</func>
+   <func_str>Add Missing Parameters:</func_str>
+  </check>
+  <check name='STARTLAYR' tab='LAYER' type='ACTION' mult='YES'>
+   <stat>PASS</stat>
+   <desc>Missing Layers</desc>
+   <msg>Missing Part layers:</msg>
+   <ans>0</ans>
+   <func>ADD</func>
+   <func_str>Add Missing Layers:</func_str>
+  </check>
+  <check name='SUP_FEATURES' tab='FEATURE' type='INFO'>
+   <stat>PASS</stat>
+   <desc>Suppressed Features</desc>
+   <msg>Number of suppressed features:</msg>
+   <ans>0</ans>
+   <title1>Suppressed Features</title1>
+  </check>
+  <check name='UDF_INFO' tab='FEATURE' type='INFO'>
+   <stat>INFO</stat>
+   <desc>User-defined Features</desc>
+   <msg>User-defined feature information:</msg>
+   <ans>0</ans>
+   <title1>Feature</title1>
+   <title2>Group</title2>
+  </check>
+  <check name='UNITS_LENGTH' tab='MISC' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Model Units for Length</desc>
+   <msg>Model units for length:</msg>
+   <ans>MM</ans>
+  </check>
+  <check name='UNITS_MASS' tab='MISC' type='NONE'>
+   <stat>INFO</stat>
+   <desc>Model Units for Mass</desc>
+   <msg>Model units for mass:</msg>
+   <ans>TONNE</ans>
+  </check>
+  <check name='VIEW_INFO' tab='INFO' type='INFO'>
+   <stat>INFO</stat>
+   <desc>View Information</desc>
+   <msg>View information:</msg>
+   <ans>0</ans>
+   <title1>View</title1>
+  </check>
+  <check name='XSEC_INFO' tab='INFO' type='INFO'>
+   <stat>INFO</stat>
+   <desc>Cross Section Information</desc>
+   <msg>Cross section information:</msg>
+   <ans>0</ans>
+   <title1>Enter NAME for cross-section [Quit]</title1>
+  </check>
+  <check name='EXTERNAL_DEPS' tab='INFO' type='HIGHLIGHT' mult='NO'>
+   <stat>PASS</stat>
+   <desc>External Dependencies Info</desc>
+   <msg>Number of external references:</msg>
+   <ans>0</ans>
+   <func>HIGHLIGHT</func>
+   <func_str>Highlight</func_str>
+  </check>
+ </mc_checks>
+ <mc_lists>
+ </mc_lists>
+</mc_report>

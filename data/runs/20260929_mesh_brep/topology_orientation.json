@@ -1,0 +1,30 @@
+{
+  "B_coarse_29_global": {
+    "shared_edges": 8,
+    "inconsistent_shared_edge_uses": []
+  },
+  "B_coarse_25": {
+    "shared_edges": 8,
+    "inconsistent_shared_edge_uses": []
+  },
+  "B_fine_25": {
+    "shared_edges": 8,
+    "inconsistent_shared_edge_uses": []
+  },
+  "B_closed64_13": {
+    "shared_edges": 12,
+    "inconsistent_shared_edge_uses": []
+  },
+  "B_wrapped64_17": {
+    "shared_edges": 0,
+    "inconsistent_shared_edge_uses": []
+  },
+  "A/inverse_xyz": {
+    "shared_edges": 8,
+    "inconsistent_shared_edge_uses": []
+  },
+  "A/mesh_uv_xyz": {
+    "shared_edges": 8,
+    "inconsistent_shared_edge_uses": []
+  }
+}

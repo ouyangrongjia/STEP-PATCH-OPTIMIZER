@@ -1,0 +1,10 @@
+{
+  "inverse_xyz": {
+    "original_boundary_max_mm": 8.126431830867263e-12,
+    "requested_g1_max_normal_degrees": 46.36101451115191
+  },
+  "mesh_uv_xyz": {
+    "original_boundary_max_mm": 8.126431830867263e-12,
+    "requested_g1_max_normal_degrees": 43.33850717166256
+  }
+}

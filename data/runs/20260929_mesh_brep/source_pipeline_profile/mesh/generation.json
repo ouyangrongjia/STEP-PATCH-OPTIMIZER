@@ -1,0 +1,71 @@
+{
+  "source": {
+    "kind": "original CAD region triangulation",
+    "region": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\source_pipeline_profile\\original_region.step",
+    "deflection_mm": 0.003,
+    "angular_deflection_rad": 0.1,
+    "layout": "Global mesh MVC rectangle with supplied original boundary corner indices; five fixed connected patches; no old candidate geometry",
+    "boundary_corner_edge_indices": [
+      0,
+      6,
+      10,
+      18
+    ],
+    "inner_scale": 0.45
+  },
+  "input_files": [
+    "input.stl",
+    "layout.json"
+  ],
+  "topology": {
+    "vertices": 8631,
+    "triangles": 16766,
+    "edges": 25396,
+    "euler": 1,
+    "components": 1,
+    "boundary_edges": 494,
+    "nonmanifold_edges": 0,
+    "inconsistent_edges": 0,
+    "degenerate_triangles": 0,
+    "area_mm2": 22.242330132582985
+  },
+  "quantization_max_mm": 2.1564774588175234e-06,
+  "collapsed_triangles_removed": 0,
+  "indexing": "Exact binary STL float32 equality; no proximity weld",
+  "prohibited_fields": "No UV, exact normals, CAD points beyond mesh vertices, curves, control points or archived map",
+  "step_read_seconds": 0.23837770009413362,
+  "mesh_and_layout_seconds": 1.7809886001050472,
+  "original_mesh_topology": {
+    "vertices": 8099,
+    "triangles": 15702,
+    "edges": 23800,
+    "euler": 1,
+    "components": 1,
+    "boundary_edges": 494,
+    "nonmanifold_edges": 0,
+    "inconsistent_edges": 0,
+    "degenerate_triangles": 0,
+    "area_mm2": 22.242329832145245
+  },
+  "generator_weld_max_mm": 0.0,
+  "generator_uv": {
+    "flipped": 0,
+    "zero": 0,
+    "orientation": 1,
+    "stretch_ratio": {
+      "rms": 1.6247179143603148,
+      "p50": 1.522088827765618,
+      "p95": 2.2919451410254807,
+      "max": 3.6554574563887616,
+      "min": 1.01183703515742
+    },
+    "area_scale": {
+      "rms": 0.044188249346255405,
+      "p50": 0.03799126950073297,
+      "p95": 0.06882098766936708,
+      "max": 0.08881876695782855,
+      "min": 0.01185295610142785
+    }
+  },
+  "generator_uv_residual": 1.8189894035458565e-12
+}
