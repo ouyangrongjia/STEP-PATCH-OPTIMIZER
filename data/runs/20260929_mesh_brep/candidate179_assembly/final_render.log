@@ -1,0 +1,2 @@
+D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\render.py:17: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells = vtk.vtkCellArray(); cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))

@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\fair_interface.py", line 121, in <module>
+    run(parser.parse_args())
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\fair_interface.py", line 85, in run
+    specs, probes, uv_report = mesh_specs(vertices, tri, meta, layout, outer, 36000, 2909300)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\fair_interface.py", line 32, in mesh_specs
+    params = np.array([GeomAPI_ProjectPointOnCurve(gp_Pnt(*vertices[k]), outer[fi]).LowerDistanceParameter() for k in chain])
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\tools\mesh_brep\fair_interface.py", line 32, in <listcomp>
+    params = np.array([GeomAPI_ProjectPointOnCurve(gp_Pnt(*vertices[k]), outer[fi]).LowerDistanceParameter() for k in chain])
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OCP.OCP.StdFail.StdFail_NotDone: GeomAPI_ProjectPointOnCurve::LowerDistanceParameter

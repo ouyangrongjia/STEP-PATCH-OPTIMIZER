@@ -10,9 +10,9 @@
 
 ## 给定分区的纯网格后端
 
-当前推进优先级是 Creo 中可显示、可识别为实体的水密模型；法向、光顺及表示成本作为后续优化方向。原实验协议和诊断标记保留，当前产物的实体/开放区域区别及查看位置统一见 [精简产物入口](../data/runs/20260929_mesh_brep/final/README.md)。
+当前范围收敛为 candidate-179 局部面片及拼回原模型的整件，要求水密且不能有明显可见褶皱。查看位置统一见 [四个 STEP 入口](../data/runs/20260929_mesh_brep/candidate179/README.md)。
 
-`tools/mesh_brep/` 已实际运行 STL、离散布局、网格 UV、共享边界 XYZ 样条网络、STEP 的链路，并完成原 CAD/缓存不可读时的重跑。当前支持四边盘状图和声明光顺的内部接缝；结构标签仍需提供。闭合自由曲面夹具已通过 Solid、往返和本轮 Creo 检查；candidate-179 的法向及接缝仍失败，A 也未形成基线替换资格。全部结果继续为 `DiagnosticOnly/can_apply=false`。准确参数、独立确认、失败原因及分阶段耗时统一见 [本轮证据](../data/runs/20260929_mesh_brep/RUN.md)。C++ 产品与 GUI 未改变。
+`tools/mesh_brep/` 已实际运行 STL、离散布局、网格 UV、共享边界 XYZ 样条网络、STEP 的链路，并完成原 CAD/缓存不可读时的重跑。当前支持四边盘状图和声明光顺的内部接缝；结构标签仍需提供。新增的独立接口适配阶段使用原 CAD 边界硬约束，再以网格位置/法向重拟合并缝合整件。A、B 整件已通过 OCCT 有效 Solid、往返和 Creo 实体导入；B 成排褶皱明显降低，残余接缝、控制点预算和 Creo ModelCHECK 仍有未通过项。全部结果继续为 `DiagnosticOnly/can_apply=false`。本次修正的准确参数和证据统一见 [接口与光顺记录](../data/runs/20260929_mesh_brep/candidate179_assembly/RUN.md)，原双路线对照见 [原实验](../data/runs/20260929_mesh_brep/RUN.md)。C++ 产品与 GUI 未改变。
 
 ## 当前几何对照与保留工具
 

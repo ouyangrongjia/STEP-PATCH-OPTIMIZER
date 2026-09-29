@@ -23,7 +23,27 @@ python -B -m unittest tools.mesh_brep.test_mesh_brep -v
 
 入口拒绝覆盖已有输出目录。`--controls` 是每个参数方向的控制点数；本原型各面使用同一均匀三次节点空间。`--normal-policy chart` 仅用于重现首版在人工分区边界处使用单侧邻域的消融；默认 `global` 对明确声明光顺的接缝使用完整网格邻域。
 
-可以直接换为 `inputs/closed64`、`--controls 13` 重跑闭合链；或 `inputs/wrapped64`、`--controls 17` 重跑包裹曲面。STEP 只包含新生成的连续样条面，不把输入三角形逐个导出为平面 Face。
+当前交付只保留 candidate-179 的局部和缝合整件入口。STEP 包含新生成的连续样条面，不把输入三角形逐个导出为平面 Face。
+
+## 保持原区域边界、光顺重拟合并缝合
+
+这是原始纯网格后端之后的 **CAD 辅助接口阶段**。`fair_interface.py` 从 B 的五片结果取得连接关系和初始接缝，原 CAD 只提供精确外边界；内部位置与法向目标来自 STL。原边界系数固定，内部接缝变量共享，三维联合拟合使用四点 Gauss 积分及切平面探针，`--corner-planes` 对四个接缝外端点施加硬切平面约束。该五片适配器不适用于任意拓扑。
+
+```powershell
+python -B -m tools.mesh_brep.fair_interface `
+  --mesh-result data/runs/20260929_mesh_brep/B_fine_25 `
+  --stl data/runs/20260929_mesh_brep/inputs/candidate_fine/input.stl `
+  --layout data/runs/20260929_mesh_brep/inputs/candidate_fine/layout.json `
+  --region data/runs/20260929_mesh_brep/baseline_cold/original_region.step `
+  --corner-planes --output data/runs/new_candidate179_interface
+
+python -B -m tools.mesh_brep.assemble_candidate `
+  --audit data/runs/20260929_mesh_brep/baseline_cold/input_audit.json `
+  --patch data/runs/new_candidate179_interface/network.step `
+  --output data/runs/new_candidate179_sewn
+```
+
+独立整件缝合仍使用既有 `0.001 mm` 容差，成功条件是有效 Solid、零自由边；不放大容差补缝。局部原边界落面使用更严格的 `1e-7 mm` 检查。`check_interface.py` 对原邻面单独验证接口法向，`render.py --before <STEP> --after <STEP> --output <PNG> --run <运行目录>` 生成同视角真实曲面及全部参数线。当前四个文件及残余问题见 [交付入口](../../data/runs/20260929_mesh_brep/candidate179/README.md)。
 
 ## 输入合同与适用范围
 
@@ -35,7 +55,7 @@ python -B -m unittest tools.mesh_brep.test_mesh_brep -v
 
 共享链先确定唯一弧长参数，相邻面的边界控制点按方向映射到同一组未知量；角点固定为网格顶点。位置闭合在缝合前成立。网格法向提供软切平面约束，不能保证端点 G1，实测最大接缝法向差必须单列。OCCT 缝合固定为 `1e-7 mm`，不以提高容差制造水密。
 
-拟合变量为 XYZ；位置、法向切平面、二阶参数导数公平项共同构成稀疏线性系统。边界样本为软形状约束，内部接缝系数相等为硬约束。中点求积和固定节点空间是当前实验选择，不声称最优。样条面内简单节点为 C2；非零采样 Jacobian、无 UV 翻转、BRepCheck 有效均不足以证明整个连续曲面无自交。
+拟合变量为 XYZ；位置、法向切平面、二阶参数导数光顺项共同构成稀疏线性系统。纯网格后端的边界样本为软形状约束，内部接缝系数相等为硬约束。原对照保留 `quadrature_order=1` 以复现；它不能完整积分三次样条的导数平方，新的接口光顺采用 `quadrature_order=4`。四个硬切平面方程通过稀疏约束系统求解，实际残差写入报告。样条面内简单节点为 C2；非零采样 Jacobian、无 UV 翻转、BRepCheck 有效均不足以证明整个连续曲面无自交。
 
 ## 数据生成、A 和独立评估
 

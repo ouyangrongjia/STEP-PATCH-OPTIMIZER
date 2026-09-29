@@ -75,6 +75,24 @@ def render_shape(shape, path, center, axes, scale, wire=False, error=None):
     writer = vtk.vtkPNGWriter(); writer.SetFileName(str(path)); writer.SetInputConnection(capture.GetOutputPort()); writer.Write(); window.Finalize()
 
 
+def compare_repair(run, before, after, output):
+    run, output = Path(run), Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    ref = np.load(run/'baseline_cold/reference.npz')
+    font = ImageFont.truetype('C:/Windows/Fonts/msyh.ttc', 25)
+    board = Image.new('RGB', (1800, 1430), 'white'); draw = ImageDraw.Draw(board)
+    for col, (label, source) in enumerate([('修正前：边界适配后有明显褶皱', before), ('修正后：联合光顺与端点切平面约束', after)]):
+        shape = read_step(source)
+        for mode in range(2):
+            path = output.parent/f'{output.stem}_{col}_{mode}.png'
+            render_shape(shape, path, ref['center'], ref['axes'], 3.35, bool(mode))
+            board.paste(Image.open(path), (900*col, 50+680*mode))
+        draw.text((900*col+15, 12), label, font=font, fill='#20324b')
+        draw.text((900*col+15, 700), '全部节点参数线；相同相机、材质和光照', font=font, fill='#20324b')
+    draw.text((15, 1388), '真实 STEP 曲面与 D1 法向；未进行显示法向平滑。残余接缝问题见数值报告。', font=font, fill='#803724')
+    board.save(output)
+
+
 def compose(run):
     run = Path(run); out = run/'figures'; out.mkdir(exist_ok=True)
     source = run/'baseline_cold/original_region.step'
@@ -97,15 +115,6 @@ def compose(run):
         draw.text((col*900+15, row*1390+710), '全部节点参数线 + 每方向 11 条等参线', font=font, fill='#20324b')
     draw.text((20, 2760), '真实 STEP 表面及导数法向；全部视图使用同一相机、光照、材质与尺度。未通过项见报告。', font=font, fill='#803724')
     canvas.save(out/'candidate_comparison.png')
-    for case, title in [('B_closed64_13', '闭合自由曲面夹具 · 6 面 / 1014 点'), ('B_wrapped64_17', '240° 包裹区域 · 1 面 / 289 点')]:
-        shape = read_step(run/case/'network.step'); p, _, _, _ = tessellate(shape)
-        cen = (p.min(axis=0)+p.max(axis=0))/2
-        ax = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0.]])
-        board = Image.new('RGB', (1800, 730), 'white'); d = ImageDraw.Draw(board)
-        for mode in range(2):
-            f = out/f'{case}_{mode}.png'; render_shape(shape, f, cen, ax, 2.7, bool(mode)); board.paste(Image.open(f), (mode*900, 55))
-        d.text((20, 12), title+'；同相机真实曲面 / 全节点参数线', font=font, fill='#20324b')
-        board.save(out/f'{case}.png')
     # True triangle UV charts; no synthetic regularized UV illustration.
     import matplotlib
     matplotlib.use('Agg')
@@ -130,4 +139,12 @@ def compose(run):
 
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser(); p.add_argument('--run', required=True); compose(p.parse_args().run)
+    p = argparse.ArgumentParser(); p.add_argument('--run', required=True)
+    p.add_argument('--before'); p.add_argument('--after'); p.add_argument('--output')
+    a = p.parse_args()
+    if any([a.before, a.after, a.output]):
+        if not all([a.before, a.after, a.output]):
+            p.error('--before, --after and --output must be supplied together')
+        compare_repair(a.run, a.before, a.after, a.output)
+    else:
+        compose(a.run)

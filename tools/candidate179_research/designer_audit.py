@@ -50,7 +50,7 @@ def footprints(shape,data):
     return dict(patches=records,overlaps=overlaps,total_projected_area_mm2=sum(p.area for p in polys))
 
 
-def original_boundaries(out,protocol,variants,fits):
+def original_boundaries(out,protocol,variants,fits,output=None):
     data=np.load(out/'reference.npz');audit=json.loads((out/'input_audit.json').read_text(encoding='utf-8'))
     original=read_step(audit['source']);allfaces=shapes(original,TopAbs_FACE);selected=set(audit['selected_face_ids'])
     region=read_step(out/'original_region.step');regional_edges,_,_=original_loop(region)
@@ -79,12 +79,13 @@ def original_boundaries(out,protocol,variants,fits):
             row['variants'][name]=dict(original_curve_to_surface_mm=stats(np.linalg.norm(p-points,axis=1)),
                 adjacent_normal_degrees=stats(np.degrees(np.arccos(np.clip(np.sum(n*normal,axis=1),-1,1)))))
         rows.append(row)
-    if (out/'boundary_audit.json').exists():
-        previous=json.loads((out/'boundary_audit.json').read_text(encoding='utf-8'))
+    destination=Path(output) if output is not None else out/'boundary_audit.json'
+    if destination.exists():
+        previous=json.loads(destination.read_text(encoding='utf-8'))
         prior={e['original_edge_id']:e for e in previous['edges']}
         for row in rows:
             merged=dict(prior.get(row['original_edge_id'],{}).get('variants',{}));merged.update(row['variants']);row['variants']=merged
-    dump(out/'boundary_audit.json',dict(original_edges=len(rows),samples_per_edge=385,edges=rows))
+    dump(destination,dict(original_edges=len(rows),samples_per_edge=385,edges=rows))
     return {name:dict(original_boundary_max_mm=max(r['variants'][name]['original_curve_to_surface_mm']['max'] for r in rows),
         requested_g1_max_normal_degrees=max(r['variants'][name]['adjacent_normal_degrees']['max'] for r in rows if r['requested_continuity']=='G1')) for name in variants}
 

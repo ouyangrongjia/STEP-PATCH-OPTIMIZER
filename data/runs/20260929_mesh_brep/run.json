@@ -1257,5 +1257,8 @@
     "Original outer-edge identity does not apply to B; new shared boundaries use exact common coefficients.",
     "Same-face global self-intersection is not certified; sampled regularity and pairwise OCCT checks are reported.",
     "CAD regional import checks do not certify local replacement into the original whole part."
-  ]
+  ],
+  "current_delivery": "candidate179/README.md",
+  "candidate179_followup": "candidate179_assembly/run.json",
+  "initial_comparison_scope": "Historical first A/B comparison; later CAD-assisted interface fairing and whole-part checks are reported separately"
 }

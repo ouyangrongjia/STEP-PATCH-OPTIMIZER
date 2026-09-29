@@ -1,8 +1,8 @@
 # 网格参数化与纯网格 B-Rep：双路线验证
 
-只查看 A/B 最终模型时，使用 [精简产物入口](final/README.md)。该入口按当前 Creo 实体/水密优先级说明结果；下文保留本轮原始实验协议和测量。
+当前只交付 **candidate-179 的 A/B 局部面片与缝合整件**，见 [四个 STEP](candidate179/README.md)。B 已追加精确原接口约束、光顺重拟合和整件 Creo 检查；截图中的成排褶皱已明显降低，残余接缝和 Creo ModelCHECK 仍未通过。最新数值见 [本次修正](candidate179_assembly/RUN.md)。
 
-**本轮保留 B 的给定分区纯网格后端，旧五片继续作为诊断对照。** A 证实对应关系可明显加速，但没有证实曲面质量改善；B 已脱离 CAD 重建并导出真实 STEP，在闭合自由曲面夹具上得到有效 Solid。candidate-179 的 B 距离和表达预算改善，最坏法向及人工接缝光顺变差，仍为 `DiagnosticOnly/can_apply=false`。
+以下保留最初 A/B 参数化对照的测量口径，数值不是新修正版的指标。原纯网格后端仍保留，后加的 CAD 接口适配明确独立记账；原始四片和五片基线不变。
 
 代码和命令见 [工具说明](../../../tools/mesh_brep/README.md)。机器事实：[run.json](run.json)、[完整指标 CSV](comparison.csv)、[分阶段计时 CSV](timing.csv)、[预先记录的协议](protocol.json)、[选型冻结记录](selection_freeze.json)、[环境](environment.json)。本分支从 `6efff7e` 开始；主工作区已有 STL 与文档修改保持，历史四片、`aligned_inner_cubic` 和原输入均保留。
 
@@ -16,7 +16,7 @@
 
 B 的输入是“给定分区条件下的纯网格重建”。candidate-179 生成阶段从原始 49 面网格选择已声明的四个边界角点索引，用全局网格参数图剪出四个外围片及中央片；只把顶点、三角形、单位、公差、分区、角点、边链交给重建。它没有自动发现工程分区，也没有读取旧候选的 XY 图、控制网、精确法向或曲线。B 放弃继承原 26 条接口的表达，压缩收益不能全部归于 UV。
 
-B 的 24000 为目标采样数；按片面积分配取整后，candidate-179 实取 23997、闭合 32/64 分别 23997/23998、包裹区域 24000。各次实际数量记录在 `reconstruction.json/solver/training_samples`。
+B 的 24000 为目标采样数；按片面积分配取整后，candidate-179 实取 23997。各次实际数量记录在 `reconstruction.json/solver/training_samples`。
 
 A 使用原 CAD 精确目标。每点先取最近离散三角形的三维位置，再用其重心坐标插值 UV；真实点到该三角面最大 **0.003007 mm**，不是零。A 的三维拟合与旧高度目标在公平项、边界法向目标和可表达函数族上不同；只在两个 A 配置之间归因参数化变化。两者的原接口参数、共享变量和 XYZ 目标相同。详细 [对应关系与畸变](A/mesh_correspondence.json) 保留了该误差。
 
@@ -52,22 +52,9 @@ B 粗/细网格分别 **8631 / 10730 个索引顶点，16766 / 20936 个三角�
 
 最坏 CAD 法向点位于新外边窄带，距外边约 **0.00121 mm**、距内接缝约 **1.30 mm**；最坏接缝法向位于端点。见 [定位](localization.json)、[端点与包裹诊断](junction_and_wrap_diagnostics.json)。这说明下一处瓶颈是边界窄带的形状/切平面兼容及接缝端点导数，而不是 UV 线性求解速度。
 
-## 包裹区域与闭合自由曲面
-
-生成器只输出网格和结构标签，生成公式没有进入重建。闭合输入的六个面全部重建，没有回用解析曲面或 CAD 封盖。两个夹具都执行了 32→64 网格分辨率复核，控制点与训练样本数不随分辨率变化。这里不存在原 CAD，STEP→原 CAD 指标为 N/A。
-
-| 输入 | 顶点 / 三角形 | 面 / 控制点 / 标量变量 | 网格→面 / 面→网格最大 mm | 网格法向最大 ° | 内缝最大 ° | 结果 |
-|---|---:|---:|---:|---:|---:|---|
-| 闭合 32 | 6146 / 12288 | 6 / 1014 / 2574 | 0.001395 / 0.001310 | 0.777 | 0.768 | 有效 Solid |
-| 闭合 64 | 24578 / 49152 | 6 / 1014 / 2574 | 0.000406 / 0.000417 | 0.395 | 0.361 | 有效 Solid，Creo 通过 |
-| 包裹 32 | 1089 / 2048 | 1 / 289 / 855 | 0.004184 / 0.004064 | 2.864 | N/A | 开放 Face |
-| 包裹 64 | 4225 / 8192 | 1 / 289 / 855 | 0.001108 / 0.001026 | 1.896 | N/A | 开放 Face，Creo 通过 |
-
-表中网格法向来自面积加权顶点法向；原三角面片法向也独立报告。细闭合/包裹的反向面片法向最大约 1.729° / 2.351°。240° 包裹区域相对 PCA 法向方向有正负两类投影，不能稳定作为旧 PCA 高度场；此次用一张 XYZ 曲面完成，未人为分成平面片。闭合 64 的 12 条共享边方向相反，位置差小于 `7e-16 mm`，STEP 往返为 1 个有效 Solid、0 自由边。见 [方向检查](topology_orientation.json)、[闭合 CAD 检查](B_closed64_13/extra_checks.json)。
-
 ## CAD 检查与数据隔离
 
-局部开放区域只要求内部闭合，四条新外边正常存在；B 没有被强贴回旧整件。相邻曲面在构造前共享系数及一致参数，SameParameter、Curve-on-Surface、共享边拓扑方向、往返与相邻面求交均实际检查。candidate-179 的 B 最大落面残差约 `3.4e-13 mm`。所有输出继续携带诊断状态。
+初始纯网格局部阶段只要求内部闭合，四条新外边正常存在；随后根据用户要求另加了原接口适配和整件缝合。相邻曲面在构造前共享系数及一致参数，SameParameter、Curve-on-Surface、共享边拓扑方向、往返与相邻面求交均实际检查。candidate-179 的 B 最大落面残差约 `3.4e-13 mm`。所有输出继续携带诊断状态。
 
 使用同一 Creo 11 模板做区域尺度对照：
 
@@ -77,11 +64,10 @@ B 粗/细网格分别 **8631 / 10730 个索引顶点，16766 / 20936 个三角�
 | 旧五片区域 | 1 | 2 | 2 |
 | A 网格 UV 区域 | 1 | 2 | 2 |
 | B 粗 29、粗 25、细 25 | 各 0 | 各 0 | 各 0 |
-| 闭合 64、包裹 64 | 各 0 | 各 0 | 各 0 |
 
-原区域的短边错误是原有问题。B 的本轮 ModelCHECK 为通过，仍有导入特征/精度等警告；距离、法向及光顺门不由 Creo 代替。区域绝对 Accuracy 约 `0.0008896–0.0008899 mm`，不混用历史整件约 `0.00424 mm` 的检查口径。A 反求配置未单独运行 Creo，A 整件亦未重复 Creo；已运行的是 A 网格 UV 局部区域。原始 XML/HTML/日志位于 [creo](creo)，汇总见 `run.json` 的 `cad`。
+原区域的短边错误是原有问题。B 的本轮 ModelCHECK 为通过，仍有导入特征/精度等警告；距离、法向及光顺门不由 Creo 代替。区域绝对 Accuracy 约 `0.0008896–0.0008899 mm`，不混用历史整件约 `0.00424 mm` 的检查口径。这组初始对照未运行 A 反求 Creo，A/B 整件的后续检查单列在最新记录中。原始 XML/HTML/日志位于 [creo](creo)，汇总见 `run.json` 的 `cad`。
 
-[candidate 隔离证据](isolation_candidate/result/isolation_evidence.json) 记录 1593 个原 CAD、旧候选和 CAD 辅助缓存被 Windows 独占句柄锁定；Python 与原生 OCCT 的原 STEP/旧候选读取探针均失败。子进程实际只打开 `input.stl` 和 `layout.json`，重建后控制点与非隔离 B25 **完全一致**。另有 [闭合隔离重跑](isolation_closed/result/isolation_evidence.json)，同样成功生成有效 Solid。隔离包只含五个 B 模块；没有 `prepare.py`、生成器、A 或评估器。
+[candidate 隔离证据](isolation_candidate/result/isolation_evidence.json) 记录 1593 个原 CAD、旧候选和 CAD 辅助缓存被 Windows 独占句柄锁定；Python 与原生 OCCT 的原 STEP/旧候选读取探针均失败。子进程实际只打开 `input.stl` 和 `layout.json`，重建后控制点与非隔离 B25 **完全一致**。隔离包只含五个 B 模块；没有 `prepare.py`、生成器、A 或评估器。
 
 ## 时间、失败与修正
 
@@ -119,8 +105,7 @@ B 的已提取原区域→网格含布局为粗 **1.997 s**、细 **2.528 s**。
 
 - A：[反求对照 STEP](A/inverse_xyz/network.step)、[网格 UV STEP](A/mesh_uv_xyz/network.step)。
 - B：[相近复杂度 STEP](B_coarse_29_global/network.step)、[25×25 粗网格 STEP](B_coarse_25/network.step)、[25×25 细网格 STEP](B_fine_25/network.step)。
-- 完整链：[闭合自由曲面 STEP](B_closed64_13/network.step)、[包裹曲面 STEP](B_wrapped64_17/network.step)。
-- 图：[同视角真实表面与全部参数线](figures/candidate_comparison.png)、[实际 UV](figures/uv_comparison.png)、[外边窄带放大](figures/boundary_closeup.png)、[同色标实测法向](figures/normal_error_comparison.png)、[闭合体](figures/B_closed64_13.png)、[包裹区域](figures/B_wrapped64_17.png)。
+- 图：[同视角真实表面与全部参数线](figures/candidate_comparison.png)、[实际 UV](figures/uv_comparison.png)、[外边窄带放大](figures/boundary_closeup.png)、[同色标实测法向](figures/normal_error_comparison.png)。
 
 这些图已经实际查看。STEP 三角化使用真实曲面导数法向，没有用网格法向平滑滤镜修改视觉；线框显示每个原生节点及每方向 11 条等参线，相机、光照、材质和尺度固定。图中 A 外圈起伏与 B 外边局部问题仍可见，不能用较规整的参数线判定通过。
 

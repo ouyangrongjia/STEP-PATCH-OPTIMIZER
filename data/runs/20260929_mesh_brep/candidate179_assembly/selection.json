@@ -1,0 +1,11 @@
+{
+  "selected": "fair_B_corners",
+  "selected_before_final_CAD_evaluation": true,
+  "reason": "Visible stripe wrinkles suppressed; four exact corner tangent planes reduce endpoint discontinuity while preserving all 26 original boundary curves. Mesh-only development distance does not worsen materially.",
+  "development_seed": 2909301,
+  "remaining_issue": "Internal seam maximum still 6.716 degrees in the endpoint neighborhood; nominal C0 lines still have 2.801 degree sampled normal jump. No full smoothness pass claimed.",
+  "no_further_parameter_selection": true,
+  "final_seed": 2909400,
+  "final_samples": 30000,
+  "reverse_samples": 12000
+}

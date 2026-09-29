@@ -7,10 +7,30 @@ import numpy as np
 from .mesh import read_stl, write_stl, charts, audit, mean_value, side_uv
 from .generate import fixture
 from .reconstruct import reconstruct
-from .splines import knots, tensor, evaluate, shared_maps, side_indices
+from .splines import knots, tensor, evaluate, shared_maps, side_indices, quadrature, joint_fit
 
 
 class MeshBRepTests(unittest.TestCase):
+    def test_bicubic_fairness_integral(self):
+        t = knots(4); p = np.zeros(16); p[-1] = 1.  # u^3 v^3
+        q, w = quadrature(t, t, 4)
+        self.assertAlmostEqual(float(w@np.square(tensor(q, t, t, 2, 0)@p)), 12/7, places=12)
+        midpoint, mw = quadrature(t, t, 1)
+        self.assertGreater(abs(float(mw@np.square(tensor(midpoint, t, t, 2, 0)@p))-12/7), 1.)
+
+    def test_hard_tangent_resists_conflicting_data(self):
+        from scipy import sparse
+        t = knots(4); q, _ = quadrature(t, t, 5)
+        spec = dict(uv=q, points=np.c_[q, .1*q[:, 0]], normals=np.tile([0., 0., 1.], (len(q), 1)),
+                    tu=t, tv=t, lengths=[1., 1.])
+        probe = np.array([[.5, .5]])
+        poles, report = joint_fit([spec], [sparse.eye(16)], [np.zeros((16, 3))], [],
+                                 normal_weight=0., fairness=0.,
+                                 hard_tangents=[(0, probe, np.array([[0., 0., 1.]]), [1., 0.])])
+        derivative = tensor(probe, t, t, 1, 0)@poles[0].reshape(-1, 3)
+        self.assertLess(abs(derivative[0, 2]), 1e-10)
+        self.assertLess(report['hard_tangent_max_residual'], 1e-10)
+
     def test_stl_does_not_weld_thin_wall(self):
         p = np.array([[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]])
         vertices = np.r_[p, p+np.array([0, 0, 1e-5])]

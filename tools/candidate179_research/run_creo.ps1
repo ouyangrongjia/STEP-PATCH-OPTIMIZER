@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory=$true)][string]$OutputDir,
     [Parameter(Mandatory=$true)][string]$CreoRoot,
     [int]$TimeoutSeconds=240,
-    [string]$ExistingImportDirectory=''
+    [string]$ExistingImportDirectory='',
+    [ValidatePattern('^[a-zA-Z][a-zA-Z0-9_]{0,30}$')][string]$ModelName='candidate'
 )
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -34,7 +35,7 @@ try {
         $result.existing_import_directory=[System.IO.Path]::GetFullPath($ExistingImportDirectory)
         $assemblyRoot=$ExistingImportDirectory
     } else {
-        $staged=Join-Path $stageDir 'candidate.step'
+        $staged=Join-Path $stageDir ($ModelName+'.step')
         Copy-Item -LiteralPath $stepAbsolute -Destination $staged
         $dxc=Join-Path $stageDir 'import.dxc'
         New-DxcFile -Path $dxc -TtdPath (Join-Path $common 'text/ttds/step_3d_import.ttd') -TaskName 'STEP 3D Import' -ObjectPath $staged -TaskOutputDir $importDir -Syntax 'ObjectText'
@@ -44,7 +45,8 @@ try {
     }
     $result.generated_parts=$parts
     if ($parts.Count) {
-        $assemblies=@(Get-ChildItem -LiteralPath $assemblyRoot -File | Where-Object { $_.Name -match '^candidate\.asm\.\d+$' } | ForEach-Object FullName)
+        $assemblyPattern='^'+[regex]::Escape($ModelName)+'\.asm\.\d+$'
+        $assemblies=@(Get-ChildItem -LiteralPath $assemblyRoot -File | Where-Object { $_.Name -match $assemblyPattern } | ForEach-Object FullName)
         $result.root_assemblies=$assemblies
         $result.component_checks=@()
         $index=0

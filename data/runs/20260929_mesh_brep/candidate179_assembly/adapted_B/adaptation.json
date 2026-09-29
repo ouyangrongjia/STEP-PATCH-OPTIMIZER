@@ -1,0 +1,572 @@
+{
+  "stage": "CAD-assisted interface adaptation after pure mesh reconstruction",
+  "source_mesh_reconstruction": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\B_fine_25",
+  "interface_CAD": "D:\\pyProject\\step-patch-optimizer-worktrees\\mesh-brep-20260929\\data\\runs\\20260929_mesh_brep\\baseline_cold\\original_region.step",
+  "changed": "Outer CAD curves and tiny shared radial-corner adjustment; center surface unchanged",
+  "corner_change_mm": [
+    1.066228126667479e-06,
+    1.7767045701865441e-06,
+    1.5853795449995844e-06,
+    8.730328346620136e-07
+  ],
+  "surfaces": [
+    {
+      "face": 0,
+      "controls": [
+        120,
+        25
+      ],
+      "interpolation_boundary_roundoff_mm": 4.973799150320701e-14,
+      "target_approximation_mm": {
+        "rms": 2.8849450638129727e-06,
+        "p50": 2.7560013466313994e-07,
+        "p95": 4.492911872042391e-06,
+        "max": 6.049473341454624e-05,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 1,
+      "controls": [
+        87,
+        25
+      ],
+      "interpolation_boundary_roundoff_mm": 3.552713678800501e-14,
+      "target_approximation_mm": {
+        "rms": 5.142346269238238e-06,
+        "p50": 1.886360650255181e-08,
+        "p95": 2.9473841057980873e-06,
+        "max": 0.00011567061365821694,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 2,
+      "controls": [
+        152,
+        25
+      ],
+      "interpolation_boundary_roundoff_mm": 4.263256414560601e-14,
+      "target_approximation_mm": {
+        "rms": 2.508395659864412e-06,
+        "p50": 2.0726975710906266e-07,
+        "p95": 5.474656200154157e-06,
+        "max": 2.346506358542357e-05,
+        "min": 0.0
+      }
+    },
+    {
+      "face": 3,
+      "controls": [
+        151,
+        25
+      ],
+      "interpolation_boundary_roundoff_mm": 4.263256414560601e-14,
+      "target_approximation_mm": {
+        "rms": 1.600194345600746e-06,
+        "p50": 5.927651038574726e-08,
+        "p95": 2.464874506165675e-06,
+        "max": 3.0798355738885234e-05,
+        "min": 0.0
+      }
+    }
+  ],
+  "topology": {
+    "faces": 5,
+    "edges": 34,
+    "solids": 0,
+    "free_edges": 26,
+    "multiple_edges": 0,
+    "brep_valid": true,
+    "maximum_edge_tolerance_mm": 1e-07
+  },
+  "cad_checks": {
+    "max_curve_on_surface_mm": 1.0992052488276059e-11,
+    "same_parameter_or_range_failures": 0,
+    "edges": [
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.913860570657313e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.135538432196605e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.605135151401909e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.34898060559683e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.822506577900197e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          1.0992052488276059e-11
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          2.1683198553528097e-14,
+          2.1683198553528097e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          7.494680230379633e-12,
+          2.1316282072803006e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          2.1683198553528097e-14,
+          2.1683198553528097e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.646149180811433e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.918637843844892e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.866738208097218e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.97913357595824e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          1.591302455776226e-14,
+          1.591302455776226e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          7.20896578676641e-12,
+          1.5888218580782548e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.687277461489815e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          1.0170070967527642e-11
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.160963358443753e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.900517987021724e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          9.450933617640187e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          4.945806277843284e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.110160676796124e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          4.5248408023407325e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          1.5888218580782548e-14,
+          1.5888218580782548e-14
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          9.050027183618158e-12,
+          3.3090338331346405e-13
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.122477066289159e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.665089783662711e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.115980184640597e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          6.402460490460594e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.027260643627642e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          7.0737339697950854e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          5.809663507382482e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 1,
+        "curve_on_surface_mm": [
+          8.924890538014624e-12
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      },
+      {
+        "owners": 2,
+        "curve_on_surface_mm": [
+          7.834281453328303e-12,
+          3.1959123042473447e-13
+        ],
+        "same_parameter": true,
+        "same_range": true,
+        "tolerance_mm": 1e-07
+      }
+    ]
+  },
+  "actual_support_control_points": 13375,
+  "normal_and_smoothness": "Optimization diagnostics, not a claim of exact G1",
+  "wall_seconds": 3.326194600202143,
+  "boundary_coverage": {
+    "original_edges": 26,
+    "samples": 10010,
+    "maximum_distance_mm": 8.104084885706105e-12,
+    "hard_constraint_passed": true,
+    "edges": [
+      {
+        "original_edge": 0,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 4.589428546356157e-12
+      },
+      {
+        "original_edge": 1,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 4.589428546356157e-12
+      },
+      {
+        "original_edge": 2,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 3.5238787452045624e-12
+      },
+      {
+        "original_edge": 3,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 2.6574138017363174e-12
+      },
+      {
+        "original_edge": 4,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 4.1392012272212835e-12
+      },
+      {
+        "original_edge": 5,
+        "face": 0,
+        "samples": 385,
+        "maximum_distance_mm": 4.1392012272212835e-12
+      },
+      {
+        "original_edge": 6,
+        "face": 1,
+        "samples": 385,
+        "maximum_distance_mm": 4.198561435940392e-12
+      },
+      {
+        "original_edge": 7,
+        "face": 1,
+        "samples": 385,
+        "maximum_distance_mm": 4.198561435940392e-12
+      },
+      {
+        "original_edge": 8,
+        "face": 1,
+        "samples": 385,
+        "maximum_distance_mm": 2.259774638826269e-12
+      },
+      {
+        "original_edge": 9,
+        "face": 1,
+        "samples": 385,
+        "maximum_distance_mm": 2.259774638826269e-12
+      },
+      {
+        "original_edge": 10,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 6.678279214646786e-12
+      },
+      {
+        "original_edge": 11,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 6.678279214646786e-12
+      },
+      {
+        "original_edge": 12,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 5.039012536880203e-12
+      },
+      {
+        "original_edge": 13,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 3.0816009134378114e-12
+      },
+      {
+        "original_edge": 14,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 3.0806867633656898e-12
+      },
+      {
+        "original_edge": 15,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 1.2151851872741264e-12
+      },
+      {
+        "original_edge": 16,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 2.089383052389688e-12
+      },
+      {
+        "original_edge": 17,
+        "face": 2,
+        "samples": 385,
+        "maximum_distance_mm": 2.089383052389688e-12
+      },
+      {
+        "original_edge": 18,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 8.104084885706105e-12
+      },
+      {
+        "original_edge": 19,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 8.104084885706105e-12
+      },
+      {
+        "original_edge": 20,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 1.455594096470167e-12
+      },
+      {
+        "original_edge": 21,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 1.455594096470167e-12
+      },
+      {
+        "original_edge": 22,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 6.658972330866089e-12
+      },
+      {
+        "original_edge": 23,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 6.658972330866089e-12
+      },
+      {
+        "original_edge": 24,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 1.5360259380729663e-12
+      },
+      {
+        "original_edge": 25,
+        "face": 3,
+        "samples": 385,
+        "maximum_distance_mm": 1.5360259380729663e-12
+      }
+    ],
+    "constraint": "Exact shared CAD boundary curves; samples verify their embedding, not a soft fitting weight"
+  },
+  "center_surface_unchanged": true
+}

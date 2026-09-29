@@ -82,7 +82,18 @@ def shared_maps(vertices, charts, n):
     return maps, offsets, uses, len(free)
 
 
-def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairness=1e-6, seam_weight=.01):
+def quadrature(tu, tv, order=4):
+    """Integrate each polynomial span; order four covers squared cubic terms."""
+    nodes, weights = np.polynomial.legendre.leggauss(order)
+    def spans(t):
+        t = np.unique(t); widths = np.diff(t)
+        return ((t[:-1, None]+t[1:, None])/2+widths[:, None]*nodes/2).ravel(), (widths[:, None]*weights/2).ravel()
+    u, wu = spans(tu); v, wv = spans(tv)
+    return np.stack(np.meshgrid(u, v, indexing='ij'), axis=-1).reshape(-1, 2), np.outer(wu, wv).ravel()
+
+
+def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairness=1e-6, seam_weight=.01,
+              quadrature_order=1, hard_tangents=()):
     """Shared by A ablations and B. specs contain explicit XYZ/normal/UV data.
 
     It has no access to source geometry; fixed coefficients are eliminated.
@@ -107,11 +118,9 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
         if 'boundary_uv' in spec:
             buv, bp = spec['boundary_uv'], spec['boundary_points']
             coordinates(tensor(buv, tu, tv), mapping, initial, bp, np.sqrt(10./len(bp)))
-        # Quadrature per knot span, so high-frequency control modes are observed.
-        unique_u, unique_v = np.unique(tu), np.unique(tv)
-        u = (unique_u[:-1]+unique_u[1:])/2; v = (unique_v[:-1]+unique_v[1:])/2
-        quad = np.stack(np.meshgrid(u, v, indexing='ij'), axis=-1).reshape(-1, 2)
-        areas = np.outer(np.diff(unique_u), np.diff(unique_v)).ravel()
+        # Four Gauss points integrate the squared bicubic derivative terms.
+        # Order one remains available to reproduce the original experiment.
+        quad, areas = quadrature(tu, tv, quadrature_order)
         for du, dv, length in [(2, 0, lu*lu), (1, 1, lu*lv/np.sqrt(2)), (0, 2, lv*lv)]:
             op = tensor(quad, tu, tv, du, dv).multiply(np.sqrt(areas)[:, None]).tocsr()
             coordinates(op, mapping, initial, np.zeros((len(quad), 3)), np.sqrt(fairness)/length)
@@ -124,13 +133,33 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
     scale = 1/np.maximum(np.sqrt(np.asarray(matrix.power(2).sum(axis=0)).ravel()), 1e-15)
     a = matrix@sparse.diags(scale)
     h = (a.T@a).tocsc()+sparse.eye(unknowns*3, format='csc')*1e-12
-    g = a.T@target; assembled = time.perf_counter()
-    factor = splu(h); x = factor.solve(g); solved = time.perf_counter()
+    g = a.T@target
+    constraints, values = [], []
+    for fi, uv, normal, direction in hard_tangents:
+        spec, mapping, initial = specs[fi], maps[fi], offsets[fi]
+        op = (tensor(uv, spec['tu'], spec['tv'], 1, 0)*direction[0]+
+              tensor(uv, spec['tu'], spec['tv'], 0, 1)*direction[1])
+        q = op@mapping
+        constraints.append(sparse.hstack([q.multiply(normal[:, k, None]) for k in range(3)], format='csr'))
+        values.append(-np.einsum('ij,ij->i', op@initial, normal))
+    system, system_rhs = h, g
+    if constraints:
+        constraint = sparse.vstack(constraints, format='csc'); value = np.concatenate(values)
+        scaled_constraint = constraint@sparse.diags(scale)
+        row_scale = 1/np.maximum(np.sqrt(np.asarray(scaled_constraint.power(2).sum(axis=1)).ravel()), 1e-15)
+        c = sparse.diags(row_scale)@scaled_constraint
+        system = sparse.bmat([[h, c.T], [c, None]], format='csc')
+        system_rhs = np.r_[g, value*row_scale]
+    assembled = time.perf_counter()
+    factor = splu(system); solution = factor.solve(system_rhs); x = solution[:unknowns*3]
+    solved = time.perf_counter()
     coeff = (x*scale).reshape(3, unknowns).T
     poles = [(m@coeff+p0).reshape(len(s['tu'])-4, len(s['tv'])-4, 3) for s, m, p0 in zip(specs, maps, offsets)]
     report = dict(independent_scalar_variables=unknowns*3, matrix_rows=matrix.shape[0], matrix_nnz=matrix.nnz,
-                  normal_weight=normal_weight, fairness=fairness, seam_weight=seam_weight,
-                  relative_linear_residual=float(np.linalg.norm(h@x-g)/max(np.linalg.norm(g), 1e-30)),
+                  normal_weight=normal_weight, fairness=fairness, seam_weight=seam_weight, quadrature_order=quadrature_order,
+                  relative_linear_residual=float(np.linalg.norm(system@solution-system_rhs)/max(np.linalg.norm(system_rhs), 1e-30)),
+                  hard_tangent_constraints=sum(len(v) for v in values),
+                  hard_tangent_max_residual=float(np.max(abs(constraint@(scale*x)-value))) if constraints else None,
                   weighted_residual_norm=float(np.linalg.norm(matrix@(scale*x)-target)),
                   matrix_assembly_seconds=assembled-started, solve_seconds=solved-assembled)
     return poles, report
