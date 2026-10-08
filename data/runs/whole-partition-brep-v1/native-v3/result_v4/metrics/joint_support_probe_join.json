@@ -1,0 +1,151 @@
+{
+  "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v11\\fit\\round_1",
+  "selected_charts": [
+    566,
+    581
+  ],
+  "source_triangles": 1216,
+  "supplied_labels_preserved": true,
+  "source_CAD_read": false,
+  "accepted": true,
+  "source_join_angle_p95": 25.556705545152255,
+  "source_join_angle_max": 34.098772778375036,
+  "fitting": {
+    "accepted": true,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.03882919210966,
+        "boundary_max": 0.009030355945287769,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 3300,
+          "solver_seconds": 0.2927935,
+          "sampled_data_error_mm": 0.03882919210966,
+          "sampled_boundary_error_mm": 0.009030355945287769
+        }
+      },
+      {
+        "controls": 15,
+        "distance_max": 0.06728615907078943,
+        "boundary_max": 0.006654675027686435,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 7000,
+          "solver_seconds": 0.6719356,
+          "sampled_data_error_mm": 0.06728615907078943,
+          "sampled_boundary_error_mm": 0.006654675027686435
+        }
+      },
+      {
+        "controls": 21,
+        "distance_max": 0.05581846766250591,
+        "boundary_max": 0.005489828294746257,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 5375,
+          "solver_seconds": 0.6592361999999999,
+          "sampled_data_error_mm": 0.05581846766250591,
+          "sampled_boundary_error_mm": 0.005489828294746257
+        }
+      },
+      {
+        "controls": 27,
+        "distance_max": 0.03913987697793607,
+        "boundary_max": 0.005286139097849349,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 7425,
+          "solver_seconds": 1.1689066,
+          "sampled_data_error_mm": 0.03913987697793607,
+          "sampled_boundary_error_mm": 0.005286139097849349
+        }
+      },
+      {
+        "controls": 33,
+        "distance_max": 0.039514278864163005,
+        "boundary_max": 0.0044159911238106225,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 1.7466922999999999,
+          "sampled_data_error_mm": 0.039514278864163005,
+          "sampled_boundary_error_mm": 0.0044159911238106225
+        }
+      },
+      {
+        "controls": 39,
+        "distance_max": 0.04542859908473654,
+        "boundary_max": 0.00400344071800951,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 2.3868017999999998,
+          "sampled_data_error_mm": 0.04542859908473654,
+          "sampled_boundary_error_mm": 0.00400344071800951
+        }
+      },
+      {
+        "controls": 45,
+        "distance_max": 0.0456105914173824,
+        "boundary_max": 0.0024762530625216522,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 3.2661013,
+          "sampled_data_error_mm": 0.0456105914173824,
+          "sampled_boundary_error_mm": 0.0024762530625216522
+        }
+      },
+      {
+        "controls": 51,
+        "distance_max": 0.020102727468680213,
+        "boundary_max": 0.002118792293791319,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 4.6078747,
+          "sampled_data_error_mm": 0.020102727468680213,
+          "sampled_boundary_error_mm": 0.002118792293791319
+        }
+      },
+      {
+        "controls": 57,
+        "distance_max": 0.020638277368748584,
+        "boundary_max": 0.0012366931129920433,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 5.9494334,
+          "sampled_data_error_mm": 0.020638277368748584,
+          "sampled_boundary_error_mm": 0.0012366931129920433
+        }
+      },
+      {
+        "controls": 63,
+        "distance_max": 0.010681931829336647,
+        "boundary_max": 0.001300100015477687,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 7100,
+          "solver_seconds": 7.7789985999999995,
+          "sampled_data_error_mm": 0.010681931829336647,
+          "sampled_boundary_error_mm": 0.001300100015477687
+        },
+        "continuous_boundary_max": 0.0014574781191229256,
+        "interior_probe_max_mm": 0.01473061877795788
+      }
+    ]
+  },
+  "seconds": 36.18964349999442
+}

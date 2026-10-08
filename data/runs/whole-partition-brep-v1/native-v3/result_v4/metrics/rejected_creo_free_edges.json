@@ -1,0 +1,146 @@
+{
+  "whole_fair_v10": {
+    "topology": {
+      "faces": 864,
+      "edges": 38318,
+      "shells": 1,
+      "solids": 0,
+      "free_edges": 2,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 690.0913485237577,
+      "maximum_edge_tolerance_mm": 0.04510929229592292
+    },
+    "abnormal_edges": [
+      {
+        "edge": 17698,
+        "owners": [
+          291
+        ],
+        "center": [
+          -24.99518104223646,
+          38.373320247927715,
+          -3.655849840648176
+        ],
+        "length_mm": 0.04018017425069233,
+        "tolerance_mm": 0.041277721746722174,
+        "source_distance_max_mm": 0.009689176437942308,
+        "nearby_region_votes": {
+          "65": 1,
+          "66": 8
+        },
+        "nearby_chart_votes": {
+          "277": 1,
+          "814": 8
+        }
+      },
+      {
+        "edge": 17840,
+        "owners": [
+          292
+        ],
+        "center": [
+          -25.00094581643667,
+          38.37383676141749,
+          -3.6561354042938756
+        ],
+        "length_mm": 0.04715301799120873,
+        "tolerance_mm": 6.727280064770223e-06,
+        "source_distance_max_mm": 0.0011701650485541964,
+        "nearby_region_votes": {
+          "66": 9
+        },
+        "nearby_chart_votes": {
+          "814": 9
+        }
+      }
+    ],
+    "seconds": 114.88664650000283,
+    "scope": "Actual Creo import/export topology. Nearest source votes are spatial diagnostics, not CAD ID correspondence. Export is not a reconstruction input."
+  },
+  "whole_fair_v13": {
+    "topology": {
+      "faces": 870,
+      "edges": 38374,
+      "shells": 1,
+      "solids": 0,
+      "free_edges": 3,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 690.1396712542944,
+      "maximum_edge_tolerance_mm": 0.0049013006422571085
+    },
+    "abnormal_edges": [
+      {
+        "edge": 17625,
+        "owners": [
+          294
+        ],
+        "center": [
+          -25.010792583405937,
+          38.360148545350874,
+          -3.6720077368921156
+        ],
+        "length_mm": 0.026559195922649523,
+        "tolerance_mm": 0.0034634331595882377,
+        "source_distance_max_mm": 0.003160100499135804,
+        "nearby_region_votes": {
+          "66": 8,
+          "65": 1
+        },
+        "nearby_chart_votes": {
+          "895": 8,
+          "277": 1
+        }
+      },
+      {
+        "edge": 17766,
+        "owners": [
+          295
+        ],
+        "center": [
+          -25.00095774885604,
+          38.373840045855,
+          -3.6561085910944167
+        ],
+        "length_mm": 0.04165688055650449,
+        "tolerance_mm": 0.004030512250540604,
+        "source_distance_max_mm": 0.0011671688000009733,
+        "nearby_region_votes": {
+          "66": 8,
+          "65": 1
+        },
+        "nearby_chart_votes": {
+          "895": 8,
+          "277": 1
+        }
+      },
+      {
+        "edge": 17767,
+        "owners": [
+          295
+        ],
+        "center": [
+          -24.999170209724586,
+          38.35569120023084,
+          -3.664746926338396
+        ],
+        "length_mm": 0.05311993988994781,
+        "tolerance_mm": 0.0007806141536378459,
+        "source_distance_max_mm": 0.0019375967800733184,
+        "nearby_region_votes": {
+          "65": 5,
+          "66": 4
+        },
+        "nearby_chart_votes": {
+          "277": 5,
+          "895": 4
+        }
+      }
+    ],
+    "seconds": 104.13238399999682,
+    "scope": "Actual Creo import/export topology. Nearest source votes are spatial diagnostics, not CAD ID correspondence. Export is not a reconstruction input."
+  }
+}

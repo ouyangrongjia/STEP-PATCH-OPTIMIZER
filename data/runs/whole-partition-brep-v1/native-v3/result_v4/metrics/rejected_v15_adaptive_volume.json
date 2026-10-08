@@ -1,0 +1,10 @@
+{
+  "volume_mm3": 688.4780019074741,
+  "requested_relative_error": 1e-06,
+  "returned_relative_error": 0.0029696183031038765,
+  "algorithm": "OCCT adaptive 2D Gauss VolumeProperties with explicit Eps",
+  "seconds": 103.27346460000263,
+  "scope": "The requested adaptive integration did not reach its tolerance. Kept as an unsuccessful numerical cross-check; it is not an accepted volume reference.",
+  "converged": false,
+  "source_case": "whole_fair_v15"
+}

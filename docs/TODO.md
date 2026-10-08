@@ -17,7 +17,7 @@
 - 验证不同曲率、孔洞及复杂边界的区域，并比较多档质量与性能；任何未通过项保留失败记录，不回退至商业拟合。
 - 在共用骨架路线中消除窄弯折区残余波纹，并降低短边交换和控制点的表达成本；保持现有边界、距离和实体预算。
 
-已完成能力与限制见 `implementation_status.md`，当前自主重建实验见 `data/runs/whole-partition-brep-v1/native-v2/`；此前商业版本仅保留为历史证据，不满足当前依赖合同。原 candidate-179 基线保持不变。
+已完成能力与限制见 `implementation_status.md`，当前自主重建实验见 `data/runs/whole-partition-brep-v1/native-v3/result_v4/`；此前商业版本仅保留为历史证据，不满足当前依赖合同。原 candidate-179 基线保持不变。
 
 ### 原生区域级多曲面重拟合
 

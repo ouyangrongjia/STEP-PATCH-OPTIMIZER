@@ -10,15 +10,30 @@ $env:OMP_NUM_THREADS='1'
 python -m tools.mesh_brep.skeleton_reconstruct `
   --stl <原始STL> --partition <已有分区.npz> `
   --reference <对应参考STEP> --output <不存在的新目录> `
-  --smoothing .12 --workers 4 `
+  --smoothing .12 --workers 8 `
+  --boundary-mode fair-chains --support-solver bounded `
+  --normal-field crease-fans --normal-filter-steps 2 --normal-weight .01 `
+  --repair-smooth-joins `
   --creo-root <Creo安装目录> --native-probe <creo_body_probe.exe>
 ```
 
 边界平滑区分沿原表面的移动和离开两侧源三角形平面的误差；默认分别为 0.12 mm 和 0.003 mm。共享交汇点保留，连续边界极值进入拟合约束，避免只检查离散采样点漏掉窄峰。相邻面共用三维曲线；交换时使用该曲线的精确短子段，保持几何光顺而不增加曲面数。输出 `step/model.step`、全部 `regions/region_*.step`、独立 `quality/` 与可选 Creo 原生体及显示证据。
 
+上述改进配置需要 `osqp>=1.0,<2`（本轮实测 1.1.3）。`fair-chains` 在位置与两侧源平面约束内最小化公共三次曲线的弯曲能量；拓扑失败时只调整同一条公共边及其两侧支撑。连续交点检查会复核内核的重合候选，防止短回环漏检，也避免把近停滞曲线误判后反复缩回锯齿。`bounded` 使用物理尺度下的法向与曲率目标，以及独立的位置和边界约束；窄条区域的法向项不会随宽度缩小而失效。法向滤波保留 STL 坐标和固定分区标签，几何评估另用未滤波的源法向。
+
+有界拟合还检查节点区间内部的 Gauss 探针及源网格边中点。发现顶点和重心样本之间的鼓包时，先加入实际超限位置重新求解，再决定是否增加控制点或细分域。旧缓存缺少这项检查时会重新验证。整件 STEP 独立原生面抽样超出距离预算，或实际 Creo 未形成闭合活动实体时，统一入口记录失败并拒绝报告成功。
+
+`--repair-smooth-joins` 检测相对于原 STL 异常增大的接缝法向差，只对小邻域提出共用支撑面方案；每组最多四个拟合域，仍分别保留原分区的裁剪边界和三角形归属。通过距离、裁剪拓扑、邻接接缝及区域内部法向检查后才接受。成功组的内部接缝位于同一张 C2 曲面上；源锐边、非单值投影或导致邻区变差的方案会被拒绝。它不会把整件模型放进同一个拟合系统，也不代表未修复接缝全部满足 G1。可单独运行 `python -m tools.mesh_brep.shared_support --run <round_N> --output <新目录> --workers 8`，再把输出传给统一入口的 `--from-fit` 完成 CAD 验收。`--charts` 仅用于显式局部诊断，自动模式按实测接缝排序。
+
+`--boundary-normal-weight` 是额外边界切平面罚项的实验选项，默认 0；本轮强加该项曾引入新的局部褶皱，未作为推荐配置。`--repair-charts` 可依据外部 CAD 诊断选择需重新构造公共边界的源拟合域；诊断只选择位置，不向拟合器提供 CAD 几何，且修复后仍须完整复验。
+
+共用支撑提案的数值接受不是视觉验收：本轮有追加提案降低了局部 P95、也通过了 Creo，却产生窄带波纹，最终未采用。统一入口保留 `visual_review_required=true` 和 `can_apply=false`，实际交付仍依据同视角原生法向图复核。
+
+历史默认 `chain` / `least-squares` 保留用于复现。`fair-network` 是移动整段标签接口交汇点的实验模式，在复杂主样例上尚未通过全部边界拓扑检查，不属于当前推荐配置。`--boundary-plane-budget` 显式控制离开源平面的预算；本轮放宽到 0.009 mm 的对照效果变差，推荐保持默认 0.003 mm。
+
 `--from-fit <本路线的 round_N>` 可复用相同输入、配置和公共曲线的支撑面；变化的共享边界会使两侧缓存失效。缓存只复用已通过连续边界检查的域，仍重新执行实体装配、STEP 回读和外部 CAD 检查。不完整分区禁止导出。目录拒绝覆盖；失败保留原因。默认 `--profile-mode installed` 使用安装自带导入配置；可显式选择 `preserve_splines` 使用产物内配置，不修改 Creo 安装。只有原生体检查通过才能报告 Creo 实体；可见质量仍需查看实际对比图。
 
-本路线已在复杂主样例上获得显著的区域合面与边界改善，当前结果和剩余限制统一见 [运行记录](../../data/runs/whole-partition-brep-v1/native-v2/result_v3/RUN.md)。它支持给定分区重建，不承诺任意输入必定通过全部几何和 CAD 验收。
+本路线已在复杂主样例上获得显著的区域合面与边界改善，当前结果和剩余限制统一见 [运行记录](../../data/runs/whole-partition-brep-v1/native-v3/result_v4/RUN.md)。它支持给定分区重建，不承诺任意输入必定通过全部几何和 CAD 验收。
 
 ## 保留的先拟合后合并入口
 
@@ -106,7 +121,7 @@ python -B -m tools.mesh_brep.assemble_candidate --audit <原整件输入记录.j
 
 ## 复跑 B
 
-从仓库根目录运行，Python 环境沿用 [已有依赖](../candidate179_research/requirements.txt)。本轮未安装新的包，实测版本和许可元数据见运行目录 `environment.json`。
+从仓库根目录运行，Python 环境沿用 [已有依赖](../candidate179_research/requirements.txt)。上面的有界重建配置另需 OSQP；原始 B 入口不依赖它。
 
 ```powershell
 python -B -m tools.mesh_brep.reconstruct `

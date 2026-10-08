@@ -1,0 +1,627 @@
+{
+  "date": "2026-10-08T05:49:51.6603445-07:00",
+  "method": "Windows Recycle Bin",
+  "scope": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3",
+  "kept": "result_v4",
+  "published_previous_result_preserved": true,
+  "moved_entries": 123,
+  "moved_files": 118410.0,
+  "moved_bytes": 3241697308.0,
+  "entries": [
+    {
+      "name": "cone_probe",
+      "files": 1,
+      "bytes": 608.0
+    },
+    {
+      "name": "joint_support_probe",
+      "files": 3379,
+      "bytes": 18923274.0
+    },
+    {
+      "name": "last_join_review",
+      "files": 18,
+      "bytes": 1969641.0
+    },
+    {
+      "name": "local_bounded_chain",
+      "files": 4721,
+      "bytes": 16275078.0
+    },
+    {
+      "name": "local_bounded_fair_chains",
+      "files": 1,
+      "bytes": 1447.0
+    },
+    {
+      "name": "local_bounded_fair_v5",
+      "files": 4714,
+      "bytes": 20062130.0
+    },
+    {
+      "name": "local_bounded_strong",
+      "files": 2388,
+      "bytes": 11886831.0
+    },
+    {
+      "name": "local_bounded_v3",
+      "files": 1128,
+      "bytes": 4338727.0
+    },
+    {
+      "name": "local_bounded_v4",
+      "files": 1128,
+      "bytes": 4387038.0
+    },
+    {
+      "name": "local_fair_v1",
+      "files": 1,
+      "bytes": 1315.0
+    },
+    {
+      "name": "local_fair_v2",
+      "files": 1128,
+      "bytes": 4071377.0
+    },
+    {
+      "name": "local_fair_v6",
+      "files": 2381,
+      "bytes": 13916771.0
+    },
+    {
+      "name": "local_fairness1e4",
+      "files": 9944,
+      "bytes": 35901630.0
+    },
+    {
+      "name": "local_fairness1e5",
+      "files": 7442,
+      "bytes": 28383424.0
+    },
+    {
+      "name": "local_normals_v1",
+      "files": 14258,
+      "bytes": 30592472.0
+    },
+    {
+      "name": "local_plane009",
+      "files": 4714,
+      "bytes": 18566853.0
+    },
+    {
+      "name": "local_shared_normals",
+      "files": 5050,
+      "bytes": 26265773.0
+    },
+    {
+      "name": "local_shared_normals1",
+      "files": 2474,
+      "bytes": 7291099.0
+    },
+    {
+      "name": "local_shared_projected",
+      "files": 2495,
+      "bytes": 7591543.0
+    },
+    {
+      "name": "local_shared_projected_strong",
+      "files": 5007,
+      "bytes": 15166720.0
+    },
+    {
+      "name": "local_shared_projected_v3",
+      "files": 2577,
+      "bytes": 21264991.0
+    },
+    {
+      "name": "medallion_v10",
+      "files": 2,
+      "bytes": 2260751.0
+    },
+    {
+      "name": "region_selected",
+      "files": 64,
+      "bytes": 8937614.0
+    },
+    {
+      "name": "region_visuals",
+      "files": 56,
+      "bytes": 7577617.0
+    },
+    {
+      "name": "region_visuals_repaired",
+      "files": 16,
+      "bytes": 2219754.0
+    },
+    {
+      "name": "shared_support_auto",
+      "files": 3360,
+      "bytes": 16513279.0
+    },
+    {
+      "name": "shared_support_followup",
+      "files": 3360,
+      "bytes": 16430962.0
+    },
+    {
+      "name": "visuals_final",
+      "files": 4,
+      "bytes": 7576481.0
+    },
+    {
+      "name": "visuals_selected",
+      "files": 4,
+      "bytes": 7575346.0
+    },
+    {
+      "name": "visuals_v10",
+      "files": 4,
+      "bytes": 6657618.0
+    },
+    {
+      "name": "visuals_v11",
+      "files": 4,
+      "bytes": 7573809.0
+    },
+    {
+      "name": "whole_fair_bounded",
+      "files": 140,
+      "bytes": 1307964.0
+    },
+    {
+      "name": "whole_fair_v10",
+      "files": 3799,
+      "bytes": 576957818.0
+    },
+    {
+      "name": "whole_fair_v11",
+      "files": 7142,
+      "bytes": 519446282.0
+    },
+    {
+      "name": "whole_fair_v12",
+      "files": 843,
+      "bytes": 6449816.0
+    },
+    {
+      "name": "whole_fair_v13",
+      "files": 3817,
+      "bytes": 581818094.0
+    },
+    {
+      "name": "whole_fair_v14",
+      "files": 3815,
+      "bytes": 520971779.0
+    },
+    {
+      "name": "whole_fair_v15",
+      "files": 3815,
+      "bytes": 521202969.0
+    },
+    {
+      "name": "whole_fair_v6",
+      "files": 13098,
+      "bytes": 141201355.0
+    },
+    {
+      "name": "whole_fair_v7",
+      "files": 2,
+      "bytes": 2293.0
+    },
+    {
+      "name": "whole_fair_v8",
+      "files": 2,
+      "bytes": 2293.0
+    },
+    {
+      "name": "whole_fair_v9",
+      "files": 33,
+      "bytes": 112688.0
+    },
+    {
+      "name": "adaptive_volume.log",
+      "files": 1,
+      "bytes": 378.0
+    },
+    {
+      "name": "boundary_regression.log",
+      "files": 1,
+      "bytes": 6592.0
+    },
+    {
+      "name": "common_support_regression.log",
+      "files": 1,
+      "bytes": 6304.0
+    },
+    {
+      "name": "cone_probe.log",
+      "files": 1,
+      "bytes": 509.0
+    },
+    {
+      "name": "continuous_intersections.log",
+      "files": 1,
+      "bytes": 6103.0
+    },
+    {
+      "name": "creo_boundary_v10.log",
+      "files": 1,
+      "bytes": 220.0
+    },
+    {
+      "name": "creo_boundary_v13_corrected.log",
+      "files": 1,
+      "bytes": 222.0
+    },
+    {
+      "name": "creo_boundary_v13.log",
+      "files": 1,
+      "bytes": 858.0
+    },
+    {
+      "name": "curve_progress_v10.json",
+      "files": 1,
+      "bytes": 216000.0
+    },
+    {
+      "name": "delivery_validation.log",
+      "files": 1,
+      "bytes": 284.0
+    },
+    {
+      "name": "environment.json",
+      "files": 1,
+      "bytes": 241.0
+    },
+    {
+      "name": "experiment_comparison.json",
+      "files": 1,
+      "bytes": 112527.0
+    },
+    {
+      "name": "focus_camera.json",
+      "files": 1,
+      "bytes": 86.0
+    },
+    {
+      "name": "focus_source.png",
+      "files": 1,
+      "bytes": 174073.0
+    },
+    {
+      "name": "interior_regression.log",
+      "files": 1,
+      "bytes": 7351.0
+    },
+    {
+      "name": "joint_support_evidence.log",
+      "files": 1,
+      "bytes": 1591.0
+    },
+    {
+      "name": "joint_support_probe.log",
+      "files": 1,
+      "bytes": 3620.0
+    },
+    {
+      "name": "last_join_review.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "local_bounded_chain.log",
+      "files": 1,
+      "bytes": 1169.0
+    },
+    {
+      "name": "local_bounded_fair_chains.log",
+      "files": 1,
+      "bytes": 2110.0
+    },
+    {
+      "name": "local_bounded_fair_v5.log",
+      "files": 1,
+      "bytes": 3415.0
+    },
+    {
+      "name": "local_bounded_strong.log",
+      "files": 1,
+      "bytes": 585.0
+    },
+    {
+      "name": "local_bounded_v3.log",
+      "files": 1,
+      "bytes": 5534.0
+    },
+    {
+      "name": "local_bounded_v4.log",
+      "files": 1,
+      "bytes": 8307.0
+    },
+    {
+      "name": "local_fair_v1.log",
+      "files": 1,
+      "bytes": 2097.0
+    },
+    {
+      "name": "local_fair_v2.log",
+      "files": 1,
+      "bytes": 2446.0
+    },
+    {
+      "name": "local_fair_v6.log",
+      "files": 1,
+      "bytes": 288.0
+    },
+    {
+      "name": "local_fairness1e4_evidence.log",
+      "files": 1,
+      "bytes": 2037.0
+    },
+    {
+      "name": "local_fairness1e4.log",
+      "files": 1,
+      "bytes": 1208.0
+    },
+    {
+      "name": "local_fairness1e5_evidence.log",
+      "files": 1,
+      "bytes": 2037.0
+    },
+    {
+      "name": "local_fairness1e5.log",
+      "files": 1,
+      "bytes": 924.0
+    },
+    {
+      "name": "local_normals_v1.log",
+      "files": 1,
+      "bytes": 3734.0
+    },
+    {
+      "name": "local_plane009.log",
+      "files": 1,
+      "bytes": 1315.0
+    },
+    {
+      "name": "local_shared_normals_evidence.log",
+      "files": 1,
+      "bytes": 3074.0
+    },
+    {
+      "name": "local_shared_normals.log",
+      "files": 1,
+      "bytes": 639.0
+    },
+    {
+      "name": "local_shared_normals1.log",
+      "files": 1,
+      "bytes": 171.0
+    },
+    {
+      "name": "local_shared_projected_strong.log",
+      "files": 1,
+      "bytes": 644.0
+    },
+    {
+      "name": "local_shared_projected_v3_evidence.log",
+      "files": 1,
+      "bytes": 4138.0
+    },
+    {
+      "name": "local_shared_projected_v3.log",
+      "files": 1,
+      "bytes": 171.0
+    },
+    {
+      "name": "local_shared_projected.log",
+      "files": 1,
+      "bytes": 171.0
+    },
+    {
+      "name": "medallion_v10.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "outliers_v10.log",
+      "files": 1,
+      "bytes": 3052.0
+    },
+    {
+      "name": "projected_normal_regression.log",
+      "files": 1,
+      "bytes": 7683.0
+    },
+    {
+      "name": "projected_normal_v3_regression.log",
+      "files": 1,
+      "bytes": 7923.0
+    },
+    {
+      "name": "region_delivery_0.log",
+      "files": 1,
+      "bytes": 557.0
+    },
+    {
+      "name": "region_delivery_1.log",
+      "files": 1,
+      "bytes": 561.0
+    },
+    {
+      "name": "region_delivery_2.log",
+      "files": 1,
+      "bytes": 560.0
+    },
+    {
+      "name": "region_delivery_3.log",
+      "files": 1,
+      "bytes": 1078.0
+    },
+    {
+      "name": "region_delivery_repaired.log",
+      "files": 1,
+      "bytes": 561.0
+    },
+    {
+      "name": "region_selected_0.log",
+      "files": 1,
+      "bytes": 557.0
+    },
+    {
+      "name": "region_selected_1.log",
+      "files": 1,
+      "bytes": 561.0
+    },
+    {
+      "name": "region_selected_2.log",
+      "files": 1,
+      "bytes": 560.0
+    },
+    {
+      "name": "region_selected_3.log",
+      "files": 1,
+      "bytes": 562.0
+    },
+    {
+      "name": "regression_current.log",
+      "files": 1,
+      "bytes": 55950.0
+    },
+    {
+      "name": "regression_delivery.log",
+      "files": 1,
+      "bytes": 56170.0
+    },
+    {
+      "name": "regression_final.log",
+      "files": 1,
+      "bytes": 55612.0
+    },
+    {
+      "name": "regression_verified.log",
+      "files": 1,
+      "bytes": 54942.0
+    },
+    {
+      "name": "regression.log",
+      "files": 1,
+      "bytes": 14382.0
+    },
+    {
+      "name": "repair_selection_joint.json",
+      "files": 1,
+      "bytes": 277.0
+    },
+    {
+      "name": "repair_selection.json",
+      "files": 1,
+      "bytes": 485.0
+    },
+    {
+      "name": "seam_scan.log",
+      "files": 1,
+      "bytes": 6518.0
+    },
+    {
+      "name": "shared_normal_regression.log",
+      "files": 1,
+      "bytes": 7549.0
+    },
+    {
+      "name": "shared_support_auto.log",
+      "files": 1,
+      "bytes": 3304.0
+    },
+    {
+      "name": "shared_support_followup.log",
+      "files": 1,
+      "bytes": 1332.0
+    },
+    {
+      "name": "visuals_final.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "visuals_selected.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "visuals_v10.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "visuals_v11.log",
+      "files": 1,
+      "bytes": 0.0
+    },
+    {
+      "name": "whole_camera.json",
+      "files": 1,
+      "bytes": 330.0
+    },
+    {
+      "name": "whole_fair_bounded.log",
+      "files": 1,
+      "bytes": 401.0
+    },
+    {
+      "name": "whole_fair_v10.log",
+      "files": 1,
+      "bytes": 186638.0
+    },
+    {
+      "name": "whole_fair_v11.log",
+      "files": 1,
+      "bytes": 186577.0
+    },
+    {
+      "name": "whole_fair_v12.log",
+      "files": 1,
+      "bytes": 1216.0
+    },
+    {
+      "name": "whole_fair_v13.log",
+      "files": 1,
+      "bytes": 186915.0
+    },
+    {
+      "name": "whole_fair_v14.log",
+      "files": 1,
+      "bytes": 186032.0
+    },
+    {
+      "name": "whole_fair_v15.log",
+      "files": 1,
+      "bytes": 186026.0
+    },
+    {
+      "name": "whole_fair_v6.log",
+      "files": 1,
+      "bytes": 3347.0
+    },
+    {
+      "name": "whole_fair_v7.log",
+      "files": 1,
+      "bytes": 4901.0
+    },
+    {
+      "name": "whole_fair_v8.log",
+      "files": 1,
+      "bytes": 4891.0
+    },
+    {
+      "name": "whole_fair_v9.log",
+      "files": 1,
+      "bytes": 5253.0
+    },
+    {
+      "name": "whole_source.png",
+      "files": 1,
+      "bytes": 225548.0
+    }
+  ]
+}

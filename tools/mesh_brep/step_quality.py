@@ -170,6 +170,12 @@ def _audit_impl(step, partition, output, deflection=.005, count=30000, render=Fa
     sn = np.einsum('ij,ijk->ik', nearest_bary, source_normals[f[nearest]])
     sn /= np.maximum(np.linalg.norm(sn, axis=1)[:, None], 1e-30)
     dot = np.sum(sn*normals, axis=1); angles = np.degrees(np.arccos(np.clip(dot, -1, 1)))
+    # Keep actionable positions from the independent audit, including isolated
+    # reverse-distance or normal failures that a global percentile can hide.
+    worst = np.unique(np.r_[np.argsort(reverse)[-24:], np.argsort(angles)[-24:]])
+    dump(out/'worst_samples.json', [dict(face=int(owners[i]), uv=q[i].tolist(), xyz=fitted[i].tolist(),
+        distance_mm=float(reverse[i]), normal_degrees=float(angles[i]),
+        source_triangle=int(nearest[i]), source_label=int(labels[nearest[i]])) for i in worst])
     report.update(reverse_native_surface_distance_mm=stats(reverse), source_normal_difference_degrees=stats(angles),
                   opposed_normal_sample_fraction=float(np.mean(dot < 0)), tessellation_area_mm2=float(areas.sum()),
                   tessellation_triangles=len(areas), tessellation_deflection_mm=deflection,

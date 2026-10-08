@@ -1,0 +1,79 @@
+{
+  "status": "DiagnosticOnly",
+  "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v14\\step\\model.step",
+  "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+  "units": "mm",
+  "source_CAD_read": false,
+  "source_label_assignment": "Nearest STL votes, diagnostic only",
+  "topology": {
+    "faces": 902,
+    "edges": 39705,
+    "shells": 1,
+    "solids": 1,
+    "free_edges": 0,
+    "multiple_edges": 0,
+    "invalid_faces": [],
+    "brep_valid": true,
+    "volume_mm3": 688.5140896065452,
+    "maximum_edge_tolerance_mm": 0.0036613346540694982
+  },
+  "delabella_retried_faces": [],
+  "representation": {
+    "file_bytes": 138078462,
+    "spline_faces": 902,
+    "actual_control_points": 473326,
+    "maximum_direction_poles": 65
+  },
+  "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+  "forward_tessellation_distance_mm": {
+    "rms": 0.0020539313720372445,
+    "p50": 0.0009440552179463772,
+    "p95": 0.0040282524585253665,
+    "max": 0.02045134931069063,
+    "min": 1.4071279341938067e-09
+  },
+  "reverse_native_surface_distance_mm": {
+    "rms": 0.0016447007434756205,
+    "p50": 0.00045278340824172797,
+    "p95": 0.003169431410295235,
+    "max": 0.026430907586447186,
+    "min": 2.717000252812457e-09
+  },
+  "source_normal_difference_degrees": {
+    "rms": 2.878486319615573,
+    "p50": 0.6237403773031485,
+    "p95": 5.49414998275804,
+    "max": 67.13616125886502,
+    "min": 0.00098157164592846
+  },
+  "opposed_normal_sample_fraction": 0.0,
+  "tessellation_area_mm2": 1075.8573564414405,
+  "tessellation_triangles": 823159,
+  "tessellation_deflection_mm": 0.005,
+  "source_samples": 30000,
+  "reverse_samples": 90200,
+  "all_join_normal_degrees": {
+    "rms": 10.299806275698325,
+    "p50": 1.8346703361444248,
+    "p95": 22.01363340184877,
+    "max": 138.50888806448694,
+    "min": 0.0
+  },
+  "length_weighted_all_join_normal_degrees": {
+    "rms": 10.816898581486749,
+    "p50": 1.9056786558207728,
+    "p95": 23.595881914802543,
+    "max": 138.50888806448694,
+    "min": 0.0
+  },
+  "surface_gap_mm": {
+    "rms": 0.0009280192764437376,
+    "p50": 0.0006959434593490183,
+    "p95": 0.0017456323877904582,
+    "max": 0.0036176663899793538,
+    "min": 0.0
+  },
+  "seconds": 149.80348329999833,
+  "can_apply": false,
+  "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+}

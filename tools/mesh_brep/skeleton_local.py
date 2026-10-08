@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import numpy as np
-from OCP.BRep import BRep_Builder
+from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeEdge
 from OCP.TopoDS import TopoDS, TopoDS_Wire, TopoDS_Face, TopoDS_Compound
 from OCP.TopLoc import TopLoc_Location
@@ -38,6 +38,8 @@ def export(root, output, regions=None):
         for vi, p in [(a, c.StartPoint()), (b, c.EndPoint())]:
             if vi not in vertices:
                 vertices[vi] = BRepBuilderAPI_MakeVertex(p).Vertex()
+            elif BRep_Tool.Pnt_s(vertices[vi]).Distance(p) > 1e-8:
+                raise ValueError(f'Inconsistent canonical boundary junction at source vertex {vi}')
         edge = BRepBuilderAPI_MakeEdge(c, vertices[a], vertices[b], 0., 1.).Edge()
         for fi in owners:
             error = spline_graph_error(rec['poles'], rec['knots'], records[fi])

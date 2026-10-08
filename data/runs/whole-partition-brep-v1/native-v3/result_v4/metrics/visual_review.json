@@ -1,0 +1,19 @@
+{
+  "generated_model": "whole_fair_v14/step/model.step",
+  "native_creo_gray_observed": true,
+  "inspected_final_images": [
+    "focus_comparison.png",
+    "whole_shaded.png",
+    "region_78_comparison.png",
+    "region_197_comparison.png",
+    "region_200_comparison.png",
+    "creo_gray.jpg"
+  ],
+  "observed_improvement": "Plaque frame and corner transitions have substantially reduced artificial ripples; the supplied partition is retained.",
+  "remaining_visible_waviness": [
+    "region 78 lower boundary"
+  ],
+  "global_visual_acceptance": false,
+  "scope": "Visual review complements finite sampled metrics and native CAD topology; it is not a universal smoothness certificate.",
+  "rejected_later_candidate": "whole_fair_v15: new visible narrow-band ripples in region 197"
+}

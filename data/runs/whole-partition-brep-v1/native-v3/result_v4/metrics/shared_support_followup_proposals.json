@@ -1,0 +1,696 @@
+[
+  {
+    "accepted": true,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.52294594106974,
+        "boundary_max": 0.06578989838976616,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 300,
+          "solver_seconds": 0.0614327,
+          "sampled_data_error_mm": 0.52294594106974,
+          "sampled_boundary_error_mm": 0.06578989838976616
+        }
+      },
+      {
+        "controls": 13,
+        "distance_max": 0.4379849858766128,
+        "boundary_max": 0.03208320683343885,
+        "solver": {
+          "status": "dual infeasible",
+          "solved": false,
+          "iterations": 475,
+          "solver_seconds": 0.0791576,
+          "sampled_data_error_mm": 0.4379849858766128,
+          "sampled_boundary_error_mm": 0.03208320683343885
+        }
+      },
+      {
+        "controls": 19,
+        "distance_max": 0.1519570630890208,
+        "boundary_max": 0.011611770573179747,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 1625,
+          "solver_seconds": 0.2730475,
+          "sampled_data_error_mm": 0.1519570630890208,
+          "sampled_boundary_error_mm": 0.011611770573179747
+        }
+      },
+      {
+        "controls": 25,
+        "distance_max": 0.0891875976986701,
+        "boundary_max": 0.007784952226625119,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 3575,
+          "solver_seconds": 0.8054547000000001,
+          "sampled_data_error_mm": 0.0891875976986701,
+          "sampled_boundary_error_mm": 0.007784952226625119
+        }
+      },
+      {
+        "controls": 31,
+        "distance_max": 0.07048805785965227,
+        "boundary_max": 0.0034232307539781453,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 2.7834474,
+          "sampled_data_error_mm": 0.07048805785965227,
+          "sampled_boundary_error_mm": 0.0034232307539781453
+        }
+      },
+      {
+        "controls": 37,
+        "distance_max": 0.02940000019092849,
+        "boundary_max": 0.0013002466565368298,
+        "solver": {
+          "status": "solved inaccurate",
+          "solved": true,
+          "iterations": 8000,
+          "solver_seconds": 3.5519016999999997,
+          "sampled_data_error_mm": 0.02940000019092849,
+          "sampled_boundary_error_mm": 0.0013002466565368298
+        },
+        "continuous_boundary_max": 0.0015289256207970784,
+        "interior_probe_max_mm": 0.03983838657332627,
+        "interior_enrichment": 1
+      },
+      {
+        "controls": 37,
+        "distance_max": 0.0683968604623465,
+        "boundary_max": 0.0021068118003227357,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 3.484754,
+          "sampled_data_error_mm": 0.0683968604623465,
+          "sampled_boundary_error_mm": 0.0021068118003227357
+        }
+      },
+      {
+        "controls": 43,
+        "distance_max": 0.029400000000633406,
+        "boundary_max": 0.0013003831316815706,
+        "solver": {
+          "status": "solved inaccurate",
+          "solved": true,
+          "iterations": 8000,
+          "solver_seconds": 4.7896367,
+          "sampled_data_error_mm": 0.029400000000633406,
+          "sampled_boundary_error_mm": 0.0013003831316815706
+        },
+        "continuous_boundary_max": 0.0016294640044615836,
+        "interior_probe_max_mm": 0.029400000000633406
+      }
+    ],
+    "selected_charts": [
+      595,
+      612
+    ],
+    "join_score_before": 13675.322139748743,
+    "join_score_after": 7197.576888391408,
+    "new_worst_smooth_excess_degrees": 50.35255488554981,
+    "source_normal_p95_before": 13.048331917751462,
+    "source_normal_p95_after": 11.801205293372666
+  },
+  {
+    "accepted": false,
+    "reason": "nonregular_union",
+    "selected_charts": [
+      132,
+      140
+    ]
+  },
+  {
+    "accepted": false,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.09910335857479363,
+        "boundary_max": 0.023161829589701623,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 1825,
+          "solver_seconds": 0.0768968,
+          "sampled_data_error_mm": 0.09910335857479363,
+          "sampled_boundary_error_mm": 0.023161829589701623
+        }
+      },
+      {
+        "controls": 14,
+        "distance_max": 0.06309653586190299,
+        "boundary_max": 0.008766738492499482,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.3843389,
+          "sampled_data_error_mm": 0.06309653586190299,
+          "sampled_boundary_error_mm": 0.008766738492499482
+        }
+      },
+      {
+        "controls": 20,
+        "distance_max": 0.05933720545879168,
+        "boundary_max": 0.0039560892114398494,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.6050325999999999,
+          "sampled_data_error_mm": 0.05933720545879168,
+          "sampled_boundary_error_mm": 0.0039560892114398494
+        }
+      },
+      {
+        "controls": 26,
+        "distance_max": 0.05394573423846091,
+        "boundary_max": 0.0025733781124891025,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 1.0797444,
+          "sampled_data_error_mm": 0.05394573423846091,
+          "sampled_boundary_error_mm": 0.0025733781124891025
+        }
+      },
+      {
+        "controls": 32,
+        "distance_max": 0.02940000000000001,
+        "boundary_max": 0.0013000000000097447,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 5450,
+          "solver_seconds": 1.293339,
+          "sampled_data_error_mm": 0.02940000000000001,
+          "sampled_boundary_error_mm": 0.0013000000000097447
+        },
+        "continuous_boundary_max": 0.002002279519618942,
+        "direct_peak_residual": 0.0020022795196334466,
+        "boundary_enrichment": 1
+      },
+      {
+        "controls": 32,
+        "distance_max": 0.029400000000000065,
+        "boundary_max": 0.0013000000000097517,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 5150,
+          "solver_seconds": 1.0710348,
+          "sampled_data_error_mm": 0.029400000000000065,
+          "sampled_boundary_error_mm": 0.0013000000000097517
+        },
+        "continuous_boundary_max": 0.0018461939600881484,
+        "interior_probe_max_mm": 0.03562851314112059,
+        "interior_enrichment": 1
+      },
+      {
+        "controls": 32,
+        "distance_max": 0.02940000000000001,
+        "boundary_max": 0.0013000000000097447,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 6775,
+          "solver_seconds": 1.5010585,
+          "sampled_data_error_mm": 0.02940000000000001,
+          "sampled_boundary_error_mm": 0.0013000000000097447
+        },
+        "continuous_boundary_max": 0.0018466669164497556,
+        "interior_probe_max_mm": 0.02939999999999998
+      }
+    ],
+    "selected_charts": [
+      469,
+      723
+    ],
+    "join_score_before": 8495.941659039103,
+    "join_score_after": 5183.017182795772,
+    "new_worst_smooth_excess_degrees": 63.015937559559895,
+    "reason": "neighbor_join_regression",
+    "worsened_curves": [
+      412
+    ]
+  },
+  {
+    "accepted": false,
+    "reason": "nonregular_union",
+    "selected_charts": [
+      361,
+      868
+    ]
+  },
+  {
+    "accepted": false,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.24868733655634548,
+        "boundary_max": 0.03566390645243919,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 475,
+          "solver_seconds": 0.028466599999999998,
+          "sampled_data_error_mm": 0.24868733655634548,
+          "sampled_boundary_error_mm": 0.03566390645243919
+        }
+      },
+      {
+        "controls": 15,
+        "distance_max": 0.1504121225509261,
+        "boundary_max": 0.02639938763243052,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 975,
+          "solver_seconds": 0.0650102,
+          "sampled_data_error_mm": 0.1504121225509261,
+          "sampled_boundary_error_mm": 0.02639938763243052
+        }
+      },
+      {
+        "controls": 21,
+        "distance_max": 0.12278227335873068,
+        "boundary_max": 0.012586011048032975,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 4000,
+          "solver_seconds": 0.3163646,
+          "sampled_data_error_mm": 0.12278227335873068,
+          "sampled_boundary_error_mm": 0.012586011048032975
+        }
+      },
+      {
+        "controls": 27,
+        "distance_max": 0.08217557019797225,
+        "boundary_max": 0.0032179497394894674,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 1.1475429000000001,
+          "sampled_data_error_mm": 0.08217557019797225,
+          "sampled_boundary_error_mm": 0.0032179497394894674
+        }
+      },
+      {
+        "controls": 33,
+        "distance_max": 0.0834223418135335,
+        "boundary_max": 0.0026560508862001897,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 2.1154708,
+          "sampled_data_error_mm": 0.0834223418135335,
+          "sampled_boundary_error_mm": 0.0026560508862001897
+        }
+      },
+      {
+        "controls": 39,
+        "distance_max": 0.064825494311783,
+        "boundary_max": 0.002336635251134922,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 2.9775283999999997,
+          "sampled_data_error_mm": 0.064825494311783,
+          "sampled_boundary_error_mm": 0.002336635251134922
+        }
+      },
+      {
+        "controls": 45,
+        "distance_max": 0.055763166706760285,
+        "boundary_max": 0.0024339889093926426,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 4.1260228,
+          "sampled_data_error_mm": 0.055763166706760285,
+          "sampled_boundary_error_mm": 0.0024339889093926426
+        }
+      },
+      {
+        "controls": 51,
+        "distance_max": 0.052293967546754985,
+        "boundary_max": 0.0024296604495748775,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 6.0251327,
+          "sampled_data_error_mm": 0.052293967546754985,
+          "sampled_boundary_error_mm": 0.0024296604495748775
+        }
+      },
+      {
+        "controls": 57,
+        "distance_max": 0.05254859352463523,
+        "boundary_max": 0.002123029834964485,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 6.7601598,
+          "sampled_data_error_mm": 0.05254859352463523,
+          "sampled_boundary_error_mm": 0.002123029834964485
+        }
+      },
+      {
+        "controls": 63,
+        "distance_max": 0.05279179014027266,
+        "boundary_max": 0.0021224818263910483,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 8.9487059,
+          "sampled_data_error_mm": 0.05279179014027266,
+          "sampled_boundary_error_mm": 0.0021224818263910483
+        }
+      },
+      {
+        "controls": 65,
+        "distance_max": 0.052921126586497474,
+        "boundary_max": 0.002122471192203851,
+        "solver": {
+          "status": "run time limit reached",
+          "solved": false,
+          "iterations": 7917,
+          "solver_seconds": 12.0011747,
+          "sampled_data_error_mm": 0.052921126586497474,
+          "sampled_boundary_error_mm": 0.002122471192203851
+        }
+      }
+    ],
+    "selected_charts": [
+      41,
+      44
+    ]
+  },
+  {
+    "accepted": false,
+    "reason": "source_crease",
+    "selected_charts": [
+      277,
+      811,
+      895
+    ]
+  },
+  {
+    "accepted": false,
+    "reason": "source_crease",
+    "selected_charts": [
+      469,
+      711,
+      723
+    ]
+  },
+  {
+    "accepted": false,
+    "reason": "nonregular_union",
+    "selected_charts": [
+      595,
+      605,
+      606,
+      612
+    ]
+  },
+  {
+    "accepted": false,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.24723191620062576,
+        "boundary_max": 0.06181939754352095,
+        "solver": {
+          "status": "dual infeasible",
+          "solved": false,
+          "iterations": 375,
+          "solver_seconds": 0.0232732,
+          "sampled_data_error_mm": 0.24723191620062576,
+          "sampled_boundary_error_mm": 0.06181939754352095
+        }
+      },
+      {
+        "controls": 14,
+        "distance_max": 0.12024731250070288,
+        "boundary_max": 0.008661192730690714,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 2225,
+          "solver_seconds": 0.1328648,
+          "sampled_data_error_mm": 0.12024731250070288,
+          "sampled_boundary_error_mm": 0.008661192730690714
+        }
+      },
+      {
+        "controls": 20,
+        "distance_max": 0.11024380639364723,
+        "boundary_max": 0.0030244977854356203,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.580971,
+          "sampled_data_error_mm": 0.11024380639364723,
+          "sampled_boundary_error_mm": 0.0030244977854356203
+        }
+      },
+      {
+        "controls": 26,
+        "distance_max": 0.029400000000000148,
+        "boundary_max": 0.0013000000000002454,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 5850,
+          "solver_seconds": 0.7279851,
+          "sampled_data_error_mm": 0.029400000000000148,
+          "sampled_boundary_error_mm": 0.0013000000000002454
+        },
+        "continuous_boundary_max": 0.0055054231104308075,
+        "direct_peak_residual": 0.005505423110438612,
+        "boundary_enrichment": 1
+      },
+      {
+        "controls": 26,
+        "distance_max": 0.02940000006100396,
+        "boundary_max": 0.0013000836157545867,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 4950,
+          "solver_seconds": 0.7570716,
+          "sampled_data_error_mm": 0.02940000006100396,
+          "sampled_boundary_error_mm": 0.0013000836157545867
+        },
+        "continuous_boundary_max": 0.00177614434823295,
+        "interior_probe_max_mm": 0.04088900891605446,
+        "interior_enrichment": 1
+      },
+      {
+        "controls": 26,
+        "distance_max": 0.029400000000000148,
+        "boundary_max": 0.00130000000000019,
+        "solver": {
+          "status": "solved",
+          "solved": true,
+          "iterations": 7450,
+          "solver_seconds": 1.134827,
+          "sampled_data_error_mm": 0.029400000000000148,
+          "sampled_boundary_error_mm": 0.00130000000000019
+        },
+        "continuous_boundary_max": 0.001729444598531644,
+        "interior_probe_max_mm": 0.029400000000000148
+      }
+    ],
+    "selected_charts": [
+      406,
+      494
+    ],
+    "join_score_before": 1323.742540943395,
+    "join_score_after": 1687.18378063061,
+    "new_worst_smooth_excess_degrees": 31.861518410142747,
+    "reason": "neighbor_join_regression",
+    "worsened_curves": []
+  },
+  {
+    "accepted": false,
+    "reason": "nonregular_union",
+    "selected_charts": [
+      543,
+      830
+    ]
+  },
+  {
+    "accepted": false,
+    "history": [
+      {
+        "controls": 9,
+        "distance_max": 0.18924357425975277,
+        "boundary_max": 0.025101048507253837,
+        "solver": {
+          "status": "primal infeasible",
+          "solved": false,
+          "iterations": 825,
+          "solver_seconds": 0.037092999999999994,
+          "sampled_data_error_mm": 0.18924357425975277,
+          "sampled_boundary_error_mm": 0.025101048507253837
+        }
+      },
+      {
+        "controls": 14,
+        "distance_max": 0.17118847196392095,
+        "boundary_max": 0.022734558127095406,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.3674323,
+          "sampled_data_error_mm": 0.17118847196392095,
+          "sampled_boundary_error_mm": 0.022734558127095406
+        }
+      },
+      {
+        "controls": 20,
+        "distance_max": 0.11759848221317673,
+        "boundary_max": 0.010570807857674336,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.4899006,
+          "sampled_data_error_mm": 0.11759848221317673,
+          "sampled_boundary_error_mm": 0.010570807857674336
+        }
+      },
+      {
+        "controls": 26,
+        "distance_max": 0.10498559040547614,
+        "boundary_max": 0.003505504071327062,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 0.8402826,
+          "sampled_data_error_mm": 0.10498559040547614,
+          "sampled_boundary_error_mm": 0.003505504071327062
+        }
+      },
+      {
+        "controls": 32,
+        "distance_max": 0.07096167207602111,
+        "boundary_max": 0.0027877066914866466,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 1.5983414,
+          "sampled_data_error_mm": 0.07096167207602111,
+          "sampled_boundary_error_mm": 0.0027877066914866466
+        }
+      },
+      {
+        "controls": 38,
+        "distance_max": 0.051318706260521485,
+        "boundary_max": 0.0026402455370494876,
+        "solver": {
+          "status": "primal infeasible inaccurate",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 2.492874,
+          "sampled_data_error_mm": 0.051318706260521485,
+          "sampled_boundary_error_mm": 0.0026402455370494876
+        }
+      },
+      {
+        "controls": 44,
+        "distance_max": 0.04959199035159756,
+        "boundary_max": 0.0025827422414741417,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 3.2214001,
+          "sampled_data_error_mm": 0.04959199035159756,
+          "sampled_boundary_error_mm": 0.0025827422414741417
+        }
+      },
+      {
+        "controls": 50,
+        "distance_max": 0.04839560159745161,
+        "boundary_max": 0.002534518778816164,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 4.8644789,
+          "sampled_data_error_mm": 0.04839560159745161,
+          "sampled_boundary_error_mm": 0.002534518778816164
+        }
+      },
+      {
+        "controls": 56,
+        "distance_max": 0.046328581321866014,
+        "boundary_max": 0.002426110277560886,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 6.4455788,
+          "sampled_data_error_mm": 0.046328581321866014,
+          "sampled_boundary_error_mm": 0.002426110277560886
+        }
+      },
+      {
+        "controls": 62,
+        "distance_max": 0.04594520880146813,
+        "boundary_max": 0.0024440734270262804,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 8.8217404,
+          "sampled_data_error_mm": 0.04594520880146813,
+          "sampled_boundary_error_mm": 0.0024440734270262804
+        }
+      },
+      {
+        "controls": 65,
+        "distance_max": 0.04563286143648845,
+        "boundary_max": 0.0023131406835874696,
+        "solver": {
+          "status": "maximum iterations reached",
+          "solved": false,
+          "iterations": 8000,
+          "solver_seconds": 10.1382865,
+          "sampled_data_error_mm": 0.04563286143648845,
+          "sampled_boundary_error_mm": 0.0023131406835874696
+        }
+      }
+    ],
+    "selected_charts": [
+      469,
+      711
+    ]
+  }
+]

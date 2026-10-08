@@ -207,6 +207,8 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
                 if vid not in vertices:
                     vertices[vid] = BRepBuilderAPI_MakeVertex(curve.Value(float(t[j]))).Vertex()
                 vertex = vertices[vid]
+                if BRep_Tool.Pnt_s(vertex).Distance(curve.Value(float(t[j]))) > 1e-8:
+                    raise ValueError(f'Inconsistent canonical boundary junction at source vertex {vid}')
                 builder.UpdateVertex(vertex, max(BRep_Tool.Tolerance_s(vertex), etol))
             edge_curve = curve
             edge_pcurves = pcurves

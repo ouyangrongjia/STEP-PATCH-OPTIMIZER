@@ -1,0 +1,3268 @@
+{
+  "scope": "Measured exploratory configurations, not a controlled single-factor benchmark. Layouts, resumed caches and concurrent workloads differ. Open-region distances include displaced trims and are not whole-solid error bounds.",
+  "cases": [
+    {
+      "case": "local_bounded_chain",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "chain",
+      "source_plane_budget_mm": null,
+      "resumed_from": null,
+      "fitting_seconds": 179.23679759999504,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179
+      ],
+      "reported_chart_domains": 854,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_bounded_chain\\step\\region_0114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0017395724616135054,
+                "p50": 0.00042999679051205575,
+                "p95": 0.0027254430640265667,
+                "max": 0.05359270048052309,
+                "min": 1.1340191247136407e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.0703600458939078,
+                "p50": 0.32176043634291546,
+                "p95": 4.536302354950841,
+                "max": 52.967619399613056,
+                "min": 0.0018559483833296953
+              },
+              "samples_above_15_degrees": 101,
+              "samples_above_30_degrees": 21,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_bounded_chain\\step\\region_0179.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0011091733846190404,
+                "p50": 0.0001998258901081669,
+                "p95": 0.0016649437379602913,
+                "max": 0.036332575422500374,
+                "min": 7.104712921408016e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.56296423748407,
+                "p50": 0.20738580348930113,
+                "p95": 3.392099695527332,
+                "max": 47.145388622729214,
+                "min": 0.001773018392391256
+              },
+              "samples_above_15_degrees": 66,
+              "samples_above_30_degrees": 21,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_bounded_chain\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0038289491036612453,
+                "p50": 0.0008827275406434514,
+                "p95": 0.00611210574883091,
+                "max": 0.04930523188556886,
+                "min": 1.2948582371296436e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 8.65271574617041,
+                "p50": 1.6400865589731817,
+                "p95": 12.757937549130562,
+                "max": 80.3695834897808,
+                "min": 0.009285818105204022
+              },
+              "samples_above_15_degrees": 466,
+              "samples_above_30_degrees": 287,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_bounded_chain\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0016024182562467233,
+                "p50": 0.0002811993812112473,
+                "p95": 0.0027972317213684397,
+                "max": 0.032510966001525775,
+                "min": 5.162126009729434e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.701881826623514,
+                "p50": 0.37040898045256077,
+                "p95": 4.721299929498892,
+                "max": 36.347682675036765,
+                "min": 0.0045670226974442365
+              },
+              "samples_above_15_degrees": 81,
+              "samples_above_30_degrees": 10,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_fair_v6",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": null,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_bounded_fair_v5\\round_1",
+      "fitting_seconds": 29.65089080002508,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179
+      ],
+      "reported_chart_domains": 852,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fair_v6\\step\\region_0114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021017779164766103,
+                "p50": 0.00046273576667379425,
+                "p95": 0.0028496078467013094,
+                "max": 0.05004965068038768,
+                "min": 1.635131718131275e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.938970513672429,
+                "p50": 0.3515929057180337,
+                "p95": 4.542987778582311,
+                "max": 54.64150622713409,
+                "min": 0.004487377919537065
+              },
+              "samples_above_15_degrees": 91,
+              "samples_above_30_degrees": 20,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fair_v6\\step\\region_0179.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.00149164131604253,
+                "p50": 0.00022001110270884926,
+                "p95": 0.0019889055573827576,
+                "max": 0.055994595473064256,
+                "min": 1.2154639101964867e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.6839046340022263,
+                "p50": 0.21796593628669553,
+                "p95": 3.8441348323513123,
+                "max": 47.01193226795778,
+                "min": 0.0010601809668597778
+              },
+              "samples_above_15_degrees": 80,
+              "samples_above_30_degrees": 18,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fair_v6\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004302426642996929,
+                "p50": 0.0009641405786214475,
+                "p95": 0.006995452671264715,
+                "max": 0.06008197996788919,
+                "min": 4.49487613579307e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 8.182545054311099,
+                "p50": 1.6671787352545744,
+                "p95": 12.967656169535212,
+                "max": 78.34533535670886,
+                "min": 0.0022804981320770443
+              },
+              "samples_above_15_degrees": 465,
+              "samples_above_30_degrees": 258,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fair_v6\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0018296346842095598,
+                "p50": 0.00036405362386231546,
+                "p95": 0.002796859467254342,
+                "max": 0.05520865222042384,
+                "min": 9.894987679024805e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.811473503333962,
+                "p50": 0.4417749515116881,
+                "p95": 5.0572761751074475,
+                "max": 43.36624101507269,
+                "min": 0.0022031757562734856
+              },
+              "samples_above_15_degrees": 74,
+              "samples_above_30_degrees": 14,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_plane009",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.009,
+      "resumed_from": null,
+      "fitting_seconds": 204.41387660001055,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179
+      ],
+      "reported_chart_domains": 852,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_plane009\\step\\region_0114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0036103587009721438,
+                "p50": 0.001011613714575399,
+                "p95": 0.005182649770758749,
+                "max": 0.07296592538250678,
+                "min": 2.210720947639651e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7915515480701845,
+                "p50": 0.8834157733534637,
+                "p95": 5.869662348294611,
+                "max": 92.60789003797474,
+                "min": 0.0026539872053874367
+              },
+              "samples_above_15_degrees": 132,
+              "samples_above_30_degrees": 38,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_plane009\\step\\region_0179.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002105798976055744,
+                "p50": 0.00042139806880175105,
+                "p95": 0.004021425801092028,
+                "max": 0.04307624695957976,
+                "min": 2.2152245192701227e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.078184021373182,
+                "p50": 0.3877464768715482,
+                "p95": 3.874193137039621,
+                "max": 63.01194583388558,
+                "min": 0.0020614769118943053
+              },
+              "samples_above_15_degrees": 72,
+              "samples_above_30_degrees": 30,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_plane009\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.005910015230745558,
+                "p50": 0.0016154008542227114,
+                "p95": 0.012573688232147821,
+                "max": 0.05537511987511503,
+                "min": 4.912992751028688e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 10.988215546874606,
+                "p50": 2.2250609802717563,
+                "p95": 28.541493988960813,
+                "max": 75.83874123500351,
+                "min": 0.005202702208696336
+              },
+              "samples_above_15_degrees": 1050,
+              "samples_above_30_degrees": 569,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_plane009\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0030999983306759698,
+                "p50": 0.0010158215661452618,
+                "p95": 0.005424476949152895,
+                "max": 0.05451251039328537,
+                "min": 3.6871929807014504e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.849299431594022,
+                "p50": 1.0927494383926861,
+                "p95": 5.181622873183893,
+                "max": 34.018977498469695,
+                "min": 0.006900343125687044
+              },
+              "samples_above_15_degrees": 58,
+              "samples_above_30_degrees": 5,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_fairness1e5",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-05,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 263.38052450001123,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179
+      ],
+      "reported_chart_domains": 901,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e5\\step\\region_0114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002622409370670535,
+                "p50": 0.0005535685782814604,
+                "p95": 0.0044367492506418756,
+                "max": 0.05002836329231767,
+                "min": 5.964535204855218e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.567155446268959,
+                "p50": 0.40063059837959886,
+                "p95": 5.782743526560975,
+                "max": 56.191965750515806,
+                "min": 0.0021828122105906206
+              },
+              "samples_above_15_degrees": 138,
+              "samples_above_30_degrees": 29,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e5\\step\\region_0179.step",
+              "faces": 11,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0017906223725930959,
+                "p50": 0.0003050470366271449,
+                "p95": 0.0026216140805244764,
+                "max": 0.05592090644963119,
+                "min": 3.794761746352126e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.758123584848178,
+                "p50": 0.2534613974468569,
+                "p95": 3.7368256809903646,
+                "max": 57.841624375331484,
+                "min": 0.0020363441130466365
+              },
+              "samples_above_15_degrees": 83,
+              "samples_above_30_degrees": 21,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e5\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.005089910057814488,
+                "p50": 0.0016158410902589828,
+                "p95": 0.009791739549597457,
+                "max": 0.06007404977719902,
+                "min": 3.177628529261152e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 8.458393203490866,
+                "p50": 2.440220995562249,
+                "p95": 16.779652688463408,
+                "max": 64.99915985981607,
+                "min": 0.025128488534867308
+              },
+              "samples_above_15_degrees": 697,
+              "samples_above_30_degrees": 238,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e5\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0030469430968782184,
+                "p50": 0.0005306775315164471,
+                "p95": 0.005768939248949698,
+                "max": 0.0551107497680159,
+                "min": 3.2271652354866594e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.310522567279296,
+                "p50": 0.4520138632015328,
+                "p95": 7.426053797180561,
+                "max": 95.49625715258094,
+                "min": 0.0038127883111356
+              },
+              "samples_above_15_degrees": 161,
+              "samples_above_30_degrees": 27,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_fairness1e4",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 0.0001,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 365.61894929999835,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179
+      ],
+      "reported_chart_domains": 905,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e4\\step\\region_0114.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004480233237911084,
+                "p50": 0.0011741681334472107,
+                "p95": 0.009844820741262273,
+                "max": 0.049933494772147376,
+                "min": 8.344084819146109e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.423516771418109,
+                "p50": 0.7660802661344056,
+                "p95": 8.202225249959818,
+                "max": 71.10069238632164,
+                "min": 0.0037843699621660206
+              },
+              "samples_above_15_degrees": 210,
+              "samples_above_30_degrees": 45,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e4\\step\\region_0179.step",
+              "faces": 12,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0031539960448393684,
+                "p50": 0.0004877093352326803,
+                "p95": 0.007259119762798979,
+                "max": 0.05582673021058994,
+                "min": 2.599549402125214e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.4380115351152587,
+                "p50": 0.3335006251222532,
+                "p95": 5.523674097686398,
+                "max": 53.97937823734466,
+                "min": 0.003668354493905116
+              },
+              "samples_above_15_degrees": 121,
+              "samples_above_30_degrees": 25,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e4\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.01092626009514959,
+                "p50": 0.0062664061891854585,
+                "p95": 0.022641205174309648,
+                "max": 0.060024253832483325,
+                "min": 1.355032494066767e-05
+              },
+              "source_normal_difference_degrees": {
+                "rms": 10.19985476980637,
+                "p50": 5.3735175172829415,
+                "p95": 22.26688335622094,
+                "max": 63.67931753729767,
+                "min": 0.10866444810341949
+              },
+              "samples_above_15_degrees": 980,
+              "samples_above_30_degrees": 303,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_fairness1e4\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.005010215473751388,
+                "p50": 0.0013123865718242828,
+                "p95": 0.012061722822552221,
+                "max": 0.05499504789310762,
+                "min": 7.051194096396231e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.332214790075638,
+                "p50": 0.9692384321531367,
+                "p95": 9.061969948507695,
+                "max": 43.25441332122375,
+                "min": 0.006914981679155789
+              },
+              "samples_above_15_degrees": 165,
+              "samples_above_30_degrees": 19,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_shared_normals",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.1,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v11\\fit\\round_1",
+      "fitting_seconds": 209.2199716999894,
+      "partial_regions": [
+        78,
+        88,
+        114,
+        179,
+        192,
+        195
+      ],
+      "reported_chart_domains": 903,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0024593072630501697,
+                "p50": 0.0006160421159526635,
+                "p95": 0.003922711103962867,
+                "max": 0.05003770193799194,
+                "min": 1.7985780580680843e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.6529957866424447,
+                "p50": 0.5230182473023162,
+                "p95": 6.131482062317278,
+                "max": 47.26031896763487,
+                "min": 0.00711249981136747
+              },
+              "samples_above_15_degrees": 170,
+              "samples_above_30_degrees": 24,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002407692165767254,
+                "p50": 0.0003487779624154788,
+                "p95": 0.004093470213117435,
+                "max": 0.055923940013175334,
+                "min": 3.889284165863671e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.548615040737308,
+                "p50": 0.31420249778130294,
+                "p95": 7.304663757639205,
+                "max": 73.93135336771215,
+                "min": 0.004616368712400707
+              },
+              "samples_above_15_degrees": 243,
+              "samples_above_30_degrees": 49,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 192,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00192.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0023576528002953153,
+                "p50": 0.00023178787842768027,
+                "p95": 0.004805348676307847,
+                "max": 0.022318429338237595,
+                "min": 2.445396627640289e-10
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.0491792061963165,
+                "p50": 0.31931824310902046,
+                "p95": 10.495323230760667,
+                "max": 83.8359078105605,
+                "min": 0.00015258442346042887
+              },
+              "samples_above_15_degrees": 291,
+              "samples_above_30_degrees": 45,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0192.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002491514425121664,
+                "p50": 0.0005298270856505987,
+                "p95": 0.004570253215291044,
+                "max": 0.0466954252481097,
+                "min": 3.789395312023751e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.3959233289809045,
+                "p50": 0.48059854089986875,
+                "p95": 9.0082089760822,
+                "max": 45.46927784703631,
+                "min": 0.0010368545773751328
+              },
+              "samples_above_15_degrees": 230,
+              "samples_above_30_degrees": 32,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 195,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0041869998937956706,
+                "p50": 0.0006420674300768096,
+                "p95": 0.010041283282177809,
+                "max": 0.030224838043703916,
+                "min": 7.411701318326074e-09
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.602017310889829,
+                "p50": 1.9747562879264318,
+                "p95": 16.192879880548524,
+                "max": 78.19893704801534,
+                "min": 6.967546242376378e-05
+              },
+              "samples_above_15_degrees": 709,
+              "samples_above_30_degrees": 90,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004733786552012034,
+                "p50": 0.0011544932105907206,
+                "p95": 0.011050938348259941,
+                "max": 0.04848950182546969,
+                "min": 4.567972009941391e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.427079437730154,
+                "p50": 1.9063188947993268,
+                "p95": 17.038036807870338,
+                "max": 47.242891601835055,
+                "min": 0.002137234022919856
+              },
+              "samples_above_15_degrees": 788,
+              "samples_above_30_degrees": 73,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.00475623972222401,
+                "p50": 0.0014331411859061264,
+                "p95": 0.009193067730575365,
+                "max": 0.06009150740874052,
+                "min": 6.325775991303318e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 8.822463905472373,
+                "p50": 2.907435873314972,
+                "p95": 18.385640692445598,
+                "max": 79.16600059423011,
+                "min": 0.009336433003946414
+              },
+              "samples_above_15_degrees": 846,
+              "samples_above_30_degrees": 211,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_normals\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0032630748897107186,
+                "p50": 0.0006203186603137011,
+                "p95": 0.0062413840600701554,
+                "max": 0.05525627757815611,
+                "min": 1.8674534326102199e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.02590604653546,
+                "p50": 0.6298855798147268,
+                "p95": 10.047611078189451,
+                "max": 45.19234864878825,
+                "min": 0.005029229957482302
+              },
+              "samples_above_15_degrees": 351,
+              "samples_above_30_degrees": 53,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_shared_projected_v3",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.1,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v11\\fit\\round_1",
+      "fitting_seconds": 88.81291459998465,
+      "partial_regions": [
+        65,
+        66,
+        78,
+        88,
+        114,
+        179,
+        192,
+        195
+      ],
+      "reported_chart_domains": 902,
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002453472967709401,
+                "p50": 0.0006549669841846027,
+                "p95": 0.0042069187600376826,
+                "max": 0.05003638219584827,
+                "min": 1.1581145173187535e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.6602250979966877,
+                "p50": 0.5304025952963878,
+                "p95": 5.857474058394483,
+                "max": 61.58769225432355,
+                "min": 0.006456766713599152
+              },
+              "samples_above_15_degrees": 144,
+              "samples_above_30_degrees": 30,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0179.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002319724702160227,
+                "p50": 0.00034208072095101555,
+                "p95": 0.00392429650630433,
+                "max": 0.05593617112414955,
+                "min": 5.782762519636229e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.39558771551377,
+                "p50": 0.30007054185860293,
+                "p95": 6.549703742179449,
+                "max": 77.47515873075443,
+                "min": 0.002075569916786004
+              },
+              "samples_above_15_degrees": 194,
+              "samples_above_30_degrees": 66,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 192,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00192.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0023576528002953153,
+                "p50": 0.00023178787842768027,
+                "p95": 0.004805348676307847,
+                "max": 0.022318429338237595,
+                "min": 2.445396627640289e-10
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.0491792061963165,
+                "p50": 0.31931824310902046,
+                "p95": 10.495323230760667,
+                "max": 83.8359078105605,
+                "min": 0.00015258442346042887
+              },
+              "samples_above_15_degrees": 291,
+              "samples_above_30_degrees": 45,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0192.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0027964276539357976,
+                "p50": 0.0005040287238562065,
+                "p95": 0.004996340832651705,
+                "max": 0.04701089193999688,
+                "min": 6.288837940968676e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.2518333567176105,
+                "p50": 0.44669717573330625,
+                "p95": 10.03583530511551,
+                "max": 63.89012542305073,
+                "min": 0.003619909747489028
+              },
+              "samples_above_15_degrees": 333,
+              "samples_above_30_degrees": 74,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 195,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0041869998937956706,
+                "p50": 0.0006420674300768096,
+                "p95": 0.010041283282177809,
+                "max": 0.030224838043703916,
+                "min": 7.411701318326074e-09
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.602017310889829,
+                "p50": 1.9747562879264318,
+                "p95": 16.192879880548524,
+                "max": 78.19893704801534,
+                "min": 6.967546242376378e-05
+              },
+              "samples_above_15_degrees": 709,
+              "samples_above_30_degrees": 90,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.005052689189119048,
+                "p50": 0.001291091876838565,
+                "p95": 0.011887323511401876,
+                "max": 0.0483042026879368,
+                "min": 2.0204413812831567e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.946409230476153,
+                "p50": 2.005962574029812,
+                "p95": 17.7576523146572,
+                "max": 88.77484369668288,
+                "min": 0.004477320631725204
+              },
+              "samples_above_15_degrees": 870,
+              "samples_above_30_degrees": 100,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 65,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00065.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0031257472989741778,
+                "p50": 0.0005849660194515694,
+                "p95": 0.007178913232949785,
+                "max": 0.023629736674415744,
+                "min": 4.991212298533093e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.2546999189313865,
+                "p50": 1.2159101091812254,
+                "p95": 12.371855569189286,
+                "max": 30.614504296259486,
+                "min": 0.005200767476415962
+              },
+              "samples_above_15_degrees": 360,
+              "samples_above_30_degrees": 2,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0065.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002356313306157812,
+                "p50": 0.0007270782709436047,
+                "p95": 0.0041700591452497535,
+                "max": 0.04961245641315898,
+                "min": 3.4701260420733855e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.0902040714772543,
+                "p50": 1.1345211516017706,
+                "p95": 6.724858356438769,
+                "max": 19.18011026319405,
+                "min": 0.006624740020779931
+              },
+              "samples_above_15_degrees": 25,
+              "samples_above_30_degrees": 0,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 66,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00066.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0024515396207533046,
+                "p50": 0.0006165932274260284,
+                "p95": 0.004613174723292612,
+                "max": 0.033648163453765145,
+                "min": 3.491423058516935e-08
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.351989656651277,
+                "p50": 1.8479514536995385,
+                "p95": 13.302711565132768,
+                "max": 63.13950553465756,
+                "min": 0.008817709582200038
+              },
+              "samples_above_15_degrees": 479,
+              "samples_above_30_degrees": 143,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0066.step",
+              "faces": 4,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0036538630274905574,
+                "p50": 0.0011399654300975112,
+                "p95": 0.006019675078292261,
+                "max": 0.056256057800367076,
+                "min": 2.528386249457167e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.468546084807704,
+                "p50": 1.7026413391185715,
+                "p95": 11.64844665751345,
+                "max": 64.03956829918033,
+                "min": 0.014637789952357996
+              },
+              "samples_above_15_degrees": 426,
+              "samples_above_30_degrees": 192,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004715923616520275,
+                "p50": 0.0010440636890177014,
+                "p95": 0.009553512205501175,
+                "max": 0.06008156174520365,
+                "min": 1.1469019280970897e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 8.034168678067237,
+                "p50": 2.512792194763777,
+                "p95": 16.49377291101826,
+                "max": 60.99369654847501,
+                "min": 0.010222613086912073
+              },
+              "samples_above_15_degrees": 747,
+              "samples_above_30_degrees": 126,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\step\\region_0088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0034062729660279596,
+                "p50": 0.0006677566346147616,
+                "p95": 0.006734364301627037,
+                "max": 0.05525079320354311,
+                "min": 5.152070195929481e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.9817077407792985,
+                "p50": 0.6648324462156644,
+                "p95": 10.466078640189535,
+                "max": 68.51580179879869,
+                "min": 0.006394931946629587
+              },
+              "samples_above_15_degrees": 296,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "local_shared_projected_strong",
+      "recorded_status": "local_diagnostic",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 1.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\local_shared_projected_v3\\round_0",
+      "fitting_seconds": 203.98933199999738,
+      "partial_regions": [
+        65,
+        66,
+        78,
+        88,
+        114,
+        179,
+        192,
+        195
+      ],
+      "reported_chart_domains": 906,
+      "regional_evidence": [],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "joint_support_probe",
+      "recorded_status": "fitted",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 41.416074699984165,
+      "partial_regions": null,
+      "reported_chart_domains": 902,
+      "regional_evidence": [
+        {
+          "region": 192,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00192.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0023576528002953153,
+                "p50": 0.00023178787842768027,
+                "p95": 0.004805348676307847,
+                "max": 0.022318429338237595,
+                "min": 2.445396627640289e-10
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.0491792061963165,
+                "p50": 0.31931824310902046,
+                "p95": 10.495323230760667,
+                "max": 83.8359078105605,
+                "min": 0.00015258442346042887
+              },
+              "samples_above_15_degrees": 291,
+              "samples_above_30_degrees": 45,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\joint_support_probe\\regions\\region_0192.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0017495660066481644,
+                "p50": 0.00032832430227847044,
+                "p95": 0.003026367302467946,
+                "max": 0.04710774678704723,
+                "min": 3.121092137972936e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.026252616240447,
+                "p50": 0.30197837270507955,
+                "p95": 6.41317000666648,
+                "max": 46.21212176136189,
+                "min": 0.001870928602662054
+              },
+              "samples_above_15_degrees": 71,
+              "samples_above_30_degrees": 6,
+              "delabella_retried_faces": []
+            }
+          ]
+        },
+        {
+          "region": 195,
+          "samples": 12000,
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound.",
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0041869998937956706,
+                "p50": 0.0006420674300768096,
+                "p95": 0.010041283282177809,
+                "max": 0.030224838043703916,
+                "min": 7.411701318326074e-09
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.602017310889829,
+                "p50": 1.9747562879264318,
+                "p95": 16.192879880548524,
+                "max": 78.19893704801534,
+                "min": 6.967546242376378e-05
+              },
+              "samples_above_15_degrees": 709,
+              "samples_above_30_degrees": 90,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\joint_support_probe\\regions\\region_0195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0026942930239654303,
+                "p50": 0.0008223434622259009,
+                "p95": 0.00554736274747643,
+                "max": 0.048284591623093315,
+                "min": 1.9992705967032482e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.175572149839351,
+                "p50": 1.1066760527575306,
+                "p95": 8.333248723691607,
+                "max": 42.94346746855975,
+                "min": 0.002892970395086469
+              },
+              "samples_above_15_degrees": 199,
+              "samples_above_30_degrees": 15,
+              "delabella_retried_faces": []
+            }
+          ]
+        }
+      ],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "whole_fair_v10",
+      "recorded_status": "DiagnosticOnly",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v6\\fit\\round_3",
+      "fitting_seconds": 74.4425399999891,
+      "partial_regions": null,
+      "reported_chart_domains": 896,
+      "regional_evidence": [],
+      "whole_quality": {
+        "status": "DiagnosticOnly",
+        "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\step\\model.step",
+        "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+        "units": "mm",
+        "source_CAD_read": false,
+        "source_label_assignment": "Nearest STL votes, diagnostic only",
+        "topology": {
+          "faces": 896,
+          "edges": 39752,
+          "shells": 1,
+          "solids": 1,
+          "free_edges": 0,
+          "multiple_edges": 0,
+          "invalid_faces": [],
+          "brep_valid": true,
+          "volume_mm3": 688.4544951608284,
+          "maximum_edge_tolerance_mm": 0.0036613346540694982
+        },
+        "delabella_retried_faces": [],
+        "representation": {
+          "file_bytes": 132583084,
+          "spline_faces": 896,
+          "actual_control_points": 417855,
+          "maximum_direction_poles": 65
+        },
+        "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+        "forward_tessellation_distance_mm": {
+          "rms": 0.0021041592287097846,
+          "p50": 0.0009513710736562845,
+          "p95": 0.004087643596519292,
+          "max": 0.025468468626899773,
+          "min": 1.4071279341938067e-09
+        },
+        "reverse_native_surface_distance_mm": {
+          "rms": 0.0017171144945960096,
+          "p50": 0.00045184478200245066,
+          "p95": 0.003219576001329675,
+          "max": 0.07919579644214948,
+          "min": 1.8210198301467125e-08
+        },
+        "source_normal_difference_degrees": {
+          "rms": 3.2663024681576434,
+          "p50": 0.6232649487275237,
+          "p95": 5.657333047702239,
+          "max": 129.56860955546782,
+          "min": 0.001423072157144626
+        },
+        "opposed_normal_sample_fraction": 4.464285714285714e-05,
+        "tessellation_area_mm2": 1075.9748884879568,
+        "tessellation_triangles": 867148,
+        "tessellation_deflection_mm": 0.005,
+        "source_samples": 30000,
+        "reverse_samples": 89600,
+        "all_join_normal_degrees": {
+          "rms": 12.037684362695837,
+          "p50": 1.8828784238588057,
+          "p95": 24.089003449561233,
+          "max": 179.61393369963181,
+          "min": 0.0001025452879829374
+        },
+        "length_weighted_all_join_normal_degrees": {
+          "rms": 12.435433944518147,
+          "p50": 1.9551548504112024,
+          "p95": 25.791486722905024,
+          "max": 179.61393369963181,
+          "min": 0.0001025452879829374
+        },
+        "surface_gap_mm": {
+          "rms": 0.0009335905105757802,
+          "p50": 0.0006996089140566704,
+          "p95": 0.0017469916157834301,
+          "max": 0.0036176663899793538,
+          "min": 9.137328672332802e-08
+        },
+        "seconds": 175.88940670000738,
+        "can_apply": false,
+        "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+      },
+      "native_body": {
+        "start_status": 0,
+        "load_status": 0,
+        "quilts": [
+          {
+            "internal_status": 0,
+            "internal": 0,
+            "backup_status": 0,
+            "backup": 0,
+            "volume_status": -18,
+            "volume_model_units": 0,
+            "surfaces": 862
+          }
+        ],
+        "unit_density_mass_status": 0,
+        "volume_model_units": 0,
+        "quilt_visit_status": 0,
+        "external_quilts": 1,
+        "body_collect_status": 0,
+        "bodies": [
+          {
+            "id": -5778,
+            "state_status": 0,
+            "state": 3,
+            "surface_visit_status": -4,
+            "surfaces": 0,
+            "mass_status": 0,
+            "volume_model_units": 0
+          }
+        ],
+        "active_bodies_with_surfaces": 0,
+        "quilt_surfaces_outside_active_bodies": 862,
+        "closed_quilts": 0,
+        "native_closed_solid": false
+      }
+    },
+    {
+      "case": "whole_fair_v11",
+      "recorded_status": "DiagnosticOnly",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 290.40523830000893,
+      "partial_regions": null,
+      "reported_chart_domains": 902,
+      "regional_evidence": [],
+      "whole_quality": {
+        "status": "DiagnosticOnly",
+        "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v11\\step\\model.step",
+        "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+        "units": "mm",
+        "source_CAD_read": false,
+        "source_label_assignment": "Nearest STL votes, diagnostic only",
+        "topology": {
+          "faces": 902,
+          "edges": 39696,
+          "shells": 1,
+          "solids": 1,
+          "free_edges": 0,
+          "multiple_edges": 0,
+          "invalid_faces": [],
+          "brep_valid": true,
+          "volume_mm3": 688.4784701716869,
+          "maximum_edge_tolerance_mm": 0.0036613346540694982
+        },
+        "delabella_retried_faces": [],
+        "representation": {
+          "file_bytes": 133217761,
+          "spline_faces": 902,
+          "actual_control_points": 423282,
+          "maximum_direction_poles": 65
+        },
+        "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+        "forward_tessellation_distance_mm": {
+          "rms": 0.0020834670773802397,
+          "p50": 0.00094705762962361,
+          "p95": 0.004074761492537085,
+          "max": 0.02045134931069063,
+          "min": 1.4071279341938067e-09
+        },
+        "reverse_native_surface_distance_mm": {
+          "rms": 0.0016467225544916145,
+          "p50": 0.0004488091683242719,
+          "p95": 0.003187387384833636,
+          "max": 0.027109513572808542,
+          "min": 7.201231258101241e-09
+        },
+        "source_normal_difference_degrees": {
+          "rms": 3.0113004361319615,
+          "p50": 0.6108130954240134,
+          "p95": 5.548829091579571,
+          "max": 111.22608447711433,
+          "min": 0.0013101130869158564
+        },
+        "opposed_normal_sample_fraction": 2.2172949002217295e-05,
+        "tessellation_area_mm2": 1075.8732806229573,
+        "tessellation_triangles": 834040,
+        "tessellation_deflection_mm": 0.005,
+        "source_samples": 30000,
+        "reverse_samples": 90200,
+        "all_join_normal_degrees": {
+          "rms": 11.848490824508538,
+          "p50": 1.875178856829777,
+          "p95": 23.833691260894167,
+          "max": 179.61393369963181,
+          "min": 0.0001025452879829374
+        },
+        "length_weighted_all_join_normal_degrees": {
+          "rms": 12.241355206670699,
+          "p50": 1.9473885955427157,
+          "p95": 25.51087269732346,
+          "max": 179.61393369963181,
+          "min": 0.0001025452879829374
+        },
+        "surface_gap_mm": {
+          "rms": 0.0009333035018376746,
+          "p50": 0.0006981477955001883,
+          "p95": 0.0017468364176780689,
+          "max": 0.0036176663899793538,
+          "min": 9.137328672332802e-08
+        },
+        "seconds": 127.83862690001843,
+        "can_apply": false,
+        "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+      },
+      "native_body": {
+        "start_status": 0,
+        "load_status": 0,
+        "quilts": [
+          {
+            "internal_status": 0,
+            "internal": 0,
+            "backup_status": 0,
+            "backup": 0,
+            "volume_status": -18,
+            "volume_model_units": 0,
+            "surfaces": 868
+          }
+        ],
+        "unit_density_mass_status": 0,
+        "volume_model_units": 0,
+        "quilt_visit_status": 0,
+        "external_quilts": 1,
+        "body_collect_status": 0,
+        "bodies": [
+          {
+            "id": -5778,
+            "state_status": 0,
+            "state": 3,
+            "surface_visit_status": -4,
+            "surfaces": 0,
+            "mass_status": 0,
+            "volume_model_units": 0
+          }
+        ],
+        "active_bodies_with_surfaces": 0,
+        "quilt_surfaces_outside_active_bodies": 868,
+        "closed_quilts": 0,
+        "native_closed_solid": false
+      }
+    },
+    {
+      "case": "whole_fair_v13",
+      "recorded_status": "failed",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\joint_support_probe",
+      "fitting_seconds": 86.15083969998523,
+      "partial_regions": null,
+      "reported_chart_domains": 902,
+      "regional_evidence": [],
+      "whole_quality": {
+        "status": "DiagnosticOnly",
+        "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v13\\step\\model.step",
+        "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+        "units": "mm",
+        "source_CAD_read": false,
+        "source_label_assignment": "Nearest STL votes, diagnostic only",
+        "topology": {
+          "faces": 902,
+          "edges": 39699,
+          "shells": 1,
+          "solids": 1,
+          "free_edges": 0,
+          "multiple_edges": 0,
+          "invalid_faces": [],
+          "brep_valid": true,
+          "volume_mm3": 688.4895774010778,
+          "maximum_edge_tolerance_mm": 0.0036613346540694982
+        },
+        "delabella_retried_faces": [],
+        "representation": {
+          "file_bytes": 133800361,
+          "spline_faces": 902,
+          "actual_control_points": 429121,
+          "maximum_direction_poles": 65
+        },
+        "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+        "forward_tessellation_distance_mm": {
+          "rms": 0.0020730246344472813,
+          "p50": 0.00094705762962361,
+          "p95": 0.004065240115211303,
+          "max": 0.02277676704657179,
+          "min": 1.4071279341938067e-09
+        },
+        "reverse_native_surface_distance_mm": {
+          "rms": 0.0016462699139817444,
+          "p50": 0.0004487782934298445,
+          "p95": 0.0031469394048514567,
+          "max": 0.028066493723124464,
+          "min": 3.1561572012436742e-09
+        },
+        "source_normal_difference_degrees": {
+          "rms": 3.011267858166945,
+          "p50": 0.6144456862425621,
+          "p95": 5.507552281665252,
+          "max": 85.98112588996607,
+          "min": 0.0013101130869158564
+        },
+        "opposed_normal_sample_fraction": 0.0,
+        "tessellation_area_mm2": 1075.8721057290736,
+        "tessellation_triangles": 831221,
+        "tessellation_deflection_mm": 0.005,
+        "source_samples": 30000,
+        "reverse_samples": 90200,
+        "all_join_normal_degrees": {
+          "rms": 10.773281242883902,
+          "p50": 1.862828520196048,
+          "p95": 23.26817622535683,
+          "max": 150.06468769961677,
+          "min": 0.0
+        },
+        "length_weighted_all_join_normal_degrees": {
+          "rms": 11.247639083606453,
+          "p50": 1.9346238471854555,
+          "p95": 24.850570865520737,
+          "max": 150.06468769961677,
+          "min": 0.0
+        },
+        "surface_gap_mm": {
+          "rms": 0.0009329254813746421,
+          "p50": 0.0006988808594319097,
+          "p95": 0.0017470157724484268,
+          "max": 0.0036176663899793538,
+          "min": 0.0
+        },
+        "seconds": 171.5139923999959,
+        "can_apply": false,
+        "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+      },
+      "native_body": {
+        "start_status": 0,
+        "load_status": 0,
+        "quilts": [
+          {
+            "internal_status": 0,
+            "internal": 0,
+            "backup_status": 0,
+            "backup": 0,
+            "volume_status": -18,
+            "volume_model_units": 0,
+            "surfaces": 868
+          }
+        ],
+        "unit_density_mass_status": 0,
+        "volume_model_units": 0,
+        "quilt_visit_status": 0,
+        "external_quilts": 1,
+        "body_collect_status": 0,
+        "bodies": [
+          {
+            "id": -5778,
+            "state_status": 0,
+            "state": 3,
+            "surface_visit_status": -4,
+            "surfaces": 0,
+            "mass_status": 0,
+            "volume_model_units": 0
+          }
+        ],
+        "active_bodies_with_surfaces": 0,
+        "quilt_surfaces_outside_active_bodies": 868,
+        "closed_quilts": 0,
+        "native_closed_solid": false
+      }
+    },
+    {
+      "case": "whole_fair_v14",
+      "recorded_status": "DiagnosticOnly",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": null,
+      "support_solver": null,
+      "boundary_mode": null,
+      "source_plane_budget_mm": null,
+      "resumed_from": null,
+      "fitting_seconds": 65.69983489997685,
+      "partial_regions": null,
+      "reported_chart_domains": null,
+      "regional_evidence": [],
+      "whole_quality": {
+        "status": "DiagnosticOnly",
+        "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v14\\step\\model.step",
+        "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+        "units": "mm",
+        "source_CAD_read": false,
+        "source_label_assignment": "Nearest STL votes, diagnostic only",
+        "topology": {
+          "faces": 902,
+          "edges": 39705,
+          "shells": 1,
+          "solids": 1,
+          "free_edges": 0,
+          "multiple_edges": 0,
+          "invalid_faces": [],
+          "brep_valid": true,
+          "volume_mm3": 688.5140896065452,
+          "maximum_edge_tolerance_mm": 0.0036613346540694982
+        },
+        "delabella_retried_faces": [],
+        "representation": {
+          "file_bytes": 138078462,
+          "spline_faces": 902,
+          "actual_control_points": 473326,
+          "maximum_direction_poles": 65
+        },
+        "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+        "forward_tessellation_distance_mm": {
+          "rms": 0.0020539313720372445,
+          "p50": 0.0009440552179463772,
+          "p95": 0.0040282524585253665,
+          "max": 0.02045134931069063,
+          "min": 1.4071279341938067e-09
+        },
+        "reverse_native_surface_distance_mm": {
+          "rms": 0.0016447007434756205,
+          "p50": 0.00045278340824172797,
+          "p95": 0.003169431410295235,
+          "max": 0.026430907586447186,
+          "min": 2.717000252812457e-09
+        },
+        "source_normal_difference_degrees": {
+          "rms": 2.878486319615573,
+          "p50": 0.6237403773031485,
+          "p95": 5.49414998275804,
+          "max": 67.13616125886502,
+          "min": 0.00098157164592846
+        },
+        "opposed_normal_sample_fraction": 0.0,
+        "tessellation_area_mm2": 1075.8573564414405,
+        "tessellation_triangles": 823159,
+        "tessellation_deflection_mm": 0.005,
+        "source_samples": 30000,
+        "reverse_samples": 90200,
+        "all_join_normal_degrees": {
+          "rms": 10.299806275698325,
+          "p50": 1.8346703361444248,
+          "p95": 22.01363340184877,
+          "max": 138.50888806448694,
+          "min": 0.0
+        },
+        "length_weighted_all_join_normal_degrees": {
+          "rms": 10.816898581486749,
+          "p50": 1.9056786558207728,
+          "p95": 23.595881914802543,
+          "max": 138.50888806448694,
+          "min": 0.0
+        },
+        "surface_gap_mm": {
+          "rms": 0.0009280192764437376,
+          "p50": 0.0006959434593490183,
+          "p95": 0.0017456323877904582,
+          "max": 0.0036176663899793538,
+          "min": 0.0
+        },
+        "seconds": 149.80348329999833,
+        "can_apply": false,
+        "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+      },
+      "native_body": {
+        "start_status": 0,
+        "load_status": 0,
+        "quilts": [
+          {
+            "internal_status": 0,
+            "internal": 0,
+            "backup_status": 0,
+            "backup": 0,
+            "volume_status": 0,
+            "volume_model_units": 690.228,
+            "surfaces": 868
+          }
+        ],
+        "unit_density_mass_status": 0,
+        "volume_model_units": 690.247,
+        "quilt_visit_status": 0,
+        "external_quilts": 1,
+        "body_collect_status": 0,
+        "bodies": [
+          {
+            "id": -5778,
+            "state_status": 0,
+            "state": 4,
+            "surface_visit_status": 0,
+            "surfaces": 868,
+            "mass_status": -1,
+            "volume_model_units": 0
+          }
+        ],
+        "active_bodies_with_surfaces": 1,
+        "quilt_surfaces_outside_active_bodies": 0,
+        "closed_quilts": 1,
+        "native_closed_solid": true
+      },
+      "pipeline_seconds": 878.7730861000018,
+      "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\shared_support_auto",
+      "selected": true
+    },
+    {
+      "case": "shared_support_auto",
+      "recorded_status": "fitted",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 41.416074699984165,
+      "partial_regions": null,
+      "reported_chart_domains": 902,
+      "regional_evidence": [],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "shared_support_followup",
+      "recorded_status": "fitted",
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "normal_field": "crease-fans",
+      "support_solver": "bounded",
+      "boundary_mode": "fair-chains",
+      "source_plane_budget_mm": 0.003,
+      "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v10\\fit\\round_0",
+      "fitting_seconds": 41.416074699984165,
+      "partial_regions": null,
+      "reported_chart_domains": 902,
+      "regional_evidence": [],
+      "whole_quality": null,
+      "native_body": null
+    },
+    {
+      "case": "whole_fair_v15",
+      "recorded_status": "DiagnosticOnly",
+      "whole_quality": {
+        "status": "DiagnosticOnly",
+        "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\step\\model.step",
+        "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\source_partition.npz",
+        "units": "mm",
+        "source_CAD_read": false,
+        "source_label_assignment": "Nearest STL votes, diagnostic only",
+        "topology": {
+          "faces": 902,
+          "edges": 39716,
+          "shells": 1,
+          "solids": 1,
+          "free_edges": 0,
+          "multiple_edges": 0,
+          "invalid_faces": [],
+          "brep_valid": true,
+          "volume_mm3": 688.5198443026461,
+          "maximum_edge_tolerance_mm": 0.0036613346540694982
+        },
+        "delabella_retried_faces": [],
+        "representation": {
+          "file_bytes": 138133991,
+          "spline_faces": 902,
+          "actual_control_points": 473910,
+          "maximum_direction_poles": 65
+        },
+        "tessellation_to_native_surface_max_mm": 0.0034562994093196753,
+        "forward_tessellation_distance_mm": {
+          "rms": 0.0020541976832436823,
+          "p50": 0.0009450346693763748,
+          "p95": 0.004025292148735937,
+          "max": 0.02045134931069063,
+          "min": 1.4071279341938067e-09
+        },
+        "reverse_native_surface_distance_mm": {
+          "rms": 0.0016370032058400318,
+          "p50": 0.00045386361539288974,
+          "p95": 0.003179080112248977,
+          "max": 0.02864310659882941,
+          "min": 2.717000252812457e-09
+        },
+        "source_normal_difference_degrees": {
+          "rms": 2.92090945490557,
+          "p50": 0.6253347319697145,
+          "p95": 5.499093217717547,
+          "max": 86.86038986764665,
+          "min": 0.00098157164592846
+        },
+        "opposed_normal_sample_fraction": 0.0,
+        "tessellation_area_mm2": 1075.8578669046042,
+        "tessellation_triangles": 824344,
+        "tessellation_deflection_mm": 0.005,
+        "source_samples": 30000,
+        "reverse_samples": 90200,
+        "all_join_normal_degrees": {
+          "rms": 10.188592586582883,
+          "p50": 1.8297611770601814,
+          "p95": 21.878105298996243,
+          "max": 138.50888806448694,
+          "min": 0.0
+        },
+        "length_weighted_all_join_normal_degrees": {
+          "rms": 10.717140703099581,
+          "p50": 1.8994913071256165,
+          "p95": 23.50942029461342,
+          "max": 138.50888806448694,
+          "min": 0.0
+        },
+        "surface_gap_mm": {
+          "rms": 0.0009277117687617461,
+          "p50": 0.00069602221271759,
+          "p95": 0.00174575271828398,
+          "max": 0.0036176663899793538,
+          "min": 0.0
+        },
+        "seconds": 127.42555630000425,
+        "can_apply": false,
+        "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+      },
+      "native_body": {
+        "start_status": 0,
+        "load_status": 0,
+        "quilts": [
+          {
+            "internal_status": 0,
+            "internal": 0,
+            "backup_status": 0,
+            "backup": 0,
+            "volume_status": 0,
+            "volume_model_units": 690.228,
+            "surfaces": 868
+          }
+        ],
+        "unit_density_mass_status": 0,
+        "volume_model_units": 690.246,
+        "quilt_visit_status": 0,
+        "external_quilts": 1,
+        "body_collect_status": 0,
+        "bodies": [
+          {
+            "id": -5778,
+            "state_status": 0,
+            "state": 4,
+            "surface_visit_status": 0,
+            "surfaces": 868,
+            "mass_status": -1,
+            "volume_model_units": 0
+          }
+        ],
+        "active_bodies_with_surfaces": 1,
+        "quilt_surfaces_outside_active_bodies": 0,
+        "closed_quilts": 1,
+        "native_closed_solid": true
+      },
+      "pipeline_seconds": 815.0787251000002,
+      "fitting_seconds": 58.08739100000821,
+      "configuration": {
+        "distance": 0.03,
+        "boundary": 0.005,
+        "controls": [
+          65
+        ],
+        "normal_weight": 0.01,
+        "fairness": 1e-06,
+        "max_charts": 8000,
+        "max_depth": 24,
+        "shared_smooth_normals": false,
+        "feature_angle": 30.0,
+        "boundary_normal_weight": 0.0,
+        "interior_subdivisions": 0
+      },
+      "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\shared_support_followup",
+      "selected": false,
+      "rejection_reason": "Final same-camera visual review found new narrow-band ripples in region 197, despite improved P95. Rejected in favor of whole_fair_v14.",
+      "regional_evidence": [
+        {
+          "region": 114,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00114.step",
+              "faces": 7,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0021882202882291986,
+                "p50": 0.0004706442513088791,
+                "p95": 0.004277752097727541,
+                "max": 0.053476111224121894,
+                "min": 3.167647244043479e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.411261124294867,
+                "p50": 0.5287773432286779,
+                "p95": 8.055559177476717,
+                "max": 79.30766092387911,
+                "min": 0.0018823168704319385
+              },
+              "samples_above_15_degrees": 191,
+              "samples_above_30_degrees": 43,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00114.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0022737605447353776,
+                "p50": 0.00047947850059377247,
+                "p95": 0.003532514373920482,
+                "max": 0.04994910201399762,
+                "min": 1.455533976676961e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.066096610267319,
+                "p50": 0.3539063272258487,
+                "p95": 4.6984877924844035,
+                "max": 49.477089019274786,
+                "min": 0.004031741274491082
+              },
+              "samples_above_15_degrees": 104,
+              "samples_above_30_degrees": 25,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 179,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00179.step",
+              "faces": 9,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002139799328862204,
+                "p50": 0.00036011397798667993,
+                "p95": 0.0040591319749985096,
+                "max": 0.035747670031249804,
+                "min": 1.87442798063605e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.8182125212615516,
+                "p50": 0.3849804556716041,
+                "p95": 7.002276055502282,
+                "max": 45.4472557939381,
+                "min": 0.0022576154928520393
+              },
+              "samples_above_15_degrees": 175,
+              "samples_above_30_degrees": 40,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00179.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0015988507488208287,
+                "p50": 0.00029467503203624854,
+                "p95": 0.002198319274778077,
+                "max": 0.0555235123265281,
+                "min": 1.785302189590273e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.88691855525102,
+                "p50": 0.22310211365701865,
+                "p95": 3.5859268041456183,
+                "max": 47.01193226795778,
+                "min": 0.001262823293103598
+              },
+              "samples_above_15_degrees": 102,
+              "samples_above_30_degrees": 26,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 192,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00192.step",
+              "faces": 8,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0023576528002953153,
+                "p50": 0.00023178787842768027,
+                "p95": 0.004805348676307847,
+                "max": 0.022318429338237595,
+                "min": 2.445396627640289e-10
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.0491792061963165,
+                "p50": 0.31931824310902046,
+                "p95": 10.495323230760667,
+                "max": 83.8359078105605,
+                "min": 0.00015258442346042887
+              },
+              "samples_above_15_degrees": 291,
+              "samples_above_30_degrees": 45,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00192.step",
+              "faces": 6,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0018033634559224418,
+                "p50": 0.0003934391376476918,
+                "p95": 0.0030561201046519536,
+                "max": 0.046167413280048676,
+                "min": 4.4949077364176355e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.0546976177971,
+                "p50": 0.3507275905865393,
+                "p95": 6.227620678956921,
+                "max": 50.57337488012624,
+                "min": 0.0018795277572745107
+              },
+              "samples_above_15_degrees": 74,
+              "samples_above_30_degrees": 8,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 195,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0041869998937956706,
+                "p50": 0.0006420674300768096,
+                "p95": 0.010041283282177809,
+                "max": 0.030224838043703916,
+                "min": 7.411701318326074e-09
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.602017310889829,
+                "p50": 1.9747562879264318,
+                "p95": 16.192879880548524,
+                "max": 78.19893704801534,
+                "min": 6.967546242376378e-05
+              },
+              "samples_above_15_degrees": 709,
+              "samples_above_30_degrees": 90,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00195.step",
+              "faces": 10,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002835513975302691,
+                "p50": 0.0009685444391637583,
+                "p95": 0.005791581214613929,
+                "max": 0.04949159524897501,
+                "min": 1.372174446136654e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.364654835954371,
+                "p50": 1.3864943182313842,
+                "p95": 8.849982174213965,
+                "max": 43.83911189510502,
+                "min": 0.00289287061493092
+              },
+              "samples_above_15_degrees": 223,
+              "samples_above_30_degrees": 16,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 197,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00197.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0020683101431862015,
+                "p50": 0.00018117893970286526,
+                "p95": 0.00382833519257962,
+                "max": 0.024847713355892108,
+                "min": 1.0486374150723786e-08
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.206799296692865,
+                "p50": 0.19726107412880484,
+                "p95": 7.861660659568139,
+                "max": 63.90502502622557,
+                "min": 0.0005105794833911724
+              },
+              "samples_above_15_degrees": 204,
+              "samples_above_30_degrees": 41,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00197.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002081259089605504,
+                "p50": 0.00032610367242369757,
+                "p95": 0.004230861857483397,
+                "max": 0.03351394839515832,
+                "min": 1.2542797601381394e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.3372402630461315,
+                "p50": 0.3290331982799967,
+                "p95": 5.052472932512923,
+                "max": 88.38562736598519,
+                "min": 0.00048041972802011684
+              },
+              "samples_above_15_degrees": 38,
+              "samples_above_30_degrees": 20,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 200,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00200.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.003000196378858761,
+                "p50": 0.0006560782139542441,
+                "p95": 0.006791596775556236,
+                "max": 0.02511522032288186,
+                "min": 1.6273897727141504e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 5.772804877508375,
+                "p50": 1.6533235007208034,
+                "p95": 12.96580361451767,
+                "max": 40.22782579796218,
+                "min": 0.002365624519667542
+              },
+              "samples_above_15_degrees": 401,
+              "samples_above_30_degrees": 26,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00200.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.002804707799487286,
+                "p50": 0.0006412493150297317,
+                "p95": 0.0053202515384675325,
+                "max": 0.05816276703966766,
+                "min": 2.5181001969568065e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 4.473605026843427,
+                "p50": 0.9099505836908577,
+                "p95": 9.917305555613908,
+                "max": 60.96373352267055,
+                "min": 0.000654890580103142
+              },
+              "samples_above_15_degrees": 248,
+              "samples_above_30_degrees": 15,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 78,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00078.step",
+              "faces": 2,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004143599276474035,
+                "p50": 0.000623837232557876,
+                "p95": 0.008667553460114354,
+                "max": 0.04746181015429088,
+                "min": 9.036672772118189e-07
+              },
+              "source_normal_difference_degrees": {
+                "rms": 9.541505842772274,
+                "p50": 1.9294806509292117,
+                "p95": 19.911353534917225,
+                "max": 58.97639461535522,
+                "min": 0.007806915470970648
+              },
+              "samples_above_15_degrees": 985,
+              "samples_above_30_degrees": 342,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00078.step",
+              "faces": 1,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.004190017192949891,
+                "p50": 0.0010635787238761885,
+                "p95": 0.0067844500550982775,
+                "max": 0.0599678152175659,
+                "min": 1.8503600191134455e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 7.501220004603559,
+                "p50": 1.6504040417855825,
+                "p95": 11.93418242716264,
+                "max": 76.15129430056068,
+                "min": 0.005548722156472336
+              },
+              "samples_above_15_degrees": 405,
+              "samples_above_30_degrees": 210,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        },
+        {
+          "region": 88,
+          "samples": 12000,
+          "source_CAD_used": false,
+          "models": [
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\result_v3\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0019801037462771455,
+                "p50": 0.0002334460791781983,
+                "p95": 0.003985839281882119,
+                "max": 0.03255909313423631,
+                "min": 1.5673255245101926e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 3.7566115524426857,
+                "p50": 0.42890021056373884,
+                "p95": 8.078846265785955,
+                "max": 53.322487726497734,
+                "min": 0.00233906214218204
+              },
+              "samples_above_15_degrees": 172,
+              "samples_above_30_degrees": 12,
+              "delabella_retried_faces": []
+            },
+            {
+              "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\whole_fair_v15\\regions\\region_00088.step",
+              "faces": 5,
+              "source_to_native_sample_distance_mm": {
+                "rms": 0.0018800469283016266,
+                "p50": 0.0003892675646360981,
+                "p95": 0.0029666916634305245,
+                "max": 0.05514497978417694,
+                "min": 1.3819661839234162e-06
+              },
+              "source_normal_difference_degrees": {
+                "rms": 2.863018429781736,
+                "p50": 0.4398789267989303,
+                "p95": 5.155159940904276,
+                "max": 42.94609196490576,
+                "min": 0.002206959131450976
+              },
+              "samples_above_15_degrees": 76,
+              "samples_above_30_degrees": 13,
+              "delabella_retried_faces": []
+            }
+          ],
+          "scope": "Same area-uniform source samples and raw crease-fan normals. Native STEP D1 at UV interpolated from closest trimmed tessellation (0.001 mm); sampled evidence, not a continuous bound."
+        }
+      ]
+    }
+  ]
+}

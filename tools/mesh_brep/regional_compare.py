@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import cad
 from .mesh import dump, vertex_normals
 from .render import render_shape, polydata, lines
-from .partition_fit import boundary_edges, loops
+from .partition_fit import boundary_edges
 
 
 def source_view(v, f, path, center, axes, scale):
@@ -16,7 +16,9 @@ def source_view(v, f, path, center, axes, scale):
     prop.SetColor(.72, .77, .84); prop.SetSpecular(.45); prop.SetSpecularPower(35)
     prop.SetAmbient(.18); prop.SetDiffuse(.72)
     renderer = vtk.vtkRenderer(); renderer.SetBackground(.97, .98, .99); renderer.AddActor(actor)
-    lines(renderer, [v[np.r_[lp, lp[0]]] for lp in loops(boundary_edges(f))], (.12, .17, .23), 1.7)
+    # A supplied region can pinch at a source vertex while its individual CAD
+    # charts remain regular. Draw every source boundary segment in that case.
+    lines(renderer, [v[e] for e in boundary_edges(f)], (.12, .17, .23), 1.7)
     camera = renderer.GetActiveCamera(); camera.SetFocalPoint(*center)
     camera.SetPosition(*(center+20*(axes[2]+.25*axes[1]-.16*axes[0]))); camera.SetViewUp(*axes[1])
     camera.ParallelProjectionOn(); camera.SetParallelScale(scale)

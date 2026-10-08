@@ -13,7 +13,9 @@ from .partition_fit import Config
 def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                 config=None, smoothing=.12, workers=4, rounds=12, from_fit=None,
                 render=True, creo_root=None, native_probe=None,
-                profile_mode='installed'):
+                profile_mode='installed', boundary_mode='chain', normal_field='vertex',
+                normal_filter_steps=0, support_solver='least-squares', boundary_cache=None, boundary_plane_budget=None,
+                repair_charts=(), repair_smooth_joins=False):
     out = Path(output); out.mkdir(parents=True, exist_ok=False)
     start = time.perf_counter()
     report = dict(status='running', can_apply=False, algorithm='shared-skeleton-regional-solid-v1',
@@ -35,15 +37,24 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
             config = Config(distance=.03, boundary=.005, controls=(65,), normal_weight=.001, fairness=1e-6)
         from .skeleton_graph import reconstruct as fit
         fitted = fit(partition, stl, out/'fit', smoothing=smoothing, workers=workers,
-                     rounds=rounds, face_limit=int(reference_faces)-1, config=config, from_fit=from_fit)
+                     rounds=rounds, face_limit=int(reference_faces)-1, config=config, from_fit=from_fit,
+                     boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
+                     support_solver=support_solver, boundary_cache=boundary_cache, boundary_plane_budget=boundary_plane_budget,
+                     repair_charts=repair_charts)
         report['fitting'] = fitted
         if not fitted['complete_source_coverage'] or not fitted['partition_labels_unchanged']:
             raise ValueError('Incomplete source partition coverage')
+        surface_fit = fitted['source_fit']
+        if repair_smooth_joins:
+            from .shared_support import optimize
+            report['shared_support_repair'] = optimize(surface_fit, out/'shared_support', workers=workers)
+            surface_fit = str((out/'shared_support').resolve())
+        report['surface_fit'] = surface_fit
         from .graph_reassemble import reconstruct as assemble
         from .graph_export import export
         # Exact subcurves preserve the same smooth shared geometry. Short trim
         # spans avoid the long-edge exchange failure observed in actual Creo.
-        report['assembly'] = assemble(fitted['source_fit'], out/'assembled',
+        report['assembly'] = assemble(surface_fit, out/'assembled',
                                      smooth_segments=True, write_preview=False)
         report['step'] = export(out/'assembled', out/'step')
         report['model'] = str((out/'step/model.step').resolve())
@@ -52,6 +63,10 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
             raise ValueError('STEP topology, measured tolerance or face-count gate failed')
         from .step_quality import audit
         report['quality'] = audit(out/'step/model.step', partition, out/'quality', render=render)
+        report['sampled_distance_gate_passed'] = (
+            report['quality']['reverse_native_surface_distance_mm']['max'] <= fitted['config']['distance'])
+        if not report['sampled_distance_gate_passed']:
+            raise ValueError('Independent native-surface samples exceed the declared source-distance budget')
         from .export_regions import export as regions
         report['regions'] = regions(out/'assembled', out/'regions')
         report['regional_directory'] = str((out/'regions').resolve())
@@ -63,8 +78,9 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                                        boundary_preference='XYZ', profile_mode=profile_mode)
             part = next((out/'creo/audit/import').glob('*.prt.*'))
             report['creo_native_body'] = native_body_check(part, out/'creo/native_body', creo_root, native_probe)
-            if report['creo_native_body']['native_closed_solid']:
-                report['creo_raster'] = str(export_native_part(part, out/'creo/raster', creo_root, format='jpeg'))
+            if not report['creo_native_body']['native_closed_solid']:
+                raise ValueError('Actual Creo import did not create a closed active solid')
+            report['creo_raster'] = str(export_native_part(part, out/'creo/raster', creo_root, format='jpeg'))
         report.update(status='DiagnosticOnly',
             native_solid_verified=report.get('creo_native_body', {}).get('native_closed_solid', False))
     except (Exception, KeyboardInterrupt) as error:
@@ -88,8 +104,24 @@ if __name__ == '__main__':
     p.add_argument('--from-fit'); p.add_argument('--no-render', action='store_true')
     p.add_argument('--creo-root'); p.add_argument('--native-probe')
     p.add_argument('--profile-mode', choices=['installed', 'preserve_splines'], default='installed')
+    p.add_argument('--boundary-mode', choices=['chain', 'fair-network', 'fair-chains'], default='chain')
+    p.add_argument('--normal-field', choices=['vertex', 'crease-fans'], default='vertex')
+    p.add_argument('--normal-filter-steps', type=int, default=0)
+    p.add_argument('--support-solver', choices=['least-squares', 'bounded'], default='least-squares')
+    p.add_argument('--boundary-cache')
+    p.add_argument('--normal-weight', type=float, default=.001)
+    p.add_argument('--fairness', type=float, default=1e-6)
+    p.add_argument('--boundary-plane-budget', type=float)
+    p.add_argument('--boundary-normal-weight', type=float, default=0.)
+    p.add_argument('--repair-charts', type=int, nargs='+', default=[])
+    p.add_argument('--repair-smooth-joins', action='store_true')
     a = p.parse_args()
     reconstruct(a.stl, a.partition, a.output, reference=a.reference, reference_faces=a.reference_faces,
                 smoothing=a.smoothing, workers=a.workers, rounds=a.rounds, from_fit=a.from_fit,
                 render=not a.no_render, creo_root=a.creo_root, native_probe=a.native_probe,
-                profile_mode=a.profile_mode)
+                profile_mode=a.profile_mode, boundary_mode=a.boundary_mode, normal_field=a.normal_field,
+                normal_filter_steps=a.normal_filter_steps, support_solver=a.support_solver, boundary_cache=a.boundary_cache,
+                boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts,
+                repair_smooth_joins=a.repair_smooth_joins,
+                config=None if a.from_fit else Config(distance=.03, boundary=.005, controls=(65,),
+                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight))

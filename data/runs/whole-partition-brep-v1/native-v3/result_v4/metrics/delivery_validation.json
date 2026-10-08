@@ -1,0 +1,16 @@
+{
+  "source_case": "whole_fair_v14",
+  "regional_files": 359,
+  "regional_faces": 902,
+  "source_triangles": 491132,
+  "each_triangle_covered_once": true,
+  "partition_labels_unchanged": true,
+  "comparison_boards": 11,
+  "native_creo_gray_observed": true,
+  "generated_CAD_payloads_preserved": true,
+  "images_readable": true,
+  "report_links_exist": true,
+  "tests_passed": 66,
+  "tests_failed": 0,
+  "tests_skipped": 0
+}

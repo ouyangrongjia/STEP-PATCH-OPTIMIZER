@@ -178,16 +178,21 @@ def regular_domains(v, f, graph, seeds):
     return result
 
 
-def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_cache=None):
+def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_cache=None, boundary_network=None,
+             diagnostics=None):
     assigned = np.full(len(f), -1, dtype=int)
     for i, d in enumerate(domains):
         assigned[d['triangle_ids']] = i
     chains, pairs = shared_chains(edges, owners, assigned); curves, samples, errors, chain_normals = [], [], [], []
+    if boundary_network is not None:
+        chains, pairs = boundary_network.split_chains(chains, pairs)
     fn = np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]])
     fn /= np.linalg.norm(fn, axis=1)[:, None]; edge_keys = edges[:, 0]*len(v)+edges[:, 1]
     for ci, chain in enumerate(chains):
         keys = np.minimum(chain[:-1], chain[1:])*len(v)+np.maximum(chain[:-1], chain[1:])
         nn = fn[owners[np.searchsorted(edge_keys, keys)]]; chain_normals.append(nn)
+        if boundary_network is not None:
+            continue
         t = chain_parameters(v, chain); cached = None if curve_cache is None else curve_cache.get(tuple(map(int, chain)))
         if cached is None:
             cp, kt, error = fit_boundary(v[chain], t, smoothing, nn, normal_budget)
@@ -197,12 +202,16 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
         curves.append(dict(poles=cp, knots=kt, chain=chain, parameters=t, movement_mm=error)); samples.append(BSpline(kt, cp, 3)(q)); errors.append(error)
         if ci % 500 == 0:
             print(dict(stage='boundary_fit', done=ci+1, total=len(chains)), flush=True)
+    if boundary_network is not None:
+        curves, samples, errors = boundary_network.build(chains, chain_normals)
     # Check all incident projected wires together before any fitting. Reducing
     # a curve budget always changes its two owners together.
     from shapely.geometry import Polygon
-    for attempt in range(9):
-        invalid = set()
-        lookup = {}
+    for attempt in range(14 if boundary_network is not None else 9):
+        invalid = {i for i, c in enumerate(curves) if boundary_network is not None and
+                   (c['movement_mm'] > smoothing*(1+1e-6) or
+                    c['source_plane_error_mm'] > normal_budget*(1+1e-6))}
+        lookup = {}; exact_frames = []; intersection_details = []
         for ci, c in enumerate(curves):
             for a, b in zip(c['chain'][:-1], c['chain'][1:]):
                 lookup[tuple(sorted((int(a), int(b))))] = (ci, int(a))
@@ -222,11 +231,41 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
             polygons.sort(key=lambda p: -abs(np.sum(p[:, 0]*np.roll(p[:, 1], -1)-p[:, 1]*np.roll(p[:, 0], -1))))
             if not Polygon(polygons[0], polygons[1:]).is_valid:
                 invalid.update(involved)
+            exact_frames.append((tuple(map(int, d['triangle_ids'])), involved,
+                                 dict(origin=o, axes=ax, lo=lo, size=size)))
+        if not invalid and boundary_network is not None:
+            from .boundary_checks import intersections
+            from .compact import curve as native_curve
+            native_curves = [native_curve(c['poles'], c['knots']) for c in curves]
+            for domain_key, involved, check_frame in exact_frames:
+                signature = {tuple(map(int, curves[i]['chain'])): (curves[i]['poles'], curves[i]['knots']) for i in involved}
+                old = boundary_network.exact_cache.get(domain_key)
+                if (old is not None and old.keys() == signature.keys() and all(
+                        np.array_equal(old[k][0], signature[k][0]) and np.array_equal(old[k][1], signature[k][1]) for k in old)):
+                    continue
+                details = []
+                bad = intersections(curves, involved, check_frame, native_curves, details)
+                intersection_details.extend(dict(domain=list(domain_key[:1]), frame={k: x.tolist() for k, x in check_frame.items()},
+                                                 **item) for item in details)
+                invalid.update(bad)
+                if not bad:
+                    boundary_network.exact_cache[domain_key] = signature
+            if invalid:
+                print(dict(stage='continuous_boundary_intersection', affected_curves=sorted(invalid)), flush=True)
         if not invalid:
             if curve_cache is not None:
                 curve_cache.update({tuple(map(int, c['chain'])): c for c in curves})
             return assigned, curves, pairs, samples, errors
         print(dict(stage='boundary_crossing_guard', attempt=attempt, affected_curves=len(invalid)), flush=True)
+        if diagnostics is not None:
+            diagnostic = Path(diagnostics); diagnostic.mkdir(exist_ok=True)
+            dump(diagnostic/'intersections.json', dict(attempt=attempt, curves=sorted(invalid), details=intersection_details))
+            for ci in invalid:
+                np.savez_compressed(diagnostic/f'{ci:05d}.npz', **curves[ci])
+        if boundary_network is not None:
+            boundary_network.tighten([curves[ci] for ci in invalid])
+            curves, samples, errors = boundary_network.build(chains, chain_normals)
+            continue
         for ci in invalid:
             chain = chains[ci]; t = chain_parameters(v, chain)
             cp, kt, error = fit_boundary(v[chain], t, smoothing*2**(-attempt-1), chain_normals[ci], normal_budget)
@@ -237,7 +276,9 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
 
 
 def fit_support(task):
-    di, v, f, normals, boundary, curves, config = task
+    di, v, f, normals, boundary, curves, config, *options = task
+    support_solver = options[0] if options else 'least-squares'
+    boundary_normals = options[1] if len(options) > 1 else None
     o, ax, lo, size, uv, heights, dot = stable_frame(v, f)
     if dot.min() <= .05:
         return di, None, dict(accepted=False, reason='non_graph', history=[])
@@ -249,35 +290,70 @@ def fit_support(task):
     points = np.r_[v, v[f].mean(axis=1)]
     q = ((points-o)@ax[:2].T-lo)/size; z = (points-o)@ax[2]
     bq = ((boundary-o)@ax[:2].T-lo)/size; bz = (boundary-o)@ax[2]
-    normal_q = ((v-o)@ax[:2].T-lo)/size; n = normals@ax.T; good = n[:, 2] > .15
+    boundary_normal_q = bq.copy()
+    boundary_n = None if boundary_normals is None else boundary_normals@ax.T
+    normal_points = v if normals.ndim == 2 else v[f].reshape(-1, 3)
+    normal_q = ((normal_points-o)@ax[:2].T-lo)/size
+    n = normals.reshape(-1, 3)@ax.T; good = n[:, 2] > .15
     grad = -n[good, :2]/n[good, 2, None]*size
     # STEP import may choose either incident pcurve. Reserve a two-sided gap
     # budget instead of allowing each support almost the whole edge tolerance.
     seam_limit = config.boundary*.4
-    t = knots(9); history = []; boundary_enrichments = 0
+    t = knots(9); history = []; boundary_enrichments = 0; interior_enrichments = 0; probe_cache = {}
     for iteration in range(32):
         count = len(t)-4; a, b = tensor(q, t, t), tensor(bq, t, t)
-        blocks = [a/np.sqrt(len(q)), b*np.sqrt(3000/len(bq))]; rhs = [z/np.sqrt(len(q)), bz*np.sqrt(3000/len(bq))]
-        for axis in range(2):
-            weight = np.sqrt(config.normal_weight/max(1, good.sum()))*min(size)/size[axis]
-            op = tensor(normal_q[good], t, t, int(axis == 0), int(axis == 1))
-            blocks.append(op*weight); rhs.append(grad[:, axis]*weight)
-        uq = np.unique(t); g = np.unique(np.r_[(uq[:-1]+uq[1:])/2, np.linspace(0, 1, count)])
-        fq = np.stack(np.meshgrid(g, g, indexing='ij'), axis=-1).reshape(-1, 2)
-        for du, dv in [(2, 0), (1, 1), (0, 2)]:
-            weight = np.sqrt(config.fairness/len(fq))/(size[0]**du*size[1]**dv)
-            blocks.append(tensor(fq, t, t, du, dv)*weight); rhs.append(np.zeros(len(fq)))
-        matrix = sparse.vstack(blocks, format='csr'); target = np.concatenate(rhs)
-        h = (matrix.T@matrix).tocsc(); reg = max(1., h.diagonal().max())*1e-14
-        coeff = spsolve(h+sparse.eye(count*count, format='csc')*reg, matrix.T@target)
+        uq = np.unique(t); solver = None
+        if support_solver == 'bounded':
+            from .bounded_support import solve
+            coeff, solver = solve(a, z, b, bz, normal_q, n, t, size, config, seam_limit,
+                                  boundary_q=boundary_normal_q, boundary_normals=boundary_n)
+        elif support_solver == 'least-squares':
+            blocks = [a/np.sqrt(len(q)), b*np.sqrt(3000/len(bq))]; rhs = [z/np.sqrt(len(q)), bz*np.sqrt(3000/len(bq))]
+            for axis in range(2):
+                weight = np.sqrt(config.normal_weight/max(1, good.sum()))*min(size)/size[axis]
+                op = tensor(normal_q[good], t, t, int(axis == 0), int(axis == 1))
+                blocks.append(op*weight); rhs.append(grad[:, axis]*weight)
+            g = np.unique(np.r_[(uq[:-1]+uq[1:])/2, np.linspace(0, 1, count)])
+            fq = np.stack(np.meshgrid(g, g, indexing='ij'), axis=-1).reshape(-1, 2)
+            for du, dv in [(2, 0), (1, 1), (0, 2)]:
+                weight = np.sqrt(config.fairness/len(fq))/(size[0]**du*size[1]**dv)
+                blocks.append(tensor(fq, t, t, du, dv)*weight); rhs.append(np.zeros(len(fq)))
+            matrix = sparse.vstack(blocks, format='csr'); target = np.concatenate(rhs)
+            h = (matrix.T@matrix).tocsc(); reg = max(1., h.diagonal().max())*1e-14
+            coeff = spsolve(h+sparse.eye(count*count, format='csc')*reg, matrix.T@target)
+        else:
+            raise ValueError('Unknown support solver')
         error = abs(a@coeff-z); be = abs(b@coeff-bz)
         rec = dict(origin=o, axes=ax, lo=lo, size=size, knots=t, height=coeff)
         item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max())); history.append(item)
-        if error.max() < config.distance and be.max() < seam_limit*.8:
+        if solver is not None:
+            item['solver'] = solver
+        if (solver is None or solver['solved']) and error.max() < config.distance and be.max() < seam_limit*.8:
             extrema = [spline_graph_error(c['poles'], c['knots'], rec, return_parameter=True) for c in curves]
             maximum = max(x[0] for x in extrema)
             item['continuous_boundary_max'] = maximum
             if maximum < seam_limit:
+                if support_solver == 'bounded':
+                    from .support_probe import probes, VERSION
+                    key = tuple(t)
+                    if key not in probe_cache:
+                        probe_cache[key] = probes(rec, v, f)
+                    iq, iz = probe_cache[key]
+                    ie = abs(tensor(iq, t, t)@coeff-iz)
+                    peak = float(ie.max(initial=0.)); item['interior_probe_max_mm'] = peak
+                    if peak >= config.distance:
+                        # Enrich the actual violated positions before adding
+                        # knots or splitting a fixed-label fitting domain.
+                        if interior_enrichments < 12:
+                            worst = np.argsort(ie)[-64:]; worst = worst[ie[worst] >= config.distance*.98]
+                            q = np.r_[q, iq[worst]]; z = np.r_[z, iz[worst]]
+                            interior_enrichments += 1; item['interior_enrichment'] = interior_enrichments
+                            continue
+                        return di, None, dict(accepted=False, reason='interior_excursion', history=history)
+                    rec.update(interior_probe_version=VERSION, interior_probe_count=len(iq), interior_probe_max_mm=peak)
+                    if config.boundary_normal_weight > 0:
+                        from .boundary_normals import VERSION as normal_version
+                        rec['boundary_normal_target_version'] = normal_version
                 rec['continuous_boundary_error_mm'] = maximum
                 return di, rec, dict(accepted=True, history=history)
             if boundary_enrichments < 12:
@@ -314,7 +390,9 @@ def fit_support(task):
 
 
 def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, rounds=4,
-                face_limit=None, config=None, from_fit=None):
+                face_limit=None, config=None, from_fit=None, boundary_mode='chain',
+                normal_field='vertex', normal_filter_steps=0, boundary_cache=None,
+                support_solver='least-squares', refit_supports=False, boundary_plane_budget=None, repair_charts=()):
     out = Path(output); out.mkdir(parents=True, exist_ok=False); start = time.perf_counter()
     v, f, labels, topo = load_partition(partition, stl); normal = vertex_normals(v, f)
     fit_cache, curve_cache = {}, {}
@@ -330,22 +408,56 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         if Path(previous['partition']).resolve() != Path(partition).resolve() or Path(previous['stl']).resolve() != Path(stl).resolve():
             raise ValueError('Resume fit uses different declared input files')
         old_config = Config(**previous['config'])
-        if config is not None and any(getattr(config, k) != getattr(old_config, k) for k in ('distance', 'boundary', 'normal_weight', 'fairness')):
+        old_plane_budget = previous.get('source_plane_budget_mm', old_config.distance*.1)
+        if boundary_plane_budget is None:
+            boundary_plane_budget = old_plane_budget
+        elif boundary_plane_budget != old_plane_budget:
+            raise ValueError('Resume caching requires the same source-plane movement budget')
+        checked = ('distance', 'boundary') if refit_supports else ('distance', 'boundary', 'normal_weight', 'fairness', 'boundary_normal_weight')
+        if config is not None and any(getattr(config, k) != getattr(old_config, k) for k in checked):
             raise ValueError('Resume caching requires unchanged fitting tolerances and weights')
         if smoothing != previous['smoothing_mm']:
             raise ValueError('Resume caching requires the same smoothing movement limit')
-        config = old_config; assignment = np.load(source/'chart_index.npz')['face_chart']
+        for key, value, default in [('boundary_mode', boundary_mode, 'chain'),
+                                    ('normal_field', normal_field, 'vertex'),
+                                    ('normal_filter_steps', normal_filter_steps, 0),
+                                    ('support_solver', support_solver, 'least-squares')]:
+            if previous.get(key, default) != value:
+                raise ValueError('Resume caching requires unchanged boundary and normal algorithms')
+        config = old_config if config is None else config
+        assignment = np.load(source/'chart_index.npz')['face_chart']
         old_curves = [dict(np.load(p)) for p in sorted((source/'curves').glob('*.npz'))]
         old_pairs = [c['owners'] for c in old_curves]
         curve_cache = {tuple(map(int, c['chain'])): c for c in old_curves
                        if np.max(np.unique(c['knots'][4:-4], return_counts=True)[1], initial=0) < 3}
         old_rows = {r['chart']: r for r in json.loads((source/'fitting.json').read_text(encoding='utf-8'))}
+        pending_checks = []; pending_records = {}
         for path in sorted((source/'charts').glob('*.npz')):
             rec = dict(np.load(path)); history = old_rows[int(path.stem)]['history']
             measured = rec.get('continuous_boundary_error_mm', history[-1].get('continuous_boundary_max', float('inf')) if history else float('inf'))
-            if measured < config.boundary*.4:
+            if measured < config.boundary*.4 and not refit_supports:
+                if config.boundary_normal_weight > 0:
+                    from .boundary_normals import VERSION as normal_version
+                    if int(rec.get('boundary_normal_target_version', 0)) != normal_version:
+                        continue
                 rec['continuous_boundary_error_mm'] = float(measured)
-                remember(rec, stamp(int(path.stem), old_curves, old_pairs))
+                if support_solver == 'bounded' and int(rec.get('interior_probe_version', 0)) != 1:
+                    di = int(path.stem); used = rec['vertex_ids']; pending_records[di] = rec
+                    pending_checks.append((di, rec, v[used], np.searchsorted(used, f[rec['triangle_ids']])))
+                else:
+                    remember(rec, stamp(int(path.stem), old_curves, old_pairs))
+        if pending_checks:
+            from .support_probe import check
+            rejected = []
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                for di, info in pool.map(check, pending_checks):
+                    rec = pending_records[di]; rec.update(info)
+                    if info['interior_probe_max_mm'] < config.distance:
+                        remember(rec, stamp(di, old_curves, old_pairs))
+                    else:
+                        rejected.append(dict(chart=di, **info))
+            dump(out/'resume_interior_rejections.json', rejected)
+            print(dict(stage='resume_interior_validation', checked=len(pending_checks), rejected=len(rejected)), flush=True)
         edges, owners = incidence(f)
         graph = sparse.coo_matrix((np.ones(owners.size), (owners.ravel(), owners[:, ::-1].ravel())), shape=(len(f), len(f))).tocsr()
         seeds = []
@@ -357,18 +469,56 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
             seeds.extend((int(region[0]), part) for part in parts)
         domains = regular_domains(v, f, graph, seeds)
     config = config or Config(distance=.03, boundary=.005, controls=(65,), normal_weight=.0001, fairness=1e-8)
+    plane_budget = config.distance*.1 if boundary_plane_budget is None else boundary_plane_budget
+    repair_charts = set(map(int, repair_charts))
+    if repair_charts and (from_fit is None or boundary_mode != 'fair-chains'
+                          or min(repair_charts) < 0 or max(repair_charts) >= len(domains)):
+        raise ValueError('Boundary repair requires valid source-fit chart IDs and fair-chains mode')
+    if not np.isfinite(plane_budget) or not 0 < plane_budget < config.distance:
+        raise ValueError('Source-plane budget must be positive and below the source-distance limit')
+    if normal_field == 'crease-fans':
+        from .source_normals import crease_fan_normals
+        normal = crease_fan_normals(v, f, config.feature_angle, (edges, owners), normal_filter_steps)
+    elif normal_field != 'vertex':
+        raise ValueError('Unknown normal field')
     metadata = dict(status='running', algorithm='shared-skeleton-regional-graph-v2', partition=str(Path(partition).resolve()),
                     stl=str(Path(stl).resolve()), source_CAD_read=False, commercial_engine_used=False,
                     config=asdict(config), smoothing_mm=smoothing, workers=workers, input_topology=topo,
                     face_limit=face_limit, resumed_from=None if from_fit is None else str(Path(from_fit).resolve()),
-                    support_boundary_limit_mm=config.boundary*.4, boundary_weight=3000.)
+                    support_boundary_limit_mm=config.boundary*.4,
+                    boundary_weight=3000. if support_solver == 'least-squares' else None,
+                    sampled_boundary_limit_mm=config.boundary*.4*.65 if support_solver == 'bounded' else None,
+                    boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
+                    support_solver=support_solver, refit_supports=refit_supports, source_plane_budget_mm=plane_budget,
+                    boundary_repair_charts=sorted(repair_charts))
+    if config.boundary_normal_weight > 0:
+        from .boundary_normals import VERSION as normal_version
+        metadata['boundary_normal_target_mode'] = f'nearest-source-smooth-fans-v{normal_version}'
     dump(out/'run.json', metadata)
+    boundary_network = None
+    if boundary_mode in ('fair-network', 'fair-chains'):
+        from .feature_boundary import FeatureBoundaryNetwork
+        boundary_network = FeatureBoundaryNetwork(v, f, labels, edges, owners, smoothing, plane_budget,
+            workers=workers, cache=boundary_cache or out/'complete_interfaces', complete=boundary_mode == 'fair-network')
+        boundary_network.seed(curve_cache.values())
+        for c in curve_cache.values():
+            if repair_charts.intersection(map(int, c['owners'])):
+                key = tuple(map(int, c['chain']))
+                boundary_network.force_positive.add(key); boundary_network.tangent_locked.add(key)
+                boundary_network.internal_cache.pop(key, None)
+    elif boundary_mode != 'chain':
+        raise ValueError('Unknown boundary mode')
     for iteration in range(rounds):
         if face_limit is not None and len(domains) > face_limit:
             raise ValueError('Representation exceeded the supplied face budget')
         stage = out/f'round_{iteration}'; stage.mkdir(); (stage/'charts').mkdir(); (stage/'curves').mkdir()
-        assignment, curves, pairs, boundary_samples, errors = skeleton(v, f, domains, edges, owners, smoothing, config.distance*.1, curve_cache)
+        assignment, curves, pairs, boundary_samples, errors = skeleton(v, f, domains, edges, owners, smoothing, plane_budget,
+            curve_cache, boundary_network, stage/'boundary_diagnostics')
         print(dict(stage='network', iteration=iteration, domains=len(domains), curves=len(curves)), flush=True)
+        normal_targets = None
+        if config.boundary_normal_weight > 0:
+            from .boundary_normals import targets
+            normal_targets = targets(v, f, normal, assignment, edges, owners, curves, pairs)
         tasks = []; signatures = {}; records = []; reused = 0
         for di, d in enumerate(domains):
             if regions is not None and d['region'] not in regions:
@@ -382,8 +532,12 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                     np.savez_compressed(stage/'charts'/f'{di:05d}.npz', **rec)
                     records.append(dict(chart=di, region=d['region'], accepted=True, reused=True, history=[])); reused += 1
                     continue
-            tasks.append((di, v[used], np.searchsorted(used, f[d['triangle_ids']]), normal[used],
-                          np.concatenate([boundary_samples[i] for i in selected]), [curves[i] for i in selected], config))
+            target_normals = normal[used] if normal.ndim == 2 else normal[d['triangle_ids']]
+            boundary_normals = None if normal_targets is None else np.concatenate([
+                normal_targets[i][list(pairs[i]).index(di)] for i in selected])
+            tasks.append((di, v[used], np.searchsorted(used, f[d['triangle_ids']]), target_normals,
+                          np.concatenate([boundary_samples[i] for i in selected]), [curves[i] for i in selected],
+                          config, support_solver, boundary_normals))
         failed = []
         print(dict(stage='cache', reused=reused, refit=len(tasks)), flush=True)
         with ProcessPoolExecutor(max_workers=workers) as executor:
@@ -430,12 +584,25 @@ if __name__ == '__main__':
     p.add_argument('--face-limit', type=int); p.add_argument('--rounds', type=int, default=4)
     p.add_argument('--fairness', type=float, default=1e-8); p.add_argument('--normal-weight', type=float, default=.0001)
     p.add_argument('--from-fit')
+    p.add_argument('--boundary-mode', choices=['chain', 'fair-network', 'fair-chains'], default='chain')
+    p.add_argument('--normal-field', choices=['vertex', 'crease-fans'], default='vertex')
+    p.add_argument('--normal-filter-steps', type=int, default=0)
+    p.add_argument('--boundary-cache')
+    p.add_argument('--support-solver', choices=['least-squares', 'bounded'], default='least-squares')
+    p.add_argument('--refit-supports', action='store_true')
+    p.add_argument('--boundary-plane-budget', type=float)
+    p.add_argument('--boundary-normal-weight', type=float, default=0.)
+    p.add_argument('--repair-charts', type=int, nargs='+', default=[])
     a = p.parse_args()
     try:
         reconstruct(a.partition, a.stl, a.output, a.smoothing, a.workers, a.regions,
                     a.rounds, a.face_limit, Config(distance=.03, boundary=.005, controls=(65,),
-                    normal_weight=a.normal_weight, fairness=a.fairness) if a.from_fit is None else None,
-                    from_fit=a.from_fit)
+                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight)
+                    if a.from_fit is None or a.refit_supports else None,
+                    from_fit=a.from_fit, boundary_mode=a.boundary_mode,
+                    normal_field=a.normal_field, normal_filter_steps=a.normal_filter_steps, boundary_cache=a.boundary_cache,
+                    support_solver=a.support_solver, refit_supports=a.refit_supports,
+                    boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts)
     except (Exception, KeyboardInterrupt) as error:
         path = Path(a.output)/'run.json'
         if path.exists():

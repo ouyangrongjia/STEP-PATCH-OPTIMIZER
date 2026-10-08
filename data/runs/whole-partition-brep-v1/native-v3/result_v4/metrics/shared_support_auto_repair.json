@@ -1,0 +1,109 @@
+{
+  "accepted_groups": [
+    [
+      538,
+      842
+    ],
+    [
+      123,
+      657
+    ],
+    [
+      65,
+      549
+    ],
+    [
+      277,
+      895
+    ],
+    [
+      394,
+      483
+    ],
+    [
+      179,
+      220
+    ],
+    [
+      77,
+      283
+    ],
+    [
+      744,
+      745
+    ],
+    [
+      191,
+      254
+    ],
+    [
+      424,
+      430
+    ],
+    [
+      329,
+      539
+    ],
+    [
+      29,
+      34
+    ],
+    [
+      564,
+      759
+    ],
+    [
+      484,
+      750
+    ],
+    [
+      455,
+      466
+    ],
+    [
+      605,
+      606
+    ],
+    [
+      20,
+      858
+    ],
+    [
+      866,
+      881
+    ],
+    [
+      228,
+      791
+    ],
+    [
+      611,
+      616
+    ],
+    [
+      700,
+      869
+    ],
+    [
+      337,
+      635
+    ],
+    [
+      577,
+      583
+    ],
+    [
+      438,
+      531
+    ]
+  ],
+  "attempted_groups": 34,
+  "threshold_degrees": 25.0,
+  "max_proposals": 36,
+  "max_group": 4,
+  "workers": 6,
+  "seconds": 316.0968858000124,
+  "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\joint_support_probe",
+  "source_CAD_read": false,
+  "supplied_labels_preserved": true
+}

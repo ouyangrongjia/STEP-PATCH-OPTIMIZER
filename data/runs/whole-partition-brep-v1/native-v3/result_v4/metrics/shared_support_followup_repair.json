@@ -1,0 +1,17 @@
+{
+  "accepted_groups": [
+    [
+      595,
+      612
+    ]
+  ],
+  "attempted_groups": 11,
+  "threshold_degrees": 25.0,
+  "max_proposals": 20,
+  "max_group": 4,
+  "workers": 6,
+  "seconds": 157.8454105000128,
+  "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\shared_support_auto",
+  "source_CAD_read": false,
+  "supplied_labels_preserved": true
+}

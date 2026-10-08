@@ -1,0 +1,38 @@
+{
+  "status": "DiagnosticOnly",
+  "date": "2026-10-08",
+  "model": "model.step",
+  "regions": "regions",
+  "images": "images",
+  "source_case": "whole_fair_v14",
+  "reference_faces": 2739,
+  "previous_faces": 989,
+  "faces": 902,
+  "source_regions": 359,
+  "partition_labels_unchanged": true,
+  "source_triangle_coverage_verified": true,
+  "native_closed_solid": true,
+  "gray_display_observed": true,
+  "commercial_reconstruction_used": false,
+  "fitter_reads_source_CAD": false,
+  "can_apply": false,
+  "geometry_summary": {
+    "reverse_rms_mm": 0.0016447007434756205,
+    "reverse_p95_mm": 0.003169431410295235,
+    "reverse_max_mm": 0.026430907586447186,
+    "normal_p95_degrees": 5.49414998275804
+  },
+  "tests": {
+    "passed": 66,
+    "failed": 0,
+    "skipped": 0
+  },
+  "remaining_limits": [
+    "Region 78 lower boundary retains local visible waviness",
+    "All-join normal P95 did not improve relative to the published version; global G1 is not certified",
+    "Creo GEOM_CHECKS remains 1",
+    "OCCT and Creo volume estimates differ; no validated volume-preservation claim",
+    "Only this full model was validated with this configuration; no arbitrary-model acceptance claim"
+  ],
+  "provenance": "Original measurement records retain their historical absolute paths. Intermediate directories are removed after packaging; current deliverables are relative to this directory."
+}
