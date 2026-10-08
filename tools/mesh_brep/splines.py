@@ -15,14 +15,26 @@ def basis(t, x, derivative=0):
     return BSpline(t, np.eye(len(t)-4), 3, extrapolate=False)(np.clip(x, 0, 1), nu=derivative)
 
 
+def sparse_basis(t,x,derivative=0):
+    """Cubic basis/derivatives with local support, including repeated knots."""
+    t=np.asarray(t);n=len(t)-4;mapping=sparse.eye(n,format='csr');degree=3
+    for _ in range(derivative):
+        count=len(t)-degree-1;denominator=t[degree+1:degree+count]-t[1:count]
+        scale=np.divide(degree,denominator,out=np.zeros_like(denominator),where=denominator!=0)
+        op=sparse.diags([-scale,scale],[0,1],shape=(count-1,count),format='csr')
+        mapping=op@mapping;t=t[1:-1];degree-=1
+    b=sparse.csr_matrix(BSpline.design_matrix(np.clip(x,0,1),t,degree,extrapolate=False))@mapping
+    b.eliminate_zeros();return b
+
+
 def tensor(uv, tu, tv, du=0, dv=0):
-    bu, bv = sparse.coo_matrix(basis(tu, uv[:, 0], du)), basis(tv, uv[:, 1], dv)
-    rows, cols, data = [], [], []
-    for j in range(bv.shape[1]):
-        value = bu.data*bv[bu.row, j]; mask = value != 0
-        rows.append(bu.row[mask]); cols.append(bu.col[mask]*bv.shape[1]+j); data.append(value[mask])
-    return sparse.csr_matrix((np.concatenate(data), (np.concatenate(rows), np.concatenate(cols))),
-                             shape=(len(uv), (len(tu)-4)*(len(tv)-4)))
+    bu=sparse_basis(tu,uv[:,0],du).tocoo();bv=sparse_basis(tv,uv[:,1],dv)
+    count=np.diff(bv.indptr)[bu.row];total=int(count.sum())
+    offset=np.arange(total)-np.repeat(np.cumsum(count)-count,count)
+    vi=np.repeat(bv.indptr[bu.row],count)+offset
+    rows=np.repeat(bu.row,count);cols=np.repeat(bu.col,count)*bv.shape[1]+bv.indices[vi]
+    values=np.repeat(bu.data,count)*bv.data[vi]
+    return sparse.csr_matrix((values,(rows,cols)),shape=(len(uv),(len(tu)-4)*(len(tv)-4)))
 
 
 def evaluate(p, tu, tv, uv):
@@ -106,16 +118,21 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
         q = (op@mapping)*weight
         blocks.append(sparse.block_diag([q, q, q], format='csr'))
         rhs.append(((target-op@initial)*weight).T.ravel())
-    def tangent(op, mapping, initial, normal, weight):
+    def tangent(op, mapping, initial, normal, weight, local_scaling=False):
         q = op@mapping
+        initial_derivative = op@initial
+        if local_scaling:
+            weight = weight/np.maximum(np.linalg.norm(initial_derivative, axis=1), 1e-12)
         blocks.append(sparse.hstack([q.multiply((normal[:, k]*weight)[:, None]) for k in range(3)], format='csr'))
-        rhs.append(-np.einsum('ij,ij->i', op@initial, normal)*weight)
+        rhs.append(-np.einsum('ij,ij->i', initial_derivative, normal)*weight)
     for spec, mapping, initial in zip(specs, maps, offsets):
         uv, points, normals, tu, tv = (spec[x] for x in ['uv', 'points', 'normals', 'tu', 'tv'])
         count = len(points); lu, lv = spec['lengths']
         coordinates(tensor(uv, tu, tv), mapping, initial, points, np.sqrt(spec.get('data_weight', 1.)/count))
         for du, dv, length in [(1, 0, lu), (0, 1, lv)]:
-            tangent(tensor(uv, tu, tv, du, dv), mapping, initial, normals, np.sqrt(normal_weight/count)/length)
+            local = spec.get('local_tangent_scaling', False)
+            tangent(tensor(uv, tu, tv, du, dv), mapping, initial, normals,
+                    np.sqrt(normal_weight/count)/(1. if local else length), local)
         if 'boundary_uv' in spec:
             buv, bp = spec['boundary_uv'], spec['boundary_points']
             coordinates(tensor(buv, tu, tv), mapping, initial, bp, np.sqrt(spec.get('boundary_weight', 10.)/len(bp)))
@@ -124,12 +141,21 @@ def joint_fit(specs, maps, offsets, seam_samples, *, normal_weight=1e-4, fairnes
         quad, areas = quadrature(tu, tv, quadrature_order)
         for du, dv, length in [(2, 0, lu*lu), (1, 1, lu*lv/np.sqrt(2)), (0, 2, lv*lv)]:
             op = tensor(quad, tu, tv, du, dv).multiply(np.sqrt(areas)[:, None]).tocsr()
-            coordinates(op, mapping, initial, np.zeros((len(quad), 3)), np.sqrt(fairness)/length)
+            reference = op@initial if spec.get('regularize_correction', False) else np.zeros((len(quad), 3))
+            coordinates(op, mapping, initial, reference, np.sqrt(fairness)/length)
     for fi, uv, normals in seam_samples:
         spec, mapping, initial = specs[fi], maps[fi], offsets[fi]
         for du, dv, length in [(1, 0, spec['lengths'][0]), (0, 1, spec['lengths'][1])]:
+            local = spec.get('local_tangent_scaling', False)
             tangent(tensor(uv, spec['tu'], spec['tv'], du, dv), mapping, initial, normals,
-                    np.sqrt(seam_weight/len(uv))/length)
+                    np.sqrt(seam_weight/len(uv))/(1. if local else length), local)
+    for spec, mapping, initial in zip(specs, maps, offsets):
+        for uv, du, dv, target_derivative in spec.get('derivative_targets', ()):
+            op = tensor(uv, spec['tu'], spec['tv'], du, dv)
+            length = np.maximum(np.linalg.norm(target_derivative, axis=1), 1e-12)
+            normalized = op.multiply((1/length)[:, None]).tocsr()
+            coordinates(normalized, mapping, initial, target_derivative/length[:, None],
+                        np.sqrt(seam_weight/len(uv)))
     matrix = sparse.vstack(blocks, format='csc'); target = np.concatenate(rhs)
     scale = 1/np.maximum(np.sqrt(np.asarray(matrix.power(2).sum(axis=0)).ravel()), 1e-15)
     a = matrix@sparse.diags(scale)

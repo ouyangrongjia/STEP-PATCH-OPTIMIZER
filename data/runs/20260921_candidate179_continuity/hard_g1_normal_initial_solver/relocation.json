@@ -1,5 +1,0 @@
-{
-  "original_directory": "data\\runs\\20260921_candidate179_continuity\\hard_g1_normal",
-  "current_directory": "data\\runs\\20260921_candidate179_continuity\\hard_g1_normal_initial_solver",
-  "reason": "Preserved before orthonormalizing equality rows in the Schur solve; corrected repeat is in the unsuffixed directory."
-}

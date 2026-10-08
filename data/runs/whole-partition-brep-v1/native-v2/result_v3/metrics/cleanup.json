@@ -1,0 +1,52 @@
+{
+  "status": "complete",
+  "date": "2026-10-07",
+  "scope": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1",
+  "retained_delivery": "native-v2/result_v3",
+  "before": {
+    "files": 261928,
+    "bytes": 30720961730
+  },
+  "retained_categories": [
+    "final_whole_STEP_and_Creo_part",
+    "359_regional_STEP_files_and_fixed_input_labels",
+    "quality_performance_and_Creo_evidence",
+    "whole_and_regional_before_after_views"
+  ],
+  "removed_categories": [
+    "superseded_candidates",
+    "fit_and_assembly_caches",
+    "duplicate_exports",
+    "temporary_scripts_and_logs",
+    "superseded_diagnostic_images"
+  ],
+  "source_code_and_original_STL_reference_STEP_untouched": true,
+  "geometry_recomputed": false,
+  "CAD_validation_rerun": false,
+  "historical_paths_in_original_metrics": "Provenance only; source caches removed. Active paths are in delivery run.json and RUN.md.",
+  "removal_method": "Windows Recycle Bin; recoverable; not permanently deleted",
+  "recycled_top_level_entries": 826,
+  "verification": {
+    "final_whole_STEP_face_records": 989,
+    "regional_STEP_files": 359,
+    "regional_STEP_face_records": 989,
+    "STEP_text_envelopes_complete": true,
+    "regional_files_match_recorded_sizes": true,
+    "fixed_GUI_labels": 359,
+    "fixed_source_triangles": 491132,
+    "image_files_readable": 7,
+    "retained_JSON_readable": true,
+    "active_local_document_links_valid": true,
+    "only_retained_delivery_in_run_root": true,
+    "CAD_reimport_rerun": false
+  },
+  "disk_space_note": "Removed from the output tree into the Recycle Bin; disk space has not been claimed as freed.",
+  "after": {
+    "files": 396,
+    "bytes": 406630149
+  },
+  "output_tree_reduction": {
+    "files": 261532,
+    "bytes": 30314331581
+  }
+}

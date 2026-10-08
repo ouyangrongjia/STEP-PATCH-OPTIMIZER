@@ -1,0 +1,67 @@
+{
+  "status": "ReviewableImprovement",
+  "can_apply": false,
+  "source_experiment": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v5",
+  "model": "model.step",
+  "regions": "regions",
+  "images": "images",
+  "units": "mm",
+  "reference_faces": 2739,
+  "step_faces": 989,
+  "face_reduction_vs_reference": 0.6389193136181088,
+  "previous_step_faces": 2433,
+  "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "partition": "regions/source_partition.npz",
+  "given_GUI_partition": true,
+  "commercial_reconstruction_used": false,
+  "fitter_reads_source_CAD": false,
+  "complete_source_coverage": true,
+  "partition_labels_unchanged": true,
+  "shared_curves": 2679,
+  "curves_with_internal_C0_knots": 0,
+  "curve_smoothness_scope": "C2 within each canonical chain; junction and inter-surface G1 are separately assessed.",
+  "creo_native_closed_solid": true,
+  "creo_installed_profile_verified": true,
+  "installed_profile_boundary_preference": "XYZ",
+  "creo_geometry_check_features": 1,
+  "gray_display_observed": true,
+  "visual_review": "metrics/visual_review.json",
+  "universal_reconstructor_all_cases_validated": false,
+  "limitations": [
+    "Finite-sample distance and normal checks, not certified global bounds.",
+    "Visible wrinkles remain at narrow bend region 78 and smaller rim undulations elsewhere; full visual quality is not passed.",
+    "Creo GEOM_CHECKS remains present.",
+    "One face used same-deflection Delabella tessellation after default Watson failed."
+  ],
+  "measured_seconds": {
+    "final_cached_refinement": 41.443942700047046,
+    "assembly": 163.7524566000793,
+    "step_export_and_reread": 205.02888609981164,
+    "independent_QA": 177.47373319999315,
+    "all_regions_export": 77.9364267999772
+  },
+  "timing_scope": "Overlapping diagnostic jobs; cached refinement is not a cold full reconstruction time.",
+  "all_visual_requirements_passed": false,
+  "cold_fit_validation": {
+    "record": "metrics/cold_fit_validation.json",
+    "seconds": 265.72687570005655,
+    "charts": 955,
+    "independently_CAD_validated": false
+  },
+  "tests": {
+    "relevant_regression": {
+      "count": 28,
+      "passed": true,
+      "record": "metrics/regression_v7.log"
+    },
+    "final_entry_and_mesh_regression": {
+      "count": 7,
+      "passed": true,
+      "record": "metrics/regression_v8.log"
+    }
+  },
+  "source_experiment_retained": false,
+  "source_experiment_scope": "Historical provenance; intermediate fit and assembly caches removed at user request on 2026-10-07.",
+  "cleanup_record": "metrics/cleanup.json",
+  "publication_checks": "metrics/publication_checks.json"
+}

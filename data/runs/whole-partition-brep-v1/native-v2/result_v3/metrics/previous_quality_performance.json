@@ -1,0 +1,177 @@
+{
+  "status": "DiagnosticOnly",
+  "accepted_product": null,
+  "models": [
+    {
+      "directory": "graph_feature_split_reconstruction",
+      "reference_faces": 2739,
+      "step_faces": 1952,
+      "step_bytes": 158947965,
+      "control_points": 302228,
+      "reverse_distance_mm": {
+        "rms": 0.0022431988827047284,
+        "p50": 0.0006353100370879107,
+        "p95": 0.0046170816563545205,
+        "max": 0.03090837702308602,
+        "min": 1.3603924741222636e-13
+      },
+      "forward_tessellation_distance_mm": {
+        "rms": 0.003342710130828235,
+        "p50": 0.001486269146291719,
+        "p95": 0.006762783002919155,
+        "max": 0.06867102326504589,
+        "min": 2.3721787416446884e-12
+      },
+      "reverse_samples": 195200,
+      "forward_samples": 30000,
+      "opposed_normal_sample_fraction": 5.122950819672131e-06,
+      "smooth_join_per_edge_p95_degrees": {
+        "rms": 3.6483011072094635,
+        "p50": 1.1186399649497503,
+        "p95": 7.195666946605646,
+        "max": 46.86140804280358,
+        "min": 0.0013345821083915635
+      },
+      "all_join_length_weighted_normal_degrees": {
+        "rms": 10.696513408352084,
+        "p50": 0.9067425871297154,
+        "p95": 18.619255839947158,
+        "max": 126.78859708720236,
+        "min": 0.0002599036188962606
+      },
+      "surface_gap_mm": {
+        "rms": 0.002238993349519715,
+        "p50": 0.0012519532809240003,
+        "p95": 0.004652671754930275,
+        "max": 0.013159040602817482,
+        "min": 3.0237877441983485e-13
+      },
+      "seconds": {
+        "assembly": 308.1083986000158,
+        "step_export_reread": 206.95614170003682,
+        "quality": 185.95536800008267,
+        "pipeline_from_fit_cache": 1055.0732833000366
+      },
+      "native_Creo_preserve_splines": true,
+      "native_Creo_installed": null
+    },
+    {
+      "directory": "graph_feature_hotspot_identity_reconstruction",
+      "reference_faces": 2739,
+      "step_faces": 2419,
+      "step_bytes": 103036696,
+      "control_points": 314251,
+      "reverse_distance_mm": {
+        "rms": 0.002205262701973791,
+        "p50": 0.0006239528307161698,
+        "p95": 0.004559884709156531,
+        "max": 0.028297507288128947,
+        "min": 4.263256414560601e-14
+      },
+      "forward_tessellation_distance_mm": {
+        "rms": 0.0030834323122975577,
+        "p50": 0.0014465195084213507,
+        "p95": 0.0065813128348563565,
+        "max": 0.02790781455229305,
+        "min": 4.7664655742347644e-14
+      },
+      "reverse_samples": 241900,
+      "forward_samples": 30000,
+      "opposed_normal_sample_fraction": 0.0,
+      "smooth_join_per_edge_p95_degrees": {
+        "rms": 3.4463942748462424,
+        "p50": 1.1298380993719692,
+        "p95": 7.13316037239341,
+        "max": 31.32678286486807,
+        "min": 0.001240088178307894
+      },
+      "all_join_length_weighted_normal_degrees": {
+        "rms": 11.393107746644967,
+        "p50": 0.9424415024732961,
+        "p95": 27.549464560747552,
+        "max": 126.78859708752584,
+        "min": 0.0002599036188962606
+      },
+      "surface_gap_mm": {
+        "rms": 0.002077838500195574,
+        "p50": 0.001102162043134524,
+        "p95": 0.00441986578214637,
+        "max": 0.01197053116937218,
+        "min": 6.405361479303477e-14
+      },
+      "seconds": {
+        "assembly": 224.36152769997716,
+        "step_export_reread": 174.45161679992452,
+        "quality": 150.10673239990138,
+        "pipeline_from_fit_cache": 858.7961935999338
+      },
+      "native_Creo_preserve_splines": true,
+      "native_Creo_installed": false
+    },
+    {
+      "directory": "graph_feature_barrier_extreme_reconstruction",
+      "reference_faces": 2739,
+      "step_faces": 2433,
+      "step_bytes": 103239621,
+      "control_points": 314277,
+      "reverse_distance_mm": {
+        "rms": 0.0022028903266800457,
+        "p50": 0.000625423856703371,
+        "p95": 0.004515952281064562,
+        "max": 0.026973538879869,
+        "min": 1.1572252471767065e-13
+      },
+      "forward_tessellation_distance_mm": {
+        "rms": 0.003084058591323362,
+        "p50": 0.001447479655917838,
+        "p95": 0.006584920385862469,
+        "max": 0.02790781455229305,
+        "min": 4.7664655742347644e-14
+      },
+      "reverse_samples": 243300,
+      "forward_samples": 30000,
+      "opposed_normal_sample_fraction": 0.0,
+      "smooth_join_per_edge_p95_degrees": {
+        "rms": 3.434494407684019,
+        "p50": 1.1301041754215224,
+        "p95": 7.13507147680545,
+        "max": 29.68375156055969,
+        "min": 0.001240088178307894
+      },
+      "all_join_length_weighted_normal_degrees": {
+        "rms": 11.487661184765624,
+        "p50": 0.9458683284341954,
+        "p95": 28.182266034949272,
+        "max": 126.78859708752584,
+        "min": 0.0002599036188962606
+      },
+      "surface_gap_mm": {
+        "rms": 0.0020757828904618605,
+        "p50": 0.0010994834057711854,
+        "p95": 0.00441746353273071,
+        "max": 0.01197053116937218,
+        "min": 6.405361479303477e-14
+      },
+      "seconds": {
+        "assembly": 231.32689919997938,
+        "step_export_reread": 171.587845900096,
+        "quality": 149.0680996000301,
+        "pipeline_from_fit_cache": 839.7327892000321
+      },
+      "native_Creo_preserve_splines": true,
+      "native_Creo_installed": false
+    }
+  ],
+  "scope": [
+    "Same original STL and supplied GUI partition; layouts and fitting settings differ.",
+    "Forward samples are fixed; reverse sample counts depend on the actual face count.",
+    "Elapsed times include actual stage work but concurrent diagnostics mean this is not an exclusive-machine performance benchmark.",
+    "Source-smooth join statistics are spatially matched diagnostics, not a G1 proof.",
+    "A null Creo result means not yet verified; it is not a pass."
+  ],
+  "fixed_source_point_comparison": "fixed_source_point_comparison.json",
+  "fixed_source_edge_comparisons": [
+    "graph_feature_hotspot_fixed_edges.json",
+    "feature_barrier_fixed_edges.json"
+  ]
+}

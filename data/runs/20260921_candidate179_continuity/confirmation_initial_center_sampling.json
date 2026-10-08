@@ -1,7 +1,0 @@
-{
-  "count": 30000,
-  "seed": 9180179,
-  "method": "Frozen original area-weighted triangles, exact original surface positions/normals, same method as old protocol.",
-  "original_face_correspondence_max_residual_mm": 1.693442071270802e-13,
-  "used_in_fitting_or_selection": false
-}

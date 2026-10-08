@@ -1,6 +1,96 @@
-# 给定分区的纯网格曲面网络实验
+# 给定分区的 STL 曲面网络重建
 
-当前 candidate-179 推荐入口为 `compact.py`，交付统一见 [最终 B 目录](../../data/runs/20260929_mesh_brep/candidate179_B_final/README.md)。它保留五片连接关系，用 C2 自适应外链、较小的共享接缝基底和 XYZ 联合拟合减少支撑控制点，避免把原 CAD 的重复节点直接传入曲面。独立接口挂接 `attach_boundary.py` 只生成与原 3D 曲线相容的 pcurve，不改变网格重建的支撑系数。具体数值、失败方案和两档网格复核见 [本轮记录](../../data/runs/20260929_mesh_brep/compact_b/RUN.md)。
+## 共用平滑骨架的分区重建入口
+
+`skeleton_reconstruct.py` 先构造唯一的三次样条公共边界，再让相邻分区拟合同一套边界。大盘状区域采用中央域和外围域，狭窄或回折区域按源法向锥选择投影方向；只在原标签内部调整拟合域，不改变 GUI 分区。全部几何目标来自原始 STL，不调用 Geomagic Wrap。参考 STEP 仅由独立计数器读取面数。
+
+```powershell
+$env:OPENBLAS_NUM_THREADS='1'
+$env:OMP_NUM_THREADS='1'
+python -m tools.mesh_brep.skeleton_reconstruct `
+  --stl <原始STL> --partition <已有分区.npz> `
+  --reference <对应参考STEP> --output <不存在的新目录> `
+  --smoothing .12 --workers 4 `
+  --creo-root <Creo安装目录> --native-probe <creo_body_probe.exe>
+```
+
+边界平滑区分沿原表面的移动和离开两侧源三角形平面的误差；默认分别为 0.12 mm 和 0.003 mm。共享交汇点保留，连续边界极值进入拟合约束，避免只检查离散采样点漏掉窄峰。相邻面共用三维曲线；交换时使用该曲线的精确短子段，保持几何光顺而不增加曲面数。输出 `step/model.step`、全部 `regions/region_*.step`、独立 `quality/` 与可选 Creo 原生体及显示证据。
+
+`--from-fit <本路线的 round_N>` 可复用相同输入、配置和公共曲线的支撑面；变化的共享边界会使两侧缓存失效。缓存只复用已通过连续边界检查的域，仍重新执行实体装配、STEP 回读和外部 CAD 检查。不完整分区禁止导出。目录拒绝覆盖；失败保留原因。默认 `--profile-mode installed` 使用安装自带导入配置；可显式选择 `preserve_splines` 使用产物内配置，不修改 Creo 安装。只有原生体检查通过才能报告 Creo 实体；可见质量仍需查看实际对比图。
+
+本路线已在复杂主样例上获得显著的区域合面与边界改善，当前结果和剩余限制统一见 [运行记录](../../data/runs/whole-partition-brep-v1/native-v2/result_v3/RUN.md)。它支持给定分区重建，不承诺任意输入必定通过全部几何和 CAD 验收。
+
+## 保留的先拟合后合并入口
+
+当前入口完全使用本仓库算法、NumPy/SciPy、网格工具和 OCCT，不调用 Geomagic Wrap，也不复用其曲面。输入为原始 STL 和固定分区 NPZ；公共边界统一构造，曲面拟合保留源区域。参考 STEP 仅由独立评估器读取实际面数，拟合阶段只接收整数预算。
+
+```powershell
+python -m tools.mesh_brep.graph_reconstruct `
+  --stl <原始STL> --partition <已有分区.npz> `
+  --reference <对应参考STEP> --output <不存在的新目录> `
+  --creo-root <Creo安装目录> `
+  --native-probe <creo_body_probe.exe>
+```
+
+这是实验入口，已有少面主样例通过 Creo 原生闭合实体检查，但局部几何质量仍未全部满足要求。验收同时要求面数严格小于参考、弯折处无明显褶皱、实际 Creo 水密实体，以及平滑后仍共用的区域边界。所有阶段保留状态和失败，不用拓扑通过代替几何通过。
+
+入口依次执行分区内高度曲面拟合、同标签域合并、共享边界装配、三维主边界 STEP 导出、独立几何评估及可选 Creo 验证。装配器保留内腔和多个闭合壳层；已测内腔样例通过共享边界平滑形成 Creo 原生实体，光顺性仍单独检查。默认增加源三角形内部采样与二阶公平项，减少顶点之间的鼓包。`--from-fit <已完成的拟合目录>` 可以复用相同 STL 和分区的原生曲面缓存，缓存需通过投影检查。所有输出目录必须尚不存在。
+
+对自生成 STEP 无法离散化的面，先核对完整 B-spline 控制点、节点矢量及输入身份。唯一匹配成功时只收紧对应源拟合域，避免最近点投票扩大修复范围；身份不明或经外部 CAD 改写的面，仍从实际边界定位源域及其一圈邻居。Creo 再导出件的自由边、无效面，以及无自由边的闭合无效 quilt 都纳入诊断。`--max-refinements` 默认允许两轮，每轮另存完整证据，并重新检查实际面数。诊断 CAD 只用于选择待处理域；重拟合的几何数据仍来自原 STL。无法定位故障、超过轮数、面数超预算或未通过原生体检查，都不能标为合格成品。结果路径以最终 `run.json` 的 `model` 字段为准。
+
+STEP 回读中出现的无效裁剪面也进入平滑边界局部回退。重复试验可用 `--boundary-history <先前运行目录> [更多目录]` 复用已定位的边界失败；入口检查 STL 和分区身份，再按原三角形归属映射到当前拟合域，不复用旧支撑几何。该提示不会跳过新 STEP 与 Creo 的检查。
+
+Creo 失败定位到启用了平滑的曲线时，先让相关共用曲线恢复源折线表达，再考虑增加拟合面数。几何重拟合后按原三角形身份保留已有曲线回退，避免编号变化使同一失败被重复尝试；每轮仍独立重测。
+
+Creo 仅承担独立验收；安装有 Pro/TOOLKIT 的环境可用以下命令编译只读原生体检查器。只有导入检查不足以确认水密，需保留原生体记录与实际显示证据。
+
+当前自动检查使用产物内的 `import_mm.dip`，设置外部精度、保留 B-spline 和 XYZ 边界偏好。安装自带配置另行验证；主样例已发现默认配置不能形成活动实体，不能把自定义配置下成功推广为任意导入设置成功。
+
+```powershell
+cmake -S tools/mesh_brep/creo_body_probe -B build/creo-body-probe `
+  -G "Visual Studio 17 2022" -A x64 "-DCREO_ROOT=<Creo安装目录>"
+cmake --build build/creo-body-probe --config Release
+```
+
+`whole_reconstruct.py` 保留早期多项式路线的复现接口。公共 C2 边界平滑可通过 `--boundary-smoothing <毫米预算>` 显式启用；曲线按原网格边分段但精确保留连续几何，裁剪失败时只回退相关曲线。该选项尚未通过复杂模型的全部验收，不默认启用。
+
+`--compact-edges` 在启用边界平滑时将整条共用链表示为一个拓扑边，并沿用局部裁剪失败回退；这是减少边数量及交换体积的实验选项，最终仍检查真实 STEP 和 Creo。边界历史也可读取原生装配运行中的无效面，按源三角形映射到新域。
+
+可选 `graph_fair_optimize` 对已拟合支撑面做有界二次规划平滑，保持面数及分区，另需 OSQP。其输出仍需交给统一入口完成独立 STEP 与 Creo 检查，不以优化目标下降作为合格结论：
+
+```powershell
+python -m tools.mesh_brep.graph_fair_optimize --run <原生拟合目录> --output <新平滑目录> `
+  --normal-field crease-fans --boundary-normal-weight .1
+python -m tools.mesh_brep.graph_reconstruct --stl <原始STL> --partition <已有分区.npz> `
+  --reference <对应参考STEP> --from-fit <新平滑目录> --output <新验收目录> `
+  --creo-root <Creo安装目录> --native-probe <creo_body_probe.exe>
+```
+
+`crease-fans` 按 STL 折角连接顶点周围的三角形法向，避免区域标签在原本光滑的边上引入不同目标法向；保留 `regional` 用于既有试验复现。`graph_join_audit` 在固定源边采样上检查拟合支撑面的接缝，仅用于导出前诊断。`step_outliers.localize_forward` 直接复核既有最差正向采样点到原生面的距离，区分曲面偏差和离散化遗漏，不覆盖原指标。局部修复新生成的缓存保存各域边界预算，后处理不得放松该预算。
+
+平滑后处理还可显式试验 `--boundary-normal-limit <度>` 和 `--boundary-smoothing <毫米>`。前者在有限边界样本上施加法向锥硬约束，不能保证连续 G1，已有复杂样例多数域无解或未收敛；后者先拟合唯一共用 C2 曲线，再将边界法向投影到垂直于曲线切向的平面，仍独立检查原始 STL 边界误差。失败域保留原曲面；这些选项不作为质量合格的默认承诺。
+
+`--boundary-target-tolerance <毫米>` 可另外收紧共用曲线样本到支撑面的残差上限；不放松原 STL 边界预算，也不等价于连续曲线精确落面。无可行解的域保留原支撑和失败记录。
+
+`--normal-filter-steps <次数>` 在 `crease-fans` 下启用原网格上的双边法向滤波。空间尺度取相邻三角形重心距离中位数，角度尺度取特征角的一半，原锐边阻断关系固定；仅改变拟合目标法向，不移动 STL 顶点或改变区域标签。默认关闭，独立质量检查仍使用原始 STL。
+
+统一入口也可通过 `--fairing --condition-normals` 串联上述平滑及狭长域参数方向修复。后者从实际接缝异常中选择法向投影接近退化的域，重新选取法向锥中心方向；仅在必要时增加原分区内部的拟合域，仍受最终参考面数门约束。两个开关保持显式启用，尚不能作为任意曲面质量保证。
+
+`--feature-split-angle <度>` 允许在已有拟合域内部沿原 STL 折角断开支撑面。按平滑程度聚合源三角形时，对折角两侧施加不能同组的约束，避免普通连通分量通过折角端点绕行后仍落入同一面。它不改 GUI 区域标签或移动源网格，也不跨区域合并；新增面数仍受同一参考预算约束。原二面角只是特征代理，过度切分会超预算；该选项保持显式启用，与 `--condition-normals` 合用时采用法向锥参数方向，不能仅凭导出前预览判定合格。
+
+`python -m tools.mesh_brep.export_regions --assembly <装配目录> --output <新目录>` 从实际原生装配件导出各标签的开放分区 STEP。导出前逐一核对支撑曲面和原拟合域身份，导出后核对每件回读面数。整体实体检查仍由整件 STEP 承担。
+
+`step_outliers.track_source_points` 可通过固定源三角形及重心坐标跨版本追踪已知几何异常，核对真实 STEP 支撑身份、裁剪域内外、对应位置距离及原三角形法向差；不会用新的随机样本覆盖已知失败，也不把对应位置距离混写为最近距离。
+
+`regional_target.py` 将公共边界与区域内部控制点分别求解。`regional_rectangle.py` 另行验证把拓扑边分段和曲面支撑布局分开：一条支撑边可包含多个共用的拓扑边，避免每个区域交汇点都增加一张曲面。两条路线均仍在实验中；旧试验产物已按要求清理，保留 [历史指标摘录](../../data/runs/whole-partition-brep-v1/native-v2/result_v3/metrics/previous_experiments.md)。
+
+NPZ 包含 `mesh_vertex_original`、`mesh_triangle`、逐三角形 `face_instance_id`，须与 STL 坐标及顺序匹配。当前使用毫米单位、闭合定向二流形输入，分区由调用者提供。依赖 NumPy、SciPy、cadquery-ocp、VTK、Pillow、Numba、meshoptimizer 和 PyMeshLab；Creo 仅用于独立验收。
+
+此前商业试验保存在 `legacy_wrap_reconstruct.py` 和运行目录历史记录中，不能作为当前重建后端。清理仅涉及本工作树继承的旧产物；其余工作树及原始 STL/STEP 未改动。
+
+## 冻结的 candidate-179 局部实验
+
+当前 candidate-179 推荐入口为 `compact.py`，交付统一见 最终 B 目录（历史路径：`../../data/runs/20260929_mesh_brep/candidate179_B_final/README.md`）。它保留五片连接关系，用 C2 自适应外链、较小的共享接缝基底和 XYZ 联合拟合减少支撑控制点，避免把原 CAD 的重复节点直接传入曲面。独立接口挂接 `attach_boundary.py` 只生成与原 3D 曲线相容的 pcurve，不改变网格重建的支撑系数。具体数值、失败方案和两档网格复核见 本轮记录（历史路径：`../../data/runs/20260929_mesh_brep/compact_b/RUN.md`）。
 
 ```powershell
 python -B -m tools.mesh_brep.compact --stl <input.stl> --layout <layout.json> --output <新目录>
@@ -12,7 +102,7 @@ python -B -m tools.mesh_brep.assemble_candidate --audit <原整件输入记录.j
 
 以下为保留的原双路线与精确 CAD 接口对照；它们继续用于复现实验历史。
 
-`reconstruct.py` 接收二进制 STL 和离散布局 JSON，运行真实网格邻接上的 mean-value 参数化、共享边界系数的三维 B-spline 联合拟合、OCCT 构造与 STEP 往返。输出始终为 `DiagnosticOnly/can_apply=false`；公差验收由独立评估给出。当前证据见 [本轮报告](../../data/runs/20260929_mesh_brep/RUN.md)。这不是无标签 STL 的自动分区器，也不调用原 CAD 或既有高度场拟合入口。
+`reconstruct.py` 接收二进制 STL 和离散布局 JSON，运行真实网格邻接上的 mean-value 参数化、共享边界系数的三维 B-spline 联合拟合、OCCT 构造与 STEP 往返。输出始终为 `DiagnosticOnly/can_apply=false`；公差验收由独立评估给出。当前证据见 本轮报告（历史路径：`../../data/runs/20260929_mesh_brep/RUN.md`）。这不是无标签 STL 的自动分区器，也不调用原 CAD 或既有高度场拟合入口。
 
 ## 复跑 B
 
@@ -55,7 +145,7 @@ python -B -m tools.mesh_brep.assemble_candidate `
   --output data/runs/new_candidate179_sewn
 ```
 
-独立整件缝合仍使用既有 `0.001 mm` 容差，成功条件是有效 Solid、零自由边；不放大容差补缝。局部原边界落面使用更严格的 `1e-7 mm` 检查。`check_interface.py` 对原邻面单独验证接口法向，`render.py --before <STEP> --after <STEP> --output <PNG> --run <运行目录>` 生成同视角真实曲面及全部参数线。当前四个文件及残余问题见 [交付入口](../../data/runs/20260929_mesh_brep/candidate179/README.md)。
+独立整件缝合仍使用既有 `0.001 mm` 容差，成功条件是有效 Solid、零自由边；不放大容差补缝。局部原边界落面使用更严格的 `1e-7 mm` 检查。`check_interface.py` 对原邻面单独验证接口法向，`render.py --before <STEP> --after <STEP> --output <PNG> --run <运行目录>` 生成同视角真实曲面及全部参数线。当前四个文件及残余问题见 交付入口（历史路径：`../../data/runs/20260929_mesh_brep/candidate179/README.md`）。
 
 ## 输入合同与适用范围
 

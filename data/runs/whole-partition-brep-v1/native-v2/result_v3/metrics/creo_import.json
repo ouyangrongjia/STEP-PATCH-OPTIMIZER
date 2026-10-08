@@ -1,0 +1,15 @@
+{
+  "part_status": "OK",
+  "score": "PASS",
+  "geometry_check_features": 1,
+  "profile": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v5\\creo_installed\\import_mm.dip",
+  "report": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v5\\creo_installed\\audit\\modelcheck\\model.p.xml",
+  "gray_display_observed": false,
+  "boundary_preference": "XYZ",
+  "profile_mode": "installed",
+  "profile_modified": false,
+  "profile_source": "E:\\Proe\\Creo 11.0.0.0\\Common Files\\x86e_win64\\mworks\\mw_import_mm.dip",
+  "import_validation_passed": true,
+  "solid_import_passed": null,
+  "native_body_check_required": true
+}

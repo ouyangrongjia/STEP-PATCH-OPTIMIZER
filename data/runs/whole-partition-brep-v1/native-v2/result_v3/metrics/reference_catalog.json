@@ -1,0 +1,158 @@
+{
+  "references": [
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_前发_Clay.stp",
+      "face_entities": 3028,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 3027,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_前发_Clay.stl",
+      "transferred_faces": 3028
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_发尾_Clay.stp",
+      "face_entities": 1221,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1220,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_发尾_Clay.stl",
+      "transferred_faces": 1221
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\03_配件_Clay.stp",
+      "face_entities": 2739,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 2738,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+      "transferred_faces": 2739
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\2沈眉庄_前发_Clay.stp",
+      "face_entities": 3110,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 3109,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\2沈眉庄_前发_Clay.stl",
+      "transferred_faces": 3110
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\2沈眉庄_配件-3_Clay.stp",
+      "face_entities": 1674,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1673,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\2沈眉庄_配件-3_Clay.stl",
+      "transferred_faces": 1674
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\右尾巴_Clay.stp",
+      "face_entities": 1439,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1438,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\右尾巴_Clay.stl",
+      "transferred_faces": 1439
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\后发左配件_Clay.stp",
+      "face_entities": 1904,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1903,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\后发左配件_Clay.stl",
+      "transferred_faces": 1904
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\帽子盖_Clay.stp",
+      "face_entities": 1997,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1996,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\帽子盖_Clay.stl",
+      "transferred_faces": 1997
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#1卷双马尾_前发_Clay.stp",
+      "face_entities": 1902,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1901,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#1卷双马尾_前发_Clay.stl",
+      "transferred_faces": 1902
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#1卷双马尾_右辫子_Clay.stp",
+      "face_entities": 1774,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1773,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#1卷双马尾_右辫子_Clay.stl",
+      "transferred_faces": 1774
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#1卷双马尾_后发 1_Clay.stp",
+      "face_entities": 4326,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 4325,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#1卷双马尾_后发 1_Clay.stl",
+      "transferred_faces": 4326
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#1卷双马尾_左辫子_Clay.stp",
+      "face_entities": 1787,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1786,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#1卷双马尾_左辫子_Clay.stl",
+      "transferred_faces": 1787
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#2直双马尾_前发_Clay.stp",
+      "face_entities": 3727,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 3726,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#2直双马尾_前发_Clay.stl",
+      "transferred_faces": 3727
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#2直双马尾_右马尾_Clay.stp",
+      "face_entities": 1740,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1739,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#2直双马尾_右马尾_Clay.stl",
+      "transferred_faces": 1740
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#2直双马尾_后发  1_Clay.stp",
+      "face_entities": 5037,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 5036,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#2直双马尾_后发  1_Clay.stl",
+      "transferred_faces": 5037
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#6黑长直_前发_Clay.stp",
+      "face_entities": 3135,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 3134,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#6黑长直_前发_Clay.stl",
+      "transferred_faces": 3135
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\星祈社-#6黑长直_后发_Clay.stp",
+      "face_entities": 6650,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 6649,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\星祈社-#6黑长直_后发_Clay.stl",
+      "transferred_faces": 6650
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\甄嬛传1基础版_Group35412_Clay_Clay.stp",
+      "face_entities": 1709,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 1708,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\甄嬛传1基础版_Group35412_Clay_Clay.stl",
+      "transferred_faces": 1709
+    },
+    {
+      "reference": "D:\\pyProject\\step-patch-optimizer\\data\\stp\\甄嬛传1基础版_甄嬛传1基础版_后发_Clay_Clay_Clay.stp",
+      "face_entities": 7288,
+      "count_scope": "STEP face entity inventory; final gate additionally reads transferred topology",
+      "maximum_reconstructed_faces": 7287,
+      "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\甄嬛传1基础版_甄嬛传1基础版_后发_Clay_Clay_Clay.stl",
+      "transferred_faces": 7288
+    }
+  ],
+  "count": 19,
+  "reconstruction_reads_reference_geometry": false
+}

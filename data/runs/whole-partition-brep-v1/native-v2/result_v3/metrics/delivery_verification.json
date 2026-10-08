@@ -1,0 +1,12 @@
+{
+  "regional_step_files": 359,
+  "regional_step_faces": 989,
+  "requested_artifacts_present": true,
+  "relative_document_links_valid": true,
+  "native_Creo_solid_verified": true,
+  "actual_Creo_gray_image_reviewed": true,
+  "full_visual_quality_passed": false,
+  "source_geometry_unchanged": true,
+  "code_committed_at_original_validation": false,
+  "record_scope": "Original geometric delivery verification before Git publication; publication_checks.json records the later pre-commit checks."
+}

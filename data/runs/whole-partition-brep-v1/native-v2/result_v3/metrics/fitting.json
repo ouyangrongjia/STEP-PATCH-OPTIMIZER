@@ -1,0 +1,57 @@
+{
+  "status": "fitted",
+  "algorithm": "shared-skeleton-regional-graph-v2",
+  "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\gui_stl_input\\partition.npz",
+  "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "source_CAD_read": false,
+  "commercial_engine_used": false,
+  "config": {
+    "distance": 0.03,
+    "boundary": 0.005,
+    "controls": [
+      65
+    ],
+    "normal_weight": 0.001,
+    "fairness": 1e-06,
+    "max_charts": 8000,
+    "max_depth": 24,
+    "shared_smooth_normals": false,
+    "feature_angle": 30.0,
+    "boundary_normal_weight": 0.0,
+    "interior_subdivisions": 0
+  },
+  "smoothing_mm": 0.12,
+  "workers": 4,
+  "input_topology": {
+    "vertices": 245568,
+    "triangles": 491132,
+    "edges": 736698,
+    "euler": 2,
+    "components": 1,
+    "boundary_edges": 0,
+    "nonmanifold_edges": 0,
+    "inconsistent_edges": 0,
+    "degenerate_triangles": 0,
+    "area_mm2": 1078.596709769745
+  },
+  "face_limit": 2738,
+  "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v4\\round_3",
+  "support_boundary_limit_mm": 0.002,
+  "boundary_weight": 3000.0,
+  "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v5\\round_0",
+  "fitted_charts": 989,
+  "failed_charts": [],
+  "partial_regions": null,
+  "boundary_movement_mm": {
+    "rms": 0.048234235350519884,
+    "p50": 0.03559199778518919,
+    "p95": 0.08813906167398862,
+    "max": 0.11998664727977934,
+    "min": 0.0
+  },
+  "seconds": 41.443942700047046,
+  "reused_charts": 981,
+  "refitted_charts": 8,
+  "complete_source_coverage": true,
+  "partition_labels_unchanged": true
+}

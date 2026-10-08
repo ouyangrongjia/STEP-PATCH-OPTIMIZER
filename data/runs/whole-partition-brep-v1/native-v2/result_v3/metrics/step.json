@@ -1,0 +1,40 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "commercial_engine_used": false,
+  "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v2\\skeleton_graph_full_v5\\assembled",
+  "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\gui_stl_input\\partition.npz",
+  "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "algorithm": "native-graph-step-canonical-3d-boundaries-v1",
+  "write_pcurves": true,
+  "topology_before": {
+    "faces": 989,
+    "edges": 40173,
+    "shells": 1,
+    "solids": 1,
+    "free_edges": 0,
+    "multiple_edges": 0,
+    "invalid_faces": [],
+    "brep_valid": true,
+    "volume_mm3": 690.3315680245879,
+    "maximum_edge_tolerance_mm": 0.00209865980342411
+  },
+  "topology": {
+    "faces": 989,
+    "edges": 40280,
+    "shells": 1,
+    "solids": 1,
+    "free_edges": 0,
+    "multiple_edges": 0,
+    "invalid_faces": [],
+    "brep_valid": true,
+    "volume_mm3": 690.0466759252549,
+    "maximum_edge_tolerance_mm": 0.004187062473044209
+  },
+  "master_3d_curves": 40173,
+  "declared_step_uncertainty_mm": 0.00209865980342411,
+  "step_bytes": 153145150,
+  "expected_solids": 1,
+  "watertight": true,
+  "seconds": 205.02888609981164
+}

@@ -46,7 +46,10 @@ def unpack(surface):
 
 
 def side_uv(mapping, t):
-    t = np.asarray(t); uv = np.empty((len(t), 2)); uv[:, mapping['axis']] = mapping['fixed']
+    t = np.asarray(t)
+    if 'range' in mapping:
+        a,b=mapping['range'];t=a+(b-a)*t
+    uv = np.empty((len(t), 2)); uv[:, mapping['axis']] = mapping['fixed']
     uv[:, 1-mapping['axis']] = 1-t if mapping['reverse'] else t
     return uv
 

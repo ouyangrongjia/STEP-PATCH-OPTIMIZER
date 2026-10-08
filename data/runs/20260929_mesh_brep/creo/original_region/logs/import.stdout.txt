@@ -1,2 +1,0 @@
-Checking for dll config file: E:\Proe\Creo 11.0.0.0\Common Files\x86e_win64\nms\dbatchs.dat
-WARNING: Name Server is shutting down due to timeout reached.

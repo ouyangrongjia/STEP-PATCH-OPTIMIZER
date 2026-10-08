@@ -4,21 +4,31 @@
 
 ## 分支
 
-本工作树分支为 `experiment/mesh-brep-20260929`，从回退提交 `6efff7e` 开展网格参数化与纯网格重建的隔离实验。主工作树的 STL 工程修改保留，未合并或推送本实验。
+本工作树分支为 `experiment/whole-mesh-brep`，继承 `experiment/mesh-brep-20260929` 的局部纯网格实验，推进固定 GUI 分区的逐区拟合与全模型装配。该实验通过独立分支归档，主工作树的 STL 工程修改保留，未合并主线。
 
 当前产品主线是原生 Surface Reduction。Geomagic AutoSurface、原生单曲面重拟合和原生局部 AutoSurface 均不是默认路线。
 
 ## 给定分区的纯网格后端
 
-当前范围收敛为 candidate-179 局部面片及拼回原模型的整件，要求水密且不能有明显可见褶皱。当前 B 的模型、图片、指标和复跑入口统一见 [最终目录](../data/runs/20260929_mesh_brep/candidate179_B_final/README.md)。
+历史基线为 candidate-179 局部面片及拼回原模型的整件，要求水密且不能有明显可见褶皱。其原始材料保留在原工作树和 Git 历史中；按用户要求，本工作树现在只保留 `data/runs/whole-partition-brep-v1` 这一运行产物根目录。
 
-`tools/mesh_brep/compact.py` 已实际运行 STL、离散布局、网格 UV、不同基底的共享三维接缝、C2 曲面及 STEP 的完整链路，并完成原 CAD/旧候选/缓存不可读时的相同结果重跑。该原型保留给定五片布局，以较小径向和中央控制网配合自适应边界曲线。后续接口挂接只读取原 CAD 边界，不再修改网格拟合出的支撑曲面；整件已通过有效 Solid、STEP 往返和 Creo 实体导入，并消除了此前 Creo 中的额外拆面和该整件的 GEOM_CHECKS。最大方向预算、原邻面 G1、短边提示及局部曲率峰值仍有未通过或待优化项，保持 `DiagnosticOnly/can_apply=false`。参数与证据见 [本轮 B 记录](../data/runs/20260929_mesh_brep/compact_b/RUN.md)，原 A/B 对照与旧接口版按各自冻结协议保留。C++ 产品与 GUI 未改变。
+`tools/mesh_brep/compact.py` 已实际运行 STL、离散布局、网格 UV、不同基底的共享三维接缝、C2 曲面及 STEP 的完整链路，并完成原 CAD/旧候选/缓存不可读时的相同结果重跑。该原型保留给定五片布局，以较小径向和中央控制网配合自适应边界曲线。后续接口挂接只读取原 CAD 边界，不再修改网格拟合出的支撑曲面；整件已通过有效 Solid、STEP 往返和 Creo 实体导入，并消除了此前 Creo 中的额外拆面和该整件的 GEOM_CHECKS。最大方向预算、原邻面 G1、短边提示及局部曲率峰值仍有未通过或待优化项，保持 `DiagnosticOnly/can_apply=false`。参数与证据见 本轮 B 记录（历史路径：`../data/runs/20260929_mesh_brep/compact_b/RUN.md`），原 A/B 对照与旧接口版按各自冻结协议保留。C++ 产品与 GUI 未改变。
+
+完整模型使用主 GUI 中与 candidate-179 对应的已有分区，已通过原 C++ 分区代码和冻结 FaceId 列表核对。上游 STEP 仅用于分区定位；拟合输入保留原始 STL 坐标、三角形及离散区域标签。当前任务明确要求完全自主重建，且最终面数小于对应参考 STEP，并同时满足可见光顺、边界保持和 Creo 水密实体。新的实验入口为 `skeleton_reconstruct.py`：先构造共用平滑骨架，再逐区拟合和装配；参考 CAD 只在独立计数阶段读取，不向拟合器提供曲面或曲线。`graph_reconstruct.py` 保留先拟合后合并路线，`whole_reconstruct.py` 保留早期原生多项式路线；商业旧入口 `legacy_wrap_reconstruct.py` 只用于历史复现。
+
+共用骨架路线已把 candidate179 的少面布局思想推广到固定分区全模型，处理内部切分碎屑、狭长曲面投影、共享曲线过冲及连续边界残差漏检。边界允许受控地沿源表面平滑移动，相邻区域使用相同曲线；交换时精确分段，不把平滑几何改回折线。新增不完整区域导出拒绝、公共边界变化后的双侧缓存失效、四进程拟合和无缓存复跑。最新主样例显著减少面数和内部锯齿，且在安装自带配置下实际成为 Creo 活动实体，灰色图已检查。窄弯折区域仍有可见波纹，GEOM_CHECKS 未清零，尚不满足全部产品验收；其他模型未用本轮新算法逐一复核。最新模型、全部区域文件、指标、测试与失败统一见 [result_v3](../data/runs/whole-partition-brep-v1/native-v2/result_v3/RUN.md)。C++ 产品与 GUI 未改。
+
+2026-10-07 按用户要求清理运行产物，当前只保留 `native-v2/result_v3` 的整件、分区件、固定分区输入、必要指标及前后多视角图。旧候选、拟合缓存和重复输出已移入 Windows 回收站；本次未重新执行几何或 CAD 验收。
+
+下段保留此前先拟合后合并路线的实现与历史验收状态：
+
+本轮固定分区高度曲面后端已加入共用法向、分区内部合并、原始顶点身份装配、投影自交检查及原 STL 内腔的包含关系。统一入口可以根据失败裁剪面，或 Creo 再导出的自由边与无效面自动收紧局部拟合；自生成 STEP 先核对完整支撑身份，唯一匹配时只修复对应域，诊断 CAD 不作拟合目标。折角支撑划分补上不能同组约束，防止两侧绕端点重新聚合；过度切分仍会超预算。已知异常可按固定源三角形位置在实际 STEP 中跨版本复核。支持显式共享边界平滑及局部回退。已经在三个实际模型上使用各自产物保存的导入配置取得少于参考面的 Creo 原生实体，包括带内腔模型；安装自带配置复核中，主样例仍无法形成活动实体。可见边缘波纹、Creo 几何检查及交换稳定性仍未全面解决，保持 `DiagnosticOnly`。可选有界二次规划新增按 STL 折角划分的角点法向场，消除分区标签对光滑边目标法向的影响；后续法向滤波仅为未采用的对照。直接原生面距离复核与离散化距离分开保留。C++ 产品与 GUI 未改变；旧输出已按要求清理，保留 [历史对照指标与失败结论](../data/runs/whole-partition-brep-v1/native-v2/result_v3/metrics/previous_experiments.md)。
 
 ## 当前几何对照与保留工具
 
 candidate-179 的直接对照恢复为 `aligned_inner_cubic`：5 面、4324 个实际支撑控制点；历史四片继续保留。两者仍按各自原质量门报告，基线不因回退而变为合格替换。后续自适应探索继续开放，当前没有采用新的自适应布局结果。
 
-`tools/candidate179_research/` 保留周期 B-spline 评估、闭合缝有向使用与双 pcurve 检查、独立裁剪域距离核对、实际 STEP 表达统计、五片分阶段计时，以及显式调用的精确支撑合并辅助算子。它们不改变基线拟合策略或产品 Apply 门。失败方案、其余区域输出和缓存已按用户要求清理，精简结论与本次验证见 [回退记录](../data/runs/20260928_baseline_retention/RUN.md)。
+`tools/candidate179_research/` 保留周期 B-spline 评估、闭合缝有向使用与双 pcurve 检查、独立裁剪域距离核对、实际 STEP 表达统计、五片分阶段计时，以及显式调用的精确支撑合并辅助算子。它们不改变基线拟合策略或产品 Apply 门。失败方案、其余区域输出和缓存已按用户要求清理，精简结论与本次验证见 回退记录（历史路径：`../data/runs/20260928_baseline_retention/RUN.md`）。
 
 ## 产品入口
 
@@ -181,7 +191,7 @@ SurfaceRefitter 与 native_surface_fit_probe 保留用于诊断和历史复现�
 
 当前采用的结果基线由用户选定为 `data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/final/` 中的四面片结果，实际曲面位于 `evidence/previous_full_diagnostic_20260729_032156/`。流程为先构造曲线骨架和分片布局，再拟合曲面、裁剪与缝合。该选择基于用户对形状效果的评估；结果仍为 `DiagnosticOnly`、`can_apply=false`，面内褶皱和完整质量门未通过的问题仍未解决。
 
-远程交付入口见[四面片结果归档](../data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/README.md)，包含可直接查看的面片 STEP、指标与可视化，以及完整原始证据压缩包。
+远程交付入口见四面片结果归档（历史路径：`../data/runs/20260729_candidate_0179_geomagic_reverse_optimization_visualization/README.md`），包含可直接查看的面片 STEP、指标与可视化，以及完整原始证据压缩包。
 
 该汇总包另含尚未生成新曲面的参数布局实验，应与上述四面片几何按运行编号区分。后续单面片自适应减面实验保留为探索证据，不替代当前采用的结果基线；以下实现说明反映当前代码状态。
 
@@ -199,7 +209,7 @@ P0 锁定诊断证据位于 `D:\pyProject\step-patch-optimizer-worktrees\native-
 
 ## 当前限制
 
-candidate-179 独立研究以原外边界硬保持和整件水密作为前置门。基线机制与自由重建见 [首轮实证](../data/runs/20260921_candidate179_evidence/RUN.md)，冻结旧曲线的四片闭合对照见 [水密优先补充实证](../data/runs/20260921_candidate179_hard_boundary/RUN.md)，上一轮直接对照见 [布局与共享接缝实证](../data/runs/20260921_candidate179_designer_layout/RUN.md)。最新 [连续性与节点传播实证](../data/runs/20260921_candidate179_continuity/RUN.md) 在保持原边和整件闭合的前提下，使用显式外围 XY 映射及同几何起点的节点兼容对照，进一步改善局部法向、节点跳变和参数尺度分布，并减少控制点。最大法向、方向控制点预算和 Creo 几何检查仍未通过；CAD 等几何分段与加密探针将后续重点缩小到复合拼接的实际连续性/表示。原始 CAD 报告及修正前的证据均保留。所有结果仍为 DiagnosticOnly，无产品 Apply 资格，不代表现有 C++ 能力或既有回归基线变化。
+candidate-179 独立研究以原外边界硬保持和整件水密作为前置门。基线机制与自由重建见 首轮实证（历史路径：`../data/runs/20260921_candidate179_evidence/RUN.md`），冻结旧曲线的四片闭合对照见 水密优先补充实证（历史路径：`../data/runs/20260921_candidate179_hard_boundary/RUN.md`），上一轮直接对照见 布局与共享接缝实证（历史路径：`../data/runs/20260921_candidate179_designer_layout/RUN.md`）。最新 连续性与节点传播实证（历史路径：`../data/runs/20260921_candidate179_continuity/RUN.md`） 在保持原边和整件闭合的前提下，使用显式外围 XY 映射及同几何起点的节点兼容对照，进一步改善局部法向、节点跳变和参数尺度分布，并减少控制点。最大法向、方向控制点预算和 Creo 几何检查仍未通过；CAD 等几何分段与加密探针将后续重点缩小到复合拼接的实际连续性/表示。原始 CAD 报告及修正前的证据均保留。所有结果仍为 DiagnosticOnly，无产品 Apply 资格，不代表现有 C++ 能力或既有回归基线变化。
 
 - MinimizeFaceCount 是预算搜索；除非达到可证明下界，否则不证明全局最优。
 - GUI 默认参数与锁定的 candidate-179 49→46 比例回归不同。

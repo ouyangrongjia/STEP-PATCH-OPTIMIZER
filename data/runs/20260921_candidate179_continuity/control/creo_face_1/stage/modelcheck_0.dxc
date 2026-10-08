@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<DXC>
-  <WINDCHILL/>
-  <Group TTD="E:\Proe\Creo 11.0.0.0\Common Files\text\ttds\modelcheck.ttd" DSQM="_LOCAL" Name="ModelCHECK" Output="2" OutputDir="D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\data\runs\20260921_candidate179_continuity\control\creo_face_1\modelcheck\component_0" VaultResults="0" PrimaryContent="0">
-    <Object>D:\pyProject\step-patch-optimizer-worktrees\candidate179-continuity-20260921\data\runs\20260921_candidate179_continuity\control\creo_face_1\import\candidate.prt.1</Object>
-  </Group>
-</DXC>

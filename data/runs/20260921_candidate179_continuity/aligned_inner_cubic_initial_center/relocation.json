@@ -1,6 +1,0 @@
-{
-  "reason": "Preserve first geometry, raw Creo XML and models before restoring archived central XY map",
-  "moved_at": "2026-09-21T08:26:54.3845823-07:00",
-  "original_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\candidate179-continuity-20260921\\data\\runs\\20260921_candidate179_continuity\\aligned_inner_cubic",
-  "current_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\candidate179-continuity-20260921\\data\\runs\\20260921_candidate179_continuity\\aligned_inner_cubic_initial_center"
-}

@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory=$true)][string]$Part,
     [Parameter(Mandatory=$true)][string]$OutputDir,
     [Parameter(Mandatory=$true)][string]$CreoRoot,
+    [ValidateSet('step','jpeg')][string]$Format='step',
     [int]$TimeoutSeconds=240
 )
 $ErrorActionPreference='Stop'
@@ -18,7 +19,11 @@ New-Item -ItemType Directory -Path $OutputDir | Out-Null
 Set-CreoBatchEnvironment $CreoRoot
 $common=Join-Path $CreoRoot 'Common Files'
 $dxc=Join-Path $OutputDir 'export.dxc'
-New-DxcFile -Path $dxc -TtdPath (Join-Path $common 'text/ttds/step_3d_export.ttd') -TaskName 'STEP 3D Export' -ObjectPath ([System.IO.Path]::GetFullPath($Part)) -TaskOutputDir $OutputDir -Syntax 'ObjectText'
+$ttd=if ($Format -eq 'jpeg') {'text/ttds/solid-raster_write_jpg.ttd'} else {'text/ttds/step_3d_export.ttd'}
+New-DxcFile -Path $dxc -TtdPath (Join-Path $common $ttd) -TaskName ('3D Export '+$Format) -ObjectPath ([System.IO.Path]::GetFullPath($Part)) -TaskOutputDir $OutputDir -Syntax 'ObjectText'
 $result=Invoke-ProcessWithTimeout -FilePath (Join-Path $common 'x86e_win64/obj/dbatchc.exe') -Arguments @('-nographics','-process',$dxc) -WorkingDirectory $OutputDir -LogPrefix 'export' -Timeout $TimeoutSeconds -LogDirectory $OutputDir
 $result | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDir 'export.json')
-if ($result.timed_out -or $result.exit_code -ne 0) { throw 'Creo STEP export failed' }
+if ($result.timed_out -or $result.exit_code -ne 0) { throw ('Creo '+$Format+' export failed') }
+$patterns=if ($Format -eq 'jpeg') {@('*.jpg','*.jpeg')} else {@('*.stp','*.step')}
+$files=@(foreach ($pattern in $patterns) {Get-ChildItem -LiteralPath $OutputDir -Filter $pattern -File})
+if (-not $files.Count) { throw ('Creo returned without producing a '+$Format+' file; see export logs') }

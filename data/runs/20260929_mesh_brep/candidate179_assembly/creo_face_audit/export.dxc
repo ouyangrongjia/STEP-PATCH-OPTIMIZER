@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<DXC>
-  <WINDCHILL/>
-  <Group TTD="E:\Proe\Creo 11.0.0.0\Common Files\text\ttds\step_3d_export.ttd" DSQM="_LOCAL" Name="STEP 3D Export" Output="2" OutputDir="C:\Users\27836\AppData\Local\Temp\candidate179_creo_face_audit_20260929" VaultResults="0" PrimaryContent="0">
-    <Object>D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\data\runs\20260929_mesh_brep\candidate179_assembly\creo_final_B\import\b179_smooth.prt.1</Object>
-  </Group>
-</DXC>

@@ -1,0 +1,446 @@
+"""Fit a compact regional skeleton before constructing its trimmed supports.
+
+Labels are immutable. Internal rings isolate boundary detail from large smooth
+interiors. Shared cubic curves are fitting constraints, rather than trims added
+after an independent fit. Graph supports cannot fold in their own projection.
+"""
+import argparse
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import asdict
+import json
+from pathlib import Path
+import time
+import numpy as np
+from scipy import sparse
+from scipy.sparse.linalg import spsolve
+from scipy.interpolate import BSpline
+
+from .mesh import dump, stats, vertex_normals, chain_parameters
+from .partition_fit import (Config, load_partition, incidence, frame, boundary_edges,
+                            loops, split_faces, projected_boundary_valid, parameters,
+                            spline_graph_error)
+from .partition_fan import disk_domains
+from .regional_rectangle import corners_for_loop, curve_polyline_error
+from .regional_compact import CircularChart
+from .partition_cad import shared_chains
+from .splines import knots, tensor
+
+
+def stable_frame(v, f):
+    initial = frame(v, f)
+    o, axes, _, _, _, _, dot = initial
+    cross = np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]])
+    normal = cross/np.linalg.norm(cross, axis=1)[:, None]
+    candidates = [axes[2], cross.sum(axis=0), normal.sum(axis=0)]
+    candidates = [x/np.linalg.norm(x) for x in candidates if np.linalg.norm(x) > 1e-14]
+    direction = max(candidates, key=lambda x: float(np.min(normal@x)))
+    if np.min(normal@direction) <= .15 and len(f) > 1:
+        conditioned = frame(v, f, normal)
+        if conditioned[-1].min() > np.min(normal@direction):
+            return conditioned
+    if np.min(normal@direction) <= dot.min()+1e-10:
+        return initial
+    axes = axes.copy(); axes[2] = direction
+    tangent = axes[0]-np.dot(axes[0], direction)*direction
+    if np.linalg.norm(tangent) < 1e-10:
+        tangent = axes[1]-np.dot(axes[1], direction)*direction
+    axes[0] = tangent/np.linalg.norm(tangent); axes[1] = np.cross(direction, axes[0])
+    xyz = (v-o)@axes.T; lo = xyz[:, :2].min(axis=0); size = np.ptp(xyz[:, :2], axis=0)
+    return o, axes, lo, size, (xyz[:, :2]-lo)/size, xyz[:, 2], normal@direction
+
+
+def normal_error(cp, kt, points, t, normals):
+    """Cubic/linear residual extrema against both incident source planes."""
+    from numpy.polynomial.chebyshev import chebvander, chebder, chebroots, chebval
+    cuts = np.unique(np.r_[kt, t]); nodes = np.cos(np.arange(4)*np.pi/3)
+    q = cuts[:-1, None]+np.diff(cuts)[:, None]*(nodes+1)/2
+    xyz = BSpline(kt, cp, 3)(q.ravel())
+    target = np.stack([np.interp(q.ravel(), t, points[:, k]) for k in range(3)], axis=1)
+    segment = np.clip(np.searchsorted(t, (cuts[:-1]+cuts[1:])/2)-1, 0, len(t)-2)
+    residual = np.einsum('std,snd->stn', (xyz-target).reshape(-1, 4, 3), normals[segment])
+    coeff = np.linalg.solve(chebvander(nodes, 3), residual.transpose(1, 0, 2).reshape(4, -1))
+    maximum, where = 0., 0.
+    for i, c in enumerate(coeff.T):
+        roots = chebroots(chebder(c)); roots = roots.real[(abs(roots.imag) < 1e-8) & (abs(roots.real) <= 1)]
+        q = np.r_[-1., 1., roots]; values = abs(chebval(q, c)); j = int(np.argmax(values))
+        if values[j] > maximum:
+            index = i//normals.shape[1]; maximum = float(values[j])
+            where = float(cuts[index]+(q[j]+1)*np.diff(cuts)[index]/2)
+    return maximum, where
+
+
+def fit_boundary(points, t, budget, normals=None, normal_budget=.003):
+    # Positive B-spline approximation of the control polygon cannot introduce
+    # the least-squares curve's overshooting endpoint loops. Endpoint spans
+    # retain the source outgoing directions at topological junctions.
+    breaks = np.unique(np.r_[np.linspace(0, 1, 5), t[1], t[-2]])
+    probe = np.unique((t[:-1, None]+np.diff(t)[:, None]*np.linspace(0, 1, 5)).ravel())
+    target = np.stack([np.interp(probe, t, points[:, k]) for k in range(3)], axis=1)
+    if normals is not None:
+        segment = np.clip(np.searchsorted(t, probe, side='right')-1, 0, len(t)-2)
+    # A long feature chain can contain more than 100 localized bends. Budget
+    # refinement by source complexity before retaining an exact C0 fallback.
+    for _ in range(max(100, 4*len(points))):
+        kt = np.r_[np.zeros(3), breaks, np.ones(3)]; n = len(kt)-4
+        g = np.array([kt[i+1:i+4].mean() for i in range(n)])
+        cp = np.stack([np.interp(g, t, points[:, k]) for k in range(3)], axis=1)
+        delta = BSpline(kt, cp, 3)(probe)-target
+        residual = np.linalg.norm(delta, axis=1); ratio = residual/budget
+        if normals is not None:
+            plane = abs(np.einsum('nd,nkd->nk', delta, normals[segment])).max(axis=1)
+            ratio = np.maximum(ratio, plane/normal_budget)
+        where = float(probe[np.argmax(ratio)])
+        if ratio.max() <= 1:
+            error, where = curve_polyline_error(cp, kt, points, t)
+            if error <= budget:
+                if normals is None:
+                    return cp, kt, error
+                peak, where = normal_error(cp, kt, points, t, normals)
+                if peak <= normal_budget:
+                    return cp, kt, error
+        i = int(np.clip(np.searchsorted(breaks, where)-1, 0, len(breaks)-2))
+        midpoint = (breaks[i]+breaks[i+1])/2
+        if midpoint in breaks:
+            break
+        breaks = np.sort(np.r_[breaks, midpoint])
+    # A failed cubic approximation is retained as an explicit exact source
+    # polyline; its C0 knots remain visible in the saved network evidence.
+    cp = np.concatenate([points[i]+np.linspace(0, 1, 4)[:, None]*(points[i+1]-points[i])
+                         if i == 0 else points[i]+np.linspace(0, 1, 4)[1:, None]*(points[i+1]-points[i])
+                         for i in range(len(points)-1)])
+    kt = np.repeat(t, np.r_[4, np.full(len(t)-2, 3), 4])
+    return cp, kt, 0.
+
+
+def initial_domains(v, f, labels, ring_threshold=2000):
+    domains, _, edges, owners = disk_domains(v, f, labels)
+    graph = sparse.coo_matrix((np.ones(owners.size), (owners.ravel(), owners[:, ::-1].ravel())),
+                             shape=(len(f), len(f))).tocsr()
+    seeds = []
+    for d in domains:
+        ids = d['triangles']
+        if len(ids) >= ring_threshold and len(d['loop']) >= 4:
+            d['corners'] = corners_for_loop(v, d['loop']); chart = CircularChart(v, f, d)
+            q = chart.uv[chart.tri].mean(axis=1)
+            part = (np.floor((np.arctan2(q[:, 1], q[:, 0]) % (2*np.pi))/(np.pi/2))).astype(int)
+            part[np.abs(q).sum(axis=1) < .65] = 4
+            part = connected_ring(part, graph[ids][:, ids])
+            for label in np.unique(part):
+                selected = ids[part == label]
+                count, cc = sparse.csgraph.connected_components(graph[selected][:, selected], directed=False)
+                seeds.extend((d['region'], selected[cc == k]) for k in range(count))
+        else:
+            seeds.append((d['region'], ids))
+    return regular_domains(v, f, graph, seeds), graph, edges, owners
+
+
+def connected_ring(part, graph):
+    """Absorb rasterized cut slivers inside the same supplied region.
+
+    Keep each intended ring sector's largest component, then grow those five
+    connected domains across the remaining cut cells. No GUI label is read or
+    modified by this operation; every changed cell is inside this one region.
+    """
+    result = np.full(len(part), -1, dtype=int)
+    for label in np.unique(part):
+        ids = np.flatnonzero(part == label)
+        count, cc = sparse.csgraph.connected_components(graph[ids][:, ids], directed=False)
+        main = int(np.argmax(np.bincount(cc))); result[ids[cc == main]] = label
+    while np.any(result < 0):
+        changed = 0
+        for i in np.flatnonzero(result < 0):
+            neighbors = result[graph.indices[graph.indptr[i]:graph.indptr[i+1]]]
+            neighbors = neighbors[neighbors >= 0]
+            if len(neighbors):
+                result[i] = int(np.argmax(np.bincount(neighbors))); changed += 1
+        if not changed:
+            raise ValueError('Ring cut has a disconnected source component')
+    return result
+
+
+def regular_domains(v, f, graph, seeds):
+    result = []
+    while seeds:
+        region, ids = seeds.pop(0); used = np.unique(f[ids]); tri = np.searchsorted(used, f[ids])
+        accepted = False
+        try:
+            bd = boundary_edges(tri); found = loops(bd)
+            _, _, _, _, uv, _, dot = stable_frame(v[used], tri)
+            accepted = len(found) >= 1 and dot.min() > .08 and projected_boundary_valid(uv, bd)
+        except ValueError:
+            pass
+        if accepted:
+            result.append(dict(region=region, triangle_ids=ids, vertex_ids=used))
+        elif len(ids) <= 1:
+            raise ValueError('Degenerate seed domain')
+        else:
+            seeds.extend((region, part) for part in split_faces(v, f, ids, graph))
+    return result
+
+
+def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_cache=None):
+    assigned = np.full(len(f), -1, dtype=int)
+    for i, d in enumerate(domains):
+        assigned[d['triangle_ids']] = i
+    chains, pairs = shared_chains(edges, owners, assigned); curves, samples, errors, chain_normals = [], [], [], []
+    fn = np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]])
+    fn /= np.linalg.norm(fn, axis=1)[:, None]; edge_keys = edges[:, 0]*len(v)+edges[:, 1]
+    for ci, chain in enumerate(chains):
+        keys = np.minimum(chain[:-1], chain[1:])*len(v)+np.maximum(chain[:-1], chain[1:])
+        nn = fn[owners[np.searchsorted(edge_keys, keys)]]; chain_normals.append(nn)
+        t = chain_parameters(v, chain); cached = None if curve_cache is None else curve_cache.get(tuple(map(int, chain)))
+        if cached is None:
+            cp, kt, error = fit_boundary(v[chain], t, smoothing, nn, normal_budget)
+        else:
+            cp, kt, error = cached['poles'], cached['knots'], float(cached['movement_mm'])
+        cuts = np.unique(np.r_[t, kt]); q = np.unique((cuts[:-1, None]+np.diff(cuts)[:, None]*np.linspace(0, 1, 5)).ravel())
+        curves.append(dict(poles=cp, knots=kt, chain=chain, parameters=t, movement_mm=error)); samples.append(BSpline(kt, cp, 3)(q)); errors.append(error)
+        if ci % 500 == 0:
+            print(dict(stage='boundary_fit', done=ci+1, total=len(chains)), flush=True)
+    # Check all incident projected wires together before any fitting. Reducing
+    # a curve budget always changes its two owners together.
+    from shapely.geometry import Polygon
+    for attempt in range(9):
+        invalid = set()
+        lookup = {}
+        for ci, c in enumerate(curves):
+            for a, b in zip(c['chain'][:-1], c['chain'][1:]):
+                lookup[tuple(sorted((int(a), int(b))))] = (ci, int(a))
+        for di, d in enumerate(domains):
+            used = d['vertex_ids']; tri = np.searchsorted(used, f[d['triangle_ids']]); o, ax, lo, size, _, _, _ = stable_frame(v[used], tri)
+            polygons, involved = [], set()
+            for loop in loops(boundary_edges(tri)):
+                refs = []
+                for a, b in zip(used[loop], np.roll(used[loop], -1)):
+                    ci, av = lookup[tuple(sorted((int(a), int(b))))]; item = (ci, int(a) == av)
+                    if not refs or refs[-1] != item:
+                        refs.append(item)
+                if len(refs) > 1 and refs[0] == refs[-1]:
+                    refs.pop()
+                xyz = np.concatenate([(samples[ci] if forward else samples[ci][::-1])[:-1] for ci, forward in refs])
+                polygons.append(np.round((xyz-o)@ax[:2].T, 12)); involved.update(ci for ci, _ in refs)
+            polygons.sort(key=lambda p: -abs(np.sum(p[:, 0]*np.roll(p[:, 1], -1)-p[:, 1]*np.roll(p[:, 0], -1))))
+            if not Polygon(polygons[0], polygons[1:]).is_valid:
+                invalid.update(involved)
+        if not invalid:
+            if curve_cache is not None:
+                curve_cache.update({tuple(map(int, c['chain'])): c for c in curves})
+            return assigned, curves, pairs, samples, errors
+        print(dict(stage='boundary_crossing_guard', attempt=attempt, affected_curves=len(invalid)), flush=True)
+        for ci in invalid:
+            chain = chains[ci]; t = chain_parameters(v, chain)
+            cp, kt, error = fit_boundary(v[chain], t, smoothing*2**(-attempt-1), chain_normals[ci], normal_budget)
+            q = np.unique(np.r_[t, np.linspace(0, 1, max(33, len(kt)*4))])
+            curves[ci] = dict(poles=cp, knots=kt, chain=chain, parameters=t, movement_mm=error)
+            samples[ci] = BSpline(kt, cp, 3)(q); errors[ci] = error
+    raise ValueError('Shared skeleton has a projected crossing')
+
+
+def fit_support(task):
+    di, v, f, normals, boundary, curves, config = task
+    o, ax, lo, size, uv, heights, dot = stable_frame(v, f)
+    if dot.min() <= .05:
+        return di, None, dict(accepted=False, reason='non_graph', history=[])
+    # Extents include the smoothed boundary, not just the old staircase.
+    all_xy = np.r_[(v-o)@ax[:2].T, (boundary-o)@ax[:2].T]
+    lo = all_xy.min(axis=0); size = np.ptp(all_xy, axis=0)
+    margin = config.boundary/size
+    lo -= margin*size; size *= 1+2*margin
+    points = np.r_[v, v[f].mean(axis=1)]
+    q = ((points-o)@ax[:2].T-lo)/size; z = (points-o)@ax[2]
+    bq = ((boundary-o)@ax[:2].T-lo)/size; bz = (boundary-o)@ax[2]
+    normal_q = ((v-o)@ax[:2].T-lo)/size; n = normals@ax.T; good = n[:, 2] > .15
+    grad = -n[good, :2]/n[good, 2, None]*size
+    # STEP import may choose either incident pcurve. Reserve a two-sided gap
+    # budget instead of allowing each support almost the whole edge tolerance.
+    seam_limit = config.boundary*.4
+    t = knots(9); history = []; boundary_enrichments = 0
+    for iteration in range(32):
+        count = len(t)-4; a, b = tensor(q, t, t), tensor(bq, t, t)
+        blocks = [a/np.sqrt(len(q)), b*np.sqrt(3000/len(bq))]; rhs = [z/np.sqrt(len(q)), bz*np.sqrt(3000/len(bq))]
+        for axis in range(2):
+            weight = np.sqrt(config.normal_weight/max(1, good.sum()))*min(size)/size[axis]
+            op = tensor(normal_q[good], t, t, int(axis == 0), int(axis == 1))
+            blocks.append(op*weight); rhs.append(grad[:, axis]*weight)
+        uq = np.unique(t); g = np.unique(np.r_[(uq[:-1]+uq[1:])/2, np.linspace(0, 1, count)])
+        fq = np.stack(np.meshgrid(g, g, indexing='ij'), axis=-1).reshape(-1, 2)
+        for du, dv in [(2, 0), (1, 1), (0, 2)]:
+            weight = np.sqrt(config.fairness/len(fq))/(size[0]**du*size[1]**dv)
+            blocks.append(tensor(fq, t, t, du, dv)*weight); rhs.append(np.zeros(len(fq)))
+        matrix = sparse.vstack(blocks, format='csr'); target = np.concatenate(rhs)
+        h = (matrix.T@matrix).tocsc(); reg = max(1., h.diagonal().max())*1e-14
+        coeff = spsolve(h+sparse.eye(count*count, format='csc')*reg, matrix.T@target)
+        error = abs(a@coeff-z); be = abs(b@coeff-bz)
+        rec = dict(origin=o, axes=ax, lo=lo, size=size, knots=t, height=coeff)
+        item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max())); history.append(item)
+        if error.max() < config.distance and be.max() < seam_limit*.8:
+            extrema = [spline_graph_error(c['poles'], c['knots'], rec, return_parameter=True) for c in curves]
+            maximum = max(x[0] for x in extrema)
+            item['continuous_boundary_max'] = maximum
+            if maximum < seam_limit:
+                rec['continuous_boundary_error_mm'] = maximum
+                return di, rec, dict(accepted=True, history=history)
+            if boundary_enrichments < 12:
+                # An extremum can sit between every original boundary sample,
+                # especially on an adaptively knotted surface. Add that actual
+                # point to the same domain before spending another CAD face.
+                extra = np.array([BSpline(c['knots'], c['poles'], 3)(where)
+                                  for c, (value, where) in zip(curves, extrema) if value >= seam_limit])
+                eq = ((extra-o)@ax[:2].T-lo)/size; ez = (extra-o)@ax[2]
+                actual = abs(tensor(eq, t, t)@coeff-ez)
+                item['direct_peak_residual'] = float(actual.max())
+                bq = np.r_[bq, np.repeat(eq, 16, axis=0)]; bz = np.r_[bz, np.repeat(ez, 16)]
+                boundary_enrichments += 1; item['boundary_enrichment'] = boundary_enrichments
+                continue
+        if count >= max(config.controls):
+            break
+        # Refine where current residuals are worst; keep a simple-knot C2 basis.
+        all_q = np.r_[q, bq]; ratio = np.r_[error/config.distance, be/(seam_limit*.8)]
+        order = np.argsort(ratio)[::-1]; new = []
+        for k in order[:min(128, len(order))]:
+            for value in all_q[k]:
+                span = int(np.clip(np.searchsorted(uq, value)-1, 0, len(uq)-2))
+                midpoint = float((uq[span]+uq[span+1])/2)
+                if uq[span+1]-uq[span] > 1e-4 and midpoint not in new:
+                    new.append(midpoint)
+                if len(new) >= min(6, max(config.controls)-count):
+                    break
+            if len(new) >= min(6, max(config.controls)-count):
+                break
+        if not new:
+            break
+        t = np.sort(np.r_[t, new])
+    return di, None, dict(accepted=False, history=history)
+
+
+def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, rounds=4,
+                face_limit=None, config=None, from_fit=None):
+    out = Path(output); out.mkdir(parents=True, exist_ok=False); start = time.perf_counter()
+    v, f, labels, topo = load_partition(partition, stl); normal = vertex_normals(v, f)
+    fit_cache, curve_cache = {}, {}
+    def stamp(di, curves, pairs):
+        return {tuple(map(int, c['chain'])): (c['poles'], c['knots'])
+                for c, pair in zip(curves, pairs) if di in pair}
+    def remember(rec, signatures):
+        fit_cache[tuple(sorted(map(int, rec['triangle_ids'])))] = (rec, signatures)
+    if from_fit is None:
+        domains, graph, edges, owners = initial_domains(v, f, labels)
+    else:
+        source = Path(from_fit); previous = json.loads((source/'run.json').read_text(encoding='utf-8'))
+        if Path(previous['partition']).resolve() != Path(partition).resolve() or Path(previous['stl']).resolve() != Path(stl).resolve():
+            raise ValueError('Resume fit uses different declared input files')
+        old_config = Config(**previous['config'])
+        if config is not None and any(getattr(config, k) != getattr(old_config, k) for k in ('distance', 'boundary', 'normal_weight', 'fairness')):
+            raise ValueError('Resume caching requires unchanged fitting tolerances and weights')
+        if smoothing != previous['smoothing_mm']:
+            raise ValueError('Resume caching requires the same smoothing movement limit')
+        config = old_config; assignment = np.load(source/'chart_index.npz')['face_chart']
+        old_curves = [dict(np.load(p)) for p in sorted((source/'curves').glob('*.npz'))]
+        old_pairs = [c['owners'] for c in old_curves]
+        curve_cache = {tuple(map(int, c['chain'])): c for c in old_curves
+                       if np.max(np.unique(c['knots'][4:-4], return_counts=True)[1], initial=0) < 3}
+        old_rows = {r['chart']: r for r in json.loads((source/'fitting.json').read_text(encoding='utf-8'))}
+        for path in sorted((source/'charts').glob('*.npz')):
+            rec = dict(np.load(path)); history = old_rows[int(path.stem)]['history']
+            measured = rec.get('continuous_boundary_error_mm', history[-1].get('continuous_boundary_max', float('inf')) if history else float('inf'))
+            if measured < config.boundary*.4:
+                rec['continuous_boundary_error_mm'] = float(measured)
+                remember(rec, stamp(int(path.stem), old_curves, old_pairs))
+        edges, owners = incidence(f)
+        graph = sparse.coo_matrix((np.ones(owners.size), (owners.ravel(), owners[:, ::-1].ravel())), shape=(len(f), len(f))).tocsr()
+        seeds = []
+        for di in np.unique(assignment):
+            ids = np.flatnonzero(assignment == di); region = np.unique(labels[ids])
+            if len(region) != 1:
+                raise ValueError('Resume chart crosses supplied labels')
+            parts = split_faces(v, f, ids, graph) if di in previous['failed_charts'] and len(ids) > 1 else [ids]
+            seeds.extend((int(region[0]), part) for part in parts)
+        domains = regular_domains(v, f, graph, seeds)
+    config = config or Config(distance=.03, boundary=.005, controls=(65,), normal_weight=.0001, fairness=1e-8)
+    metadata = dict(status='running', algorithm='shared-skeleton-regional-graph-v2', partition=str(Path(partition).resolve()),
+                    stl=str(Path(stl).resolve()), source_CAD_read=False, commercial_engine_used=False,
+                    config=asdict(config), smoothing_mm=smoothing, workers=workers, input_topology=topo,
+                    face_limit=face_limit, resumed_from=None if from_fit is None else str(Path(from_fit).resolve()),
+                    support_boundary_limit_mm=config.boundary*.4, boundary_weight=3000.)
+    dump(out/'run.json', metadata)
+    for iteration in range(rounds):
+        if face_limit is not None and len(domains) > face_limit:
+            raise ValueError('Representation exceeded the supplied face budget')
+        stage = out/f'round_{iteration}'; stage.mkdir(); (stage/'charts').mkdir(); (stage/'curves').mkdir()
+        assignment, curves, pairs, boundary_samples, errors = skeleton(v, f, domains, edges, owners, smoothing, config.distance*.1, curve_cache)
+        print(dict(stage='network', iteration=iteration, domains=len(domains), curves=len(curves)), flush=True)
+        tasks = []; signatures = {}; records = []; reused = 0
+        for di, d in enumerate(domains):
+            if regions is not None and d['region'] not in regions:
+                continue
+            selected = np.flatnonzero(np.any(np.asarray(pairs) == di, axis=1)); used = d['vertex_ids']
+            signatures[di] = stamp(di, curves, pairs)
+            cached = fit_cache.get(tuple(sorted(map(int, d['triangle_ids']))))
+            if cached is not None:
+                rec, old = cached; current = signatures[di]
+                if old.keys() == current.keys() and all(np.array_equal(old[k][0], current[k][0]) and np.array_equal(old[k][1], current[k][1]) for k in current):
+                    np.savez_compressed(stage/'charts'/f'{di:05d}.npz', **rec)
+                    records.append(dict(chart=di, region=d['region'], accepted=True, reused=True, history=[])); reused += 1
+                    continue
+            tasks.append((di, v[used], np.searchsorted(used, f[d['triangle_ids']]), normal[used],
+                          np.concatenate([boundary_samples[i] for i in selected]), [curves[i] for i in selected], config))
+        failed = []
+        print(dict(stage='cache', reused=reused, refit=len(tasks)), flush=True)
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            for index, (di, rec, info) in enumerate(executor.map(fit_support, tasks)):
+                d = domains[di]; records.append(dict(chart=di, region=d['region'], **info))
+                if rec is None:
+                    failed.append(di)
+                else:
+                    rec.update(**d); np.savez_compressed(stage/'charts'/f'{di:05d}.npz', **rec)
+                    remember(rec, signatures[di])
+                if index % 50 == 0:
+                    print(dict(stage='fit', done=index+1, total=len(tasks), failed=len(failed)), flush=True)
+        dump(stage/'fitting.json', records)
+        for ci, (curve, pair) in enumerate(zip(curves, pairs)):
+            np.savez_compressed(stage/'curves'/f'{ci:05d}.npz', **curve, owners=pair)
+        np.savez_compressed(stage/'chart_index.npz', face_chart=assignment, source_labels=labels)
+        metadata.update(source_fit=str(stage.resolve()), fitted_charts=len(domains), failed_charts=failed,
+                        partial_regions=regions, boundary_movement_mm=stats(errors), seconds=time.perf_counter()-start,
+                        reused_charts=reused, refitted_charts=len(tasks), complete_source_coverage=regions is None and not failed,
+                        partition_labels_unchanged=all(np.all(labels[d['triangle_ids']] == d['region']) for d in domains))
+        dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
+        if not failed:
+            metadata['status'] = 'local_diagnostic' if regions is not None else 'fitted'
+            dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
+            return metadata
+        next_domains = []; split_seeds = []
+        for di, d in enumerate(domains):
+            if di not in failed:
+                next_domains.append(d); continue
+            ids = d['triangle_ids']
+            if len(ids) <= 1:
+                raise ValueError(f'Single triangle cannot meet the shared skeleton: {di}')
+            for part in split_faces(v, f, ids, graph):
+                split_seeds.append((d['region'], part))
+        domains = next_domains+regular_domains(v, f, graph, split_seeds)
+    metadata['status'] = 'failed'; dump(out/'run.json', metadata)
+    raise ValueError('Regional skeleton refinement limit exceeded')
+
+
+if __name__ == '__main__':
+    p = argparse.ArgumentParser(); p.add_argument('--partition', required=True); p.add_argument('--stl', required=True)
+    p.add_argument('--output', required=True); p.add_argument('--smoothing', type=float, default=.04)
+    p.add_argument('--workers', type=int, default=4); p.add_argument('--regions', type=int, nargs='+')
+    p.add_argument('--face-limit', type=int); p.add_argument('--rounds', type=int, default=4)
+    p.add_argument('--fairness', type=float, default=1e-8); p.add_argument('--normal-weight', type=float, default=.0001)
+    p.add_argument('--from-fit')
+    a = p.parse_args()
+    try:
+        reconstruct(a.partition, a.stl, a.output, a.smoothing, a.workers, a.regions,
+                    a.rounds, a.face_limit, Config(distance=.03, boundary=.005, controls=(65,),
+                    normal_weight=a.normal_weight, fairness=a.fairness) if a.from_fit is None else None,
+                    from_fit=a.from_fit)
+    except (Exception, KeyboardInterrupt) as error:
+        path = Path(a.output)/'run.json'
+        if path.exists():
+            report = json.loads(path.read_text(encoding='utf-8'))
+            report.update(status='interrupted' if isinstance(error, KeyboardInterrupt) else 'failed',
+                          error=f'{type(error).__name__}: {error}')
+            dump(path, report)
+        raise

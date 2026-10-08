@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<DXC>
-  <WINDCHILL/>
-  <Group TTD="E:\Proe\Creo 11.0.0.0\Common Files\text\ttds\step_3d_import.ttd" DSQM="_LOCAL" Name="STEP 3D Import" Output="2" OutputDir="D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\data\runs\20260929_mesh_brep\creo\baseline_region\import" VaultResults="0" PrimaryContent="0">
-    <Object>D:\pyProject\step-patch-optimizer-worktrees\mesh-brep-20260929\data\runs\20260929_mesh_brep\creo\baseline_region\stage\candidate.step</Object>
-  </Group>
-</DXC>

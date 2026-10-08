@@ -1,0 +1,19 @@
+{
+  "reviewed": true,
+  "gray_display_observed": true,
+  "images": [
+    "whole_six_views.png",
+    "creo_gray.jpg",
+    "region_179_comparison.png",
+    "region_114_comparison.png",
+    "region_78_comparison.png",
+    "region_88_comparison.png"
+  ],
+  "jagged_internal_boundaries": "Substantially reduced in inspected regions.",
+  "region_179": "56 to 9 faces; compact smooth internal network; small outer rim undulations remain.",
+  "region_114": "31 to 7 faces; no incomplete regional export; upper rim and lower corner undulations remain.",
+  "region_78": "10 to 2 faces and smoother border path, but visible boundary wrinkles remain and are not accepted as wrinkle-free.",
+  "region_88": "7 to 5 faces; coherent compact network; remaining local rim undulations.",
+  "all_visual_requirements_passed": false,
+  "scope": "Actual STEP derivative-normal views and native Creo raster; visual observations are not geometric guarantees."
+}

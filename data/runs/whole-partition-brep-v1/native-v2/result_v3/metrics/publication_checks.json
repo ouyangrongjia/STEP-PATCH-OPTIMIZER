@@ -1,0 +1,42 @@
+{
+  "record_type": "pre_commit_validation",
+  "date": "2026-10-07",
+  "branch": "experiment/whole-mesh-brep",
+  "scope": "Code and retained result publication; original geometry measurements are not recomputed.",
+  "regression": {
+    "command": "python -B -m unittest discover -s tools/mesh_brep -t . -p 'test_*.py'",
+    "collected": 56,
+    "passed": 53,
+    "skipped": [
+      {
+        "test": "tools.mesh_brep.test_graph_fair_optimize.BoundedFairingTests.test_closed_mesh_keeps_chart_topology_and_continuous_boundary_budget",
+        "reason": "Optional OSQP is not installed"
+      },
+      {
+        "test": "tools.mesh_brep.test_graph_fair_optimize.BoundedFairingTests.test_entry_runs_fairing_conditioning_and_boundary_history_on_native_geometry",
+        "reason": "Optional OSQP is not installed"
+      },
+      {
+        "test": "tools.mesh_brep.test_graph_fair_optimize.BoundedFairingTests.test_hard_cone_enforces_oriented_normal_and_rejects_backwards_target",
+        "reason": "Optional OSQP is not installed"
+      }
+    ],
+    "failures": 0,
+    "errors": 0,
+    "seconds": 36.544,
+    "log": "publication_regression.log"
+  },
+  "python_syntax_files": 97,
+  "python_syntax_passed": true,
+  "CAD_storage": "Git LFS for the whole STEP, 359 regional STEP files and native Creo part",
+  "raw_result_line_endings_preserved": true,
+  "full_model_CAD_validation_rerun": false,
+  "cleanup_statistics_scope": "cleanup.json records the earlier cleanup snapshot, before publication validation files were added.",
+  "git_delivery_status": "This file records checks before commit. The branch and remote Git refs determine publication status.",
+  "retained_artifacts_staged": 398,
+  "LFS_CAD_files": 361,
+  "LFS_CAD_bytes": 393953982,
+  "largest_regular_blob_bytes": 3762318,
+  "staged_source_scope_verified": true,
+  "generated_report_whitespace": "Original CRLF and generated ModelCHECK whitespace retained via path-specific .gitattributes; measurement files were not reformatted to pass style checks."
+}
