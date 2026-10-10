@@ -1,0 +1,91 @@
+{
+  "status": "DiagnosticOnly",
+  "date": "2026-10-09",
+  "model": "model.step",
+  "regions": "regions",
+  "images": "images",
+  "units": "mm",
+  "source_regions": 359,
+  "faces": 1092,
+  "previous_faces": 1092,
+  "reference_faces": 2739,
+  "partition": "regions/source_partition.npz",
+  "baseline": "../../native-v4/result_v5/run.json",
+  "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "partition_labels_unchanged": true,
+  "source_triangle_coverage_verified": true,
+  "native_closed_solid": true,
+  "gray_display_observed": true,
+  "Creo_geometry_check_features": 0,
+  "Creo_geometry_gate_passed": true,
+  "Geomagic_API_used": false,
+  "commercial_reconstruction_used": false,
+  "fitter_reads_source_CAD": false,
+  "partition_origin": "Frozen GUI STEP-derived labels mapped to original STL",
+  "can_apply": false,
+  "global_smoothness_passed": false,
+  "geometry_summary": {
+    "reverse_distance_mm": {
+      "rms": 0.0018486295580663538,
+      "p50": 0.0005170428418309975,
+      "p95": 0.003696827374235784,
+      "max": 0.02676622194212974,
+      "min": 3.710205222909732e-14
+    },
+    "stratified_distance_mm": {
+      "rms": 0.001954631757186868,
+      "p50": 0.0006797613178511875,
+      "p95": 0.003858615029458611,
+      "max": 0.02983086722959917,
+      "min": 0.0
+    }
+  },
+  "boundary_summary": {
+    "changed_chains": 552,
+    "reductions": {
+      "total_tangent_turn_degrees": 0.22841975138493875,
+      "curvature_squared_integral_per_mm": 0.4160508798082637
+    }
+  },
+  "glyph_seam_summary": {
+    "before": {
+      "rms": 10.40233585468646,
+      "p50": 0.9950411375105567,
+      "p95": 24.841206664677767,
+      "max": 78.13628617526368,
+      "min": 0.0010463096181326924
+    },
+    "after": {
+      "rms": 1.9920619806068551,
+      "p50": 0.0550757094064869,
+      "p95": 3.0735918556445725,
+      "max": 27.988444317379386,
+      "min": 3.89006107334333e-05
+    }
+  },
+  "tests": {
+    "passed": 96,
+    "failed": 0,
+    "seconds": 48.815,
+    "log": "metrics/tests.log"
+  },
+  "evidence": {
+    "quality": "metrics/quality.json",
+    "dense": "metrics/stratified.json",
+    "boundaries": "metrics/boundaries.json",
+    "seams": "metrics/seams.json",
+    "Creo": "metrics/creo_validation.json",
+    "experiments": "metrics/experiments.json",
+    "visual_review": "metrics/visual_review.json",
+    "reconstruction": "metrics/reconstruction.zip"
+  },
+  "remaining_limits": [
+    "Residual grooves and seam-normal jumps; no global G1/G2 certificate.",
+    "Distance and normal samples do not certify Hausdorff or absence of self-intersections.",
+    "Frozen STEP-derived partition remains; pure-STL layout and new transition strips are not integrated.",
+    "Only this model; commercial-equivalent quality and generality are not established.",
+    "OCCT and Creo volume integrations differ; no volume-preservation claim.",
+    "Experimental Python backend; product GUI and Apply unchanged."
+  ],
+  "provenance": "Detailed measurements retain original staging paths. Delivery entry paths are relative; exact coefficients and source snapshot are archived."
+}

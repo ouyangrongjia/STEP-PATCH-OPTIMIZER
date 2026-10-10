@@ -1,0 +1,20 @@
+{
+  "status": "verified",
+  "source_arrays_equal_to_baseline": true,
+  "complete_source_coverage": true,
+  "archive_readback_passed": true,
+  "archive_entries": 12719,
+  "regions": 359,
+  "faces": 1092,
+  "source_triangles": 491132,
+  "independent_distance_gate_passed": true,
+  "Creo_geometry_gate_passed": true,
+  "geometry_acceptance_passed": false,
+  "reason": "Residual visual and continuity limitations remain",
+  "archive_restore_executed": true,
+  "archive_coefficients_array_equal": true,
+  "archive_npz_records_verified": 12067,
+  "archived_module_imports_passed": true,
+  "delivered_step_byte_equal": true,
+  "temporary_staging_may_be_removed": true
+}

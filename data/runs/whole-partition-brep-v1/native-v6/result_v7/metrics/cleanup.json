@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "staging_absent": true,
+  "cleanup_method": "Windows Recycle Bin",
+  "original_staging": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-network-staging\\native-v6",
+  "delivery_preserved": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v6\\result_v7",
+  "historical_directories_preserved": [
+    "native-v2/result_v3",
+    "native-v3/result_v4",
+    "native-v4/result_v5",
+    "native-v5/result_v6"
+  ],
+  "exported_regions": 359,
+  "archive_restore_verified": true,
+  "archive_npz_records_verified": 12067,
+  "permanent_delete_automatic_review_rejected": true,
+  "rejection_detail": "blocked by policy; no further reason returned",
+  "safer_reversible_cleanup_completed": true
+}

@@ -1,0 +1,398 @@
+........D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{'stage': 'complete_interface', 'done': 1, 'total': 6}
+{'stage': 'complete_interface', 'done': 6, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 0, 'refit': 4}
+{'stage': 'fit', 'done': 1, 'total': 4, 'failed': 0}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpr_h3rxpn\result\step\model.step(556 ents)  Write  Done
+.D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpr_h3rxpn\\result\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpr_h3rxpn\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666676103, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 40305, "spline_faces": 4, "actual_control_points": 324, "maximum_direction_poles": 9}, "tessellation_to_native_surface_max_mm": 8.52420229018236e-13, "forward_tessellation_distance_mm": {"rms": 6.762615597783452e-14, "p50": 0.0, "p95": 1.6902040816841064e-13, "max": 1.991793442417573e-13, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 9.227198608054625e-14, "p50": 0.0, "p95": 2.4829174136470075e-13, "max": 4.32746728474965e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.310238204562225, "p50": 45.395148507281206, "p95": 88.29798572249642, "max": 89.99759166162897, "min": 0.09863644886761315}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403785147, "tessellation_triangles": 24, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701263778, "p50": 107.63219484108578, "p95": 125.26438968280314, "max": 125.26438968283381, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208380135, "p50": 125.26438968265049, "p95": 125.26438968280351, "max": 125.26438968283381, "min": 90.0}, "surface_gap_mm": {"rms": 3.286708196641562e-13, "p50": 2.584742956045306e-13, "p95": 5.930494853929573e-13, "max": 6.815455212788906e-13, "min": 4.313584602263498e-14}, "seconds": 0.2554538999684155, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpr_h3rxpn\result\regions\region_00000.step(173 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpr_h3rxpn\result\regions\region_00001.step(173 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpr_h3rxpn\result\regions\region_00002.step(173 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpr_h3rxpn\result\regions\region_00003.step(173 ents)  Write  Done
+{'stage': 'complete_interface', 'done': 1, 'total': 2}
+{'stage': 'complete_interface', 'done': 2, 'total': 2}
+{'stage': 'internal_interface', 'done': 1, 'total': 3}
+{'stage': 'internal_interface', 'done': 3, 'total': 3}
+{'stage': 'restore_previous_shared_curve', 'endpoints': [[0, 1]]}
+.....D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{"stage": "fit", "region": 0, "charts": 1, "seconds": 0.010164999985136092}
+{"stage": "fit", "region": 0, "charts": 1, "seconds": 0.006265999982133508}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpjvuh9ton\result\step\model.step(260 ents)  Write  Done
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpjvuh9ton\\result\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpjvuh9ton\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666667235, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 17520, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 2.3847590571782653e-13, "forward_tessellation_distance_mm": {"rms": 3.195674673137121e-14, "p50": 0.0, "p95": 6.945902117084653e-14, "max": 7.475787304028376e-14, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 4.4609629718655884e-14, "p50": 0.0, "p95": 1.0630879108465726e-13, "max": 1.6520784749542303e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.44384743370204, "p50": 45.65004342343045, "p95": 88.20303745770579, "max": 89.99806610425149, "min": 0.206846118145263}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403784631, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701267337, "p50": 107.63219484136181, "p95": 125.26438968279246, "max": 125.26438968281298, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384193, "p50": 125.2643896827441, "p95": 125.26438968279288, "max": 125.26438968281298, "min": 90.0}, "surface_gap_mm": {"rms": 2.2249169690345843e-13, "p50": 1.980210677615344e-13, "p95": 4.005671522355585e-13, "max": 5.206849410154759e-13, "min": 3.392136747281569e-14}, "seconds": 0.22964480001246557, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpjvuh9ton\reused\step\model.step(260 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpjvuh9ton\reused\recovery_1\step\model.step(260 ents)  Write  Done
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+Polishing not needed - no active set detected at optimal point
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpjvuh9ton\\reused\\recovery_1\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpjvuh9ton\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666667235, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 17520, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 2.3847590571782653e-13, "forward_tessellation_distance_mm": {"rms": 3.195674673137121e-14, "p50": 0.0, "p95": 6.945902117084653e-14, "max": 7.475787304028376e-14, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 4.4609629718655884e-14, "p50": 0.0, "p95": 1.0630879108465726e-13, "max": 1.6520784749542303e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.44384743370204, "p50": 45.65004342343045, "p95": 88.20303745770579, "max": 89.99806610425149, "min": 0.206846118145263}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403784631, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701267337, "p50": 107.63219484136181, "p95": 125.26438968279246, "max": 125.26438968281298, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384193, "p50": 125.2643896827441, "p95": 125.26438968279288, "max": 125.26438968281298, "min": 90.0}, "surface_gap_mm": {"rms": 2.2249169690345843e-13, "p50": 1.980210677615344e-13, "p95": 4.005671522355585e-13, "max": 5.206849410154759e-13, "min": 3.392136747281569e-14}, "seconds": 0.2353261000243947, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp6w6xylro\model.step(428 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpnqpm25gq\model.step(474 ents)  Write  Done
+{'trials': 25, 'merged': 25, 'remaining': 23, 'seconds': 0.4159198999986984}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpkvx2rf13\result\network.step(878 ents)  Write  Done
+{"stage": "fit", "region": 0, "charts": 1, "seconds": 0.005726600007619709}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\accepted\step\model.step(224 ents)  Write  Done
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\accepted\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666666632, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 14297, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 3.37566651873436e-16, "forward_tessellation_distance_mm": {"rms": 3.021887592165757e-17, "p50": 0.0, "p95": 7.235195562408715e-17, "max": 1.6184142622847344e-16, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 2.87591382411859e-14, "p50": 0.0, "p95": 6.92679271886593e-14, "max": 1.2346090264843774e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.349872175038136, "p50": 45.65184311996008, "p95": 88.22077589975191, "max": 89.99806610424339, "min": 0.206846118148787}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.3660254037844384, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.0668770126745, "p50": 107.63219484136056, "p95": 125.2643896828015, "max": 125.26438968282292, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384322, "p50": 125.2643896827421, "p95": 125.2643896828019, "max": 125.26438968282292, "min": 90.0}, "surface_gap_mm": {"rms": 6.917766488343895e-14, "p50": 3.3618595150791785e-14, "p95": 1.3802177387585222e-13, "max": 1.5484370216866215e-13, "min": 6.359601310784502e-17}, "seconds": 0.25378700002329424, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\reordered.step(368 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\regions\region_00000.step(84 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\regions\region_00001.step(84 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\regions\region_00002.step(84 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\regions\region_00003.step(84 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\closed_invalid\step\model.step(224 ents)  Write  Done
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\closed_invalid\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666666632, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 14297, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 3.37566651873436e-16, "forward_tessellation_distance_mm": {"rms": 3.021887592165757e-17, "p50": 0.0, "p95": 7.235195562408715e-17, "max": 1.6184142622847344e-16, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 2.87591382411859e-14, "p50": 0.0, "p95": 6.92679271886593e-14, "max": 1.2346090264843774e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.349872175038136, "p50": 45.65184311996008, "p95": 88.22077589975191, "max": 89.99806610424339, "min": 0.206846118148787}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.3660254037844384, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.0668770126745, "p50": 107.63219484136056, "p95": 125.2643896828015, "max": 125.26438968282292, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384322, "p50": 125.2643896827421, "p95": 125.2643896828019, "max": 125.26438968282292, "min": 90.0}, "surface_gap_mm": {"rms": 6.917766488343895e-14, "p50": 3.3618595150791785e-14, "p95": 1.3802177387585222e-13, "max": 1.5484370216866215e-13, "min": 6.359601310784502e-17}, "seconds": 0.2222378000151366, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\closed_invalid\recovery_1\step\model.step(224 ents)  Write  Done
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\closed_invalid\\recovery_1\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666666632, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 14299, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 3.37566651873436e-16, "forward_tessellation_distance_mm": {"rms": 3.020718047691399e-17, "p50": 0.0, "p95": 7.221307387944258e-17, "max": 1.6184142622847344e-16, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 2.875899750081495e-14, "p50": 0.0, "p95": 6.929016782386865e-14, "max": 1.2348024617773707e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.34987217503813, "p50": 45.65184311996008, "p95": 88.22077589975191, "max": 89.99806610424339, "min": 0.206846118147025}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.3660254037844384, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.0668770126745, "p50": 107.63219484136056, "p95": 125.2643896828015, "max": 125.26438968282292, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384322, "p50": 125.2643896827421, "p95": 125.2643896828019, "max": 125.26438968282292, "min": 90.0}, "surface_gap_mm": {"rms": 6.917354220016226e-14, "p50": 3.3618595150791785e-14, "p95": 1.3802384408222626e-13, "max": 1.5482470600334903e-13, "min": 6.359601310784502e-17}, "seconds": 0.22561149997636676, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\curve_recovery\step\model.step(260 ents)  Write  Done
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\curve_recovery\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666667235, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 17527, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 2.3847590571782653e-13, "forward_tessellation_distance_mm": {"rms": 3.1934677686269405e-14, "p50": 0.0, "p95": 6.942696624765236e-14, "max": 7.465634162145143e-14, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 4.460995361408728e-14, "p50": 0.0, "p95": 1.0633983655701108e-13, "max": 1.6520985063770274e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.44384743370205, "p50": 45.65004342343045, "p95": 88.20303745770579, "max": 89.99806610425149, "min": 0.206846118145263}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403784631, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701267337, "p50": 107.6321948413618, "p95": 125.26438968279246, "max": 125.26438968281298, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384193, "p50": 125.2643896827441, "p95": 125.26438968279288, "max": 125.26438968281298, "min": 90.0}, "surface_gap_mm": {"rms": 2.225033878111747e-13, "p50": 1.9802106792180405e-13, "p95": 4.0059883951525054e-13, "max": 5.206879032803305e-13, "min": 3.392136747281569e-14}, "seconds": 0.22488320001866668, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp2pypxxyb\curve_recovery\recovery_1\step\model.step(242 ents)  Write  Done
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\curve_recovery\\recovery_1\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp2pypxxyb\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.16666666666667168, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 16378, "spline_faces": 4, "actual_control_points": 64, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 2.3847590571782653e-13, "forward_tessellation_distance_mm": {"rms": 3.1934677686269405e-14, "p50": 0.0, "p95": 6.942696624765236e-14, "max": 7.465634162145143e-14, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 4.460995361408728e-14, "p50": 0.0, "p95": 1.0633983655701108e-13, "max": 1.6520985063770274e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.44384743370205, "p50": 45.65004342343045, "p95": 88.20303745770579, "max": 89.99806610425149, "min": 0.206846118145263}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403784631, "tessellation_triangles": 4, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701267337, "p50": 107.6321948413618, "p95": 125.26438968279246, "max": 125.26438968281298, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.01251208384194, "p50": 125.2643896827441, "p95": 125.26438968279288, "max": 125.26438968281298, "min": 90.0}, "surface_gap_mm": {"rms": 2.1424649301487548e-13, "p50": 1.7597651347356834e-13, "p95": 3.9533364944411376e-13, "max": 4.638612360346088e-13, "min": 2.9089035015519326e-14}, "seconds": 0.2250247999909334, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+{'stage': 'network_fairing', 'iteration': 0, 'status': 'solved', 'seconds': 0.26707980000000003, 'constraint_violation_mm': 4.440892098500626e-16, 'solver_iterations': 17175, 'linear_constraints_satisfied': True, 'sampled_source_max_mm': 0.0}
+...................................D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{'stage': 'network_topology_guard', 'attempt': 0, 'restored_curves': 1}
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 0, 'refit': 4}
+{'stage': 'fit', 'done': 1, 'total': 4, 'failed': 0}
+..D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{'stage': 'normal_screen', 'screened': 1, 'refit': 1}
+{'stage': 'normal_refit', 'chart': 0, 'accepted': True}
+Polishing not needed - no active set detected at optimal point
+{"stage": "fit", "region": 0, "charts": 66, "seconds": 1.237200399977155}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpzienq1y8\fit\model.step(40667 ents)  Write  Done
+{"stage": "domains", "regions": 6, "domains": 6, "curves": 20}
+{"stage": "fit", "domain": 0, "region": 0, "patches": 6, "seconds": 0.28028880001511425}
+{"stage": "fit", "domain": 1, "region": 1, "patches": 12, "seconds": 0.5296735999872908}
+{"stage": "fit", "domain": 2, "region": 2, "patches": 20, "seconds": 0.8863954999833368}
+{"stage": "fit", "domain": 3, "region": 3, "patches": 28, "seconds": 1.242119400005322}
+{"stage": "fit", "domain": 4, "region": 4, "patches": 34, "seconds": 1.5265541999833658}
+{"stage": "fit", "domain": 5, "region": 5, "patches": 40, "seconds": 1.8166191999916919}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp85o94lqa\fit\model.step(10982 ents)  Write  Done
+{"stage": "domains", "regions": 6, "domains": 6, "curves": 20}
+{"stage": "fit", "domain": 0, "region": 0, "patches": 6, "seconds": 0.2741035000071861}
+{"stage": "fit", "domain": 1, "region": 1, "patches": 12, "seconds": 0.5292320000007749}
+{"stage": "fit", "domain": 2, "region": 2, "patches": 20, "seconds": 0.9049745000083931}
+{"stage": "fit", "domain": 3, "region": 3, "patches": 28, "seconds": 1.2597452000482008}
+{"stage": "fit", "domain": 4, "region": 4, "patches": 34, "seconds": 1.5511676000314765}
+{"stage": "fit", "domain": 5, "region": 5, "patches": 40, "seconds": 1.8403747000265867}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpmarp0826\fit\model.step(10982 ents)  Write  Done
+{"forward_samples": 600, "reverse_samples": 640, "reverse_per_patch": 16, "seed": 3093051, "training_samples_reused": false, "sampled_source_to_surface_upper_bound_mm": {"rms": 0.0002620780002751981, "p50": 0.0001661428635306587, "p95": 0.0005184541505405624, "max": 0.001284178591925539, "min": 3.58458240180837e-09}, "source_to_tessellation_proxy_mm": {"rms": 0.00025297864173365645, "p50": 0.00015274379089907735, "p95": 0.0005008125555376779, "max": 0.0012829136420065637, "min": 5.347536510867176e-07}, "sampled_surface_to_source_mesh_mm": {"rms": 0.00024270805706554007, "p50": 0.00015834259132195718, "p95": 0.0005063566545431515, "max": 0.0008535528052107101, "min": 2.9412945671840133e-08}, "area_weighted_surface_to_source_mesh_mm": {"rms": 0.00025356809244267273, "p50": 0.0001605560149563162, "p95": 0.0005294549169145976, "max": 0.0008535528052107101, "min": 2.9412945671840133e-08}, "surface_to_flat_source_normal_degrees": {"rms": 5.169712991181112, "p50": 4.074441406125079, "p95": 9.603327862072453, "max": 12.738191470553206, "min": 0.040882352899195985}, "area_weighted_surface_to_flat_source_normal_degrees": {"rms": 5.292905185995389, "p50": 4.157197548460855, "p95": 9.701808709799097, "max": 12.738191470553206, "min": 0.040882352899195985}, "sampled_abs_mean_curvature_per_mm": {"rms": 23.48008236373987, "p50": 11.455718846873697, "p95": 36.22093095399487, "max": 177.99859248933586, "min": 0.01796838275312867}, "reverse_estimated_area_mm2": 0.09599654222712017, "reverse_samples_opposed_to_nearest_triangle": 0, "singular_reverse_samples": 0, "tessellation_triangles": 51408, "sampling_note": "Independent mesh-distance and native-normal checks of the fitted supports.\n\nAll samples here are independent of fitting. Forward distances are distances\nto actual points on the supports, initialized by a knot-aware tessellation;\nthey are upper bounds on sampled point-to-surface distance, not Hausdorff\ncertificates. Reverse samples are stratified in patch parameter space.\n", "seconds": 0.9665009999880567}
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 0, 'refit': 4}
+{'stage': 'fit', 'done': 1, 'total': 4, 'failed': 0}
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 4, 'refit': 0}
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 3, 'refit': 1}
+{'stage': 'fit', 'done': 1, 'total': 1, 'failed': 0}
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+{'stage': 'network', 'iteration': 0, 'domains': 4, 'curves': 6}
+{'stage': 'cache', 'reused': 4, 'refit': 0}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpbzxg2f_b\solid\step\model.step(574 ents)  Write  Done
+.........................D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpbzxg2f_b\\solid\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmpbzxg2f_b\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 4, "edges": 6, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 0.1666666666666993, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 40942, "spline_faces": 4, "actual_control_points": 324, "maximum_direction_poles": 9}, "tessellation_to_native_surface_max_mm": 8.52420229018236e-13, "forward_tessellation_distance_mm": {"rms": 6.771066068048729e-14, "p50": 0.0, "p95": 1.6902080876664588e-13, "max": 1.9915528663959324e-13, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 9.253578190520095e-14, "p50": 0.0, "p95": 2.483918977643468e-13, "max": 4.326826297188401e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 56.31023820456211, "p50": 45.3951485072812, "p95": 88.29798572249642, "max": 89.99759166162897, "min": 0.09863644886761315}, "opposed_normal_sample_fraction": 0.0, "tessellation_area_mm2": 2.366025403785148, "tessellation_triangles": 24, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 109.06687701263651, "p50": 107.6321948410858, "p95": 125.26438968280313, "max": 125.26438968283381, "min": 90.0}, "length_weighted_all_join_normal_degrees": {"rms": 112.0125120837999, "p50": 125.26438968264212, "p95": 125.26438968280348, "max": 125.26438968283381, "min": 90.0}, "surface_gap_mm": {"rms": 2.9496370075768003e-13, "p50": 2.2084209449708893e-13, "p95": 5.885573615831188e-13, "max": 6.815097413289797e-13, "min": 3.3188697879060103e-14}, "seconds": 0.2529060999513604, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpbzxg2f_b\solid\regions\region_00000.step(179 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpbzxg2f_b\solid\regions\region_00001.step(179 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpbzxg2f_b\solid\regions\region_00002.step(179 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpbzxg2f_b\solid\regions\region_00003.step(179 ents)  Write  Done
+{'stage': 'boundary_fit', 'done': 1, 'total': 6}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmphvti8uqa\model.step(574 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmphvti8uqa\without_pcurves\model.step(436 ents)  Write  Done
+{"stage": "fit", "region": 0, "charts": 1, "seconds": 0.00593089999165386}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmp52owas_k\split\step\model.step(443 ents)  Write  Done
+.......D:\pyProject\step-patch-optimizer-worktrees\whole-mesh-brep\tools\mesh_brep\mesh.py:244: DeprecationWarning: Call to deprecated method SetCells. (Use ImportLegacyFormat or SetData instead.) -- Deprecated since version 9.6.0.
+  cells.SetCells(len(triangles), numpy_to_vtkIdTypeArray(np.c_[np.full(len(triangles), 3), triangles].astype(np.int64).ravel(), deep=True))
+{"status": "DiagnosticOnly", "step": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp52owas_k\\split\\step\\model.step", "partition": "C:\\Users\\27836\\AppData\\Local\\Temp\\tmp52owas_k\\partition.npz", "units": "mm", "source_CAD_read": false, "source_label_assignment": "Nearest STL votes, diagnostic only", "topology": {"faces": 8, "edges": 13, "shells": 1, "solids": 1, "free_edges": 0, "multiple_edges": 0, "invalid_faces": [], "brep_valid": true, "volume_mm3": 2.6666666666667322, "maximum_edge_tolerance_mm": 1e-07}, "delabella_retried_faces": [], "representation": {"file_bytes": 29948, "spline_faces": 8, "actual_control_points": 128, "maximum_direction_poles": 4}, "tessellation_to_native_surface_max_mm": 8.44553565420649e-13, "forward_tessellation_distance_mm": {"rms": 8.982758134367184e-14, "p50": 6.498864753707654e-14, "p95": 1.8865083028885903e-13, "max": 2.2771024898550644e-13, "min": 0.0}, "reverse_native_surface_distance_mm": {"rms": 1.3269651416628435e-13, "p50": 1.0413986659084379e-13, "p95": 2.2426054632334064e-13, "max": 2.5796800664352943e-13, "min": 0.0}, "source_normal_difference_degrees": {"rms": 49.48862733408141, "p50": 42.889050711554844, "p95": 89.15181097352799, "max": 111.87564369222514, "min": 0.4028029822866307}, "opposed_normal_sample_fraction": 0.046566666666666666, "tessellation_area_mm2": 13.402422872735382, "tessellation_triangles": 26, "tessellation_deflection_mm": 0.005, "source_samples": 30000, "reverse_samples": 30000, "all_join_normal_degrees": {"rms": 91.72956317902924, "p50": 74.60782930543314, "p95": 125.75388738935429, "max": 125.75388738935429, "min": 10.222179542030098}, "length_weighted_all_join_normal_degrees": {"rms": 84.55625228423685, "p50": 74.60782930542025, "p95": 125.75388738935429, "max": 125.75388738935429, "min": 10.222179542030098}, "surface_gap_mm": {"rms": 3.472573960440098e-13, "p50": 2.0399220452461565e-13, "p95": 7.743967736681852e-13, "max": 8.293926819273199e-13, "min": 0.0}, "seconds": 0.27936240000417456, "can_apply": false, "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."}
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 2                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpvgsoutjl\repaired\model.step(439 ents)  Write  Done
+
+*******************************************************************
+******        Statistics on Transfer (Write)                 ******
+
+*******************************************************************
+******        Transfer Mode = 0  I.E.  As Is       ******
+******        Transferring Shape, ShapeType = 0                      ******
+** WorkSession : Sending all data
+ Step File Name : C:\Users\27836\AppData\Local\Temp\tmpu1kzn211\model.step(344 ents)  Write  Done
+.............
+----------------------------------------------------------------------
+Ran 96 tests in 48.815s
+
+OK

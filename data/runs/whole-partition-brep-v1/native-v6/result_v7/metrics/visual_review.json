@@ -1,0 +1,151 @@
+{
+  "actual_step_images_reviewed": true,
+  "gray_display_observed": true,
+  "global_visual_smoothness_passed": false,
+  "source": "final_whole/step/model.step",
+  "reviewed": [
+    "final_details/glyph.png",
+    "final_details/plaque.png",
+    "final_images/whole_shaded.png",
+    "final_images/whole_boundaries.png",
+    "final_creo/raster/model.jpg"
+  ],
+  "observations": [
+    "整体形状保留，未见整件撕裂或缺失。",
+    "凹字左侧壁部分接缝过渡更柔和，部分牌框边界摆动减少。",
+    "牌面仍有明显不均匀高光和细小起伏，部分位置未见改善，不能宣告视觉光顺验收通过。",
+    "凹字底部仍有粗折角及不规则过渡，原分区内部曲线仍较复杂。",
+    "Creo 导出图为可见灰色实体，近距离曲面质量以实际 STEP 同视角图核查。"
+  ],
+  "protocol": "Same cameras, lighting and material. Actual STEP D1 normals, 0.001 mm tessellation, all nondegenerate edges. No display normal smoothing.",
+  "rendering_protocol": {
+    "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\result_v5\\model.step",
+    "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-network-staging\\native-v6\\final_whole\\step\\model.step",
+    "views": [
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.0016313046812785575,
+          -0.06775190995137219,
+          -0.9977008657623678
+        ],
+        "up": [
+          -0.9858929062941876,
+          0.16709400510084213,
+          -0.009735028410853063
+        ],
+        "scale": 14.463070619381867
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.45735243525628155,
+          0.13772770031718143,
+          0.8785555363951043
+        ],
+        "up": [
+          -0.8733935160059935,
+          0.1163692760484474,
+          -0.47290798025688746
+        ],
+        "scale": 14.583905406644378
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.1348185937626435,
+          -0.988961783855079,
+          -0.061469804376161376
+        ],
+        "up": [
+          -0.9575505304782715,
+          0.1459863375433132,
+          -0.2485658279640841
+        ],
+        "scale": 14.915881027821994
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          0.2528095725389894,
+          0.8396006535332626,
+          -0.4807890001020946
+        ],
+        "up": [
+          -0.9575505304782717,
+          0.1459863375433132,
+          -0.248565827964084
+        ],
+        "scale": 14.915881027821996
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.8986908776397261,
+          0.09218158307050578,
+          -0.4287857998928537
+        ],
+        "up": [
+          -0.2023478433838,
+          -0.9545376158507421,
+          0.2188910464224298
+        ],
+        "scale": 17.33020121744755
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          0.9792202147294389,
+          -0.19412117994922395,
+          0.05869189518453539
+        ],
+        "up": [
+          -0.20234784338380013,
+          -0.954537615850742,
+          0.21889104642242982
+        ],
+        "scale": 17.330201217447545
+      }
+    ],
+    "focus": [
+      -19.1,
+      30.7,
+      -5.4
+    ],
+    "focus_scale": 4.0,
+    "face_counts": [
+      null,
+      1092,
+      1092
+    ],
+    "source_normals": "Original STL crease-separated corner normals, 30 degrees",
+    "step_normals": "Actual native D1, no display smoothing",
+    "deflection_mm": 0.001,
+    "boundaries": "All nondegenerate CAD edges; no edge filtering",
+    "identical_material_and_lighting": true
+  }
+}

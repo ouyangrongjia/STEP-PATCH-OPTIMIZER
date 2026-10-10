@@ -20,6 +20,8 @@ def reconstruct(run, output, segment_edges=False, smooth_boundary=0., skip_smoot
         smoothing_disabled_charts=list(skip_smooth_faces), smooth_segments=smooth_segments)
     dump(out/'run.json', report)
     try:
+        if source.get('requires_support_refit'):
+            raise ValueError('Changed shared curves require incident-support validation before CAD assembly')
         z = np.load(source['partition']); v, f = z['mesh_vertex_original'], z['mesh_triangle']
         assignment = np.load(root/'chart_index.npz')['face_chart']; records = []
         for path in sorted((root/'charts').glob('*.npz')):

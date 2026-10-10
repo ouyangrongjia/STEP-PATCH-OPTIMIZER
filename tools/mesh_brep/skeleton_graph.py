@@ -494,6 +494,8 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         domains, graph, edges, owners = initial_domains(v, f, labels)
     else:
         source = Path(from_fit); previous = json.loads((source/'run.json').read_text(encoding='utf-8'))
+        if previous.get('network_fairing') or previous.get('network_guard'):
+            raise ValueError('Movable-junction caches require network_support for refitting or graph_reassemble for exact replay; rebuilding the source-edge skeleton would reset their junctions')
         required_refit = set(previous.get('required_refit_regions', ()))
         if previous.get('requires_support_refit') and not (refit_supports or (required_refit and required_refit.issubset(selected_refit))):
             raise ValueError('Changed source-surface boundaries require explicit support refitting')
