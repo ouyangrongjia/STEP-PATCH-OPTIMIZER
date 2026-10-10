@@ -5,6 +5,7 @@ reference geometry or commercial fitting engine is passed to reconstruction.
 """
 import argparse
 from pathlib import Path
+import shutil
 import time
 from .mesh import dump
 from .partition_fit import Config
@@ -15,7 +16,8 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                 render=True, creo_root=None, native_probe=None,
                 profile_mode='installed', boundary_mode='chain', normal_field='vertex',
                 normal_filter_steps=0, support_solver='least-squares', boundary_cache=None, boundary_plane_budget=None,
-                repair_charts=(), repair_smooth_joins=False, refit_regions=None):
+                repair_charts=(), repair_smooth_joins=False, refit_regions=None,
+                surface_fit=None, distance_options=None, prior_fit=None):
     out = Path(output); out.mkdir(parents=True, exist_ok=False)
     start = time.perf_counter()
     report = dict(status='running', can_apply=False, algorithm='shared-skeleton-regional-solid-v1',
@@ -24,6 +26,9 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
         visual_review_required=True, from_fit=None if from_fit is None else str(Path(from_fit).resolve()))
     dump(out/'run.json', report)
     try:
+        if surface_fit is not None and (from_fit is not None or config is not None or boundary_cache is not None
+                                       or repair_charts or refit_regions is not None):
+            raise ValueError('Completed surface-fit input cannot also request skeleton refitting')
         if (reference is None) == (reference_faces is None):
             raise ValueError('Supply exactly one reference STEP or independently measured face count')
         if (creo_root is None) != (native_probe is None):
@@ -33,14 +38,18 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
             reference_faces = transferred_face_count(reference)
             report['reference_for_face_count_only'] = str(Path(reference).resolve())
         report['reference_faces'] = int(reference_faces)
-        if config is None and from_fit is None:
+        if config is None and from_fit is None and surface_fit is None:
             config = Config(distance=.03, boundary=.005, controls=(65,), normal_weight=.001, fairness=1e-6)
-        from .skeleton_graph import reconstruct as fit
-        fitted = fit(partition, stl, out/'fit', smoothing=smoothing, workers=workers,
-                     rounds=rounds, face_limit=int(reference_faces)-1, config=config, from_fit=from_fit,
-                     boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
-                     support_solver=support_solver, boundary_cache=boundary_cache, boundary_plane_budget=boundary_plane_budget,
-                     repair_charts=repair_charts, refit_regions=refit_regions)
+        if surface_fit is None:
+            from .skeleton_graph import reconstruct as fit
+            fitted = fit(partition, stl, out/'fit', smoothing=smoothing, workers=workers,
+                         rounds=rounds, face_limit=int(reference_faces)-1, config=config, from_fit=from_fit,
+                         boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
+                         support_solver=support_solver, boundary_cache=boundary_cache, boundary_plane_budget=boundary_plane_budget,
+                         repair_charts=repair_charts, refit_regions=refit_regions)
+        else:
+            from .distance_guard import validate_fit
+            fitted = validate_fit(surface_fit, partition, stl)
         report['fitting'] = fitted
         if not fitted['complete_source_coverage'] or not fitted['partition_labels_unchanged']:
             raise ValueError('Incomplete source partition coverage')
@@ -49,26 +58,23 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
             from .shared_support import optimize
             report['shared_support_repair'] = optimize(surface_fit, out/'shared_support', workers=workers)
             surface_fit = str((out/'shared_support').resolve())
-        report['surface_fit'] = surface_fit
-        from .graph_reassemble import reconstruct as assemble
-        from .graph_export import export
-        # Exact subcurves preserve the same smooth shared geometry. Short trim
-        # spans avoid the long-edge exchange failure observed in actual Creo.
-        report['assembly'] = assemble(surface_fit, out/'assembled',
-                                     smooth_segments=True, write_preview=False)
-        report['step'] = export(out/'assembled', out/'step')
+        from .distance_guard import finalize
+        guard = finalize(surface_fit, out/'distance_guard', reference_faces=int(reference_faces),
+                         options=distance_options, prior_fit=prior_fit, render=render)
+        report['distance_guard'] = guard
+        final = guard['history'][-1]; stage = Path(guard['final_round'])
+        report['surface_fit'] = guard['source_fit']
+        report['assembly'] = final['assembly']; report['step'] = final['step']
+        # Retain the existing public STEP/quality paths; all failed attempts
+        # remain in distance_guard and are never published as passing results.
+        for name in ('step', 'quality'):
+            shutil.copytree(stage/name, out/name)
         report['model'] = str((out/'step/model.step').resolve())
         report['face_budget_passed'] = report['step']['topology']['faces'] < int(reference_faces)
-        if not report['step']['watertight'] or not report['face_budget_passed']:
-            raise ValueError('STEP topology, measured tolerance or face-count gate failed')
-        from .step_quality import audit
-        report['quality'] = audit(out/'step/model.step', partition, out/'quality', render=render)
-        report['sampled_distance_gate_passed'] = (
-            report['quality']['reverse_native_surface_distance_mm']['max'] <= fitted['config']['distance'])
-        if not report['sampled_distance_gate_passed']:
-            raise ValueError('Independent native-surface samples exceed the declared source-distance budget')
+        report['quality'] = final['quality']; report['stratified'] = final['stratified']
+        report['sampled_distance_gate_passed'] = guard['sampled_distance_gate_passed']
         from .export_regions import export as regions
-        report['regions'] = regions(out/'assembled', out/'regions')
+        report['regions'] = regions(stage/'assembled', out/'regions')
         report['regional_directory'] = str((out/'regions').resolve())
         if report['regions']['exported_faces'] != report['step']['topology']['faces']:
             raise ValueError('Regional export does not cover the whole reconstructed STEP')
@@ -101,7 +107,13 @@ if __name__ == '__main__':
     reference.add_argument('--reference'); reference.add_argument('--reference-faces', type=int)
     p.add_argument('--smoothing', type=float, default=.12)
     p.add_argument('--workers', type=int, default=4); p.add_argument('--rounds', type=int, default=12)
-    p.add_argument('--from-fit'); p.add_argument('--no-render', action='store_true')
+    cache = p.add_mutually_exclusive_group()
+    cache.add_argument('--from-fit'); cache.add_argument('--surface-fit')
+    p.add_argument('--prior-fit', help='Optional compatible support checkpoint for bounded coefficient backtracking')
+    p.add_argument('--distance-repairs', type=int, default=3)
+    p.add_argument('--distance-samples-per-face', type=int, default=1024)
+    p.add_argument('--distance-seed', type=int, default=810572)
+    p.add_argument('--no-render', action='store_true')
     p.add_argument('--creo-root'); p.add_argument('--native-probe')
     p.add_argument('--profile-mode', choices=['installed', 'preserve_splines'], default='installed')
     p.add_argument('--boundary-mode', choices=['chain', 'fair-network', 'fair-chains'], default='chain')
@@ -121,6 +133,7 @@ if __name__ == '__main__':
     p.add_argument('--repair-smooth-joins', action='store_true')
     p.add_argument('--refit-regions', type=int, nargs='+')
     a = p.parse_args()
+    from .distance_guard import Options
     reconstruct(a.stl, a.partition, a.output, reference=a.reference, reference_faces=a.reference_faces,
                 smoothing=a.smoothing, workers=a.workers, rounds=a.rounds, from_fit=a.from_fit,
                 render=not a.no_render, creo_root=a.creo_root, native_probe=a.native_probe,
@@ -128,7 +141,10 @@ if __name__ == '__main__':
                 normal_filter_steps=a.normal_filter_steps, support_solver=a.support_solver, boundary_cache=a.boundary_cache,
                 boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts,
                 repair_smooth_joins=a.repair_smooth_joins, refit_regions=a.refit_regions,
-                config=None if a.from_fit else Config(distance=.03, boundary=.005, controls=(65,),
+                surface_fit=a.surface_fit, prior_fit=a.prior_fit,
+                distance_options=Options(max_repairs=a.distance_repairs, samples_per_face=a.distance_samples_per_face,
+                                         seed=a.distance_seed),
+                config=None if a.from_fit or a.surface_fit else Config(distance=.03, boundary=.005, controls=(65,),
                     normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight,
                     normal_angle_limit=a.normal_angle_limit, fairness_domain=a.fairness_domain,
                     area_weighted=a.area_weighted, fairness_order=a.fairness_order))

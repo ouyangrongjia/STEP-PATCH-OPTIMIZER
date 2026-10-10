@@ -25,6 +25,9 @@ class StratifiedTests(unittest.TestCase):
             r=audit(root/'model.step',root/'source.npz',root/'quality.json',samples_per_face=64)
             self.assertEqual(r['faces'],4)
             self.assertEqual(r['minimum_verified_samples_per_face'],64)
+            self.assertEqual([row['worst_distance']['face'] for row in r['per_face']], list(range(4)))
+            for row in r['per_face']:
+                self.assertEqual(row['worst_distance']['distance_mm'], row['source_distance_mm']['max'])
             self.assertLess(r['source_distance_mm']['max'],1e-8)
             self.assertLess(r['source_flat_normal_degrees']['max'],1e-4)
             self.assertEqual(r['over_90'],0)

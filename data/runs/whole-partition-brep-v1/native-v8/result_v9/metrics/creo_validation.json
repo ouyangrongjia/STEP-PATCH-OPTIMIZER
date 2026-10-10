@@ -1,0 +1,55 @@
+{
+  "status": "complete",
+  "part": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.distance-guard-staging\\native-v8\\creo\\audit\\import\\model.prt.1",
+  "import": {
+    "part_status": "OK",
+    "score": "PASS",
+    "geometry_check_features": 0,
+    "profile": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.distance-guard-staging\\native-v8\\creo\\import_mm.dip",
+    "report": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.distance-guard-staging\\native-v8\\creo\\audit\\modelcheck\\model.p.xml",
+    "gray_display_observed": false,
+    "boundary_preference": "XYZ",
+    "profile_mode": "installed",
+    "profile_modified": false,
+    "profile_source": "E:\\Proe\\Creo 11.0.0.0\\Common Files\\x86e_win64\\mworks\\mw_import_mm.dip",
+    "import_validation_passed": true,
+    "solid_import_passed": null,
+    "native_body_check_required": true
+  },
+  "native_body": {
+    "start_status": 0,
+    "load_status": 0,
+    "quilts": [
+      {
+        "internal_status": 0,
+        "internal": 0,
+        "backup_status": 0,
+        "backup": 0,
+        "volume_status": 0,
+        "volume_model_units": 690.254,
+        "surfaces": 944
+      }
+    ],
+    "unit_density_mass_status": 0,
+    "volume_model_units": 690.264,
+    "quilt_visit_status": 0,
+    "external_quilts": 1,
+    "body_collect_status": 0,
+    "bodies": [
+      {
+        "id": -5778,
+        "state_status": 0,
+        "state": 4,
+        "surface_visit_status": 0,
+        "surfaces": 944,
+        "mass_status": -1,
+        "volume_model_units": 0
+      }
+    ],
+    "active_bodies_with_surfaces": 1,
+    "quilt_surfaces_outside_active_bodies": 0,
+    "closed_quilts": 1,
+    "native_closed_solid": true
+  },
+  "image": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.distance-guard-staging\\native-v8\\creo_raster\\model.jpg"
+}

@@ -1,0 +1,5 @@
+{
+  "whole_images_reused_from": "native-v7/result_v8/images",
+  "reason": "All support geometry, ownership, curves and routes exactly match the manually repaired version.",
+  "creo_image": "Fresh import of this run actual STEP; not reused."
+}

@@ -1,0 +1,8 @@
+{
+  "archive_readback_arrays_equal": true,
+  "checked_fit_files": 3768,
+  "regions": 359,
+  "source_and_manual_equivalence": "manual_equivalence.json",
+  "geometry_modified_by_packaging": false,
+  "archived_entrypoint_source_identity_verified": true
+}

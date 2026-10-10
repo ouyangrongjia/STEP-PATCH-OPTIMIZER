@@ -18,7 +18,7 @@
 - 在共用骨架路线中消除窄弯折区残余波纹，并降低短边交换和控制点的表达成本；保持现有边界、距离和实体预算。
 - 在主曲线重构结果上继续消除数字 3 内弧、急弯、相邻牌面和窄带残余起伏；补齐闭环、多分支及未覆盖接口的曲线组织，并联合改进过渡带宽度与曲率约束。解决局部支线转角和接缝法向极值的退化，核查逐面采样的极端法向。保持两侧支撑兼容、原曲面距离预算与安装配置 Creo 验收，不能仅以接缝 P95 下降判断可见质量。
 
-已完成能力与限制见 `implementation_status.md`，最新诊断候选见 `data/runs/whole-partition-brep-v1/native-v7/result_v8/`，此前 native-v6、native-v4 的零提示基线、native-v5 的失败记录及更早对照保留；此前商业版本仅保留为历史证据，不满足当前依赖合同。原 candidate-179 基线保持不变。
+已完成能力与限制见 `implementation_status.md`，最新诊断候选见 `data/runs/whole-partition-brep-v1/native-v8/result_v9/`，此前 native-v6、native-v4 的零提示基线、native-v5 的失败记录及更早对照保留；此前商业版本仅保留为历史证据，不满足当前依赖合同。原 candidate-179 基线保持不变。
 
 ### 原生区域级多曲面重拟合
 

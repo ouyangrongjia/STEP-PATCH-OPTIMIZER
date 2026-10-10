@@ -1,0 +1,20 @@
+{
+  "compared_to": "native-v7/result_v8/metrics/reconstruction.zip:fit",
+  "charts": 985,
+  "geometry_and_ownership_fields": [
+    "origin",
+    "axes",
+    "lo",
+    "size",
+    "knots",
+    "height",
+    "region",
+    "triangle_ids",
+    "vertex_ids"
+  ],
+  "different_charts": [],
+  "exact_manual_geometry_recovered": true,
+  "unchanged_curves": 2681,
+  "unchanged_routes": 102,
+  "scope": "Exact coefficient and ownership comparison, not a new continuity or commercial quality claim."
+}

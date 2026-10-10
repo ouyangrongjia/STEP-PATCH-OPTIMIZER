@@ -180,20 +180,24 @@ def _audit_impl(step, partition, output, deflection=.005, count=30000, render=Fa
                   opposed_normal_sample_fraction=float(np.mean(dot < 0)), tessellation_area_mm2=float(areas.sum()),
                   tessellation_triangles=len(areas), tessellation_deflection_mm=deflection,
                   source_samples=count, reverse_samples=len(reverse))
-    votes = []; majority = []
+    votes = []; majority = []; per_face_distance = []
     for fi in range(len(surfaces)):
         selected = owners == fi
         if not np.any(selected):
             # Explicitly retain unsampled tiny faces instead of inventing labels.
             votes.append(dict(face=fi, samples=0)); majority.append(-1); continue
         unique, counts = np.unique(labels[nearest[selected]], return_counts=True)
+        index = np.flatnonzero(selected)[np.argmax(reverse[selected])]
+        per_face_distance.append(dict(face=fi, samples=int(selected.sum()), source_distance_mm=stats(reverse[selected]),
+            worst_distance=dict(face=fi, uv=q[index].tolist(), xyz=fitted[index].tolist(),
+                distance_mm=float(reverse[index]), source_triangle=int(nearest[index]))))
         order = np.argsort(-counts); region = int(unique[order[0]]); majority.append(region)
         votes.append(dict(face=fi, samples=int(selected.sum()), majority_region=region,
                           majority_fraction=float(counts[order[0]]/counts.sum()),
                           votes={str(int(k)): int(n) for k, n in zip(unique[order], counts[order])}))
     dump(out/'source_region_votes.json', dict(faces=votes, majority_regions=sorted(set(majority))))
     joins = edge_audit(shape, surfaces, signs, original, labels); dump(out/'edges.json', joins)
-    report.update(all_join_normal_degrees=joins['all_join_normal_degrees'],
+    report.update(per_face_distance=per_face_distance, all_join_normal_degrees=joins['all_join_normal_degrees'],
                   length_weighted_all_join_normal_degrees=joins['length_weighted_all_join_normal_degrees'],
                   surface_gap_mm=joins['surface_gap_mm'], seconds=time.perf_counter()-started,
                   status='DiagnosticOnly', can_apply=False,

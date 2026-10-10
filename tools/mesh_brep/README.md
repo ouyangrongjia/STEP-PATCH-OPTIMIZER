@@ -21,7 +21,20 @@ python -m tools.mesh_brep.skeleton_reconstruct `
 
 上述改进配置需要 `osqp>=1.0,<2`（本轮实测 1.1.3）。`fair-chains` 在位置与两侧源平面约束内最小化公共三次曲线的弯曲能量；拓扑失败时只调整同一条公共边及其两侧支撑。连续交点检查会复核内核的重合候选，防止短回环漏检，也避免把近停滞曲线误判后反复缩回锯齿。`bounded` 使用物理尺度下的法向与曲率目标，以及独立的位置和边界约束；窄条区域的法向项不会随宽度缩小而失效。法向滤波保留 STL 坐标和固定分区标签，几何评估另用未滤波的源法向。
 
-有界拟合还检查节点区间内部的 Gauss 探针及源网格边中点。发现顶点和重心样本之间的鼓包时，先加入实际超限位置重新求解，再决定是否增加控制点或细分域。旧缓存缺少这项检查时会重新验证。整件 STEP 独立原生面抽样超出距离预算，或实际 Creo 未形成闭合活动实体时，统一入口记录失败并拒绝报告成功。
+有界拟合还检查节点区间内部的 Gauss 探针及源网格边中点。发现顶点和重心样本之间的鼓包时，先加入实际超限位置重新求解，再决定是否增加控制点或细分域。旧缓存缺少这项检查时会重新验证。统一入口现在默认调用 `distance_guard.py`，将装配后的超预算检测和局部修复包含在同一次运行中；无需另写补救脚本。
+
+整件每轮同时做面积抽样和实际 STEP 逐面抽样（默认每面 1024 点），保存每个面的最差位置，不以全局前若干名代替全覆盖。首轮预防性选择超过原距离预算 95% 的面；后续只在实际超预算时启动下一轮修复，并纳入接近预算的候选。通过实际支撑控制点、节点及裁剪顶点核对 STEP 面与拟合域的对应关系。局部优先回退到兼容旧系数，否则以原距离预算的 90% 重拟合；局部加密探针要求回到 95% 以下，原连续边界约束保持。共享同一支撑的面片整体修复，原曲线、主曲线、分区归属不变。新曲面重新装配并使用新随机种子验证，最多修复三轮。次数耗尽、身份不明或无合格候选时保留失败记录，不导出通过的整件与分区件；没有提高最终距离预算。局部重拟合使用未滤波的源折角法向，目前不支持非零边界法向耦合目标的自动修复。
+
+曲线网络已经完成、支撑已经验证的缓存，使用以下统一入口；它保留现有主曲线和移动交点，不再经旧骨架生成器：
+
+```powershell
+python -m tools.mesh_brep.skeleton_reconstruct `
+  --stl <原始STL> --partition <已有分区.npz> `
+  --surface-fit <完整拟合目录> --reference-faces <独立测得的参考面数> `
+  --output <不存在的新目录> --no-render
+```
+
+`--surface-fit` 与 `--from-fit` 互斥：前者保留已完成曲线网，后者继续旧骨架拟合。可选 `--prior-fit <旧拟合目录>` 提供系数回退候选，缺少或不兼容的旧系数自动改为局部重拟合。`--distance-repairs`、`--distance-samples-per-face`、`--distance-seed` 分别控制修复上限、逐面样本数和初始种子。`distance_guard/run.json` 保存各轮选择、原预算、局部试算、失败和新采样结果，最终入口仍为 `step/model.step` 与 `regions/`。距离抽样通过仅代表已测位置合格，不代表认证 Hausdorff、G1/G2、外部 CAD 或可见质量通过。
 
 有界求解分别记录求解器状态与候选的实际约束残差；对病态系统可做等价变量缩放重试，也可保留满足全部线性约束的边界罚项候选，再进入上述连续几何检查。求解器停止容差严于候选可行性检查。自适应节点聚集导致最大控制点预算仍求解失败时，允许在相同预算内用均匀 C2 节点重试，保留已经加密的约束，不放宽几何公差。
 
@@ -47,7 +60,7 @@ python -m tools.mesh_brep.skeleton_reconstruct `
 
 `python -m tools.mesh_brep.network_fairing --run <完整拟合目录> --output <新边界目录> --regions <区域列表> --feasible-seed-only` 联合优化公共曲线和可移动交点，锁定锐角及编辑范围外的接口。连续有限源域距离与移动预算仍分别验证，数值求解超时只产生待检查提案。随后使用 `network_support.guard(..., geometric_guard=True)` 逐边复核曲率、裁剪交叉、绕序和源域距离；回退共享交点时同步协调全部相邻曲线，避免短边卷曲被总体改善掩盖。`network_fairing.straighten` 仅在源域、端点切向及两侧支撑均允许时接受直线替代。
 
-`python -m tools.mesh_brep.network_support --run <已检查边界目录> --output <新拟合目录> --workers 4` 验证并按需重拟合两侧支撑，保留相容系数；失败时保存已接受提案，禁止进入 CAD 装配。移动过交点的缓存不能用旧 `skeleton_graph` / `skeleton_reconstruct --from-fit` 重新生成骨架。完成支撑验证后，用 `graph_reassemble.reconstruct(..., smooth_segments=True)` 保留精确系数和公共交点，再经 `graph_export`、独立 STEP 检查及 Creo 验证。
+`python -m tools.mesh_brep.network_support --run <已检查边界目录> --output <新拟合目录> --workers 4` 验证并按需重拟合两侧支撑，保留相容系数；失败时保存已接受提案，禁止进入 CAD 装配。移动过交点的缓存不能用旧 `skeleton_graph` / `skeleton_reconstruct --from-fit` 重新生成骨架。完成支撑验证后，使用 `skeleton_reconstruct --surface-fit` 保留精确系数和公共交点，自动完成装配、距离修复闭环、分区导出及可选 Creo 验证；`graph_reassemble` 和 `graph_export` 保留为单步诊断工具。
 
 `python -m tools.mesh_brep.seam_fairing --run <完整拟合目录> --output <新目录> --regions <区域列表> --smooth-degrees 30 --seam-weight .1 --iterations 2` 在公共曲线不变时联合拟合两侧实际单位法向，包含不同参数坐标系的导数变换。源折角以上的接缝不参与光滑目标，保留源位置、内部探针、连续落面误差和局部法向退化检查。逐面回溯后还须通过整体实际法向能量检查；不能把这一采样优化称为精确 G1/G2。实现测试包含法向 Jacobian 有限差分、共享端点、有限源域孔洞、连续裁剪交叉及有效裁剪内新增边界鼓包的回退。
 

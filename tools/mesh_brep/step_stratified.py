@@ -39,10 +39,12 @@ def audit(step, partition, output, samples_per_face=1024, seed=810572):
         angle=np.degrees(np.arccos(np.clip(np.sum(n*target,axis=1),-1,1)))
         flat_angle=np.degrees(np.arccos(np.clip(np.sum(n*flat[nearest],axis=1),-1,1)))
         k=int(np.argmax(angle));j=int(np.argmax(distance))
-        worst.extend([dict(face=fi,uv=q[h].tolist(),xyz=xyz[h].tolist(),distance_mm=float(distance[h]),
+        witnesses=[dict(face=fi,uv=q[h].tolist(),xyz=xyz[h].tolist(),distance_mm=float(distance[h]),
             normal_degrees=float(angle[h]),flat_normal_degrees=float(flat_angle[h]),
-            source_triangle=int(nearest[h]),source_barycentric=bary[h].tolist()) for h in set((k,j))])
+            source_triangle=int(nearest[h]),source_barycentric=bary[h].tolist()) for h in (k,j)]
+        worst.extend(witnesses[:1] if k == j else witnesses)
         rows.append(dict(face=fi,samples=len(q),outside_trim_rejected=int((~inside).sum()),
+            worst_distance=witnesses[1],
             source_distance_mm=stats(distance),source_fan_normal_degrees=stats(angle),
             source_flat_normal_degrees=stats(flat_angle),over_30=int((angle>30).sum()),over_90=int((angle>90).sum())))
         all_distance.append(distance);all_angle.append(angle);all_flat.append(flat_angle)
@@ -65,5 +67,6 @@ if __name__=='__main__':
     p=argparse.ArgumentParser()
     for name in ('step','partition','output'):p.add_argument('--'+name,required=True)
     p.add_argument('--samples-per-face',type=int,default=1024)
-    a=p.parse_args();r=audit(a.step,a.partition,a.output,a.samples_per_face)
+    p.add_argument('--seed',type=int,default=810572)
+    a=p.parse_args();r=audit(a.step,a.partition,a.output,a.samples_per_face,a.seed)
     print({k:v for k,v in r.items() if k not in ('per_face','worst_normals','worst_distances')})
