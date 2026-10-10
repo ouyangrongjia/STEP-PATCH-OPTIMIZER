@@ -14,7 +14,7 @@ from .partition_cad import projected_curve, topology
 from .mesh import dump
 
 
-def export(root, output, regions=None):
+def export(root, output, regions=None, smooth_segments=False):
     root, out = Path(root), Path(output); out.mkdir(parents=True, exist_ok=False)
     meta = json.loads((root/'run.json').read_text(encoding='utf-8')); data = np.load(meta['partition'])
     v, f = data['mesh_vertex_original'], data['mesh_triangle']
@@ -34,19 +34,29 @@ def export(root, output, regions=None):
         ci = int(path.stem); rec = dict(np.load(path)); owners = [int(i) for i in rec['owners'] if int(i) in records]
         if not owners:
             continue
-        ch = rec['chain']; c = curve(rec['poles'], rec['knots']); a, b = map(int, ch[[0, -1]])
-        for vi, p in [(a, c.StartPoint()), (b, c.EndPoint())]:
-            if vi not in vertices:
-                vertices[vi] = BRepBuilderAPI_MakeVertex(p).Vertex()
-            elif BRep_Tool.Pnt_s(vertices[vi]).Distance(p) > 1e-8:
-                raise ValueError(f'Inconsistent canonical boundary junction at source vertex {vi}')
-        edge = BRepBuilderAPI_MakeEdge(c, vertices[a], vertices[b], 0., 1.).Edge()
-        for fi in owners:
-            error = spline_graph_error(rec['poles'], rec['knots'], records[fi])
-            builder.UpdateEdge(edge, projected_curve(c, records[fi]), surfaces[fi], TopLoc_Location(), max(1e-7, error*1.05))
-        builder.SameRange(edge, True); builder.SameParameter(edge, True); edges[ci] = edge
-        for a, b in zip(ch[:-1], ch[1:]):
-            lookup[tuple(sorted((int(a), int(b))))] = ci, int(a)
+        ch = rec['chain']; c = curve(rec['poles'], rec['knots']); t = rec['parameters']
+        errors = {fi: spline_graph_error(rec['poles'], rec['knots'], records[fi]) for fi in owners}
+        pcurves = {fi: projected_curve(c, records[fi]) for fi in owners}
+        tolerance = max(1e-7, max(errors.values())*1.05)
+        parts = [(j, j+1) for j in range(len(ch)-1)] if smooth_segments else [(0, len(ch)-1)]
+        for first, last in parts:
+            a, b = map(int, ch[[first, last]])
+            for vi, value in [(a, t[first]), (b, t[last])]:
+                p = c.Value(float(value))
+                if vi not in vertices:
+                    vertices[vi] = BRepBuilderAPI_MakeVertex(p).Vertex()
+                elif BRep_Tool.Pnt_s(vertices[vi]).Distance(p) > 1e-8:
+                    raise ValueError(f'Inconsistent canonical boundary junction at source vertex {vi}')
+                builder.UpdateVertex(vertices[vi], max(BRep_Tool.Tolerance_s(vertices[vi]), tolerance))
+            cc = c.Copy(); cc.Segment(float(t[first]), float(t[last]))
+            edge = BRepBuilderAPI_MakeEdge(cc, vertices[a], vertices[b], float(t[first]), float(t[last])).Edge()
+            for fi in owners:
+                pc = pcurves[fi].Copy(); pc.Segment(float(t[first]), float(t[last]))
+                builder.UpdateEdge(edge, pc, surfaces[fi], TopLoc_Location(), max(1e-7, errors[fi]*1.05))
+            builder.SameRange(edge, True); builder.SameParameter(edge, True)
+            edge_id = len(edges); edges[edge_id] = edge
+            for av, bv in zip(ch[first:last], ch[first+1:last+1]):
+                lookup[tuple(sorted((int(av), int(bv))))] = edge_id, int(av)
     regional = {}
     for fi, rec in records.items():
         used = rec['vertex_ids']; tri = np.searchsorted(used, f[rec['triangle_ids']]); wires = []
@@ -75,11 +85,12 @@ def export(root, output, regions=None):
         path = out/f'region_{region:04d}.step'; cad.write_step(path, shape)
         result = topology(cad.read_generated(path)); report.append(dict(region=region, **result))
     dump(out/'run.json', dict(source_fit=str(root.resolve()), scope='Open regional STEP diagnostics', regions=report,
-                              complete_requested_region_source_coverage=True))
+                              complete_requested_region_source_coverage=True, smooth_segments=smooth_segments))
     return report
 
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(); p.add_argument('--run', required=True); p.add_argument('--output', required=True)
     p.add_argument('--regions', type=int, nargs='+')
-    a = p.parse_args(); print(export(a.run, a.output, a.regions))
+    p.add_argument('--smooth-segments', action='store_true')
+    a = p.parse_args(); print(export(a.run, a.output, a.regions, a.smooth_segments))

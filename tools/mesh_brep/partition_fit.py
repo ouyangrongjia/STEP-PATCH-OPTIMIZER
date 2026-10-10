@@ -32,6 +32,10 @@ class Config:
     feature_angle: float = 30.
     boundary_normal_weight: float = 0.
     interior_subdivisions: int = 0
+    normal_angle_limit: float | None = None
+    fairness_domain: str = 'rectangle'
+    area_weighted: bool = False
+    fairness_order: int = 2
 
 
 def load_partition(path, stl):

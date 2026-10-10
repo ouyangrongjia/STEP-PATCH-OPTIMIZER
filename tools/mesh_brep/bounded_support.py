@@ -2,21 +2,54 @@
 import numpy as np
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
-from .splines import tensor
+from .splines import tensor, sparse_basis
+
+
+FAIRNESS_VERSION = 2
+
+
+def bending_matrix(knot, size, order=2):
+    """Exact average thin-plate energy for a cubic tensor height surface.
+
+    A squared second derivative is still degree six in the other direction.
+    Two-point tensor quadrature misses non-affine modes. Integrating the three
+    one-dimensional Gram matrices separately is exact and avoids a dense 2-D
+    quadrature grid when the adaptive basis has many knots.
+    """
+    if order not in (2, 3):
+        raise ValueError('Fairness derivative order must be two or three')
+    spans = np.unique(knot); nodes, weights = np.polynomial.legendre.leggauss(4)
+    q = (spans[:-1, None]+np.diff(spans)[:, None]*(nodes+1)/2).ravel()
+    w = (np.diff(spans)[:, None]*weights/2).ravel()
+    gram = []
+    for derivative in range(order+1):
+        b = sparse_basis(knot, q, derivative)
+        gram.append((b.T@b.multiply(w[:, None])).tocsr())
+    if order == 3:
+        return (sparse.kron(gram[3], gram[0])/size[0]**6
+                +3*sparse.kron(gram[2], gram[1])/size[0]**4/size[1]**2
+                +3*sparse.kron(gram[1], gram[2])/size[0]**2/size[1]**4
+                +sparse.kron(gram[0], gram[3])/size[1]**6).tocsc()
+    return (sparse.kron(gram[2], gram[0])/size[0]**4
+            +2*sparse.kron(gram[1], gram[1])/(size[0]*size[1])**2
+            +sparse.kron(gram[0], gram[2])/size[1]**4).tocsc()
 
 
 def solve(a, z, b, bz, normal_q, normals, knot, size, config, seam_limit, normal_limit=None,
-          boundary_q=None, boundary_normals=None):
+          boundary_q=None, boundary_normals=None, bending=None, position_weights=None, normal_weights=None):
     import osqp
     count = len(knot)-4
-    blocks = [a/np.sqrt(len(z))]; rhs = [z/np.sqrt(len(z))]
+    position_weights = np.ones(len(z)) if position_weights is None else np.asarray(position_weights)
+    weight = np.sqrt(position_weights/position_weights.sum())
+    blocks = [a.multiply(weight[:, None])]; rhs = [z*weight]
     good = normals[:, 2] > .15
+    normal_weights = np.ones(len(normals)) if normal_weights is None else np.asarray(normal_weights)
     for axis in (range(2) if np.any(good) else ()):
         # Residual n_z * dh/dx + n_x measures tangent-plane disagreement.
         # It does not vanish simply because a chart happens to be narrow.
-        weight = np.sqrt(config.normal_weight/max(1, good.sum()))
+        weight = np.sqrt(config.normal_weight*normal_weights[good]/normal_weights[good].sum())
         op = tensor(normal_q[good], knot, knot, int(axis == 0), int(axis == 1))
-        blocks.append(op.multiply(normals[good, 2, None])*weight/size[axis])
+        blocks.append(op.multiply((normals[good, 2]*weight)[:, None])/size[axis])
         rhs.append(-normals[good, axis]*weight)
     if config.boundary_normal_weight > 0:
         if boundary_q is None or boundary_normals is None:
@@ -27,17 +60,10 @@ def solve(a, z, b, bz, normal_q, normals, knot, size, config, seam_limit, normal
             op = tensor(boundary_q[usable], knot, knot, int(axis == 0), int(axis == 1))
             blocks.append(op.multiply(boundary_normals[usable, 2, None])*weight/size[axis])
             rhs.append(-boundary_normals[usable, axis]*weight)
-    spans = np.unique(knot); nodes, weights = np.polynomial.legendre.leggauss(2)
-    grid = (spans[:-1, None]+np.diff(spans)[:, None]*(nodes+1)/2).ravel()
-    w = (np.diff(spans)[:, None]*weights/2).ravel()
-    fq = np.stack(np.meshgrid(grid, grid, indexing='ij'), axis=-1).reshape(-1, 2)
-    area_weights = np.sqrt(np.outer(w, w).ravel()*config.fairness)
-    for du, dv in [(2, 0), (1, 1), (0, 2)]:
-        scale = area_weights*np.sqrt(2 if du == dv else 1)/(size[0]**du*size[1]**dv)
-        blocks.append(tensor(fq, knot, knot, du, dv).multiply(scale[:, None]))
-        rhs.append(np.zeros(len(fq)))
     matrix = sparse.vstack(blocks, format='csr'); target = np.concatenate(rhs)
-    h = (matrix.T@matrix).tocsc()
+    if bending is None:
+        bending = bending_matrix(knot, size, config.fairness_order)
+    h = (matrix.T@matrix+config.fairness*bending).tocsc()
     regularization = max(float(h.diagonal().max()), 1.)*1e-14
     h += sparse.eye(count*count, format='csc')*regularization
     linear = np.asarray(matrix.T@target).ravel()

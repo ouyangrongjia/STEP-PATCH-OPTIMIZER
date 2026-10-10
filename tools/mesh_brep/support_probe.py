@@ -36,3 +36,14 @@ def check(task):
     error = abs(tensor(q, record['knots'], record['knots'])@record['height']-z)
     return index, dict(interior_probe_version=VERSION, interior_probe_count=len(q),
                        interior_probe_max_mm=float(error.max(initial=0.)))
+
+
+def normal_targets(record, vertices, triangles, normals, points):
+    """Interpolate inside one source triangle, preserving crease-side identity."""
+    uv = parameters(vertices, record)
+    locator = Locator(np.c_[uv, np.zeros(len(uv))], triangles)
+    _, _, ids, bary = locator.closest(np.c_[points, np.zeros(len(points))])
+    corner = normals[triangles[ids]] if normals.ndim == 2 else normals[ids]
+    target = np.einsum('ij,ijk->ik', bary, corner)
+    target /= np.maximum(np.linalg.norm(target, axis=1)[:, None], 1e-30)
+    return target@record['axes'].T

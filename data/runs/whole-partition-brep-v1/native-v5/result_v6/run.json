@@ -1,0 +1,96 @@
+{
+  "status": "DiagnosticOnly",
+  "date": "2026-10-09",
+  "model": "model.step",
+  "regions": "regions",
+  "images": "images",
+  "units": "mm",
+  "source_regions": 359,
+  "faces": 1099,
+  "previous_faces": 1092,
+  "reference_faces": 2739,
+  "partition": "regions/source_partition.npz",
+  "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "baseline": "../../native-v4/result_v5/run.json",
+  "partition_labels_unchanged": true,
+  "source_triangle_coverage_verified": true,
+  "native_closed_solid": true,
+  "gray_display_observed": true,
+  "Creo_geometry_check_features": 1,
+  "Creo_geometry_gate_passed": false,
+  "baseline_replacement_accepted": false,
+  "delivery_role": "Experimental geometry improvement with unresolved CAD regression",
+  "Geomagic_API_used": false,
+  "commercial_reconstruction_used": false,
+  "fitter_reads_source_CAD": false,
+  "can_apply": false,
+  "global_smoothness_passed": false,
+  "geometry_summary": {
+    "reverse_rms_mm": 0.001693048133233168,
+    "reverse_p95_mm": 0.00345870624500291,
+    "reverse_max_mm": 0.026269370842188066,
+    "stratified_max_mm": 0.027787818316136352,
+    "normal_p95_degrees": 5.496831654040773,
+    "normal_max_degrees": 72.24958561313692
+  },
+  "boundary_summary": {
+    "changed_matched_chains": 340,
+    "tangent_turn_reduction_fraction": 0.7802121400856458,
+    "curvature_squared_reduction_fraction": 0.901857266966109,
+    "source_tube_limit_mm": 0.012,
+    "measured_final_fit_cache": true
+  },
+  "normal_repair": {
+    "screened": 293,
+    "attempted": 10,
+    "numerical_accepted": 8,
+    "retained_after_CAD": 6,
+    "numerical_rejected": [
+      298,
+      965
+    ],
+    "CAD_repair_seed_charts": [
+      618,
+      991,
+      992,
+      993,
+      1017,
+      1019,
+      1020,
+      1021,
+      1022,
+      1023,
+      1026,
+      1027,
+      1028,
+      1029
+    ]
+  },
+  "tests": {
+    "passed": 85,
+    "failed": 0,
+    "seconds": 67.998,
+    "log": "metrics/tests.log"
+  },
+  "evidence": {
+    "quality": "metrics/quality.json",
+    "pipeline": "metrics/pipeline.json",
+    "boundaries": "metrics/boundary_comparison.json",
+    "diagnostics": "metrics/diagnostics.json",
+    "Creo": "metrics/creo_validation.json",
+    "experiments": "metrics/experiments.json",
+    "visual_review": "metrics/visual_review.json",
+    "reconstruction": "metrics/reconstruction.zip"
+  },
+  "remaining_limits": [
+    "Creo geometry gate: 1 flagged import features versus zero in the previous whole model; not accepted as a baseline replacement.",
+    "Residual groove transition bumps and seam-normal jumps remain; no global G1/G2 certificate.",
+    "Aggregate distance and normal statistics do not all improve; detailed paired protocols are retained.",
+    "Two local normal proposals were infeasible; local CAD-driven curve/support repair also replaced some accepted normal proposals.",
+    "Finite sampled distances are not a Hausdorff or self-intersection certificate.",
+    "This model only; commercial-equivalent quality and generality are not established.",
+    "OCCT and Creo volume integration differ; no volume-preservation claim.",
+    "Experimental Python worktree only; GUI and product Apply gate remain unchanged."
+  ],
+  "provenance": "Measurement records preserve historical work paths. Current deliverables use the relative paths above. Exact final and baseline coefficients are retained in the reconstruction archive."
+}

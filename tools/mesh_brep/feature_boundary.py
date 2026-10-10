@@ -129,6 +129,28 @@ def fair_curve(points, parameters, budget, normals, normal_budget=.003, endpoint
                               source_plane_error_mm=plane)
 
 
+def coupled_repair_charts(curves, requested):
+    """Restore both sides of two-chain trim cells during boundary repair.
+
+    Resetting only one arc of a narrow lens can turn a common displacement
+    into a steep cross-cell ramp. Large neighboring charts still refit when
+    their incident curve changes, without resetting their unrelated curves.
+    """
+    incident = {}
+    for ci, curve in enumerate(curves):
+        for di in curve['owners']:
+            incident.setdefault(int(di), set()).add(ci)
+    selected = set(map(int, requested))
+    touched = set().union(*(incident.get(di, set()) for di in selected))
+    while True:
+        added = {di for di, ids in incident.items()
+                 if di not in selected and len(ids) == 2 and ids & touched}
+        if not added:
+            return sorted(selected)
+        selected.update(added)
+        touched.update(set().union(*(incident[di] for di in added)))
+
+
 class FeatureBoundaryNetwork:
     """Shared parent curves survive arbitrary splits inside the fixed labels."""
     def __init__(self, vertices, triangles, labels, edges, owners, smoothing, normal_budget,
@@ -146,6 +168,7 @@ class FeatureBoundaryNetwork:
         self.source = []; self.lookup = {}; self.parent = {}; self.scale = {}; self.internal = {}
         self.vertex_parents = {}
         self.internal_cache = {}; self.tangent_locked = set(); self.force_positive = set(); self.exact_cache = {}
+        self.rollback = {}
         for ci, chain in enumerate(self.chains):
             keys = np.minimum(chain[:-1], chain[1:])*len(vertices)+np.maximum(chain[:-1], chain[1:])
             normals = fn[owners[np.searchsorted(edge_keys, keys)]]
@@ -256,6 +279,20 @@ class FeatureBoundaryNetwork:
         return result, samples, errors
 
     def tighten(self, records):
+        reverted = []
+        for rec in records:
+            key = tuple(map(int,rec['chain']))
+            if key not in self.rollback: continue
+            scale, ends, locked, positive, fitted = self.rollback.pop(key)
+            self.internal[key] = scale
+            self.tangent_locked.discard(key); self.force_positive.discard(key)
+            if locked: self.tangent_locked.add(key)
+            if positive: self.force_positive.add(key)
+            self.internal_cache[key] = scale,ends,locked,positive,fitted
+            reverted.append([key[0],key[-1]])
+        if reverted:
+            print(dict(stage='restore_previous_shared_curve',endpoints=reverted),flush=True)
+            return
         selected = set()
         for rec in records:
             ci = int(rec['parent_interface'])
@@ -299,4 +336,20 @@ class FeatureBoundaryNetwork:
             if positive: self.force_positive.add(key)
             fitted = (rec['poles'], rec['knots'], float(rec['movement_mm']),
                 dict(method=str(rec['method']), source_plane_error_mm=float(rec['source_plane_error_mm'])))
+            for field in ('source_tube_certified_max_mm', 'source_tube_certificate_version',
+                          'source_tube_limit_mm', 'source_tube_domains'):
+                if field in rec:
+                    fitted[3][field] = float(rec[field])
+            if 'source_tangent_planes' in rec:
+                fitted[3]['source_tangent_planes'] = rec['source_tangent_planes'].copy()
             self.internal_cache[key] = scale, self.v[chain[[0, -1]]].copy(), locked, positive, fitted
+            if 'rollback_poles' in rec:
+                old = {field[len('rollback_'):]: value for field,value in rec.items() if field.startswith('rollback_')}
+                old_scale = float(old.get('movement_budget_mm',self.smoothing))/self.smoothing
+                old_locked = bool(old.get('endpoint_tangent_locked',False))
+                old_positive = str(old['method']) == 'positive_topology_guard'
+                info = {field: value.item() if np.ndim(value)==0 and hasattr(value,'item') else value
+                        for field,value in old.items() if field not in
+                        ('poles','knots','movement_mm','movement_budget_mm','endpoint_tangent_locked')}
+                old_fit = old['poles'],old['knots'],float(old['movement_mm']),info
+                self.rollback[key] = old_scale,self.v[chain[[0,-1]]].copy(),old_locked,old_positive,old_fit

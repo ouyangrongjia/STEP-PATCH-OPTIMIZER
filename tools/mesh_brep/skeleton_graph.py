@@ -208,9 +208,15 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
     # a curve budget always changes its two owners together.
     from shapely.geometry import Polygon
     for attempt in range(14 if boundary_network is not None else 9):
-        invalid = {i for i, c in enumerate(curves) if boundary_network is not None and
-                   (c['movement_mm'] > smoothing*(1+1e-6) or
-                    c['source_plane_error_mm'] > normal_budget*(1+1e-6))}
+        invalid = set()
+        for i, c in enumerate(curves):
+            if boundary_network is None:
+                continue
+            certified = c.get('source_tube_certificate_version') == 1
+            limit = float(c.get('source_tube_limit_mm', normal_budget)) if certified else normal_budget
+            error = c['source_tube_certified_max_mm'] if certified else c['source_plane_error_mm']
+            if c['movement_mm'] > smoothing*(1+1e-6) or error > limit*(1+1e-6):
+                invalid.add(i)
         lookup = {}; exact_frames = []; intersection_details = []
         for ci, c in enumerate(curves):
             for a, b in zip(c['chain'][:-1], c['chain'][1:]):
@@ -227,7 +233,13 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
                 if len(refs) > 1 and refs[0] == refs[-1]:
                     refs.pop()
                 xyz = np.concatenate([(samples[ci] if forward else samples[ci][::-1])[:-1] for ci, forward in refs])
-                polygons.append(np.round((xyz-o)@ax[:2].T, 12)); involved.update(ci for ci, _ in refs)
+                polygon = np.round((xyz-o)@ax[:2].T, 12)
+                from .boundary_checks import preserves_winding
+                if not preserves_winding((v[used[loop]]-o)@ax[:2].T,polygon):
+                    invalid.update(ci for ci,_ in refs)
+                    intersection_details.append(dict(kind='reversed_loop',domain=list(map(int,d['triangle_ids'][:1])),
+                                                     curves=[ci for ci,_ in refs]))
+                polygons.append(polygon); involved.update(ci for ci, _ in refs)
             polygons.sort(key=lambda p: -abs(np.sum(p[:, 0]*np.roll(p[:, 1], -1)-p[:, 1]*np.roll(p[:, 0], -1))))
             if not Polygon(polygons[0], polygons[1:]).is_valid:
                 invalid.update(involved)
@@ -279,6 +291,8 @@ def fit_support(task):
     di, v, f, normals, boundary, curves, config, *options = task
     support_solver = options[0] if options else 'least-squares'
     boundary_normals = options[1] if len(options) > 1 else None
+    if support_solver != 'bounded' and (config.area_weighted or config.normal_angle_limit is not None or config.fairness_order != 2):
+        raise ValueError('Area weights, normal limits and higher-order fairness require the bounded support solver')
     o, ax, lo, size, uv, heights, dot = stable_frame(v, f)
     if dot.min() <= .05:
         return di, None, dict(accepted=False, reason='non_graph', history=[])
@@ -296,17 +310,41 @@ def fit_support(task):
     normal_q = ((normal_points-o)@ax[:2].T-lo)/size
     n = normals.reshape(-1, 3)@ax.T; good = n[:, 2] > .15
     grad = -n[good, :2]/n[good, 2, None]*size
+    position_weights = normal_weights = None
+    if config.area_weighted:
+        area2 = np.linalg.norm(np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]]), axis=1)
+        vertex_area = np.bincount(f.ravel(), weights=np.repeat(area2/3, 3), minlength=len(v))
+        # Half of each triangle's mass at its centroid and half at its corners.
+        # Refinement probes remain hard constraints without changing the target measure.
+        position_weights = np.r_[vertex_area/2, area2/2]
+        normal_weights = vertex_area if normals.ndim == 2 else np.repeat(area2/3, 3)
     # STEP import may choose either incident pcurve. Reserve a two-sided gap
     # budget instead of allowing each support almost the whole edge tolerance.
     seam_limit = config.boundary*.4
     t = knots(9); history = []; boundary_enrichments = 0; interior_enrichments = 0; probe_cache = {}
+    bending_cache = {}; polygon = None; normal_enrichments = 0; normal_probe_cache = {}
+    if config.fairness_domain == 'source':
+        if support_solver != 'bounded':
+            raise ValueError('Source-domain fairness requires the bounded support solver')
+        if config.fairness_order != 2:
+            raise ValueError('Source-domain fairness currently supports second derivatives only')
+        from .trimmed_fairness import source_polygon
+        polygon = source_polygon(q[:len(v)], f)
+    elif config.fairness_domain != 'rectangle':
+        raise ValueError('Unknown fairness domain')
     for iteration in range(32):
         count = len(t)-4; a, b = tensor(q, t, t), tensor(bq, t, t)
         uq = np.unique(t); solver = None
         if support_solver == 'bounded':
-            from .bounded_support import solve
+            from .bounded_support import solve, FAIRNESS_VERSION
+            if polygon is not None and tuple(t) not in bending_cache:
+                from .trimmed_fairness import bending_matrix
+                bending_cache[tuple(t)] = bending_matrix(polygon, t, size)
             coeff, solver = solve(a, z, b, bz, normal_q, n, t, size, config, seam_limit,
-                                  boundary_q=boundary_normal_q, boundary_normals=boundary_n)
+                                  normal_limit=config.normal_angle_limit,
+                                  boundary_q=boundary_normal_q, boundary_normals=boundary_n,
+                                  bending=bending_cache.get(tuple(t)),
+                                  position_weights=position_weights, normal_weights=normal_weights)
         elif support_solver == 'least-squares':
             blocks = [a/np.sqrt(len(q)), b*np.sqrt(3000/len(bq))]; rhs = [z/np.sqrt(len(q)), bz*np.sqrt(3000/len(bq))]
             for axis in range(2):
@@ -324,11 +362,23 @@ def fit_support(task):
         else:
             raise ValueError('Unknown support solver')
         error = abs(a@coeff-z); be = abs(b@coeff-bz)
+        normal_error = None
+        if config.normal_angle_limit is not None:
+            gradient = np.column_stack([tensor(normal_q[good], t, t, int(axis == 0), int(axis == 1))@coeff/size[axis]
+                                        for axis in range(2)])
+            predicted = np.c_[-gradient, np.ones(len(gradient))]
+            predicted /= np.linalg.norm(predicted, axis=1)[:, None]
+            normal_error = np.degrees(np.arccos(np.clip(np.sum(predicted*n[good], axis=1), -1, 1)))
         rec = dict(origin=o, axes=ax, lo=lo, size=size, knots=t, height=coeff)
+        if support_solver == 'bounded':
+            rec['fairness_version'] = FAIRNESS_VERSION
         item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max())); history.append(item)
+        if normal_error is not None:
+            item['sampled_normal_max_degrees'] = float(normal_error.max(initial=0.))
         if solver is not None:
             item['solver'] = solver
-        if (solver is None or solver['solved']) and error.max() < config.distance and be.max() < seam_limit*.8:
+        normal_pass = normal_error is None or normal_error.max(initial=0.) <= config.normal_angle_limit*(1+1e-5)
+        if (solver is None or solver['solved']) and normal_pass and error.max() < config.distance and be.max() < seam_limit*.8:
             extrema = [spline_graph_error(c['poles'], c['knots'], rec, return_parameter=True) for c in curves]
             maximum = max(x[0] for x in extrema)
             item['continuous_boundary_max'] = maximum
@@ -347,9 +397,41 @@ def fit_support(task):
                         if interior_enrichments < 12:
                             worst = np.argsort(ie)[-64:]; worst = worst[ie[worst] >= config.distance*.98]
                             q = np.r_[q, iq[worst]]; z = np.r_[z, iz[worst]]
+                            if position_weights is not None:
+                                position_weights = np.r_[position_weights, np.zeros(len(worst))]
                             interior_enrichments += 1; item['interior_enrichment'] = interior_enrichments
                             continue
                         return di, None, dict(accepted=False, reason='interior_excursion', history=history)
+                    if config.normal_angle_limit is not None:
+                        from .support_probe import normal_targets
+                        if key not in normal_probe_cache:
+                            normal_probe_cache[key] = normal_targets(rec, v, f, normals, iq)
+                        target = normal_probe_cache[key]
+                        usable = target[:, 2] > .15
+                        nq, nn = iq[usable], target[usable]
+                        gradient = np.column_stack([tensor(nq, t, t, int(axis == 0), int(axis == 1))@coeff/size[axis]
+                                                    for axis in range(2)])
+                        predicted = np.c_[-gradient, np.ones(len(gradient))]
+                        predicted /= np.linalg.norm(predicted, axis=1)[:, None]
+                        angles = np.degrees(np.arccos(np.clip(np.sum(predicted*nn, axis=1), -1, 1)))
+                        normal_peak = float(angles.max(initial=0.))
+                        item['interior_normal_max_degrees'] = normal_peak
+                        if normal_peak > config.normal_angle_limit*(1+1e-5):
+                            if normal_enrichments >= 12:
+                                return di, None, dict(accepted=False, reason='interior_normal_excursion', history=history)
+                            worst = np.argsort(angles)[-64:]
+                            worst = worst[angles[worst] > config.normal_angle_limit]
+                            if normal_weights is None:
+                                normal_weights = np.ones(len(n))
+                            normal_q = np.r_[normal_q, nq[worst]]; n = np.r_[n, nn[worst]]
+                            normal_weights = np.r_[normal_weights, np.zeros(len(worst))]
+                            good = n[:, 2] > .15
+                            normal_enrichments += 1
+                            item['interior_normal_enrichment'] = normal_enrichments
+                            continue
+                        rec.update(interior_normal_probe_version=1, interior_normal_probe_count=len(nq),
+                                   interior_normal_max_degrees=normal_peak,
+                                   sampled_normal_limit_degrees=config.normal_angle_limit)
                     rec.update(interior_probe_version=VERSION, interior_probe_count=len(iq), interior_probe_max_mm=peak)
                     if config.boundary_normal_weight > 0:
                         from .boundary_normals import VERSION as normal_version
@@ -372,6 +454,9 @@ def fit_support(task):
             break
         # Refine where current residuals are worst; keep a simple-knot C2 basis.
         all_q = np.r_[q, bq]; ratio = np.r_[error/config.distance, be/(seam_limit*.8)]
+        if normal_error is not None:
+            all_q = np.r_[all_q, normal_q[good]]
+            ratio = np.r_[ratio, normal_error/config.normal_angle_limit]
         order = np.argsort(ratio)[::-1]; new = []
         for k in order[:min(128, len(order))]:
             for value in all_q[k]:
@@ -392,9 +477,13 @@ def fit_support(task):
 def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, rounds=4,
                 face_limit=None, config=None, from_fit=None, boundary_mode='chain',
                 normal_field='vertex', normal_filter_steps=0, boundary_cache=None,
-                support_solver='least-squares', refit_supports=False, boundary_plane_budget=None, repair_charts=()):
+                support_solver='least-squares', refit_supports=False, boundary_plane_budget=None, repair_charts=(),
+                refit_regions=None):
     out = Path(output); out.mkdir(parents=True, exist_ok=False); start = time.perf_counter()
     v, f, labels, topo = load_partition(partition, stl); normal = vertex_normals(v, f)
+    selected_refit = set(refit_regions or ())
+    if selected_refit and (from_fit is None or regions is not None or not selected_refit.issubset(set(labels))):
+        raise ValueError('Selective whole-model refitting requires a prior fit and existing source regions')
     fit_cache, curve_cache = {}, {}
     def stamp(di, curves, pairs):
         return {tuple(map(int, c['chain'])): (c['poles'], c['knots'])
@@ -405,6 +494,9 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         domains, graph, edges, owners = initial_domains(v, f, labels)
     else:
         source = Path(from_fit); previous = json.loads((source/'run.json').read_text(encoding='utf-8'))
+        required_refit = set(previous.get('required_refit_regions', ()))
+        if previous.get('requires_support_refit') and not (refit_supports or (required_refit and required_refit.issubset(selected_refit))):
+            raise ValueError('Changed source-surface boundaries require explicit support refitting')
         if Path(previous['partition']).resolve() != Path(partition).resolve() or Path(previous['stl']).resolve() != Path(stl).resolve():
             raise ValueError('Resume fit uses different declared input files')
         old_config = Config(**previous['config'])
@@ -413,7 +505,7 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
             boundary_plane_budget = old_plane_budget
         elif boundary_plane_budget != old_plane_budget:
             raise ValueError('Resume caching requires the same source-plane movement budget')
-        checked = ('distance', 'boundary') if refit_supports else ('distance', 'boundary', 'normal_weight', 'fairness', 'boundary_normal_weight')
+        checked = ('distance', 'boundary') if refit_supports else ('distance', 'boundary', 'normal_weight', 'fairness', 'boundary_normal_weight', 'normal_angle_limit', 'fairness_domain', 'area_weighted', 'fairness_order')
         if config is not None and any(getattr(config, k) != getattr(old_config, k) for k in checked):
             raise ValueError('Resume caching requires unchanged fitting tolerances and weights')
         if smoothing != previous['smoothing_mm']:
@@ -427,6 +519,11 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         config = old_config if config is None else config
         assignment = np.load(source/'chart_index.npz')['face_chart']
         old_curves = [dict(np.load(p)) for p in sorted((source/'curves').glob('*.npz'))]
+        for curve in old_curves:
+            if curve.get('source_tube_certificate_version') == 1:
+                limit = float(curve.get('source_tube_limit_mm',old_plane_budget))
+                if not np.isfinite(limit) or not 0 < limit < config.distance:
+                    raise ValueError('Cached source tube exceeds the declared fitting-distance budget')
         old_pairs = [c['owners'] for c in old_curves]
         curve_cache = {tuple(map(int, c['chain'])): c for c in old_curves
                        if np.max(np.unique(c['knots'][4:-4], return_counts=True)[1], initial=0) < 3}
@@ -434,8 +531,16 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         pending_checks = []; pending_records = {}
         for path in sorted((source/'charts').glob('*.npz')):
             rec = dict(np.load(path)); history = old_rows[int(path.stem)]['history']
+            if support_solver == 'bounded':
+                from .bounded_support import FAIRNESS_VERSION
+                if int(rec.get('fairness_version', 0)) != FAIRNESS_VERSION:
+                    continue
+                if config.normal_angle_limit is not None and (
+                    int(rec.get('interior_normal_probe_version',0)) != 1 or
+                    float(rec.get('interior_normal_max_degrees',float('inf'))) > config.normal_angle_limit*(1+1e-5)):
+                    continue
             measured = rec.get('continuous_boundary_error_mm', history[-1].get('continuous_boundary_max', float('inf')) if history else float('inf'))
-            if measured < config.boundary*.4 and not refit_supports:
+            if measured < config.boundary*.4 and not refit_supports and int(rec['region']) not in selected_refit:
                 if config.boundary_normal_weight > 0:
                     from .boundary_normals import VERSION as normal_version
                     if int(rec.get('boundary_normal_target_version', 0)) != normal_version:
@@ -474,6 +579,12 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
     if repair_charts and (from_fit is None or boundary_mode != 'fair-chains'
                           or min(repair_charts) < 0 or max(repair_charts) >= len(domains)):
         raise ValueError('Boundary repair requires valid source-fit chart IDs and fair-chains mode')
+    requested_repairs = sorted(repair_charts)
+    if repair_charts:
+        if previous['failed_charts']:
+            raise ValueError('Finish pending domain refinements before repairing cached chart boundaries')
+        from .feature_boundary import coupled_repair_charts
+        repair_charts = set(coupled_repair_charts(old_curves, repair_charts))
     if not np.isfinite(plane_budget) or not 0 < plane_budget < config.distance:
         raise ValueError('Source-plane budget must be positive and below the source-distance limit')
     if normal_field == 'crease-fans':
@@ -491,6 +602,8 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                     boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
                     support_solver=support_solver, refit_supports=refit_supports, source_plane_budget_mm=plane_budget,
                     boundary_repair_charts=sorted(repair_charts))
+    metadata['refit_regions'] = sorted(selected_refit)
+    metadata['requested_boundary_repair_charts'] = requested_repairs
     if config.boundary_normal_weight > 0:
         from .boundary_normals import VERSION as normal_version
         metadata['boundary_normal_target_mode'] = f'nearest-source-smooth-fans-v{normal_version}'
@@ -558,6 +671,7 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                         partial_regions=regions, boundary_movement_mm=stats(errors), seconds=time.perf_counter()-start,
                         reused_charts=reused, refitted_charts=len(tasks), complete_source_coverage=regions is None and not failed,
                         partition_labels_unchanged=all(np.all(labels[d['triangle_ids']] == d['region']) for d in domains))
+        metadata['source_surface_tube_curves'] = sum(bool(c.get('source_tube_certificate_version') == 1) for c in curves)
         dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
         if not failed:
             metadata['status'] = 'local_diagnostic' if regions is not None else 'fitted'
@@ -590,19 +704,27 @@ if __name__ == '__main__':
     p.add_argument('--boundary-cache')
     p.add_argument('--support-solver', choices=['least-squares', 'bounded'], default='least-squares')
     p.add_argument('--refit-supports', action='store_true')
+    p.add_argument('--refit-regions', type=int, nargs='+')
     p.add_argument('--boundary-plane-budget', type=float)
     p.add_argument('--boundary-normal-weight', type=float, default=0.)
+    p.add_argument('--normal-angle-limit', type=float)
+    p.add_argument('--fairness-domain', choices=['rectangle', 'source'], default='rectangle')
+    p.add_argument('--area-weighted', action='store_true')
+    p.add_argument('--fairness-order', type=int, choices=[2, 3], default=2)
     p.add_argument('--repair-charts', type=int, nargs='+', default=[])
     a = p.parse_args()
     try:
         reconstruct(a.partition, a.stl, a.output, a.smoothing, a.workers, a.regions,
                     a.rounds, a.face_limit, Config(distance=.03, boundary=.005, controls=(65,),
-                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight)
+                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight,
+                    normal_angle_limit=a.normal_angle_limit, fairness_domain=a.fairness_domain,
+                    area_weighted=a.area_weighted, fairness_order=a.fairness_order)
                     if a.from_fit is None or a.refit_supports else None,
                     from_fit=a.from_fit, boundary_mode=a.boundary_mode,
                     normal_field=a.normal_field, normal_filter_steps=a.normal_filter_steps, boundary_cache=a.boundary_cache,
                     support_solver=a.support_solver, refit_supports=a.refit_supports,
-                    boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts)
+                    boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts,
+                    refit_regions=a.refit_regions)
     except (Exception, KeyboardInterrupt) as error:
         path = Path(a.output)/'run.json'
         if path.exists():

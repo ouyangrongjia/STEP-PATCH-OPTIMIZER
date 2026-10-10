@@ -1,0 +1,5479 @@
+{
+  "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v5\\work\\baseline_fit",
+  "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v5\\work\\fit_restored",
+  "source_chain_matches": 2921,
+  "before_curves": 2928,
+  "after_curves": 2947,
+  "changed_matched_curves": 340,
+  "matched_totals": {
+    "before": {
+      "length_mm": 2235.633312123247,
+      "total_tangent_turn_degrees": 331164.33543947525,
+      "curvature_squared_integral_per_mm": 827591.8541342161,
+      "control_points": 38501.0
+    },
+    "after": {
+      "length_mm": 2227.9916481140726,
+      "total_tangent_turn_degrees": 302914.1611862987,
+      "curvature_squared_integral_per_mm": 799889.6869006095,
+      "control_points": 37055.0
+    }
+  },
+  "changed_matched_totals": {
+    "before": {
+      "length_mm": 224.80021080836983,
+      "total_tangent_turn_degrees": 36208.32437966866,
+      "curvature_squared_integral_per_mm": 30716.797711014366,
+      "control_points": 3705.0
+    },
+    "after": {
+      "length_mm": 217.15854679919394,
+      "total_tangent_turn_degrees": 7958.150126492112,
+      "curvature_squared_integral_per_mm": 3014.6304774081173,
+      "control_points": 2259.0
+    }
+  },
+  "changed": [
+    {
+      "before_curve": 1295,
+      "after_curve": 1295,
+      "before": {
+        "length_mm": 0.1282761654573718,
+        "total_tangent_turn_degrees": 71.35592199841668,
+        "curvature_squared_integral_per_mm": 19.703792840462818,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.12158376789704234,
+        "total_tangent_turn_degrees": 0.009117692959055802,
+        "curvature_squared_integral_per_mm": 2.6272989450506924e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1301,
+      "after_curve": 1301,
+      "before": {
+        "length_mm": 0.5302007271515597,
+        "total_tangent_turn_degrees": 177.29241466043015,
+        "curvature_squared_integral_per_mm": 32.80601685444546,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4773883706258024,
+        "total_tangent_turn_degrees": 12.231811186619568,
+        "curvature_squared_integral_per_mm": 0.1251758516517552,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1308,
+      "after_curve": 1308,
+      "before": {
+        "length_mm": 0.4675120038640553,
+        "total_tangent_turn_degrees": 122.97433593319141,
+        "curvature_squared_integral_per_mm": 13.236043600800574,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.40282112833159023,
+        "total_tangent_turn_degrees": 18.443014111408985,
+        "curvature_squared_integral_per_mm": 0.3185589473652706,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1309,
+      "after_curve": 1309,
+      "before": {
+        "length_mm": 0.40050009960707184,
+        "total_tangent_turn_degrees": 0.5355958930029898,
+        "curvature_squared_integral_per_mm": 0.00029091696258345365,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4004997107522906,
+        "total_tangent_turn_degrees": 4.333405100464195e-05,
+        "curvature_squared_integral_per_mm": 1.750093521925556e-12,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1316,
+      "after_curve": 1316,
+      "before": {
+        "length_mm": 0.17991882066425818,
+        "total_tangent_turn_degrees": 36.30005316046934,
+        "curvature_squared_integral_per_mm": 5.312930944584601,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17769043760640008,
+        "total_tangent_turn_degrees": 0.0016875844867697597,
+        "curvature_squared_integral_per_mm": 5.961778661022006e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1319,
+      "after_curve": 1319,
+      "before": {
+        "length_mm": 4.600576480843079,
+        "total_tangent_turn_degrees": 3096.7096238455197,
+        "curvature_squared_integral_per_mm": 7069.726631725847,
+        "control_points": 147
+      },
+      "after": {
+        "length_mm": 3.807174665790895,
+        "total_tangent_turn_degrees": 99.78004789627404,
+        "curvature_squared_integral_per_mm": 1.1067912839065333,
+        "control_points": 18
+      }
+    },
+    {
+      "before_curve": 1320,
+      "after_curve": 1320,
+      "before": {
+        "length_mm": 0.8426780012398869,
+        "total_tangent_turn_degrees": 32.78216532443069,
+        "curvature_squared_integral_per_mm": 0.6118397828432701,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.8389821675632871,
+        "total_tangent_turn_degrees": 17.342002142683175,
+        "curvature_squared_integral_per_mm": 0.15850384264424933,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1321,
+      "after_curve": 1321,
+      "before": {
+        "length_mm": 0.17787859220781266,
+        "total_tangent_turn_degrees": 184.06065142741545,
+        "curvature_squared_integral_per_mm": 147.30413519096152,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15061388447835097,
+        "total_tangent_turn_degrees": 63.28461466539926,
+        "curvature_squared_integral_per_mm": 15.106923468558442,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1322,
+      "after_curve": 1322,
+      "before": {
+        "length_mm": 2.492428368885643,
+        "total_tangent_turn_degrees": 339.887122339087,
+        "curvature_squared_integral_per_mm": 248.1614680124647,
+        "control_points": 30
+      },
+      "after": {
+        "length_mm": 2.405741216703101,
+        "total_tangent_turn_degrees": 55.095399306766886,
+        "curvature_squared_integral_per_mm": 2.7635248032354487,
+        "control_points": 18
+      }
+    },
+    {
+      "before_curve": 1338,
+      "after_curve": 1338,
+      "before": {
+        "length_mm": 0.7146163774443042,
+        "total_tangent_turn_degrees": 42.86495491351684,
+        "curvature_squared_integral_per_mm": 3.9564081694077577,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.7148526282746255,
+        "total_tangent_turn_degrees": 18.631215237970157,
+        "curvature_squared_integral_per_mm": 0.20462452509706125,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1339,
+      "after_curve": 1339,
+      "before": {
+        "length_mm": 2.317859522135612,
+        "total_tangent_turn_degrees": 206.0747031260135,
+        "curvature_squared_integral_per_mm": 278.75050975907584,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 2.2933061064427167,
+        "total_tangent_turn_degrees": 134.53131350021965,
+        "curvature_squared_integral_per_mm": 33.01296646042859,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1350,
+      "after_curve": 1350,
+      "before": {
+        "length_mm": 0.2922634506764111,
+        "total_tangent_turn_degrees": 106.22950720008791,
+        "curvature_squared_integral_per_mm": 164.42398710699229,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28887514617000437,
+        "total_tangent_turn_degrees": 22.32376130315751,
+        "curvature_squared_integral_per_mm": 0.7162269848656797,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1351,
+      "after_curve": 1351,
+      "before": {
+        "length_mm": 0.23163053505042064,
+        "total_tangent_turn_degrees": 0.546343047896682,
+        "curvature_squared_integral_per_mm": 0.0005200911400371286,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23162916453394608,
+        "total_tangent_turn_degrees": 0.004804293299200787,
+        "curvature_squared_integral_per_mm": 4.035261220941447e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1352,
+      "after_curve": 1352,
+      "before": {
+        "length_mm": 0.2891781823314578,
+        "total_tangent_turn_degrees": 54.362847462301374,
+        "curvature_squared_integral_per_mm": 5.447124403871675,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.27515222698473707,
+        "total_tangent_turn_degrees": 0.05039813645529402,
+        "curvature_squared_integral_per_mm": 3.726496584051264e-06,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1357,
+      "after_curve": 1357,
+      "before": {
+        "length_mm": 0.3523271291017761,
+        "total_tangent_turn_degrees": 145.66217701133877,
+        "curvature_squared_integral_per_mm": 72.54876882075953,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28138845016262976,
+        "total_tangent_turn_degrees": 11.477856121156575,
+        "curvature_squared_integral_per_mm": 0.19410189521509202,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1358,
+      "after_curve": 1358,
+      "before": {
+        "length_mm": 1.1221789200366645,
+        "total_tangent_turn_degrees": 117.91605954433167,
+        "curvature_squared_integral_per_mm": 27.86369099060485,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.1051554378079673,
+        "total_tangent_turn_degrees": 20.90563385872841,
+        "curvature_squared_integral_per_mm": 0.1706542996409909,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1386,
+      "after_curve": 1386,
+      "before": {
+        "length_mm": 0.8851975955504464,
+        "total_tangent_turn_degrees": 41.79289783921402,
+        "curvature_squared_integral_per_mm": 1.060569011159358,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8693777953999435,
+        "total_tangent_turn_degrees": 11.016207727322218,
+        "curvature_squared_integral_per_mm": 0.055934933271594586,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1388,
+      "after_curve": 1388,
+      "before": {
+        "length_mm": 0.2849581953184058,
+        "total_tangent_turn_degrees": 13.762857158031682,
+        "curvature_squared_integral_per_mm": 0.3425676623844779,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2840791592927885,
+        "total_tangent_turn_degrees": 3.2112906270771076,
+        "curvature_squared_integral_per_mm": 0.014714014312484543,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1389,
+      "after_curve": 1389,
+      "before": {
+        "length_mm": 0.3002307383229884,
+        "total_tangent_turn_degrees": 52.13454521739217,
+        "curvature_squared_integral_per_mm": 5.197911496087944,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2844067027572847,
+        "total_tangent_turn_degrees": 8.3758878720464,
+        "curvature_squared_integral_per_mm": 0.09963632506614677,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1390,
+      "after_curve": 1390,
+      "before": {
+        "length_mm": 0.2906822625512575,
+        "total_tangent_turn_degrees": 8.965785176794245,
+        "curvature_squared_integral_per_mm": 0.09888531328924835,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.29028930828551136,
+        "total_tangent_turn_degrees": 0.0007961128568824042,
+        "curvature_squared_integral_per_mm": 8.059979665264115e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1410,
+      "after_curve": 1410,
+      "before": {
+        "length_mm": 0.28894116987709995,
+        "total_tangent_turn_degrees": 19.254100339125916,
+        "curvature_squared_integral_per_mm": 0.6638347479970337,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2877428486598894,
+        "total_tangent_turn_degrees": 6.658504207547996,
+        "curvature_squared_integral_per_mm": 0.062498420067645326,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1411,
+      "after_curve": 1411,
+      "before": {
+        "length_mm": 0.30371442922644165,
+        "total_tangent_turn_degrees": 54.376077117540234,
+        "curvature_squared_integral_per_mm": 4.719868401633017,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.287991062203338,
+        "total_tangent_turn_degrees": 9.397227553025376,
+        "curvature_squared_integral_per_mm": 0.12373911555811581,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1419,
+      "after_curve": 1419,
+      "before": {
+        "length_mm": 0.4648382090054048,
+        "total_tangent_turn_degrees": 50.57873554829371,
+        "curvature_squared_integral_per_mm": 3.701334424778083,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.46020738421404644,
+        "total_tangent_turn_degrees": 16.565922209170054,
+        "curvature_squared_integral_per_mm": 0.23359724721663394,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1420,
+      "after_curve": 1420,
+      "before": {
+        "length_mm": 0.4652512800633782,
+        "total_tangent_turn_degrees": 194.39092337738236,
+        "curvature_squared_integral_per_mm": 33.37059938048998,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.44202137433550925,
+        "total_tangent_turn_degrees": 5.054554315628389,
+        "curvature_squared_integral_per_mm": 0.023410410292784803,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1426,
+      "after_curve": 1426,
+      "before": {
+        "length_mm": 1.6583193911276357,
+        "total_tangent_turn_degrees": 475.488480742903,
+        "curvature_squared_integral_per_mm": 425.2476543033394,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 1.572408295073277,
+        "total_tangent_turn_degrees": 136.52145476863637,
+        "curvature_squared_integral_per_mm": 6.856975382873782,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1427,
+      "after_curve": 1427,
+      "before": {
+        "length_mm": 5.85285360216632,
+        "total_tangent_turn_degrees": 78.75239161451469,
+        "curvature_squared_integral_per_mm": 3.603736849340095,
+        "control_points": 130
+      },
+      "after": {
+        "length_mm": 5.846730530849152,
+        "total_tangent_turn_degrees": 55.36854528082268,
+        "curvature_squared_integral_per_mm": 0.964388415472996,
+        "control_points": 66
+      }
+    },
+    {
+      "before_curve": 1428,
+      "after_curve": 1428,
+      "before": {
+        "length_mm": 0.6669940778207538,
+        "total_tangent_turn_degrees": 171.40461389657446,
+        "curvature_squared_integral_per_mm": 20.689929244754275,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.6445567889570047,
+        "total_tangent_turn_degrees": 28.01748672736264,
+        "curvature_squared_integral_per_mm": 0.5077455981050837,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1447,
+      "after_curve": 1447,
+      "before": {
+        "length_mm": 0.839024487909091,
+        "total_tangent_turn_degrees": 97.02156457139372,
+        "curvature_squared_integral_per_mm": 23.438134744003616,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.8318196824620763,
+        "total_tangent_turn_degrees": 24.852978208427437,
+        "curvature_squared_integral_per_mm": 0.3160169084578963,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1448,
+      "after_curve": 1448,
+      "before": {
+        "length_mm": 2.1940655454588733,
+        "total_tangent_turn_degrees": 69.51609398951284,
+        "curvature_squared_integral_per_mm": 0.8520653884357511,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 2.189892781226519,
+        "total_tangent_turn_degrees": 63.630964426953184,
+        "curvature_squared_integral_per_mm": 0.7327564100270996,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1456,
+      "after_curve": 1456,
+      "before": {
+        "length_mm": 2.1634375608032825,
+        "total_tangent_turn_degrees": 13.149728934957732,
+        "curvature_squared_integral_per_mm": 0.025808871547989425,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.1635619832918547,
+        "total_tangent_turn_degrees": 13.062866124354006,
+        "curvature_squared_integral_per_mm": 0.025752935485861116,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1457,
+      "after_curve": 1457,
+      "before": {
+        "length_mm": 0.29696140728332365,
+        "total_tangent_turn_degrees": 14.104560501677488,
+        "curvature_squared_integral_per_mm": 0.32183374834270395,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2959631144917525,
+        "total_tangent_turn_degrees": 4.942349336308602,
+        "curvature_squared_integral_per_mm": 0.033499864270366025,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1458,
+      "after_curve": 1458,
+      "before": {
+        "length_mm": 0.4117682512966512,
+        "total_tangent_turn_degrees": 78.12717226020496,
+        "curvature_squared_integral_per_mm": 6.810153468100469,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4002807650062761,
+        "total_tangent_turn_degrees": 0.0015421725754945928,
+        "curvature_squared_integral_per_mm": 2.3910883948570266e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1486,
+      "after_curve": 1486,
+      "before": {
+        "length_mm": 2.3192931533984504,
+        "total_tangent_turn_degrees": 365.44010382954343,
+        "curvature_squared_integral_per_mm": 42.12373790971839,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.2573668805677385,
+        "total_tangent_turn_degrees": 56.20218768833735,
+        "curvature_squared_integral_per_mm": 0.522281520577018,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1494,
+      "after_curve": 1494,
+      "before": {
+        "length_mm": 0.5751613734554363,
+        "total_tangent_turn_degrees": 50.57468119191415,
+        "curvature_squared_integral_per_mm": 1.5323061259022743,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5626557011290767,
+        "total_tangent_turn_degrees": 14.820508304146227,
+        "curvature_squared_integral_per_mm": 0.1626851502118739,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1495,
+      "after_curve": 1495,
+      "before": {
+        "length_mm": 0.6466711988467674,
+        "total_tangent_turn_degrees": 25.54864338268536,
+        "curvature_squared_integral_per_mm": 0.4170862086352505,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6452531719900104,
+        "total_tangent_turn_degrees": 0.0003976576774725013,
+        "curvature_squared_integral_per_mm": 9.449625479399792e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1502,
+      "after_curve": 1502,
+      "before": {
+        "length_mm": 0.18681104613397714,
+        "total_tangent_turn_degrees": 9.11442444534163,
+        "curvature_squared_integral_per_mm": 0.19897265788973859,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18663349115672284,
+        "total_tangent_turn_degrees": 0.0007590225867994217,
+        "curvature_squared_integral_per_mm": 1.2149719522892581e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1524,
+      "after_curve": 1524,
+      "before": {
+        "length_mm": 0.7160796788711908,
+        "total_tangent_turn_degrees": 171.55403481448974,
+        "curvature_squared_integral_per_mm": 35.231404527975606,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.6951757107747579,
+        "total_tangent_turn_degrees": 10.143198479684724,
+        "curvature_squared_integral_per_mm": 0.058119573030075505,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1526,
+      "after_curve": 1526,
+      "before": {
+        "length_mm": 0.7251615122466804,
+        "total_tangent_turn_degrees": 37.728087438933855,
+        "curvature_squared_integral_per_mm": 1.319640517039254,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7231763577070411,
+        "total_tangent_turn_degrees": 17.933150886363656,
+        "curvature_squared_integral_per_mm": 0.1859331262192715,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1527,
+      "after_curve": 1527,
+      "before": {
+        "length_mm": 3.385468546635104,
+        "total_tangent_turn_degrees": 27.709286663189836,
+        "curvature_squared_integral_per_mm": 0.10720915656757046,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 3.3861106795348292,
+        "total_tangent_turn_degrees": 24.477876400433743,
+        "curvature_squared_integral_per_mm": 0.08691992399698084,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1537,
+      "after_curve": 1537,
+      "before": {
+        "length_mm": 0.24827308392624597,
+        "total_tangent_turn_degrees": 16.823934514782227,
+        "curvature_squared_integral_per_mm": 0.43523283691968767,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2479459846792852,
+        "total_tangent_turn_degrees": 0.00018457662886782098,
+        "curvature_squared_integral_per_mm": 5.27030507231911e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1538,
+      "after_curve": 1538,
+      "before": {
+        "length_mm": 0.25662599162179045,
+        "total_tangent_turn_degrees": 57.91923920943135,
+        "curvature_squared_integral_per_mm": 6.099158483602582,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.24794598471680096,
+        "total_tangent_turn_degrees": 0.002847237949775531,
+        "curvature_squared_integral_per_mm": 1.2376985737360131e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1540,
+      "after_curve": 1540,
+      "before": {
+        "length_mm": 0.8349799830185016,
+        "total_tangent_turn_degrees": 86.08553741060904,
+        "curvature_squared_integral_per_mm": 4.4607963698575075,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8359597111729854,
+        "total_tangent_turn_degrees": 61.320359415694156,
+        "curvature_squared_integral_per_mm": 1.734870287082003,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1544,
+      "after_curve": 1544,
+      "before": {
+        "length_mm": 0.681990328680031,
+        "total_tangent_turn_degrees": 123.79230800175995,
+        "curvature_squared_integral_per_mm": 100.60695914356577,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6706576044265586,
+        "total_tangent_turn_degrees": 20.567465200266437,
+        "curvature_squared_integral_per_mm": 0.25774974913067167,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1552,
+      "after_curve": 1552,
+      "before": {
+        "length_mm": 0.5047784492492494,
+        "total_tangent_turn_degrees": 64.7123622397234,
+        "curvature_squared_integral_per_mm": 3.979145512594015,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4998155041415725,
+        "total_tangent_turn_degrees": 29.381958270358616,
+        "curvature_squared_integral_per_mm": 0.6930743048853407,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1553,
+      "after_curve": 1553,
+      "before": {
+        "length_mm": 1.1928112021122357,
+        "total_tangent_turn_degrees": 91.21025507645547,
+        "curvature_squared_integral_per_mm": 2.9327247602816646,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.1740096689098007,
+        "total_tangent_turn_degrees": 45.06555842824304,
+        "curvature_squared_integral_per_mm": 0.7158516128699511,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1564,
+      "after_curve": 1564,
+      "before": {
+        "length_mm": 0.16112946057627736,
+        "total_tangent_turn_degrees": 90.89181437872082,
+        "curvature_squared_integral_per_mm": 26.714061093109787,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.13110854757320686,
+        "total_tangent_turn_degrees": 0.7603475202259953,
+        "curvature_squared_integral_per_mm": 0.00174781918833011,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1586,
+      "after_curve": 1586,
+      "before": {
+        "length_mm": 5.1651427461885575,
+        "total_tangent_turn_degrees": 2819.0070156359566,
+        "curvature_squared_integral_per_mm": 5247.074230156228,
+        "control_points": 103
+      },
+      "after": {
+        "length_mm": 4.761438027523281,
+        "total_tangent_turn_degrees": 78.79719162930584,
+        "curvature_squared_integral_per_mm": 0.4923600946706996,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1590,
+      "after_curve": 1590,
+      "before": {
+        "length_mm": 0.2550419183371887,
+        "total_tangent_turn_degrees": 19.352658308795327,
+        "curvature_squared_integral_per_mm": 0.5785357212558508,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2545368408947661,
+        "total_tangent_turn_degrees": 0.0003192158332623737,
+        "curvature_squared_integral_per_mm": 2.0226381990019597e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1591,
+      "after_curve": 1591,
+      "before": {
+        "length_mm": 0.2646373959257221,
+        "total_tangent_turn_degrees": 57.131549397012094,
+        "curvature_squared_integral_per_mm": 5.889316689366478,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2545368573416561,
+        "total_tangent_turn_degrees": 0.05939525220420774,
+        "curvature_squared_integral_per_mm": 5.498703662439746e-06,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1593,
+      "after_curve": 1593,
+      "before": {
+        "length_mm": 1.0887960704668525,
+        "total_tangent_turn_degrees": 27.76138926475634,
+        "curvature_squared_integral_per_mm": 0.3561447672542174,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.0881321908716408,
+        "total_tangent_turn_degrees": 24.614051607759855,
+        "curvature_squared_integral_per_mm": 0.22737311514142297,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1594,
+      "after_curve": 1594,
+      "before": {
+        "length_mm": 1.8512766872901047,
+        "total_tangent_turn_degrees": 35.29568049902994,
+        "curvature_squared_integral_per_mm": 0.6365173511235218,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.8486168055424341,
+        "total_tangent_turn_degrees": 16.769503221319418,
+        "curvature_squared_integral_per_mm": 0.06442502652522245,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1595,
+      "after_curve": 1595,
+      "before": {
+        "length_mm": 0.686650287063634,
+        "total_tangent_turn_degrees": 15.120822777804706,
+        "curvature_squared_integral_per_mm": 0.1886975768166029,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6860420194893313,
+        "total_tangent_turn_degrees": 0.9323108108336013,
+        "curvature_squared_integral_per_mm": 0.0005010591721861357,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1611,
+      "after_curve": 1611,
+      "before": {
+        "length_mm": 0.24053458336259467,
+        "total_tangent_turn_degrees": 138.17932399150237,
+        "curvature_squared_integral_per_mm": 178.67244431376466,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1498469457948394,
+        "total_tangent_turn_degrees": 95.35568735701695,
+        "curvature_squared_integral_per_mm": 48.21749250960372,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1629,
+      "after_curve": 1629,
+      "before": {
+        "length_mm": 0.26336712492385456,
+        "total_tangent_turn_degrees": 35.971411907963386,
+        "curvature_squared_integral_per_mm": 1.914672364381859,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2582270300253762,
+        "total_tangent_turn_degrees": 17.152730397644245,
+        "curvature_squared_integral_per_mm": 0.43671315537577576,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1637,
+      "after_curve": 1637,
+      "before": {
+        "length_mm": 0.18303187080117914,
+        "total_tangent_turn_degrees": 4.219105907316875,
+        "curvature_squared_integral_per_mm": 0.038421547172684124,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18296703101389805,
+        "total_tangent_turn_degrees": 0.000807495861821692,
+        "curvature_squared_integral_per_mm": 1.352159875015616e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1649,
+      "after_curve": 1649,
+      "before": {
+        "length_mm": 0.20223312616710415,
+        "total_tangent_turn_degrees": 38.21569386903972,
+        "curvature_squared_integral_per_mm": 3.0194573135134526,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2003801523022184,
+        "total_tangent_turn_degrees": 9.072823479706393,
+        "curvature_squared_integral_per_mm": 0.1674166205550299,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1651,
+      "after_curve": 1651,
+      "before": {
+        "length_mm": 0.2672646652318118,
+        "total_tangent_turn_degrees": 20.84722954015028,
+        "curvature_squared_integral_per_mm": 0.6876678644623759,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2664282961033324,
+        "total_tangent_turn_degrees": 1.4357201447922772,
+        "curvature_squared_integral_per_mm": 0.003119566974367551,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1652,
+      "after_curve": 1652,
+      "before": {
+        "length_mm": 0.2786825610293117,
+        "total_tangent_turn_degrees": 56.08077425595062,
+        "curvature_squared_integral_per_mm": 5.7406139784738075,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2665832564497517,
+        "total_tangent_turn_degrees": 5.737754211043257,
+        "curvature_squared_integral_per_mm": 0.049486053810032085,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1657,
+      "after_curve": 1657,
+      "before": {
+        "length_mm": 0.46549402128290135,
+        "total_tangent_turn_degrees": 24.657527760108316,
+        "curvature_squared_integral_per_mm": 0.7656493735838189,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4627158569548393,
+        "total_tangent_turn_degrees": 0.00144811981364193,
+        "curvature_squared_integral_per_mm": 1.7255957303068583e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1658,
+      "after_curve": 1658,
+      "before": {
+        "length_mm": 1.905331647184535,
+        "total_tangent_turn_degrees": 8.744896686686763e-06,
+        "curvature_squared_integral_per_mm": 2.1418654679271378e-14,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.9053316471845387,
+        "total_tangent_turn_degrees": 3.768739208480515e-06,
+        "curvature_squared_integral_per_mm": 1.974656009962169e-14,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1659,
+      "after_curve": 1659,
+      "before": {
+        "length_mm": 0.7396858396615811,
+        "total_tangent_turn_degrees": 2.551502570491084,
+        "curvature_squared_integral_per_mm": 0.003710166614519123,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7396162072166735,
+        "total_tangent_turn_degrees": 0.0003501927655944917,
+        "curvature_squared_integral_per_mm": 5.6493159591236446e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1666,
+      "after_curve": 1666,
+      "before": {
+        "length_mm": 0.23916262895033313,
+        "total_tangent_turn_degrees": 13.246614780931328,
+        "curvature_squared_integral_per_mm": 0.2986984015182445,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2383392658996403,
+        "total_tangent_turn_degrees": 0.0016305269319658996,
+        "curvature_squared_integral_per_mm": 4.194319540296395e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1669,
+      "after_curve": 1669,
+      "before": {
+        "length_mm": 0.14670341406290346,
+        "total_tangent_turn_degrees": 35.21679237128272,
+        "curvature_squared_integral_per_mm": 7.345448791985473,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14438558337643556,
+        "total_tangent_turn_degrees": 20.59466874399778,
+        "curvature_squared_integral_per_mm": 1.2435682418312128,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1683,
+      "after_curve": 1683,
+      "before": {
+        "length_mm": 0.2885331132435746,
+        "total_tangent_turn_degrees": 15.799181658606875,
+        "curvature_squared_integral_per_mm": 0.4452557945585884,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28746051902018316,
+        "total_tangent_turn_degrees": 4.584852050981583,
+        "curvature_squared_integral_per_mm": 0.029615814558523915,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1684,
+      "after_curve": 1684,
+      "before": {
+        "length_mm": 0.3027731438888459,
+        "total_tangent_turn_degrees": 51.33183928386487,
+        "curvature_squared_integral_per_mm": 4.63262241879564,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2876257644805002,
+        "total_tangent_turn_degrees": 7.109498709944075,
+        "curvature_squared_integral_per_mm": 0.07099629646838967,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1701,
+      "after_curve": 1701,
+      "before": {
+        "length_mm": 0.2786155775734629,
+        "total_tangent_turn_degrees": 19.56684542545664,
+        "curvature_squared_integral_per_mm": 0.6543365883286999,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.27744471162766454,
+        "total_tangent_turn_degrees": 5.731407291779686,
+        "curvature_squared_integral_per_mm": 0.0478461153594498,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1702,
+      "after_curve": 1702,
+      "before": {
+        "length_mm": 0.2914703730578713,
+        "total_tangent_turn_degrees": 51.7943596374335,
+        "curvature_squared_integral_per_mm": 5.272061547843282,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2779712426405711,
+        "total_tangent_turn_degrees": 11.51098764259021,
+        "curvature_squared_integral_per_mm": 0.19208476525335172,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1710,
+      "after_curve": 1710,
+      "before": {
+        "length_mm": 0.5961297274634506,
+        "total_tangent_turn_degrees": 95.41968078366294,
+        "curvature_squared_integral_per_mm": 8.20328806646673,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.5695082096208596,
+        "total_tangent_turn_degrees": 13.742288908505099,
+        "curvature_squared_integral_per_mm": 0.12706330931946735,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1713,
+      "after_curve": 1713,
+      "before": {
+        "length_mm": 2.9117336832960934,
+        "total_tangent_turn_degrees": 214.58236399903828,
+        "curvature_squared_integral_per_mm": 20.08043254485729,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.868633639144588,
+        "total_tangent_turn_degrees": 59.43480159763476,
+        "curvature_squared_integral_per_mm": 0.5539777153418144,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1721,
+      "after_curve": 1721,
+      "before": {
+        "length_mm": 1.0418441692588356,
+        "total_tangent_turn_degrees": 4.770438588998621,
+        "curvature_squared_integral_per_mm": 0.00790179381392959,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.0417670767372533,
+        "total_tangent_turn_degrees": 4.074398801041712,
+        "curvature_squared_integral_per_mm": 0.005879392819866366,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1724,
+      "after_curve": 1724,
+      "before": {
+        "length_mm": 0.28985403370624624,
+        "total_tangent_turn_degrees": 16.24485810270382,
+        "curvature_squared_integral_per_mm": 0.48170957732710346,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28864742607708244,
+        "total_tangent_turn_degrees": 6.053921924721729,
+        "curvature_squared_integral_per_mm": 0.051464269330309995,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1725,
+      "after_curve": 1725,
+      "before": {
+        "length_mm": 0.30371596300545833,
+        "total_tangent_turn_degrees": 50.51933988218729,
+        "curvature_squared_integral_per_mm": 4.558871123247685,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2888416970847892,
+        "total_tangent_turn_degrees": 8.428600521105011,
+        "curvature_squared_integral_per_mm": 0.09937881283698755,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1726,
+      "after_curve": 1726,
+      "before": {
+        "length_mm": 1.0351161988248985,
+        "total_tangent_turn_degrees": 184.21668100209547,
+        "curvature_squared_integral_per_mm": 14.54809583604842,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.0063747166320924,
+        "total_tangent_turn_degrees": 37.75763404497116,
+        "curvature_squared_integral_per_mm": 0.5121684663540113,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1727,
+      "after_curve": 1727,
+      "before": {
+        "length_mm": 0.31811740291830326,
+        "total_tangent_turn_degrees": 25.885892431783695,
+        "curvature_squared_integral_per_mm": 1.0315195488785847,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3164549810421536,
+        "total_tangent_turn_degrees": 8.315871328824215,
+        "curvature_squared_integral_per_mm": 0.08588422859945931,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1744,
+      "after_curve": 1744,
+      "before": {
+        "length_mm": 0.8899793816934295,
+        "total_tangent_turn_degrees": 54.04630902443846,
+        "curvature_squared_integral_per_mm": 9.470481684878271,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8893370347578217,
+        "total_tangent_turn_degrees": 51.04436843421483,
+        "curvature_squared_integral_per_mm": 8.573814397627055,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1753,
+      "after_curve": 1753,
+      "before": {
+        "length_mm": 1.1866050487068658,
+        "total_tangent_turn_degrees": 292.4898744200858,
+        "curvature_squared_integral_per_mm": 52.88326049598079,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.152684986235222,
+        "total_tangent_turn_degrees": 246.02685529212698,
+        "curvature_squared_integral_per_mm": 44.65022825415682,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1765,
+      "after_curve": 1765,
+      "before": {
+        "length_mm": 0.287160925663038,
+        "total_tangent_turn_degrees": 18.541169890662843,
+        "curvature_squared_integral_per_mm": 0.5886308573316545,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28607590761674645,
+        "total_tangent_turn_degrees": 8.212445710629215,
+        "curvature_squared_integral_per_mm": 0.09522700821344976,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1766,
+      "after_curve": 1766,
+      "before": {
+        "length_mm": 0.30138112174568393,
+        "total_tangent_turn_degrees": 52.3996412827305,
+        "curvature_squared_integral_per_mm": 4.83197017209468,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.286343186700513,
+        "total_tangent_turn_degrees": 10.714685850804145,
+        "curvature_squared_integral_per_mm": 0.16186556011795408,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1777,
+      "after_curve": 1777,
+      "before": {
+        "length_mm": 0.18429311360520198,
+        "total_tangent_turn_degrees": 35.72351596877792,
+        "curvature_squared_integral_per_mm": 2.956484514533039,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17962179797952987,
+        "total_tangent_turn_degrees": 0.001884546441856258,
+        "curvature_squared_integral_per_mm": 7.653726866486304e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1778,
+      "after_curve": 1778,
+      "before": {
+        "length_mm": 0.2893540136768047,
+        "total_tangent_turn_degrees": 12.822824283096917,
+        "curvature_squared_integral_per_mm": 0.3036458494324225,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28850708899874494,
+        "total_tangent_turn_degrees": 3.382566146792431,
+        "curvature_squared_integral_per_mm": 0.016091314143089362,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1779,
+      "after_curve": 1779,
+      "before": {
+        "length_mm": 0.3401054888711554,
+        "total_tangent_turn_degrees": 2.12454375393518,
+        "curvature_squared_integral_per_mm": 0.005392515777654902,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.34007548139679555,
+        "total_tangent_turn_degrees": 0.0005112370129847639,
+        "curvature_squared_integral_per_mm": 2.8806775181451805e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1782,
+      "after_curve": 1782,
+      "before": {
+        "length_mm": 2.782039003929651,
+        "total_tangent_turn_degrees": 128.57827289908644,
+        "curvature_squared_integral_per_mm": 7.316470415127308,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.78176744323573,
+        "total_tangent_turn_degrees": 17.21937904672715,
+        "curvature_squared_integral_per_mm": 0.1503454251400925,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1784,
+      "after_curve": 1784,
+      "before": {
+        "length_mm": 0.2747886058150374,
+        "total_tangent_turn_degrees": 19.1803058135636,
+        "curvature_squared_integral_per_mm": 0.5421117129951356,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2732621448794902,
+        "total_tangent_turn_degrees": 9.532552932457708,
+        "curvature_squared_integral_per_mm": 0.133053144262125,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1811,
+      "after_curve": 1811,
+      "before": {
+        "length_mm": 2.2706855688026377,
+        "total_tangent_turn_degrees": 471.23324762968036,
+        "curvature_squared_integral_per_mm": 279.05158306822295,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.0903127104377623,
+        "total_tangent_turn_degrees": 70.8543337515683,
+        "curvature_squared_integral_per_mm": 4.0801510091507325,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1812,
+      "after_curve": 1812,
+      "before": {
+        "length_mm": 0.4696457032214865,
+        "total_tangent_turn_degrees": 283.1650669193422,
+        "curvature_squared_integral_per_mm": 278.532858990589,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4040254711740018,
+        "total_tangent_turn_degrees": 8.705007572365854,
+        "curvature_squared_integral_per_mm": 0.0742521725967083,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1817,
+      "after_curve": 1817,
+      "before": {
+        "length_mm": 0.7964842571776518,
+        "total_tangent_turn_degrees": 21.614527674721963,
+        "curvature_squared_integral_per_mm": 0.24450816150517313,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7921255298935103,
+        "total_tangent_turn_degrees": 0.0015451072989011462,
+        "curvature_squared_integral_per_mm": 1.1149051429924567e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1818,
+      "after_curve": 1818,
+      "before": {
+        "length_mm": 0.7921352011705848,
+        "total_tangent_turn_degrees": 0.7837051202167933,
+        "curvature_squared_integral_per_mm": 0.0003089009266186036,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7921255298590049,
+        "total_tangent_turn_degrees": 0.00017626649137840206,
+        "curvature_squared_integral_per_mm": 1.5317354677288383e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1821,
+      "after_curve": 1821,
+      "before": {
+        "length_mm": 0.18033162375290987,
+        "total_tangent_turn_degrees": 17.98400430611599,
+        "curvature_squared_integral_per_mm": 0.7140473367764332,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1792104149191745,
+        "total_tangent_turn_degrees": 3.586259133896008,
+        "curvature_squared_integral_per_mm": 0.028368435877192358,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1824,
+      "after_curve": 1824,
+      "before": {
+        "length_mm": 0.20554125640423337,
+        "total_tangent_turn_degrees": 35.49979741449822,
+        "curvature_squared_integral_per_mm": 2.256393055128937,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.20321500459509448,
+        "total_tangent_turn_degrees": 5.968542086807904,
+        "curvature_squared_integral_per_mm": 0.0707995851603214,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1825,
+      "after_curve": 1825,
+      "before": {
+        "length_mm": 1.4159563361700833,
+        "total_tangent_turn_degrees": 60.49777318082224,
+        "curvature_squared_integral_per_mm": 1.507890952371045,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.4071722632675825,
+        "total_tangent_turn_degrees": 18.46395223552173,
+        "curvature_squared_integral_per_mm": 0.09312068665887921,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1826,
+      "after_curve": 1826,
+      "before": {
+        "length_mm": 0.44878310120856224,
+        "total_tangent_turn_degrees": 86.95012735702745,
+        "curvature_squared_integral_per_mm": 5.508685348420512,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4354015229592429,
+        "total_tangent_turn_degrees": 21.329408876539233,
+        "curvature_squared_integral_per_mm": 0.42007965915032697,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1854,
+      "after_curve": 1854,
+      "before": {
+        "length_mm": 0.5965782045294744,
+        "total_tangent_turn_degrees": 302.7481062440554,
+        "curvature_squared_integral_per_mm": 293.7203993256611,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4858894858513127,
+        "total_tangent_turn_degrees": 57.153638719190496,
+        "curvature_squared_integral_per_mm": 4.519353742215864,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1857,
+      "after_curve": 1857,
+      "before": {
+        "length_mm": 0.23667980574483488,
+        "total_tangent_turn_degrees": 25.735763387423518,
+        "curvature_squared_integral_per_mm": 1.0645591742960185,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23746801599549883,
+        "total_tangent_turn_degrees": 33.02834970009896,
+        "curvature_squared_integral_per_mm": 2.993043017260815,
+        "control_points": 9
+      }
+    },
+    {
+      "before_curve": 1865,
+      "after_curve": 1865,
+      "before": {
+        "length_mm": 1.7609442051831357,
+        "total_tangent_turn_degrees": 348.4130949760553,
+        "curvature_squared_integral_per_mm": 27.99863911194663,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 1.7306850820176076,
+        "total_tangent_turn_degrees": 0.00011477105928376311,
+        "curvature_squared_integral_per_mm": 2.8172465707216235e-12,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1880,
+      "after_curve": 1880,
+      "before": {
+        "length_mm": 0.9812391347557934,
+        "total_tangent_turn_degrees": 85.67131914795362,
+        "curvature_squared_integral_per_mm": 4.7085350667717005,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.9611548352493833,
+        "total_tangent_turn_degrees": 71.3457904301402,
+        "curvature_squared_integral_per_mm": 2.134790482090245,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1883,
+      "after_curve": 1883,
+      "before": {
+        "length_mm": 0.6773817803211473,
+        "total_tangent_turn_degrees": 85.21825197739713,
+        "curvature_squared_integral_per_mm": 23.597738497305485,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.670469986403234,
+        "total_tangent_turn_degrees": 15.28741915253245,
+        "curvature_squared_integral_per_mm": 0.12729228499102613,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1884,
+      "after_curve": 1886,
+      "before": {
+        "length_mm": 0.6354444619839436,
+        "total_tangent_turn_degrees": 150.50215163098025,
+        "curvature_squared_integral_per_mm": 38.59575733646348,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.5870066448377845,
+        "total_tangent_turn_degrees": 66.87093793058187,
+        "curvature_squared_integral_per_mm": 2.728283538451997,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1885,
+      "after_curve": 1887,
+      "before": {
+        "length_mm": 0.9635700987005169,
+        "total_tangent_turn_degrees": 3.4675496190588917,
+        "curvature_squared_integral_per_mm": 0.0049444286472540185,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9633544766409647,
+        "total_tangent_turn_degrees": 0.8804880871845795,
+        "curvature_squared_integral_per_mm": 0.00031898237283574886,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1886,
+      "after_curve": 1888,
+      "before": {
+        "length_mm": 0.8684194223420731,
+        "total_tangent_turn_degrees": 56.60786872758611,
+        "curvature_squared_integral_per_mm": 3.7376365399336007,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8504450078580539,
+        "total_tangent_turn_degrees": 0.25333288897175776,
+        "curvature_squared_integral_per_mm": 3.036955475052403e-05,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1891,
+      "after_curve": 1893,
+      "before": {
+        "length_mm": 0.11369493619222101,
+        "total_tangent_turn_degrees": 0.0012012046453595692,
+        "curvature_squared_integral_per_mm": 4.537742798406068e-09,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11749622202183813,
+        "total_tangent_turn_degrees": 64.45909467757869,
+        "curvature_squared_integral_per_mm": 60.65370270553296,
+        "control_points": 8
+      }
+    },
+    {
+      "before_curve": 1895,
+      "after_curve": 1897,
+      "before": {
+        "length_mm": 0.8408254688679769,
+        "total_tangent_turn_degrees": 62.50876297646258,
+        "curvature_squared_integral_per_mm": 2.042244503990436,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8365911203129403,
+        "total_tangent_turn_degrees": 40.08590617809939,
+        "curvature_squared_integral_per_mm": 0.6798331530017624,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1899,
+      "after_curve": 1901,
+      "before": {
+        "length_mm": 0.6155009362221664,
+        "total_tangent_turn_degrees": 266.80675668256197,
+        "curvature_squared_integral_per_mm": 326.89956164101534,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.5887162097409473,
+        "total_tangent_turn_degrees": 56.71819010139815,
+        "curvature_squared_integral_per_mm": 4.035550919621096,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1914,
+      "after_curve": 1916,
+      "before": {
+        "length_mm": 0.11357807959125889,
+        "total_tangent_turn_degrees": 8.037607439738484e-06,
+        "curvature_squared_integral_per_mm": 4.105072443152862e-24,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11357807959126026,
+        "total_tangent_turn_degrees": 5.464151336010201e-05,
+        "curvature_squared_integral_per_mm": 9.460419580741915e-24,
+        "control_points": 7
+      }
+    },
+    {
+      "before_curve": 1915,
+      "after_curve": 1917,
+      "before": {
+        "length_mm": 1.0784892652480058,
+        "total_tangent_turn_degrees": 317.64829849718376,
+        "curvature_squared_integral_per_mm": 39.93669693131124,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.0356435269669917,
+        "total_tangent_turn_degrees": 21.690569841244248,
+        "curvature_squared_integral_per_mm": 0.34118526629430257,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1927,
+      "after_curve": 1929,
+      "before": {
+        "length_mm": 0.8865875011338153,
+        "total_tangent_turn_degrees": 33.67539392683719,
+        "curvature_squared_integral_per_mm": 0.6800777243070452,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8835553325167945,
+        "total_tangent_turn_degrees": 24.00989837464791,
+        "curvature_squared_integral_per_mm": 0.25945721153830453,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1930,
+      "after_curve": 1932,
+      "before": {
+        "length_mm": 0.703819667037615,
+        "total_tangent_turn_degrees": 88.95508207320552,
+        "curvature_squared_integral_per_mm": 7.086988438549222,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6888179245881583,
+        "total_tangent_turn_degrees": 6.856098889727705,
+        "curvature_squared_integral_per_mm": 0.027671959515562904,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1931,
+      "after_curve": 1933,
+      "before": {
+        "length_mm": 1.1889804849414547,
+        "total_tangent_turn_degrees": 269.9612905198363,
+        "curvature_squared_integral_per_mm": 35.62679447772257,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.136363203163989,
+        "total_tangent_turn_degrees": 82.87934607280683,
+        "curvature_squared_integral_per_mm": 1.9956565968809763,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1932,
+      "after_curve": 1934,
+      "before": {
+        "length_mm": 0.19391600438481954,
+        "total_tangent_turn_degrees": 57.81133968963245,
+        "curvature_squared_integral_per_mm": 7.218421420871856,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18158045240587561,
+        "total_tangent_turn_degrees": 2.749986289460592,
+        "curvature_squared_integral_per_mm": 0.016448868050808946,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1933,
+      "after_curve": 1935,
+      "before": {
+        "length_mm": 0.2525385197216705,
+        "total_tangent_turn_degrees": 38.89519510808688,
+        "curvature_squared_integral_per_mm": 2.2929403225405576,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2520955108129212,
+        "total_tangent_turn_degrees": 32.08520846953634,
+        "curvature_squared_integral_per_mm": 1.7775205615269394,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1935,
+      "after_curve": 1937,
+      "before": {
+        "length_mm": 1.3170761813097445,
+        "total_tangent_turn_degrees": 1.3721054164893012e-05,
+        "curvature_squared_integral_per_mm": 1.692687506657023e-14,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.3170761813097445,
+        "total_tangent_turn_degrees": 9.098541310160904e-06,
+        "curvature_squared_integral_per_mm": 1.4732438841414983e-14,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1936,
+      "after_curve": 1938,
+      "before": {
+        "length_mm": 0.3138941044182829,
+        "total_tangent_turn_degrees": 131.75106442836417,
+        "curvature_squared_integral_per_mm": 87.18648411798165,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23050895984620332,
+        "total_tangent_turn_degrees": 72.0647103642919,
+        "curvature_squared_integral_per_mm": 10.400080068792823,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1951,
+      "after_curve": 1954,
+      "before": {
+        "length_mm": 0.3064946286766435,
+        "total_tangent_turn_degrees": 56.781928114535646,
+        "curvature_squared_integral_per_mm": 5.960427521073138,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2955780307638181,
+        "total_tangent_turn_degrees": 34.117004714136186,
+        "curvature_squared_integral_per_mm": 1.633666029855614,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1952,
+      "after_curve": 1955,
+      "before": {
+        "length_mm": 0.2946826667999591,
+        "total_tangent_turn_degrees": 64.73263216162012,
+        "curvature_squared_integral_per_mm": 6.606515813793814,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2944045320865005,
+        "total_tangent_turn_degrees": 39.268574144467806,
+        "curvature_squared_integral_per_mm": 1.966503113572804,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1953,
+      "after_curve": 1956,
+      "before": {
+        "length_mm": 1.4659174413233442,
+        "total_tangent_turn_degrees": 117.31286081265512,
+        "curvature_squared_integral_per_mm": 6.716139715709841,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.449625261617303,
+        "total_tangent_turn_degrees": 28.591692192895383,
+        "curvature_squared_integral_per_mm": 0.24506950141760073,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1960,
+      "after_curve": 1963,
+      "before": {
+        "length_mm": 0.6826869401950344,
+        "total_tangent_turn_degrees": 48.786069064482014,
+        "curvature_squared_integral_per_mm": 2.5024344953166797,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.6807906532028603,
+        "total_tangent_turn_degrees": 46.045068577794964,
+        "curvature_squared_integral_per_mm": 1.6167554836938802,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1961,
+      "after_curve": 1964,
+      "before": {
+        "length_mm": 0.09989298401525902,
+        "total_tangent_turn_degrees": 119.248869005214,
+        "curvature_squared_integral_per_mm": 188.05701214814118,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08640474412907355,
+        "total_tangent_turn_degrees": 57.85992300259915,
+        "curvature_squared_integral_per_mm": 16.69614568609955,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1963,
+      "after_curve": 1966,
+      "before": {
+        "length_mm": 0.6167800437334976,
+        "total_tangent_turn_degrees": 315.6806875047424,
+        "curvature_squared_integral_per_mm": 1415.6719171867203,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.5248009207301408,
+        "total_tangent_turn_degrees": 47.620913018526025,
+        "curvature_squared_integral_per_mm": 2.1509102914771097,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1967,
+      "after_curve": 1970,
+      "before": {
+        "length_mm": 0.39297449818608887,
+        "total_tangent_turn_degrees": 253.7068501773145,
+        "curvature_squared_integral_per_mm": 800.6333705309148,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.3582509543103254,
+        "total_tangent_turn_degrees": 8.154521037103857,
+        "curvature_squared_integral_per_mm": 0.07618300939405807,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 1973,
+      "after_curve": 1976,
+      "before": {
+        "length_mm": 0.7859204128973705,
+        "total_tangent_turn_degrees": 53.33718944286521,
+        "curvature_squared_integral_per_mm": 1.399272441364234,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.7787692086093568,
+        "total_tangent_turn_degrees": 37.05916177412779,
+        "curvature_squared_integral_per_mm": 0.7156765648940098,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1977,
+      "after_curve": 1980,
+      "before": {
+        "length_mm": 0.3203749472846482,
+        "total_tangent_turn_degrees": 7.785442464395675,
+        "curvature_squared_integral_per_mm": 0.06999542554653748,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3200216649666448,
+        "total_tangent_turn_degrees": 0.001114336163159143,
+        "curvature_squared_integral_per_mm": 1.4538644079351454e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 1981,
+      "after_curve": 1984,
+      "before": {
+        "length_mm": 0.3212841427479432,
+        "total_tangent_turn_degrees": 162.86761849665174,
+        "curvature_squared_integral_per_mm": 37.39380086612872,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2324963801950328,
+        "total_tangent_turn_degrees": 82.17082390610733,
+        "curvature_squared_integral_per_mm": 11.717241559781916,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2007,
+      "after_curve": 2010,
+      "before": {
+        "length_mm": 0.11347348697614981,
+        "total_tangent_turn_degrees": 8.891381085990079e-06,
+        "curvature_squared_integral_per_mm": 1.0730547364776521e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11347348697614912,
+        "total_tangent_turn_degrees": 1.2367151495863963e-05,
+        "curvature_squared_integral_per_mm": 2.1763787959963616e-23,
+        "control_points": 7
+      }
+    },
+    {
+      "before_curve": 2019,
+      "after_curve": 2022,
+      "before": {
+        "length_mm": 0.14124484229969708,
+        "total_tangent_turn_degrees": 189.09192233795227,
+        "curvature_squared_integral_per_mm": 901.7837911079483,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.06219686934435922,
+        "total_tangent_turn_degrees": 137.31868952746214,
+        "curvature_squared_integral_per_mm": 407.3305032950678,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2021,
+      "after_curve": 2024,
+      "before": {
+        "length_mm": 0.4814457004611552,
+        "total_tangent_turn_degrees": 9.848119281327477,
+        "curvature_squared_integral_per_mm": 0.07890547668640942,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.48075774175232533,
+        "total_tangent_turn_degrees": 4.005143065793319,
+        "curvature_squared_integral_per_mm": 0.011826695770911309,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2022,
+      "after_curve": 2025,
+      "before": {
+        "length_mm": 0.34427653316629697,
+        "total_tangent_turn_degrees": 28.23492105676131,
+        "curvature_squared_integral_per_mm": 0.7375471938935709,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.34136697526760135,
+        "total_tangent_turn_degrees": 12.444571760535203,
+        "curvature_squared_integral_per_mm": 0.18541127937007387,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2025,
+      "after_curve": 2028,
+      "before": {
+        "length_mm": 0.1895438095481007,
+        "total_tangent_turn_degrees": 50.41910764233343,
+        "curvature_squared_integral_per_mm": 7.420726672940257,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18014314007657567,
+        "total_tangent_turn_degrees": 0.19492800518864564,
+        "curvature_squared_integral_per_mm": 8.322816937300395e-05,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2027,
+      "after_curve": 2030,
+      "before": {
+        "length_mm": 0.24686403400782414,
+        "total_tangent_turn_degrees": 51.079434117664924,
+        "curvature_squared_integral_per_mm": 3.7332268975310154,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.24307672697817162,
+        "total_tangent_turn_degrees": 23.03476333495731,
+        "curvature_squared_integral_per_mm": 0.8346511820235584,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2029,
+      "after_curve": 2032,
+      "before": {
+        "length_mm": 0.27153475342203154,
+        "total_tangent_turn_degrees": 55.85651271335426,
+        "curvature_squared_integral_per_mm": 5.310295107786875,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2538734644892451,
+        "total_tangent_turn_degrees": 0.006056849435986587,
+        "curvature_squared_integral_per_mm": 5.4642629159009544e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2030,
+      "after_curve": 2033,
+      "before": {
+        "length_mm": 0.3831896613694166,
+        "total_tangent_turn_degrees": 54.738010945149114,
+        "curvature_squared_integral_per_mm": 4.350985197936332,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.35817764685121517,
+        "total_tangent_turn_degrees": 3.613152679697323,
+        "curvature_squared_integral_per_mm": 0.014677553048365594,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2031,
+      "after_curve": 2034,
+      "before": {
+        "length_mm": 0.28852595005197373,
+        "total_tangent_turn_degrees": 1.5884598502747647,
+        "curvature_squared_integral_per_mm": 0.003539972899097242,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2885115398731729,
+        "total_tangent_turn_degrees": 0.004468010424492528,
+        "curvature_squared_integral_per_mm": 2.6002480055297683e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2033,
+      "after_curve": 2036,
+      "before": {
+        "length_mm": 0.23418981858408405,
+        "total_tangent_turn_degrees": 51.96560125272812,
+        "curvature_squared_integral_per_mm": 6.597777901407138,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23112231871151262,
+        "total_tangent_turn_degrees": 8.209221418727461,
+        "curvature_squared_integral_per_mm": 0.11942028874637843,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2049,
+      "after_curve": 2052,
+      "before": {
+        "length_mm": 0.39129442991468444,
+        "total_tangent_turn_degrees": 159.92688788617738,
+        "curvature_squared_integral_per_mm": 30.552152669764816,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3703797485847735,
+        "total_tangent_turn_degrees": 21.69884185300016,
+        "curvature_squared_integral_per_mm": 0.5201824979148263,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2055,
+      "after_curve": 2058,
+      "before": {
+        "length_mm": 0.3085016613513917,
+        "total_tangent_turn_degrees": 73.56830092830162,
+        "curvature_squared_integral_per_mm": 6.224146626524479,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.29905327702353407,
+        "total_tangent_turn_degrees": 8.303938607374809,
+        "curvature_squared_integral_per_mm": 0.08973854130333858,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2057,
+      "after_curve": 2060,
+      "before": {
+        "length_mm": 0.32005008572241544,
+        "total_tangent_turn_degrees": 2.525722011929474,
+        "curvature_squared_integral_per_mm": 0.007869163067156895,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.32000946075765246,
+        "total_tangent_turn_degrees": 0.00042454437056416833,
+        "curvature_squared_integral_per_mm": 2.1325770590964086e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2067,
+      "after_curve": 2072,
+      "before": {
+        "length_mm": 1.0653431802290576,
+        "total_tangent_turn_degrees": 7.141582326374339,
+        "curvature_squared_integral_per_mm": 0.029916159894788588,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.0651643741876702,
+        "total_tangent_turn_degrees": 2.1443943383474915,
+        "curvature_squared_integral_per_mm": 0.0017119053602285717,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2068,
+      "after_curve": 2073,
+      "before": {
+        "length_mm": 0.21198871265826696,
+        "total_tangent_turn_degrees": 0.24760600948731237,
+        "curvature_squared_integral_per_mm": 0.0001172918176726861,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.21198845659404633,
+        "total_tangent_turn_degrees": 0.008466233248207146,
+        "curvature_squared_integral_per_mm": 1.2776736420685546e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2069,
+      "after_curve": 2076,
+      "before": {
+        "length_mm": 1.9605938360591255,
+        "total_tangent_turn_degrees": 66.27599665788549,
+        "curvature_squared_integral_per_mm": 2.6513617909915355,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 1.9554123988820364,
+        "total_tangent_turn_degrees": 54.096985553886,
+        "curvature_squared_integral_per_mm": 1.066312705045076,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2074,
+      "after_curve": 2081,
+      "before": {
+        "length_mm": 0.20512202490871337,
+        "total_tangent_turn_degrees": 19.900314380534176,
+        "curvature_squared_integral_per_mm": 0.8707640024811042,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.20397003017646034,
+        "total_tangent_turn_degrees": 0.006605907902986509,
+        "curvature_squared_integral_per_mm": 8.05765755655521e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2076,
+      "after_curve": 2083,
+      "before": {
+        "length_mm": 0.32138386402854036,
+        "total_tangent_turn_degrees": 14.071280526401232,
+        "curvature_squared_integral_per_mm": 0.2714040894029592,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3203119311602557,
+        "total_tangent_turn_degrees": 4.387269597831624,
+        "curvature_squared_integral_per_mm": 0.024038580206543012,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2081,
+      "after_curve": 2088,
+      "before": {
+        "length_mm": 0.23400009880961373,
+        "total_tangent_turn_degrees": 142.77008480425965,
+        "curvature_squared_integral_per_mm": 144.51735339793953,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1120849440605212,
+        "total_tangent_turn_degrees": 54.801304287908195,
+        "curvature_squared_integral_per_mm": 16.1969282125339,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2083,
+      "after_curve": 2090,
+      "before": {
+        "length_mm": 0.24055476058385905,
+        "total_tangent_turn_degrees": 9.638898063887222,
+        "curvature_squared_integral_per_mm": 0.15740669714067854,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2401169355003372,
+        "total_tangent_turn_degrees": 0.0010350067017858488,
+        "curvature_squared_integral_per_mm": 1.6880702958527493e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2084,
+      "after_curve": 2091,
+      "before": {
+        "length_mm": 0.13216043599070193,
+        "total_tangent_turn_degrees": 10.651064216514179,
+        "curvature_squared_integral_per_mm": 0.3423499261510121,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1318885036140692,
+        "total_tangent_turn_degrees": 0.001408918680251748,
+        "curvature_squared_integral_per_mm": 5.58069138091766e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2086,
+      "after_curve": 2093,
+      "before": {
+        "length_mm": 0.3265316577987769,
+        "total_tangent_turn_degrees": 96.52460860837559,
+        "curvature_squared_integral_per_mm": 15.542459032673042,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.39131714884841795,
+        "total_tangent_turn_degrees": 473.6785944284504,
+        "curvature_squared_integral_per_mm": 552.4239170761219,
+        "control_points": 16
+      }
+    },
+    {
+      "before_curve": 2092,
+      "after_curve": 2099,
+      "before": {
+        "length_mm": 0.34850794537433916,
+        "total_tangent_turn_degrees": 58.559105206221275,
+        "curvature_squared_integral_per_mm": 5.0972778346324175,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3406691493880275,
+        "total_tangent_turn_degrees": 0.0017992189571578408,
+        "curvature_squared_integral_per_mm": 3.35513347879003e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2093,
+      "after_curve": 2100,
+      "before": {
+        "length_mm": 3.4303790717105636,
+        "total_tangent_turn_degrees": 98.540729225392,
+        "curvature_squared_integral_per_mm": 1.766513488136624,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 3.426615887772425,
+        "total_tangent_turn_degrees": 76.61160445732642,
+        "curvature_squared_integral_per_mm": 0.7064111002230209,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2104,
+      "after_curve": 2112,
+      "before": {
+        "length_mm": 0.7785321902815593,
+        "total_tangent_turn_degrees": 72.82676391991095,
+        "curvature_squared_integral_per_mm": 3.330301328045483,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.7710382184134457,
+        "total_tangent_turn_degrees": 0.001329138838587974,
+        "curvature_squared_integral_per_mm": 8.717159987567458e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2105,
+      "after_curve": 2113,
+      "before": {
+        "length_mm": 0.3506889237871522,
+        "total_tangent_turn_degrees": 55.241886610392406,
+        "curvature_squared_integral_per_mm": 4.973206352389903,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.32990965398478295,
+        "total_tangent_turn_degrees": 0.005367388716733545,
+        "curvature_squared_integral_per_mm": 3.294731781674602e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2107,
+      "after_curve": 2115,
+      "before": {
+        "length_mm": 0.30426327137338544,
+        "total_tangent_turn_degrees": 78.4995940654606,
+        "curvature_squared_integral_per_mm": 10.24833115744328,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2929074494983156,
+        "total_tangent_turn_degrees": 10.888146523564668,
+        "curvature_squared_integral_per_mm": 0.16298067096670696,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2108,
+      "after_curve": 2116,
+      "before": {
+        "length_mm": 0.27011106999858187,
+        "total_tangent_turn_degrees": 54.90049281782697,
+        "curvature_squared_integral_per_mm": 4.8332830524858945,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.25313324525820824,
+        "total_tangent_turn_degrees": 0.006155056028640303,
+        "curvature_squared_integral_per_mm": 5.661213595898041e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2111,
+      "after_curve": 2119,
+      "before": {
+        "length_mm": 0.11369359411704286,
+        "total_tangent_turn_degrees": 1.1099057401270721e-05,
+        "curvature_squared_integral_per_mm": 1.0617038415907417e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11369359411704094,
+        "total_tangent_turn_degrees": 6.037091348628667e-06,
+        "curvature_squared_integral_per_mm": 1.605856684670401e-23,
+        "control_points": 7
+      }
+    },
+    {
+      "before_curve": 2118,
+      "after_curve": 2126,
+      "before": {
+        "length_mm": 0.19120537501673837,
+        "total_tangent_turn_degrees": 2.8726734933720266,
+        "curvature_squared_integral_per_mm": 0.017329435622638376,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.19117404596144508,
+        "total_tangent_turn_degrees": 0.0060416082960772725,
+        "curvature_squared_integral_per_mm": 7.258760990996528e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2120,
+      "after_curve": 2128,
+      "before": {
+        "length_mm": 0.5444828861110396,
+        "total_tangent_turn_degrees": 87.83297596240196,
+        "curvature_squared_integral_per_mm": 6.300318821579506,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.5364132222452191,
+        "total_tangent_turn_degrees": 40.25562902998882,
+        "curvature_squared_integral_per_mm": 1.0817787814773123,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2121,
+      "after_curve": 2129,
+      "before": {
+        "length_mm": 0.9721779281625266,
+        "total_tangent_turn_degrees": 29.094889521246905,
+        "curvature_squared_integral_per_mm": 0.4574031597730063,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9707264776632086,
+        "total_tangent_turn_degrees": 27.158168883835756,
+        "curvature_squared_integral_per_mm": 0.4114891360968374,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2122,
+      "after_curve": 2130,
+      "before": {
+        "length_mm": 0.5844208836154545,
+        "total_tangent_turn_degrees": 2.0470439574767445,
+        "curvature_squared_integral_per_mm": 0.0027679621096914067,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5843824886750312,
+        "total_tangent_turn_degrees": 0.0003370197025850235,
+        "curvature_squared_integral_per_mm": 6.801056310999697e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2123,
+      "after_curve": 2131,
+      "before": {
+        "length_mm": 1.010261963550892,
+        "total_tangent_turn_degrees": 39.14741857011639,
+        "curvature_squared_integral_per_mm": 0.9346564780013732,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.0083148913998932,
+        "total_tangent_turn_degrees": 35.77420982944555,
+        "curvature_squared_integral_per_mm": 0.6361992031679277,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2125,
+      "after_curve": 2133,
+      "before": {
+        "length_mm": 0.291385744678037,
+        "total_tangent_turn_degrees": 63.14927832864065,
+        "curvature_squared_integral_per_mm": 10.176529429162754,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.29123649467738527,
+        "total_tangent_turn_degrees": 60.04751520276971,
+        "curvature_squared_integral_per_mm": 5.4343936706974,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2128,
+      "after_curve": 2136,
+      "before": {
+        "length_mm": 0.18975496706328512,
+        "total_tangent_turn_degrees": 58.29292073373606,
+        "curvature_squared_integral_per_mm": 9.08039745592173,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17770818079801826,
+        "total_tangent_turn_degrees": 0.008619102828116868,
+        "curvature_squared_integral_per_mm": 1.5975850485874444e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2131,
+      "after_curve": 2139,
+      "before": {
+        "length_mm": 0.15490671366175743,
+        "total_tangent_turn_degrees": 41.23775811211755,
+        "curvature_squared_integral_per_mm": 4.667868544313352,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1496790228986996,
+        "total_tangent_turn_degrees": 0.01248696285413563,
+        "curvature_squared_integral_per_mm": 3.941206047807691e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2135,
+      "after_curve": 2143,
+      "before": {
+        "length_mm": 0.2016525685803536,
+        "total_tangent_turn_degrees": 68.30782235178631,
+        "curvature_squared_integral_per_mm": 10.517727399807706,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.269722252486553,
+        "total_tangent_turn_degrees": 132.36266713404817,
+        "curvature_squared_integral_per_mm": 142.91006852595672,
+        "control_points": 9
+      }
+    },
+    {
+      "before_curve": 2138,
+      "after_curve": 2146,
+      "before": {
+        "length_mm": 0.2998337265907436,
+        "total_tangent_turn_degrees": 128.36639688018712,
+        "curvature_squared_integral_per_mm": 71.4776837552945,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2198434879659423,
+        "total_tangent_turn_degrees": 41.87211393210287,
+        "curvature_squared_integral_per_mm": 3.747807468145943,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2141,
+      "after_curve": 2149,
+      "before": {
+        "length_mm": 0.30358360853029065,
+        "total_tangent_turn_degrees": 51.2127954952676,
+        "curvature_squared_integral_per_mm": 4.916602867073733,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28844494767208956,
+        "total_tangent_turn_degrees": 0.004921198973300216,
+        "curvature_squared_integral_per_mm": 3.1583380780673045e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2142,
+      "after_curve": 2150,
+      "before": {
+        "length_mm": 0.2910220905390277,
+        "total_tangent_turn_degrees": 21.506174963812832,
+        "curvature_squared_integral_per_mm": 0.63360672279864,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28844494764997924,
+        "total_tangent_turn_degrees": 0.004491074231878106,
+        "curvature_squared_integral_per_mm": 2.62828047960436e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2153,
+      "after_curve": 2162,
+      "before": {
+        "length_mm": 0.9626400694800544,
+        "total_tangent_turn_degrees": 1.9836264178216727,
+        "curvature_squared_integral_per_mm": 0.0015960576464828134,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9625807152416658,
+        "total_tangent_turn_degrees": 0.0006315120066466378,
+        "curvature_squared_integral_per_mm": 1.5501265888094716e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2155,
+      "after_curve": 2164,
+      "before": {
+        "length_mm": 0.6086249181979673,
+        "total_tangent_turn_degrees": 110.92505127325735,
+        "curvature_squared_integral_per_mm": 15.084577692445018,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6079784023556101,
+        "total_tangent_turn_degrees": 108.21958833379747,
+        "curvature_squared_integral_per_mm": 14.919341371950383,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2156,
+      "after_curve": 2165,
+      "before": {
+        "length_mm": 0.2648580831313427,
+        "total_tangent_turn_degrees": 94.29531577425712,
+        "curvature_squared_integral_per_mm": 13.584044491834721,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2532154438787012,
+        "total_tangent_turn_degrees": 4.051356292168041,
+        "curvature_squared_integral_per_mm": 0.026358908420258093,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2157,
+      "after_curve": 2166,
+      "before": {
+        "length_mm": 0.7715070694697389,
+        "total_tangent_turn_degrees": 964.9419881551692,
+        "curvature_squared_integral_per_mm": 2247.582212246267,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.4381998617198552,
+        "total_tangent_turn_degrees": 186.47312648404096,
+        "curvature_squared_integral_per_mm": 59.23708558273247,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2162,
+      "after_curve": 2171,
+      "before": {
+        "length_mm": 0.17960678022619395,
+        "total_tangent_turn_degrees": 12.725169407307924,
+        "curvature_squared_integral_per_mm": 0.4024049264626674,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17904413393273208,
+        "total_tangent_turn_degrees": 0.0017371486735614562,
+        "curvature_squared_integral_per_mm": 5.9277022050116164e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2163,
+      "after_curve": 2172,
+      "before": {
+        "length_mm": 0.288617053743917,
+        "total_tangent_turn_degrees": 3.61574042993547,
+        "curvature_squared_integral_per_mm": 0.018353501395046035,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2885423785846055,
+        "total_tangent_turn_degrees": 0.0007812989020081771,
+        "curvature_squared_integral_per_mm": 7.399308987376591e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2165,
+      "after_curve": 2174,
+      "before": {
+        "length_mm": 0.16826307624447764,
+        "total_tangent_turn_degrees": 28.815035858838527,
+        "curvature_squared_integral_per_mm": 1.9869401664281854,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.16545030446743283,
+        "total_tangent_turn_degrees": 1.2517488183039243,
+        "curvature_squared_integral_per_mm": 0.0037403420835509394,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2170,
+      "after_curve": 2179,
+      "before": {
+        "length_mm": 0.3982414411145871,
+        "total_tangent_turn_degrees": 102.73714534597009,
+        "curvature_squared_integral_per_mm": 11.496072532071569,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.3916670431099945,
+        "total_tangent_turn_degrees": 27.49219576307261,
+        "curvature_squared_integral_per_mm": 0.7613575696231912,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2171,
+      "after_curve": 2180,
+      "before": {
+        "length_mm": 0.4152388062709181,
+        "total_tangent_turn_degrees": 346.2833452483783,
+        "curvature_squared_integral_per_mm": 811.7642053676885,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.3197977453303838,
+        "total_tangent_turn_degrees": 25.07468339623979,
+        "curvature_squared_integral_per_mm": 0.7735828824016782,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2175,
+      "after_curve": 2184,
+      "before": {
+        "length_mm": 0.44453896969234613,
+        "total_tangent_turn_degrees": 215.64761986096093,
+        "curvature_squared_integral_per_mm": 70.32267066551233,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3891823507104488,
+        "total_tangent_turn_degrees": 3.075608366470548,
+        "curvature_squared_integral_per_mm": 0.009876392951322347,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2176,
+      "after_curve": 2185,
+      "before": {
+        "length_mm": 0.390016235249584,
+        "total_tangent_turn_degrees": 29.618261627364603,
+        "curvature_squared_integral_per_mm": 1.2706345407517585,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.38911006786261826,
+        "total_tangent_turn_degrees": 0.0007149708768764045,
+        "curvature_squared_integral_per_mm": 4.798016193136435e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2177,
+      "after_curve": 2186,
+      "before": {
+        "length_mm": 1.1702997459465598,
+        "total_tangent_turn_degrees": 242.90350527443934,
+        "curvature_squared_integral_per_mm": 161.42123676315694,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 1.1390484476700136,
+        "total_tangent_turn_degrees": 88.9929329662744,
+        "curvature_squared_integral_per_mm": 2.412036467394776,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2182,
+      "after_curve": 2191,
+      "before": {
+        "length_mm": 0.7084030135218765,
+        "total_tangent_turn_degrees": 1.733260127833898,
+        "curvature_squared_integral_per_mm": 0.0016410427420548133,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7083703456890098,
+        "total_tangent_turn_degrees": 0.0021833979922697465,
+        "curvature_squared_integral_per_mm": 2.504915630133763e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2188,
+      "after_curve": 2197,
+      "before": {
+        "length_mm": 0.331417419903188,
+        "total_tangent_turn_degrees": 28.366847431824354,
+        "curvature_squared_integral_per_mm": 1.0974738887986428,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.32993385194950975,
+        "total_tangent_turn_degrees": 0.0010305008029838831,
+        "curvature_squared_integral_per_mm": 1.2602618523694977e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2190,
+      "after_curve": 2199,
+      "before": {
+        "length_mm": 0.1972279588765469,
+        "total_tangent_turn_degrees": 44.81732141031891,
+        "curvature_squared_integral_per_mm": 4.074937062874077,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.19116092762970766,
+        "total_tangent_turn_degrees": 13.439697566430219,
+        "curvature_squared_integral_per_mm": 0.3746485596203813,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2191,
+      "after_curve": 2200,
+      "before": {
+        "length_mm": 0.23804336510334237,
+        "total_tangent_turn_degrees": 18.04998956263433,
+        "curvature_squared_integral_per_mm": 0.5269871737792411,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23685693897399707,
+        "total_tangent_turn_degrees": 6.512393573441315,
+        "curvature_squared_integral_per_mm": 0.07133648736579003,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2200,
+      "after_curve": 2209,
+      "before": {
+        "length_mm": 0.0948236478304678,
+        "total_tangent_turn_degrees": 7.89112304043517e-06,
+        "curvature_squared_integral_per_mm": 5.514393777573683e-24,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.09482364783046948,
+        "total_tangent_turn_degrees": 5.464151336010201e-05,
+        "curvature_squared_integral_per_mm": 6.688069059586024e-23,
+        "control_points": 7
+      }
+    },
+    {
+      "before_curve": 2202,
+      "after_curve": 2211,
+      "before": {
+        "length_mm": 0.2363440390849431,
+        "total_tangent_turn_degrees": 18.604624043042,
+        "curvature_squared_integral_per_mm": 0.567062391864209,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23538544707695916,
+        "total_tangent_turn_degrees": 3.3837058976255014,
+        "curvature_squared_integral_per_mm": 0.019217737246454758,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2205,
+      "after_curve": 2214,
+      "before": {
+        "length_mm": 0.3030619703676636,
+        "total_tangent_turn_degrees": 127.60864126761876,
+        "curvature_squared_integral_per_mm": 77.08985295729626,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2254137644699897,
+        "total_tangent_turn_degrees": 57.52386269498108,
+        "curvature_squared_integral_per_mm": 6.213588981747747,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2206,
+      "after_curve": 2215,
+      "before": {
+        "length_mm": 0.30289978574845977,
+        "total_tangent_turn_degrees": 50.007288015873726,
+        "curvature_squared_integral_per_mm": 4.548194308274463,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2884491806870439,
+        "total_tangent_turn_degrees": 0.0048531315475857165,
+        "curvature_squared_integral_per_mm": 3.070795251781813e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2207,
+      "after_curve": 2216,
+      "before": {
+        "length_mm": 0.29102280211971265,
+        "total_tangent_turn_degrees": 21.49305357641889,
+        "curvature_squared_integral_per_mm": 0.6328310900845251,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2884491806680831,
+        "total_tangent_turn_degrees": 0.004481587934557771,
+        "curvature_squared_integral_per_mm": 2.6168488566168895e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2215,
+      "after_curve": 2224,
+      "before": {
+        "length_mm": 0.8493362263952136,
+        "total_tangent_turn_degrees": 15.673268062945468,
+        "curvature_squared_integral_per_mm": 0.19231736088493578,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.8476229920818321,
+        "total_tangent_turn_degrees": 12.001799925547186,
+        "curvature_squared_integral_per_mm": 0.06896549328182386,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2219,
+      "after_curve": 2228,
+      "before": {
+        "length_mm": 0.24769025473675854,
+        "total_tangent_turn_degrees": 16.856906035283302,
+        "curvature_squared_integral_per_mm": 0.4843377670627165,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.24680988593315706,
+        "total_tangent_turn_degrees": 1.4041518932269494,
+        "curvature_squared_integral_per_mm": 0.0031599834839975555,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2220,
+      "after_curve": 2229,
+      "before": {
+        "length_mm": 0.12648239118833843,
+        "total_tangent_turn_degrees": 34.04104965878555,
+        "curvature_squared_integral_per_mm": 3.7900391720425697,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.12356980342555272,
+        "total_tangent_turn_degrees": 0.014094299972034936,
+        "curvature_squared_integral_per_mm": 6.226071742142713e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2221,
+      "after_curve": 2230,
+      "before": {
+        "length_mm": 0.8699207442577908,
+        "total_tangent_turn_degrees": 100.59098689583767,
+        "curvature_squared_integral_per_mm": 4.536644548411212,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.8653655686256198,
+        "total_tangent_turn_degrees": 0.0003303026056847055,
+        "curvature_squared_integral_per_mm": 4.637187474361973e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2225,
+      "after_curve": 2234,
+      "before": {
+        "length_mm": 0.3199340565568832,
+        "total_tangent_turn_degrees": 151.3799773818771,
+        "curvature_squared_integral_per_mm": 71.8798195950146,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.2030623907971785,
+        "total_tangent_turn_degrees": 69.18079248013755,
+        "curvature_squared_integral_per_mm": 10.088846520368882,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2229,
+      "after_curve": 2238,
+      "before": {
+        "length_mm": 0.3733691481523068,
+        "total_tangent_turn_degrees": 194.30093735466573,
+        "curvature_squared_integral_per_mm": 161.26047478671714,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.258520600206727,
+        "total_tangent_turn_degrees": 91.18950980762446,
+        "curvature_squared_integral_per_mm": 24.62838542687031,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2233,
+      "after_curve": 2242,
+      "before": {
+        "length_mm": 0.18227344221630648,
+        "total_tangent_turn_degrees": 43.972486234344004,
+        "curvature_squared_integral_per_mm": 4.412412113456847,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17506425200478265,
+        "total_tangent_turn_degrees": 0.009424129928228123,
+        "curvature_squared_integral_per_mm": 1.9236813579842753e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2238,
+      "after_curve": 2247,
+      "before": {
+        "length_mm": 0.3452641862202824,
+        "total_tangent_turn_degrees": 103.97931248577041,
+        "curvature_squared_integral_per_mm": 11.92101433852804,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2885969415417878,
+        "total_tangent_turn_degrees": 3.891828667172356,
+        "curvature_squared_integral_per_mm": 0.020795783922887577,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2239,
+      "after_curve": 2248,
+      "before": {
+        "length_mm": 0.2886426806290668,
+        "total_tangent_turn_degrees": 4.923026415866722,
+        "curvature_squared_integral_per_mm": 0.03370760741354986,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2885115295449526,
+        "total_tangent_turn_degrees": 0.004502181719147639,
+        "curvature_squared_integral_per_mm": 2.6406458523658352e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2244,
+      "after_curve": 2253,
+      "before": {
+        "length_mm": 0.5211817606418954,
+        "total_tangent_turn_degrees": 126.772079926741,
+        "curvature_squared_integral_per_mm": 21.787515607881073,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4945747071770453,
+        "total_tangent_turn_degrees": 22.41816653252402,
+        "curvature_squared_integral_per_mm": 0.34916557078779115,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2251,
+      "after_curve": 2260,
+      "before": {
+        "length_mm": 1.238960571863785,
+        "total_tangent_turn_degrees": 88.03703426941992,
+        "curvature_squared_integral_per_mm": 3.0791682459117307,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.235062943446622,
+        "total_tangent_turn_degrees": 4.211452513317757,
+        "curvature_squared_integral_per_mm": 0.006297414249540854,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2255,
+      "after_curve": 2264,
+      "before": {
+        "length_mm": 0.43454511996397066,
+        "total_tangent_turn_degrees": 101.61678275173917,
+        "curvature_squared_integral_per_mm": 11.714247752806846,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.40922523012946665,
+        "total_tangent_turn_degrees": 12.18492743494144,
+        "curvature_squared_integral_per_mm": 0.1379498025201738,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2260,
+      "after_curve": 2269,
+      "before": {
+        "length_mm": 0.3091535927020541,
+        "total_tangent_turn_degrees": 93.56003604037546,
+        "curvature_squared_integral_per_mm": 10.845950390401462,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2855650250380247,
+        "total_tangent_turn_degrees": 0.004047538570852487,
+        "curvature_squared_integral_per_mm": 2.1481124833115516e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2263,
+      "after_curve": 2272,
+      "before": {
+        "length_mm": 0.3038465428634561,
+        "total_tangent_turn_degrees": 136.65324294872678,
+        "curvature_squared_integral_per_mm": 87.4360683844495,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2222628271032658,
+        "total_tangent_turn_degrees": 64.3917824808936,
+        "curvature_squared_integral_per_mm": 7.92947654928051,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2268,
+      "after_curve": 2277,
+      "before": {
+        "length_mm": 0.1880889637931453,
+        "total_tangent_turn_degrees": 9.86192290276909,
+        "curvature_squared_integral_per_mm": 0.20592517506805036,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18775238360676533,
+        "total_tangent_turn_degrees": 0.002493377098590783,
+        "curvature_squared_integral_per_mm": 1.0676359860086027e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2269,
+      "after_curve": 2278,
+      "before": {
+        "length_mm": 0.3673018451271019,
+        "total_tangent_turn_degrees": 52.74931245310031,
+        "curvature_squared_integral_per_mm": 2.7401699193766524,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3577332875387865,
+        "total_tangent_turn_degrees": 34.23226826476456,
+        "curvature_squared_integral_per_mm": 1.3309681911128297,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2272,
+      "after_curve": 2281,
+      "before": {
+        "length_mm": 0.2895927909854096,
+        "total_tangent_turn_degrees": 29.56253700435397,
+        "curvature_squared_integral_per_mm": 1.4457009446589308,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2870736920109457,
+        "total_tangent_turn_degrees": 20.76166756755709,
+        "curvature_squared_integral_per_mm": 0.6099694330438972,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2276,
+      "after_curve": 2285,
+      "before": {
+        "length_mm": 0.1420596581219041,
+        "total_tangent_turn_degrees": 10.184808004933025,
+        "curvature_squared_integral_per_mm": 0.294567601081474,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14177841952157477,
+        "total_tangent_turn_degrees": 0.0013130714711846205,
+        "curvature_squared_integral_per_mm": 4.606963844635188e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2279,
+      "after_curve": 2288,
+      "before": {
+        "length_mm": 0.33912057571736093,
+        "total_tangent_turn_degrees": 235.68047556926894,
+        "curvature_squared_integral_per_mm": 766.0205595737208,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.2896722034714863,
+        "total_tangent_turn_degrees": 64.31038570426315,
+        "curvature_squared_integral_per_mm": 7.998303809743577,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2285,
+      "after_curve": 2294,
+      "before": {
+        "length_mm": 0.29573008139665163,
+        "total_tangent_turn_degrees": 68.71022729681351,
+        "curvature_squared_integral_per_mm": 6.7572110122374145,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2888996103813568,
+        "total_tangent_turn_degrees": 0.0009768543627049024,
+        "curvature_squared_integral_per_mm": 1.1974113462299673e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2303,
+      "after_curve": 2312,
+      "before": {
+        "length_mm": 0.2996509546961608,
+        "total_tangent_turn_degrees": 50.1229204155884,
+        "curvature_squared_integral_per_mm": 4.363340217773944,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2853931608618832,
+        "total_tangent_turn_degrees": 3.6860269068355693,
+        "curvature_squared_integral_per_mm": 0.019315832919314355,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2304,
+      "after_curve": 2313,
+      "before": {
+        "length_mm": 0.2859065205098945,
+        "total_tangent_turn_degrees": 10.743126071905433,
+        "curvature_squared_integral_per_mm": 0.20905481575534893,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28533703495414037,
+        "total_tangent_turn_degrees": 1.8245286967119387,
+        "curvature_squared_integral_per_mm": 0.004715275070094057,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2305,
+      "after_curve": 2314,
+      "before": {
+        "length_mm": 0.28877724863793464,
+        "total_tangent_turn_degrees": 251.12491147812443,
+        "curvature_squared_integral_per_mm": 192.20234594142744,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.25188214123260316,
+        "total_tangent_turn_degrees": 18.168625333671347,
+        "curvature_squared_integral_per_mm": 0.5231632501314609,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2306,
+      "after_curve": 2315,
+      "before": {
+        "length_mm": 0.4838257246870815,
+        "total_tangent_turn_degrees": 108.85377301142881,
+        "curvature_squared_integral_per_mm": 11.725567484143301,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4675297495154467,
+        "total_tangent_turn_degrees": 10.6140626012511,
+        "curvature_squared_integral_per_mm": 0.09665774654811587,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2322,
+      "after_curve": 2331,
+      "before": {
+        "length_mm": 0.1613684225739881,
+        "total_tangent_turn_degrees": 87.50397039738377,
+        "curvature_squared_integral_per_mm": 52.85735085155923,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1657519595181453,
+        "total_tangent_turn_degrees": 83.88581105297084,
+        "curvature_squared_integral_per_mm": 27.06236603426725,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2328,
+      "after_curve": 2337,
+      "before": {
+        "length_mm": 0.206093241131924,
+        "total_tangent_turn_degrees": 39.85140875453055,
+        "curvature_squared_integral_per_mm": 3.1613821460362224,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2013005133042693,
+        "total_tangent_turn_degrees": 21.652896562172725,
+        "curvature_squared_integral_per_mm": 0.9335658759529006,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2332,
+      "after_curve": 2341,
+      "before": {
+        "length_mm": 0.21855272541890908,
+        "total_tangent_turn_degrees": 52.93872402590307,
+        "curvature_squared_integral_per_mm": 5.548866445989432,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2093407996153059,
+        "total_tangent_turn_degrees": 14.785339875791983,
+        "curvature_squared_integral_per_mm": 0.4153697610420625,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2342,
+      "after_curve": 2351,
+      "before": {
+        "length_mm": 0.2801454500597058,
+        "total_tangent_turn_degrees": 52.38629197102533,
+        "curvature_squared_integral_per_mm": 4.851856779471933,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.26951649510115105,
+        "total_tangent_turn_degrees": 2.6903733880114045,
+        "curvature_squared_integral_per_mm": 0.010856118819221477,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2343,
+      "after_curve": 2352,
+      "before": {
+        "length_mm": 0.2699781584170323,
+        "total_tangent_turn_degrees": 16.50993334075421,
+        "curvature_squared_integral_per_mm": 0.4343547763691349,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2694794822098668,
+        "total_tangent_turn_degrees": 0.0006616987235305335,
+        "curvature_squared_integral_per_mm": 6.48810388784814e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2344,
+      "after_curve": 2353,
+      "before": {
+        "length_mm": 0.3880797108720888,
+        "total_tangent_turn_degrees": 251.6247775649751,
+        "curvature_squared_integral_per_mm": 176.18911978975018,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.2681250593484724,
+        "total_tangent_turn_degrees": 54.7575538218441,
+        "curvature_squared_integral_per_mm": 5.782412652514118,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2348,
+      "after_curve": 2357,
+      "before": {
+        "length_mm": 1.8584115830887054,
+        "total_tangent_turn_degrees": 60.089357950775266,
+        "curvature_squared_integral_per_mm": 2.417429994754819,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.8548031904836406,
+        "total_tangent_turn_degrees": 46.790910956215455,
+        "curvature_squared_integral_per_mm": 0.7372415042266657,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2356,
+      "after_curve": 2365,
+      "before": {
+        "length_mm": 0.3673486708093529,
+        "total_tangent_turn_degrees": 168.87390039211252,
+        "curvature_squared_integral_per_mm": 77.89000254542339,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.338527303537633,
+        "total_tangent_turn_degrees": 0.004490738237460465,
+        "curvature_squared_integral_per_mm": 2.1512294639859368e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2365,
+      "after_curve": 2374,
+      "before": {
+        "length_mm": 2.8823576681096865,
+        "total_tangent_turn_degrees": 208.56122267527775,
+        "curvature_squared_integral_per_mm": 6.983964813689921,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 2.875427069350213,
+        "total_tangent_turn_degrees": 1.9700339572077878,
+        "curvature_squared_integral_per_mm": 0.0009002120554529743,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2371,
+      "after_curve": 2380,
+      "before": {
+        "length_mm": 0.17997431234477773,
+        "total_tangent_turn_degrees": 15.600171437553762,
+        "curvature_squared_integral_per_mm": 0.5372752895291188,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.179105997396736,
+        "total_tangent_turn_degrees": 1.3875462667828526,
+        "curvature_squared_integral_per_mm": 0.004244943445761934,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2373,
+      "after_curve": 2382,
+      "before": {
+        "length_mm": 0.1401249953633668,
+        "total_tangent_turn_degrees": 101.22047982874201,
+        "curvature_squared_integral_per_mm": 52.72669549147173,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.13409649084300052,
+        "total_tangent_turn_degrees": 0.004772308385148637,
+        "curvature_squared_integral_per_mm": 7.086130866215516e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2374,
+      "after_curve": 2383,
+      "before": {
+        "length_mm": 0.27029917432575556,
+        "total_tangent_turn_degrees": 55.62847467923005,
+        "curvature_squared_integral_per_mm": 5.2238230630984175,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.26026007419838554,
+        "total_tangent_turn_degrees": 37.235615591444414,
+        "curvature_squared_integral_per_mm": 2.2226352088659005,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2375,
+      "after_curve": 2384,
+      "before": {
+        "length_mm": 0.2077397722836929,
+        "total_tangent_turn_degrees": 10.790956124023264,
+        "curvature_squared_integral_per_mm": 0.22305236903652162,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.20729704216271294,
+        "total_tangent_turn_degrees": 0.0013038842687571942,
+        "curvature_squared_integral_per_mm": 3.0711773451036397e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2377,
+      "after_curve": 2386,
+      "before": {
+        "length_mm": 0.26108959613776306,
+        "total_tangent_turn_degrees": 46.727379697106144,
+        "curvature_squared_integral_per_mm": 3.4762514470477495,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.25167072394937884,
+        "total_tangent_turn_degrees": 7.018904584214517,
+        "curvature_squared_integral_per_mm": 0.07757715704984983,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2386,
+      "after_curve": 2395,
+      "before": {
+        "length_mm": 0.23061597424265687,
+        "total_tangent_turn_degrees": 10.051199712579825,
+        "curvature_squared_integral_per_mm": 0.16978761518626023,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23037967664423253,
+        "total_tangent_turn_degrees": 3.954853602411106,
+        "curvature_squared_integral_per_mm": 0.026987774381217574,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2422,
+      "after_curve": 2431,
+      "before": {
+        "length_mm": 0.16757032406097186,
+        "total_tangent_turn_degrees": 82.779785025156,
+        "curvature_squared_integral_per_mm": 19.89945492679055,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14207234546451072,
+        "total_tangent_turn_degrees": 0.012366249580041414,
+        "curvature_squared_integral_per_mm": 4.0816716616718813e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2425,
+      "after_curve": 2434,
+      "before": {
+        "length_mm": 0.10656278309687273,
+        "total_tangent_turn_degrees": 15.762782992981231,
+        "curvature_squared_integral_per_mm": 0.9412244927635554,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.10605414580619003,
+        "total_tangent_turn_degrees": 0.008828735698266157,
+        "curvature_squared_integral_per_mm": 2.8190732901434674e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2427,
+      "after_curve": 2436,
+      "before": {
+        "length_mm": 0.7031748134815294,
+        "total_tangent_turn_degrees": 35.00846515378761,
+        "curvature_squared_integral_per_mm": 0.7679943754340397,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7016845887765154,
+        "total_tangent_turn_degrees": 29.991650456865294,
+        "curvature_squared_integral_per_mm": 0.5618820087184224,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2435,
+      "after_curve": 2444,
+      "before": {
+        "length_mm": 0.15362228150229792,
+        "total_tangent_turn_degrees": 11.388408490661565,
+        "curvature_squared_integral_per_mm": 0.3425130288014888,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15322871285771392,
+        "total_tangent_turn_degrees": 0.0014614454418380692,
+        "curvature_squared_integral_per_mm": 5.085325913906186e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2438,
+      "after_curve": 2447,
+      "before": {
+        "length_mm": 0.29590516419222945,
+        "total_tangent_turn_degrees": 99.04254375280038,
+        "curvature_squared_integral_per_mm": 14.954591370938987,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2606324484400864,
+        "total_tangent_turn_degrees": 22.171789219478093,
+        "curvature_squared_integral_per_mm": 0.7506767380577603,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2439,
+      "after_curve": 2448,
+      "before": {
+        "length_mm": 0.27028864153241583,
+        "total_tangent_turn_degrees": 53.88643901606969,
+        "curvature_squared_integral_per_mm": 5.332596468811903,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.25303826573865323,
+        "total_tangent_turn_degrees": 1.1816519082688979,
+        "curvature_squared_integral_per_mm": 0.002238863835088366,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2440,
+      "after_curve": 2449,
+      "before": {
+        "length_mm": 0.5300184236608243,
+        "total_tangent_turn_degrees": 28.831276456540806,
+        "curvature_squared_integral_per_mm": 0.9207706291769413,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5254674320928245,
+        "total_tangent_turn_degrees": 0.5424994694920084,
+        "curvature_squared_integral_per_mm": 0.00022548057287257662,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2441,
+      "after_curve": 2450,
+      "before": {
+        "length_mm": 2.027699313556176,
+        "total_tangent_turn_degrees": 8.897117014029218,
+        "curvature_squared_integral_per_mm": 0.026584530596899383,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 2.027106130036281,
+        "total_tangent_turn_degrees": 0.7701004291167999,
+        "curvature_squared_integral_per_mm": 0.00011353761147659381,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2443,
+      "after_curve": 2452,
+      "before": {
+        "length_mm": 0.2796422205451741,
+        "total_tangent_turn_degrees": 150.2170137088418,
+        "curvature_squared_integral_per_mm": 46.75619593683562,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2419791463942135,
+        "total_tangent_turn_degrees": 17.388682861621447,
+        "curvature_squared_integral_per_mm": 0.5107561089875017,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2444,
+      "after_curve": 2453,
+      "before": {
+        "length_mm": 2.796690432107391,
+        "total_tangent_turn_degrees": 674.0090985795052,
+        "curvature_squared_integral_per_mm": 85.21755823394105,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 2.6881725036868875,
+        "total_tangent_turn_degrees": 1.7895854902686414,
+        "curvature_squared_integral_per_mm": 0.00048113520933946514,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2460,
+      "after_curve": 2469,
+      "before": {
+        "length_mm": 0.36469045300841746,
+        "total_tangent_turn_degrees": 212.45180048419377,
+        "curvature_squared_integral_per_mm": 68.53324748762695,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.3271235673190995,
+        "total_tangent_turn_degrees": 5.067396870893972,
+        "curvature_squared_integral_per_mm": 0.031314534390599294,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2464,
+      "after_curve": 2473,
+      "before": {
+        "length_mm": 0.17499260860495797,
+        "total_tangent_turn_degrees": 16.53007795760879,
+        "curvature_squared_integral_per_mm": 0.6228363242475977,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17404793733418011,
+        "total_tangent_turn_degrees": 1.8321841429099774,
+        "curvature_squared_integral_per_mm": 0.007642494467856601,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2466,
+      "after_curve": 2475,
+      "before": {
+        "length_mm": 0.17257958716047167,
+        "total_tangent_turn_degrees": 69.77808508022113,
+        "curvature_squared_integral_per_mm": 10.871316396365764,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1685309805398622,
+        "total_tangent_turn_degrees": 0.001395277273095733,
+        "curvature_squared_integral_per_mm": 4.71762018202011e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2467,
+      "after_curve": 2476,
+      "before": {
+        "length_mm": 0.1765487690094005,
+        "total_tangent_turn_degrees": 43.513641635401854,
+        "curvature_squared_integral_per_mm": 4.535325440122117,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17177625830748752,
+        "total_tangent_turn_degrees": 24.963969459028913,
+        "curvature_squared_integral_per_mm": 1.4525193610174123,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2469,
+      "after_curve": 2478,
+      "before": {
+        "length_mm": 0.29227459997152266,
+        "total_tangent_turn_degrees": 18.560219475084025,
+        "curvature_squared_integral_per_mm": 0.49444376268551005,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2915030362289868,
+        "total_tangent_turn_degrees": 1.71969366308779,
+        "curvature_squared_integral_per_mm": 0.004006824073975176,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2474,
+      "after_curve": 2483,
+      "before": {
+        "length_mm": 0.2889146825957777,
+        "total_tangent_turn_degrees": 12.077248363771897,
+        "curvature_squared_integral_per_mm": 0.15907024906244346,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.289701372594445,
+        "total_tangent_turn_degrees": 91.7871530271283,
+        "curvature_squared_integral_per_mm": 428.37022594557465,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2475,
+      "after_curve": 2484,
+      "before": {
+        "length_mm": 3.400259650174158,
+        "total_tangent_turn_degrees": 8.891381085990079e-06,
+        "curvature_squared_integral_per_mm": 5.889794704091992e-15,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 3.400259650174158,
+        "total_tangent_turn_degrees": 6.683704770709436e-06,
+        "curvature_squared_integral_per_mm": 5.809301204601622e-15,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2476,
+      "after_curve": 2485,
+      "before": {
+        "length_mm": 0.44410902244574807,
+        "total_tangent_turn_degrees": 9.711943299570763,
+        "curvature_squared_integral_per_mm": 0.08227088169655034,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4440899852983613,
+        "total_tangent_turn_degrees": 9.472978422424088,
+        "curvature_squared_integral_per_mm": 0.0799846243311602,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2477,
+      "after_curve": 2486,
+      "before": {
+        "length_mm": 1.005542244828351,
+        "total_tangent_turn_degrees": 131.492031718914,
+        "curvature_squared_integral_per_mm": 10.079646060625173,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 0.9834030560913521,
+        "total_tangent_turn_degrees": 77.49838777849953,
+        "curvature_squared_integral_per_mm": 2.2107505081207344,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2487,
+      "after_curve": 2498,
+      "before": {
+        "length_mm": 0.1459587818005857,
+        "total_tangent_turn_degrees": 11.060606440818312,
+        "curvature_squared_integral_per_mm": 0.33952557391063853,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14561303543103607,
+        "total_tangent_turn_degrees": 0.0013069465309525378,
+        "curvature_squared_integral_per_mm": 4.322990184496957e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2488,
+      "after_curve": 2499,
+      "before": {
+        "length_mm": 0.29146773376171387,
+        "total_tangent_turn_degrees": 22.862758383447943,
+        "curvature_squared_integral_per_mm": 0.7063044885023809,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2886849481592369,
+        "total_tangent_turn_degrees": 3.4398508572788824,
+        "curvature_squared_integral_per_mm": 0.016307680888657507,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2489,
+      "after_curve": 2500,
+      "before": {
+        "length_mm": 0.5117051343083098,
+        "total_tangent_turn_degrees": 71.29615195529115,
+        "curvature_squared_integral_per_mm": 6.102876857314307,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4971530670788185,
+        "total_tangent_turn_degrees": 35.73264163657321,
+        "curvature_squared_integral_per_mm": 1.360035656354596,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2506,
+      "after_curve": 2517,
+      "before": {
+        "length_mm": 0.20088269375611847,
+        "total_tangent_turn_degrees": 49.000205947466384,
+        "curvature_squared_integral_per_mm": 4.909284382915089,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1912173027308989,
+        "total_tangent_turn_degrees": 0.00724483690591003,
+        "curvature_squared_integral_per_mm": 1.0329434597308191e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2508,
+      "after_curve": 2523,
+      "before": {
+        "length_mm": 0.1566418778045893,
+        "total_tangent_turn_degrees": 10.58252046913648,
+        "curvature_squared_integral_per_mm": 0.28949802860782725,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15629366115416618,
+        "total_tangent_turn_degrees": 0.0016951326090656404,
+        "curvature_squared_integral_per_mm": 6.7375496861754835e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2509,
+      "after_curve": 2524,
+      "before": {
+        "length_mm": 0.30249262387889553,
+        "total_tangent_turn_degrees": 49.93707357876913,
+        "curvature_squared_integral_per_mm": 3.9050832913487556,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2884698611699413,
+        "total_tangent_turn_degrees": 1.6493703157728663,
+        "curvature_squared_integral_per_mm": 0.0038232037157229595,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2510,
+      "after_curve": 2525,
+      "before": {
+        "length_mm": 0.2890899263088354,
+        "total_tangent_turn_degrees": 11.735232606136595,
+        "curvature_squared_integral_per_mm": 0.2011930636281698,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2884651790066886,
+        "total_tangent_turn_degrees": 1.373309930342372,
+        "curvature_squared_integral_per_mm": 0.0026480583388503553,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2514,
+      "after_curve": 2529,
+      "before": {
+        "length_mm": 0.4016717421916173,
+        "total_tangent_turn_degrees": 28.155402625393574,
+        "curvature_squared_integral_per_mm": 1.1693297215825658,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4038525772398573,
+        "total_tangent_turn_degrees": 82.82599858924351,
+        "curvature_squared_integral_per_mm": 107.65564298239242,
+        "control_points": 12
+      }
+    },
+    {
+      "before_curve": 2518,
+      "after_curve": 2533,
+      "before": {
+        "length_mm": 0.4394139558857725,
+        "total_tangent_turn_degrees": 202.90353154015855,
+        "curvature_squared_integral_per_mm": 58.08617756055309,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4071027525907238,
+        "total_tangent_turn_degrees": 5.411530900955777,
+        "curvature_squared_integral_per_mm": 0.029348997732468244,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2525,
+      "after_curve": 2541,
+      "before": {
+        "length_mm": 3.180233443839942,
+        "total_tangent_turn_degrees": 40.40284298480795,
+        "curvature_squared_integral_per_mm": 0.2603856670852831,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 3.180414049336985,
+        "total_tangent_turn_degrees": 33.242006171374044,
+        "curvature_squared_integral_per_mm": 0.1836294994114524,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2535,
+      "after_curve": 2551,
+      "before": {
+        "length_mm": 0.2108325293323751,
+        "total_tangent_turn_degrees": 78.66448577913229,
+        "curvature_squared_integral_per_mm": 11.738976258424644,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18961205098267486,
+        "total_tangent_turn_degrees": 0.009351811943147818,
+        "curvature_squared_integral_per_mm": 1.7284131316460672e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2539,
+      "after_curve": 2555,
+      "before": {
+        "length_mm": 0.1495497757859063,
+        "total_tangent_turn_degrees": 10.045535677377922,
+        "curvature_squared_integral_per_mm": 0.27389829878455274,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14925391945764915,
+        "total_tangent_turn_degrees": 0.0012306686914634005,
+        "curvature_squared_integral_per_mm": 3.795666036384071e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2540,
+      "after_curve": 2556,
+      "before": {
+        "length_mm": 0.29980543702657175,
+        "total_tangent_turn_degrees": 50.90375722356458,
+        "curvature_squared_integral_per_mm": 4.518648028354653,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28550114894447953,
+        "total_tangent_turn_degrees": 5.58311537429266,
+        "curvature_squared_integral_per_mm": 0.04441060317519991,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2541,
+      "after_curve": 2557,
+      "before": {
+        "length_mm": 0.28639329048116086,
+        "total_tangent_turn_degrees": 15.946992296124629,
+        "curvature_squared_integral_per_mm": 0.46805373231216996,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2854228023813402,
+        "total_tangent_turn_degrees": 4.096705947163409,
+        "curvature_squared_integral_per_mm": 0.02374104176419229,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2544,
+      "after_curve": 2560,
+      "before": {
+        "length_mm": 0.9987336496340012,
+        "total_tangent_turn_degrees": 73.39761604892911,
+        "curvature_squared_integral_per_mm": 2.8080881350156965,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.9610022587724425,
+        "total_tangent_turn_degrees": 18.76288658596789,
+        "curvature_squared_integral_per_mm": 0.14421768053209066,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2550,
+      "after_curve": 2566,
+      "before": {
+        "length_mm": 0.4001705125258119,
+        "total_tangent_turn_degrees": 4.554509545412664,
+        "curvature_squared_integral_per_mm": 0.021496656037300277,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.40102968932468175,
+        "total_tangent_turn_degrees": 80.1643011320123,
+        "curvature_squared_integral_per_mm": 273.0555192943171,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2555,
+      "after_curve": 2571,
+      "before": {
+        "length_mm": 0.4757951195472966,
+        "total_tangent_turn_degrees": 145.85630137885053,
+        "curvature_squared_integral_per_mm": 102.12050116283092,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3686977459615103,
+        "total_tangent_turn_degrees": 90.28059768255531,
+        "curvature_squared_integral_per_mm": 18.508721908420338,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2563,
+      "after_curve": 2579,
+      "before": {
+        "length_mm": 0.28612562572988753,
+        "total_tangent_turn_degrees": 54.793830021001995,
+        "curvature_squared_integral_per_mm": 5.304006534118518,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2735690215751163,
+        "total_tangent_turn_degrees": 6.417168787252784,
+        "curvature_squared_integral_per_mm": 0.060542009490572375,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2564,
+      "after_curve": 2580,
+      "before": {
+        "length_mm": 0.2742257918085887,
+        "total_tangent_turn_degrees": 20.355833599812456,
+        "curvature_squared_integral_per_mm": 0.6610042147771344,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.27338843971404414,
+        "total_tangent_turn_degrees": 2.565177149159524,
+        "curvature_squared_integral_per_mm": 0.009698768803728192,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2565,
+      "after_curve": 2581,
+      "before": {
+        "length_mm": 0.2605780660713102,
+        "total_tangent_turn_degrees": 161.22275720409317,
+        "curvature_squared_integral_per_mm": 57.84051185820204,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2213049707057124,
+        "total_tangent_turn_degrees": 4.275561554685153,
+        "curvature_squared_integral_per_mm": 0.033219861382180464,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2566,
+      "after_curve": 2582,
+      "before": {
+        "length_mm": 1.031770993764779,
+        "total_tangent_turn_degrees": 95.95721170071405,
+        "curvature_squared_integral_per_mm": 5.538508263285088,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.0021024659159437,
+        "total_tangent_turn_degrees": 26.75902025221213,
+        "curvature_squared_integral_per_mm": 0.2541408586451994,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2570,
+      "after_curve": 2586,
+      "before": {
+        "length_mm": 0.28848907672501917,
+        "total_tangent_turn_degrees": 12.668950493807328,
+        "curvature_squared_integral_per_mm": 0.22601597793313535,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28759181634468006,
+        "total_tangent_turn_degrees": 0.0014471428692183891,
+        "curvature_squared_integral_per_mm": 2.725628430371793e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2571,
+      "after_curve": 2587,
+      "before": {
+        "length_mm": 0.306477040575538,
+        "total_tangent_turn_degrees": 131.70896853045224,
+        "curvature_squared_integral_per_mm": 38.67824740633393,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2875918163897421,
+        "total_tangent_turn_degrees": 0.0033031568527204357,
+        "curvature_squared_integral_per_mm": 1.3560181670466016e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2576,
+      "after_curve": 2592,
+      "before": {
+        "length_mm": 0.29930176688181737,
+        "total_tangent_turn_degrees": 52.210520169197785,
+        "curvature_squared_integral_per_mm": 5.0646731137636865,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28462499024045634,
+        "total_tangent_turn_degrees": 9.608819296137263,
+        "curvature_squared_integral_per_mm": 0.13094316992364077,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2577,
+      "after_curve": 2593,
+      "before": {
+        "length_mm": 0.28553047461885767,
+        "total_tangent_turn_degrees": 18.342739113885287,
+        "curvature_squared_integral_per_mm": 0.583512840958425,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.284430097425373,
+        "total_tangent_turn_degrees": 7.564345255902591,
+        "curvature_squared_integral_per_mm": 0.08139112843417892,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2580,
+      "after_curve": 2596,
+      "before": {
+        "length_mm": 0.7052233404276019,
+        "total_tangent_turn_degrees": 106.64561708282851,
+        "curvature_squared_integral_per_mm": 10.90485503516334,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.6882595678449464,
+        "total_tangent_turn_degrees": 0.00070736870999856,
+        "curvature_squared_integral_per_mm": 2.702293300998799e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2591,
+      "after_curve": 2607,
+      "before": {
+        "length_mm": 0.25514935493897406,
+        "total_tangent_turn_degrees": 23.995383511502514,
+        "curvature_squared_integral_per_mm": 0.8945710613799853,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2543507653286334,
+        "total_tangent_turn_degrees": 0.0004840276273162335,
+        "curvature_squared_integral_per_mm": 4.1517584596934805e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2593,
+      "after_curve": 2609,
+      "before": {
+        "length_mm": 0.2950625193144884,
+        "total_tangent_turn_degrees": 8.05291691901689,
+        "curvature_squared_integral_per_mm": 0.09251201023472042,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.29589709006972287,
+        "total_tangent_turn_degrees": 90.1807571680768,
+        "curvature_squared_integral_per_mm": 424.4736592236427,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2598,
+      "after_curve": 2614,
+      "before": {
+        "length_mm": 0.2817106596813675,
+        "total_tangent_turn_degrees": 10.730945210860014,
+        "curvature_squared_integral_per_mm": 0.17795510957270316,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2810724449053914,
+        "total_tangent_turn_degrees": 0.0011407579681230013,
+        "curvature_squared_integral_per_mm": 1.7306881483014795e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2599,
+      "after_curve": 2615,
+      "before": {
+        "length_mm": 0.3092424251363466,
+        "total_tangent_turn_degrees": 157.45544885590422,
+        "curvature_squared_integral_per_mm": 55.37402363221615,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2810724449921034,
+        "total_tangent_turn_degrees": 0.00428211941360167,
+        "curvature_squared_integral_per_mm": 2.3487417096423175e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2604,
+      "after_curve": 2620,
+      "before": {
+        "length_mm": 0.2820541117159484,
+        "total_tangent_turn_degrees": 56.49095424268132,
+        "curvature_squared_integral_per_mm": 5.644224674357074,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.26945679509777415,
+        "total_tangent_turn_degrees": 6.285249750766583,
+        "curvature_squared_integral_per_mm": 0.059281526798785796,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2605,
+      "after_curve": 2621,
+      "before": {
+        "length_mm": 0.27027850534275016,
+        "total_tangent_turn_degrees": 23.375631163281295,
+        "curvature_squared_integral_per_mm": 0.8561562395245681,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.26930827699497406,
+        "total_tangent_turn_degrees": 3.1599341511694212,
+        "curvature_squared_integral_per_mm": 0.014969412836299609,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2606,
+      "after_curve": 2622,
+      "before": {
+        "length_mm": 0.3067009590183542,
+        "total_tangent_turn_degrees": 125.51752592412878,
+        "curvature_squared_integral_per_mm": 97.83151548963413,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.20794926821257967,
+        "total_tangent_turn_degrees": 77.8191115538533,
+        "curvature_squared_integral_per_mm": 17.735199936250467,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2607,
+      "after_curve": 2623,
+      "before": {
+        "length_mm": 0.20256562487697707,
+        "total_tangent_turn_degrees": 102.18849063226577,
+        "curvature_squared_integral_per_mm": 66.01785696837582,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1847932960477943,
+        "total_tangent_turn_degrees": 0.0018639800394079252,
+        "curvature_squared_integral_per_mm": 7.730692864953226e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2627,
+      "after_curve": 2643,
+      "before": {
+        "length_mm": 0.7085347754752318,
+        "total_tangent_turn_degrees": 4.243611899499342,
+        "curvature_squared_integral_per_mm": 0.014942773338062433,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7083803313200377,
+        "total_tangent_turn_degrees": 0.0016744823048891033,
+        "curvature_squared_integral_per_mm": 1.4805392916391242e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2629,
+      "after_curve": 2645,
+      "before": {
+        "length_mm": 0.23938564788052066,
+        "total_tangent_turn_degrees": 23.491307250911753,
+        "curvature_squared_integral_per_mm": 0.873514250350848,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.24005251943380682,
+        "total_tangent_turn_degrees": 30.788453346210567,
+        "curvature_squared_integral_per_mm": 2.4319324317889444,
+        "control_points": 9
+      }
+    },
+    {
+      "before_curve": 2644,
+      "after_curve": 2660,
+      "before": {
+        "length_mm": 0.28322122837117136,
+        "total_tangent_turn_degrees": 0.9273729086320768,
+        "curvature_squared_integral_per_mm": 0.0016445631766420085,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2832173498694197,
+        "total_tangent_turn_degrees": 0.00015052805660832415,
+        "curvature_squared_integral_per_mm": 3.559928148257008e-11,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2646,
+      "after_curve": 2662,
+      "before": {
+        "length_mm": 0.17345727443505174,
+        "total_tangent_turn_degrees": 19.030695550664653,
+        "curvature_squared_integral_per_mm": 0.831406657624337,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17219973098126876,
+        "total_tangent_turn_degrees": 0.0023412360945557387,
+        "curvature_squared_integral_per_mm": 1.2071024631604663e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2648,
+      "after_curve": 2664,
+      "before": {
+        "length_mm": 0.5084815814394874,
+        "total_tangent_turn_degrees": 89.5804595241627,
+        "curvature_squared_integral_per_mm": 14.171663592429317,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4781325866927542,
+        "total_tangent_turn_degrees": 36.00621357663894,
+        "curvature_squared_integral_per_mm": 1.358072374092703,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2651,
+      "after_curve": 2667,
+      "before": {
+        "length_mm": 0.15771347195889954,
+        "total_tangent_turn_degrees": 13.611826573587258,
+        "curvature_squared_integral_per_mm": 0.47583527042548496,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1571322733298252,
+        "total_tangent_turn_degrees": 0.0015793341488738637,
+        "curvature_squared_integral_per_mm": 5.843803044531837e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2652,
+      "after_curve": 2668,
+      "before": {
+        "length_mm": 0.6464478453938581,
+        "total_tangent_turn_degrees": 26.058733152287274,
+        "curvature_squared_integral_per_mm": 1.3375083743292666,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.6452133577069389,
+        "total_tangent_turn_degrees": 21.572379057304047,
+        "curvature_squared_integral_per_mm": 0.38927280203642617,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2662,
+      "after_curve": 2678,
+      "before": {
+        "length_mm": 0.567899825268681,
+        "total_tangent_turn_degrees": 9.460677474372288,
+        "curvature_squared_integral_per_mm": 0.1035892087991509,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5674235081899344,
+        "total_tangent_turn_degrees": 0.002790858025376669,
+        "curvature_squared_integral_per_mm": 5.0633278975997385e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2669,
+      "after_curve": 2685,
+      "before": {
+        "length_mm": 0.48090662070961115,
+        "total_tangent_turn_degrees": 102.19472326594159,
+        "curvature_squared_integral_per_mm": 15.061055427739648,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.46949294746728526,
+        "total_tangent_turn_degrees": 0.7357397352060544,
+        "curvature_squared_integral_per_mm": 0.0004750785382406449,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2670,
+      "after_curve": 2686,
+      "before": {
+        "length_mm": 0.30291559988927963,
+        "total_tangent_turn_degrees": 50.81927028726801,
+        "curvature_squared_integral_per_mm": 3.9319857945635595,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28845624833130834,
+        "total_tangent_turn_degrees": 0.004930600369522522,
+        "curvature_squared_integral_per_mm": 3.1665445482557025e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2671,
+      "after_curve": 2687,
+      "before": {
+        "length_mm": 0.28887491304919327,
+        "total_tangent_turn_degrees": 8.816041260279555,
+        "curvature_squared_integral_per_mm": 0.12220988900264418,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.288456248205873,
+        "total_tangent_turn_degrees": 0.001156370089640141,
+        "curvature_squared_integral_per_mm": 1.7019895742759774e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2672,
+      "after_curve": 2688,
+      "before": {
+        "length_mm": 0.8074424110141732,
+        "total_tangent_turn_degrees": 23.677748054152257,
+        "curvature_squared_integral_per_mm": 0.3652062515999864,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8060632957115179,
+        "total_tangent_turn_degrees": 21.08713479826539,
+        "curvature_squared_integral_per_mm": 0.2156135869629634,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2675,
+      "after_curve": 2691,
+      "before": {
+        "length_mm": 0.28930282157860077,
+        "total_tangent_turn_degrees": 123.59808074632868,
+        "curvature_squared_integral_per_mm": 94.91360350408213,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.19363121619114942,
+        "total_tangent_turn_degrees": 77.3801286164682,
+        "curvature_squared_integral_per_mm": 18.342855619785094,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2676,
+      "after_curve": 2692,
+      "before": {
+        "length_mm": 0.1854951938051927,
+        "total_tangent_turn_degrees": 115.73705540968062,
+        "curvature_squared_integral_per_mm": 93.14888499909802,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17186250643038645,
+        "total_tangent_turn_degrees": 0.00373388335021885,
+        "curvature_squared_integral_per_mm": 3.628418796250595e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2679,
+      "after_curve": 2695,
+      "before": {
+        "length_mm": 0.28290455043116003,
+        "total_tangent_turn_degrees": 24.271909533974128,
+        "curvature_squared_integral_per_mm": 0.8005024085280965,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2823425027194628,
+        "total_tangent_turn_degrees": 0.001547295431847423,
+        "curvature_squared_integral_per_mm": 3.2876573479990995e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2681,
+      "after_curve": 2697,
+      "before": {
+        "length_mm": 0.17479826326130185,
+        "total_tangent_turn_degrees": 8.238263504155558,
+        "curvature_squared_integral_per_mm": 0.1535580161052258,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.174561953264361,
+        "total_tangent_turn_degrees": 0.001140424728040542,
+        "curvature_squared_integral_per_mm": 2.749912168506918e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2682,
+      "after_curve": 2698,
+      "before": {
+        "length_mm": 0.766337059775063,
+        "total_tangent_turn_degrees": 96.42791658216915,
+        "curvature_squared_integral_per_mm": 5.88381876752296,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.7536960942457311,
+        "total_tangent_turn_degrees": 18.37421421095356,
+        "curvature_squared_integral_per_mm": 0.21977746987004626,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2686,
+      "after_curve": 2702,
+      "before": {
+        "length_mm": 0.17353313704291368,
+        "total_tangent_turn_degrees": 9.291110012014615,
+        "curvature_squared_integral_per_mm": 0.1968198096206442,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17323466127543788,
+        "total_tangent_turn_degrees": 0.0013903165661708267,
+        "curvature_squared_integral_per_mm": 4.226882750638916e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2693,
+      "after_curve": 2711,
+      "before": {
+        "length_mm": 0.3038839039727394,
+        "total_tangent_turn_degrees": 51.40692016491635,
+        "curvature_squared_integral_per_mm": 4.576673208862544,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28935301421628024,
+        "total_tangent_turn_degrees": 12.582918419585308,
+        "curvature_squared_integral_per_mm": 0.2211147040516312,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2694,
+      "after_curve": 2712,
+      "before": {
+        "length_mm": 0.2907776987194996,
+        "total_tangent_turn_degrees": 20.85178172484109,
+        "curvature_squared_integral_per_mm": 0.8257279449533839,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2891377084449364,
+        "total_tangent_turn_degrees": 11.04819665455219,
+        "curvature_squared_integral_per_mm": 0.1722507118701712,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2700,
+      "after_curve": 2718,
+      "before": {
+        "length_mm": 0.19673963718851883,
+        "total_tangent_turn_degrees": 74.65861900860854,
+        "curvature_squared_integral_per_mm": 12.023693666997069,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17986535086603408,
+        "total_tangent_turn_degrees": 0.007055199731758012,
+        "curvature_squared_integral_per_mm": 1.0319659203582999e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2702,
+      "after_curve": 2720,
+      "before": {
+        "length_mm": 0.8593343739644457,
+        "total_tangent_turn_degrees": 75.7155726760952,
+        "curvature_squared_integral_per_mm": 4.281528764671742,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.8361845612538147,
+        "total_tangent_turn_degrees": 45.09673324968239,
+        "curvature_squared_integral_per_mm": 1.0823075072759907,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2705,
+      "after_curve": 2723,
+      "before": {
+        "length_mm": 0.37921907312261843,
+        "total_tangent_turn_degrees": 147.0248638866654,
+        "curvature_squared_integral_per_mm": 129.4535419623206,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2710583809843498,
+        "total_tangent_turn_degrees": 88.06371360876236,
+        "curvature_squared_integral_per_mm": 23.44593168536872,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2706,
+      "after_curve": 2724,
+      "before": {
+        "length_mm": 0.2463497373810563,
+        "total_tangent_turn_degrees": 37.34915315572481,
+        "curvature_squared_integral_per_mm": 2.8723130320373826,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.24149579424669435,
+        "total_tangent_turn_degrees": 0.006163812288916865,
+        "curvature_squared_integral_per_mm": 5.8677590301847324e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2707,
+      "after_curve": 2725,
+      "before": {
+        "length_mm": 1.849243248830083,
+        "total_tangent_turn_degrees": 40.17746167577589,
+        "curvature_squared_integral_per_mm": 1.1790493789571137,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.8461131839441458,
+        "total_tangent_turn_degrees": 9.350598320166224,
+        "curvature_squared_integral_per_mm": 0.040044986614807015,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2716,
+      "after_curve": 2735,
+      "before": {
+        "length_mm": 1.984918633091703,
+        "total_tangent_turn_degrees": 616.195416067593,
+        "curvature_squared_integral_per_mm": 338.2184396218973,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 1.905045228278176,
+        "total_tangent_turn_degrees": 11.24887961685171,
+        "curvature_squared_integral_per_mm": 0.031180048908589986,
+        "control_points": 18
+      }
+    },
+    {
+      "before_curve": 2717,
+      "after_curve": 2736,
+      "before": {
+        "length_mm": 0.8313195127120396,
+        "total_tangent_turn_degrees": 29.45328781770724,
+        "curvature_squared_integral_per_mm": 1.0711043031594656,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8298872515831625,
+        "total_tangent_turn_degrees": 16.355563679615436,
+        "curvature_squared_integral_per_mm": 0.17885400524068618,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2723,
+      "after_curve": 2742,
+      "before": {
+        "length_mm": 0.29740315506130893,
+        "total_tangent_turn_degrees": 51.2487217045908,
+        "curvature_squared_integral_per_mm": 5.183329546529469,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2833994040367359,
+        "total_tangent_turn_degrees": 11.94281297020017,
+        "curvature_squared_integral_per_mm": 0.20316837388304942,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2724,
+      "after_curve": 2743,
+      "before": {
+        "length_mm": 0.2845553196484297,
+        "total_tangent_turn_degrees": 21.383514769842797,
+        "curvature_squared_integral_per_mm": 0.8520587711907438,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28309650205075376,
+        "total_tangent_turn_degrees": 9.449572508198713,
+        "curvature_squared_integral_per_mm": 0.12865882627296876,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2733,
+      "after_curve": 2752,
+      "before": {
+        "length_mm": 0.17531707407905553,
+        "total_tangent_turn_degrees": 8.909748156590467,
+        "curvature_squared_integral_per_mm": 0.1791289533178402,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17503980728215354,
+        "total_tangent_turn_degrees": 0.0013376298374435996,
+        "curvature_squared_integral_per_mm": 3.866562809794259e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2748,
+      "after_curve": 2767,
+      "before": {
+        "length_mm": 0.27242676713803954,
+        "total_tangent_turn_degrees": 56.831072690660626,
+        "curvature_squared_integral_per_mm": 5.6821816334516075,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.26193730772282553,
+        "total_tangent_turn_degrees": 5.544182697236017,
+        "curvature_squared_integral_per_mm": 0.04699315973440218,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2749,
+      "after_curve": 2768,
+      "before": {
+        "length_mm": 0.26280293412785305,
+        "total_tangent_turn_degrees": 26.16890561629512,
+        "curvature_squared_integral_per_mm": 1.0464386226469589,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.261797127669563,
+        "total_tangent_turn_degrees": 1.5376252926663219,
+        "curvature_squared_integral_per_mm": 0.003633193633965172,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2762,
+      "after_curve": 2781,
+      "before": {
+        "length_mm": 0.26156440163020317,
+        "total_tangent_turn_degrees": 95.40171012296386,
+        "curvature_squared_integral_per_mm": 19.325903763849087,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.22373309171988107,
+        "total_tangent_turn_degrees": 0.009909336791270283,
+        "curvature_squared_integral_per_mm": 1.6565418069562528e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2766,
+      "after_curve": 2785,
+      "before": {
+        "length_mm": 0.3068383996548903,
+        "total_tangent_turn_degrees": 56.14864926697213,
+        "curvature_squared_integral_per_mm": 6.157012869861242,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.28848557091253596,
+        "total_tangent_turn_degrees": 0.004998584648184622,
+        "curvature_squared_integral_per_mm": 3.255963253696905e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2767,
+      "after_curve": 2786,
+      "before": {
+        "length_mm": 0.2888861429037798,
+        "total_tangent_turn_degrees": 8.462734704987444,
+        "curvature_squared_integral_per_mm": 0.10018215451135887,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2884855707822208,
+        "total_tangent_turn_degrees": 0.001059229917060226,
+        "curvature_squared_integral_per_mm": 1.435213579485247e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2771,
+      "after_curve": 2790,
+      "before": {
+        "length_mm": 1.809906103684463,
+        "total_tangent_turn_degrees": 708.7191087333484,
+        "curvature_squared_integral_per_mm": 205.88321475613515,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 1.6012039226115136,
+        "total_tangent_turn_degrees": 295.6135341492168,
+        "curvature_squared_integral_per_mm": 44.903732331957,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2773,
+      "after_curve": 2792,
+      "before": {
+        "length_mm": 0.4373558956407838,
+        "total_tangent_turn_degrees": 28.927007521352344,
+        "curvature_squared_integral_per_mm": 0.900595252095875,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4365183916170306,
+        "total_tangent_turn_degrees": 0.3938514215797748,
+        "curvature_squared_integral_per_mm": 0.00014051719092224242,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2774,
+      "after_curve": 2793,
+      "before": {
+        "length_mm": 0.41204728460578416,
+        "total_tangent_turn_degrees": 78.57292124585501,
+        "curvature_squared_integral_per_mm": 6.917039665193683,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.40032955665295555,
+        "total_tangent_turn_degrees": 0.001537976469816178,
+        "curvature_squared_integral_per_mm": 2.3816502830667907e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2779,
+      "after_curve": 2798,
+      "before": {
+        "length_mm": 1.1665300700511854,
+        "total_tangent_turn_degrees": 34.11706569947998,
+        "curvature_squared_integral_per_mm": 0.847338599819031,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.1642735890569154,
+        "total_tangent_turn_degrees": 21.684382166591437,
+        "curvature_squared_integral_per_mm": 0.1845146098706127,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2782,
+      "after_curve": 2801,
+      "before": {
+        "length_mm": 1.1428827426688097,
+        "total_tangent_turn_degrees": 43.086544768035985,
+        "curvature_squared_integral_per_mm": 1.0087110310502714,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.1289346523665043,
+        "total_tangent_turn_degrees": 16.08358815645972,
+        "curvature_squared_integral_per_mm": 0.09045508650932901,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2787,
+      "after_curve": 2806,
+      "before": {
+        "length_mm": 0.41894194487070335,
+        "total_tangent_turn_degrees": 58.922727992601935,
+        "curvature_squared_integral_per_mm": 5.720974663706004,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.40001872077399225,
+        "total_tangent_turn_degrees": 0.003740868820634114,
+        "curvature_squared_integral_per_mm": 1.3079389795165198e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2788,
+      "after_curve": 2807,
+      "before": {
+        "length_mm": 0.4019691678067239,
+        "total_tangent_turn_degrees": 37.86832480461549,
+        "curvature_squared_integral_per_mm": 1.8193711078749115,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.40001872067328026,
+        "total_tangent_turn_degrees": 0.0007822822854150987,
+        "curvature_squared_integral_per_mm": 5.607304661258498e-10,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2798,
+      "after_curve": 2817,
+      "before": {
+        "length_mm": 0.6006196626797784,
+        "total_tangent_turn_degrees": 2.458515119087643,
+        "curvature_squared_integral_per_mm": 0.0038902002317451347,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6005635888394559,
+        "total_tangent_turn_degrees": 0.001328561104821034,
+        "curvature_squared_integral_per_mm": 1.1738874387978224e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2800,
+      "after_curve": 2819,
+      "before": {
+        "length_mm": 0.2619394034178654,
+        "total_tangent_turn_degrees": 92.44397406041344,
+        "curvature_squared_integral_per_mm": 18.71208070724136,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.22243848417571976,
+        "total_tangent_turn_degrees": 0.009946984543711207,
+        "curvature_squared_integral_per_mm": 1.67905781245697e-07,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2801,
+      "after_curve": 2820,
+      "before": {
+        "length_mm": 6.799862887475523,
+        "total_tangent_turn_degrees": 3030.8234234959327,
+        "curvature_squared_integral_per_mm": 2961.508804756299,
+        "control_points": 109
+      },
+      "after": {
+        "length_mm": 6.289515349846627,
+        "total_tangent_turn_degrees": 82.026825229681,
+        "curvature_squared_integral_per_mm": 1.7612966896922186,
+        "control_points": 18
+      }
+    },
+    {
+      "before_curve": 2807,
+      "after_curve": 2826,
+      "before": {
+        "length_mm": 0.9705722950371256,
+        "total_tangent_turn_degrees": 31.711151298093014,
+        "curvature_squared_integral_per_mm": 0.5258400090289856,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9695607726473667,
+        "total_tangent_turn_degrees": 25.29703504719056,
+        "curvature_squared_integral_per_mm": 0.2798627578648587,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2809,
+      "after_curve": 2828,
+      "before": {
+        "length_mm": 0.29331555321505354,
+        "total_tangent_turn_degrees": 51.82819059956711,
+        "curvature_squared_integral_per_mm": 4.759204501073317,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.27977993416458313,
+        "total_tangent_turn_degrees": 2.7366225815118668,
+        "curvature_squared_integral_per_mm": 0.010845369918594272,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2810,
+      "after_curve": 2829,
+      "before": {
+        "length_mm": 0.28046164671211615,
+        "total_tangent_turn_degrees": 16.114272055073855,
+        "curvature_squared_integral_per_mm": 0.44782740381514746,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.27976023849822834,
+        "total_tangent_turn_degrees": 1.9734387698037479,
+        "curvature_squared_integral_per_mm": 0.005633747117689024,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2821,
+      "after_curve": 2840,
+      "before": {
+        "length_mm": 0.18079682300293481,
+        "total_tangent_turn_degrees": 18.02113823919868,
+        "curvature_squared_integral_per_mm": 0.715074356778145,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1796218195853709,
+        "total_tangent_turn_degrees": 0.003572997852906361,
+        "curvature_squared_integral_per_mm": 2.6721699843731348e-08,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2824,
+      "after_curve": 2843,
+      "before": {
+        "length_mm": 0.2706656762880405,
+        "total_tangent_turn_degrees": 109.94706555083361,
+        "curvature_squared_integral_per_mm": 86.69791852997034,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.22651789882015586,
+        "total_tangent_turn_degrees": 30.692123085153625,
+        "curvature_squared_integral_per_mm": 1.7706592416553875,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2828,
+      "after_curve": 2847,
+      "before": {
+        "length_mm": 2.421322338511237,
+        "total_tangent_turn_degrees": 68.13178989555627,
+        "curvature_squared_integral_per_mm": 1.541840202372081,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.4203192853501876,
+        "total_tangent_turn_degrees": 67.72697219878148,
+        "curvature_squared_integral_per_mm": 1.495767349277995,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2830,
+      "after_curve": 2849,
+      "before": {
+        "length_mm": 0.1629318088030155,
+        "total_tangent_turn_degrees": 13.400495589673787,
+        "curvature_squared_integral_per_mm": 0.4437428959053789,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.16234837798939,
+        "total_tangent_turn_degrees": 0.0017309216338827834,
+        "curvature_squared_integral_per_mm": 6.766902658363482e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2833,
+      "after_curve": 2852,
+      "before": {
+        "length_mm": 0.27087038023058546,
+        "total_tangent_turn_degrees": 66.11708016721829,
+        "curvature_squared_integral_per_mm": 6.744916760965866,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2652165123189906,
+        "total_tangent_turn_degrees": 56.61625335312874,
+        "curvature_squared_integral_per_mm": 5.751223468209976,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2847,
+      "after_curve": 2866,
+      "before": {
+        "length_mm": 1.787463080830371,
+        "total_tangent_turn_degrees": 67.10560920292922,
+        "curvature_squared_integral_per_mm": 5.2798486666156315,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.7836132253233223,
+        "total_tangent_turn_degrees": 50.736031712135876,
+        "curvature_squared_integral_per_mm": 2.161698577176857,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2848,
+      "after_curve": 2867,
+      "before": {
+        "length_mm": 0.30510649318909494,
+        "total_tangent_turn_degrees": 338.8215936392845,
+        "curvature_squared_integral_per_mm": 436.0820932910394,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.2572628784646379,
+        "total_tangent_turn_degrees": 22.987179767792664,
+        "curvature_squared_integral_per_mm": 0.8404783378816283,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2849,
+      "after_curve": 2868,
+      "before": {
+        "length_mm": 0.17215199343199447,
+        "total_tangent_turn_degrees": 0.39086013532866715,
+        "curvature_squared_integral_per_mm": 0.00035771974982968044,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.17215147171880874,
+        "total_tangent_turn_degrees": 0.0009266361548550775,
+        "curvature_squared_integral_per_mm": 1.966020846458766e-09,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2858,
+      "after_curve": 2877,
+      "before": {
+        "length_mm": 2.660218270391778,
+        "total_tangent_turn_degrees": 91.17692912391446,
+        "curvature_squared_integral_per_mm": 2.3966270344787626,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 2.653681964801479,
+        "total_tangent_turn_degrees": 78.42596203844069,
+        "curvature_squared_integral_per_mm": 1.285880078284504,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2861,
+      "after_curve": 2880,
+      "before": {
+        "length_mm": 0.6142214777141026,
+        "total_tangent_turn_degrees": 268.41144771193643,
+        "curvature_squared_integral_per_mm": 395.2781124218096,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.5619056188260817,
+        "total_tangent_turn_degrees": 40.04495049447803,
+        "curvature_squared_integral_per_mm": 1.84422406648276,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2864,
+      "after_curve": 2883,
+      "before": {
+        "length_mm": 1.1383590909472727,
+        "total_tangent_turn_degrees": 189.5840225865728,
+        "curvature_squared_integral_per_mm": 17.530267392849957,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 1.1137255022096768,
+        "total_tangent_turn_degrees": 112.76885871125384,
+        "curvature_squared_integral_per_mm": 4.746179568630503,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2865,
+      "after_curve": 2884,
+      "before": {
+        "length_mm": 3.3066915191871447,
+        "total_tangent_turn_degrees": 45.860498308226354,
+        "curvature_squared_integral_per_mm": 0.31020183127001716,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 3.30174779300614,
+        "total_tangent_turn_degrees": 34.26640507552639,
+        "curvature_squared_integral_per_mm": 0.14667626962865957,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2876,
+      "after_curve": 2895,
+      "before": {
+        "length_mm": 4.561289420226722,
+        "total_tangent_turn_degrees": 116.71170386278445,
+        "curvature_squared_integral_per_mm": 4.076189905186471,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 4.532555028277221,
+        "total_tangent_turn_degrees": 63.86304361636522,
+        "curvature_squared_integral_per_mm": 0.4095125674103985,
+        "control_points": 10
+      }
+    },
+    {
+      "before_curve": 2880,
+      "after_curve": 2899,
+      "before": {
+        "length_mm": 0.40298808802295427,
+        "total_tangent_turn_degrees": 84.81694149392985,
+        "curvature_squared_integral_per_mm": 18.201351473285143,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3986031646062993,
+        "total_tangent_turn_degrees": 9.459368179876165,
+        "curvature_squared_integral_per_mm": 0.09958840607016423,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2884,
+      "after_curve": 2903,
+      "before": {
+        "length_mm": 0.7597455383837245,
+        "total_tangent_turn_degrees": 186.41260540108013,
+        "curvature_squared_integral_per_mm": 95.77165323133661,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.682250867397316,
+        "total_tangent_turn_degrees": 45.868011669838396,
+        "curvature_squared_integral_per_mm": 1.1803212266707872,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2889,
+      "after_curve": 2908,
+      "before": {
+        "length_mm": 0.7983999599702577,
+        "total_tangent_turn_degrees": 40.14716137922015,
+        "curvature_squared_integral_per_mm": 1.033207200663601,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7938381121493554,
+        "total_tangent_turn_degrees": 24.35939104494642,
+        "curvature_squared_integral_per_mm": 0.32431195601704554,
+        "control_points": 6
+      }
+    },
+    {
+      "before_curve": 2912,
+      "after_curve": 2931,
+      "before": {
+        "length_mm": 0.8228594445630165,
+        "total_tangent_turn_degrees": 35.948967878676825,
+        "curvature_squared_integral_per_mm": 0.5492094630192148,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8073675616127185,
+        "total_tangent_turn_degrees": 10.620759695993227,
+        "curvature_squared_integral_per_mm": 0.055884664753114245,
+        "control_points": 6
+      }
+    }
+  ],
+  "scope": "Same source-edge chains only; split or merged chains are not paired. Turning and bending are geometric diagnostics, not a replacement for shape, trim, or continuity checks."
+}

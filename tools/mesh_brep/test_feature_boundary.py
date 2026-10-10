@@ -7,6 +7,47 @@ from .splines import knots
 
 
 class FeatureBoundaryTests(unittest.TestCase):
+    def test_boundary_repair_keeps_lenses_coherent_without_flooding_large_neighbors(self):
+        from .feature_boundary import coupled_repair_charts
+        curves=[dict(owners=np.array(pair)) for pair in
+                [(0,1),(1,2),(2,3),(0,4),(0,5),(3,6),(3,7),(8,9),(8,10)]]
+        repaired=coupled_repair_charts(curves,[0])
+        self.assertEqual(repaired,[0,1,2])
+        forced={i for i,c in enumerate(curves) if set(c['owners']) & set(repaired)}
+        self.assertTrue({0,1,2}.issubset(forced))
+        self.assertTrue({5,6,7,8}.isdisjoint(forced))
+        self.assertEqual(coupled_repair_charts(curves,[]),[])
+
+    def test_a_simple_lens_can_reverse_without_a_boundary_crossing(self):
+        from shapely.geometry import Polygon
+        from .boundary_checks import preserves_winding
+        source=np.array([[0.,0],[1.,-.01],[2.,0],[1.,.01]])
+        swapped=source[[0,3,2,1]]
+        self.assertTrue(Polygon(swapped).is_valid)
+        self.assertFalse(preserves_winding(source,swapped))
+        self.assertTrue(preserves_winding(source,source+[100.,200.]))
+
+    def test_failed_proposal_restores_previous_curve_before_changing_neighbors(self):
+        from .feature_boundary import FeatureBoundaryNetwork
+        from .partition_fit import incidence
+        v=np.array([[0.,0,0],[1.,0,0],[0.,1,0],[0.,0,1]])
+        f=np.array([[0,2,1],[0,1,3],[1,2,3],[2,0,3]])
+        e,o=incidence(f)
+        network=FeatureBoundaryNetwork(v,f,np.arange(4),e,o,.12,.003,complete=False)
+        old=dict(chain=np.array([0,1]),poles=np.linspace(v[0],v[1],4),knots=knots(4),
+                 movement_mm=0.,movement_budget_mm=.12,method='minimum_bending',
+                 source_plane_error_mm=0.,endpoint_tangent_locked=False,parent_interface=-1)
+        neighbor=dict(old,chain=np.array([0,2]),poles=np.linspace(v[0],v[2],4))
+        proposed=dict(old,poles=old['poles']+np.array([[0,0,0],[0,.04,0],[0,.04,0],[0,0,0]]),movement_mm=.04)
+        proposed.update({'rollback_'+k:value for k,value in old.items() if k not in ('chain','parent_interface')})
+        network.seed([{k:np.asarray(value) for k,value in proposed.items()},neighbor]);saved=network.internal_cache[(0,2)]
+        network.tighten([proposed,neighbor])
+        np.testing.assert_array_equal(network.internal_cache[(0,1)][4][0],old['poles'])
+        self.assertIs(network.internal_cache[(0,2)],saved)
+        self.assertFalse(network.tangent_locked)
+        import json
+        json.dumps(network.internal_cache[(0,1)][4][3])
+
     def test_boundary_targets_share_smooth_normals_and_exclude_crease_sides(self):
         from .boundary_normals import targets
         v = np.array([[0., 0, 0], [1., 0, 0], [1., 1, 0], [0., 1, 0]])

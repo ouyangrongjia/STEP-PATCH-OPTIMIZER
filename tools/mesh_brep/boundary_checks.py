@@ -9,6 +9,14 @@ from .compact import curve
 from .partition_cad import projected_curve
 
 
+def preserves_winding(source, candidate):
+    """A simple loop can still turn inside out when two shared arcs swap sides."""
+    def area(p):
+        p=np.asarray(p)-np.asarray(p)[0]
+        return np.sum(p[:,0]*np.roll(p[:,1],-1)-p[:,1]*np.roll(p[:,0],-1))
+    return bool(area(source)*area(candidate)>0)
+
+
 def distinct_intersection(spline, first, second):
     """Refine a kernel candidate without converging to the trivial s == t root.
 

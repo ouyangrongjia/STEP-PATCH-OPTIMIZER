@@ -1,0 +1,13 @@
+{
+  "status": "complete",
+  "intermediate_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v5\\work",
+  "disposition": "Moved to Windows Recycle Bin",
+  "files": 71686,
+  "bytes": 3322410615.0,
+  "final_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v5\\result_v6",
+  "exact_final_and_baseline_caches": "metrics/reconstruction.zip",
+  "cache_extraction_and_input_validation_passed": true,
+  "previous_deliveries_preserved": true,
+  "original_recycle_bin_source_preserved": true,
+  "scope": "Only this turn temporary work directory was recycled after verified delivery and archive recovery. No previous results or source materials were removed."
+}

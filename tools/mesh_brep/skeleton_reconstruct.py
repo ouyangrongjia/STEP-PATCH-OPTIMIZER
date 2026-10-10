@@ -15,7 +15,7 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                 render=True, creo_root=None, native_probe=None,
                 profile_mode='installed', boundary_mode='chain', normal_field='vertex',
                 normal_filter_steps=0, support_solver='least-squares', boundary_cache=None, boundary_plane_budget=None,
-                repair_charts=(), repair_smooth_joins=False):
+                repair_charts=(), repair_smooth_joins=False, refit_regions=None):
     out = Path(output); out.mkdir(parents=True, exist_ok=False)
     start = time.perf_counter()
     report = dict(status='running', can_apply=False, algorithm='shared-skeleton-regional-solid-v1',
@@ -40,7 +40,7 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                      rounds=rounds, face_limit=int(reference_faces)-1, config=config, from_fit=from_fit,
                      boundary_mode=boundary_mode, normal_field=normal_field, normal_filter_steps=normal_filter_steps,
                      support_solver=support_solver, boundary_cache=boundary_cache, boundary_plane_budget=boundary_plane_budget,
-                     repair_charts=repair_charts)
+                     repair_charts=repair_charts, refit_regions=refit_regions)
         report['fitting'] = fitted
         if not fitted['complete_source_coverage'] or not fitted['partition_labels_unchanged']:
             raise ValueError('Incomplete source partition coverage')
@@ -113,8 +113,13 @@ if __name__ == '__main__':
     p.add_argument('--fairness', type=float, default=1e-6)
     p.add_argument('--boundary-plane-budget', type=float)
     p.add_argument('--boundary-normal-weight', type=float, default=0.)
+    p.add_argument('--normal-angle-limit', type=float)
+    p.add_argument('--fairness-domain', choices=['rectangle', 'source'], default='rectangle')
+    p.add_argument('--area-weighted', action='store_true')
+    p.add_argument('--fairness-order', type=int, choices=[2, 3], default=2)
     p.add_argument('--repair-charts', type=int, nargs='+', default=[])
     p.add_argument('--repair-smooth-joins', action='store_true')
+    p.add_argument('--refit-regions', type=int, nargs='+')
     a = p.parse_args()
     reconstruct(a.stl, a.partition, a.output, reference=a.reference, reference_faces=a.reference_faces,
                 smoothing=a.smoothing, workers=a.workers, rounds=a.rounds, from_fit=a.from_fit,
@@ -122,6 +127,8 @@ if __name__ == '__main__':
                 profile_mode=a.profile_mode, boundary_mode=a.boundary_mode, normal_field=a.normal_field,
                 normal_filter_steps=a.normal_filter_steps, support_solver=a.support_solver, boundary_cache=a.boundary_cache,
                 boundary_plane_budget=a.boundary_plane_budget, repair_charts=a.repair_charts,
-                repair_smooth_joins=a.repair_smooth_joins,
+                repair_smooth_joins=a.repair_smooth_joins, refit_regions=a.refit_regions,
                 config=None if a.from_fit else Config(distance=.03, boundary=.005, controls=(65,),
-                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight))
+                    normal_weight=a.normal_weight, fairness=a.fairness, boundary_normal_weight=a.boundary_normal_weight,
+                    normal_angle_limit=a.normal_angle_limit, fairness_domain=a.fairness_domain,
+                    area_weighted=a.area_weighted, fairness_order=a.fairness_order))

@@ -11,6 +11,12 @@ from .skeleton_graph import fit_boundary, stable_frame, skeleton, fit_support, c
 
 
 class SkeletonGraphTests(unittest.TestCase):
+    def test_unsupported_fitting_options_are_not_silently_ignored(self):
+        v=np.array([[0.,0,0],[1.,0,0],[0.,1,0]]); f=np.array([[0,1,2]])
+        for config in (Config(area_weighted=True),Config(normal_angle_limit=10),Config(fairness_order=3)):
+            with self.assertRaisesRegex(ValueError, 'require the bounded support solver'):
+                fit_support((0,v,f,np.tile([0.,0,1],(3,1)),v,[],config,'least-squares'))
+
     def test_partial_region_export_is_rejected_before_creating_cad(self):
         from .skeleton_local import export
         with tempfile.TemporaryDirectory() as temp:
@@ -39,9 +45,21 @@ class SkeletonGraphTests(unittest.TestCase):
             self.assertTrue(second['partition_labels_unchanged'])
             self.assertEqual(second['reused_charts'], 4)
             self.assertEqual(second['refitted_charts'], 0)
+            checkpoint=Path(second['source_fit'])/'run.json'
+            state=json.loads(checkpoint.read_text(encoding='utf-8'))
+            state.update(requires_support_refit=True,required_refit_regions=[1])
+            checkpoint.write_text(json.dumps(state),encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'require explicit support refitting'):
+                reconstruct(root/'partition.npz',root/'source.stl',root/'wrong_selective',smoothing=.05,
+                            workers=1,from_fit=second['source_fit'],refit_regions=[2])
+            third=reconstruct(root/'partition.npz',root/'source.stl',root/'selective',smoothing=.05,
+                              workers=1,from_fit=second['source_fit'],refit_regions=[1])
+            self.assertTrue(third['complete_source_coverage'])
+            self.assertEqual(third['reused_charts'],3)
+            self.assertEqual(third['refitted_charts'],1)
             from .skeleton_reconstruct import reconstruct as solid
             result = solid(root/'source.stl', root/'partition.npz', root/'solid',
-                reference_faces=5, smoothing=.05, workers=1, from_fit=second['source_fit'], render=False)
+                reference_faces=5, smoothing=.05, workers=1, from_fit=third['source_fit'], render=False)
             self.assertTrue(result['step']['watertight'])
             self.assertTrue(result['face_budget_passed'])
             self.assertEqual(result['regions']['exported_regions'], 4)
