@@ -1,0 +1,15 @@
+{
+  "status": "completed",
+  "date": "2026-10-08T21:12:42.1788047-07:00",
+  "scope": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4",
+  "kept": "result_v5",
+  "target": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing",
+  "method": "Windows Recycle Bin",
+  "original_files": 136442,
+  "original_bytes": 3119520266,
+  "native_v2_and_native_v3_preserved": true,
+  "original_source_files_and_other_worktrees_preserved": true,
+  "retained_files": 387,
+  "original_experiment_directory_removed": true,
+  "historical_paths_are_provenance_only": true
+}

@@ -1,0 +1,61 @@
+{
+  "status": "DiagnosticOnly",
+  "date": "2026-10-08",
+  "model": "model.step",
+  "regions": "regions",
+  "images": "images",
+  "source_case": "whole_final",
+  "units": "mm",
+  "reference_faces": 2739,
+  "previous_faces": 902,
+  "faces": 1092,
+  "source_regions": 359,
+  "partition": "regions/source_partition.npz",
+  "baseline": "../../native-v3/result_v4/run.json",
+  "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "partition_labels_unchanged": true,
+  "source_triangle_coverage_verified": true,
+  "native_closed_solid": true,
+  "gray_display_observed": true,
+  "Creo_geometry_check_features": 0,
+  "commercial_reconstruction_used": false,
+  "Geomagic_API_used": false,
+  "fitter_reads_source_CAD": false,
+  "can_apply": false,
+  "global_smoothness_passed": false,
+  "geometry_summary": {
+    "reverse_rms_mm": 0.0015769813813653875,
+    "reverse_p95_mm": 0.0030538045977478528,
+    "reverse_max_mm": 0.025313039313824868,
+    "normal_p95_degrees": 5.4526972344307625,
+    "normal_max_degrees": 117.13680524872863,
+    "opposed_normal_sample_fraction": 9.157509157509158e-06
+  },
+  "tests": {
+    "passed": 76,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 55.353,
+    "log": "metrics/tests.log"
+  },
+  "evidence": {
+    "quality": "metrics/quality.json",
+    "fitting": "metrics/fitting.json",
+    "pipeline": "metrics/pipeline.json",
+    "Creo": "metrics/creo_validation.json",
+    "experiments": "metrics/experiments.json",
+    "diagnostics": "metrics/diagnostics.json",
+    "visual_review": "metrics/visual_review.json",
+    "delivery": "metrics/delivery_validation.json",
+    "cleanup": "metrics/cleanup.json"
+  },
+  "remaining_limits": [
+    "Residual narrow transition ripples and source-derived angular facets remain visible.",
+    "Region 192 retains a native-surface normal extreme: 117.1368 degrees against global nearest source and 115.7082 degrees within its own source domain. Not explained away by nearest-label ambiguity; not repaired by the separate region 137 distance refinement.",
+    "No global G1/G2 or certified Hausdorff/self-intersection guarantee.",
+    "Only this full model was rerun; commercial-equivalent quality is not established.",
+    "OCCT readback and Creo volume integrations differ; no volume-preservation claim.",
+    "Experimental Python worktree only; product GUI and Apply gate remain unchanged."
+  ],
+  "provenance": "Original measurement records retain historical source paths. Current deliverables use the relative paths above. Intermediate models and caches are removed from this directory after verified packaging; quality results are unchanged."
+}

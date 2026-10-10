@@ -1,0 +1,266 @@
+{
+  "focused_feature_selection": {
+    "selected_regions": [
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      319,
+      320,
+      321,
+      322,
+      323,
+      324,
+      325,
+      326,
+      327,
+      328
+    ],
+    "retained_base_regions": [
+      78,
+      192
+    ],
+    "retained_scope": "Support-domain layout; adjoining curve changes can still refit support coefficients",
+    "method": "Exclude changed source regions incident to the diagnosed failed-exchange charts",
+    "base_fit": "whole_candidate/shared_support",
+    "CAD_use": "Failure localization only; all shape targets remain original STL"
+  },
+  "distance_refinement": {
+    "source": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_focused\\fit\\round_0",
+    "failed_faces": [
+      472
+    ],
+    "source_charts": [
+      472
+    ],
+    "source_regions": [
+      137
+    ],
+    "identity": {
+      "method": "verified_generated_supports_with_mesh_fallback",
+      "assembly": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_focused\\assembled",
+      "support_coordinate_tolerance_mm": 1e-08,
+      "verified": [
+        {
+          "face": 472,
+          "source_chart": 472,
+          "current_charts": [
+            472
+          ]
+        }
+      ],
+      "fallback_faces": [],
+      "all_supports_verified": true
+    },
+    "failure_samples": [
+      {
+        "face": 472,
+        "uv": [
+          0.4897769621341392,
+          0.9129301264348566
+        ],
+        "xyz": [
+          -34.19717835356524,
+          33.91839156876021,
+          -5.200575069791329
+        ],
+        "distance_mm": 0.030019969503927085,
+        "normal_degrees": 15.636165832872791,
+        "source_triangle": 62817,
+        "source_label": 137
+      }
+    ],
+    "action": "Existing source-domain subdivision and refitting, unchanged hard distance and boundary budgets",
+    "CAD_use": "Generated candidate used only to identify source cells; fit targets are unchanged original STL",
+    "comparison_to_895_face_base": [
+      {
+        "chart": 472,
+        "base_charts": [
+          472
+        ],
+        "same_source_cells_and_support_geometry": true
+      }
+    ],
+    "supplemental_check": "refined_region_check.json"
+  },
+  "refined_region_check": {
+    "regions": [
+      {
+        "region": 137,
+        "source_samples": 100000,
+        "seed": 810137,
+        "before": {
+          "source_correspondence_distance_mm": {
+            "rms": 0.0034464865982929502,
+            "p50": 0.0006694962785091816,
+            "p95": 0.005817587578832753,
+            "max": 0.03124091160415049,
+            "min": 1.375078222613499e-08
+          },
+          "support_to_original_mesh_distance_mm": {
+            "rms": 0.0031417204472930743,
+            "p50": 0.0006411659295062415,
+            "p95": 0.005190408637676851,
+            "max": 0.03084218833261642,
+            "min": 1.3541420195358443e-08
+          }
+        },
+        "after": {
+          "source_correspondence_distance_mm": {
+            "rms": 0.002423507640624445,
+            "p50": 0.0006327662092770238,
+            "p95": 0.0032928424974566018,
+            "max": 0.029709321309318994,
+            "min": 9.54828739184705e-09
+          },
+          "support_to_original_mesh_distance_mm": {
+            "rms": 0.0021579357893151676,
+            "p50": 0.0006163531760522167,
+            "p95": 0.0029618073214221574,
+            "max": 0.027620277535336246,
+            "min": 9.529550508846744e-09
+          }
+        }
+      }
+    ],
+    "scope": "Same 100000 source-area samples and source-triangle ownership. Actual spline supports over the original source mask, not trimmed-STEP acceptance or a Hausdorff certificate. Whole STEP audit remains independent."
+  },
+  "normal_extrema_diagnosis": {
+    "samples": [
+      {
+        "sample": {
+          "face": 572,
+          "uv": [
+            0.4403203767585734,
+            0.10887709252516757
+          ],
+          "xyz": [
+            -17.584224404038896,
+            29.181792991406603,
+            -3.4639606790304365
+          ],
+          "distance_mm": 0.006510660905040927,
+          "normal_degrees": 117.13680524872863,
+          "source_triangle": 412749,
+          "source_label": 195
+        },
+        "owning_source_region": 192,
+        "native_sample_match_mm": 1.3724494944436644e-12,
+        "nearest_own_domain_distance_mm": 0.006762489828333448,
+        "own_domain_normal_degrees": 115.70815432691668,
+        "support_unchanged_by_distance_repair": true
+      },
+      {
+        "sample": {
+          "face": 572,
+          "uv": [
+            0.5859325089715148,
+            0.08137879605407636
+          ],
+          "xyz": [
+            -17.178489878687266,
+            29.826021649999046,
+            -3.4663510740959818
+          ],
+          "distance_mm": 0.005728651242623989,
+          "normal_degrees": 89.39313081089706,
+          "source_triangle": 434749,
+          "source_label": 195
+        },
+        "owning_source_region": 192,
+        "native_sample_match_mm": 3.3193242937380595e-12,
+        "nearest_own_domain_distance_mm": 0.01043240729679543,
+        "own_domain_normal_degrees": 58.41161309191987,
+        "support_unchanged_by_distance_repair": true
+      },
+      {
+        "sample": {
+          "face": 572,
+          "uv": [
+            0.4233252395999711,
+            0.11934633892066696
+          ],
+          "xyz": [
+            -17.636361588627345,
+            29.109666210713176,
+            -3.458718251990116
+          ],
+          "distance_mm": 0.006662591635806721,
+          "normal_degrees": 73.37317855749187,
+          "source_triangle": 411840,
+          "source_label": 192
+        },
+        "owning_source_region": 192,
+        "native_sample_match_mm": 5.618148004043774e-12,
+        "nearest_own_domain_distance_mm": 0.006662591639599194,
+        "own_domain_normal_degrees": 73.37317853695438,
+        "support_unchanged_by_distance_repair": true
+      }
+    ],
+    "scope": "Same candidate point evaluated on its stored native support; compares nearest source globally and within exact owning source domain. Original global audit remains unchanged."
+  },
+  "boundary_curve_comparison": {
+    "comparisons": [
+      {
+        "candidate": "whole_candidate",
+        "matched_retained_tube_curves": 61,
+        "bending_before": 633.3660760937993,
+        "bending_after": 160.75384663521848,
+        "certified_source_tube_max_mm": 0.002999910946989109
+      },
+      {
+        "candidate": "whole_features",
+        "matched_retained_tube_curves": 23,
+        "bending_before": 191.34115618687565,
+        "bending_after": 87.49129442226696,
+        "certified_source_tube_max_mm": 0.0029998610578231863
+      },
+      {
+        "candidate": "whole_features_repaired",
+        "matched_retained_tube_curves": 22,
+        "bending_before": 191.3411561868756,
+        "bending_after": 87.49129442226692,
+        "certified_source_tube_max_mm": 0.0029998610578231863
+      },
+      {
+        "candidate": "whole_focused",
+        "matched_retained_tube_curves": 27,
+        "bending_before": 317.26773328157293,
+        "bending_after": 92.9151787103581,
+        "certified_source_tube_max_mm": 0.0029998610578231863
+      },
+      {
+        "candidate": "whole_final",
+        "matched_retained_tube_curves": 27,
+        "bending_before": 317.26773328157293,
+        "bending_after": 92.9151787103581,
+        "certified_source_tube_max_mm": 0.0029998610578231863
+      }
+    ],
+    "scope": "Identical oriented source chains, retained source-tube curves only. Baseline is area_local before boundary fairing, not all edges of the published STEP. Different layouts are not pooled."
+  },
+  "failed_feature_exchange": {
+    "selected_charts": [
+      298,
+      299,
+      300,
+      302,
+      565,
+      756,
+      757,
+      829,
+      1089
+    ],
+    "abnormal_edges": 49,
+    "invalid_exported_faces": [],
+    "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_features\\fit\\round_1",
+    "CAD_use": "Spatial failure localization only; all refit targets remain original STL"
+  },
+  "scope": "Original measured diagnostics; historical paths identify sources, not current cache locations."
+}

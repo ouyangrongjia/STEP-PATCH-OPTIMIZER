@@ -7,3 +7,7 @@ data/runs/whole-partition-brep-v1/native-v3/result_v4/model.step filter=lfs diff
 data/runs/whole-partition-brep-v1/native-v3/result_v4/regions/*.step filter=lfs diff=lfs merge=lfs -text
 data/runs/whole-partition-brep-v1/native-v3/result_v4/creo/*.prt.* filter=lfs diff=lfs merge=lfs -text
 data/runs/whole-partition-brep-v1/native-v3/result_v4/creo/modelcheck.xml -whitespace
+data/runs/whole-partition-brep-v1/native-v4/result_v5/model.step filter=lfs diff=lfs merge=lfs -text
+data/runs/whole-partition-brep-v1/native-v4/result_v5/regions/*.step filter=lfs diff=lfs merge=lfs -text
+data/runs/whole-partition-brep-v1/native-v4/result_v5/creo/*.prt.* filter=lfs diff=lfs merge=lfs -text
+data/runs/whole-partition-brep-v1/native-v4/result_v5/creo/modelcheck.xml -whitespace

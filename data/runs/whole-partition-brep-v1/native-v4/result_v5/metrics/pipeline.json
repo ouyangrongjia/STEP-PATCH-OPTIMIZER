@@ -1,0 +1,3527 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "algorithm": "shared-skeleton-regional-solid-v1",
+  "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+  "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\result_v4\\regions\\source_partition.npz",
+  "units": "mm",
+  "fitter_reads_source_CAD": false,
+  "commercial_reconstruction_used": false,
+  "visual_review_required": true,
+  "from_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\distance_refinement_seed",
+  "reference_faces": 2739,
+  "fitting": {
+    "status": "fitted",
+    "algorithm": "shared-skeleton-regional-graph-v2",
+    "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\result_v4\\regions\\source_partition.npz",
+    "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+    "source_CAD_read": false,
+    "commercial_engine_used": false,
+    "config": {
+      "distance": 0.03,
+      "boundary": 0.005,
+      "controls": [
+        65
+      ],
+      "normal_weight": 0.01,
+      "fairness": 1e-06,
+      "max_charts": 8000,
+      "max_depth": 24,
+      "shared_smooth_normals": false,
+      "feature_angle": 30.0,
+      "boundary_normal_weight": 0.0,
+      "interior_subdivisions": 0,
+      "normal_angle_limit": null,
+      "fairness_domain": "rectangle",
+      "area_weighted": true,
+      "fairness_order": 2
+    },
+    "smoothing_mm": 0.12,
+    "workers": 6,
+    "input_topology": {
+      "vertices": 245568,
+      "triangles": 491132,
+      "edges": 736698,
+      "euler": 2,
+      "components": 1,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "inconsistent_edges": 0,
+      "degenerate_triangles": 0,
+      "area_mm2": 1078.596709769745
+    },
+    "face_limit": 2738,
+    "resumed_from": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\distance_refinement_seed",
+    "support_boundary_limit_mm": 0.002,
+    "boundary_weight": null,
+    "sampled_boundary_limit_mm": 0.0013000000000000002,
+    "boundary_mode": "fair-chains",
+    "normal_field": "crease-fans",
+    "normal_filter_steps": 2,
+    "support_solver": "bounded",
+    "refit_supports": false,
+    "source_plane_budget_mm": 0.003,
+    "boundary_repair_charts": [],
+    "refit_regions": [
+      137
+    ],
+    "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\fit\\round_0",
+    "fitted_charts": 1092,
+    "failed_charts": [],
+    "partial_regions": null,
+    "boundary_movement_mm": {
+      "rms": 0.06171908901792014,
+      "p50": 0.05939657149668791,
+      "p95": 0.09800769942947732,
+      "max": 0.1199183714627982,
+      "min": 3.552713678800501e-15
+    },
+    "seconds": 83.94778200000292,
+    "reused_charts": 1089,
+    "refitted_charts": 3,
+    "complete_source_coverage": true,
+    "partition_labels_unchanged": true,
+    "source_surface_tube_curves": 27
+  },
+  "surface_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\fit\\round_0",
+  "assembly": {
+    "status": "DiagnosticOnly",
+    "can_apply": false,
+    "commercial_engine_used": false,
+    "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\result_v4\\regions\\source_partition.npz",
+    "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+    "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\fit\\round_0",
+    "algorithm": "native-graph-canonical-topology-v1",
+    "boundary_tolerance_mm": 0.005,
+    "segment_edges": false,
+    "boundary_smoothing_budget_mm": 0.0,
+    "smoothing_disabled_charts": [],
+    "smooth_segments": true,
+    "topology_before": {
+      "faces": 1092,
+      "edges": 39985,
+      "shells": 1,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 690.2501033918271,
+      "maximum_edge_tolerance_mm": 0.0020952307718705323
+    },
+    "topology": {
+      "faces": 1092,
+      "edges": 39985,
+      "shells": 1,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 690.2501033918271,
+      "maximum_edge_tolerance_mm": 0.0020952307718705323
+    },
+    "max_curve_on_surface_mm": 0.0019954578779719356,
+    "construction_seconds": 45.403449300007196,
+    "topology_seconds": 65.84561430002213,
+    "step_write_seconds": 0.0,
+    "step_reread_check_seconds": 0.0,
+    "step_bytes": 0,
+    "step_roundtrip_performed": false,
+    "actual_support_control_points": 465755,
+    "fitted_charts": 1092,
+    "trim_curves": 39985,
+    "expected_solids": 1,
+    "cad_face_charts": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223,
+      224,
+      225,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      233,
+      234,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279,
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300,
+      301,
+      302,
+      303,
+      304,
+      305,
+      306,
+      307,
+      308,
+      309,
+      310,
+      311,
+      312,
+      313,
+      314,
+      315,
+      316,
+      317,
+      318,
+      319,
+      320,
+      321,
+      322,
+      323,
+      324,
+      325,
+      326,
+      327,
+      328,
+      329,
+      330,
+      331,
+      332,
+      333,
+      334,
+      335,
+      336,
+      337,
+      338,
+      339,
+      340,
+      341,
+      342,
+      343,
+      344,
+      345,
+      346,
+      347,
+      348,
+      349,
+      350,
+      351,
+      352,
+      353,
+      354,
+      355,
+      356,
+      357,
+      358,
+      359,
+      360,
+      361,
+      362,
+      363,
+      364,
+      365,
+      366,
+      367,
+      368,
+      369,
+      370,
+      371,
+      372,
+      373,
+      374,
+      375,
+      376,
+      377,
+      378,
+      379,
+      380,
+      381,
+      382,
+      383,
+      384,
+      385,
+      386,
+      387,
+      388,
+      389,
+      390,
+      391,
+      392,
+      393,
+      394,
+      395,
+      396,
+      397,
+      398,
+      399,
+      400,
+      401,
+      402,
+      403,
+      404,
+      405,
+      406,
+      407,
+      408,
+      409,
+      410,
+      411,
+      412,
+      413,
+      414,
+      415,
+      416,
+      417,
+      418,
+      419,
+      420,
+      421,
+      422,
+      423,
+      424,
+      425,
+      426,
+      427,
+      428,
+      429,
+      430,
+      431,
+      432,
+      433,
+      434,
+      435,
+      436,
+      437,
+      438,
+      439,
+      440,
+      441,
+      442,
+      443,
+      444,
+      445,
+      446,
+      447,
+      448,
+      449,
+      450,
+      451,
+      452,
+      453,
+      454,
+      455,
+      456,
+      457,
+      458,
+      459,
+      460,
+      461,
+      462,
+      463,
+      464,
+      465,
+      466,
+      467,
+      468,
+      469,
+      470,
+      471,
+      472,
+      473,
+      474,
+      475,
+      476,
+      477,
+      478,
+      479,
+      480,
+      481,
+      482,
+      483,
+      484,
+      485,
+      486,
+      487,
+      488,
+      489,
+      490,
+      491,
+      492,
+      493,
+      494,
+      495,
+      496,
+      497,
+      498,
+      499,
+      500,
+      501,
+      502,
+      503,
+      504,
+      505,
+      506,
+      507,
+      508,
+      509,
+      510,
+      511,
+      512,
+      513,
+      514,
+      515,
+      516,
+      517,
+      518,
+      519,
+      520,
+      521,
+      522,
+      523,
+      524,
+      525,
+      526,
+      527,
+      528,
+      529,
+      530,
+      531,
+      532,
+      533,
+      534,
+      535,
+      536,
+      537,
+      538,
+      539,
+      540,
+      541,
+      542,
+      543,
+      544,
+      545,
+      546,
+      547,
+      548,
+      549,
+      550,
+      551,
+      552,
+      553,
+      554,
+      555,
+      556,
+      557,
+      558,
+      559,
+      560,
+      561,
+      562,
+      563,
+      564,
+      565,
+      566,
+      567,
+      568,
+      569,
+      570,
+      571,
+      572,
+      573,
+      574,
+      575,
+      576,
+      577,
+      578,
+      579,
+      580,
+      581,
+      582,
+      583,
+      584,
+      585,
+      586,
+      587,
+      588,
+      589,
+      590,
+      591,
+      592,
+      593,
+      594,
+      595,
+      596,
+      597,
+      598,
+      599,
+      600,
+      601,
+      602,
+      603,
+      604,
+      605,
+      606,
+      607,
+      608,
+      609,
+      610,
+      611,
+      612,
+      613,
+      614,
+      615,
+      616,
+      617,
+      618,
+      619,
+      620,
+      621,
+      622,
+      623,
+      624,
+      625,
+      626,
+      627,
+      628,
+      629,
+      630,
+      631,
+      632,
+      633,
+      634,
+      635,
+      636,
+      637,
+      638,
+      639,
+      640,
+      641,
+      642,
+      643,
+      644,
+      645,
+      646,
+      647,
+      648,
+      649,
+      650,
+      651,
+      652,
+      653,
+      654,
+      655,
+      656,
+      657,
+      658,
+      659,
+      660,
+      661,
+      662,
+      663,
+      664,
+      665,
+      666,
+      667,
+      668,
+      669,
+      670,
+      671,
+      672,
+      673,
+      674,
+      675,
+      676,
+      677,
+      678,
+      679,
+      680,
+      681,
+      682,
+      683,
+      684,
+      685,
+      686,
+      687,
+      688,
+      689,
+      690,
+      691,
+      692,
+      693,
+      694,
+      695,
+      696,
+      697,
+      698,
+      699,
+      700,
+      701,
+      702,
+      703,
+      704,
+      705,
+      706,
+      707,
+      708,
+      709,
+      710,
+      711,
+      712,
+      713,
+      714,
+      715,
+      716,
+      717,
+      718,
+      719,
+      720,
+      721,
+      722,
+      723,
+      724,
+      725,
+      726,
+      727,
+      728,
+      729,
+      730,
+      731,
+      732,
+      733,
+      734,
+      735,
+      736,
+      737,
+      738,
+      739,
+      740,
+      741,
+      742,
+      743,
+      744,
+      745,
+      746,
+      747,
+      748,
+      749,
+      750,
+      751,
+      752,
+      753,
+      754,
+      755,
+      756,
+      757,
+      758,
+      759,
+      760,
+      761,
+      762,
+      763,
+      764,
+      765,
+      766,
+      767,
+      768,
+      769,
+      770,
+      771,
+      772,
+      773,
+      774,
+      775,
+      776,
+      777,
+      778,
+      779,
+      780,
+      781,
+      782,
+      783,
+      784,
+      785,
+      786,
+      787,
+      788,
+      789,
+      790,
+      791,
+      792,
+      793,
+      794,
+      795,
+      796,
+      797,
+      798,
+      799,
+      800,
+      801,
+      802,
+      803,
+      804,
+      805,
+      806,
+      807,
+      808,
+      809,
+      810,
+      811,
+      812,
+      813,
+      814,
+      815,
+      816,
+      817,
+      818,
+      819,
+      820,
+      821,
+      822,
+      823,
+      824,
+      825,
+      826,
+      827,
+      828,
+      829,
+      830,
+      831,
+      832,
+      833,
+      834,
+      835,
+      836,
+      837,
+      838,
+      839,
+      840,
+      841,
+      842,
+      843,
+      844,
+      845,
+      846,
+      847,
+      848,
+      849,
+      850,
+      851,
+      852,
+      853,
+      854,
+      855,
+      856,
+      857,
+      858,
+      859,
+      860,
+      861,
+      862,
+      863,
+      864,
+      865,
+      866,
+      867,
+      868,
+      869,
+      870,
+      871,
+      872,
+      873,
+      874,
+      875,
+      876,
+      877,
+      878,
+      879,
+      880,
+      881,
+      882,
+      883,
+      884,
+      885,
+      886,
+      887,
+      888,
+      889,
+      890,
+      891,
+      892,
+      893,
+      894,
+      895,
+      896,
+      897,
+      898,
+      899,
+      900,
+      901,
+      902,
+      903,
+      904,
+      905,
+      906,
+      907,
+      908,
+      909,
+      910,
+      911,
+      912,
+      913,
+      914,
+      915,
+      916,
+      917,
+      918,
+      919,
+      920,
+      921,
+      922,
+      923,
+      924,
+      925,
+      926,
+      927,
+      928,
+      929,
+      930,
+      931,
+      932,
+      933,
+      934,
+      935,
+      936,
+      937,
+      938,
+      939,
+      940,
+      941,
+      942,
+      943,
+      944,
+      945,
+      946,
+      947,
+      948,
+      949,
+      950,
+      951,
+      952,
+      953,
+      954,
+      955,
+      956,
+      957,
+      958,
+      959,
+      960,
+      961,
+      962,
+      963,
+      964,
+      965,
+      966,
+      967,
+      968,
+      969,
+      970,
+      971,
+      972,
+      973,
+      974,
+      975,
+      976,
+      977,
+      978,
+      979,
+      980,
+      981,
+      982,
+      983,
+      984,
+      985,
+      986,
+      987,
+      988,
+      989,
+      990,
+      991,
+      992,
+      993,
+      994,
+      995,
+      996,
+      997,
+      998,
+      999,
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005,
+      1006,
+      1007,
+      1008,
+      1009,
+      1010,
+      1011,
+      1012,
+      1013,
+      1014,
+      1015,
+      1016,
+      1017,
+      1018,
+      1019,
+      1020,
+      1021,
+      1022,
+      1023,
+      1024,
+      1025,
+      1026,
+      1027,
+      1028,
+      1029,
+      1030,
+      1031,
+      1032,
+      1033,
+      1034,
+      1035,
+      1036,
+      1037,
+      1038,
+      1039,
+      1040,
+      1041,
+      1042,
+      1043,
+      1044,
+      1045,
+      1046,
+      1047,
+      1048,
+      1049,
+      1050,
+      1051,
+      1052,
+      1053,
+      1054,
+      1055,
+      1056,
+      1057,
+      1058,
+      1059,
+      1060,
+      1061,
+      1062,
+      1063,
+      1064,
+      1065,
+      1066,
+      1067,
+      1068,
+      1069,
+      1070,
+      1071,
+      1072,
+      1073,
+      1074,
+      1075,
+      1076,
+      1077,
+      1078,
+      1079,
+      1080,
+      1081,
+      1082,
+      1083,
+      1084,
+      1085,
+      1086,
+      1087,
+      1088,
+      1089,
+      1090,
+      1091
+    ],
+    "watertight": true,
+    "fitted_shared_skeleton": true,
+    "maximum_edge_length_mm": null,
+    "seconds": 148.22137590000057
+  },
+  "step": {
+    "status": "DiagnosticOnly",
+    "can_apply": false,
+    "commercial_engine_used": false,
+    "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\assembled",
+    "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\result_v4\\regions\\source_partition.npz",
+    "stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
+    "algorithm": "native-graph-step-canonical-3d-boundaries-v1",
+    "write_pcurves": true,
+    "topology_before": {
+      "faces": 1092,
+      "edges": 39985,
+      "shells": 1,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 690.2501033918273,
+      "maximum_edge_tolerance_mm": 0.00209523077187053
+    },
+    "topology": {
+      "faces": 1092,
+      "edges": 40612,
+      "shells": 1,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 688.5903074942605,
+      "maximum_edge_tolerance_mm": 0.003926987582888349
+    },
+    "master_3d_curves": 39985,
+    "declared_step_uncertainty_mm": 0.00209523077187053,
+    "step_bytes": 139569825,
+    "expected_solids": 1,
+    "watertight": true,
+    "seconds": 187.58193779998692
+  },
+  "model": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\step\\model.step",
+  "face_budget_passed": true,
+  "quality": {
+    "status": "DiagnosticOnly",
+    "step": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\step\\model.step",
+    "partition": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v3\\result_v4\\regions\\source_partition.npz",
+    "units": "mm",
+    "source_CAD_read": false,
+    "source_label_assignment": "Nearest STL votes, diagnostic only",
+    "topology": {
+      "faces": 1092,
+      "edges": 40612,
+      "shells": 1,
+      "solids": 1,
+      "free_edges": 0,
+      "multiple_edges": 0,
+      "invalid_faces": [],
+      "brep_valid": true,
+      "volume_mm3": 688.5903074942605,
+      "maximum_edge_tolerance_mm": 0.003926987582888349
+    },
+    "delabella_retried_faces": [],
+    "representation": {
+      "file_bytes": 139569825,
+      "spline_faces": 1092,
+      "actual_control_points": 465755,
+      "maximum_direction_poles": 65
+    },
+    "tessellation_to_native_surface_max_mm": 0.0036434662304965252,
+    "forward_tessellation_distance_mm": {
+      "rms": 0.00199323496366392,
+      "p50": 0.0009301817369651866,
+      "p95": 0.003917171920316645,
+      "max": 0.022505676872426557,
+      "min": 6.424999479215832e-08
+    },
+    "reverse_native_surface_distance_mm": {
+      "rms": 0.0015769813813653875,
+      "p50": 0.00046327524504103485,
+      "p95": 0.0030538045977478528,
+      "max": 0.025313039313824868,
+      "min": 2.4375914435890624e-10
+    },
+    "source_normal_difference_degrees": {
+      "rms": 3.03462856792887,
+      "p50": 0.605150841898009,
+      "p95": 5.4526972344307625,
+      "max": 117.13680524872863,
+      "min": 0.0007968722751894447
+    },
+    "opposed_normal_sample_fraction": 9.157509157509158e-06,
+    "tessellation_area_mm2": 1076.052712018251,
+    "tessellation_triangles": 804721,
+    "tessellation_deflection_mm": 0.005,
+    "source_samples": 30000,
+    "reverse_samples": 109200,
+    "all_join_normal_degrees": {
+      "rms": 11.149406677390866,
+      "p50": 1.9710822899140295,
+      "p95": 24.94961777397055,
+      "max": 144.18382601784796,
+      "min": 0.0
+    },
+    "length_weighted_all_join_normal_degrees": {
+      "rms": 11.839824147523284,
+      "p50": 2.0573687180966984,
+      "p95": 27.456448759797144,
+      "max": 144.18382601784796,
+      "min": 0.0
+    },
+    "surface_gap_mm": {
+      "rms": 0.000947106931469195,
+      "p50": 0.0007190352625747067,
+      "p95": 0.0017887134151105956,
+      "max": 0.004149392179891669,
+      "min": 0.0
+    },
+    "seconds": 168.25021520000882,
+    "can_apply": false,
+    "scope": "Independent finite samples, not a certified Hausdorff or self-intersection bound. Join angles include designed creases."
+  },
+  "sampled_distance_gate_passed": true,
+  "regions": {
+    "status": "DiagnosticOnly",
+    "source_assembly": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\assembled",
+    "source_fit": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\fit\\round_0",
+    "source_CAD_read": false,
+    "source_region_identity": "Verified native support poles and chart labels",
+    "scope": "Open fitted regional surfaces before STEP healing; the assembled whole STEP carries solid validation.",
+    "files": [
+      {
+        "region": 0,
+        "file": "region_00000.step",
+        "faces": 1,
+        "bytes": 117922
+      },
+      {
+        "region": 1,
+        "file": "region_00001.step",
+        "faces": 2,
+        "bytes": 133729
+      },
+      {
+        "region": 2,
+        "file": "region_00002.step",
+        "faces": 5,
+        "bytes": 1146127
+      },
+      {
+        "region": 3,
+        "file": "region_00003.step",
+        "faces": 1,
+        "bytes": 147587
+      },
+      {
+        "region": 4,
+        "file": "region_00004.step",
+        "faces": 1,
+        "bytes": 199839
+      },
+      {
+        "region": 5,
+        "file": "region_00005.step",
+        "faces": 1,
+        "bytes": 138383
+      },
+      {
+        "region": 6,
+        "file": "region_00006.step",
+        "faces": 1,
+        "bytes": 198591
+      },
+      {
+        "region": 7,
+        "file": "region_00007.step",
+        "faces": 1,
+        "bytes": 139048
+      },
+      {
+        "region": 8,
+        "file": "region_00008.step",
+        "faces": 1,
+        "bytes": 261568
+      },
+      {
+        "region": 9,
+        "file": "region_00009.step",
+        "faces": 6,
+        "bytes": 2815986
+      },
+      {
+        "region": 10,
+        "file": "region_00010.step",
+        "faces": 8,
+        "bytes": 2790645
+      },
+      {
+        "region": 11,
+        "file": "region_00011.step",
+        "faces": 1,
+        "bytes": 205417
+      },
+      {
+        "region": 12,
+        "file": "region_00012.step",
+        "faces": 22,
+        "bytes": 2123230
+      },
+      {
+        "region": 13,
+        "file": "region_00013.step",
+        "faces": 5,
+        "bytes": 964375
+      },
+      {
+        "region": 14,
+        "file": "region_00014.step",
+        "faces": 6,
+        "bytes": 1115118
+      },
+      {
+        "region": 15,
+        "file": "region_00015.step",
+        "faces": 1,
+        "bytes": 258569
+      },
+      {
+        "region": 16,
+        "file": "region_00016.step",
+        "faces": 1,
+        "bytes": 206828
+      },
+      {
+        "region": 17,
+        "file": "region_00017.step",
+        "faces": 1,
+        "bytes": 230102
+      },
+      {
+        "region": 18,
+        "file": "region_00018.step",
+        "faces": 1,
+        "bytes": 178311
+      },
+      {
+        "region": 19,
+        "file": "region_00019.step",
+        "faces": 1,
+        "bytes": 133942
+      },
+      {
+        "region": 20,
+        "file": "region_00020.step",
+        "faces": 1,
+        "bytes": 100024
+      },
+      {
+        "region": 21,
+        "file": "region_00021.step",
+        "faces": 1,
+        "bytes": 117248
+      },
+      {
+        "region": 22,
+        "file": "region_00022.step",
+        "faces": 8,
+        "bytes": 2809119
+      },
+      {
+        "region": 23,
+        "file": "region_00023.step",
+        "faces": 1,
+        "bytes": 158257
+      },
+      {
+        "region": 24,
+        "file": "region_00024.step",
+        "faces": 11,
+        "bytes": 4342889
+      },
+      {
+        "region": 25,
+        "file": "region_00025.step",
+        "faces": 12,
+        "bytes": 5024698
+      },
+      {
+        "region": 26,
+        "file": "region_00026.step",
+        "faces": 1,
+        "bytes": 168640
+      },
+      {
+        "region": 27,
+        "file": "region_00027.step",
+        "faces": 1,
+        "bytes": 282968
+      },
+      {
+        "region": 28,
+        "file": "region_00028.step",
+        "faces": 3,
+        "bytes": 320089
+      },
+      {
+        "region": 29,
+        "file": "region_00029.step",
+        "faces": 7,
+        "bytes": 1819253
+      },
+      {
+        "region": 30,
+        "file": "region_00030.step",
+        "faces": 14,
+        "bytes": 1506157
+      },
+      {
+        "region": 31,
+        "file": "region_00031.step",
+        "faces": 1,
+        "bytes": 145278
+      },
+      {
+        "region": 32,
+        "file": "region_00032.step",
+        "faces": 1,
+        "bytes": 167617
+      },
+      {
+        "region": 33,
+        "file": "region_00033.step",
+        "faces": 1,
+        "bytes": 176353
+      },
+      {
+        "region": 34,
+        "file": "region_00034.step",
+        "faces": 2,
+        "bytes": 153451
+      },
+      {
+        "region": 35,
+        "file": "region_00035.step",
+        "faces": 1,
+        "bytes": 173823
+      },
+      {
+        "region": 36,
+        "file": "region_00036.step",
+        "faces": 5,
+        "bytes": 977741
+      },
+      {
+        "region": 37,
+        "file": "region_00037.step",
+        "faces": 8,
+        "bytes": 5622819
+      },
+      {
+        "region": 38,
+        "file": "region_00038.step",
+        "faces": 5,
+        "bytes": 1224821
+      },
+      {
+        "region": 39,
+        "file": "region_00039.step",
+        "faces": 2,
+        "bytes": 185743
+      },
+      {
+        "region": 40,
+        "file": "region_00040.step",
+        "faces": 1,
+        "bytes": 116324
+      },
+      {
+        "region": 41,
+        "file": "region_00041.step",
+        "faces": 1,
+        "bytes": 132570
+      },
+      {
+        "region": 42,
+        "file": "region_00042.step",
+        "faces": 11,
+        "bytes": 4618298
+      },
+      {
+        "region": 43,
+        "file": "region_00043.step",
+        "faces": 1,
+        "bytes": 112302
+      },
+      {
+        "region": 44,
+        "file": "region_00044.step",
+        "faces": 1,
+        "bytes": 150019
+      },
+      {
+        "region": 45,
+        "file": "region_00045.step",
+        "faces": 1,
+        "bytes": 114805
+      },
+      {
+        "region": 46,
+        "file": "region_00046.step",
+        "faces": 5,
+        "bytes": 1622597
+      },
+      {
+        "region": 47,
+        "file": "region_00047.step",
+        "faces": 22,
+        "bytes": 3521381
+      },
+      {
+        "region": 48,
+        "file": "region_00048.step",
+        "faces": 1,
+        "bytes": 224602
+      },
+      {
+        "region": 49,
+        "file": "region_00049.step",
+        "faces": 1,
+        "bytes": 76147
+      },
+      {
+        "region": 50,
+        "file": "region_00050.step",
+        "faces": 1,
+        "bytes": 103837
+      },
+      {
+        "region": 51,
+        "file": "region_00051.step",
+        "faces": 1,
+        "bytes": 319510
+      },
+      {
+        "region": 52,
+        "file": "region_00052.step",
+        "faces": 71,
+        "bytes": 12720061
+      },
+      {
+        "region": 53,
+        "file": "region_00053.step",
+        "faces": 1,
+        "bytes": 250725
+      },
+      {
+        "region": 54,
+        "file": "region_00054.step",
+        "faces": 1,
+        "bytes": 188038
+      },
+      {
+        "region": 55,
+        "file": "region_00055.step",
+        "faces": 1,
+        "bytes": 131015
+      },
+      {
+        "region": 56,
+        "file": "region_00056.step",
+        "faces": 5,
+        "bytes": 729004
+      },
+      {
+        "region": 57,
+        "file": "region_00057.step",
+        "faces": 1,
+        "bytes": 133412
+      },
+      {
+        "region": 58,
+        "file": "region_00058.step",
+        "faces": 9,
+        "bytes": 569695
+      },
+      {
+        "region": 59,
+        "file": "region_00059.step",
+        "faces": 15,
+        "bytes": 906523
+      },
+      {
+        "region": 60,
+        "file": "region_00060.step",
+        "faces": 1,
+        "bytes": 156471
+      },
+      {
+        "region": 61,
+        "file": "region_00061.step",
+        "faces": 1,
+        "bytes": 160425
+      },
+      {
+        "region": 62,
+        "file": "region_00062.step",
+        "faces": 1,
+        "bytes": 191699
+      },
+      {
+        "region": 63,
+        "file": "region_00063.step",
+        "faces": 1,
+        "bytes": 150078
+      },
+      {
+        "region": 64,
+        "file": "region_00064.step",
+        "faces": 1,
+        "bytes": 163459
+      },
+      {
+        "region": 65,
+        "file": "region_00065.step",
+        "faces": 1,
+        "bytes": 303671
+      },
+      {
+        "region": 66,
+        "file": "region_00066.step",
+        "faces": 3,
+        "bytes": 277125
+      },
+      {
+        "region": 67,
+        "file": "region_00067.step",
+        "faces": 1,
+        "bytes": 376168
+      },
+      {
+        "region": 68,
+        "file": "region_00068.step",
+        "faces": 2,
+        "bytes": 303045
+      },
+      {
+        "region": 69,
+        "file": "region_00069.step",
+        "faces": 1,
+        "bytes": 114191
+      },
+      {
+        "region": 70,
+        "file": "region_00070.step",
+        "faces": 2,
+        "bytes": 335313
+      },
+      {
+        "region": 71,
+        "file": "region_00071.step",
+        "faces": 1,
+        "bytes": 129796
+      },
+      {
+        "region": 72,
+        "file": "region_00072.step",
+        "faces": 1,
+        "bytes": 140717
+      },
+      {
+        "region": 73,
+        "file": "region_00073.step",
+        "faces": 1,
+        "bytes": 214844
+      },
+      {
+        "region": 74,
+        "file": "region_00074.step",
+        "faces": 1,
+        "bytes": 199983
+      },
+      {
+        "region": 75,
+        "file": "region_00075.step",
+        "faces": 1,
+        "bytes": 188496
+      },
+      {
+        "region": 76,
+        "file": "region_00076.step",
+        "faces": 1,
+        "bytes": 135174
+      },
+      {
+        "region": 77,
+        "file": "region_00077.step",
+        "faces": 5,
+        "bytes": 974003
+      },
+      {
+        "region": 78,
+        "file": "region_00078.step",
+        "faces": 1,
+        "bytes": 259246
+      },
+      {
+        "region": 79,
+        "file": "region_00079.step",
+        "faces": 1,
+        "bytes": 232472
+      },
+      {
+        "region": 80,
+        "file": "region_00080.step",
+        "faces": 16,
+        "bytes": 4305105
+      },
+      {
+        "region": 81,
+        "file": "region_00081.step",
+        "faces": 1,
+        "bytes": 182035
+      },
+      {
+        "region": 82,
+        "file": "region_00082.step",
+        "faces": 1,
+        "bytes": 192615
+      },
+      {
+        "region": 83,
+        "file": "region_00083.step",
+        "faces": 5,
+        "bytes": 2514281
+      },
+      {
+        "region": 84,
+        "file": "region_00084.step",
+        "faces": 21,
+        "bytes": 2388594
+      },
+      {
+        "region": 85,
+        "file": "region_00085.step",
+        "faces": 1,
+        "bytes": 203207
+      },
+      {
+        "region": 86,
+        "file": "region_00086.step",
+        "faces": 6,
+        "bytes": 1937454
+      },
+      {
+        "region": 87,
+        "file": "region_00087.step",
+        "faces": 1,
+        "bytes": 295271
+      },
+      {
+        "region": 88,
+        "file": "region_00088.step",
+        "faces": 5,
+        "bytes": 813626
+      },
+      {
+        "region": 89,
+        "file": "region_00089.step",
+        "faces": 1,
+        "bytes": 282862
+      },
+      {
+        "region": 90,
+        "file": "region_00090.step",
+        "faces": 5,
+        "bytes": 1028686
+      },
+      {
+        "region": 91,
+        "file": "region_00091.step",
+        "faces": 1,
+        "bytes": 109467
+      },
+      {
+        "region": 92,
+        "file": "region_00092.step",
+        "faces": 1,
+        "bytes": 87693
+      },
+      {
+        "region": 93,
+        "file": "region_00093.step",
+        "faces": 2,
+        "bytes": 153109
+      },
+      {
+        "region": 94,
+        "file": "region_00094.step",
+        "faces": 1,
+        "bytes": 180679
+      },
+      {
+        "region": 95,
+        "file": "region_00095.step",
+        "faces": 1,
+        "bytes": 117289
+      },
+      {
+        "region": 96,
+        "file": "region_00096.step",
+        "faces": 1,
+        "bytes": 85993
+      },
+      {
+        "region": 97,
+        "file": "region_00097.step",
+        "faces": 2,
+        "bytes": 97099
+      },
+      {
+        "region": 98,
+        "file": "region_00098.step",
+        "faces": 5,
+        "bytes": 647419
+      },
+      {
+        "region": 99,
+        "file": "region_00099.step",
+        "faces": 1,
+        "bytes": 88375
+      },
+      {
+        "region": 100,
+        "file": "region_00100.step",
+        "faces": 1,
+        "bytes": 249170
+      },
+      {
+        "region": 101,
+        "file": "region_00101.step",
+        "faces": 1,
+        "bytes": 142560
+      },
+      {
+        "region": 102,
+        "file": "region_00102.step",
+        "faces": 3,
+        "bytes": 452718
+      },
+      {
+        "region": 103,
+        "file": "region_00103.step",
+        "faces": 5,
+        "bytes": 1054691
+      },
+      {
+        "region": 104,
+        "file": "region_00104.step",
+        "faces": 1,
+        "bytes": 62701
+      },
+      {
+        "region": 105,
+        "file": "region_00105.step",
+        "faces": 1,
+        "bytes": 226260
+      },
+      {
+        "region": 106,
+        "file": "region_00106.step",
+        "faces": 5,
+        "bytes": 1435967
+      },
+      {
+        "region": 107,
+        "file": "region_00107.step",
+        "faces": 1,
+        "bytes": 170468
+      },
+      {
+        "region": 108,
+        "file": "region_00108.step",
+        "faces": 1,
+        "bytes": 284424
+      },
+      {
+        "region": 109,
+        "file": "region_00109.step",
+        "faces": 1,
+        "bytes": 309058
+      },
+      {
+        "region": 110,
+        "file": "region_00110.step",
+        "faces": 1,
+        "bytes": 243494
+      },
+      {
+        "region": 111,
+        "file": "region_00111.step",
+        "faces": 2,
+        "bytes": 439764
+      },
+      {
+        "region": 112,
+        "file": "region_00112.step",
+        "faces": 20,
+        "bytes": 3523691
+      },
+      {
+        "region": 113,
+        "file": "region_00113.step",
+        "faces": 1,
+        "bytes": 135353
+      },
+      {
+        "region": 114,
+        "file": "region_00114.step",
+        "faces": 5,
+        "bytes": 1329247
+      },
+      {
+        "region": 115,
+        "file": "region_00115.step",
+        "faces": 1,
+        "bytes": 211681
+      },
+      {
+        "region": 116,
+        "file": "region_00116.step",
+        "faces": 1,
+        "bytes": 185895
+      },
+      {
+        "region": 117,
+        "file": "region_00117.step",
+        "faces": 1,
+        "bytes": 189011
+      },
+      {
+        "region": 118,
+        "file": "region_00118.step",
+        "faces": 1,
+        "bytes": 189223
+      },
+      {
+        "region": 119,
+        "file": "region_00119.step",
+        "faces": 28,
+        "bytes": 3077462
+      },
+      {
+        "region": 120,
+        "file": "region_00120.step",
+        "faces": 1,
+        "bytes": 415869
+      },
+      {
+        "region": 121,
+        "file": "region_00121.step",
+        "faces": 2,
+        "bytes": 104313
+      },
+      {
+        "region": 122,
+        "file": "region_00122.step",
+        "faces": 2,
+        "bytes": 294800
+      },
+      {
+        "region": 123,
+        "file": "region_00123.step",
+        "faces": 2,
+        "bytes": 131443
+      },
+      {
+        "region": 124,
+        "file": "region_00124.step",
+        "faces": 4,
+        "bytes": 478455
+      },
+      {
+        "region": 125,
+        "file": "region_00125.step",
+        "faces": 1,
+        "bytes": 239161
+      },
+      {
+        "region": 126,
+        "file": "region_00126.step",
+        "faces": 2,
+        "bytes": 142175
+      },
+      {
+        "region": 127,
+        "file": "region_00127.step",
+        "faces": 6,
+        "bytes": 1936839
+      },
+      {
+        "region": 128,
+        "file": "region_00128.step",
+        "faces": 5,
+        "bytes": 881937
+      },
+      {
+        "region": 129,
+        "file": "region_00129.step",
+        "faces": 6,
+        "bytes": 1261095
+      },
+      {
+        "region": 130,
+        "file": "region_00130.step",
+        "faces": 2,
+        "bytes": 315381
+      },
+      {
+        "region": 131,
+        "file": "region_00131.step",
+        "faces": 2,
+        "bytes": 105407
+      },
+      {
+        "region": 132,
+        "file": "region_00132.step",
+        "faces": 1,
+        "bytes": 435824
+      },
+      {
+        "region": 133,
+        "file": "region_00133.step",
+        "faces": 1,
+        "bytes": 484630
+      },
+      {
+        "region": 134,
+        "file": "region_00134.step",
+        "faces": 9,
+        "bytes": 2287616
+      },
+      {
+        "region": 135,
+        "file": "region_00135.step",
+        "faces": 1,
+        "bytes": 264173
+      },
+      {
+        "region": 136,
+        "file": "region_00136.step",
+        "faces": 1,
+        "bytes": 230255
+      },
+      {
+        "region": 137,
+        "file": "region_00137.step",
+        "faces": 2,
+        "bytes": 164266
+      },
+      {
+        "region": 138,
+        "file": "region_00138.step",
+        "faces": 2,
+        "bytes": 294074
+      },
+      {
+        "region": 139,
+        "file": "region_00139.step",
+        "faces": 1,
+        "bytes": 222014
+      },
+      {
+        "region": 140,
+        "file": "region_00140.step",
+        "faces": 5,
+        "bytes": 635760
+      },
+      {
+        "region": 141,
+        "file": "region_00141.step",
+        "faces": 2,
+        "bytes": 447582
+      },
+      {
+        "region": 142,
+        "file": "region_00142.step",
+        "faces": 1,
+        "bytes": 659893
+      },
+      {
+        "region": 143,
+        "file": "region_00143.step",
+        "faces": 1,
+        "bytes": 199324
+      },
+      {
+        "region": 144,
+        "file": "region_00144.step",
+        "faces": 1,
+        "bytes": 61720
+      },
+      {
+        "region": 145,
+        "file": "region_00145.step",
+        "faces": 1,
+        "bytes": 53384
+      },
+      {
+        "region": 146,
+        "file": "region_00146.step",
+        "faces": 1,
+        "bytes": 304639
+      },
+      {
+        "region": 147,
+        "file": "region_00147.step",
+        "faces": 1,
+        "bytes": 84790
+      },
+      {
+        "region": 148,
+        "file": "region_00148.step",
+        "faces": 1,
+        "bytes": 182339
+      },
+      {
+        "region": 149,
+        "file": "region_00149.step",
+        "faces": 1,
+        "bytes": 118914
+      },
+      {
+        "region": 150,
+        "file": "region_00150.step",
+        "faces": 1,
+        "bytes": 267331
+      },
+      {
+        "region": 151,
+        "file": "region_00151.step",
+        "faces": 1,
+        "bytes": 438708
+      },
+      {
+        "region": 152,
+        "file": "region_00152.step",
+        "faces": 10,
+        "bytes": 3956617
+      },
+      {
+        "region": 153,
+        "file": "region_00153.step",
+        "faces": 3,
+        "bytes": 187703
+      },
+      {
+        "region": 154,
+        "file": "region_00154.step",
+        "faces": 1,
+        "bytes": 170731
+      },
+      {
+        "region": 155,
+        "file": "region_00155.step",
+        "faces": 1,
+        "bytes": 86721
+      },
+      {
+        "region": 156,
+        "file": "region_00156.step",
+        "faces": 1,
+        "bytes": 106475
+      },
+      {
+        "region": 157,
+        "file": "region_00157.step",
+        "faces": 1,
+        "bytes": 143280
+      },
+      {
+        "region": 158,
+        "file": "region_00158.step",
+        "faces": 1,
+        "bytes": 123808
+      },
+      {
+        "region": 159,
+        "file": "region_00159.step",
+        "faces": 1,
+        "bytes": 179419
+      },
+      {
+        "region": 160,
+        "file": "region_00160.step",
+        "faces": 1,
+        "bytes": 160141
+      },
+      {
+        "region": 161,
+        "file": "region_00161.step",
+        "faces": 1,
+        "bytes": 180611
+      },
+      {
+        "region": 162,
+        "file": "region_00162.step",
+        "faces": 2,
+        "bytes": 182911
+      },
+      {
+        "region": 163,
+        "file": "region_00163.step",
+        "faces": 1,
+        "bytes": 181309
+      },
+      {
+        "region": 164,
+        "file": "region_00164.step",
+        "faces": 1,
+        "bytes": 138619
+      },
+      {
+        "region": 165,
+        "file": "region_00165.step",
+        "faces": 2,
+        "bytes": 126678
+      },
+      {
+        "region": 166,
+        "file": "region_00166.step",
+        "faces": 1,
+        "bytes": 367122
+      },
+      {
+        "region": 167,
+        "file": "region_00167.step",
+        "faces": 7,
+        "bytes": 396409
+      },
+      {
+        "region": 168,
+        "file": "region_00168.step",
+        "faces": 1,
+        "bytes": 147959
+      },
+      {
+        "region": 169,
+        "file": "region_00169.step",
+        "faces": 1,
+        "bytes": 160380
+      },
+      {
+        "region": 170,
+        "file": "region_00170.step",
+        "faces": 1,
+        "bytes": 131485
+      },
+      {
+        "region": 171,
+        "file": "region_00171.step",
+        "faces": 1,
+        "bytes": 123363
+      },
+      {
+        "region": 172,
+        "file": "region_00172.step",
+        "faces": 1,
+        "bytes": 201422
+      },
+      {
+        "region": 173,
+        "file": "region_00173.step",
+        "faces": 2,
+        "bytes": 328527
+      },
+      {
+        "region": 174,
+        "file": "region_00174.step",
+        "faces": 5,
+        "bytes": 1118455
+      },
+      {
+        "region": 175,
+        "file": "region_00175.step",
+        "faces": 1,
+        "bytes": 205231
+      },
+      {
+        "region": 176,
+        "file": "region_00176.step",
+        "faces": 1,
+        "bytes": 209208
+      },
+      {
+        "region": 177,
+        "file": "region_00177.step",
+        "faces": 5,
+        "bytes": 752651
+      },
+      {
+        "region": 178,
+        "file": "region_00178.step",
+        "faces": 1,
+        "bytes": 254429
+      },
+      {
+        "region": 179,
+        "file": "region_00179.step",
+        "faces": 9,
+        "bytes": 2747397
+      },
+      {
+        "region": 180,
+        "file": "region_00180.step",
+        "faces": 1,
+        "bytes": 280770
+      },
+      {
+        "region": 181,
+        "file": "region_00181.step",
+        "faces": 1,
+        "bytes": 106965
+      },
+      {
+        "region": 182,
+        "file": "region_00182.step",
+        "faces": 1,
+        "bytes": 310310
+      },
+      {
+        "region": 183,
+        "file": "region_00183.step",
+        "faces": 13,
+        "bytes": 965232
+      },
+      {
+        "region": 184,
+        "file": "region_00184.step",
+        "faces": 2,
+        "bytes": 166740
+      },
+      {
+        "region": 185,
+        "file": "region_00185.step",
+        "faces": 1,
+        "bytes": 185199
+      },
+      {
+        "region": 186,
+        "file": "region_00186.step",
+        "faces": 1,
+        "bytes": 119755
+      },
+      {
+        "region": 187,
+        "file": "region_00187.step",
+        "faces": 1,
+        "bytes": 114151
+      },
+      {
+        "region": 188,
+        "file": "region_00188.step",
+        "faces": 1,
+        "bytes": 254451
+      },
+      {
+        "region": 189,
+        "file": "region_00189.step",
+        "faces": 1,
+        "bytes": 192158
+      },
+      {
+        "region": 190,
+        "file": "region_00190.step",
+        "faces": 1,
+        "bytes": 206395
+      },
+      {
+        "region": 191,
+        "file": "region_00191.step",
+        "faces": 1,
+        "bytes": 187891
+      },
+      {
+        "region": 192,
+        "file": "region_00192.step",
+        "faces": 6,
+        "bytes": 2014666
+      },
+      {
+        "region": 193,
+        "file": "region_00193.step",
+        "faces": 25,
+        "bytes": 1629253
+      },
+      {
+        "region": 194,
+        "file": "region_00194.step",
+        "faces": 33,
+        "bytes": 2207660
+      },
+      {
+        "region": 195,
+        "file": "region_00195.step",
+        "faces": 54,
+        "bytes": 3921248
+      },
+      {
+        "region": 196,
+        "file": "region_00196.step",
+        "faces": 10,
+        "bytes": 760222
+      },
+      {
+        "region": 197,
+        "file": "region_00197.step",
+        "faces": 15,
+        "bytes": 1341611
+      },
+      {
+        "region": 198,
+        "file": "region_00198.step",
+        "faces": 7,
+        "bytes": 822460
+      },
+      {
+        "region": 199,
+        "file": "region_00199.step",
+        "faces": 15,
+        "bytes": 1454183
+      },
+      {
+        "region": 200,
+        "file": "region_00200.step",
+        "faces": 44,
+        "bytes": 1838179
+      },
+      {
+        "region": 201,
+        "file": "region_00201.step",
+        "faces": 7,
+        "bytes": 231565
+      },
+      {
+        "region": 202,
+        "file": "region_00202.step",
+        "faces": 5,
+        "bytes": 190242
+      },
+      {
+        "region": 203,
+        "file": "region_00203.step",
+        "faces": 5,
+        "bytes": 1386350
+      },
+      {
+        "region": 204,
+        "file": "region_00204.step",
+        "faces": 1,
+        "bytes": 130889
+      },
+      {
+        "region": 205,
+        "file": "region_00205.step",
+        "faces": 1,
+        "bytes": 137197
+      },
+      {
+        "region": 206,
+        "file": "region_00206.step",
+        "faces": 1,
+        "bytes": 122115
+      },
+      {
+        "region": 207,
+        "file": "region_00207.step",
+        "faces": 1,
+        "bytes": 94484
+      },
+      {
+        "region": 208,
+        "file": "region_00208.step",
+        "faces": 1,
+        "bytes": 261154
+      },
+      {
+        "region": 209,
+        "file": "region_00209.step",
+        "faces": 1,
+        "bytes": 112664
+      },
+      {
+        "region": 210,
+        "file": "region_00210.step",
+        "faces": 5,
+        "bytes": 1326294
+      },
+      {
+        "region": 211,
+        "file": "region_00211.step",
+        "faces": 1,
+        "bytes": 272767
+      },
+      {
+        "region": 212,
+        "file": "region_00212.step",
+        "faces": 1,
+        "bytes": 86328
+      },
+      {
+        "region": 213,
+        "file": "region_00213.step",
+        "faces": 5,
+        "bytes": 214952
+      },
+      {
+        "region": 214,
+        "file": "region_00214.step",
+        "faces": 1,
+        "bytes": 47676
+      },
+      {
+        "region": 215,
+        "file": "region_00215.step",
+        "faces": 1,
+        "bytes": 91160
+      },
+      {
+        "region": 216,
+        "file": "region_00216.step",
+        "faces": 2,
+        "bytes": 94699
+      },
+      {
+        "region": 217,
+        "file": "region_00217.step",
+        "faces": 1,
+        "bytes": 92309
+      },
+      {
+        "region": 218,
+        "file": "region_00218.step",
+        "faces": 1,
+        "bytes": 91844
+      },
+      {
+        "region": 219,
+        "file": "region_00219.step",
+        "faces": 1,
+        "bytes": 68081
+      },
+      {
+        "region": 220,
+        "file": "region_00220.step",
+        "faces": 1,
+        "bytes": 160175
+      },
+      {
+        "region": 221,
+        "file": "region_00221.step",
+        "faces": 1,
+        "bytes": 120635
+      },
+      {
+        "region": 222,
+        "file": "region_00222.step",
+        "faces": 1,
+        "bytes": 111959
+      },
+      {
+        "region": 223,
+        "file": "region_00223.step",
+        "faces": 1,
+        "bytes": 115000
+      },
+      {
+        "region": 224,
+        "file": "region_00224.step",
+        "faces": 3,
+        "bytes": 110092
+      },
+      {
+        "region": 225,
+        "file": "region_00225.step",
+        "faces": 1,
+        "bytes": 71143
+      },
+      {
+        "region": 226,
+        "file": "region_00226.step",
+        "faces": 1,
+        "bytes": 73710
+      },
+      {
+        "region": 227,
+        "file": "region_00227.step",
+        "faces": 1,
+        "bytes": 92023
+      },
+      {
+        "region": 228,
+        "file": "region_00228.step",
+        "faces": 1,
+        "bytes": 119690
+      },
+      {
+        "region": 229,
+        "file": "region_00229.step",
+        "faces": 1,
+        "bytes": 60264
+      },
+      {
+        "region": 230,
+        "file": "region_00230.step",
+        "faces": 2,
+        "bytes": 123986
+      },
+      {
+        "region": 231,
+        "file": "region_00231.step",
+        "faces": 1,
+        "bytes": 93766
+      },
+      {
+        "region": 232,
+        "file": "region_00232.step",
+        "faces": 1,
+        "bytes": 95759
+      },
+      {
+        "region": 233,
+        "file": "region_00233.step",
+        "faces": 1,
+        "bytes": 68325
+      },
+      {
+        "region": 234,
+        "file": "region_00234.step",
+        "faces": 1,
+        "bytes": 91924
+      },
+      {
+        "region": 235,
+        "file": "region_00235.step",
+        "faces": 1,
+        "bytes": 106288
+      },
+      {
+        "region": 236,
+        "file": "region_00236.step",
+        "faces": 1,
+        "bytes": 109519
+      },
+      {
+        "region": 237,
+        "file": "region_00237.step",
+        "faces": 1,
+        "bytes": 93301
+      },
+      {
+        "region": 238,
+        "file": "region_00238.step",
+        "faces": 1,
+        "bytes": 99808
+      },
+      {
+        "region": 239,
+        "file": "region_00239.step",
+        "faces": 1,
+        "bytes": 100925
+      },
+      {
+        "region": 240,
+        "file": "region_00240.step",
+        "faces": 1,
+        "bytes": 69487
+      },
+      {
+        "region": 241,
+        "file": "region_00241.step",
+        "faces": 1,
+        "bytes": 73345
+      },
+      {
+        "region": 242,
+        "file": "region_00242.step",
+        "faces": 1,
+        "bytes": 113784
+      },
+      {
+        "region": 243,
+        "file": "region_00243.step",
+        "faces": 1,
+        "bytes": 105478
+      },
+      {
+        "region": 244,
+        "file": "region_00244.step",
+        "faces": 1,
+        "bytes": 92741
+      },
+      {
+        "region": 245,
+        "file": "region_00245.step",
+        "faces": 1,
+        "bytes": 88853
+      },
+      {
+        "region": 246,
+        "file": "region_00246.step",
+        "faces": 1,
+        "bytes": 95259
+      },
+      {
+        "region": 247,
+        "file": "region_00247.step",
+        "faces": 1,
+        "bytes": 80207
+      },
+      {
+        "region": 248,
+        "file": "region_00248.step",
+        "faces": 1,
+        "bytes": 102821
+      },
+      {
+        "region": 249,
+        "file": "region_00249.step",
+        "faces": 1,
+        "bytes": 23074
+      },
+      {
+        "region": 250,
+        "file": "region_00250.step",
+        "faces": 1,
+        "bytes": 77996
+      },
+      {
+        "region": 251,
+        "file": "region_00251.step",
+        "faces": 1,
+        "bytes": 70870
+      },
+      {
+        "region": 252,
+        "file": "region_00252.step",
+        "faces": 1,
+        "bytes": 45289
+      },
+      {
+        "region": 253,
+        "file": "region_00253.step",
+        "faces": 1,
+        "bytes": 78597
+      },
+      {
+        "region": 254,
+        "file": "region_00254.step",
+        "faces": 1,
+        "bytes": 99661
+      },
+      {
+        "region": 255,
+        "file": "region_00255.step",
+        "faces": 1,
+        "bytes": 65475
+      },
+      {
+        "region": 256,
+        "file": "region_00256.step",
+        "faces": 2,
+        "bytes": 125650
+      },
+      {
+        "region": 257,
+        "file": "region_00257.step",
+        "faces": 2,
+        "bytes": 172361
+      },
+      {
+        "region": 258,
+        "file": "region_00258.step",
+        "faces": 1,
+        "bytes": 100775
+      },
+      {
+        "region": 259,
+        "file": "region_00259.step",
+        "faces": 1,
+        "bytes": 113851
+      },
+      {
+        "region": 260,
+        "file": "region_00260.step",
+        "faces": 1,
+        "bytes": 64260
+      },
+      {
+        "region": 261,
+        "file": "region_00261.step",
+        "faces": 1,
+        "bytes": 67102
+      },
+      {
+        "region": 262,
+        "file": "region_00262.step",
+        "faces": 1,
+        "bytes": 90808
+      },
+      {
+        "region": 263,
+        "file": "region_00263.step",
+        "faces": 1,
+        "bytes": 67876
+      },
+      {
+        "region": 264,
+        "file": "region_00264.step",
+        "faces": 2,
+        "bytes": 87324
+      },
+      {
+        "region": 265,
+        "file": "region_00265.step",
+        "faces": 1,
+        "bytes": 53003
+      },
+      {
+        "region": 266,
+        "file": "region_00266.step",
+        "faces": 2,
+        "bytes": 97627
+      },
+      {
+        "region": 267,
+        "file": "region_00267.step",
+        "faces": 1,
+        "bytes": 102975
+      },
+      {
+        "region": 268,
+        "file": "region_00268.step",
+        "faces": 2,
+        "bytes": 91817
+      },
+      {
+        "region": 269,
+        "file": "region_00269.step",
+        "faces": 1,
+        "bytes": 20343
+      },
+      {
+        "region": 270,
+        "file": "region_00270.step",
+        "faces": 1,
+        "bytes": 94134
+      },
+      {
+        "region": 271,
+        "file": "region_00271.step",
+        "faces": 1,
+        "bytes": 78074
+      },
+      {
+        "region": 272,
+        "file": "region_00272.step",
+        "faces": 1,
+        "bytes": 83524
+      },
+      {
+        "region": 273,
+        "file": "region_00273.step",
+        "faces": 2,
+        "bytes": 124006
+      },
+      {
+        "region": 274,
+        "file": "region_00274.step",
+        "faces": 1,
+        "bytes": 74845
+      },
+      {
+        "region": 275,
+        "file": "region_00275.step",
+        "faces": 1,
+        "bytes": 218785
+      },
+      {
+        "region": 276,
+        "file": "region_00276.step",
+        "faces": 1,
+        "bytes": 69222
+      },
+      {
+        "region": 277,
+        "file": "region_00277.step",
+        "faces": 1,
+        "bytes": 73522
+      },
+      {
+        "region": 278,
+        "file": "region_00278.step",
+        "faces": 1,
+        "bytes": 76780
+      },
+      {
+        "region": 279,
+        "file": "region_00279.step",
+        "faces": 1,
+        "bytes": 47572
+      },
+      {
+        "region": 280,
+        "file": "region_00280.step",
+        "faces": 1,
+        "bytes": 49181
+      },
+      {
+        "region": 281,
+        "file": "region_00281.step",
+        "faces": 1,
+        "bytes": 52330
+      },
+      {
+        "region": 282,
+        "file": "region_00282.step",
+        "faces": 1,
+        "bytes": 52869
+      },
+      {
+        "region": 283,
+        "file": "region_00283.step",
+        "faces": 1,
+        "bytes": 41690
+      },
+      {
+        "region": 284,
+        "file": "region_00284.step",
+        "faces": 1,
+        "bytes": 53325
+      },
+      {
+        "region": 285,
+        "file": "region_00285.step",
+        "faces": 1,
+        "bytes": 53273
+      },
+      {
+        "region": 286,
+        "file": "region_00286.step",
+        "faces": 1,
+        "bytes": 39614
+      },
+      {
+        "region": 287,
+        "file": "region_00287.step",
+        "faces": 1,
+        "bytes": 254733
+      },
+      {
+        "region": 288,
+        "file": "region_00288.step",
+        "faces": 1,
+        "bytes": 81841
+      },
+      {
+        "region": 289,
+        "file": "region_00289.step",
+        "faces": 1,
+        "bytes": 98393
+      },
+      {
+        "region": 290,
+        "file": "region_00290.step",
+        "faces": 1,
+        "bytes": 131454
+      },
+      {
+        "region": 291,
+        "file": "region_00291.step",
+        "faces": 2,
+        "bytes": 123348
+      },
+      {
+        "region": 292,
+        "file": "region_00292.step",
+        "faces": 2,
+        "bytes": 100285
+      },
+      {
+        "region": 293,
+        "file": "region_00293.step",
+        "faces": 2,
+        "bytes": 94427
+      },
+      {
+        "region": 294,
+        "file": "region_00294.step",
+        "faces": 2,
+        "bytes": 111786
+      },
+      {
+        "region": 295,
+        "file": "region_00295.step",
+        "faces": 2,
+        "bytes": 110347
+      },
+      {
+        "region": 296,
+        "file": "region_00296.step",
+        "faces": 1,
+        "bytes": 106485
+      },
+      {
+        "region": 297,
+        "file": "region_00297.step",
+        "faces": 1,
+        "bytes": 79028
+      },
+      {
+        "region": 298,
+        "file": "region_00298.step",
+        "faces": 1,
+        "bytes": 138454
+      },
+      {
+        "region": 299,
+        "file": "region_00299.step",
+        "faces": 1,
+        "bytes": 93769
+      },
+      {
+        "region": 300,
+        "file": "region_00300.step",
+        "faces": 1,
+        "bytes": 114402
+      },
+      {
+        "region": 301,
+        "file": "region_00301.step",
+        "faces": 1,
+        "bytes": 122878
+      },
+      {
+        "region": 302,
+        "file": "region_00302.step",
+        "faces": 1,
+        "bytes": 174625
+      },
+      {
+        "region": 303,
+        "file": "region_00303.step",
+        "faces": 1,
+        "bytes": 96427
+      },
+      {
+        "region": 304,
+        "file": "region_00304.step",
+        "faces": 2,
+        "bytes": 117522
+      },
+      {
+        "region": 305,
+        "file": "region_00305.step",
+        "faces": 1,
+        "bytes": 69043
+      },
+      {
+        "region": 306,
+        "file": "region_00306.step",
+        "faces": 1,
+        "bytes": 159218
+      },
+      {
+        "region": 307,
+        "file": "region_00307.step",
+        "faces": 1,
+        "bytes": 78703
+      },
+      {
+        "region": 308,
+        "file": "region_00308.step",
+        "faces": 2,
+        "bytes": 84205
+      },
+      {
+        "region": 309,
+        "file": "region_00309.step",
+        "faces": 1,
+        "bytes": 87724
+      },
+      {
+        "region": 310,
+        "file": "region_00310.step",
+        "faces": 1,
+        "bytes": 74987
+      },
+      {
+        "region": 311,
+        "file": "region_00311.step",
+        "faces": 2,
+        "bytes": 87342
+      },
+      {
+        "region": 312,
+        "file": "region_00312.step",
+        "faces": 1,
+        "bytes": 78256
+      },
+      {
+        "region": 313,
+        "file": "region_00313.step",
+        "faces": 1,
+        "bytes": 92813
+      },
+      {
+        "region": 314,
+        "file": "region_00314.step",
+        "faces": 1,
+        "bytes": 126280
+      },
+      {
+        "region": 315,
+        "file": "region_00315.step",
+        "faces": 1,
+        "bytes": 190998
+      },
+      {
+        "region": 316,
+        "file": "region_00316.step",
+        "faces": 1,
+        "bytes": 89749
+      },
+      {
+        "region": 317,
+        "file": "region_00317.step",
+        "faces": 1,
+        "bytes": 135313
+      },
+      {
+        "region": 318,
+        "file": "region_00318.step",
+        "faces": 1,
+        "bytes": 97192
+      },
+      {
+        "region": 319,
+        "file": "region_00319.step",
+        "faces": 3,
+        "bytes": 115391
+      },
+      {
+        "region": 320,
+        "file": "region_00320.step",
+        "faces": 6,
+        "bytes": 137649
+      },
+      {
+        "region": 321,
+        "file": "region_00321.step",
+        "faces": 6,
+        "bytes": 148236
+      },
+      {
+        "region": 322,
+        "file": "region_00322.step",
+        "faces": 7,
+        "bytes": 179600
+      },
+      {
+        "region": 323,
+        "file": "region_00323.step",
+        "faces": 4,
+        "bytes": 102012
+      },
+      {
+        "region": 324,
+        "file": "region_00324.step",
+        "faces": 4,
+        "bytes": 118393
+      },
+      {
+        "region": 325,
+        "file": "region_00325.step",
+        "faces": 4,
+        "bytes": 182989
+      },
+      {
+        "region": 326,
+        "file": "region_00326.step",
+        "faces": 3,
+        "bytes": 96102
+      },
+      {
+        "region": 327,
+        "file": "region_00327.step",
+        "faces": 3,
+        "bytes": 95994
+      },
+      {
+        "region": 328,
+        "file": "region_00328.step",
+        "faces": 3,
+        "bytes": 85523
+      },
+      {
+        "region": 329,
+        "file": "region_00329.step",
+        "faces": 1,
+        "bytes": 97903
+      },
+      {
+        "region": 330,
+        "file": "region_00330.step",
+        "faces": 1,
+        "bytes": 135258
+      },
+      {
+        "region": 331,
+        "file": "region_00331.step",
+        "faces": 1,
+        "bytes": 89315
+      },
+      {
+        "region": 332,
+        "file": "region_00332.step",
+        "faces": 1,
+        "bytes": 83758
+      },
+      {
+        "region": 333,
+        "file": "region_00333.step",
+        "faces": 1,
+        "bytes": 89986
+      },
+      {
+        "region": 334,
+        "file": "region_00334.step",
+        "faces": 1,
+        "bytes": 104729
+      },
+      {
+        "region": 335,
+        "file": "region_00335.step",
+        "faces": 1,
+        "bytes": 96402
+      },
+      {
+        "region": 336,
+        "file": "region_00336.step",
+        "faces": 1,
+        "bytes": 142290
+      },
+      {
+        "region": 337,
+        "file": "region_00337.step",
+        "faces": 1,
+        "bytes": 101905
+      },
+      {
+        "region": 338,
+        "file": "region_00338.step",
+        "faces": 1,
+        "bytes": 161288
+      },
+      {
+        "region": 339,
+        "file": "region_00339.step",
+        "faces": 1,
+        "bytes": 158641
+      },
+      {
+        "region": 340,
+        "file": "region_00340.step",
+        "faces": 1,
+        "bytes": 101070
+      },
+      {
+        "region": 341,
+        "file": "region_00341.step",
+        "faces": 2,
+        "bytes": 115030
+      },
+      {
+        "region": 342,
+        "file": "region_00342.step",
+        "faces": 1,
+        "bytes": 100012
+      },
+      {
+        "region": 343,
+        "file": "region_00343.step",
+        "faces": 1,
+        "bytes": 111420
+      },
+      {
+        "region": 344,
+        "file": "region_00344.step",
+        "faces": 1,
+        "bytes": 180470
+      },
+      {
+        "region": 345,
+        "file": "region_00345.step",
+        "faces": 1,
+        "bytes": 90358
+      },
+      {
+        "region": 346,
+        "file": "region_00346.step",
+        "faces": 1,
+        "bytes": 61544
+      },
+      {
+        "region": 347,
+        "file": "region_00347.step",
+        "faces": 1,
+        "bytes": 65652
+      },
+      {
+        "region": 348,
+        "file": "region_00348.step",
+        "faces": 1,
+        "bytes": 89642
+      },
+      {
+        "region": 349,
+        "file": "region_00349.step",
+        "faces": 1,
+        "bytes": 86968
+      },
+      {
+        "region": 350,
+        "file": "region_00350.step",
+        "faces": 1,
+        "bytes": 63463
+      },
+      {
+        "region": 351,
+        "file": "region_00351.step",
+        "faces": 1,
+        "bytes": 89061
+      },
+      {
+        "region": 352,
+        "file": "region_00352.step",
+        "faces": 1,
+        "bytes": 76384
+      },
+      {
+        "region": 353,
+        "file": "region_00353.step",
+        "faces": 1,
+        "bytes": 87575
+      },
+      {
+        "region": 354,
+        "file": "region_00354.step",
+        "faces": 1,
+        "bytes": 109602
+      },
+      {
+        "region": 355,
+        "file": "region_00355.step",
+        "faces": 1,
+        "bytes": 89323
+      },
+      {
+        "region": 356,
+        "file": "region_00356.step",
+        "faces": 1,
+        "bytes": 58477
+      },
+      {
+        "region": 357,
+        "file": "region_00357.step",
+        "faces": 1,
+        "bytes": 68626
+      },
+      {
+        "region": 358,
+        "file": "region_00358.step",
+        "faces": 2,
+        "bytes": 69393
+      }
+    ],
+    "complete_partition_export": true,
+    "exported_regions": 359,
+    "exported_faces": 1092,
+    "seconds": 78.9605947000091
+  },
+  "regional_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v4\\20261008_transition_fairing\\whole_final\\regions",
+  "native_solid_verified": false,
+  "seconds": 668.9457580000162
+}

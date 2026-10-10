@@ -1,0 +1,19 @@
+{
+  "operation": "Artifact packaging only; geometry was not recomputed or edited.",
+  "copied_files_verified_byte_for_byte": 379,
+  "original_regions": 359,
+  "delivered_region_files": 359,
+  "regional_face_sum": 1092,
+  "source_vertices": 245568,
+  "source_triangles": 491132,
+  "exact_source_coverage_once": true,
+  "partition_labels_unchanged": true,
+  "chart_layout_fields": [
+    "face_chart",
+    "source_labels"
+  ],
+  "original_native_geometry_evidence": "quality.json",
+  "original_external_Creo_evidence": "creo_validation.json",
+  "no_new_geometry_acceptance_claim": true,
+  "can_apply": false
+}
