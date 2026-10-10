@@ -1,0 +1,240 @@
+{
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "created": "2026-10-09T22:48:01.490282",
+  "source_CAD_geometry_read": false,
+  "Geomagic_API_used": false,
+  "partition_provenance": "Existing GUI STEP partition mapped to original STL; labels preserved.",
+  "model": "model.step",
+  "regions": "regions",
+  "metrics": "metrics",
+  "images": "images",
+  "reconstruction": "metrics/reconstruction.zip",
+  "charts": {
+    "before": 1092,
+    "after": 985
+  },
+  "curves": {
+    "before": 2928,
+    "after": 2681
+  },
+  "absorbed_chart_slivers": 107,
+  "removed_bivalent_junctions": 140,
+  "master_curves": 102,
+  "retained_moved_junctions": 41,
+  "budgets_mm": {
+    "source_surface": 0.03,
+    "curve_source_tube": 0.012,
+    "curve_source_chain_movement": 0.16,
+    "support_boundary": 0.002
+  },
+  "changed_matched_curve_totals": {
+    "before": {
+      "length_mm": 163.69992848035517,
+      "total_tangent_turn_degrees": 13753.282145233743,
+      "curvature_squared_integral_per_mm": 8586.182927643664,
+      "control_points": 2392
+    },
+    "after": {
+      "length_mm": 161.1462685760547,
+      "total_tangent_turn_degrees": 4802.600641963093,
+      "curvature_squared_integral_per_mm": 584.0599666631223,
+      "control_points": 905
+    }
+  },
+  "changed_matched_curve_reduction": {
+    "total_tangent_turn_degrees": 0.6508033070762346,
+    "curvature_squared_integral_per_mm": 0.931976761782851
+  },
+  "position_topology_passed": true,
+  "source_triangle_coverage_unchanged": true,
+  "partition_labels_unchanged": true,
+  "source_mesh_retriangulated": false,
+  "creo_closed_solid": true,
+  "creo_geometry_checks": 0,
+  "creo_geometry_gate_passed": true,
+  "tests_passed": 104,
+  "visual_limitations": [
+    "数字内弧、尖转折及牌框拐角仍有可见高光起伏与局部折痕；没有达到商业参考件的表面质量。",
+    "数字区域接缝法向 P95 降低，但最大角从约 28 度升至约 41 度；另有两条运输分支的转角指标回退，不能将平均改善表述为所有局部都改善。",
+    "本轮针对牌框和数字邻域重构；闭环、歧义分支和未覆盖的全模型接口仍待处理，未做 STL 切网格或新增三角形。",
+    "实际 STEP 图使用原生 D1 法向、显示全部非退化 CAD 边，不做显示平滑；深度遮挡会使部分边线断续，因此曲线质量同时用独立共享曲线投影和数值检查判断。",
+    "主曲线内部 C2 不等于相邻曲面 G1/G2；短 STEP 交换边、体积积分差异和跨模型泛化尚未解决。",
+    "Creo 灰色截图使用默认整件视角，只用于确认实际显示；局部表面效果以同视角 STEP 对比和曲线网投影为依据。"
+  ],
+  "distance_backtrack": {
+    "changed_charts": [
+      582
+    ],
+    "events": [
+      {
+        "face": 582,
+        "chart": 582,
+        "initial_max_mm": 0.03011496697495856,
+        "trials": [
+          {
+            "alpha": 0.875,
+            "source_probe_max_mm": 0.025996674236494075,
+            "continuous_boundary_mm": 0.0016998470875964154,
+            "interior_probe_max_mm": 0.025873025831321755,
+            "training_max_mm": 0.025360203074291536,
+            "accepted": true
+          }
+        ],
+        "tuning_samples": 16385,
+        "tuning_seed": 90729
+      }
+    ],
+    "shared_curves_unchanged": true,
+    "original_distance_limit_mm": 0.03,
+    "heldout_step_seed": 810573,
+    "source_CAD_geometry_used_as_target": false,
+    "scope": "Previously failed STEP sample locations select the support; targets and distances use original STL. New final audit uses a different random seed."
+  },
+  "distance_margin_repair": {
+    "status": "complete",
+    "changed_charts": [
+      120,
+      592,
+      830
+    ],
+    "events": [
+      {
+        "face": 120,
+        "chart": 120,
+        "original_max_mm": 0.030106139962878715,
+        "trials": [
+          {
+            "method": "unchanged",
+            "source_probe_max_mm": 0.030159255840921353,
+            "continuous_boundary_mm": 0.0013873878834257467,
+            "interior_probe_max_mm": 0.02889326309621516,
+            "training_max_mm": 0.029399999709760156,
+            "accepted": false
+          },
+          {
+            "method": "refit_with_margin",
+            "source_probe_max_mm": 0.010549733582599481,
+            "continuous_boundary_mm": 0.0013716578826450815,
+            "interior_probe_max_mm": 0.010966018166511469,
+            "training_max_mm": 0.00984188246087235,
+            "accepted": true,
+            "fitting_distance_mm": 0.027
+          }
+        ],
+        "tuning_samples": 32769,
+        "tuning_seed": 920221,
+        "passed": true
+      },
+      {
+        "face": 592,
+        "chart": 592,
+        "original_max_mm": 0.029583087607717662,
+        "trials": [
+          {
+            "method": "unchanged",
+            "source_probe_max_mm": 0.029876935636787838,
+            "continuous_boundary_mm": 0.0014535860497848923,
+            "interior_probe_max_mm": 0.0299716242000003,
+            "training_max_mm": 0.029969998976247775,
+            "accepted": false
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.029533192627080762,
+            "continuous_boundary_mm": 0.0014434433268535275,
+            "interior_probe_max_mm": 0.02979582859212837,
+            "training_max_mm": 0.029898749104216776,
+            "accepted": false,
+            "alpha": 0.875
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.029330679611274668,
+            "continuous_boundary_mm": 0.0014333014597144014,
+            "interior_probe_max_mm": 0.029620032984256445,
+            "training_max_mm": 0.029827499232185806,
+            "accepted": false,
+            "alpha": 0.75
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.02911014916968524,
+            "continuous_boundary_mm": 0.001413021220846198,
+            "interior_probe_max_mm": 0.02926844176851258,
+            "training_max_mm": 0.029684999488123837,
+            "accepted": false,
+            "alpha": 0.5
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.02898602893796065,
+            "continuous_boundary_mm": 0.0014109007368682874,
+            "interior_probe_max_mm": 0.02932771964748515,
+            "training_max_mm": 0.02954249974406184,
+            "accepted": false,
+            "alpha": 0.25
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.029009992797200734,
+            "continuous_boundary_mm": 0.0014787127407946126,
+            "interior_probe_max_mm": 0.02997604649473466,
+            "training_max_mm": 0.029400000000000443,
+            "accepted": false,
+            "alpha": 0.0
+          },
+          {
+            "method": "refit_with_margin",
+            "source_probe_max_mm": 0.02636634113223968,
+            "continuous_boundary_mm": 0.001589130353948841,
+            "interior_probe_max_mm": 0.026432083534004752,
+            "training_max_mm": 0.026459999995589678,
+            "accepted": true,
+            "fitting_distance_mm": 0.027
+          }
+        ],
+        "tuning_samples": 32769,
+        "tuning_seed": 920693,
+        "passed": true
+      },
+      {
+        "face": 830,
+        "chart": 830,
+        "original_max_mm": 0.02965549151666859,
+        "trials": [
+          {
+            "method": "unchanged",
+            "source_probe_max_mm": 0.02986663723601431,
+            "continuous_boundary_mm": 0.0015953138451217238,
+            "interior_probe_max_mm": 0.02997001802576354,
+            "training_max_mm": 0.02997001355872565,
+            "accepted": false
+          },
+          {
+            "method": "joint_backtrack",
+            "source_probe_max_mm": 0.026163533670452682,
+            "continuous_boundary_mm": 0.0014390464067098414,
+            "interior_probe_max_mm": 0.027021904795903322,
+            "training_max_mm": 0.026141739294353806,
+            "accepted": true,
+            "alpha": 0.875
+          }
+        ],
+        "tuning_samples": 32769,
+        "tuning_seed": 920931,
+        "passed": true
+      }
+    ],
+    "shared_curves_unchanged": true,
+    "original_distance_limit_mm": 0.03,
+    "screening_threshold_mm": 0.0285,
+    "repair_probe_limit_mm": 0.0285,
+    "fitting_distance_if_refit_mm": 0.027,
+    "heldout_step_seed": 810574,
+    "source_CAD_geometry_used_as_target": false,
+    "scope": "The previous dense sample is tuning data after this repair; final STEP must use a new independent seed."
+  },
+  "representation_scope": "Coalesced skeleton uses do not imply the same number of STEP edges; exchange retains short exact subcurves.",
+  "timing_scope": "Checkpoint reuse, concurrent runs and solver retries; not a cold end-to-end benchmark."
+}

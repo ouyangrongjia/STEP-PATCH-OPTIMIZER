@@ -1,0 +1,155 @@
+{
+  "actual_step_images_reviewed": true,
+  "gray_display_observed": true,
+  "rendering_protocol": {
+    "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\runs\\whole-partition-brep-v1\\native-v6\\result_v7\\model.step",
+    "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-network-staging\\native-v7\\checked_whole\\step\\model.step",
+    "views": [
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.0016313046812785575,
+          -0.06775190995137219,
+          -0.9977008657623678
+        ],
+        "up": [
+          -0.9858929062941876,
+          0.16709400510084213,
+          -0.009735028410853063
+        ],
+        "scale": 14.463070619381867
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.45735243525628155,
+          0.13772770031718143,
+          0.8785555363951043
+        ],
+        "up": [
+          -0.8733935160059935,
+          0.1163692760484474,
+          -0.47290798025688746
+        ],
+        "scale": 14.583905406644378
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.1348185937626435,
+          -0.988961783855079,
+          -0.061469804376161376
+        ],
+        "up": [
+          -0.9575505304782715,
+          0.1459863375433132,
+          -0.2485658279640841
+        ],
+        "scale": 14.915881027821994
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          0.2528095725389894,
+          0.8396006535332626,
+          -0.4807890001020946
+        ],
+        "up": [
+          -0.9575505304782717,
+          0.1459863375433132,
+          -0.248565827964084
+        ],
+        "scale": 14.915881027821996
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          -0.8986908776397261,
+          0.09218158307050578,
+          -0.4287857998928537
+        ],
+        "up": [
+          -0.2023478433838,
+          -0.9545376158507421,
+          0.2188910464224298
+        ],
+        "scale": 17.33020121744755
+      },
+      {
+        "center": [
+          -26.460091590881348,
+          37.173943519592285,
+          -4.501918077468872
+        ],
+        "direction": [
+          0.9792202147294389,
+          -0.19412117994922395,
+          0.05869189518453539
+        ],
+        "up": [
+          -0.20234784338380013,
+          -0.954537615850742,
+          0.21889104642242982
+        ],
+        "scale": 17.330201217447545
+      }
+    ],
+    "focus": [
+      -19.1,
+      30.7,
+      -5.4
+    ],
+    "focus_scale": 4.0,
+    "face_counts": [
+      null,
+      1092,
+      985
+    ],
+    "source_normals": "Original STL crease-separated corner normals, 30 degrees",
+    "step_normals": "Actual native D1, no display smoothing",
+    "deflection_mm": 0.001,
+    "boundaries": "All nondegenerate CAD edges; no edge filtering",
+    "identical_material_and_lighting": true
+  },
+  "inspected": [
+    "checked_images/whole_shaded.png",
+    "checked_details/glyph.png",
+    "checked_details/plaque.png",
+    "checked_network_comparison.png",
+    "checked_creo/raster/model.jpg"
+  ],
+  "observed_improvements": [
+    "牌框长边的密集小波浪明显减少，数字至牌框的一条内部切分线变为平顺曲线；真实共享曲线投影可直接核对这一变化。",
+    "数字右下外侧通向牌框的竖向褶皱减少，整件六个同视角图未见宏观形状丢失。"
+  ],
+  "limitations": [
+    "数字内弧、尖转折及牌框拐角仍有可见高光起伏与局部折痕；没有达到商业参考件的表面质量。",
+    "数字区域接缝法向 P95 降低，但最大角从约 28 度升至约 41 度；另有两条运输分支的转角指标回退，不能将平均改善表述为所有局部都改善。",
+    "本轮针对牌框和数字邻域重构；闭环、歧义分支和未覆盖的全模型接口仍待处理，未做 STL 切网格或新增三角形。",
+    "实际 STEP 图使用原生 D1 法向、显示全部非退化 CAD 边，不做显示平滑；深度遮挡会使部分边线断续，因此曲线质量同时用独立共享曲线投影和数值检查判断。",
+    "主曲线内部 C2 不等于相邻曲面 G1/G2；短 STEP 交换边、体积积分差异和跨模型泛化尚未解决。",
+    "Creo 灰色截图使用默认整件视角，只用于确认实际显示；局部表面效果以同视角 STEP 对比和曲线网投影为依据。"
+  ],
+  "curve_plot_reused_after_exact_curve_array_identity_check": true,
+  "source_distance_repair_checked_in_final_images": true
+}

@@ -1,6 +1,6 @@
 """Refit both sides of a moved shared network without rebuilding its junctions."""
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
 import json
 from pathlib import Path
@@ -192,7 +192,7 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
             # A tangentially moved trim may leave the old rectangular extent.
             # fit_support builds a new extent including the canonical curves.
             error = float('inf')
-        if error < cfg.boundary*.4:
+        if error < cfg.boundary*.4 and di not in meta.get('force_refit_charts', []):
             compatible.append(di)
         else:
             required.add(di)
@@ -223,7 +223,9 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
     fitted = {}; failed = []
     proposals = out/'support_proposals'; proposals.mkdir()
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        for index, (di, rec, info) in enumerate(pool.map(fit_support, tasks)):
+        futures = [pool.submit(fit_support, task) for task in tasks]
+        for index, future in enumerate(as_completed(futures)):
+            di, rec, info = future.result()
             info.update(chart=di, region=int(records[di]['region'])); fitting[di] = info
             if rec is None:
                 failed.append(di)
@@ -248,8 +250,10 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
     shutil.copy2(root/'chart_index.npz', out/'chart_index.npz')
     for di, rec in fitted.items():
         np.savez_compressed(out/'charts'/f'{di:05d}.npz', **rec)
+    if (root/'routes').exists():
+        shutil.copytree(root/'routes', out/'routes')
     meta.update(status='fitted', source_fit=str(out.resolve()), requires_support_refit=False,
-                network_support=report, can_apply=False)
+                force_refit_charts=[], network_support=report, can_apply=False)
     dump(out/'run.json', meta)
     return report
 

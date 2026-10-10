@@ -1,0 +1,17 @@
+{
+  "status": "verified_diagnostic_delivery",
+  "archive_readback_passed": true,
+  "source_arrays_equal": true,
+  "source_coverage_exact": true,
+  "regions": 359,
+  "faces": 985,
+  "distance_gate_passed": true,
+  "creo_geometry_gate_passed": true,
+  "product_acceptance_passed": false,
+  "archived_arrays_exactly_equal_to_live_fit": true,
+  "verified_npz_files": 3769,
+  "region_inventory_verified": true,
+  "source_partition_archive_equal": true,
+  "archive_restore_cli_passed": true,
+  "archive_restore_scope": "Source snapshot import, original STL identity and cache path rebinding; full STEP rebuild not repeated."
+}

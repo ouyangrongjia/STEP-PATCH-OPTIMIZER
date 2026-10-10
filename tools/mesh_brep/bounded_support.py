@@ -87,13 +87,53 @@ def solve(a, z, b, bz, normal_q, normals, knot, size, config, seam_limit, normal
         lower = np.r_[lower, cone_lower]; upper = np.r_[upper, cone_upper]
     model = osqp.OSQP()
     model.setup(P=sparse.triu(h, format='csc'), q=-linear, A=constraint,
-        l=lower, u=upper, verbose=False, eps_abs=1e-7, eps_rel=1e-7,
+        l=lower, u=upper, verbose=False, eps_abs=1e-8, eps_rel=1e-8,
         max_iter=8000, time_limit=12., polishing=True, adaptive_rho_interval=50)
     model.warm_start(x=warm)
     result = model.solve(raise_error=False)
-    solved = result.info.status_val in (1, 2)
-    coeff = result.x if solved else warm
+    original_status = result.info.status
+    original_seconds = result.info.run_time
+    original_iterations = result.info.iter
+    balanced = False
+    candidate = result.x
+    def feasible(x):
+        if x is None or not np.isfinite(x).all():
+            return False
+        values = constraint@x
+        return bool(np.all(values >= lower-5e-8) and np.all(values <= upper+5e-8))
+    # Small knot spans give very different coefficient energy scales. Retry
+    # the identical QP in equilibrated variables, retaining all physical bounds.
+    # Inexact solver iterates are proposals, accepted only after checking the
+    # actual constraints; fit_support still checks continuous boundaries and
+    # interior source probes independently.
+    if not feasible(candidate):
+        scale = 1/np.sqrt(np.maximum(h.diagonal(), 1e-30))
+        ph = h.multiply(scale[:, None]).multiply(scale[None, :]).tocsc()
+        ac = constraint.multiply(scale[None, :]).tocsc()
+        retry = osqp.OSQP()
+        retry.setup(P=sparse.triu(ph, format='csc'), q=-linear*scale, A=ac,
+            l=lower, u=upper, verbose=False, eps_abs=1e-8, eps_rel=1e-8,
+            max_iter=16000, time_limit=12., polishing=True, adaptive_rho_interval=50)
+        retry.warm_start(x=warm/scale)
+        result = retry.solve(raise_error=False)
+        candidate = None if result.x is None else result.x*scale
+        balanced = True
+    feasible_iterate = feasible(candidate)
+    # The boundary-penalty solve is itself a geometric proposal. A stalled QP
+    # must not discard it when it satisfies every actual linear constraint.
+    # It is not reported as a converged constrained optimum; continuous trim
+    # and source-interior checks in fit_support remain mandatory.
+    feasible_warm = not feasible_iterate and feasible(warm)
+    solved = bool(feasible_iterate or feasible_warm)
+    coeff = candidate if feasible_iterate else warm
+    values = constraint@coeff
+    violation = float(max(0., np.max(lower-values), np.max(values-upper)))
     return coeff, dict(status=result.info.status, solved=solved,
-        iterations=result.info.iter, solver_seconds=result.info.run_time,
+        iterations=result.info.iter+(original_iterations if balanced else 0),
+        solver_seconds=result.info.run_time+(original_seconds if balanced else 0),
+        initial_status=original_status, equilibrated_retry=balanced,
+        proposal_source='qp' if feasible_iterate else 'boundary_penalty_warm_start',
+        linear_constraint_violation=violation,
+        feasible_inexact_iterate=bool(feasible_iterate and result.info.status_val not in (1, 2)),
         sampled_data_error_mm=float(np.max(abs(a@coeff-z))),
         sampled_boundary_error_mm=float(np.max(abs(b@coeff-bz))))

@@ -322,7 +322,7 @@ def fit_support(task):
     # budget instead of allowing each support almost the whole edge tolerance.
     seam_limit = config.boundary*.4
     t = knots(9); history = []; boundary_enrichments = 0; interior_enrichments = 0; probe_cache = {}
-    bending_cache = {}; polygon = None; normal_enrichments = 0; normal_probe_cache = {}
+    bending_cache = {}; polygon = None; normal_enrichments = 0; normal_probe_cache = {}; uniform_retry = False
     if config.fairness_domain == 'source':
         if support_solver != 'bounded':
             raise ValueError('Source-domain fairness requires the bounded support solver')
@@ -372,7 +372,8 @@ def fit_support(task):
         rec = dict(origin=o, axes=ax, lo=lo, size=size, knots=t, height=coeff)
         if support_solver == 'bounded':
             rec['fairness_version'] = FAIRNESS_VERSION
-        item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max())); history.append(item)
+        item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max()),
+                    basis_strategy='uniform_retry' if uniform_retry else 'adaptive'); history.append(item)
         if normal_error is not None:
             item['sampled_normal_max_degrees'] = float(normal_error.max(initial=0.))
         if solver is not None:
@@ -451,6 +452,12 @@ def fit_support(task):
                 boundary_enrichments += 1; item['boundary_enrichment'] = boundary_enrichments
                 continue
         if count >= max(config.controls):
+            # Residual-driven refinement can cluster knots into tiny spans.
+            # Retry the same coefficient budget with a uniform C2 basis before
+            # rejecting the chart; all enriched geometric constraints remain.
+            if support_solver == 'bounded' and not uniform_retry and not np.array_equal(t, knots(count)):
+                t = knots(count); uniform_retry = True
+                continue
             break
         # Refine where current residuals are worst; keep a simple-knot C2 basis.
         all_q = np.r_[q, bq]; ratio = np.r_[error/config.distance, be/(seam_limit*.8)]
@@ -494,7 +501,7 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         domains, graph, edges, owners = initial_domains(v, f, labels)
     else:
         source = Path(from_fit); previous = json.loads((source/'run.json').read_text(encoding='utf-8'))
-        if previous.get('network_fairing') or previous.get('network_guard'):
+        if previous.get('network_fairing') or previous.get('network_guard') or previous.get('curve_route_reconstruction'):
             raise ValueError('Movable-junction caches require network_support for refitting or graph_reassemble for exact replay; rebuilding the source-edge skeleton would reset their junctions')
         required_refit = set(previous.get('required_refit_regions', ()))
         if previous.get('requires_support_refit') and not (refit_supports or (required_refit and required_refit.issubset(selected_refit))):

@@ -12,7 +12,7 @@ python -m tools.mesh_brep.skeleton_reconstruct `
   --reference <对应参考STEP> --output <不存在的新目录> `
   --smoothing .12 --workers 8 `
   --boundary-mode fair-chains --support-solver bounded `
-  --normal-field crease-fans --normal-filter-steps 2 --normal-weight .01 `
+  --normal-field crease-fans --normal-filter-steps 2 --normal-weight .01 --area-weighted `
   --repair-smooth-joins `
   --creo-root <Creo安装目录> --native-probe <creo_body_probe.exe>
 ```
@@ -23,9 +23,11 @@ python -m tools.mesh_brep.skeleton_reconstruct `
 
 有界拟合还检查节点区间内部的 Gauss 探针及源网格边中点。发现顶点和重心样本之间的鼓包时，先加入实际超限位置重新求解，再决定是否增加控制点或细分域。旧缓存缺少这项检查时会重新验证。整件 STEP 独立原生面抽样超出距离预算，或实际 Creo 未形成闭合活动实体时，统一入口记录失败并拒绝报告成功。
 
+有界求解分别记录求解器状态与候选的实际约束残差；对病态系统可做等价变量缩放重试，也可保留满足全部线性约束的边界罚项候选，再进入上述连续几何检查。求解器停止容差严于候选可行性检查。自适应节点聚集导致最大控制点预算仍求解失败时，允许在相同预算内用均匀 C2 节点重试，保留已经加密的约束，不放宽几何公差。
+
 `--repair-smooth-joins` 检测相对于原 STL 异常增大的接缝法向差，只对小邻域提出共用支撑面方案；每组最多四个拟合域，仍分别保留原分区的裁剪边界和三角形归属。通过距离、裁剪拓扑、邻接接缝及区域内部法向检查后才接受。成功组的内部接缝位于同一张 C2 曲面上；源锐边、非单值投影或导致邻区变差的方案会被拒绝。它不会把整件模型放进同一个拟合系统，也不代表未修复接缝全部满足 G1。可单独运行 `python -m tools.mesh_brep.shared_support --run <round_N> --output <新目录> --workers 8`，再把输出传给统一入口的 `--from-fit` 完成 CAD 验收。`--charts` 仅用于显式局部诊断，自动模式按实测接缝排序。
 
-`--boundary-normal-weight` 是额外边界切平面罚项的实验选项，默认 0；本轮强加该项曾引入新的局部褶皱，未作为推荐配置。`--repair-charts` 可依据外部 CAD 诊断选择需重新构造公共边界的源拟合域；诊断只选择位置，不向拟合器提供 CAD 几何，且修复后仍须完整复验。
+`--boundary-normal-weight` 是额外边界切平面罚项的实验选项，默认 0；本轮强加该项曾引入新的局部褶皱，未作为推荐配置。`--repair-charts` 可依据外部 CAD 诊断选择需重新构造公共边界的源拟合域；诊断只选择位置，不向拟合器提供 CAD 几何。修复会沿两条公共链围成的裁剪域补齐另一侧，避免只回退窄小面的一边形成陡坡。较大邻面的其他边不随之重构，但共享曲线变化仍使相邻支撑缓存失效。报告分别记录请求域与实际扩展域；修复后仍须完整复验。
 
 共用支撑提案的数值接受不是视觉验收：本轮有追加提案降低了局部 P95、也通过了 Creo，却产生窄带波纹，最终未采用。统一入口保留 `visual_review_required=true` 和 `can_apply=false`，实际交付仍依据同视角原生法向图复核。
 
@@ -33,7 +35,31 @@ python -m tools.mesh_brep.skeleton_reconstruct `
 
 `--from-fit <本路线的 round_N>` 可复用相同输入、配置和公共曲线的支撑面；变化的共享边界会使两侧缓存失效。缓存只复用已通过连续边界检查的域，仍重新执行实体装配、STEP 回读和外部 CAD 检查。不完整分区禁止导出。目录拒绝覆盖；失败保留原因。默认 `--profile-mode installed` 使用安装自带导入配置；可显式选择 `preserve_splines` 使用产物内配置，不修改 Creo 安装。只有原生体检查通过才能报告 Creo 实体；可见质量仍需查看实际对比图。
 
-本路线已在复杂主样例上获得显著的区域合面与边界改善，当前结果和剩余限制统一见 [运行记录](../../data/runs/whole-partition-brep-v1/native-v3/result_v4/RUN.md)。它支持给定分区重建，不承诺任意输入必定通过全部几何和 CAD 验收。
+`bounded` 的公平项使用精确积分的张量 Gram 矩阵，缓存带有公平项版本；旧版本支撑会重算。`--area-weighted` 按源三角形面积分配位置与法向目标权重，源坐标和硬误差约束保持不变。`--fairness-domain source` 是可选源多边形积分实验，需要 Shapely 2.1；`--fairness-order 3` 是可选三阶导公平项，仅支持默认矩形域。`--normal-angle-limit` 为采样法向上限。这些选项要求 `bounded`；除面积加权外，尚无证据支持把它们作为通用改进设置。
+
+`python -m tools.mesh_brep.surface_boundary --run <round_N> --output <新目录> --regions <区域列表>` 在相邻源三角形域的并集距离管内优化公共曲线。`--tube-limit <mm>` 显式指定真实三角形距离预算，默认沿用原平面预算；它与原折线移动预算分别检查，不能把源平面距离当作有限三角形距离。连续区间距离上界、几何总转角和曲率平方积分一起检查，拒绝参数弯曲能下降但几何波动反而增大的提案。`--include-creases` 允许对含源折角的链提出优化，仍须通过后续特征与 CAD 检查；`--separate-domains` 改为逐个相邻源域约束，保留为诊断选项，可能锁住原三角网格造成的阶梯边界。
+
+输出只是 `boundary_candidate`，保存需重算的全部相邻区域和原曲线回退数据。用 `skeleton_reconstruct --from-fit <候选> --refit-regions <required_refit_regions 中的全部区域>` 保留整件覆盖并重拟合受影响支撑，或用 `skeleton_graph --from-fit <候选> --refit-supports` 全部重算。必须重新通过裁剪环交叉、原环绕序、装配和实际 CAD 检查，不允许套用旧支撑直接导出。新提案导致拓扑冲突时，优先恢复该提案的原曲线，再复核邻边；避免通过反复收紧无关邻边放大锯齿。`--tangent-planes` 保留为端点切平面的诊断选项。
+
+`python -m tools.mesh_brep.normal_repair --run <完整拟合目录> --output <新目录> --regions <区域列表> --angle-limit 45 --workers 4` 保持公共曲线和源三角形归属，只重拟合域内探针超限的支撑面。除原训练位置外，法向锥还检查节点区间 Gauss 点和源边中点，新增约束后重解；失败保留原支撑和原因。这里的角度针对拟合源法向场，不代表全件原始法向、G1/G2 或自交检查通过，输出仍须完成整件验证。
+
+`boundary_quality.compare` 在相同源边链上比较真实几何转角与弯曲量；未配对的拆分链另计。`boundary_quality.seams` 在实际共享曲线参数上比较两侧支撑法向；源二面角仅作锐边代理。`python -m tools.mesh_brep.step_stratified --step <实际STEP> --partition <原分区.npz> --output <新JSON> --samples-per-face 1024` 逐面分层抽样，核对真实裁剪域并使用未滤波源法向，补充面积采样可能漏掉的微小面；这套逐面均衡统计须与原面积采样分开报告。
+
+`python -m tools.mesh_brep.network_fairing --run <完整拟合目录> --output <新边界目录> --regions <区域列表> --feasible-seed-only` 联合优化公共曲线和可移动交点，锁定锐角及编辑范围外的接口。连续有限源域距离与移动预算仍分别验证，数值求解超时只产生待检查提案。随后使用 `network_support.guard(..., geometric_guard=True)` 逐边复核曲率、裁剪交叉、绕序和源域距离；回退共享交点时同步协调全部相邻曲线，避免短边卷曲被总体改善掩盖。`network_fairing.straighten` 仅在源域、端点切向及两侧支撑均允许时接受直线替代。
+
+`python -m tools.mesh_brep.network_support --run <已检查边界目录> --output <新拟合目录> --workers 4` 验证并按需重拟合两侧支撑，保留相容系数；失败时保存已接受提案，禁止进入 CAD 装配。移动过交点的缓存不能用旧 `skeleton_graph` / `skeleton_reconstruct --from-fit` 重新生成骨架。完成支撑验证后，用 `graph_reassemble.reconstruct(..., smooth_segments=True)` 保留精确系数和公共交点，再经 `graph_export`、独立 STEP 检查及 Creo 验证。
+
+`python -m tools.mesh_brep.seam_fairing --run <完整拟合目录> --output <新目录> --regions <区域列表> --smooth-degrees 30 --seam-weight .1 --iterations 2` 在公共曲线不变时联合拟合两侧实际单位法向，包含不同参数坐标系的导数变换。源折角以上的接缝不参与光滑目标，保留源位置、内部探针、连续落面误差和局部法向退化检查。逐面回溯后还须通过整体实际法向能量检查；不能把这一采样优化称为精确 G1/G2。实现测试包含法向 Jacobian 有限差分、共享端点、有限源域孔洞、连续裁剪交叉及有效裁剪内新增边界鼓包的回退。
+
+`python -m tools.mesh_brep.curve_routes --run <完整拟合目录> --output <新边界目录> --regions <区域列表> --movement <mm> --controls 24` 沿同一分区接口跨越人工面片交点，拟合一条低控制点的主曲线；交点随后取主曲线上的位置，每条公共边是主曲线的精确子区间。真实转角和有歧义的分支保留，闭环暂不改造。添加 `--internal-only` 可重构同一分区内的光滑切分线，固定已有主曲线的交点并排除源锐边；两类主曲线分阶段保存，后续阶段不会覆盖前一阶段的系数。这改变了曲线网的几何组织，不再要求新曲线插值每个旧交点。源网格坐标、三角形和标签仍不变，尚未执行切网格。
+
+主曲线候选依次交给 `route_layout`、`route_branches`、`route_compact`，均使用 `--run <上一阶段> --output <新目录>`。前者检查连续裁剪环，并在同一原分区内吸收不可裁剪的小域；`--absorb-transport-slivers` 另外吸收交点移动后留下的细碎域。`route_branches --movement <mm>` 修复受交点牵动的支线；`route_compact` 只移除相同两侧面片、同一主曲线上的二度节点。随后使用 `network_support --boundary-normal-weight 0` 重拟合受影响曲面，再进行固定曲线的 `seam_fairing`。主曲线候选不能套用逐边独立回退：应保留主曲线及其子段的一致性，任何失败均须解决后再装配。
+
+`python -m tools.mesh_brep.route_audit --before <基线拟合> --after <候选拟合> --output <新JSON> --movement <mm> --tube .012` 通过原始网格边身份配对重构前后的曲线，分别检查端点一致、主曲线子段的一至二阶导数、有限源三角形距离管和相对源链的移动。源域使用沿网格连通的局部距离带，避免把移动后的边界锁在原标签边线上。默认移动预算仍为 0.12 mm，扩大预算必须显式声明；它与曲线离开源表面的预算、曲面整体距离预算分别验收。曲线网减少节点不等于 STEP 短边数量同步减少，曲线 C2 也不等于两侧曲面 G1/G2。
+
+`python -m tools.mesh_brep.source_features --run <round_N> --output <新目录> --regions <区域列表>` 在源折角处分开支撑域，不改变给定分区和三角形归属。输出 `layout_candidate` 必须重拟合。`skeleton_reconstruct --from-fit <候选> --refit-regions <区域列表>` 可选择性重算这些区域，同时保留全件覆盖；它与仅生成局部诊断的 `skeleton_graph --regions` 不同。改变的公共边会使邻侧缓存一起失效。更细的布局仍须单独通过 Creo，不能以源折角保留或 OCCT 水密代替交换验收。
+
+本路线已在复杂主样例上获得区域合面与边界改善。最新 [主曲线与共享网络重构](../../data/runs/whole-partition-brep-v1/native-v7/result_v8/RUN.md) 保存曲线网重组、拟合域合并、两侧支撑重拟合、真实 STEP 图、独立检查和可恢复缓存。历史 [共享网络与过渡曲面优化](../../data/runs/whole-partition-brep-v1/native-v6/result_v7/RUN.md)、[边界与法向诊断](../../data/runs/whole-partition-brep-v1/native-v5/result_v6/RUN.md)、[Creo 零提示基线](../../data/runs/whole-partition-brep-v1/native-v4/result_v5/RUN.md) 和原 [902 面版](../../data/runs/whole-partition-brep-v1/native-v3/result_v4/RUN.md) 保留。它支持给定分区重建，不承诺任意输入必定通过全部几何和 CAD 验收。
 
 ## 保留的先拟合后合并入口
 

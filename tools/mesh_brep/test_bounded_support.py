@@ -5,6 +5,30 @@ from .splines import knots, tensor
 
 
 class BendingEnergyTests(unittest.TestCase):
+    def test_stalled_qp_only_reuses_warm_proposal_inside_actual_constraints(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from .bounded_support import solve
+        from .partition_fit import Config
+        knot = knots(4); grid = np.linspace(0, 1, 7)
+        q = np.stack(np.meshgrid(grid, grid, indexing='ij'), axis=-1).reshape(-1, 2)
+        a = tensor(q, knot, knot); z = np.zeros(len(q))
+        normals = np.tile([0., 0., 1.], (len(q), 1))
+        result = SimpleNamespace(x=None, info=SimpleNamespace(status='run time limit reached',
+                                 status_val=8, run_time=.1, iter=10))
+        for target, accepted in ((.02, True), (.06, False)):
+            with self.subTest(target=target), patch('osqp.OSQP') as solver:
+                solver.return_value.solve.return_value = result
+                height, report = solve(a, z, a, np.full(len(q), target), q, normals,
+                                       knot, np.ones(2), Config(), .002)
+                self.assertEqual(report['solved'], accepted)
+                self.assertEqual(report['status'], 'run time limit reached')
+                self.assertEqual(report['proposal_source'], 'boundary_penalty_warm_start')
+                if accepted:
+                    self.assertLess(np.max(abs(a@height-z)), Config().distance*.98)
+                    self.assertLess(np.max(abs(a@height-target)), .002*.65)
+                    self.assertEqual(report['linear_constraint_violation'], 0.)
+
     def test_third_derivatives_preserve_quadratics_and_measure_cubic_variation(self):
         knot=knots(4); grid=np.linspace(0,1,4)
         q=np.stack(np.meshgrid(grid,grid,indexing='ij'),axis=-1).reshape(-1,2)

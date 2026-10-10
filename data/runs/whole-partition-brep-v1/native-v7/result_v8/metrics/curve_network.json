@@ -1,0 +1,6492 @@
+{
+  "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-network-staging\\native-v7\\fit",
+  "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-network-staging\\native-v7\\checked_fit",
+  "changed_curves": 180,
+  "moved_junctions": 41,
+  "maximum_junction_disagreement_mm": 7.993605777301127e-15,
+  "master_restrictions": [
+    {
+      "curve": 1300,
+      "route": 2,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1301,
+      "route": 28,
+      "derivative_errors": [
+        1.1243440757244517e-14,
+        2.101830250690018e-14,
+        3.982624992197032e-14
+      ]
+    },
+    {
+      "curve": 1335,
+      "route": 142,
+      "derivative_errors": [
+        1.0087767680389479e-14,
+        1.509827417430662e-14,
+        5.1677003053219274e-14
+      ]
+    },
+    {
+      "curve": 1336,
+      "route": 26,
+      "derivative_errors": [
+        1.507288760336424e-14,
+        1.292349197304123e-14,
+        4.696499021350221e-14
+      ]
+    },
+    {
+      "curve": 1341,
+      "route": 28,
+      "derivative_errors": [
+        7.95651227888113e-15,
+        2.4862540038611177e-14,
+        6.244702801675733e-14
+      ]
+    },
+    {
+      "curve": 1342,
+      "route": 143,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1369,
+      "route": 142,
+      "derivative_errors": [
+        7.95651227888113e-15,
+        3.042365608838942e-14,
+        7.429290118519978e-14
+      ]
+    },
+    {
+      "curve": 1371,
+      "route": 0,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1461,
+      "route": 5,
+      "derivative_errors": [
+        1.0087767680389479e-14,
+        2.1239309305104275e-14,
+        1.0173845525490222e-13
+      ]
+    },
+    {
+      "curve": 1468,
+      "route": 144,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1469,
+      "route": 145,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1470,
+      "route": 146,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1475,
+      "route": 26,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        2.069754236604655e-14,
+        7.449882810727196e-14
+      ]
+    },
+    {
+      "curve": 1498,
+      "route": 159,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1499,
+      "route": 160,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1500,
+      "route": 161,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1512,
+      "route": 5,
+      "derivative_errors": [
+        7.944109290391274e-15,
+        1.3020443826263352e-14,
+        5.00431449029659e-14
+      ]
+    },
+    {
+      "curve": 1519,
+      "route": 29,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1559,
+      "route": 208,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1561,
+      "route": 182,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1563,
+      "route": 34,
+      "derivative_errors": [
+        1.5235561077993902e-14,
+        1.1655499501874791e-14,
+        4.534214580235427e-14
+      ]
+    },
+    {
+      "curve": 1605,
+      "route": 50,
+      "derivative_errors": [
+        1.1269720748118957e-14,
+        1.3719583062288968e-14,
+        4.130373062738217e-14
+      ]
+    },
+    {
+      "curve": 1611,
+      "route": 183,
+      "derivative_errors": [
+        1.8115356374411762e-14,
+        1.7864772266398654e-14,
+        5.83094578332178e-14
+      ]
+    },
+    {
+      "curve": 1613,
+      "route": 183,
+      "derivative_errors": [
+        1.2932072993408848e-14,
+        9.158065736415739e-14,
+        3.393576592235666e-12
+      ]
+    },
+    {
+      "curve": 1615,
+      "route": 210,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1620,
+      "route": 41,
+      "derivative_errors": [
+        1.5306589719811546e-14,
+        1.4545450408017714e-14,
+        4.9018847505565917e-14
+      ]
+    },
+    {
+      "curve": 1649,
+      "route": 7,
+      "derivative_errors": [
+        1.4238583238573986e-14,
+        1.3561119751024476e-14,
+        4.381627067857726e-14
+      ]
+    },
+    {
+      "curve": 1664,
+      "route": 184,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1665,
+      "route": 185,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1680,
+      "route": 186,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1684,
+      "route": 211,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1685,
+      "route": 212,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1712,
+      "route": 50,
+      "derivative_errors": [
+        1.020439314654103e-14,
+        1.8610896064474465e-14,
+        8.363703277241259e-14
+      ]
+    },
+    {
+      "curve": 1714,
+      "route": 213,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1716,
+      "route": 34,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        2.092116902214593e-14,
+        8.462208454709314e-14
+      ]
+    },
+    {
+      "curve": 1745,
+      "route": 7,
+      "derivative_errors": [
+        7.95651227888113e-15,
+        1.6888081779687456e-14,
+        6.035173852964258e-14
+      ]
+    },
+    {
+      "curve": 1750,
+      "route": 41,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        1.1424888360072041e-14,
+        4.764230990033073e-14
+      ]
+    },
+    {
+      "curve": 1752,
+      "route": 150,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1755,
+      "route": 12,
+      "derivative_errors": [
+        1.464821375527116e-14,
+        1.5993986382711203e-14,
+        6.902355822258076e-14
+      ]
+    },
+    {
+      "curve": 1777,
+      "route": 217,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1781,
+      "route": 152,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1791,
+      "route": 26,
+      "derivative_errors": [
+        1.4217791915866692e-14,
+        2.0141370410123944e-14,
+        7.920445484403726e-14
+      ]
+    },
+    {
+      "curve": 1826,
+      "route": 12,
+      "derivative_errors": [
+        2.2473722312241752e-14,
+        2.8938778275695735e-14,
+        6.545674715492153e-13
+      ]
+    },
+    {
+      "curve": 1848,
+      "route": 41,
+      "derivative_errors": [
+        7.105427357601002e-15,
+        1.213348209731928e-14,
+        5.136597225724119e-14
+      ]
+    },
+    {
+      "curve": 1850,
+      "route": 64,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1866,
+      "route": 163,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1867,
+      "route": 164,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1874,
+      "route": 187,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1875,
+      "route": 188,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1884,
+      "route": 50,
+      "derivative_errors": [
+        7.993605777301127e-15,
+        2.357948260937998e-14,
+        7.851762518226092e-14
+      ]
+    },
+    {
+      "curve": 1888,
+      "route": 189,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1912,
+      "route": 113,
+      "derivative_errors": [
+        1.432144669219779e-14,
+        2.2150152919716112e-13,
+        1.334040637356516e-11
+      ]
+    },
+    {
+      "curve": 1941,
+      "route": 113,
+      "derivative_errors": [
+        7.944109290391274e-15,
+        1.7867178894683397e-14,
+        5.836448612071483e-14
+      ]
+    },
+    {
+      "curve": 1948,
+      "route": 56,
+      "derivative_errors": [
+        1.5888218580782548e-14,
+        1.8551114359616565e-14,
+        5.866378948931609e-14
+      ]
+    },
+    {
+      "curve": 1959,
+      "route": 167,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1967,
+      "route": 96,
+      "derivative_errors": [
+        1.5987211554602254e-14,
+        8.4549422024455e-14,
+        1.1158042955665498e-12
+      ]
+    },
+    {
+      "curve": 1968,
+      "route": 12,
+      "derivative_errors": [
+        7.95651227888113e-15,
+        1.4923216992669184e-14,
+        4.290947286452346e-14
+      ]
+    },
+    {
+      "curve": 1976,
+      "route": 154,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1981,
+      "route": 45,
+      "derivative_errors": [
+        1.5987211554602254e-14,
+        2.348083917907377e-14,
+        3.7563900085023534e-14
+      ]
+    },
+    {
+      "curve": 1986,
+      "route": 119,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 1991,
+      "route": 56,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        1.5965453978197196e-14,
+        4.9637215672611996e-14
+      ]
+    },
+    {
+      "curve": 2005,
+      "route": 45,
+      "derivative_errors": [
+        1.5987211554602254e-14,
+        5.763864969984482e-14,
+        3.7104667104077655e-13
+      ]
+    },
+    {
+      "curve": 2014,
+      "route": 96,
+      "derivative_errors": [
+        8.140289677804162e-15,
+        1.3847530736676381e-14,
+        4.805759103068364e-14
+      ]
+    },
+    {
+      "curve": 2016,
+      "route": 214,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2017,
+      "route": 215,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        1.4357656381996216e-14,
+        7.138728922405406e-14
+      ]
+    },
+    {
+      "curve": 2023,
+      "route": 190,
+      "derivative_errors": [
+        1.0695084443661336e-14,
+        1.714252861241236e-14,
+        4.951442158495691e-14
+      ]
+    },
+    {
+      "curve": 2026,
+      "route": 125,
+      "derivative_errors": [
+        1.591302455776226e-14,
+        1.3651574999374521e-14,
+        3.923441354579519e-14
+      ]
+    },
+    {
+      "curve": 2028,
+      "route": 56,
+      "derivative_errors": [
+        8.140289677804162e-15,
+        1.0374867447032586e-14,
+        5.256678610472277e-14
+      ]
+    },
+    {
+      "curve": 2031,
+      "route": 168,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2032,
+      "route": 169,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2038,
+      "route": 98,
+      "derivative_errors": [
+        1.1269720748118957e-14,
+        1.6412092657359343e-14,
+        5.071061816859917e-14
+      ]
+    },
+    {
+      "curve": 2042,
+      "route": 16,
+      "derivative_errors": [
+        1.4654943925052066e-14,
+        1.0526884169435273e-14,
+        4.482521920533316e-14
+      ]
+    },
+    {
+      "curve": 2043,
+      "route": 191,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2045,
+      "route": 80,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2048,
+      "route": 125,
+      "derivative_errors": [
+        1.0087767680389479e-14,
+        2.7239485148837253e-14,
+        7.017923356981967e-14
+      ]
+    },
+    {
+      "curve": 2059,
+      "route": 98,
+      "derivative_errors": [
+        1.30836851243432e-14,
+        1.9610628061757798e-14,
+        5.384733500304912e-14
+      ]
+    },
+    {
+      "curve": 2063,
+      "route": 35,
+      "derivative_errors": [
+        1.4238583238573986e-14,
+        2.0741364857248664e-14,
+        9.50604760872994e-14
+      ]
+    },
+    {
+      "curve": 2071,
+      "route": 190,
+      "derivative_errors": [
+        1.2932072993408848e-14,
+        3.74461085326371e-13,
+        7.589517683908011e-12
+      ]
+    },
+    {
+      "curve": 2075,
+      "route": 170,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2076,
+      "route": 16,
+      "derivative_errors": [
+        1.4654943925052066e-14,
+        9.838642060620345e-15,
+        4.547498292526147e-14
+      ]
+    },
+    {
+      "curve": 2077,
+      "route": 125,
+      "derivative_errors": [
+        7.993605777301127e-15,
+        1.5818439540576066e-14,
+        5.960337464613603e-14
+      ]
+    },
+    {
+      "curve": 2090,
+      "route": 50,
+      "derivative_errors": [
+        1.0695084443661336e-14,
+        1.7166347957116968e-14,
+        4.819178412639822e-14
+      ]
+    },
+    {
+      "curve": 2100,
+      "route": 126,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2101,
+      "route": 16,
+      "derivative_errors": [
+        1.2840246461466052e-14,
+        1.0304568734931526e-13,
+        2.2178678676561957e-12
+      ]
+    },
+    {
+      "curve": 2103,
+      "route": 127,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2108,
+      "route": 171,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2125,
+      "route": 215,
+      "derivative_errors": [
+        1.0087767680389479e-14,
+        1.568231509258097e-14,
+        5.004542691974417e-14
+      ]
+    },
+    {
+      "curve": 2126,
+      "route": 156,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2137,
+      "route": 219,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2143,
+      "route": 50,
+      "derivative_errors": [
+        7.993605777301127e-15,
+        1.416447133062465e-14,
+        3.1838378184888506e-14
+      ]
+    },
+    {
+      "curve": 2144,
+      "route": 215,
+      "derivative_errors": [
+        1.467511591522657e-14,
+        1.5748499362921794e-14,
+        5.5598771198025707e-14
+      ]
+    },
+    {
+      "curve": 2149,
+      "route": 215,
+      "derivative_errors": [
+        8.140289677804162e-15,
+        1.3989312620353483e-14,
+        9.177243994305901e-14
+      ]
+    },
+    {
+      "curve": 2160,
+      "route": 172,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2161,
+      "route": 173,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2177,
+      "route": 192,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2178,
+      "route": 193,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2180,
+      "route": 174,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2181,
+      "route": 63,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2193,
+      "route": 194,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2200,
+      "route": 35,
+      "derivative_errors": [
+        7.944109290391274e-15,
+        1.1984259261184504e-14,
+        4.778112995976683e-14
+      ]
+    },
+    {
+      "curve": 2208,
+      "route": 10,
+      "derivative_errors": [
+        2.1628557899130955e-14,
+        5.153177674829992e-14,
+        4.0563236172049547e-13
+      ]
+    },
+    {
+      "curve": 2228,
+      "route": 21,
+      "derivative_errors": [
+        1.4654943925052066e-14,
+        2.3757792871725368e-14,
+        1.215031741492398e-13
+      ]
+    },
+    {
+      "curve": 2232,
+      "route": 48,
+      "derivative_errors": [
+        1.475552811121985e-14,
+        2.4028317573334548e-14,
+        6.146630442651604e-14
+      ]
+    },
+    {
+      "curve": 2233,
+      "route": 128,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2234,
+      "route": 129,
+      "derivative_errors": [
+        7.993605777301127e-15,
+        1.5553056657358855e-14,
+        4.25341880443502e-14
+      ]
+    },
+    {
+      "curve": 2235,
+      "route": 130,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2243,
+      "route": 87,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2252,
+      "route": 48,
+      "derivative_errors": [
+        1.4210854715202004e-14,
+        2.2134775995939377e-14,
+        7.692462069388241e-14
+      ]
+    },
+    {
+      "curve": 2286,
+      "route": 10,
+      "derivative_errors": [
+        1.589442370446406e-14,
+        3.63995758334576e-12,
+        7.873068141640572e-09
+      ]
+    },
+    {
+      "curve": 2287,
+      "route": 134,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2291,
+      "route": 201,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2298,
+      "route": 100,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2302,
+      "route": 176,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2328,
+      "route": 48,
+      "derivative_errors": [
+        1.0087767680389479e-14,
+        5.5820556394807676e-14,
+        2.364226122008139e-13
+      ]
+    },
+    {
+      "curve": 2330,
+      "route": 135,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2339,
+      "route": 85,
+      "derivative_errors": [
+        1.020439314654103e-14,
+        1.8139347691774222e-14,
+        4.636953767786083e-14
+      ]
+    },
+    {
+      "curve": 2355,
+      "route": 202,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2356,
+      "route": 203,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2363,
+      "route": 204,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2366,
+      "route": 85,
+      "derivative_errors": [
+        7.944109290391274e-15,
+        2.019579710947346e-14,
+        7.73930476427153e-14
+      ]
+    },
+    {
+      "curve": 2367,
+      "route": 178,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2371,
+      "route": 136,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2372,
+      "route": 137,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2381,
+      "route": 138,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2394,
+      "route": 10,
+      "derivative_errors": [
+        2.2486881514489034e-14,
+        1.3288549665388442e-12,
+        7.984542900476666e-11
+      ]
+    },
+    {
+      "curve": 2415,
+      "route": 45,
+      "derivative_errors": [
+        1.2932072993408848e-14,
+        1.759467074192776e-14,
+        4.1852806006067955e-14
+      ]
+    },
+    {
+      "curve": 2439,
+      "route": 195,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2440,
+      "route": 196,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2441,
+      "route": 197,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2458,
+      "route": 129,
+      "derivative_errors": [
+        7.993605777301127e-15,
+        1.6306678227576006e-14,
+        5.811853834683348e-14
+      ]
+    },
+    {
+      "curve": 2459,
+      "route": 179,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2468,
+      "route": 205,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2474,
+      "route": 207,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2492,
+      "route": 48,
+      "derivative_errors": [
+        7.944109290391274e-15,
+        1.1880877861017696e-14,
+        4.239794108604611e-14
+      ]
+    },
+    {
+      "curve": 2547,
+      "route": 21,
+      "derivative_errors": [
+        7.95651227888113e-15,
+        1.7076335940945622e-14,
+        5.87738929919734e-14
+      ]
+    },
+    {
+      "curve": 2552,
+      "route": 16,
+      "derivative_errors": [
+        1.131338507574586e-14,
+        8.674371698769961e-14,
+        1.0520257300777385e-12
+      ]
+    },
+    {
+      "curve": 2556,
+      "route": 131,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2557,
+      "route": 132,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2558,
+      "route": 133,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2570,
+      "route": 139,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2571,
+      "route": 140,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2578,
+      "route": 141,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "curve": 2587,
+      "route": 11,
+      "derivative_errors": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "master_restrictions_passed": true,
+  "source_tube_limit_mm": 0.012,
+  "movement_limit_mm": 0.16,
+  "source_tube_domain": {
+    "kind": "source_chain_connected_geodesic_triangle_halo",
+    "radius_mm": 0.33578326282027066
+  },
+  "source_tube_passed": true,
+  "movement_passed": true,
+  "branch_turn_regressions": [
+    1743,
+    2150
+  ],
+  "per_curve": [
+    {
+      "curve": 1300,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.3066913481635503,
+        "total_tangent_turn_degrees": 422.82956541172985,
+        "curvature_squared_integral_per_mm": 77.72041562740914,
+        "control_points": 54
+      },
+      "after": {
+        "length_mm": 1.2258217636481792,
+        "total_tangent_turn_degrees": 21.56690152903438,
+        "curvature_squared_integral_per_mm": 0.11929222059972457,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1300,
+        1302,
+        1304,
+        1306,
+        1308,
+        1310,
+        1313,
+        1315,
+        1316
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011988449777963825,
+        "sampled_max_mm": 0.00981771928413263,
+        "samples": 417
+      },
+      "movement_mm": 0.08734966278368039,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1301,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.5135806659679887,
+        "total_tangent_turn_degrees": 149.02885229299108,
+        "curvature_squared_integral_per_mm": 24.281463718755276,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.46239050622946515,
+        "total_tangent_turn_degrees": 12.14491682649781,
+        "curvature_squared_integral_per_mm": 0.0983193000479196,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1301
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011801585677503577,
+        "sampled_max_mm": 0.007459650345582527,
+        "samples": 123
+      },
+      "movement_mm": 0.06181181073225318,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1335,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.28508664250263654,
+        "total_tangent_turn_degrees": 50.7889557955623,
+        "curvature_squared_integral_per_mm": 24.11294890594252,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.31461706804676864,
+        "total_tangent_turn_degrees": 2.6840471155272327,
+        "curvature_squared_integral_per_mm": 0.008036750344553931,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1350
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011090755406883165,
+        "sampled_max_mm": 0.0008860215924285972,
+        "samples": 45
+      },
+      "movement_mm": 0.07043748110411192,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1336,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.1105903948912061,
+        "total_tangent_turn_degrees": 27.086037572550637,
+        "curvature_squared_integral_per_mm": 0.3514340847433278,
+        "control_points": 36
+      },
+      "after": {
+        "length_mm": 1.118901771161534,
+        "total_tangent_turn_degrees": 3.6151988587919464,
+        "curvature_squared_integral_per_mm": 0.003642561979227816,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1351,
+        1378,
+        1388,
+        1402,
+        1410,
+        1457
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011930875696583236,
+        "sampled_max_mm": 0.006890200335215767,
+        "samples": 249
+      },
+      "movement_mm": 0.10224671116137486,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1341,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3502154759873683,
+        "total_tangent_turn_degrees": 131.14305434453115,
+        "curvature_squared_integral_per_mm": 44.65896359540223,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2989122165266048,
+        "total_tangent_turn_degrees": 8.461258163443965,
+        "curvature_squared_integral_per_mm": 0.07313092891626408,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1357
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011772443353874704,
+        "sampled_max_mm": 0.010053664239914268,
+        "samples": 117
+      },
+      "movement_mm": 0.0681543583146132,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1342,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.1197523344554479,
+        "total_tangent_turn_degrees": 69.87389080606044,
+        "curvature_squared_integral_per_mm": 4.763087354291783,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 1.142603808986139,
+        "total_tangent_turn_degrees": 29.453635401589718,
+        "curvature_squared_integral_per_mm": 0.23446108088333134,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1358
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011932550270237475,
+        "sampled_max_mm": 0.005079146553275096,
+        "samples": 273
+      },
+      "movement_mm": 0.06479922552162695,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1369,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.882841663977455,
+        "total_tangent_turn_degrees": 29.81448508594402,
+        "curvature_squared_integral_per_mm": 0.43236899566280484,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8364423976703896,
+        "total_tangent_turn_degrees": 8.55127346232167,
+        "curvature_squared_integral_per_mm": 0.03200188968993108,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1386
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00897304345024242,
+        "sampled_max_mm": 0.0010853815960275531,
+        "samples": 189
+      },
+      "movement_mm": 0.05762837130772909,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1370,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 2.7784344486453207,
+        "total_tangent_turn_degrees": 0.7680480339898688,
+        "curvature_squared_integral_per_mm": 0.0001293831218115483,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.751059708275,
+        "total_tangent_turn_degrees": 0.7638746598444105,
+        "curvature_squared_integral_per_mm": 0.00012916968403303176,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1387
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009004151704429086,
+        "sampled_max_mm": 0.001776397492019629,
+        "samples": 567
+      },
+      "movement_mm": 0.05738445098816568,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1371,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7434209384405146,
+        "total_tangent_turn_degrees": 126.63172082120226,
+        "curvature_squared_integral_per_mm": 14.221363842627685,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.7304623780078239,
+        "total_tangent_turn_degrees": 12.557482869290236,
+        "curvature_squared_integral_per_mm": 0.06648880253260187,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1390,
+        1420
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0117615229902507,
+        "sampled_max_mm": 0.009782433709360501,
+        "samples": 231
+      },
+      "movement_mm": 0.03098278780316495,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1461,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6272047756302263,
+        "total_tangent_turn_degrees": 41.76912176926581,
+        "curvature_squared_integral_per_mm": 1.0805421061087552,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.6186295052232798,
+        "total_tangent_turn_degrees": 32.9271480373602,
+        "curvature_squared_integral_per_mm": 0.7252700487730797,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1487,
+        1494
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011952095919133416,
+        "sampled_max_mm": 0.01090985608041056,
+        "samples": 267
+      },
+      "movement_mm": 0.0737866834767936,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1468,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6452531719880824,
+        "total_tangent_turn_degrees": 0.0,
+        "curvature_squared_integral_per_mm": 3.539086992797035e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.6453483034663747,
+        "total_tangent_turn_degrees": 3.233353738430454,
+        "curvature_squared_integral_per_mm": 0.0070824637166275305,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1495
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0118379619010336,
+        "sampled_max_mm": 0.0005025941777062195,
+        "samples": 93
+      },
+      "movement_mm": 0.06444276413917571,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1469,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.936458334583045,
+        "total_tangent_turn_degrees": 1.4931142859824589,
+        "curvature_squared_integral_per_mm": 0.0004701822788569069,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.937899122140054,
+        "total_tangent_turn_degrees": 7.389818257436765,
+        "curvature_squared_integral_per_mm": 0.008796486028108114,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1496
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010571545468153943,
+        "sampled_max_mm": 0.0007798680027678255,
+        "samples": 381
+      },
+      "movement_mm": 0.08658813867172103,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1470,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.8259512482003086,
+        "total_tangent_turn_degrees": 36.93454681708799,
+        "curvature_squared_integral_per_mm": 0.3852773423888534,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.835547717168023,
+        "total_tangent_turn_degrees": 43.66136092041751,
+        "curvature_squared_integral_per_mm": 0.35324056773404944,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1497
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010273726314541416,
+        "sampled_max_mm": 0.0005312611817229159,
+        "samples": 381
+      },
+      "movement_mm": 0.11693876252260506,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1475,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.021742775012672,
+        "total_tangent_turn_degrees": 45.66423593886253,
+        "curvature_squared_integral_per_mm": 0.7056151318750403,
+        "control_points": 78
+      },
+      "after": {
+        "length_mm": 1.952018010000172,
+        "total_tangent_turn_degrees": 2.662120098729229,
+        "curvature_squared_integral_per_mm": 0.0013005745909725804,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1502,
+        1537,
+        1576,
+        1590,
+        1645,
+        1651,
+        1692,
+        1701,
+        1751,
+        1765,
+        1798,
+        1821,
+        1849
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011922108971973357,
+        "sampled_max_mm": 0.010715425567962083,
+        "samples": 729
+      },
+      "movement_mm": 0.04349829775878848,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1476,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.10861796577744336,
+        "total_tangent_turn_degrees": 1.0098799355715812e-05,
+        "curvature_squared_integral_per_mm": 7.286905856658178e-24,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08741436701680506,
+        "total_tangent_turn_degrees": 1.4074698788367151e-05,
+        "curvature_squared_integral_per_mm": 8.248399340855708e-22,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1503
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009826079031811479,
+        "sampled_max_mm": 0.0025415484469873363,
+        "samples": 9
+      },
+      "movement_mm": 0.026951739684798057,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1498,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 3.3610943390413386,
+        "total_tangent_turn_degrees": 74.5354857693416,
+        "curvature_squared_integral_per_mm": 1.0430625971065646,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 3.3537882359344287,
+        "total_tangent_turn_degrees": 83.90798220561985,
+        "curvature_squared_integral_per_mm": 0.7716582669561767,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        1525
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011907128203356657,
+        "sampled_max_mm": 0.006254778390706374,
+        "samples": 810
+      },
+      "movement_mm": 0.14320799173974033,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1499,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7230816793906696,
+        "total_tangent_turn_degrees": 23.24779812290013,
+        "curvature_squared_integral_per_mm": 0.33088717246648147,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7226803077900193,
+        "total_tangent_turn_degrees": 22.03496406740652,
+        "curvature_squared_integral_per_mm": 0.2806605463836388,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1526
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01197348466709768,
+        "sampled_max_mm": 0.011511205152296049,
+        "samples": 273
+      },
+      "movement_mm": 0.011797146592415054,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1500,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 3.3864494323850147,
+        "total_tangent_turn_degrees": 26.472716317456925,
+        "curvature_squared_integral_per_mm": 0.09488338951367811,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 3.3892013474349914,
+        "total_tangent_turn_degrees": 39.06016535601312,
+        "curvature_squared_integral_per_mm": 0.20651846749041655,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1527
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011973212448650268,
+        "sampled_max_mm": 0.008403187545808113,
+        "samples": 861
+      },
+      "movement_mm": 0.07059781356282462,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1511,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.8322981642234973,
+        "total_tangent_turn_degrees": 67.56541124199123,
+        "curvature_squared_integral_per_mm": 2.465713246080559,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.859004737240574,
+        "total_tangent_turn_degrees": 65.5266042995808,
+        "curvature_squared_integral_per_mm": 2.212444670740403,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1540
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011966550582733954,
+        "sampled_max_mm": 0.007230252872335509,
+        "samples": 291
+      },
+      "movement_mm": 0.09077023877552604,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1512,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.08031348025363559,
+        "total_tangent_turn_degrees": 7.89112304043517e-06,
+        "curvature_squared_integral_per_mm": 2.495097551738924e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.06462830348333092,
+        "total_tangent_turn_degrees": 3.439560160751136,
+        "curvature_squared_integral_per_mm": 0.055766780312293464,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1541
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010729310565411267,
+        "sampled_max_mm": 0.004846234087737282,
+        "samples": 15
+      },
+      "movement_mm": 0.037310879539648845,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1513,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.08047575134181857,
+        "total_tangent_turn_degrees": 12.255818212973235,
+        "curvature_squared_integral_per_mm": 0.7706610095489007,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.06475931095055854,
+        "total_tangent_turn_degrees": 13.151286188743763,
+        "curvature_squared_integral_per_mm": 1.2126632521732241,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1542
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010206796147918109,
+        "sampled_max_mm": 0.004530512658608092,
+        "samples": 9
+      },
+      "movement_mm": 0.07462714946007791,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1519,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6932017827410064,
+        "total_tangent_turn_degrees": 68.3260913365384,
+        "curvature_squared_integral_per_mm": 8.154565212915134,
+        "control_points": 30
+      },
+      "after": {
+        "length_mm": 0.6630355164710005,
+        "total_tangent_turn_degrees": 40.718506521150715,
+        "curvature_squared_integral_per_mm": 0.7685874927580584,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1548,
+        1565,
+        1597,
+        1612,
+        1649
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011949566109721418,
+        "sampled_max_mm": 0.008920496023833864,
+        "samples": 219
+      },
+      "movement_mm": 0.0426970901533641,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1559,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.085074684335514,
+        "total_tangent_turn_degrees": 25.8686597563998,
+        "curvature_squared_integral_per_mm": 0.3119072464226485,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.0846179418843633,
+        "total_tangent_turn_degrees": 28.494459436056605,
+        "curvature_squared_integral_per_mm": 0.30289884695699065,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1593
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011885420303178173,
+        "sampled_max_mm": 0.008508818905488404,
+        "samples": 363
+      },
+      "movement_mm": 0.07122635806084644,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1561,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6865984037589862,
+        "total_tangent_turn_degrees": 4.556015559205448,
+        "curvature_squared_integral_per_mm": 0.010708373032215389,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6871780776265692,
+        "total_tangent_turn_degrees": 9.14195557838125,
+        "curvature_squared_integral_per_mm": 0.03991040137748502,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1595
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011974104109007162,
+        "sampled_max_mm": 0.007428794411065073,
+        "samples": 201
+      },
+      "movement_mm": 0.04410585610702664,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1563,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9606449397270543,
+        "total_tangent_turn_degrees": 168.11377876654265,
+        "curvature_squared_integral_per_mm": 51.97997434737938,
+        "control_points": 22
+      },
+      "after": {
+        "length_mm": 0.8926620314754108,
+        "total_tangent_turn_degrees": 6.582053363130396,
+        "curvature_squared_integral_per_mm": 0.08143469142799362,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1598,
+        1644,
+        1654
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01176160301694577,
+        "sampled_max_mm": 0.005421439267604559,
+        "samples": 357
+      },
+      "movement_mm": 0.08844360451216488,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1592,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.2618851564152313,
+        "total_tangent_turn_degrees": 31.919068924125973,
+        "curvature_squared_integral_per_mm": 1.5033145864991941,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.23956354957525577,
+        "total_tangent_turn_degrees": 34.778391620911236,
+        "curvature_squared_integral_per_mm": 1.9632935865729515,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1629
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011917845577614503,
+        "sampled_max_mm": 0.007542110891848193,
+        "samples": 75
+      },
+      "movement_mm": 0.027609965435674025,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1605,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.710920649080652,
+        "total_tangent_turn_degrees": 29.20478131352035,
+        "curvature_squared_integral_per_mm": 0.5684934233511971,
+        "control_points": 24
+      },
+      "after": {
+        "length_mm": 0.716720974431996,
+        "total_tangent_turn_degrees": 1.157650632235386,
+        "curvature_squared_integral_per_mm": 0.0005700533314117419,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1642,
+        1668,
+        1683,
+        1724
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011941696049176068,
+        "sampled_max_mm": 0.0105142920555369,
+        "samples": 351
+      },
+      "movement_mm": 0.09474925580031025,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1611,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.1841000799105359,
+        "total_tangent_turn_degrees": 36.37664358786745,
+        "curvature_squared_integral_per_mm": 3.0250915019779554,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15270872511496605,
+        "total_tangent_turn_degrees": 19.8390465686589,
+        "curvature_squared_integral_per_mm": 0.8363153116195708,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1655
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011976827740301177,
+        "sampled_max_mm": 0.009313416293943649,
+        "samples": 69
+      },
+      "movement_mm": 0.037058556991454564,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1613,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.4656942509740812,
+        "total_tangent_turn_degrees": 17.98138659308217,
+        "curvature_squared_integral_per_mm": 0.42105906202506044,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4874771424796876,
+        "total_tangent_turn_degrees": 28.703971352063594,
+        "curvature_squared_integral_per_mm": 1.2418826164755405,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1657
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011910778483906415,
+        "sampled_max_mm": 0.010233223498525323,
+        "samples": 129
+      },
+      "movement_mm": 0.042317957365578085,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1615,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7396858396615811,
+        "total_tangent_turn_degrees": 2.551502570491084,
+        "curvature_squared_integral_per_mm": 0.003710166614519123,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7398076977752819,
+        "total_tangent_turn_degrees": 8.320776444887105,
+        "curvature_squared_integral_per_mm": 0.03709317267450888,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1659
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008755633290452508,
+        "sampled_max_mm": 0.0020885042075323747,
+        "samples": 189
+      },
+      "movement_mm": 0.06363621714659189,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1620,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6647400862265314,
+        "total_tangent_turn_degrees": 240.78759428234994,
+        "curvature_squared_integral_per_mm": 42.90707977594819,
+        "control_points": 30
+      },
+      "after": {
+        "length_mm": 0.653416113239599,
+        "total_tangent_turn_degrees": 9.037004388955285,
+        "curvature_squared_integral_per_mm": 0.06189461329586884,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1665,
+        1691,
+        1723,
+        1750,
+        1777
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011997257782969593,
+        "sampled_max_mm": 0.004571123062351237,
+        "samples": 183
+      },
+      "movement_mm": 0.05183824385949857,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1649,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6975759261030167,
+        "total_tangent_turn_degrees": 123.4278900832176,
+        "curvature_squared_integral_per_mm": 25.438866783353557,
+        "control_points": 24
+      },
+      "after": {
+        "length_mm": 0.6291883682248623,
+        "total_tangent_turn_degrees": 11.147417353564695,
+        "curvature_squared_integral_per_mm": 0.0728388029038454,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1703,
+        1710
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01198155989723907,
+        "sampled_max_mm": 0.00978523547227962,
+        "samples": 207
+      },
+      "movement_mm": 0.08197626977510616,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1664,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.416536911499825,
+        "total_tangent_turn_degrees": 8.116287031259466,
+        "curvature_squared_integral_per_mm": 0.014355780979140758,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.4196161815311101,
+        "total_tangent_turn_degrees": 13.066786269222765,
+        "curvature_squared_integral_per_mm": 0.04680855388874569,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1720
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0100385711844021,
+        "sampled_max_mm": 0.0021784214227714175,
+        "samples": 381
+      },
+      "movement_mm": 0.09931555092421293,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1665,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0440800464509277,
+        "total_tangent_turn_degrees": 5.411297472850857,
+        "curvature_squared_integral_per_mm": 0.008895326451856667,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.0537421395600364,
+        "total_tangent_turn_degrees": 27.205685921463033,
+        "curvature_squared_integral_per_mm": 0.22576239394891387,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1721
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009913428293342491,
+        "sampled_max_mm": 0.00047019275522576075,
+        "samples": 189
+      },
+      "movement_mm": 0.07959113417654992,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1680,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.3093708126775967,
+        "total_tangent_turn_degrees": 8.480157271083087,
+        "curvature_squared_integral_per_mm": 0.02607476225799624,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.31342039290714,
+        "total_tangent_turn_degrees": 21.094158843258906,
+        "curvature_squared_integral_per_mm": 0.32404435097700224,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1740
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007361078432865258,
+        "sampled_max_mm": 0.0003852054856839835,
+        "samples": 381
+      },
+      "movement_mm": 0.08476862699640629,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1684,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8912856386543978,
+        "total_tangent_turn_degrees": 46.71569258626611,
+        "curvature_squared_integral_per_mm": 6.672016077013329,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8884863976918493,
+        "total_tangent_turn_degrees": 14.175887624241422,
+        "curvature_squared_integral_per_mm": 0.09324844028735413,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1744
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009363653641083007,
+        "sampled_max_mm": 0.0008293335521260437,
+        "samples": 189
+      },
+      "movement_mm": 0.10218845572067717,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1685,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.7828267112366234,
+        "total_tangent_turn_degrees": 28.66704256770749,
+        "curvature_squared_integral_per_mm": 0.1667529463481524,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.776176961329332,
+        "total_tangent_turn_degrees": 7.975402727748877,
+        "curvature_squared_integral_per_mm": 0.007012375661470001,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1745
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011776149928865783,
+        "sampled_max_mm": 0.0007310869482633473,
+        "samples": 381
+      },
+      "movement_mm": 0.08350292524219333,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1712,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.625322416753178,
+        "total_tangent_turn_degrees": 337.1600005027451,
+        "curvature_squared_integral_per_mm": 150.52117516691362,
+        "control_points": 61
+      },
+      "after": {
+        "length_mm": 1.521657433668615,
+        "total_tangent_turn_degrees": 2.2837032119522043,
+        "curvature_squared_integral_per_mm": 0.0010450444405369472,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1778,
+        1819,
+        1857,
+        1869,
+        1891,
+        1902,
+        1913,
+        1934
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011841970356286886,
+        "sampled_max_mm": 0.005740703672833346,
+        "samples": 381
+      },
+      "movement_mm": 0.05411028843432032,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1713,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.3401143637320758,
+        "total_tangent_turn_degrees": 2.4408837169403808,
+        "curvature_squared_integral_per_mm": 0.006726707228828307,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3188682074567069,
+        "total_tangent_turn_degrees": 2.5880385353832276,
+        "curvature_squared_integral_per_mm": 0.008069691992634314,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1779
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011888676279184893,
+        "sampled_max_mm": 0.011397988484101333,
+        "samples": 219
+      },
+      "movement_mm": 0.04129444048580534,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1714,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.6202505117596555,
+        "total_tangent_turn_degrees": 19.528130766155023,
+        "curvature_squared_integral_per_mm": 0.0982884355922812,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.620254220701904,
+        "total_tangent_turn_degrees": 28.802367951984998,
+        "curvature_squared_integral_per_mm": 1.0960715000895447,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        1780
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01007836158484989,
+        "sampled_max_mm": 0.0006528432937223878,
+        "samples": 762
+      },
+      "movement_mm": 0.11061345214177515,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1715,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.03533920224896589,
+        "total_tangent_turn_degrees": 9.952314956412497e-06,
+        "curvature_squared_integral_per_mm": 1.2057857044873134e-22,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.06442485398139318,
+        "total_tangent_turn_degrees": 2.3090956538799277e-05,
+        "curvature_squared_integral_per_mm": 4.1924122140147675e-22,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1781
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007406296754729016,
+        "sampled_max_mm": 0.0020375589229157847,
+        "samples": 9
+      },
+      "movement_mm": 0.031218632187724478,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1716,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.7867454481093086,
+        "total_tangent_turn_degrees": 16.288316951693897,
+        "curvature_squared_integral_per_mm": 0.38696548059775693,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.8155145889990085,
+        "total_tangent_turn_degrees": 3.3484176035669435,
+        "curvature_squared_integral_per_mm": 0.0051799675222478,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1782
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011931127332853024,
+        "sampled_max_mm": 0.0062534806846080825,
+        "samples": 861
+      },
+      "movement_mm": 0.08370026769366082,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1743,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.16297256998011425,
+        "total_tangent_turn_degrees": 11.448924087230145,
+        "curvature_squared_integral_per_mm": 0.3184377266114117,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.19958960583776975,
+        "total_tangent_turn_degrees": 40.02848356207292,
+        "curvature_squared_integral_per_mm": 2.6544230480965405,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1810
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011659072842970263,
+        "sampled_max_mm": 0.009446613646669714,
+        "samples": 93
+      },
+      "movement_mm": 0.048249257233100536,
+      "movement_passed": true,
+      "branch_turn_regression": true
+    },
+    {
+      "curve": 1744,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 2.2490023717434102,
+        "total_tangent_turn_degrees": 339.51070788364893,
+        "curvature_squared_integral_per_mm": 167.97728589374154,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 2.100312502266592,
+        "total_tangent_turn_degrees": 19.092959124609543,
+        "curvature_squared_integral_per_mm": 0.09845800120578192,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1811
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011986448298447609,
+        "sampled_max_mm": 0.011369064319566413,
+        "samples": 699
+      },
+      "movement_mm": 0.14492367652291577,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1745,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.45338547366336573,
+        "total_tangent_turn_degrees": 231.63672545488765,
+        "curvature_squared_integral_per_mm": 145.0700767250073,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.4330735665132988,
+        "total_tangent_turn_degrees": 17.18627458565182,
+        "curvature_squared_integral_per_mm": 0.22731437533222332,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1812
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01142009176313398,
+        "sampled_max_mm": 0.007894670053944414,
+        "samples": 135
+      },
+      "movement_mm": 0.09164601892334102,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1750,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7956171696420937,
+        "total_tangent_turn_degrees": 18.03087564770899,
+        "curvature_squared_integral_per_mm": 0.16792715530771196,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7475347127626868,
+        "total_tangent_turn_degrees": 3.3040134921498887,
+        "curvature_squared_integral_per_mm": 0.006143141951578841,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1817
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010082540311813165,
+        "sampled_max_mm": 0.00405854977005325,
+        "samples": 189
+      },
+      "movement_mm": 0.050294909005357456,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1751,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.7921860849886491,
+        "total_tangent_turn_degrees": 1.386094340446796,
+        "curvature_squared_integral_per_mm": 0.0009153195546078137,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7474434754158522,
+        "total_tangent_turn_degrees": 1.471626570744402,
+        "curvature_squared_integral_per_mm": 0.0010942497361577225,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1818
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010519317962628373,
+        "sampled_max_mm": 0.0027298574386790063,
+        "samples": 135
+      },
+      "movement_mm": 0.03538266745949037,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1752,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.0208831288013047,
+        "total_tangent_turn_degrees": 25.633169846033216,
+        "curvature_squared_integral_per_mm": 0.25740652064320607,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.0139631278490646,
+        "total_tangent_turn_degrees": 20.05035001517117,
+        "curvature_squared_integral_per_mm": 0.2867770800907678,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1823
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008895642507373737,
+        "sampled_max_mm": 0.0014698149291045557,
+        "samples": 765
+      },
+      "movement_mm": 0.09543252823315089,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1755,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.44673108769506936,
+        "total_tangent_turn_degrees": 65.21880137697369,
+        "curvature_squared_integral_per_mm": 3.6784417525156696,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4209992755080417,
+        "total_tangent_turn_degrees": 36.97857087599138,
+        "curvature_squared_integral_per_mm": 1.115797151156041,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1826
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011997684601607854,
+        "sampled_max_mm": 0.011230386876196432,
+        "samples": 303
+      },
+      "movement_mm": 0.07744180276689724,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1777,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9700502322711589,
+        "total_tangent_turn_degrees": 1316.6612674114165,
+        "curvature_squared_integral_per_mm": 2098.0293688282914,
+        "control_points": 26
+      },
+      "after": {
+        "length_mm": 0.8066194322164643,
+        "total_tangent_turn_degrees": 29.964177557702964,
+        "curvature_squared_integral_per_mm": 0.41434159907348844,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1848
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007705447339139719,
+        "sampled_max_mm": 0.0007113056056151985,
+        "samples": 189
+      },
+      "movement_mm": 0.0728826847241482,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1778,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.12471208418546213,
+        "total_tangent_turn_degrees": 0.00042321637952407603,
+        "curvature_squared_integral_per_mm": 5.064159201501261e-10,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11703597683343056,
+        "total_tangent_turn_degrees": 0.00046799881429392283,
+        "curvature_squared_integral_per_mm": 6.611514104498831e-10,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1850
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01070713586944314,
+        "sampled_max_mm": 0.002610370877319982,
+        "samples": 21
+      },
+      "movement_mm": 0.0349476520155435,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1781,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.8893807511462433,
+        "total_tangent_turn_degrees": 0.0,
+        "curvature_squared_integral_per_mm": 7.634560596864059e-29,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 1.8893809902767569,
+        "total_tangent_turn_degrees": 0.12011153616178125,
+        "curvature_squared_integral_per_mm": 3.4275082865012614e-06,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1853
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00784363894079512,
+        "sampled_max_mm": 0.00046320634634129703,
+        "samples": 381
+      },
+      "movement_mm": 0.0004753048881774593,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1782,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.5759600088256221,
+        "total_tangent_turn_degrees": 242.93212252498512,
+        "curvature_squared_integral_per_mm": 192.78446656394527,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.5302239866484724,
+        "total_tangent_turn_degrees": 101.3741446017805,
+        "curvature_squared_integral_per_mm": 10.714819499409645,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1854
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011984246069913069,
+        "sampled_max_mm": 0.00835201567585878,
+        "samples": 255
+      },
+      "movement_mm": 0.07744180276689724,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1791,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.74180077781577,
+        "total_tangent_turn_degrees": 316.77682189961,
+        "curvature_squared_integral_per_mm": 25.751668190712426,
+        "control_points": 64
+      },
+      "after": {
+        "length_mm": 2.7423511846296686,
+        "total_tangent_turn_degrees": 3.575234754079079,
+        "curvature_squared_integral_per_mm": 0.0021014585743568525,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1865,
+        2088,
+        2112,
+        2142,
+        2207,
+        2264
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011989220225013114,
+        "sampled_max_mm": 0.010158806123681498,
+        "samples": 1119
+      },
+      "movement_mm": 0.06236351739628622,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1826,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.2382952017093851,
+        "total_tangent_turn_degrees": 249.63517409612314,
+        "curvature_squared_integral_per_mm": 21.967188455286202,
+        "control_points": 24
+      },
+      "after": {
+        "length_mm": 1.197541340864161,
+        "total_tangent_turn_degrees": 19.082478406920977,
+        "curvature_squared_integral_per_mm": 0.11635004739856543,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        1904,
+        1915
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0118642544351875,
+        "sampled_max_mm": 0.009662071359948428,
+        "samples": 468
+      },
+      "movement_mm": 0.07744180276688954,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1848,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7011346277716409,
+        "total_tangent_turn_degrees": 72.46684553088103,
+        "curvature_squared_integral_per_mm": 5.322036748528898,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7036368037742371,
+        "total_tangent_turn_degrees": 11.134388009031836,
+        "curvature_squared_integral_per_mm": 0.057665113918299794,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1930
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01199676421411562,
+        "sampled_max_mm": 0.01185837876874466,
+        "samples": 807
+      },
+      "movement_mm": 0.04136273493972747,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1850,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.4880422936853821,
+        "total_tangent_turn_degrees": 103.04633960783437,
+        "curvature_squared_integral_per_mm": 8.895089221465497,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.47546084502910646,
+        "total_tangent_turn_degrees": 30.473826850341048,
+        "curvature_squared_integral_per_mm": 0.6060587423411222,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1932,
+        1952
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011946401964226746,
+        "sampled_max_mm": 0.008283262092382929,
+        "samples": 129
+      },
+      "movement_mm": 0.029286637559518165,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1853,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.30938419004307877,
+        "total_tangent_turn_degrees": 125.18884584793416,
+        "curvature_squared_integral_per_mm": 72.24081973568265,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.306000821635811,
+        "total_tangent_turn_degrees": 126.73114030019627,
+        "curvature_squared_integral_per_mm": 76.98884978272297,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1936
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011918080339554535,
+        "sampled_max_mm": 0.003888635890567037,
+        "samples": 81
+      },
+      "movement_mm": 0.026726275799063566,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1866,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7831700136934742,
+        "total_tangent_turn_degrees": 80.8316917146386,
+        "curvature_squared_integral_per_mm": 5.361203850290533,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7564353358038173,
+        "total_tangent_turn_degrees": 19.099258405047408,
+        "curvature_squared_integral_per_mm": 0.23206968702595188,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1949
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007109147844176548,
+        "sampled_max_mm": 0.0007909305661772947,
+        "samples": 189
+      },
+      "movement_mm": 0.10635718656930433,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1867,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.2234056180771917,
+        "total_tangent_turn_degrees": 52.81925053435834,
+        "curvature_squared_integral_per_mm": 0.8813012754747926,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.239094569628914,
+        "total_tangent_turn_degrees": 69.44241255485142,
+        "curvature_squared_integral_per_mm": 1.1996512305962892,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1950
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011827936078519168,
+        "sampled_max_mm": 0.0025874708252052493,
+        "samples": 243
+      },
+      "movement_mm": 0.062261104176571026,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1874,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9687272637007756,
+        "total_tangent_turn_degrees": 4.238933334481931,
+        "curvature_squared_integral_per_mm": 0.006387808552166126,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9802434278547756,
+        "total_tangent_turn_degrees": 38.81026006436454,
+        "curvature_squared_integral_per_mm": 1.4705767386223572,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1959
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01195361223252754,
+        "sampled_max_mm": 0.0021784214227714175,
+        "samples": 219
+      },
+      "movement_mm": 0.07835441981505299,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1875,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6803753496752003,
+        "total_tangent_turn_degrees": 45.91861237859189,
+        "curvature_squared_integral_per_mm": 2.119147701738706,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.6808911988432215,
+        "total_tangent_turn_degrees": 52.741969313319245,
+        "curvature_squared_integral_per_mm": 1.8391978493936778,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        1960
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011947245356325263,
+        "sampled_max_mm": 0.011478474011185989,
+        "samples": 279
+      },
+      "movement_mm": 0.078013784787188,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1884,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.4542032801694909,
+        "total_tangent_turn_degrees": 470.9001459857089,
+        "curvature_squared_integral_per_mm": 157.6992869312364,
+        "control_points": 52
+      },
+      "after": {
+        "length_mm": 1.3558541351317257,
+        "total_tangent_turn_degrees": 2.6090019718025568,
+        "curvature_squared_integral_per_mm": 0.0015443229845355157,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1969,
+        2006,
+        2040,
+        2110,
+        2136
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011907297835484025,
+        "sampled_max_mm": 0.005424431415728541,
+        "samples": 351
+      },
+      "movement_mm": 0.05249763595538651,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1888,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7810556173903469,
+        "total_tangent_turn_degrees": 39.335511693607096,
+        "curvature_squared_integral_per_mm": 0.8607680008614921,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.78330032154185,
+        "total_tangent_turn_degrees": 51.28312208219207,
+        "curvature_squared_integral_per_mm": 1.0407081595455057,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        1973
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011934631137275328,
+        "sampled_max_mm": 0.009849090453089336,
+        "samples": 345
+      },
+      "movement_mm": 0.06749115484342846,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1912,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.31432798625529923,
+        "total_tangent_turn_degrees": 57.22079541890827,
+        "curvature_squared_integral_per_mm": 5.721206829799309,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.3044280244821412,
+        "total_tangent_turn_degrees": 30.820054089087282,
+        "curvature_squared_integral_per_mm": 1.2257193053787367,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        1997,
+        2017
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011767888580708949,
+        "sampled_max_mm": 0.010436580612481578,
+        "samples": 132
+      },
+      "movement_mm": 0.026205298692373175,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1939,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.16094868741573237,
+        "total_tangent_turn_degrees": 6.265789634216386,
+        "curvature_squared_integral_per_mm": 0.09637928980485977,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15471368375255443,
+        "total_tangent_turn_degrees": 6.521842953445358,
+        "curvature_squared_integral_per_mm": 0.10862899530567172,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2028
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01173568214325561,
+        "sampled_max_mm": 0.008506718444738846,
+        "samples": 51
+      },
+      "movement_mm": 0.013165081889637172,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1941,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.28852595005197373,
+        "total_tangent_turn_degrees": 1.5884598502747647,
+        "curvature_squared_integral_per_mm": 0.003539972899097242,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2902378327206972,
+        "total_tangent_turn_degrees": 19.516520163303596,
+        "curvature_squared_integral_per_mm": 0.6101502075805885,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2031
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011931163438739765,
+        "sampled_max_mm": 0.008506718444738846,
+        "samples": 81
+      },
+      "movement_mm": 0.04320124495758813,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1948,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.29930158069203416,
+        "total_tangent_turn_degrees": 44.914408921290274,
+        "curvature_squared_integral_per_mm": 4.423261955100603,
+        "control_points": 9
+      },
+      "after": {
+        "length_mm": 0.25969130176488614,
+        "total_tangent_turn_degrees": 10.490945573070949,
+        "curvature_squared_integral_per_mm": 0.13341724907750024,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2038
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011749363643196833,
+        "sampled_max_mm": 0.007389439059545725,
+        "samples": 75
+      },
+      "movement_mm": 0.03876431797513953,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1959,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.4866224197626814,
+        "total_tangent_turn_degrees": 0.001466067370202932,
+        "curvature_squared_integral_per_mm": 1.6473052048395075e-09,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4876203201400218,
+        "total_tangent_turn_degrees": 12.264231401228713,
+        "curvature_squared_integral_per_mm": 0.09535577956622043,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2050
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009268759932283736,
+        "sampled_max_mm": 0.0,
+        "samples": 93
+      },
+      "movement_mm": 0.05509473513480483,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1967,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.2662419982848996,
+        "total_tangent_turn_degrees": 54.02622003289678,
+        "curvature_squared_integral_per_mm": 9.31751458621912,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.2538851877519278,
+        "total_tangent_turn_degrees": 39.343762794446505,
+        "curvature_squared_integral_per_mm": 3.087290555231306,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2058,
+        2082,
+        2109
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011815336125823785,
+        "sampled_max_mm": 0.01098945560464648,
+        "samples": 102
+      },
+      "movement_mm": 0.03639803756531999,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1968,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.20448411838304353,
+        "total_tangent_turn_degrees": 5.145729547679454,
+        "curvature_squared_integral_per_mm": 0.08108424691831545,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.18672854006448195,
+        "total_tangent_turn_degrees": 3.527976373538418,
+        "curvature_squared_integral_per_mm": 0.020646406099999487,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2059,
+        2089
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011041392391487782,
+        "sampled_max_mm": 0.009556762922138995,
+        "samples": 81
+      },
+      "movement_mm": 0.038799582711092254,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1976,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0581870081822597,
+        "total_tangent_turn_degrees": 4.5653674474343875,
+        "curvature_squared_integral_per_mm": 0.009071517660599163,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.0589363666853897,
+        "total_tangent_turn_degrees": 14.657274692759742,
+        "curvature_squared_integral_per_mm": 0.08442773752650796,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2067
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011331415812003465,
+        "sampled_max_mm": 0.004209796399713709,
+        "samples": 207
+      },
+      "movement_mm": 0.07668433443615584,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1981,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.11412706026946291,
+        "total_tangent_turn_degrees": 4.431734219866938e-05,
+        "curvature_squared_integral_per_mm": 9.837194170755995e-12,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.11201331181169097,
+        "total_tangent_turn_degrees": 1.214058282030374,
+        "curvature_squared_integral_per_mm": 0.004009708143056058,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2073
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011681015154168237,
+        "sampled_max_mm": 0.010671398949753235,
+        "samples": 63
+      },
+      "movement_mm": 0.01291872447858879,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1983,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.2399997711187403,
+        "total_tangent_turn_degrees": 0.0003546289097688625,
+        "curvature_squared_integral_per_mm": 1.9761334086003562e-10,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2474675498305911,
+        "total_tangent_turn_degrees": 0.0003430423014186058,
+        "curvature_squared_integral_per_mm": 1.8014102877925543e-10,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2075
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011898527047049811,
+        "sampled_max_mm": 0.006742952705469152,
+        "samples": 63
+      },
+      "movement_mm": 0.01906252187627531,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1984,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.3208508433962041,
+        "total_tangent_turn_degrees": 10.462137024748763,
+        "curvature_squared_integral_per_mm": 0.1398993747617969,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2943054052926192,
+        "total_tangent_turn_degrees": 11.38578619226027,
+        "curvature_squared_integral_per_mm": 0.18038079461182163,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2076
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01142499959922944,
+        "sampled_max_mm": 0.005242482051426191,
+        "samples": 63
+      },
+      "movement_mm": 0.028772041525008504,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1986,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3394109312833828,
+        "total_tangent_turn_degrees": 0.0010523087339570818,
+        "curvature_squared_integral_per_mm": 1.1541886732726417e-09,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.33978449460181337,
+        "total_tangent_turn_degrees": 17.62580454876153,
+        "curvature_squared_integral_per_mm": 0.35018828451589135,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2078
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011332604627115155,
+        "sampled_max_mm": 0.0,
+        "samples": 45
+      },
+      "movement_mm": 0.06325313068360712,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1989,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.13216043599070193,
+        "total_tangent_turn_degrees": 10.651064216514179,
+        "curvature_squared_integral_per_mm": 0.3423499261510121,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.15354744204909823,
+        "total_tangent_turn_degrees": 9.159792429648824,
+        "curvature_squared_integral_per_mm": 0.21676249757154892,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2084
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01179369117321047,
+        "sampled_max_mm": 0.01098945560464648,
+        "samples": 63
+      },
+      "movement_mm": 0.026015499612748592,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1990,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.4780557904573849,
+        "total_tangent_turn_degrees": 160.32532651103776,
+        "curvature_squared_integral_per_mm": 917.3676858515969,
+        "control_points": 13
+      },
+      "after": {
+        "length_mm": 0.35359133339564175,
+        "total_tangent_turn_degrees": 130.86014403593546,
+        "curvature_squared_integral_per_mm": 75.40210471713706,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2085
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011634184081755837,
+        "sampled_max_mm": 0.009757188006387332,
+        "samples": 207
+      },
+      "movement_mm": 0.06881879457076615,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 1991,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.32392427178917327,
+        "total_tangent_turn_degrees": 72.04993833062585,
+        "curvature_squared_integral_per_mm": 8.087307956263349,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.32586715955118484,
+        "total_tangent_turn_degrees": 9.154199863995668,
+        "curvature_squared_integral_per_mm": 0.1072946643905237,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2086
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011995705176371137,
+        "sampled_max_mm": 0.011290693728939356,
+        "samples": 195
+      },
+      "movement_mm": 0.08418294139631337,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2004,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.08444490053153164,
+        "total_tangent_turn_degrees": 24.50949025354054,
+        "curvature_squared_integral_per_mm": 2.848438508074153,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08890554344100572,
+        "total_tangent_turn_degrees": 22.78974723057803,
+        "curvature_squared_integral_per_mm": 2.3637704197394256,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2103
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011726691288950564,
+        "sampled_max_mm": 0.010737933078376248,
+        "samples": 45
+      },
+      "movement_mm": 0.01291872447858879,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2005,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.849531374344335,
+        "total_tangent_turn_degrees": 132.95885343837435,
+        "curvature_squared_integral_per_mm": 2.992731752816876,
+        "control_points": 88
+      },
+      "after": {
+        "length_mm": 2.841870523499045,
+        "total_tangent_turn_degrees": 12.443475498330347,
+        "curvature_squared_integral_per_mm": 0.021659277611035005,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2104,
+        2276,
+        2304,
+        2341,
+        2343,
+        2429,
+        2435,
+        2465,
+        2487,
+        2510,
+        2541,
+        2559,
+        2564,
+        2588
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01194393128886224,
+        "sampled_max_mm": 0.010596451608026978,
+        "samples": 840
+      },
+      "movement_mm": 0.0424306229421495,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2014,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.1912265207809623,
+        "total_tangent_turn_degrees": 4.604572673989624,
+        "curvature_squared_integral_per_mm": 0.047975459667383716,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18464211245866852,
+        "total_tangent_turn_degrees": 23.826064083662935,
+        "curvature_squared_integral_per_mm": 1.4157470640784098,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2118
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011730361939486065,
+        "sampled_max_mm": 0.011342942401652206,
+        "samples": 93
+      },
+      "movement_mm": 0.03251413458426226,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2016,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9721779281625266,
+        "total_tangent_turn_degrees": 29.094889521246905,
+        "curvature_squared_integral_per_mm": 0.4574031597730063,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.974470815678945,
+        "total_tangent_turn_degrees": 36.98486571561941,
+        "curvature_squared_integral_per_mm": 1.0343943636452912,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2121
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011180002696728579,
+        "sampled_max_mm": 0.0005877848024687547,
+        "samples": 189
+      },
+      "movement_mm": 0.08997294417400233,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2017,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.5844251672898224,
+        "total_tangent_turn_degrees": 2.783547575419964,
+        "curvature_squared_integral_per_mm": 0.004321980396169361,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5681088279112511,
+        "total_tangent_turn_degrees": 14.95175795536797,
+        "curvature_squared_integral_per_mm": 0.1290180085091062,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2122
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011645649204155482,
+        "sampled_max_mm": 0.0059127131233753525,
+        "samples": 141
+      },
+      "movement_mm": 0.07691918946897316,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2018,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 1.0068482989568215,
+        "total_tangent_turn_degrees": 32.91284896989021,
+        "curvature_squared_integral_per_mm": 0.6289456952344415,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.013962640054733,
+        "total_tangent_turn_degrees": 32.68970124893059,
+        "curvature_squared_integral_per_mm": 0.6145922202795193,
+        "control_points": 10
+      },
+      "original_curve_uses": [
+        2123
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011982232114392768,
+        "sampled_max_mm": 0.0077824549513336805,
+        "samples": 291
+      },
+      "movement_mm": 0.08579536344173205,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2023,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.19002768978142018,
+        "total_tangent_turn_degrees": 57.43548645340236,
+        "curvature_squared_integral_per_mm": 8.04319801260995,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1618725060588688,
+        "total_tangent_turn_degrees": 9.306277789235516,
+        "curvature_squared_integral_per_mm": 0.18786203078942929,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2128
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011975584992060565,
+        "sampled_max_mm": 0.011154995001647605,
+        "samples": 105
+      },
+      "movement_mm": 0.0448883708801338,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2026,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.15440174091624068,
+        "total_tangent_turn_degrees": 39.40233364906805,
+        "curvature_squared_integral_per_mm": 4.310318068356693,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.16283971446936263,
+        "total_tangent_turn_degrees": 30.743528672457224,
+        "curvature_squared_integral_per_mm": 1.8371753540162907,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2131
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011757590180555565,
+        "sampled_max_mm": 0.010286735064428844,
+        "samples": 69
+      },
+      "movement_mm": 0.06845474256817555,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2028,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.20144797400982004,
+        "total_tangent_turn_degrees": 68.25490291148127,
+        "curvature_squared_integral_per_mm": 10.51539782477518,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.1757327079304422,
+        "total_tangent_turn_degrees": 23.28085033343111,
+        "curvature_squared_integral_per_mm": 1.0044226211669625,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2135
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009284211180449182,
+        "sampled_max_mm": 0.0034055691702915285,
+        "samples": 45
+      },
+      "movement_mm": 0.11644815716275564,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2030,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.2965858755419597,
+        "total_tangent_turn_degrees": 119.92596417407708,
+        "curvature_squared_integral_per_mm": 59.51013197072478,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.31223719514904885,
+        "total_tangent_turn_degrees": 113.81208238453857,
+        "curvature_squared_integral_per_mm": 47.310364496587084,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2138
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011898669160571754,
+        "sampled_max_mm": 0.005759737281623075,
+        "samples": 111
+      },
+      "movement_mm": 0.026615430610274472,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2031,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0376033771563926,
+        "total_tangent_turn_degrees": 5.476286500983703e-06,
+        "curvature_squared_integral_per_mm": 6.638117332511807e-28,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 1.0378880781082025,
+        "total_tangent_turn_degrees": 5.594942701934643,
+        "curvature_squared_integral_per_mm": 0.015736014225007595,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2139
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009249338151288634,
+        "sampled_max_mm": 2.5315036388917633e-05,
+        "samples": 189
+      },
+      "movement_mm": 0.06679300605689835,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2032,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.2285868311572066,
+        "total_tangent_turn_degrees": 55.959950730020395,
+        "curvature_squared_integral_per_mm": 1.2229724913080897,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.227665299622176,
+        "total_tangent_turn_degrees": 64.65433395498104,
+        "curvature_squared_integral_per_mm": 1.3161558012197723,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2140
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009226218859866082,
+        "sampled_max_mm": 0.002648307740383879,
+        "samples": 381
+      },
+      "movement_mm": 0.09590369752349195,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2038,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.10875176359209346,
+        "total_tangent_turn_degrees": 0.0013589850193875188,
+        "curvature_squared_integral_per_mm": 6.248510218843537e-09,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.10726499555123371,
+        "total_tangent_turn_degrees": 5.78002815709425,
+        "curvature_squared_integral_per_mm": 0.09506331408562574,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2148
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011963363628949206,
+        "sampled_max_mm": 0.005137965758105417,
+        "samples": 21
+      },
+      "movement_mm": 0.007590461992287389,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2042,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.13067886165364373,
+        "total_tangent_turn_degrees": 30.485482764623058,
+        "curvature_squared_integral_per_mm": 3.0321498134756224,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.13100279098870776,
+        "total_tangent_turn_degrees": 0.46134825132458457,
+        "curvature_squared_integral_per_mm": 0.0004954385883385253,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2152
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011154210584244605,
+        "sampled_max_mm": 0.0070588122805725385,
+        "samples": 39
+      },
+      "movement_mm": 0.019619405131147998,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2043,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9627072469775193,
+        "total_tangent_turn_degrees": 3.3588132609800274,
+        "curvature_squared_integral_per_mm": 0.0036234453636594427,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9629676614685718,
+        "total_tangent_turn_degrees": 5.4119005254699015,
+        "curvature_squared_integral_per_mm": 0.01179901350689481,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2153
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011393326266803817,
+        "sampled_max_mm": 0.004739846439059859,
+        "samples": 201
+      },
+      "movement_mm": 0.04005230450970754,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2045,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6073706093400894,
+        "total_tangent_turn_degrees": 109.6540151187522,
+        "curvature_squared_integral_per_mm": 14.317355467121656,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.5541479587061777,
+        "total_tangent_turn_degrees": 107.46482512396281,
+        "curvature_squared_integral_per_mm": 9.357372506464245,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2155
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011175470261874305,
+        "sampled_max_mm": 0.004495064135229783,
+        "samples": 189
+      },
+      "movement_mm": 0.11663422698700042,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2047,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.7479179254516399,
+        "total_tangent_turn_degrees": 874.9449320899789,
+        "curvature_squared_integral_per_mm": 1686.441439872954,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.45280297170159733,
+        "total_tangent_turn_degrees": 147.8413710463659,
+        "curvature_squared_integral_per_mm": 25.258184342822304,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2157
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011714763869908468,
+        "sampled_max_mm": 0.009171210224524717,
+        "samples": 267
+      },
+      "movement_mm": 0.11219937536061494,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2048,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.11338527685905908,
+        "total_tangent_turn_degrees": 8.891381085990079e-06,
+        "curvature_squared_integral_per_mm": 4.0293155230711576e-24,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08245436407910577,
+        "total_tangent_turn_degrees": 20.735127235701498,
+        "curvature_squared_integral_per_mm": 1.5889133095744044,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2158
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011956913134847532,
+        "sampled_max_mm": 0.006742952705469152,
+        "samples": 21
+      },
+      "movement_mm": 0.02877204152500753,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2058,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.14357831055701528,
+        "total_tangent_turn_degrees": 0.31119671151715234,
+        "curvature_squared_integral_per_mm": 0.00025798033322061337,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.14316572672989145,
+        "total_tangent_turn_degrees": 0.31194691556556375,
+        "curvature_squared_integral_per_mm": 0.0002599705791866606,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2169
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011103724438706311,
+        "sampled_max_mm": 0.005137965758105417,
+        "samples": 27
+      },
+      "movement_mm": 0.00759046199228739,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2059,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3959317266974879,
+        "total_tangent_turn_degrees": 61.62275142799837,
+        "curvature_squared_integral_per_mm": 3.959933796637855,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.3934660524538546,
+        "total_tangent_turn_degrees": 27.698300366681565,
+        "curvature_squared_integral_per_mm": 0.5978925556482142,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2170
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011961469285678745,
+        "sampled_max_mm": 0.008798038474962539,
+        "samples": 129
+      },
+      "movement_mm": 0.019509469705942285,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2063,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6663001891297822,
+        "total_tangent_turn_degrees": 63.116129716887826,
+        "curvature_squared_integral_per_mm": 1.980127947920028,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6543809702470909,
+        "total_tangent_turn_degrees": 49.86674405767649,
+        "curvature_squared_integral_per_mm": 1.3720214847284777,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2174
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011923737979587934,
+        "sampled_max_mm": 0.010002639988481632,
+        "samples": 273
+      },
+      "movement_mm": 0.07284756073981728,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2071,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7064091835938986,
+        "total_tangent_turn_degrees": 2.1256039895940475,
+        "curvature_squared_integral_per_mm": 0.0021725953911073334,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.723333248719564,
+        "total_tangent_turn_degrees": 20.080000505217924,
+        "curvature_squared_integral_per_mm": 0.3402772437982343,
+        "control_points": 8
+      },
+      "original_curve_uses": [
+        2182
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01194549418455454,
+        "sampled_max_mm": 0.008974849148926036,
+        "samples": 141
+      },
+      "movement_mm": 0.05432187916196299,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2072,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 3.4194199505820295,
+        "total_tangent_turn_degrees": 0.5115601133544913,
+        "curvature_squared_integral_per_mm": 5.093626190616243e-05,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 3.4431001016121865,
+        "total_tangent_turn_degrees": 0.5083531827271648,
+        "curvature_squared_integral_per_mm": 5.0003682589670566e-05,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2183
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011994384909214144,
+        "sampled_max_mm": 0.009757943019045413,
+        "samples": 1347
+      },
+      "movement_mm": 0.027336335480616425,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2075,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.412677353755589,
+        "total_tangent_turn_degrees": 11.296794382861103,
+        "curvature_squared_integral_per_mm": 0.14502544810111997,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.401526240605641,
+        "total_tangent_turn_degrees": 14.590638446650674,
+        "curvature_squared_integral_per_mm": 0.21489223308426839,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2186,
+        2188
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011279924280109616,
+        "sampled_max_mm": 0.00869893507791705,
+        "samples": 159
+      },
+      "movement_mm": 0.06823564655135896,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2076,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.08497009874203296,
+        "total_tangent_turn_degrees": 1.54286014573962e-05,
+        "curvature_squared_integral_per_mm": 1.313804302534844e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.07983293443585304,
+        "total_tangent_turn_degrees": 0.2573076431805291,
+        "curvature_squared_integral_per_mm": 0.0002527140877126783,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2187
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010815021966113694,
+        "sampled_max_mm": 0.0058238731833556755,
+        "samples": 21
+      },
+      "movement_mm": 0.0152258273624191,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2077,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.2198965545585265,
+        "total_tangent_turn_degrees": 43.823666576091576,
+        "curvature_squared_integral_per_mm": 3.86727676890764,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.21697738413596954,
+        "total_tangent_turn_degrees": 34.15602661985564,
+        "curvature_squared_integral_per_mm": 1.7690480058543165,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2190,
+        2226
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010506759407415368,
+        "sampled_max_mm": 0.005242482051426191,
+        "samples": 51
+      },
+      "movement_mm": 0.0575688053832044,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2090,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.29987021205684683,
+        "total_tangent_turn_degrees": 44.91697703150865,
+        "curvature_squared_integral_per_mm": 4.4413295013372345,
+        "control_points": 9
+      },
+      "after": {
+        "length_mm": 0.2765225718553038,
+        "total_tangent_turn_degrees": 0.6405410250449736,
+        "curvature_squared_integral_per_mm": 0.00045208097691764535,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2203
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01185602165131331,
+        "sampled_max_mm": 0.009060256056975273,
+        "samples": 111
+      },
+      "movement_mm": 0.034880201460633545,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2091,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.21131054538604355,
+        "total_tangent_turn_degrees": 1.2729268324623753,
+        "curvature_squared_integral_per_mm": 0.0028587445774758704,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.20778526414467385,
+        "total_tangent_turn_degrees": 1.4198426537245425,
+        "curvature_squared_integral_per_mm": 0.00365411963292399,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2204
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011913515503421849,
+        "sampled_max_mm": 0.0059127131233753525,
+        "samples": 45
+      },
+      "movement_mm": 0.025584496076789417,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2092,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.29988887389800456,
+        "total_tangent_turn_degrees": 119.4720655632184,
+        "curvature_squared_integral_per_mm": 63.8832294803522,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3044215309916661,
+        "total_tangent_turn_degrees": 117.63571645587734,
+        "curvature_squared_integral_per_mm": 60.51052616367606,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2205
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011467521925251363,
+        "sampled_max_mm": 0.00911515129796336,
+        "samples": 129
+      },
+      "movement_mm": 0.02273752778045292,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2100,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8493362263952136,
+        "total_tangent_turn_degrees": 15.673268062945468,
+        "curvature_squared_integral_per_mm": 0.19231736088493578,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.8491855774379715,
+        "total_tangent_turn_degrees": 16.48430690783293,
+        "curvature_squared_integral_per_mm": 0.13047555111285927,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2215
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011414033055426069,
+        "sampled_max_mm": 0.007935808012958892,
+        "samples": 231
+      },
+      "movement_mm": 0.05435348768560124,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2101,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 4.255970748783279,
+        "total_tangent_turn_degrees": 308.5332986008436,
+        "curvature_squared_integral_per_mm": 11.416175026801369,
+        "control_points": 138
+      },
+      "after": {
+        "length_mm": 4.230192912955043,
+        "total_tangent_turn_degrees": 5.167219345156806,
+        "curvature_squared_integral_per_mm": 0.002798524992357403,
+        "control_points": 9
+      },
+      "original_curve_uses": [
+        2216,
+        2221,
+        2371,
+        2433,
+        2464,
+        2485,
+        2508,
+        2523,
+        2539,
+        2548,
+        2577,
+        2601,
+        2605,
+        2647,
+        2651,
+        2671,
+        2694,
+        2724,
+        2742,
+        2749,
+        2769
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011977775164163486,
+        "sampled_max_mm": 0.008809593867471198,
+        "samples": 1068
+      },
+      "movement_mm": 0.024244297784585773,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2103,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8544152503045741,
+        "total_tangent_turn_degrees": 1.6884776934865586,
+        "curvature_squared_integral_per_mm": 0.001804985001298642,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.8544004599423887,
+        "total_tangent_turn_degrees": 0.10927918899218353,
+        "curvature_squared_integral_per_mm": 4.348711264161769e-06,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2218
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007498055334996492,
+        "sampled_max_mm": 0.0008228999875421792,
+        "samples": 189
+      },
+      "movement_mm": 0.0008606926483323554,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2108,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9069658504663946,
+        "total_tangent_turn_degrees": 8.537736462515939e-07,
+        "curvature_squared_integral_per_mm": 2.8126946904056327e-28,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.9076997668170889,
+        "total_tangent_turn_degrees": 8.058413161423367,
+        "curvature_squared_integral_per_mm": 0.030998156752134413,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2224
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008402077042854202,
+        "sampled_max_mm": 0.0009768993035574084,
+        "samples": 189
+      },
+      "movement_mm": 0.069887656332759,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2125,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.07817273993336932,
+        "total_tangent_turn_degrees": 1.4574827811144605e-05,
+        "curvature_squared_integral_per_mm": 1.3281227067770847e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.04505011035982833,
+        "total_tangent_turn_degrees": 2.188097157257567,
+        "curvature_squared_integral_per_mm": 0.032440934321271646,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2243
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011389800304526592,
+        "sampled_max_mm": 0.009378183079738893,
+        "samples": 27
+      },
+      "movement_mm": 0.04397655572105835,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2126,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.5135356311887935,
+        "total_tangent_turn_degrees": 83.98200826050709,
+        "curvature_squared_integral_per_mm": 13.125216887031486,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.49426362606459223,
+        "total_tangent_turn_degrees": 25.784543226353648,
+        "curvature_squared_integral_per_mm": 0.7143271952426055,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2244
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011903402124407172,
+        "sampled_max_mm": 0.009394188768177608,
+        "samples": 183
+      },
+      "movement_mm": 0.08638375029324664,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2137,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.43126403361675175,
+        "total_tangent_turn_degrees": 94.25321266664352,
+        "curvature_squared_integral_per_mm": 9.1599412078749,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4093086476952698,
+        "total_tangent_turn_degrees": 17.338448738510763,
+        "curvature_squared_integral_per_mm": 0.22859275033617182,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2255
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011865670280350918,
+        "sampled_max_mm": 0.010190205899843102,
+        "samples": 141
+      },
+      "movement_mm": 0.07410844612186175,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2143,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3036546223998058,
+        "total_tangent_turn_degrees": 49.34997346023534,
+        "curvature_squared_integral_per_mm": 7.996535170129794,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.2813201273111372,
+        "total_tangent_turn_degrees": 0.6833846158185011,
+        "curvature_squared_integral_per_mm": 0.0005057689482786142,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2261
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011936238844060504,
+        "sampled_max_mm": 0.010102975127981369,
+        "samples": 159
+      },
+      "movement_mm": 0.0464520997754363,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2144,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.020348426310551844,
+        "total_tangent_turn_degrees": 1.946870172962208e-05,
+        "curvature_squared_integral_per_mm": 5.736937293769884e-12,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.01158733250215614,
+        "total_tangent_turn_degrees": 0.6214351604447393,
+        "curvature_squared_integral_per_mm": 0.010153718781349925,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2262
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011142508134586301,
+        "sampled_max_mm": 0.009690331153029938,
+        "samples": 9
+      },
+      "movement_mm": 0.05374165637807827,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2145,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.3004444726890558,
+        "total_tangent_turn_degrees": 127.79962780412407,
+        "curvature_squared_integral_per_mm": 72.0651038287097,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2597765130881095,
+        "total_tangent_turn_degrees": 71.21063019094566,
+        "curvature_squared_integral_per_mm": 6.8967830441190054,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2263
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011896273434359467,
+        "sampled_max_mm": 0.010086880684810073,
+        "samples": 123
+      },
+      "movement_mm": 0.05047313818307686,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2149,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.18808995784997193,
+        "total_tangent_turn_degrees": 10.802885825309726,
+        "curvature_squared_integral_per_mm": 0.2087316253128041,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2305762557521809,
+        "total_tangent_turn_degrees": 20.031076385158016,
+        "curvature_squared_integral_per_mm": 0.5630426214246087,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2268
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011655491591305061,
+        "sampled_max_mm": 0.009132732167856997,
+        "samples": 63
+      },
+      "movement_mm": 0.07573442483769567,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2150,
+      "method": "source_constrained_route_branch",
+      "before": {
+        "length_mm": 0.3624480257087793,
+        "total_tangent_turn_degrees": 42.913902344792135,
+        "curvature_squared_integral_per_mm": 2.040091972559762,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.41314517354218966,
+        "total_tangent_turn_degrees": 58.87418178758621,
+        "curvature_squared_integral_per_mm": 2.7203383808512385,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2269
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011796242303532621,
+        "sampled_max_mm": 0.009132732167856997,
+        "samples": 165
+      },
+      "movement_mm": 0.05374165637807679,
+      "movement_passed": true,
+      "branch_turn_regression": true
+    },
+    {
+      "curve": 2160,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.322779918076386,
+        "total_tangent_turn_degrees": 22.29930455148692,
+        "curvature_squared_integral_per_mm": 0.6684373239681582,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.3279750974128098,
+        "total_tangent_turn_degrees": 51.732598767162614,
+        "curvature_squared_integral_per_mm": 6.280892301602625,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2282
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008646748220183388,
+        "sampled_max_mm": 0.0005951455267001471,
+        "samples": 93
+      },
+      "movement_mm": 0.06915608806189566,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2161,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.40792154618845067,
+        "total_tangent_turn_degrees": 0.0028088367820315223,
+        "curvature_squared_integral_per_mm": 7.0536497408895434e-09,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4111248952381571,
+        "total_tangent_turn_degrees": 25.929480836984528,
+        "curvature_squared_integral_per_mm": 0.658302132318145,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2283
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008586836177436998,
+        "sampled_max_mm": 0.0,
+        "samples": 93
+      },
+      "movement_mm": 0.0569772315854285,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2177,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9592580838320381,
+        "total_tangent_turn_degrees": 0.4974334958523101,
+        "curvature_squared_integral_per_mm": 0.00010540081176904067,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9592563939089774,
+        "total_tangent_turn_degrees": 0.4292095436676608,
+        "curvature_squared_integral_per_mm": 6.311826521963238e-05,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2299
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007912044524428249,
+        "sampled_max_mm": 0.0003693883701024432,
+        "samples": 189
+      },
+      "movement_mm": 0.0032205391419758062,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2178,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.2544331637406687,
+        "total_tangent_turn_degrees": 0.8076849515651552,
+        "curvature_squared_integral_per_mm": 0.00012908578909371436,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.2544324226406203,
+        "total_tangent_turn_degrees": 0.7022289238444384,
+        "curvature_squared_integral_per_mm": 9.092121391127058e-05,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2300
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009013744406192846,
+        "sampled_max_mm": 8.655881621424869e-05,
+        "samples": 381
+      },
+      "movement_mm": 0.01428955223348395,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2180,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 3.093890875577264,
+        "total_tangent_turn_degrees": 17.40332389586444,
+        "curvature_squared_integral_per_mm": 0.04912490507895087,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 3.1034622658750686,
+        "total_tangent_turn_degrees": 34.74453093214916,
+        "curvature_squared_integral_per_mm": 0.1608376835028807,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2302
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007443936812797085,
+        "sampled_max_mm": 0.0004699615992348545,
+        "samples": 765
+      },
+      "movement_mm": 0.05933554960295548,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2181,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3803523513100101,
+        "total_tangent_turn_degrees": 218.9896981328529,
+        "curvature_squared_integral_per_mm": 130.7560045547084,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.35257299039781176,
+        "total_tangent_turn_degrees": 45.116180545870556,
+        "curvature_squared_integral_per_mm": 2.3773640971153074,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2305,
+        2360
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011900709882123802,
+        "sampled_max_mm": 0.007647250418756994,
+        "samples": 165
+      },
+      "movement_mm": 0.0719662757154634,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2193,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.1567046392580727,
+        "total_tangent_turn_degrees": 14.474846346308173,
+        "curvature_squared_integral_per_mm": 0.03581131128742763,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.1604128894580388,
+        "total_tangent_turn_degrees": 20.847886666276526,
+        "curvature_squared_integral_per_mm": 0.09641917307838045,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2317
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01108390709296648,
+        "sampled_max_mm": 9.477009944137872e-07,
+        "samples": 381
+      },
+      "movement_mm": 0.07607418521814334,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2199,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.3823675900675035,
+        "total_tangent_turn_degrees": 54.551576247422034,
+        "curvature_squared_integral_per_mm": 3.891986851802757,
+        "control_points": 12
+      },
+      "after": {
+        "length_mm": 0.40529920328229846,
+        "total_tangent_turn_degrees": 51.51308721266521,
+        "curvature_squared_integral_per_mm": 3.254970416724055,
+        "control_points": 12
+      },
+      "original_curve_uses": [
+        2323
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011941697965345168,
+        "sampled_max_mm": 0.005561719854550341,
+        "samples": 93
+      },
+      "movement_mm": 0.028006824742739456,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2200,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.1902066100240637,
+        "total_tangent_turn_degrees": 49.25848957565836,
+        "curvature_squared_integral_per_mm": 4.928187782400238,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.18117886978358613,
+        "total_tangent_turn_degrees": 19.60758790495626,
+        "curvature_squared_integral_per_mm": 0.6513289958192935,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2324
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01112958993538294,
+        "sampled_max_mm": 0.006769776027440039,
+        "samples": 51
+      },
+      "movement_mm": 0.029153060998519473,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2208,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.3224669372609182,
+        "total_tangent_turn_degrees": 125.62784642799463,
+        "curvature_squared_integral_per_mm": 58.54443791525893,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 0.3315959447473539,
+        "total_tangent_turn_degrees": 17.771387458678554,
+        "curvature_squared_integral_per_mm": 0.31470201959778876,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2332,
+        2367,
+        2392
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01137318163048944,
+        "sampled_max_mm": 0.009819153197873683,
+        "samples": 132
+      },
+      "movement_mm": 0.0699969796958097,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2228,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.9729147621930654,
+        "total_tangent_turn_degrees": 38.288761098002205,
+        "curvature_squared_integral_per_mm": 0.23682226697274328,
+        "control_points": 72
+      },
+      "after": {
+        "length_mm": 2.9629083733395696,
+        "total_tangent_turn_degrees": 0.9973389918721136,
+        "curvature_squared_integral_per_mm": 0.0001382681252104381,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2355,
+        2365
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011879320493351997,
+        "sampled_max_mm": 0.008680552997255224,
+        "samples": 843
+      },
+      "movement_mm": 0.035691604711762,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2232,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.13590664318460005,
+        "total_tangent_turn_degrees": 58.73075620278192,
+        "curvature_squared_integral_per_mm": 11.209781833888641,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08086007444731268,
+        "total_tangent_turn_degrees": 16.188742306934465,
+        "curvature_squared_integral_per_mm": 1.026819067291913,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2359
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0111046389465769,
+        "sampled_max_mm": 0.0055668582057544274,
+        "samples": 21
+      },
+      "movement_mm": 0.05596302170280818,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2233,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.5661328461916069,
+        "total_tangent_turn_degrees": 0.0,
+        "curvature_squared_integral_per_mm": 2.173410929227723e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.5661329465272219,
+        "total_tangent_turn_degrees": 0.1744459886674277,
+        "curvature_squared_integral_per_mm": 1.829534478681945e-05,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2361
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010180706490495814,
+        "sampled_max_mm": 0.0004995332194974905,
+        "samples": 93
+      },
+      "movement_mm": 0.0834387416955117,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2234,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.017175823275326,
+        "total_tangent_turn_degrees": 4.847036648424732,
+        "curvature_squared_integral_per_mm": 0.006069018361893899,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.9424233389191778,
+        "total_tangent_turn_degrees": 1.3255850393045023,
+        "curvature_squared_integral_per_mm": 0.0004069527057847293,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2362
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00944545151634025,
+        "sampled_max_mm": 0.0007276591006562055,
+        "samples": 381
+      },
+      "movement_mm": 0.10296738996794337,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2235,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 3.339478400551374,
+        "total_tangent_turn_degrees": 30.794111105439075,
+        "curvature_squared_integral_per_mm": 0.27279688869076274,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 3.3356383494263384,
+        "total_tangent_turn_degrees": 8.71144170443912,
+        "curvature_squared_integral_per_mm": 0.014989702422768121,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2363
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008193500210735583,
+        "sampled_max_mm": 0.00027179904866907607,
+        "samples": 1143
+      },
+      "movement_mm": 0.11619306840838002,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2243,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.2591744377510015,
+        "total_tangent_turn_degrees": 42.669167052430154,
+        "curvature_squared_integral_per_mm": 3.057381480176295,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2593689032691797,
+        "total_tangent_turn_degrees": 58.71098157712614,
+        "curvature_squared_integral_per_mm": 9.804834631082015,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2377
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008745947623947694,
+        "sampled_max_mm": 0.0023049487285955873,
+        "samples": 93
+      },
+      "movement_mm": 0.07756281915355624,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2252,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.23061597424265687,
+        "total_tangent_turn_degrees": 10.051199712579825,
+        "curvature_squared_integral_per_mm": 0.16978761518626023,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.286203247814229,
+        "total_tangent_turn_degrees": 17.495343090047587,
+        "curvature_squared_integral_per_mm": 0.40945708464594055,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2386
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011608575111365226,
+        "sampled_max_mm": 0.008959864463268732,
+        "samples": 129
+      },
+      "movement_mm": 0.08939303153814906,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2253,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.11338527685905976,
+        "total_tangent_turn_degrees": 1.6489535327818618e-05,
+        "curvature_squared_integral_per_mm": 1.0105472414220262e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.09382661005736796,
+        "total_tangent_turn_degrees": 1.3013764917944732e-05,
+        "curvature_squared_integral_per_mm": 6.1555600000240374e-21,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2387
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.010287889332933982,
+        "sampled_max_mm": 0.006378447247168842,
+        "samples": 21
+      },
+      "movement_mm": 0.055963021702808174,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2286,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0463508874983825,
+        "total_tangent_turn_degrees": 381.52199209857605,
+        "curvature_squared_integral_per_mm": 80.9514568205701,
+        "control_points": 32
+      },
+      "after": {
+        "length_mm": 0.9463021389276892,
+        "total_tangent_turn_degrees": 14.409312560958522,
+        "curvature_squared_integral_per_mm": 0.09806165457666836,
+        "control_points": 9
+      },
+      "original_curve_uses": [
+        2422,
+        2460,
+        2518,
+        2556
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011999773760307093,
+        "sampled_max_mm": 0.01198676299975948,
+        "samples": 444
+      },
+      "movement_mm": 0.05951213074028954,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2287,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7575559376546271,
+        "total_tangent_turn_degrees": 8.537736462515939e-07,
+        "curvature_squared_integral_per_mm": 3.5710802106471497e-28,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.7553654393068749,
+        "total_tangent_turn_degrees": 13.0269647823029,
+        "curvature_squared_integral_per_mm": 0.0812998979332475,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2423
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011279395181682188,
+        "sampled_max_mm": 0.005252071014549322,
+        "samples": 189
+      },
+      "movement_mm": 0.06213099518619716,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2291,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7009442963758231,
+        "total_tangent_turn_degrees": 24.517454439855136,
+        "curvature_squared_integral_per_mm": 0.3360097044699226,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6995455672604141,
+        "total_tangent_turn_degrees": 21.833146135962238,
+        "curvature_squared_integral_per_mm": 0.22284986174044644,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2427
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011958170402340897,
+        "sampled_max_mm": 0.007302472410232305,
+        "samples": 225
+      },
+      "movement_mm": 0.08555755901841122,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2298,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.29129783217411437,
+        "total_tangent_turn_degrees": 90.74194087569865,
+        "curvature_squared_integral_per_mm": 12.202648471180524,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2613645394167281,
+        "total_tangent_turn_degrees": 34.21600318345448,
+        "curvature_squared_integral_per_mm": 1.4022033922394732,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2438
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011920374907026566,
+        "sampled_max_mm": 0.009606960561770643,
+        "samples": 117
+      },
+      "movement_mm": 0.06699855743035982,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2302,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8564841634490834,
+        "total_tangent_turn_degrees": 2.5613209387547816e-06,
+        "curvature_squared_integral_per_mm": 1.62623046045824e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.8647806477876218,
+        "total_tangent_turn_degrees": 27.2670075590552,
+        "curvature_squared_integral_per_mm": 0.2643683321632149,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2442
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008513326660821061,
+        "sampled_max_mm": 0.0008312816442922167,
+        "samples": 189
+      },
+      "movement_mm": 0.05745547280973751,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2304,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 2.746030708476234,
+        "total_tangent_turn_degrees": 468.8546743529491,
+        "curvature_squared_integral_per_mm": 37.5591643085811,
+        "control_points": 66
+      },
+      "after": {
+        "length_mm": 2.737180080325885,
+        "total_tangent_turn_degrees": 470.92184023764946,
+        "curvature_squared_integral_per_mm": 38.02145686925411,
+        "control_points": 66
+      },
+      "original_curve_uses": [
+        2444
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011857620382925031,
+        "sampled_max_mm": 0.007159669539965853,
+        "samples": 627
+      },
+      "movement_mm": 0.03899259379100145,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2328,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.9524551568274016,
+        "total_tangent_turn_degrees": 33.31586455233628,
+        "curvature_squared_integral_per_mm": 0.26900000385300826,
+        "control_points": 40
+      },
+      "after": {
+        "length_mm": 1.9231428656829015,
+        "total_tangent_turn_degrees": 13.134510356996088,
+        "curvature_squared_integral_per_mm": 0.04313628248691978,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2474,
+        2514,
+        2550,
+        2593,
+        2642,
+        2681
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011951832840763536,
+        "sampled_max_mm": 0.009048302904908429,
+        "samples": 552
+      },
+      "movement_mm": 0.02899147724687704,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2330,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.44410902244574807,
+        "total_tangent_turn_degrees": 9.711943299570763,
+        "curvature_squared_integral_per_mm": 0.08227088169655034,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.4492982612467537,
+        "total_tangent_turn_degrees": 31.072944241765605,
+        "curvature_squared_integral_per_mm": 0.6685886249005971,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2476
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00874392590152186,
+        "sampled_max_mm": 0.0010399049691082764,
+        "samples": 93
+      },
+      "movement_mm": 0.05639769362451428,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2339,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.29146773376171387,
+        "total_tangent_turn_degrees": 22.862758383447943,
+        "curvature_squared_integral_per_mm": 0.7063044885023809,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.2663556225550877,
+        "total_tangent_turn_degrees": 27.07927924068629,
+        "curvature_squared_integral_per_mm": 0.877466630180361,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2488
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011434631873502304,
+        "sampled_max_mm": 0.003573292594845512,
+        "samples": 63
+      },
+      "movement_mm": 0.09646288225781113,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2355,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9619954145574234,
+        "total_tangent_turn_degrees": 5.976415523761157e-06,
+        "curvature_squared_integral_per_mm": 1.3639170432004267e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.9620663690255128,
+        "total_tangent_turn_degrees": 2.417342688793042,
+        "curvature_squared_integral_per_mm": 0.0019170859256047862,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2504
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00968461423470926,
+        "sampled_max_mm": 0.002125281720640572,
+        "samples": 189
+      },
+      "movement_mm": 0.016676723672000727,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2356,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.2931479419635818,
+        "total_tangent_turn_degrees": 9.162742149735443e-06,
+        "curvature_squared_integral_per_mm": 1.0673512469003057e-28,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 1.2931597586598138,
+        "total_tangent_turn_degrees": 1.3257246345463072,
+        "curvature_squared_integral_per_mm": 0.0007595852009216138,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2505
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011930938948233029,
+        "sampled_max_mm": 0.0010038364211326447,
+        "samples": 195
+      },
+      "movement_mm": 0.08231806433215495,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2363,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.302086757823849,
+        "total_tangent_turn_degrees": 5.452449298465737,
+        "curvature_squared_integral_per_mm": 0.01018203071461029,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.3017483628531898,
+        "total_tangent_turn_degrees": 4.806759298694391,
+        "curvature_squared_integral_per_mm": 0.016219636234202837,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2520
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008397999521736171,
+        "sampled_max_mm": 0.002125281720640572,
+        "samples": 381
+      },
+      "movement_mm": 0.0751685536404976,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2366,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.52383389735402,
+        "total_tangent_turn_degrees": 292.34139108618103,
+        "curvature_squared_integral_per_mm": 86.50772396197338,
+        "control_points": 11
+      },
+      "after": {
+        "length_mm": 0.40517474758690025,
+        "total_tangent_turn_degrees": 68.92223529049545,
+        "curvature_squared_integral_per_mm": 3.6286845547808766,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2524
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.00970658579702943,
+        "sampled_max_mm": 0.0023857692868123337,
+        "samples": 93
+      },
+      "movement_mm": 0.1085243492629316,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2367,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 3.1853242558367714,
+        "total_tangent_turn_degrees": 36.75629651562741,
+        "curvature_squared_integral_per_mm": 0.18818998239527035,
+        "control_points": 18
+      },
+      "after": {
+        "length_mm": 3.185513233441246,
+        "total_tangent_turn_degrees": 41.81347008939624,
+        "curvature_squared_integral_per_mm": 0.20591897878308715,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2525
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011908251572976187,
+        "sampled_max_mm": 0.009779605611659319,
+        "samples": 945
+      },
+      "movement_mm": 0.10711082004616167,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2371,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.566512376837454,
+        "total_tangent_turn_degrees": 2.0611919159773272e-06,
+        "curvature_squared_integral_per_mm": 1.3952151864268688e-26,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.5667852942346157,
+        "total_tangent_turn_degrees": 6.0818022575073325,
+        "curvature_squared_integral_per_mm": 0.02135035211607124,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2529
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.006527825907932312,
+        "sampled_max_mm": 0.0004884137768561077,
+        "samples": 189
+      },
+      "movement_mm": 0.07151029981802277,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2372,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.4880977421728265,
+        "total_tangent_turn_degrees": 22.10728046622611,
+        "curvature_squared_integral_per_mm": 0.12253432632663475,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.4873607092452397,
+        "total_tangent_turn_degrees": 18.976079623510046,
+        "curvature_squared_integral_per_mm": 0.07471779390624307,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2530
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007270946856992496,
+        "sampled_max_mm": 0.0004970534477852125,
+        "samples": 765
+      },
+      "movement_mm": 0.13579691014892684,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2380,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.3052091363760303,
+        "total_tangent_turn_degrees": 238.9638930713165,
+        "curvature_squared_integral_per_mm": 238.8200992157541,
+        "control_points": 9
+      },
+      "after": {
+        "length_mm": 0.351648512220082,
+        "total_tangent_turn_degrees": 205.77192689698091,
+        "curvature_squared_integral_per_mm": 125.66734899830345,
+        "control_points": 9
+      },
+      "original_curve_uses": [
+        2542
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011832098433922812,
+        "sampled_max_mm": 0.0023857692868123337,
+        "samples": 78
+      },
+      "movement_mm": 0.05448345705625294,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2381,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.55437487755208,
+        "total_tangent_turn_degrees": 9.574927800427488,
+        "curvature_squared_integral_per_mm": 0.01311311310330063,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 2.5561239700205864,
+        "total_tangent_turn_degrees": 17.59415963770163,
+        "curvature_squared_integral_per_mm": 0.04900707557235516,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2543
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011317820564181043,
+        "sampled_max_mm": 0.00045371774136462997,
+        "samples": 381
+      },
+      "movement_mm": 0.10472799565860366,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2394,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 2.8193875035581892,
+        "total_tangent_turn_degrees": 699.3706259830792,
+        "curvature_squared_integral_per_mm": 226.49553688210136,
+        "control_points": 108
+      },
+      "after": {
+        "length_mm": 2.60023103212254,
+        "total_tangent_turn_degrees": 39.40978715197546,
+        "curvature_squared_integral_per_mm": 0.3183387876258151,
+        "control_points": 18
+      },
+      "original_curve_uses": [
+        2565,
+        2589,
+        2595,
+        2607,
+        2646,
+        2664,
+        2676,
+        2686,
+        2706,
+        2733,
+        2738,
+        2751,
+        2762,
+        2781,
+        2790,
+        2800,
+        2814,
+        2823
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011961095720013333,
+        "sampled_max_mm": 0.011848399430761316,
+        "samples": 885
+      },
+      "movement_mm": 0.10201446697553901,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2395,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 1.026411404422187,
+        "total_tangent_turn_degrees": 90.86995199437713,
+        "curvature_squared_integral_per_mm": 4.884031274031357,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.0257756764761723,
+        "total_tangent_turn_degrees": 90.94452601191745,
+        "curvature_squared_integral_per_mm": 4.902654873607305,
+        "control_points": 10
+      },
+      "original_curve_uses": [
+        2566
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011997215646229135,
+        "sampled_max_mm": 0.010136489272551048,
+        "samples": 639
+      },
+      "movement_mm": 0.0768231128422349,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2405,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.08647599875387377,
+        "total_tangent_turn_degrees": 1.698966435059607e-05,
+        "curvature_squared_integral_per_mm": 2.6227362873005925e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.08359317003024082,
+        "total_tangent_turn_degrees": 1.678250412642525e-05,
+        "curvature_squared_integral_per_mm": 1.8995476780963832e-22,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2578
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008461745030369868,
+        "sampled_max_mm": 0.001495647527777978,
+        "samples": 9
+      },
+      "movement_mm": 0.0076866410931758075,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2415,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0119468092206256,
+        "total_tangent_turn_degrees": 373.0059353514387,
+        "curvature_squared_integral_per_mm": 1078.326436980799,
+        "control_points": 42
+      },
+      "after": {
+        "length_mm": 0.9818017301272646,
+        "total_tangent_turn_degrees": 6.309616323351671,
+        "curvature_squared_integral_per_mm": 0.014109328788856103,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2591,
+        2623,
+        2629,
+        2665,
+        2697
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011989144580004128,
+        "sampled_max_mm": 0.011110373282294674,
+        "samples": 417
+      },
+      "movement_mm": 0.04087746500217956,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2439,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.0430756800964731,
+        "total_tangent_turn_degrees": 2.176292684248286,
+        "curvature_squared_integral_per_mm": 0.0020515313974285927,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.0436765322111692,
+        "total_tangent_turn_degrees": 7.266425102284867,
+        "curvature_squared_integral_per_mm": 0.0257388179749633,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2625
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01023156975262353,
+        "sampled_max_mm": 0.000525463956771679,
+        "samples": 189
+      },
+      "movement_mm": 0.047149608304397315,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2440,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9273784102107976,
+        "total_tangent_turn_degrees": 75.39151186118136,
+        "curvature_squared_integral_per_mm": 3.5999364606997193,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9050944981499617,
+        "total_tangent_turn_degrees": 9.711905343390058,
+        "curvature_squared_integral_per_mm": 0.035841042315520585,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2626
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011681495675684613,
+        "sampled_max_mm": 0.00741109658882915,
+        "samples": 213
+      },
+      "movement_mm": 0.09946447401220407,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2441,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7081671674188268,
+        "total_tangent_turn_degrees": 4.458660444550867,
+        "curvature_squared_integral_per_mm": 0.01359997319089695,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.7096821193845004,
+        "total_tangent_turn_degrees": 13.922528290608538,
+        "curvature_squared_integral_per_mm": 0.11232953016190807,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2627
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.009267228124509821,
+        "sampled_max_mm": 0.0031411843453813286,
+        "samples": 189
+      },
+      "movement_mm": 0.06401374195094006,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2457,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.5032721443871467,
+        "total_tangent_turn_degrees": 65.09999137574592,
+        "curvature_squared_integral_per_mm": 6.970613118613254,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.5061912973422525,
+        "total_tangent_turn_degrees": 67.09257269723469,
+        "curvature_squared_integral_per_mm": 6.342851228989988,
+        "control_points": 10
+      },
+      "original_curve_uses": [
+        2648
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011714154354853432,
+        "sampled_max_mm": 0.006710598952522035,
+        "samples": 165
+      },
+      "movement_mm": 0.09353055598463772,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2458,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.4398682908559772,
+        "total_tangent_turn_degrees": 9.28980802994494,
+        "curvature_squared_integral_per_mm": 0.029476921459900305,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.5133431425834867,
+        "total_tangent_turn_degrees": 2.5651124091593207,
+        "curvature_squared_integral_per_mm": 0.0013315854530767685,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2649
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007322050111985513,
+        "sampled_max_mm": 0.00043651185652154314,
+        "samples": 381
+      },
+      "movement_mm": 0.08586598140078648,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2459,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6441382963352174,
+        "total_tangent_turn_degrees": 15.931727102813628,
+        "curvature_squared_integral_per_mm": 0.24957612862022024,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 0.6433939942575498,
+        "total_tangent_turn_degrees": 18.701120106301254,
+        "curvature_squared_integral_per_mm": 0.24744630910168594,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2652
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01198874355530307,
+        "sampled_max_mm": 0.010485453729067765,
+        "samples": 183
+      },
+      "movement_mm": 0.010846556030846475,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2468,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9626108382278168,
+        "total_tangent_turn_degrees": 2.5613209387547816e-06,
+        "curvature_squared_integral_per_mm": 1.4882014751215993e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.9626517632326891,
+        "total_tangent_turn_degrees": 1.8330123959765197,
+        "curvature_squared_integral_per_mm": 0.0010767230464418481,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2661
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008599968248150128,
+        "sampled_max_mm": 0.0010038364211326447,
+        "samples": 189
+      },
+      "movement_mm": 0.014350794370913415,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2474,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.7990808037250424,
+        "total_tangent_turn_degrees": 23.729626901480543,
+        "curvature_squared_integral_per_mm": 0.2907878378762139,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.799088536285604,
+        "total_tangent_turn_degrees": 30.340353988738883,
+        "curvature_squared_integral_per_mm": 0.36688889007814707,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2672
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011760586267396473,
+        "sampled_max_mm": 0.007832957017889889,
+        "samples": 231
+      },
+      "movement_mm": 0.0629234092117474,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2492,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.00534097567835089,
+        "total_tangent_turn_degrees": 7.1838337934868904e-06,
+        "curvature_squared_integral_per_mm": 4.511559117835011e-20,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.004991385275628902,
+        "total_tangent_turn_degrees": 0.08572400724450868,
+        "curvature_squared_integral_per_mm": 0.0004484777691020253,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2698
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.001657541992300718,
+        "sampled_max_mm": 0.00040923266540499146,
+        "samples": 3
+      },
+      "movement_mm": 0.0009251426444440283,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2493,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.1645159458630666,
+        "total_tangent_turn_degrees": 53.296143547733884,
+        "curvature_squared_integral_per_mm": 9.652676486188353,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.16510499694528283,
+        "total_tangent_turn_degrees": 53.015186315615864,
+        "curvature_squared_integral_per_mm": 9.512830761228027,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2699
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.0115545157612001,
+        "sampled_max_mm": 0.0025115180018906954,
+        "samples": 27
+      },
+      "movement_mm": 0.02528417752145942,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2547,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9835916832497918,
+        "total_tangent_turn_degrees": 43.71143397250134,
+        "curvature_squared_integral_per_mm": 1.1698960184257041,
+        "control_points": 28
+      },
+      "after": {
+        "length_mm": 0.9856570255433079,
+        "total_tangent_turn_degrees": 0.9264775063937267,
+        "curvature_squared_integral_per_mm": 0.0002688307800774937,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2767,
+        2788,
+        2821,
+        2831
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011836106971758593,
+        "sampled_max_mm": 0.006653040105626053,
+        "samples": 231
+      },
+      "movement_mm": 0.026521469422936584,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2551,
+      "method": "route_branch_endpoint_transport",
+      "before": {
+        "length_mm": 0.048155969026269514,
+        "total_tangent_turn_degrees": 1.0452443979189951e-05,
+        "curvature_squared_integral_per_mm": 5.472175370358866e-23,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.04503813443632826,
+        "total_tangent_turn_degrees": 1.1306217625441546e-05,
+        "curvature_squared_integral_per_mm": 1.6694922233453856e-22,
+        "control_points": 6
+      },
+      "original_curve_uses": [
+        2772
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.004920262269143596,
+        "sampled_max_mm": 0.0011670843994083962,
+        "samples": 9
+      },
+      "movement_mm": 0.004767209874456554,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2552,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9932472003423194,
+        "total_tangent_turn_degrees": 58.44180181863551,
+        "curvature_squared_integral_per_mm": 1.7921655518164012,
+        "control_points": 34
+      },
+      "after": {
+        "length_mm": 0.9881116428596478,
+        "total_tangent_turn_degrees": 5.55857106548507,
+        "curvature_squared_integral_per_mm": 0.013220360358074485,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2773,
+        2810,
+        2825,
+        2830,
+        2838
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011948222046797016,
+        "sampled_max_mm": 0.01101742649505963,
+        "samples": 324
+      },
+      "movement_mm": 0.01742131213791276,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2556,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8010627348022505,
+        "total_tangent_turn_degrees": 0.0,
+        "curvature_squared_integral_per_mm": 6.600651109243891e-28,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.80290392378792,
+        "total_tangent_turn_degrees": 12.520997346318758,
+        "curvature_squared_integral_per_mm": 0.0611386966262313,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2778
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.007604704319110192,
+        "sampled_max_mm": 0.00047255358028462673,
+        "samples": 189
+      },
+      "movement_mm": 0.06921335771952031,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2557,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.1665300700511854,
+        "total_tangent_turn_degrees": 34.11706569947998,
+        "curvature_squared_integral_per_mm": 0.847338599819031,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 1.1631088977046653,
+        "total_tangent_turn_degrees": 25.70530771613222,
+        "curvature_squared_integral_per_mm": 0.21417979743183027,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2779
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.01186700983361881,
+        "sampled_max_mm": 0.010824187357182026,
+        "samples": 429
+      },
+      "movement_mm": 0.07190191323886258,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2558,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 1.1406802960333904,
+        "total_tangent_turn_degrees": 35.34413384448847,
+        "curvature_squared_integral_per_mm": 0.6787119247484882,
+        "control_points": 10
+      },
+      "after": {
+        "length_mm": 1.131949000942313,
+        "total_tangent_turn_degrees": 26.832760285591426,
+        "curvature_squared_integral_per_mm": 0.25755675428718466,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2782
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011997345523341677,
+        "sampled_max_mm": 0.00948419833701595,
+        "samples": 339
+      },
+      "movement_mm": 0.06811899543985131,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2570,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6006196626797784,
+        "total_tangent_turn_degrees": 2.458515119087643,
+        "curvature_squared_integral_per_mm": 0.0038902002317451347,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.6015677983044784,
+        "total_tangent_turn_degrees": 12.219100732186622,
+        "curvature_squared_integral_per_mm": 0.13179667543857418,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2798
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011790263497035451,
+        "sampled_max_mm": 0.0017511289717839513,
+        "samples": 123
+      },
+      "movement_mm": 0.07422979322135675,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2571,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.8103401181165701,
+        "total_tangent_turn_degrees": 4.976157478206248e-06,
+        "curvature_squared_integral_per_mm": 2.835667631617036e-27,
+        "control_points": 4
+      },
+      "after": {
+        "length_mm": 0.8118261035148991,
+        "total_tangent_turn_degrees": 11.982695952028369,
+        "curvature_squared_integral_per_mm": 0.057371995639137426,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2799
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.008155728721784015,
+        "sampled_max_mm": 0.0006238033540768894,
+        "samples": 189
+      },
+      "movement_mm": 0.06275744801451331,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2578,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.9698393447951482,
+        "total_tangent_turn_degrees": 28.968842612458342,
+        "curvature_squared_integral_per_mm": 0.35235151824633626,
+        "control_points": 6
+      },
+      "after": {
+        "length_mm": 0.9687353872998147,
+        "total_tangent_turn_degrees": 17.799473336780125,
+        "curvature_squared_integral_per_mm": 0.13123608053060648,
+        "control_points": 4
+      },
+      "original_curve_uses": [
+        2807
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011981763403822256,
+        "sampled_max_mm": 0.010016476283936478,
+        "samples": 327
+      },
+      "movement_mm": 0.08155947129224954,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    },
+    {
+      "curve": 2587,
+      "method": "feature_route_restriction",
+      "before": {
+        "length_mm": 0.6795358237535661,
+        "total_tangent_turn_degrees": 341.1897058779929,
+        "curvature_squared_integral_per_mm": 245.73986912744573,
+        "control_points": 22
+      },
+      "after": {
+        "length_mm": 0.6028336213308825,
+        "total_tangent_turn_degrees": 36.348438522003356,
+        "curvature_squared_integral_per_mm": 0.8266191330435285,
+        "control_points": 5
+      },
+      "original_curve_uses": [
+        2824,
+        2843,
+        2848
+      ],
+      "source_tube": {
+        "passed": true,
+        "certified_max_mm": 0.011962519528401072,
+        "sampled_max_mm": 0.011168821429205235,
+        "samples": 264
+      },
+      "movement_mm": 0.10947769044706039,
+      "movement_passed": true,
+      "branch_turn_regression": false
+    }
+  ],
+  "scope": "C2 agreement only along restrictions of each master; not a G1/G2 surface certificate."
+}

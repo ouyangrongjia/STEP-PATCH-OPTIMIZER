@@ -222,6 +222,8 @@ def optimize(source, output, regions, config=None):
         shutil.copy2(root/name, out/name)
     for di in changed:
         np.savez_compressed(out/'charts'/f'{di:05d}.npz', **current[di])
+    if (root/'routes').exists():
+        shutil.copytree(root/'routes', out/'routes')
     meta.update(source_fit=str(out.resolve()), seam_fairing=report, can_apply=False)
     dump(out/'run.json', meta)
     return report
