@@ -4,6 +4,7 @@ The optional reference STEP is read only by the independent face counter. No
 reference geometry or commercial fitting engine is passed to reconstruction.
 """
 import argparse
+import json
 from pathlib import Path
 import shutil
 import time
@@ -17,8 +18,14 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
                 profile_mode='installed', boundary_mode='chain', normal_field='vertex',
                 normal_filter_steps=0, support_solver='least-squares', boundary_cache=None, boundary_plane_budget=None,
                 repair_charts=(), repair_smooth_joins=False, refit_regions=None,
-                surface_fit=None, distance_options=None, prior_fit=None):
-    out = Path(output); out.mkdir(parents=True, exist_ok=False)
+                surface_fit=None, distance_options=None, prior_fit=None, resume=False):
+    out = Path(output)
+    if resume:
+        if surface_fit is None or not (out/'run.json').exists() or any((out/name).exists() for name in ('step','regions','creo')):
+            raise ValueError('Only unpublished surface-fit validation can resume')
+        prior=json.loads((out/'run.json').read_text(encoding='utf-8'))
+        dump(out/f'run_before_resume_{len(list(out.glob("run_before_resume_*.json"))):02d}.json',prior)
+    out.mkdir(parents=True, exist_ok=resume)
     start = time.perf_counter()
     report = dict(status='running', can_apply=False, algorithm='shared-skeleton-regional-solid-v1',
         stl=str(Path(stl).resolve()), partition=str(Path(partition).resolve()), units='mm',
@@ -60,7 +67,7 @@ def reconstruct(stl, partition, output, *, reference=None, reference_faces=None,
             surface_fit = str((out/'shared_support').resolve())
         from .distance_guard import finalize
         guard = finalize(surface_fit, out/'distance_guard', reference_faces=int(reference_faces),
-                         options=distance_options, prior_fit=prior_fit, render=render)
+                         options=distance_options, prior_fit=prior_fit, render=render, resume=resume)
         report['distance_guard'] = guard
         final = guard['history'][-1]; stage = Path(guard['final_round'])
         report['surface_fit'] = guard['source_fit']

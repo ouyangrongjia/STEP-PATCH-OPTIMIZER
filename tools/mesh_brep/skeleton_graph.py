@@ -6,7 +6,7 @@ after an independent fit. Graph supports cannot fold in their own projection.
 """
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import time
@@ -18,7 +18,7 @@ from scipy.interpolate import BSpline
 from .mesh import dump, stats, vertex_normals, chain_parameters
 from .partition_fit import (Config, load_partition, incidence, frame, boundary_edges,
                             loops, split_faces, projected_boundary_valid, parameters,
-                            spline_graph_error)
+                            spline_graph_error, positions)
 from .partition_fan import disk_domains
 from .regional_rectangle import corners_for_loop, curve_polyline_error
 from .regional_compact import CircularChart
@@ -112,7 +112,7 @@ def fit_boundary(points, t, budget, normals=None, normal_budget=.003):
     return cp, kt, 0.
 
 
-def initial_domains(v, f, labels, ring_threshold=2000):
+def initial_domains(v, f, labels, ring_threshold=2000, minimum_cosine=.08, conditioning_distance=None):
     domains, _, edges, owners = disk_domains(v, f, labels)
     graph = sparse.coo_matrix((np.ones(owners.size), (owners.ravel(), owners[:, ::-1].ravel())),
                              shape=(len(f), len(f))).tocsr()
@@ -131,7 +131,7 @@ def initial_domains(v, f, labels, ring_threshold=2000):
                 seeds.extend((d['region'], selected[cc == k]) for k in range(count))
         else:
             seeds.append((d['region'], ids))
-    return regular_domains(v, f, graph, seeds), graph, edges, owners
+    return regular_domains(v, f, graph, seeds, minimum_cosine, conditioning_distance), graph, edges, owners
 
 
 def connected_ring(part, graph):
@@ -158,15 +158,20 @@ def connected_ring(part, graph):
     return result
 
 
-def regular_domains(v, f, graph, seeds):
+def regular_domains(v, f, graph, seeds, minimum_cosine=.08, conditioning_distance=None):
     result = []
     while seeds:
         region, ids = seeds.pop(0); used = np.unique(f[ids]); tri = np.searchsorted(used, f[ids])
         accepted = False
         try:
             bd = boundary_edges(tri); found = loops(bd)
-            _, _, _, _, uv, _, dot = stable_frame(v[used], tri)
-            accepted = len(found) >= 1 and dot.min() > .08 and projected_boundary_valid(uv, bd)
+            _, _, _, _, uv, height, dot = stable_frame(v[used], tri)
+            conditioned = dot.min() > minimum_cosine
+            if conditioning_distance is not None:
+                # Tiny departures from a plane do not justify preemptive
+                # subdivision solely for an isolated grazing source normal.
+                conditioned |= dot.min() > .08 and abs(height).max() <= conditioning_distance
+            accepted = len(found) >= 1 and conditioned and projected_boundary_valid(uv, bd)
         except ValueError:
             pass
         if accepted:
@@ -287,13 +292,36 @@ def skeleton(v, f, domains, edges, owners, smoothing, normal_budget=.003, curve_
     raise ValueError('Shared skeleton has a projected crossing')
 
 
-def fit_support(task):
+def fit_support(task, *, max_iterations=32, solver_seconds=12., solver_retry=True, seconds=None,
+                acceptance_distance=None, correction_seconds=None, retain_failed=False, quick_penalty=False,
+                normal_rms_goal=None):
+    if max_iterations < 1 or not np.isfinite(solver_seconds) or solver_seconds <= 0:
+        raise ValueError('Invalid support fitting budget')
+    if seconds is not None and (not np.isfinite(seconds) or seconds <= 0):
+        raise ValueError('Invalid support wall-clock budget')
+    if normal_rms_goal is not None and (not np.isfinite(normal_rms_goal) or normal_rms_goal <= 0):
+        raise ValueError('Invalid normal-quality objective')
+    started = time.perf_counter()
     di, v, f, normals, boundary, curves, config, *options = task
+    physical_distance = config.distance if acceptance_distance is None else acceptance_distance
+    if not np.isfinite(physical_distance) or physical_distance < config.distance:
+        raise ValueError('Acceptance distance must contain the fitting reserve')
+    if correction_seconds is not None and (not np.isfinite(correction_seconds) or correction_seconds <= 0):
+        raise ValueError('Invalid short correction budget')
     support_solver = options[0] if options else 'least-squares'
     boundary_normals = options[1] if len(options) > 1 else None
+    seed = options[2] if len(options) > 2 else None
+    preserve_frame = bool(options[3]) if len(options) > 3 else False
     if support_solver != 'bounded' and (config.area_weighted or config.normal_angle_limit is not None or config.fairness_order != 2):
         raise ValueError('Area weights, normal limits and higher-order fairness require the bounded support solver')
     o, ax, lo, size, uv, heights, dot = stable_frame(v, f)
+    if preserve_frame:
+        if seed is None:
+            raise ValueError('A preserved support frame requires a native reference record')
+        o, ax = seed['origin'].copy(), seed['axes'].copy()
+        fn = np.cross(v[f[:,1]]-v[f[:,0]],v[f[:,2]]-v[f[:,0]])
+        fn /= np.linalg.norm(fn,axis=1)[:,None]
+        dot = fn@ax[2]
     if dot.min() <= .05:
         return di, None, dict(accepted=False, reason='non_graph', history=[])
     # Extents include the smoothed boundary, not just the old staircase.
@@ -301,6 +329,8 @@ def fit_support(task):
     lo = all_xy.min(axis=0); size = np.ptp(all_xy, axis=0)
     margin = config.boundary/size
     lo -= margin*size; size *= 1+2*margin
+    if preserve_frame and np.all(lo >= seed['lo']) and np.all(lo+size <= seed['lo']+seed['size']):
+        lo, size = seed['lo'].copy(), seed['size'].copy()
     points = np.r_[v, v[f].mean(axis=1)]
     q = ((points-o)@ax[:2].T-lo)/size; z = (points-o)@ax[2]
     bq = ((boundary-o)@ax[:2].T-lo)/size; bz = (boundary-o)@ax[2]
@@ -322,6 +352,12 @@ def fit_support(task):
     # budget instead of allowing each support almost the whole edge tolerance.
     seam_limit = config.boundary*.4
     t = knots(9); history = []; boundary_enrichments = 0; interior_enrichments = 0; probe_cache = {}
+    # A moved trim usually needs the resolution already established for this
+    # source domain. Reuse that adaptive basis as the initial trial instead of
+    # repeatedly rediscovering it from nine controls. No old coefficients or
+    # feasibility claims are copied; the complete fitter gates still run.
+    if seed is not None and 9 <= len(seed['knots'])-4 <= max(config.controls):
+        t = np.array(seed['knots'], copy=True)
     bending_cache = {}; polygon = None; normal_enrichments = 0; normal_probe_cache = {}; uniform_retry = False
     if config.fairness_domain == 'source':
         if support_solver != 'bounded':
@@ -332,7 +368,113 @@ def fit_support(task):
         polygon = source_polygon(q[:len(v)], f)
     elif config.fairness_domain != 'rectangle':
         raise ValueError('Unknown fairness domain')
-    for iteration in range(32):
+    best = None; best_score = float('inf'); source_locator = None
+    quality_reference = None; quality_event = None; quality_started = None
+    physical_mode = acceptance_distance is not None
+    source_normal = np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]])
+    source_normal /= np.linalg.norm(source_normal, axis=1)[:, None]
+
+    def nearest_source(candidate, points):
+        nonlocal source_locator
+        from .mesh import Locator
+        if source_locator is None:
+            source_locator = Locator(v, f)
+        return source_locator.closest(positions(points, candidate))
+
+    def surface_quality(candidate):
+        from .surface_jets import jets
+        predicted, shape = jets(candidate, v[f].mean(axis=1))
+        target = (normals[f] if normals.ndim == 2 else normals).mean(axis=1)
+        target /= np.linalg.norm(target, axis=1)[:, None]
+        area = np.linalg.norm(np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]]), axis=1)
+        angle = np.degrees(np.arccos(np.clip(np.einsum('ij,ij->i', predicted, target), -1., 1.)))
+        return dict(normal_rms_degrees=float(np.sqrt(np.dot(area, angle**2)/area.sum())),
+                    curvature_rms_per_mm=float(np.sqrt(np.dot(area, np.sum(shape**2, axis=(1, 2)))/area.sum())))
+
+    def finish(reason):
+        """A single short repair, never recursive fitting or knot insertion."""
+        if quality_reference is not None:
+            # This is a quality proposal after an already validated fit, not
+            # a reason to split or start a second repair. Retain the known
+            # feasible geometry when the one richer solve is not useful.
+            quality_event.update(accepted=False, reason=reason, seconds=time.perf_counter()-quality_started)
+            return di, quality_reference, dict(accepted=True, history=history, quality_proposal=quality_event)
+        info = dict(accepted=False, reason=reason, history=history)
+        if retain_failed and best is not None:
+            info['rejected_candidate'] = dict(best)
+        if correction_seconds is None or best is None or config.normal_angle_limit is not None:
+            return di, None, info
+        candidate = dict(best); tick = time.perf_counter(); kt = candidate['knots']
+        bb = tensor(bq, kt, kt)
+        de = float(nearest_source(candidate, q)[1].max(initial=0.))
+        be = float(abs(bb@candidate['height']-bz).max(initial=0.))
+        minor = de <= physical_distance*1.2 and be <= seam_limit*1.2
+        info['failure_class'] = 'minor_residual' if minor else 'unresolved_support'
+        if not minor:
+            return di, None, info
+        from .support_probe import probes, VERSION
+        iq, iz = probes(candidate, v, f)
+        extrema = [spline_graph_error(c['poles'], c['knots'], candidate, return_parameter=True) for c in curves]
+        extra = np.array([BSpline(c['knots'], c['poles'], 3)(where)
+                          for c, (_, where) in zip(curves, extrema)]).reshape(-1, 3)
+        eq = ((extra-o)@ax[:2].T-lo)/size; ez = (extra-o)@ax[2]
+        cq = np.r_[q, iq]
+        cbq, cbz = np.r_[bq, eq], np.r_[bz, ez]
+        ca, cb = tensor(cq, kt, kt), tensor(cbq, kt, kt)
+        def check_proposal():
+            de = float(nearest_source(candidate, cq)[1].max(initial=0.))
+            boundary_error = max((spline_graph_error(c['poles'], c['knots'], candidate) for c in curves), default=0.)
+            return de, boundary_error
+        de, boundary_error = check_proposal()
+        original = dict(candidate); original_boundary = boundary_error
+        repair = dict(method='physical_tolerance_recheck', attempts=0, unchanged_basis=True)
+        if de >= physical_distance or boundary_error >= seam_limit:
+            from .bounded_support import correct
+            from .surface_jets import support_span_parameters
+            # Align constraints to this support's knot crossings before the
+            # only correction; original curve samples miss narrow spans.
+            dense = np.concatenate([BSpline(c['knots'], c['poles'], 3)(support_span_parameters(
+                dict(c, parameters=c.get('parameters', np.array([0., 1.]))), [candidate], quadrature=True))
+                for c in curves]) if curves else np.empty((0, 3))
+            dbq = ((dense-o)@ax[:2].T-lo)/size; dbz = (dense-o)@ax[2]
+            cb = tensor(np.r_[cbq, dbq], kt, kt); cbz = np.r_[cbz, dbz]
+            near, _, ids, _ = nearest_source(candidate, cq)
+            nn = source_normal[ids]; cosine = nn@ax[2]
+            signed = np.einsum('ij,ij->i', positions(cq, candidate)-near, nn)
+            target = ca@candidate['height']-signed/cosine
+            corrected, repair = correct(candidate['height'], ca, target, cb, cbz, physical_distance, seam_limit,
+                seconds=correction_seconds,
+                data_limits=physical_distance/cosine)
+            repair['method'] = 'single_coefficient_projection'
+            if corrected is not None:
+                candidate['height'] = corrected; de, boundary_error = check_proposal()
+                if de >= physical_distance or boundary_error >= seam_limit:
+                    from .distance_projection import damp
+                    clipped, clipping = damp(original, candidate, cq, v, f, physical_distance,
+                                             original_boundary, boundary_error, seam_limit, source_locator)
+                    repair['coefficient_step'] = clipping
+                    if clipped is not None:
+                        candidate = clipped; de, boundary_error = check_proposal()
+        passed = de < physical_distance and boundary_error < seam_limit
+        repair.update(seconds=time.perf_counter()-tick, distance_max_mm=de,
+                      continuous_boundary_max_mm=boundary_error, accepted=passed)
+        info['short_repair'] = repair
+        if not passed:
+            info['failure_class'] = ('minor_residual' if de <= physical_distance*1.2 and boundary_error <= seam_limit*1.2
+                                     else 'geometric_excursion')
+            return di, None, info
+        candidate.update(continuous_boundary_error_mm=boundary_error, interior_probe_version=VERSION,
+                         interior_probe_count=len(iq), interior_probe_max_mm=float(nearest_source(candidate, iq)[1].max(initial=0.)),
+                         interior_probe_metric='finite_source_euclidean', sampled_source_max_mm=de,
+                         distance_reserve_met=de < config.distance, short_repair=True)
+        info.pop('rejected_candidate', None)
+        return di, candidate, dict(info, accepted=True, reason='short_repair_validated')
+
+    for iteration in range(max_iterations):
+        if seconds is not None and time.perf_counter()-started >= seconds:
+            return finish('support_time_budget')
+        if quality_reference is not None:
+            quality_event['attempts'] = 1
         count = len(t)-4; a, b = tensor(q, t, t), tensor(bq, t, t)
         uq = np.unique(t); solver = None
         if support_solver == 'bounded':
@@ -344,7 +486,9 @@ def fit_support(task):
                                   normal_limit=config.normal_angle_limit,
                                   boundary_q=boundary_normal_q, boundary_normals=boundary_n,
                                   bending=bending_cache.get(tuple(t)),
-                                  position_weights=position_weights, normal_weights=normal_weights)
+                                  position_weights=position_weights, normal_weights=normal_weights,
+                                  solver_seconds=solver_seconds, equilibrated_retry=solver_retry,
+                                  retain_inexact=physical_mode, quick_penalty=quick_penalty)
         elif support_solver == 'least-squares':
             blocks = [a/np.sqrt(len(q)), b*np.sqrt(3000/len(bq))]; rhs = [z/np.sqrt(len(q)), bz*np.sqrt(3000/len(bq))]
             for axis in range(2):
@@ -372,17 +516,29 @@ def fit_support(task):
         rec = dict(origin=o, axes=ax, lo=lo, size=size, knots=t, height=coeff)
         if support_solver == 'bounded':
             rec['fairness_version'] = FAIRNESS_VERSION
+        metric_error = (nearest_source(rec, q)[1] if np.isfinite(coeff).all() else np.full(len(q), np.inf)) if physical_mode else error
+        score = max(float(metric_error.max())/physical_distance, float(be.max())/seam_limit)
+        previous_best, previous_score = best, best_score
+        if np.isfinite(coeff).all() and score < best_score:
+            best, best_score = dict(rec), score
         item = dict(controls=count, distance_max=float(error.max()), boundary_max=float(be.max()),
                     basis_strategy='uniform_retry' if uniform_retry else 'adaptive'); history.append(item)
+        if seed is not None:
+            item['initial_basis_controls'] = len(seed['knots'])-4
+            item['native_reference_frame'] = preserve_frame
         if normal_error is not None:
             item['sampled_normal_max_degrees'] = float(normal_error.max(initial=0.))
         if solver is not None:
             item['solver'] = solver
+        if physical_mode:
+            item['finite_source_sample_max_mm'] = float(metric_error.max())
         normal_pass = normal_error is None or normal_error.max(initial=0.) <= config.normal_angle_limit*(1+1e-5)
-        if (solver is None or solver['solved']) and normal_pass and error.max() < config.distance and be.max() < seam_limit*.8:
+        if (physical_mode or solver is None or solver['solved']) and normal_pass and metric_error.max() < physical_distance and be.max() < seam_limit*(1. if physical_mode else .8):
             extrema = [spline_graph_error(c['poles'], c['knots'], rec, return_parameter=True) for c in curves]
             maximum = max(x[0] for x in extrema)
             item['continuous_boundary_max'] = maximum
+            score = max(score, maximum/seam_limit)
+            best, best_score = (dict(rec), score) if score < previous_score else (previous_best, previous_score)
             if maximum < seam_limit:
                 if support_solver == 'bounded':
                     from .support_probe import probes, VERSION
@@ -390,19 +546,23 @@ def fit_support(task):
                     if key not in probe_cache:
                         probe_cache[key] = probes(rec, v, f)
                     iq, iz = probe_cache[key]
-                    ie = abs(tensor(iq, t, t)@coeff-iz)
+                    ie = nearest_source(rec, iq)[1] if physical_mode else abs(tensor(iq, t, t)@coeff-iz)
                     peak = float(ie.max(initial=0.)); item['interior_probe_max_mm'] = peak
-                    if peak >= config.distance:
+                    score = max(score, peak/physical_distance)
+                    best, best_score = (dict(rec), score) if score < previous_score else (previous_best, previous_score)
+                    if peak >= physical_distance:
+                        if quality_reference is not None:
+                            return finish('quality_interior_rejected')
                         # Enrich the actual violated positions before adding
                         # knots or splitting a fixed-label fitting domain.
                         if interior_enrichments < 12:
-                            worst = np.argsort(ie)[-64:]; worst = worst[ie[worst] >= config.distance*.98]
+                            worst = np.argsort(ie)[-64:]; worst = worst[ie[worst] >= physical_distance*.98]
                             q = np.r_[q, iq[worst]]; z = np.r_[z, iz[worst]]
                             if position_weights is not None:
                                 position_weights = np.r_[position_weights, np.zeros(len(worst))]
                             interior_enrichments += 1; item['interior_enrichment'] = interior_enrichments
                             continue
-                        return di, None, dict(accepted=False, reason='interior_excursion', history=history)
+                        return finish('interior_excursion')
                     if config.normal_angle_limit is not None:
                         from .support_probe import normal_targets
                         if key not in normal_probe_cache:
@@ -418,6 +578,8 @@ def fit_support(task):
                         normal_peak = float(angles.max(initial=0.))
                         item['interior_normal_max_degrees'] = normal_peak
                         if normal_peak > config.normal_angle_limit*(1+1e-5):
+                            if quality_reference is not None:
+                                return finish('quality_normal_limit_rejected')
                             if normal_enrichments >= 12:
                                 return di, None, dict(accepted=False, reason='interior_normal_excursion', history=history)
                             worst = np.argsort(angles)[-64:]
@@ -434,11 +596,42 @@ def fit_support(task):
                                    interior_normal_max_degrees=normal_peak,
                                    sampled_normal_limit_degrees=config.normal_angle_limit)
                     rec.update(interior_probe_version=VERSION, interior_probe_count=len(iq), interior_probe_max_mm=peak)
+                    if physical_mode:
+                        rec['interior_probe_metric'] = 'finite_source_euclidean'
                     if config.boundary_normal_weight > 0:
                         from .boundary_normals import VERSION as normal_version
                         rec['boundary_normal_target_version'] = normal_version
                 rec['continuous_boundary_error_mm'] = maximum
+                if physical_mode:
+                    rec['distance_reserve_met'] = max(float(metric_error.max()), item.get('interior_probe_max_mm', 0.)) < config.distance
+                    rec['sampled_source_max_mm'] = float(metric_error.max())
+                if normal_rms_goal is not None:
+                    quality = surface_quality(rec); item['surface_quality'] = quality
+                    rec.update(fit_normal_rms_degrees=quality['normal_rms_degrees'],
+                               fit_curvature_rms_per_mm=quality['curvature_rms_per_mm'])
+                    if quality_reference is not None:
+                        quality_event['after'] = quality
+                        before = quality_event['before']
+                        if (quality['normal_rms_degrees'] >= before['normal_rms_degrees']*.999
+                                or quality['curvature_rms_per_mm'] > before['curvature_rms_per_mm']*1.05+1e-8):
+                            return finish('quality_gain_rejected')
+                        quality_event.update(accepted=True, seconds=time.perf_counter()-quality_started)
+                        return di, rec, dict(accepted=True, history=history, quality_proposal=quality_event)
+                    if quality['normal_rms_degrees'] > normal_rms_goal and iteration+1 < max_iterations:
+                        # One nested refinement of the largest spans adds
+                        # capacity for smooth normals without a new CAD face.
+                        # No quality-driven enrichment loop follows this solve.
+                        extra_count = min(8, max(config.controls)-count, len(uq)-1)
+                        if extra_count > 0:
+                            selected = np.argsort(np.diff(uq), kind='stable')[-extra_count:]
+                            quality_reference = dict(rec); quality_started = time.perf_counter()
+                            quality_event = dict(attempts=0, before=quality, normal_rms_goal_degrees=normal_rms_goal,
+                                controls_before=count, controls_after=count+extra_count, new_CAD_faces=0)
+                            t = np.sort(np.r_[t, (uq[selected]+uq[selected+1])/2])
+                            continue
                 return di, rec, dict(accepted=True, history=history)
+            if quality_reference is not None:
+                return finish('quality_boundary_rejected')
             if boundary_enrichments < 12:
                 # An extremum can sit between every original boundary sample,
                 # especially on an adaptively knotted surface. Add that actual
@@ -451,6 +644,8 @@ def fit_support(task):
                 bq = np.r_[bq, np.repeat(eq, 16, axis=0)]; bz = np.r_[bz, np.repeat(ez, 16)]
                 boundary_enrichments += 1; item['boundary_enrichment'] = boundary_enrichments
                 continue
+        if quality_reference is not None:
+            return finish('quality_sample_rejected')
         if count >= max(config.controls):
             # Residual-driven refinement can cluster knots into tiny spans.
             # Retry the same coefficient budget with a uniform C2 basis before
@@ -460,7 +655,7 @@ def fit_support(task):
                 continue
             break
         # Refine where current residuals are worst; keep a simple-knot C2 basis.
-        all_q = np.r_[q, bq]; ratio = np.r_[error/config.distance, be/(seam_limit*.8)]
+        all_q = np.r_[q, bq]; ratio = np.r_[metric_error/physical_distance, be/(seam_limit*.8)]
         if normal_error is not None:
             all_q = np.r_[all_q, normal_q[good]]
             ratio = np.r_[ratio, normal_error/config.normal_angle_limit]
@@ -478,14 +673,23 @@ def fit_support(task):
         if not new:
             break
         t = np.sort(np.r_[t, new])
-    return di, None, dict(accepted=False, history=history)
+    return finish('fitting_budget')
 
 
 def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, rounds=4,
                 face_limit=None, config=None, from_fit=None, boundary_mode='chain',
                 normal_field='vertex', normal_filter_steps=0, boundary_cache=None,
                 support_solver='least-squares', refit_supports=False, boundary_plane_budget=None, repair_charts=(),
-                refit_regions=None):
+                refit_regions=None, master_config=None, fitting_fraction=1.,
+                fit_iterations=32, solver_seconds=12., fit_seconds=None, round_seconds=None,
+                correction_seconds=None, split_minor_residuals=True, solver_retry=True,
+                minimum_graph_cosine=.08, quick_penalty=False, normal_rms_goal=None):
+    if not 0 < fitting_fraction <= 1:
+        raise ValueError('Invalid fitting distance reserve')
+    if not np.isfinite(minimum_graph_cosine) or not 0 < minimum_graph_cosine < 1:
+        raise ValueError('Invalid graph conditioning bound')
+    if master_config is not None and (from_fit is not None or boundary_cache is not None or regions is not None):
+        raise ValueError('Automatic master planning starts from STL and labels, without prior candidates')
     out = Path(output); out.mkdir(parents=True, exist_ok=False); start = time.perf_counter()
     v, f, labels, topo = load_partition(partition, stl); normal = vertex_normals(v, f)
     selected_refit = set(refit_regions or ())
@@ -498,7 +702,8 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
     def remember(rec, signatures):
         fit_cache[tuple(sorted(map(int, rec['triangle_ids'])))] = (rec, signatures)
     if from_fit is None:
-        domains, graph, edges, owners = initial_domains(v, f, labels)
+        domains, graph, edges, owners = initial_domains(v, f, labels, minimum_cosine=minimum_graph_cosine,
+            conditioning_distance=config.distance*fitting_fraction if config is not None else None)
     else:
         source = Path(from_fit); previous = json.loads((source/'run.json').read_text(encoding='utf-8'))
         if previous.get('network_fairing') or previous.get('network_guard') or previous.get('curve_route_reconstruction'):
@@ -581,7 +786,8 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                 raise ValueError('Resume chart crosses supplied labels')
             parts = split_faces(v, f, ids, graph) if di in previous['failed_charts'] and len(ids) > 1 else [ids]
             seeds.extend((int(region[0]), part) for part in parts)
-        domains = regular_domains(v, f, graph, seeds)
+        domains = regular_domains(v, f, graph, seeds, minimum_graph_cosine,
+                                  config.distance*fitting_fraction if config is not None else None)
     config = config or Config(distance=.03, boundary=.005, controls=(65,), normal_weight=.0001, fairness=1e-8)
     plane_budget = config.distance*.1 if boundary_plane_budget is None else boundary_plane_budget
     repair_charts = set(map(int, repair_charts))
@@ -613,6 +819,17 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                     boundary_repair_charts=sorted(repair_charts))
     metadata['refit_regions'] = sorted(selected_refit)
     metadata['requested_boundary_repair_charts'] = requested_repairs
+    metadata['cold_start'] = from_fit is None and boundary_cache is None
+    metadata['master_planning_before_fitting'] = master_config is not None
+    metadata['fitting_distance_mm'] = config.distance*fitting_fraction
+    metadata['minimum_graph_cosine'] = minimum_graph_cosine
+    metadata['conditioning_plane_distance_mm'] = config.distance*fitting_fraction
+    metadata['quick_penalty_proposal'] = quick_penalty
+    metadata['normal_rms_goal_degrees'] = normal_rms_goal
+    metadata['fitting_budget'] = dict(iterations=fit_iterations, solver_seconds=solver_seconds,
+                                    support_seconds=fit_seconds, round_seconds=round_seconds, layout_rounds=rounds,
+                                    correction_seconds=correction_seconds, split_minor_residuals=split_minor_residuals,
+                                    solver_retry=solver_retry)
     if config.boundary_normal_weight > 0:
         from .boundary_normals import VERSION as normal_version
         metadata['boundary_normal_target_mode'] = f'nearest-source-smooth-fans-v{normal_version}'
@@ -636,6 +853,11 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
         stage = out/f'round_{iteration}'; stage.mkdir(); (stage/'charts').mkdir(); (stage/'curves').mkdir()
         assignment, curves, pairs, boundary_samples, errors = skeleton(v, f, domains, edges, owners, smoothing, plane_budget,
             curve_cache, boundary_network, stage/'boundary_diagnostics')
+        if master_config is not None:
+            from .global_network import plan_before_fit
+            curves, pairs, boundary_samples, planned = plan_before_fit(
+                stage, metadata, domains, curves, pairs, assignment, labels, master_config)
+            metadata['master_network'] = planned
         print(dict(stage='network', iteration=iteration, domains=len(domains), curves=len(curves)), flush=True)
         normal_targets = None
         if config.boundary_normal_weight > 0:
@@ -659,11 +881,34 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                 normal_targets[i][list(pairs[i]).index(di)] for i in selected])
             tasks.append((di, v[used], np.searchsorted(used, f[d['triangle_ids']]), target_normals,
                           np.concatenate([boundary_samples[i] for i in selected]), [curves[i] for i in selected],
-                          config, support_solver, boundary_normals))
+                          replace(config, distance=config.distance*fitting_fraction), support_solver, boundary_normals))
         failed = []
         print(dict(stage='cache', reused=reused, refit=len(tasks)), flush=True)
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for index, (di, rec, info) in enumerate(executor.map(fit_support, tasks)):
+        from functools import partial
+        fitter = partial(fit_support, max_iterations=fit_iterations, solver_seconds=solver_seconds, seconds=fit_seconds,
+                         solver_retry=solver_retry, correction_seconds=correction_seconds,
+                         acceptance_distance=config.distance if correction_seconds is not None else None,
+                         retain_failed=correction_seconds is not None, quick_penalty=quick_penalty,
+                         normal_rms_goal=normal_rms_goal)
+        # A round deadline terminates unfinished workers instead of waiting for
+        # an increasingly expensive local problem during executor shutdown.
+        import multiprocessing as mp
+        pool = mp.Pool(workers); round_start = time.perf_counter(); completed = set()
+        try:
+            results = pool.imap_unordered(fitter, tasks, chunksize=1)
+            for index in range(len(tasks)):
+                remaining = None if round_seconds is None else round_seconds-(time.perf_counter()-round_start)
+                if remaining is not None and remaining <= 0:
+                    break
+                try:
+                    di, rec, info = results.next(timeout=remaining)
+                except mp.TimeoutError:
+                    break
+                completed.add(di)
+                candidate = info.pop('rejected_candidate', None)
+                if candidate is not None:
+                    rejected = stage/'rejected_charts'; rejected.mkdir(exist_ok=True)
+                    np.savez_compressed(rejected/f'{di:05d}.npz', **dict(candidate, **domains[di]))
                 d = domains[di]; records.append(dict(chart=di, region=d['region'], **info))
                 if rec is None:
                     failed.append(di)
@@ -672,9 +917,20 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                     remember(rec, signatures[di])
                 if index % 50 == 0:
                     print(dict(stage='fit', done=index+1, total=len(tasks), failed=len(failed)), flush=True)
+                dump(stage/'fit_progress.json', dict(completed=len(completed), total=len(tasks), failed=failed,
+                                                    seconds=time.perf_counter()-round_start))
+        finally:
+            pool.terminate(); pool.join()
+        for task in tasks:
+            di = task[0]
+            if di not in completed:
+                failed.append(di)
+                records.append(dict(chart=di, region=domains[di]['region'], accepted=False,
+                                    reason='round_time_budget', history=[]))
+        records.sort(key=lambda row: row['chart'])
         dump(stage/'fitting.json', records)
         for ci, (curve, pair) in enumerate(zip(curves, pairs)):
-            np.savez_compressed(stage/'curves'/f'{ci:05d}.npz', **curve, owners=pair)
+            np.savez_compressed(stage/'curves'/f'{ci:05d}.npz', **dict(curve, owners=pair))
         np.savez_compressed(stage/'chart_index.npz', face_chart=assignment, source_labels=labels)
         metadata.update(source_fit=str(stage.resolve()), fitted_charts=len(domains), failed_charts=failed,
                         partial_regions=regions, boundary_movement_mm=stats(errors), seconds=time.perf_counter()-start,
@@ -686,6 +942,22 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
             metadata['status'] = 'local_diagnostic' if regions is not None else 'fitted'
             dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
             return metadata
+        unresolved_minor = [r['chart'] for r in records if not r['accepted'] and r.get('failure_class') == 'minor_residual']
+        substantial = sorted(set(failed)-set(unresolved_minor))
+        if not split_minor_residuals and unresolved_minor and (not substantial or iteration+1 >= rounds):
+            metadata.update(status='failed', unresolved_minor_charts=unresolved_minor,
+                            stop_reason='Short corrections exhausted; minor residuals do not trigger subdivision')
+            dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
+            raise ValueError('Unresolved minor residuals after one short correction')
+        if iteration+1 >= rounds:
+            break
+        if unresolved_minor and not split_minor_residuals:
+            # A substantial failure already requires this one layout pass.
+            # Carry remaining tiny failures with it, without adding a pass or
+            # any further coefficient-correction attempts just for those faces.
+            metadata['minor_residuals_in_required_replan'] = dict(iteration=iteration,
+                minor_charts=unresolved_minor, triggering_charts=substantial, additional_layout_rounds=0)
+            dump(stage/'run.json', metadata); dump(out/'run.json', metadata)
         next_domains = []; split_seeds = []
         for di, d in enumerate(domains):
             if di not in failed:
@@ -695,7 +967,8 @@ def reconstruct(partition, stl, output, smoothing=.04, workers=4, regions=None, 
                 raise ValueError(f'Single triangle cannot meet the shared skeleton: {di}')
             for part in split_faces(v, f, ids, graph):
                 split_seeds.append((d['region'], part))
-        domains = next_domains+regular_domains(v, f, graph, split_seeds)
+        domains = next_domains+regular_domains(v, f, graph, split_seeds, minimum_graph_cosine,
+                                              config.distance*fitting_fraction)
     metadata['status'] = 'failed'; dump(out/'run.json', metadata)
     raise ValueError('Regional skeleton refinement limit exceeded')
 

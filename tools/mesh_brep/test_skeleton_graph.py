@@ -11,6 +11,29 @@ from .skeleton_graph import fit_boundary, stable_frame, skeleton, fit_support, c
 
 
 class SkeletonGraphTests(unittest.TestCase):
+    def test_layout_conditions_source_projection_before_fitting(self):
+        from scipy import sparse
+        from .skeleton_graph import regular_domains
+        angle = np.linspace(-1.45, 1.45, 17)
+        v = np.array([[np.sin(t), y, np.cos(t)] for t in angle for y in (0., .2)])
+        f = np.array([[2*i, 2*i+3, 2*i+2] for i in range(16)]
+                    +[[2*i, 2*i+1, 2*i+3] for i in range(16)])
+        graph = np.zeros((len(f), len(f)))
+        for i, a in enumerate(f):
+            for j, b in enumerate(f):
+                if len(set(a).intersection(b)) == 2: graph[i, j] = 1
+        graph = sparse.csr_matrix(graph); ids = np.arange(len(f))
+        old = regular_domains(v, f, graph, [(0, ids)], .08)
+        new = regular_domains(v, f, graph, [(0, ids)], .35)
+        self.assertEqual(len(old), 1)
+        self.assertGreater(len(new), 1)
+        tiny = regular_domains(v*.001, f, graph, [(0, ids)], .35, conditioning_distance=.027)
+        self.assertEqual(len(tiny), 1)
+        np.testing.assert_array_equal(np.sort(np.concatenate([d['triangle_ids'] for d in new])), ids)
+        for d in new:
+            used = d['vertex_ids']
+            self.assertGreater(stable_frame(v[used], np.searchsorted(used, f[d['triangle_ids']]))[-1].min(), .35)
+
     def test_unsupported_fitting_options_are_not_silently_ignored(self):
         v=np.array([[0.,0,0],[1.,0,0],[0.,1,0]]); f=np.array([[0,1,2]])
         for config in (Config(area_weighted=True),Config(normal_angle_limit=10),Config(fairness_order=3)):

@@ -5,6 +5,64 @@ from .splines import knots, tensor
 
 
 class BendingEnergyTests(unittest.TestCase):
+    def test_short_penalty_proposal_respects_box_geometry_without_claiming_qp_convergence(self):
+        from .bounded_support import penalty_proposal, solve
+        from .partition_fit import Config
+        from scipy import sparse
+        identity = sparse.eye(3, format='csc')
+        value, report = penalty_proposal(identity, np.array([2., -3., .5]), identity,
+            np.full(3, -1.), np.ones(3), np.full(3, 1e6), np.array([2., -3., .5]), 1.)
+        np.testing.assert_allclose(value, [1., -1., .5], atol=2.1e-6)
+        self.assertLessEqual(report['iterations'], 6)
+        knot = knots(9); axis = np.linspace(0, 1, 17)
+        q = np.stack(np.meshgrid(axis, axis, indexing='ij'), axis=-1).reshape(-1, 2)
+        on_boundary = np.any((q == 0)|(q == 1), axis=1)
+        a = tensor(q, knot, knot); b = a[on_boundary]
+        target = .006*np.sin(np.pi*q[on_boundary, 0])
+        cfg = Config(distance=.027, normal_weight=.01, fairness=1e-6)
+        height, info = solve(a, np.zeros(len(q)), b, target, q, np.tile([0., 0., 1.], (len(q), 1)),
+            knot, np.ones(2), cfg, .002, quick_penalty=True, equilibrated_retry=False)
+        self.assertEqual(info['proposal_source'], 'short_penalty_newton')
+        self.assertFalse(info['solved'])
+        self.assertLess(abs(a@height).max(), .027)
+        self.assertLess(abs(b@height-target).max(), .0014)
+
+    def test_inexact_qp_is_not_replaced_by_a_worse_warm_start(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from .bounded_support import solve
+        from .partition_fit import Config
+        knot = knots(4); grid = np.linspace(0, 1, 5)
+        q = np.stack(np.meshgrid(grid, grid, indexing='ij'), axis=-1).reshape(-1, 2)
+        a = tensor(q, knot, knot); z = np.zeros(len(q))
+        result = SimpleNamespace(x=np.full(16, .028), info=SimpleNamespace(status='run time limit reached',
+            status_val=8, run_time=.1, iter=10))
+        with patch('osqp.OSQP') as solver, patch('tools.mesh_brep.bounded_support.spsolve',
+                side_effect=[np.full(16, .04), np.full(16, .031)]):
+            solver.return_value.solve.return_value = result
+            height, report = solve(a, z, a, z, q, np.tile([0., 0, 1], (len(q), 1)), knot,
+                np.ones(2), Config(distance=.027), .05, equilibrated_retry=False, retain_inexact=True)
+        self.assertFalse(report['solved'])
+        self.assertEqual(report['proposal_source'], 'inexact_qp_pending_geometric_check')
+        np.testing.assert_allclose(height, .028)
+
+    def test_single_projection_corrects_small_excess_without_basis_growth(self):
+        from .bounded_support import correct
+        knot = knots(4); grid = np.linspace(0, 1, 9)
+        q = np.stack(np.meshgrid(grid, grid, indexing='ij'), axis=-1).reshape(-1, 2)
+        a = tensor(q, knot, knot); coeff = np.full(16, .0302)
+        corrected, info = correct(coeff, a, np.zeros(len(q)), a, np.full(len(q), .028),
+                                  .03, .002, seconds=.5)
+        self.assertIsNotNone(corrected)
+        self.assertEqual(corrected.shape, coeff.shape)
+        self.assertEqual(info['attempts'], 1)
+        self.assertLess(abs(a@corrected).max(), .03)
+        self.assertLess(abs(a@corrected-.028).max(), .002)
+        bad, rejected = correct(coeff, a, np.zeros(len(q)), a, np.full(len(q), .06),
+                                .03, .002, seconds=.5)
+        self.assertIsNone(bad)
+        self.assertFalse(rejected['proposed'])
+
     def test_stalled_qp_only_reuses_warm_proposal_inside_actual_constraints(self):
         from types import SimpleNamespace
         from unittest.mock import patch

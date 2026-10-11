@@ -15,7 +15,7 @@ from .mesh import dump
 from . import cad
 
 
-def export(run, output, write_pcurves=True):
+def export(run, output, write_pcurves=True, native_context=None):
     root = Path(run); out = Path(output); out.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter(); source = json.loads((root/'run.json').read_text(encoding='utf-8'))
     report = dict(status='running', can_apply=False, commercial_engine_used=False,
@@ -23,8 +23,20 @@ def export(run, output, write_pcurves=True):
         algorithm='native-graph-step-canonical-3d-boundaries-v1', write_pcurves=bool(write_pcurves))
     dump(out/'run.json', report)
     try:
-        shape = TopoDS_Shape(); BRepTools.Read_s(shape, str(root/'native.brep'), BRep_Builder())
-        before = topology(shape)
+        if native_context is not None:
+            if native_context['assembly'] != str(root.resolve()):
+                raise ValueError('In-memory native assembly belongs to another run')
+            shape, before = native_context['shape'], native_context['topology']
+        else:
+            shape = TopoDS_Shape()
+            native = root/source.get('native_file', 'native.brep')
+            if native.suffix == '.binbrep':
+                from OCP.BinTools import BinTools
+                if not BinTools.Read_s(shape, str(native)):
+                    raise ValueError('Cannot read binary native assembly')
+            else:
+                BRepTools.Read_s(shape, str(native), BRep_Builder())
+            before = topology(shape)
         expected_solids = source.get('expected_solids', 1)
         if not before['brep_valid'] or before['free_edges'] or before['solids'] != expected_solids:
             raise ValueError('Source native BRep must already contain the expected valid closed bodies')

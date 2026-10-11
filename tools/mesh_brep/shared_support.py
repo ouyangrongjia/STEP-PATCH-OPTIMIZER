@@ -42,15 +42,17 @@ def source_angles(v, f):
 
 
 def restore_groups(records):
-    """Recover current chart IDs after a resumed layout has been renumbered."""
+    """Recover common geometric supports, including caches without group tags."""
     groups = {}; touched = set()
     for di, rec in records.items():
         if 'shared_support_group' in rec:
             touched.add(di)
-            key = tuple(np.ascontiguousarray(rec[k]).tobytes() for k in
-                        ['origin', 'axes', 'lo', 'size', 'knots', 'height'])
-            groups.setdefault(key, []).append(di)
+        key = tuple(np.ascontiguousarray(rec[k]).tobytes() for k in
+                    ['origin', 'axes', 'lo', 'size', 'knots', 'height'])
+        groups.setdefault(key, []).append(di)
     for ids in groups.values():
+        if len(ids) > 1:
+            touched.update(ids)
         for di in ids:
             if len(ids) > 1: records[di]['shared_support_group'] = np.array(sorted(ids))
             else: records[di].pop('shared_support_group', None)
@@ -86,7 +88,7 @@ def scan(root, output=None):
     return rows
 
 
-def _proposal(task):
+def _proposal(task, fit_options=None):
     selected, v, tri, normal, curves, records, config, lookup = task
     _, _, _, _, uv, _, dot = stable_frame(v, tri)
     if dot.min() <= .08 or not projected_boundary_valid(uv, boundary_edges(tri)):
@@ -103,7 +105,8 @@ def _proposal(task):
         cuts = np.unique(np.r_[c['parameters'], c['knots']])
         q = np.unique((cuts[:-1, None]+np.diff(cuts)[:, None]*np.linspace(0, 1, 5)).ravel())
         samples.append(BSpline(c['knots'], c['poles'], 3)(q))
-    _, fitted, info = fit_support((0, v, tri, normal, np.concatenate(samples), list(curves.values()), config, 'bounded'))
+    _, fitted, info = fit_support((0, v, tri, normal, np.concatenate(samples), list(curves.values()), config, 'bounded'),
+                                 **(fit_options or {}))
     info['selected_charts'] = selected
     if fitted is None: return None, info
     clist = list(curves.values())
@@ -142,10 +145,13 @@ def _proposal(task):
     return fitted, info
 
 
-def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_group=4):
+def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_group=4,
+             seconds=None, fit_options=None):
     """Repair only abnormal local joins; preserve every supplied region trim."""
     root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=False)
     start = time.perf_counter(); meta = json.loads((root/'run.json').read_text(encoding='utf-8'))
+    if seconds is not None and (not np.isfinite(seconds) or seconds <= 0):
+        raise ValueError('Invalid common-support time budget')
     config = Config(**meta['config'])
     if config.boundary_normal_weight:
         raise ValueError('Common-support repair requires the uncoupled fitting configuration')
@@ -158,6 +164,8 @@ def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_
     initial = seam_rows(curves, records, lookup); dump(out/'joins_before.json', initial)
     attempts = []; attempted = set(); accepted = []; pending = []; revision = {}
     while len(attempts) < max_proposals:
+        if seconds is not None and time.perf_counter()-start >= seconds:
+            break
         rows = initial if not attempts else seam_rows(curves, records, lookup)
         tasks = []; locked = set()
         candidates = pending+[r['owners'] for r in rows if r['smooth_excess_p95'] >= threshold
@@ -180,8 +188,19 @@ def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_
             attempted.add(key); locked.update(neighborhood)
             if len(tasks) >= min(workers, max_proposals-len(attempts)): break
         if not tasks: break
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            for fitted, info in pool.map(_proposal, tasks):
+        import multiprocessing as mp
+        from functools import partial
+        pool = mp.Pool(workers)
+        try:
+            results = pool.imap_unordered(partial(_proposal, fit_options=fit_options), tasks, chunksize=1)
+            for _ in tasks:
+                remaining = None if seconds is None else seconds-(time.perf_counter()-start)
+                if remaining is not None and remaining <= 0:
+                    break
+                try:
+                    fitted, info = results.next(timeout=remaining)
+                except mp.TimeoutError:
+                    break
                 attempts.append(info)
                 if fitted is not None:
                     selected = info['selected_charts']; accepted.append(selected)
@@ -199,7 +218,10 @@ def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_
                 print(dict(proposal=len(attempts), charts=info['selected_charts'], accepted=fitted is not None,
                            reason=info.get('reason')), flush=True)
                 dump(out/'proposals.json', attempts)
-    for name in ['charts', 'curves']: shutil.copytree(root/name, out/name)
+        finally:
+            pool.terminate(); pool.join()
+    for name in ['charts', 'curves', 'routes']:
+        if (root/name).exists(): shutil.copytree(root/name, out/name)
     shutil.copy2(root/'chart_index.npz', out/'chart_index.npz')
     for di in set(i for group in accepted for i in group).union(restored):
         np.savez_compressed(out/'charts'/f'{di:05d}.npz', **records[di])
@@ -212,6 +234,7 @@ def optimize(source, output, *, workers=4, threshold=25., max_proposals=40, max_
     final = seam_rows(curves, records, lookup); dump(out/'joins_after.json', final)
     report = dict(accepted_groups=accepted, attempted_groups=len(attempts), threshold_degrees=threshold,
                   max_proposals=max_proposals, max_group=max_group, workers=workers, seconds=time.perf_counter()-start,
+                  search_seconds_limit=seconds, fit_options=fit_options,
                   source_fit=str(root.resolve()), source_CAD_read=False, supplied_labels_preserved=True)
     dump(out/'repair.json', report)
     meta.update(source_fit=str(out.resolve()), shared_support_repair=report, status='fitted')

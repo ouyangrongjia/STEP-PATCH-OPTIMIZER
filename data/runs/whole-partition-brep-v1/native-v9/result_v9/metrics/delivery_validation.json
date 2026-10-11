@@ -1,0 +1,38 @@
+{
+  "status": "verified",
+  "package_seconds": 8.8309948000242,
+  "previous_rejected_delivery_preserved": true,
+  "regional_files": 359,
+  "exact_native_support_equality": {
+    "unchanged_supports": 985,
+    "geometry_fields": [
+      "origin",
+      "axes",
+      "lo",
+      "size",
+      "knots",
+      "height",
+      "region",
+      "triangle_ids",
+      "vertex_ids"
+    ],
+    "source_assignment_unchanged": true,
+    "comparison": "Direct complete array equality; no hashes"
+  },
+  "visual_review_pending": false,
+  "archive_valid": true,
+  "exact_final_curve_arrays_checked": 2681,
+  "reproduce_help_passed": true,
+  "run_links_resolve": true,
+  "visual_review": {
+    "images": [
+      "whole_boundaries.png",
+      "focus_01.png",
+      "focus_02.png",
+      "focus_03.png"
+    ],
+    "observation": "Boundary lines improve locally across the frame and leaf transition. Overall shape remains close to v8. Digit recess ripples and some boundary waves remain; no all-region visual smoothness claim."
+  },
+  "archive_rechecked_after_timeout_configuration_update": true,
+  "final_source_files_match_archive": true
+}

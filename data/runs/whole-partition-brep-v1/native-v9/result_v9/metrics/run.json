@@ -1,0 +1,7 @@
+{
+  "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-staging\\baseline_fit",
+  "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\fit",
+  "seconds": 58.56279130000621,
+  "status": "completed",
+  "scope": "Additional read-only cross-version diagnostics"
+}

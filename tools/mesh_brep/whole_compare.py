@@ -1,5 +1,6 @@
 """Same-camera STL / previous STEP / new STEP evidence, including all edges."""
 import argparse
+import json
 from pathlib import Path
 import numpy as np
 import vtk
@@ -36,8 +37,8 @@ def frame(mesh, edges, center, direction, up, scale, width=900, height=600):
     return result
 
 
-def compare(partition, before, after, output, focus=None, focus_scale=5., focus_only=False):
-    if focus_only and focus is None:
+def compare(partition, before, after, output, focus=None, focus_scale=5., focus_only=False, focuses=None):
+    if focus_only and focus is None and not focuses:
         raise ValueError('Focus-only comparison requires a focus position')
     out = Path(output); out.mkdir(parents=True, exist_ok=False)
     data = np.load(partition); v, f = data['mesh_vertex_original'], data['mesh_triangle']
@@ -78,16 +79,22 @@ def compare(partition, before, after, output, focus=None, focus_scale=5., focus_
                 board.paste(frame(mesh, borders[col] if show_edges else [], center, d, up, scale), (900*col, 630*row+30))
                 draw.text((900*col+14, 630*row+2), f'{row+1}. {labels[col]}', font=font, fill='#20324b')
         board.save(out/filename)
+    focus_views = list(focuses or [])
     if focus is not None:
-        focus = np.asarray(focus, dtype=float); d = directions[0]/np.linalg.norm(directions[0]); up = axes[1]
+        focus_views.insert(0, dict(center=np.asarray(focus, dtype=float).tolist(), scale=focus_scale, view=0))
+    for index, detail in enumerate(focus_views):
+        point = np.asarray(detail['center'], dtype=float); view = int(detail.get('view', 0)); scale = float(detail['scale'])
+        if point.shape != (3,) or not np.isfinite(point).all() or not 0 <= view < 6 or not np.isfinite(scale) or scale <= 0:
+            raise ValueError('Invalid focus camera')
+        d = directions[view]/np.linalg.norm(directions[view]); up = axes[0] if view >= 4 else axes[1]
         board = Image.new('RGB', (2700, 1260), 'white'); draw = ImageDraw.Draw(board)
         for row, show_edges in enumerate([False, True]):
             for col, mesh in enumerate(meshes):
-                board.paste(frame(mesh, borders[col] if show_edges else [], focus, d, up, focus_scale), (900*col, 630*row+30))
+                board.paste(frame(mesh, borders[col] if show_edges else [], point, d, up, scale), (900*col, 630*row+30))
                 draw.text((900*col+14, 630*row+2), labels[col], font=font, fill='#20324b')
-        board.save(out/'focus_comparison.png')
+        board.save(out/('focus_comparison.png' if len(focus_views) == 1 else f'focus_{index+1:02d}.png'))
     dump(out/'run.json', dict(before=str(Path(before).resolve()), after=str(Path(after).resolve()),
-        views=views, focus=None if focus is None else focus.tolist(), focus_scale=focus_scale,
+        views=views, focus=None if focus is None else np.asarray(focus).tolist(), focus_scale=focus_scale, focuses=focus_views,
         face_counts=face_counts, source_normals='Original STL crease-separated corner normals, 30 degrees',
         step_normals='Actual native D1, no display smoothing', deflection_mm=.001,
         boundaries='All nondegenerate CAD edges; no edge filtering', identical_material_and_lighting=True))
@@ -98,4 +105,6 @@ if __name__ == '__main__':
     for name in ['partition', 'before', 'after', 'output']: p.add_argument('--'+name, required=True)
     p.add_argument('--focus', type=float, nargs=3); p.add_argument('--focus-scale', type=float, default=5.)
     p.add_argument('--focus-only', action='store_true')
-    a = p.parse_args(); compare(a.partition, a.before, a.after, a.output, a.focus, a.focus_scale, a.focus_only)
+    p.add_argument('--focuses', help='JSON list of center, scale and view (0..5) camera records')
+    a = p.parse_args(); compare(a.partition, a.before, a.after, a.output, a.focus, a.focus_scale, a.focus_only,
+                               None if a.focuses is None else json.loads(Path(a.focuses).read_text(encoding='utf-8')))

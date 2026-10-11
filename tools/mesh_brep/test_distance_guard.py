@@ -8,7 +8,8 @@ from OCP.BRepTools import BRepTools
 from OCP.TopAbs import TopAbs_FACE
 from OCP.TopoDS import TopoDS_Compound, TopoDS_Shape
 from . import cad
-from .distance_guard import Options, select_faces, support_groups, match_faces, validate_fit
+from .distance_guard import Options, select_faces, support_groups, match_faces, validate_fit, repair
+from . import fit_checkpoint
 from .mesh import write_stl
 from .partition_fit import Config, parameters
 from .skeleton_graph import reconstruct as fit
@@ -29,6 +30,10 @@ class DistanceGuardTests(unittest.TestCase):
         good = dict(per_face=[dict(face=0, source_distance_mm=dict(max=.029))])
         self.assertEqual(select_faces(good, {}, .03, Options())[0], [])
         self.assertEqual(len(select_faces(good, {}, .03, Options(), preventive=True)[0]), 1)
+        mixed = dict(per_face=good['per_face']+[dict(face=1, source_distance_mm=dict(max=.0301))])
+        short, bad = select_faces(mixed, {}, .03, Options(short_repair_seconds=2.))
+        self.assertEqual([r['face'] for r in short], [1])
+        self.assertEqual(bad, [1])
         rows[0]['source_distance_mm']['max'] = float('nan')
         with self.assertRaisesRegex(ValueError, 'non-finite'):
             select_faces(dict(per_face=rows), {}, .03, Options())
@@ -58,19 +63,23 @@ class DistanceGuardTests(unittest.TestCase):
             rec['height'][index] = .012
             np.savez_compressed(path, **rec)
             curves = {p.name: p.read_bytes() for p in (source/'curves').glob('*.npz')}
-            options = Options(max_repairs=1, samples_per_face=128, repair_samples=1024, seed=44500)
+            options = Options(max_repairs=1, samples_per_face=128, repair_samples=1024, seed=44500,
+                              preserve_continuity=True)
             with self.assertRaisesRegex(ValueError, 'budget exhausted'):
                 reconstruct(root/'source.stl', root/'partition.npz', root/'rejected', reference_faces=5,
-                    surface_fit=source, render=False, distance_options=Options(max_repairs=0, samples_per_face=128, seed=44500))
+                    surface_fit=source, render=False, distance_options=Options(max_repairs=0, samples_per_face=128,
+                                                                            seed=44500, preventive_repair=False))
             failure = json.loads((root/'rejected/distance_guard/run.json').read_text())
             self.assertEqual(failure['status'], 'failed')
             self.assertFalse((root/'rejected/regions').exists())
             self.assertFalse((root/'rejected/step').exists())
-            result = reconstruct(root/'source.stl', root/'partition.npz', root/'accepted', reference_faces=5,
-                surface_fit=source, render=False, distance_options=options)
+            result = reconstruct(root/'source.stl', root/'partition.npz', root/'rejected', reference_faces=5,
+                surface_fit=source, render=False, distance_options=options, resume=True)
             guard = result['distance_guard']; history = guard['history']
             self.assertEqual(guard['repairs'], 1)
             self.assertEqual(guard['changed_charts'], [0])
+            self.assertTrue(history[0]['repair']['continuity_preservation'])
+            self.assertTrue(history[0]['cached_audit'])
             self.assertTrue(history[0]['over_budget_faces'])
             self.assertEqual(history[0]['sample_role'], 'tuning_after_local_repair')
             self.assertEqual(history[1]['seed'], history[0]['seed']+1)
@@ -79,6 +88,38 @@ class DistanceGuardTests(unittest.TestCase):
             self.assertEqual(curves, {p.name: p.read_bytes() for p in (final/'curves').glob('*.npz')})
             self.assertEqual(json.loads((final/'run.json').read_text())['config']['distance'], cfg.distance)
             validate_fit(final, root/'partition.npz', root/'source.stl')
+            # A saved candidate must pass the physical and continuity gates again.
+            first = root/'rejected/distance_guard/round_00'
+            selected, _ = select_faces(history[0]['stratified'], history[0]['quality'],
+                                       cfg.distance, options, preventive=True)
+            repeated = repair(source, first/'assembled', first/'step/model.step', selected,
+                              first/'repaired_fit', options, resume=True)
+            self.assertEqual(repeated['status'], 'complete')
+            self.assertTrue(all(e['trials'][0]['method'] == 'validated_checkpoint'
+                                and e['trials'][0]['accepted'] for e in repeated['events']))
+            # The explicit bounded-refit option retains its previous behavior.
+            limited = repair(source, first/'assembled', first/'step/model.step', selected,
+                root/'limited_repair', Options(max_repairs=1, repair_samples=1024, preserve_continuity=True,
+                    projection_repair=False, max_repair_groups=2, repair_seconds=30.,
+                    solver_seconds=2., fit_seconds=20., fit_iterations=20))
+            self.assertEqual(limited['status'], 'complete')
+            self.assertTrue(all(e['passed'] and e['trials'][-1]['method'] == 'refit_with_margin'
+                                for e in limited['events']))
+            from unittest.mock import patch
+            with patch('tools.mesh_brep.skeleton_graph.fit_support', side_effect=AssertionError('No refitting')):
+                short = repair(source, first/'assembled', first/'step/model.step', selected,
+                    root/'short_repair', Options(max_repairs=1, repair_samples=1024, preserve_continuity=True,
+                        projection_repair=False, max_repair_groups=2, repair_seconds=30., short_repair_seconds=2.))
+            self.assertEqual(short['status'], 'complete')
+            self.assertTrue(all(e['passed'] and e['trials'][-1]['method'] == 'single_coefficient_projection'
+                                for e in short['events']))
+            self.assertTrue(fit_checkpoint.matches(source, first/'input'))
+            changed = dict(np.load(path)); changed['height'] = changed['height']+.001
+            np.savez_compressed(path, **changed)
+            self.assertFalse(fit_checkpoint.matches(source, first/'input'))
+            with self.assertRaisesRegex(ValueError, 'checkpoint input changed'):
+                repair(source, first/'assembled', first/'step/model.step', selected,
+                       first/'repaired_fit', options, resume=True)
             # Actual STEP face ordering is not a stable chart identifier.
             assembly = Path(guard['final_round'])/'assembled'
             native = TopoDS_Shape(); builder = BRep_Builder()

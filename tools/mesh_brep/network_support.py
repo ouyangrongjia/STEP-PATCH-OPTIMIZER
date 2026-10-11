@@ -121,7 +121,7 @@ def samples(curve):
     return BSpline(curve['knots'], curve['poles'], 3)(q)
 
 
-def validate_wires(vertices, triangles, records, curves, selected):
+def validate_wires(vertices, triangles, records, curves, selected, *, native_frame=False):
     lookup = {}
     for ci, c in curves.items():
         for a, b in zip(c['chain'][:-1], c['chain'][1:]):
@@ -131,7 +131,10 @@ def validate_wires(vertices, triangles, records, curves, selected):
     for di in sorted(selected):
         rec = records[di]; used = rec['vertex_ids']
         tri = np.searchsorted(used, triangles[rec['triangle_ids']])
-        o, ax, lo, size, _, _, _ = stable_frame(vertices[used], tri)
+        if native_frame:
+            o, ax, lo, size = (rec[k] for k in ('origin', 'axes', 'lo', 'size'))
+        else:
+            o, ax, lo, size, _, _, _ = stable_frame(vertices[used], tri)
         polygons = []; involved = set()
         for loop in loops(boundary_edges(tri)):
             refs = []
@@ -157,8 +160,12 @@ def validate_wires(vertices, triangles, records, curves, selected):
     return failures
 
 
-def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.02, fairness=1e-5):
-    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=False)
+def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.02, fairness=1e-5, resume=False):
+    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=resume)
+    if resume and (out/'network_support.json').exists():
+        index=0
+        while (out/f'prior_network_support_{index:02d}.json').exists(): index+=1
+        shutil.copy2(out/'network_support.json',out/f'prior_network_support_{index:02d}.json')
     start = time.perf_counter(); meta = json.loads((root/'run.json').read_text(encoding='utf-8'))
     if not meta.get('requires_support_refit') or not meta.get('required_refit_charts'):
         raise ValueError('A network candidate must declare all affected supports')
@@ -170,6 +177,16 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
     assignment = np.load(root/'chart_index.npz')['face_chart']
     records = {int(p.stem): dict(np.load(p)) for p in (root/'charts').glob('*.npz')}
     curves = {int(p.stem): dict(np.load(p)) for p in sorted((root/'curves').glob('*.npz'))}
+    from .shared_support import restore_groups
+    restore_groups(records)
+    requested_groups = meta.get('required_shared_support_groups', [])
+    requested_members = set()
+    for group in requested_groups:
+        if len(set(group)) != len(group) or len(group) < 2 or not set(group).issubset(records) or requested_members.intersection(group):
+            raise ValueError('Invalid requested common-support groups')
+        requested_members.update(group)
+        for di in group:
+            records[di]['shared_support_group'] = np.array(sorted(group))
     selected = set(meta['required_refit_charts'])
     # All copies of an old common support must be treated consistently.
     while True:
@@ -200,6 +217,10 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
     # lie in their continuous fitting tube. Coordinate changes alone do not
     # require changing an entire neighboring surface.
     selected = required
+    selected.update(i for di in list(selected) for i in records[di].get('shared_support_group', []))
+    compatible = sorted(set(compatible)-selected)
+    groups = {min(map(int, records[di].get('shared_support_group', [di]))):
+              sorted(map(int, records[di].get('shared_support_group', [di]))) for di in selected}
     edges, owners = incidence(f)
     normal = crease_fan_normals(v, f, cfg.feature_angle, (edges, owners), meta['normal_filter_steps'])
     relevant = [ci for ci, c in curves.items() if selected.intersection(map(int, c['owners']))]
@@ -210,35 +231,104 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
         target = targets(v, f, normal, assignment, edges, owners, active, [c['owners'] for c in active])
         boundary_normals = dict(zip(relevant, target))
     tasks = []
-    for di in sorted(selected):
-        rec = records[di]; used = rec['vertex_ids']; ids = rec['triangle_ids']
-        incident = [ci for ci in relevant if di in curves[ci]['owners']]
+    common_reference = meta.get('common_support_reference_fit')
+    for di, group in sorted(groups.items()):
+        rec = records[di]; ids = np.unique(np.concatenate([records[i]['triangle_ids'] for i in group])); used = np.unique(f[ids])
+        seed = rec
+        if len(group) > 1 and common_reference is not None:
+            references = {i:dict(np.load(Path(common_reference)/'charts'/f'{i:05d}.npz')) for i in group}
+            if any(any(not np.array_equal(references[i][k],records[i][k]) for k in ('region','triangle_ids','vertex_ids')) for i in group):
+                raise ValueError('Common-support reference changed source ownership')
+            if any(any(not np.array_equal(references[i][k],references[di][k]) for k in ('origin','axes','lo','size','knots','height')) for i in group):
+                raise ValueError('Reference group does not share one native surface')
+            seed = references[di]
+        incident = [ci for ci in relevant if set(group).intersection(map(int, curves[ci]['owners']))]
         bn = None if not boundary_normal_weight else np.concatenate([
-            boundary_normals[ci][list(curves[ci]['owners']).index(di)] for ci in incident])
+            np.mean([boundary_normals[ci][side] for side,owner in enumerate(curves[ci]['owners'])
+                     if int(owner) in group],axis=0) for ci in incident])
+        if bn is not None:
+            bn /= np.maximum(np.linalg.norm(bn,axis=1)[:,None],1e-30)
         tasks.append((di, v[used], np.searchsorted(used, f[ids]), normal[ids],
                       np.concatenate([samples(curves[ci]) for ci in incident]), [curves[ci] for ci in incident],
-                      cfg, 'bounded', bn))
-    print(dict(stage='network_support_refit', charts=len(tasks)), flush=True)
-    fitting = {r['chart']: r for r in json.loads((root/'fitting.json').read_text(encoding='utf-8'))}
+                      cfg, 'bounded', bn, seed, len(group) > 1))
+    print(dict(stage='network_support_refit', charts=len(selected), support_groups=len(tasks)), flush=True)
+    fitting_path = out/'fitting.json' if resume and (out/'fitting.json').exists() else root/'fitting.json'
+    fitting = {r['chart']: r for r in json.loads(fitting_path.read_text(encoding='utf-8'))}
     fitted = {}; failed = []
-    proposals = out/'support_proposals'; proposals.mkdir()
+    proposals = out/'support_proposals'; proposals.mkdir(exist_ok=resume)
+    cached = []
+    if resume:
+        from .support_probe import probes
+        from .partition_fit import parameters
+        from .splines import tensor
+        if fitting_path.parent == out:
+            index = 0
+            while (out/f'prior_fitting_{index:02d}.json').exists():
+                index += 1
+            shutil.copy2(fitting_path, out/f'prior_fitting_{index:02d}.json')
+        pending = []
+        for task in tasks:
+            di = task[0]; group = groups[di]; path = proposals/f'{di:05d}.npz'
+            if any(not (proposals/f'{i:05d}.npz').exists() or not fitting.get(i, {}).get('accepted') for i in group):
+                pending.append(task); continue
+            rec = dict(np.load(path)); old = records[di]
+            if any(not np.array_equal(rec[k], old[k]) for k in ('region', 'vertex_ids', 'triangle_ids')):
+                raise ValueError('Cached support changed source ownership')
+            copies = {i:dict(np.load(proposals/f'{i:05d}.npz')) for i in group}
+            if any(any(not np.array_equal(copies[i][k], records[i][k]) for k in ('region','vertex_ids','triangle_ids')) for i in group):
+                raise ValueError('Cached common support changed source ownership')
+            if any(any(not np.array_equal(copies[i][k],rec[k]) for k in ('origin','axes','lo','size','knots','height')) for i in group):
+                pending.append(task); continue
+            local_v, tri = task[1], task[2]
+            q, target = probes(rec, local_v, tri)
+            source_points = np.r_[local_v, local_v[tri].mean(axis=1)]
+            pq = parameters(source_points, rec); z = (source_points-rec['origin'])@rec['axes'][2]
+            error = max(float(abs(tensor(q, rec['knots'], rec['knots'])@rec['height']-target).max(initial=0.)),
+                        float(abs(tensor(pq, rec['knots'], rec['knots'])@rec['height']-z).max(initial=0.)))
+            boundary_error = max(spline_graph_error(c['poles'], c['knots'], rec) for c in task[5])
+            if not np.isfinite(error+boundary_error) or error >= cfg.distance or boundary_error >= cfg.boundary*.4 or cfg.normal_angle_limit is not None:
+                pending.append(task); continue
+            fitted.update(copies); cached.extend(group)
+        tasks = pending
+        print(dict(stage='network_support_resume', verified_cached=len(cached), remaining=len(tasks)), flush=True)
     with ProcessPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(fit_support, task) for task in tasks]
         for index, future in enumerate(as_completed(futures)):
             di, rec, info = future.result()
-            info.update(chart=di, region=int(records[di]['region'])); fitting[di] = info
+            group = groups[di]
+            for i in group:
+                fitting[i] = dict(info, chart=i, region=int(records[i]['region']))
             if rec is None:
-                failed.append(di)
+                failed.extend(group)
             else:
-                rec.update({k: records[di][k] for k in ('region', 'triangle_ids', 'vertex_ids')})
-                fitted[di] = rec
-                np.savez_compressed(proposals/f'{di:05d}.npz', **rec)
+                for i in group:
+                    copy = dict(rec, **{k: records[i][k] for k in ('region', 'triangle_ids', 'vertex_ids')})
+                    if len(group) > 1:
+                        copy['shared_support_group'] = np.array(group)
+                    fitted[i] = copy
+                    np.savez_compressed(proposals/f'{i:05d}.npz', **copy)
             if (index+1)%10 == 0 or rec is None or index+1 == len(tasks):
                 print(dict(stage='network_support_refit', done=index+1, total=len(tasks), chart=di,
                            accepted=rec is not None, failed=len(failed)), flush=True)
             dump(out/'fitting.json', list(fitting.values()))
+    candidate_records = dict(records)
+    candidate_records.update(fitted)
+    trim_failures = validate_wires(v, f, candidate_records, curves, selected-set(failed), native_frame=True)
+    if trim_failures:
+        for failure in trim_failures:
+            di = failure['chart']; group = next(g for g in groups.values() if di in g)
+            failed.extend(group)
+            for i in group:
+                fitting[i].update(accepted=False, reason='refitted_trim_projection')
+        dump(out/'fitted_wire_validation.json', dict(passed=False,failures=trim_failures))
+    else:
+        dump(out/'fitted_wire_validation.json', dict(passed=True,failures=[]))
+    failed=sorted(set(failed))
     dump(out/'fitting.json', list(fitting.values()))
     report = dict(accepted=not failed, refitted_charts=sorted(fitted), reused_compatible_charts=compatible, failed_charts=failed,
+                  jointly_refitted_groups=[g for g in groups.values() if len(g) > 1],
+                  common_support_reference_fit=common_reference,
+                  verified_cached_proposals=cached,
                   normal_weight=normal_weight, boundary_normal_weight=boundary_normal_weight, fairness=fairness,
                   seconds=time.perf_counter()-start, source_fit=str(root.resolve()))
     dump(out/'network_support.json', report)
@@ -248,12 +338,13 @@ def refit(source, output, workers=4, normal_weight=.01, boundary_normal_weight=.
     for name in ('charts', 'curves'):
         shutil.copytree(root/name, out/name)
     shutil.copy2(root/'chart_index.npz', out/'chart_index.npz')
-    for di, rec in fitted.items():
-        np.savez_compressed(out/'charts'/f'{di:05d}.npz', **rec)
+    for di, rec in records.items():
+        np.savez_compressed(out/'charts'/f'{di:05d}.npz', **fitted.get(di, rec))
     if (root/'routes').exists():
         shutil.copytree(root/'routes', out/'routes')
     meta.update(status='fitted', source_fit=str(out.resolve()), requires_support_refit=False,
-                force_refit_charts=[], network_support=report, can_apply=False)
+                force_refit_charts=[], required_shared_support_groups=[], network_support=report, can_apply=False)
+    meta.pop('common_support_reference_fit',None)
     dump(out/'run.json', meta)
     return report
 
@@ -262,4 +353,5 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(); p.add_argument('--run', required=True); p.add_argument('--output', required=True)
     p.add_argument('--workers', type=int, default=4); p.add_argument('--fairness', type=float, default=1e-5)
     p.add_argument('--boundary-normal-weight', type=float, default=.02)
-    a = p.parse_args(); refit(a.run, a.output, a.workers, boundary_normal_weight=a.boundary_normal_weight, fairness=a.fairness)
+    p.add_argument('--resume', action='store_true')
+    a = p.parse_args(); refit(a.run, a.output, a.workers, boundary_normal_weight=a.boundary_normal_weight, fairness=a.fairness, resume=a.resume)

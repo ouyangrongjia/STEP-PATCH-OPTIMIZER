@@ -33,6 +33,10 @@ class Config:
     maximum_controls: int = 16
     fairness_length: float = .25
     interface_kind: str = 'regional'
+    cross_region_junctions: bool = False
+    junction_margin_degrees: float = 15.
+    crease_plane_tolerance: float = .003
+    projection_rms_fraction: float = .12
 
 
 def route_graph(curves, regions, vertices, config, selected_regions=None, allowed_curves=None, fixed_nodes=()):
@@ -50,13 +54,13 @@ def route_graph(curves, regions, vertices, config, selected_regions=None, allowe
         if selected_regions is not None and not set(pair).intersection(selected_regions):
             continue
         if (pair[0] == pair[1]) == (config.interface_kind == 'internal'):
-            groups[pair].append(ci)
-    routes = []
+            groups[(-1, -1) if config.cross_region_junctions and config.interface_kind == 'regional' else pair].append(ci)
+    routes = []; repeated_junctions = set()
     for pair, ids in sorted(groups.items()):
         local = {ci: curves[ci] for ci in ids}
         uses = incidence(local); continuation = {}
         for vi, ends in uses.items():
-            if len(ends) != 2 or vi in fixed_nodes:
+            if len(ends) < 2 or vi in fixed_nodes or (len(ends) != 2 and not config.cross_region_junctions):
                 continue
             directions = []
             for ci, end in ends:
@@ -66,8 +70,15 @@ def route_graph(curves, regions, vertices, config, selected_regions=None, allowe
                 s = np.r_[0., np.cumsum(np.linalg.norm(np.diff(points, axis=0), axis=1))]
                 d = np.array([np.interp(min(config.direction_span, s[-1]), s, points[:, k]) for k in range(3)])-points[0]
                 directions.append(d/max(np.linalg.norm(d), 1e-30))
-            if np.dot(*directions) <= -np.cos(np.radians(config.corner_degrees)):
-                a, b = ends; continuation[a] = b; continuation[b] = a
+            pairs = sorted((float(np.degrees(np.arccos(np.clip(np.dot(directions[a], directions[b]), -1., 1.)))), a, b)
+                           for a in range(len(ends)) for b in range(a+1, len(ends)))
+            angle, a, b = pairs[-1]
+            competing = max((value for value, i, j in pairs if (i, j) != (a, b) and ({i, j} & {a, b})), default=0.)
+            if angle >= 180-config.corner_degrees and (len(ends) == 2 or angle-competing >= config.junction_margin_degrees):
+                # One dominant continuation transports the subordinate branch.
+                # Competing continuations never move a crossing independently.
+                first, last = ends[a], ends[b]
+                continuation[first] = last; continuation[last] = first
         remaining = set(ids)
         while remaining:
             starts = [(ci, end) for ci in sorted(remaining) for end in (0, 1) if (ci, end) not in continuation]
@@ -84,7 +95,19 @@ def route_graph(curves, regions, vertices, config, selected_regions=None, allowe
                 current = next_use
             # A closed spline needs periodic fitting; preserve it explicitly
             # instead of cutting it into artificial fixed-end curves here.
-            routes.append(dict(regions=list(pair), members=members, chain=np.array(chain), closed=closed))
+            region_ids = sorted({regions[int(di)] for ci, _ in members for di in local[ci]['owners']})
+            routes.append(dict(regions=region_ids, members=members, chain=np.array(chain), closed=closed))
+            junctions = [chain[0]]+[int(local[ci]['chain'][-1 if forward else 0]) for ci, forward in members]
+            if junctions[-1] == junctions[0]:
+                junctions.pop()
+            ids, counts = np.unique(junctions, return_counts=True)
+            repeated_junctions.update(map(int, ids[counts > 1]))
+    if repeated_junctions:
+        # A route that revisits a branch node would assign two different
+        # master parameters to one shared endpoint. Stop continuation at that
+        # node before fitting, retaining every original edge exactly once.
+        return route_graph(curves, regions, vertices, config, selected_regions,
+                           allowed_curves, set(fixed_nodes) | repeated_junctions)
     return routes
 
 
@@ -106,8 +129,10 @@ def restrict(poles, knot, first, last, forward=True):
     return p, t
 
 
-def fit_master(points, endpoints, locator, config):
+def fit_master(points, endpoints, locator, config, closed=False, plane_normals=None):
     """Try increasing low-complexity bases, never interpolate old junctions."""
+    if not 0 < config.projection_rms_fraction < .85:
+        raise ValueError('Invalid source projection objective')
     length = np.linalg.norm(np.diff(points, axis=0), axis=1)
     s = np.r_[0., np.cumsum(length)]; s /= s[-1]
     total = float(length.sum())
@@ -116,7 +141,17 @@ def fit_master(points, endpoints, locator, config):
     target = np.column_stack([np.interp(sample, s, points[:, k]) for k in range(3)])
     origin = target.mean(axis=0); target -= origin
     trials = []
-    for count in (4, 5, 6, 8, 10, 12, 16, 24, 32):
+    if plane_normals is not None:
+        plane_normals = np.asarray(plane_normals)
+        if (plane_normals.shape != (len(points)-1, 2, 3)
+                or not np.isfinite(config.crease_plane_tolerance) or config.crease_plane_tolerance <= 0):
+            raise ValueError('Invalid two-sided feature-plane constraints')
+        segment = np.clip(np.searchsorted(s, sample, side='right')-1, 0, len(s)-2)
+        previous = np.clip(np.searchsorted(s, sample, side='left')-1, 0, len(s)-2)
+        plane = np.concatenate([plane_normals[segment], plane_normals[previous]], axis=1)
+    if closed and not np.allclose(points[0], points[-1], atol=1e-12, rtol=0):
+        raise ValueError('A periodic route must have a closed source chain')
+    for count in ((8, 10, 12, 16, 24, 32) if closed else (4, 5, 6, 8, 10, 12, 16, 24, 32)):
         if count > config.maximum_controls:
             continue
         kt = knots(count); b = sparse_basis(kt, sample).toarray()
@@ -127,9 +162,38 @@ def fit_master(points, endpoints, locator, config):
         mass = np.r_[np.diff(sample)[0]/2, (sample[2:]-sample[:-2])/2, np.diff(sample)[-1]/2]
         h = b.T@(mass[:, None]*b)+(min(config.fairness_length, total*.25)/total)**4*(d2.T@(w[:, None]*d2))
         rhs = b.T@(mass[:, None]*target)
-        cp = np.zeros((count, 3)); cp[[0, -1]] = endpoints-origin
-        cp[1:-1] = np.linalg.solve(h[1:-1, 1:-1], rhs[1:-1]-h[1:-1][:, [0, -1]]@cp[[0, -1]])
+        if closed:
+            continuity = np.array([(sparse_basis(kt, np.array([0., 1.]), d).toarray()[0]
+                                    -sparse_basis(kt, np.array([0., 1.]), d).toarray()[1]) for d in (0, 1, 2)])
+            continuity /= np.linalg.norm(continuity, axis=1)[:, None]
+            kkt = np.block([[h, continuity.T], [continuity, np.zeros((3, 3))]])
+            cp = np.linalg.solve(kkt, np.vstack((rhs, np.zeros((3, 3)))))[:count]
+        else:
+            cp = np.zeros((count, 3)); cp[[0, -1]] = endpoints-origin
+            cp[1:-1] = np.linalg.solve(h[1:-1, 1:-1], rhs[1:-1]-h[1:-1][:, [0, -1]]@cp[[0, -1]])
         cp += origin
+        base_h, base_rhs = np.kron(h, np.eye(3)), rhs.ravel()
+        if plane_normals is not None:
+            # A sharp cross-section is not a corner along the feature route.
+            # Keep both incident planes, while allowing a low-rank master to
+            # move tangentially along the ridge. Continuous checking below is
+            # authoritative; this penalty only proposes a curve efficiently.
+            op = (b[:, None, :, None]*plane[:, :, None, :]).reshape(-1, 3*count)
+            weight = np.repeat(mass/plane.shape[1], plane.shape[1])
+            strength = (config.movement/config.crease_plane_tolerance)**2
+            base_h += strength*(op.T@(weight[:, None]*op))
+            base_rhs += strength*op.T@(weight*np.einsum('nkd,nd->nk', plane, target).ravel())
+            if closed:
+                cc = np.kron(continuity, np.eye(3))
+                kkt = np.block([[base_h, cc.T], [cc, np.zeros((9, 9))]])
+                cp = np.linalg.solve(kkt, np.r_[base_rhs, np.zeros(9)])[:3*count].reshape(-1, 3)+origin
+            else:
+                fixed = np.r_[np.arange(3), np.arange(3*(count-1), 3*count)]
+                free = np.setdiff1d(np.arange(3*count), fixed)
+                value = (cp-origin).ravel()
+                value[free] = np.linalg.solve(base_h[np.ix_(free, free)],
+                    base_rhs[free]-base_h[np.ix_(free, fixed)]@value[fixed])
+                cp = value.reshape(-1, 3)+origin
         movement, _ = curve_polyline_error(cp, kt, points, s)
         item = dict(controls=count, movement_mm=float(movement)); trials.append(item)
         if movement > config.movement:
@@ -137,14 +201,24 @@ def fit_master(points, endpoints, locator, config):
         # Fit the low-rank master to the source surface, not to the sawtooth
         # boundary itself. Only closest-point normal residuals enter this
         # projection; tangential motion remains controlled by the route data.
-        projection = []
+        projection = []; projection_rms = []; best = None
         fixed = np.r_[np.arange(3), np.arange(3*(count-1), 3*count)]
         free = np.setdiff1d(np.arange(3*count), fixed)
-        for step in range(12):
+        for step in range(9):
             xyz = b@cp
             nearest, distance, ids, _ = locator.closest(xyz)
             projection.append(float(distance.max()))
-            if distance.max() < config.tube*.85:
+            rms = float(np.sqrt(np.dot(mass, distance**2)/mass.sum()))
+            projection_rms.append(rms)
+            # The tube is an admission bound, not a good placement target.
+            # Independent offsets inside it force ripples on narrow supports.
+            # Keep the best admissible iterate; fixed endpoints can prevent
+            # reaching the smaller RMS objective, without requiring a split.
+            if distance.max() < config.tube*.85 and (best is None or rms < best[0]):
+                best = (rms, cp.copy())
+            if distance.max() < config.tube*.85 and rms < config.tube*config.projection_rms_fraction:
+                break
+            if step == 8 or (step >= 6 and rms >= min(projection_rms[-3:-1])*.99):
                 break
             tri = locator.vertices[locator.triangles[ids]]
             normal = np.cross(tri[:, 1]-tri[:, 0], tri[:, 2]-tri[:, 0])
@@ -152,17 +226,33 @@ def fit_master(points, endpoints, locator, config):
             active = distance > config.tube*.1
             normal[active] = (xyz[active]-nearest[active])/distance[active, None]
             op = (b[:, :, None]*normal[:, None, :]).reshape(len(b), 3*count)
-            strength = min(100., 3.*2**(step//3))
-            hh = np.kron(h, np.eye(3))+strength*(op.T@(mass[:, None]*op))
-            rr = rhs.ravel()+strength*op.T@(mass*np.sum(normal*(nearest-origin), axis=1))
+            strength = min(4096., 8.*4**step)
+            hh = base_h+strength*(op.T@(mass[:, None]*op))
+            rr = base_rhs+strength*op.T@(mass*np.sum(normal*(nearest-origin), axis=1))
             new = (cp-origin).ravel()
-            new[free] = np.linalg.solve(hh[np.ix_(free, free)], rr[free]-hh[np.ix_(free, fixed)]@new[fixed])
+            if closed:
+                cc = np.kron(continuity, np.eye(3))
+                kkt = np.block([[hh, cc.T], [cc, np.zeros((9, 9))]])
+                new = np.linalg.solve(kkt, np.r_[rr, np.zeros(9)])[:3*count]
+            else:
+                new[free] = np.linalg.solve(hh[np.ix_(free, free)], rr[free]-hh[np.ix_(free, fixed)]@new[fixed])
             cp = new.reshape(-1, 3)+origin
+        if best is not None:
+            cp = best[1]
         item['projection_max_history_mm'] = projection
+        item['projection_rms_history_mm'] = projection_rms
+        item['projection_rms_objective_mm'] = config.tube*config.projection_rms_fraction
         movement, _ = curve_polyline_error(cp, kt, points, s)
         item['movement_mm'] = float(movement)
         if movement > config.movement:
             item['reason'] = 'projected_movement'; continue
+        plane_error = None
+        if plane_normals is not None:
+            from .skeleton_graph import normal_error
+            plane_error, _ = normal_error(cp, kt, points, s, plane_normals)
+            item['incident_plane_max_mm'] = plane_error
+            if plane_error > config.crease_plane_tolerance:
+                item['reason'] = 'incident_planes'; continue
         cert = certify_tube(cp, kt, locator, config.tube)
         cert.pop('violating_parameters', None); item['source_tube'] = cert
         if not cert['passed']:
@@ -171,13 +261,17 @@ def fit_master(points, endpoints, locator, config):
         # data residual does not by itself rule out a stationary point or hook.
         velocity = BSpline(kt, cp, 3)(sample, 1)
         span = min(config.direction_span/total, .2)
-        ahead, behind = np.minimum(sample+span, 1.), np.maximum(sample-span, 0.)
+        ahead, behind = ((sample+span) % 1., (sample-span) % 1.) if closed else (np.minimum(sample+span, 1.), np.maximum(sample-span, 0.))
         reference = np.column_stack([np.interp(ahead, s, points[:, k])-np.interp(behind, s, points[:, k]) for k in range(3)])
         progress = np.einsum('ij,ij->i', velocity, reference)
         if np.any(progress <= 0):
             item['reason'] = 'backtracking'; continue
-        return dict(poles=cp, knots=kt, parameters=s, movement_mm=movement,
-                    source_tube_certified_max_mm=cert['certified_max_mm']), trials
+        result = dict(poles=cp, knots=kt, parameters=s, movement_mm=movement,
+                      source_tube_certified_max_mm=cert['certified_max_mm'])
+        if plane_error is not None:
+            result.update(incident_plane_max_mm=plane_error,
+                          incident_plane_limit_mm=config.crease_plane_tolerance)
+        return result, trials
     return None, trials
 
 

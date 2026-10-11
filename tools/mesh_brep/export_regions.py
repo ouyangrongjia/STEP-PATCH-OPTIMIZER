@@ -20,7 +20,14 @@ def export(assembly, output, regions=None):
     started = time.perf_counter(); meta = json.loads((root/'run.json').read_text(encoding='utf-8'))
     source = Path(meta['source_fit'])
     records = [dict(np.load(p)) for p in sorted((source/'charts').glob('*.npz'))]
-    shape = TopoDS_Shape(); builder = BRep_Builder(); BRepTools.Read_s(shape, str(root/'native.brep'), builder)
+    shape = TopoDS_Shape(); builder = BRep_Builder()
+    native = root/meta.get('native_file', 'native.brep')
+    if native.suffix == '.binbrep':
+        from OCP.BinTools import BinTools
+        if not BinTools.Read_s(shape, str(native)):
+            raise ValueError('Cannot read binary native assembly')
+    else:
+        BRepTools.Read_s(shape, str(native), builder)
     faces = cad.shapes(shape, TopAbs_FACE)
     mapping = meta.get('cad_face_charts', list(range(len(faces))))
     if len(faces) != len(records) or sorted(mapping) != list(range(len(records))):

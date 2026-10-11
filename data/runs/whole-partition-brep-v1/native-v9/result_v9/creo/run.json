@@ -1,0 +1,70 @@
+{
+  "imported": {
+    "part_status": "OK",
+    "score": "PASS",
+    "geometry_check_features": 0,
+    "profile": "data\\.native-v9-incremental-verified\\creo\\import_mm.dip",
+    "report": "data\\.native-v9-incremental-verified\\creo\\audit\\modelcheck\\model.p.xml",
+    "profile_mode": "installed",
+    "profile_modified": false,
+    "profile_source": "E:\\Proe\\Creo 11.0.0.0\\Common Files\\x86e_win64\\mworks\\mw_import_mm.dip",
+    "import_validation_passed": true,
+    "native_body_check_required": true,
+    "solid_import_passed": null,
+    "modelcheck_process_timed_out": true,
+    "process_failure_preserved": true,
+    "completed_report_read_after_timeout": true,
+    "timeout_process_record": {
+      "file_path": "E:\\Proe\\Creo 11.0.0.0\\Common Files\\x86e_win64\\obj\\dbatchc.exe",
+      "arguments": [
+        "-nographics",
+        "-process",
+        "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\creo\\audit\\modelcheck.dxc"
+      ],
+      "working_directory": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\creo\\audit",
+      "started_at": "2026-10-10T22:17:23.7807034-07:00",
+      "ended_at": "2026-10-10T22:20:23.8468055-07:00",
+      "timeout_seconds": 180,
+      "timed_out": true,
+      "exit_code": null,
+      "stdout_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\creo\\audit\\modelcheck.stdout.txt",
+      "stderr_path": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\creo\\audit\\modelcheck.stderr.txt"
+    }
+  },
+  "native_body": {
+    "start_status": 0,
+    "load_status": 0,
+    "quilts": [
+      {
+        "internal_status": 0,
+        "internal": 0,
+        "backup_status": 0,
+        "backup": 0,
+        "volume_status": 0,
+        "volume_model_units": 690.257,
+        "surfaces": 945
+      }
+    ],
+    "unit_density_mass_status": 0,
+    "volume_model_units": 690.272,
+    "quilt_visit_status": 0,
+    "external_quilts": 1,
+    "body_collect_status": 0,
+    "bodies": [
+      {
+        "id": -5778,
+        "state_status": 0,
+        "state": 4,
+        "surface_visit_status": 0,
+        "surfaces": 945,
+        "mass_status": -1,
+        "volume_model_units": 0
+      }
+    ],
+    "active_bodies_with_surfaces": 1,
+    "quilt_surfaces_outside_active_bodies": 0,
+    "closed_quilts": 1,
+    "native_closed_solid": true
+  },
+  "report_recovery": true
+}

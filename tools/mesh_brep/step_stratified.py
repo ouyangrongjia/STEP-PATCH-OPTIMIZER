@@ -11,6 +11,13 @@ from .source_normals import crease_fan_normals
 from .step_quality import tessellate, native
 
 
+def inside_trim(face, q):
+    # OCCT's exact classifier supports conservative bounding-box rejection.
+    # It avoids intersecting every spline edge for every interior sample.
+    return np.array([BRepClass_FaceClassifier(face, gp_Pnt2d(*x), 1e-9, True).State()
+                     in (TopAbs_IN, TopAbs_ON) for x in q])
+
+
 def audit(step, partition, output, samples_per_face=1024, seed=810572):
     if samples_per_face < 1:
         raise ValueError('At least one sample per face is required')
@@ -31,7 +38,7 @@ def audit(step, partition, output, samples_per_face=1024, seed=810572):
         choices=rng.choice(ids,size=samples_per_face,p=area[ids]/area[ids].sum())
         u=rng.random((len(choices),2));s=np.sqrt(u[:,0]);b=np.c_[1-s,s*(1-u[:,1]),s*u[:,1]]
         q=np.einsum('ij,ijk->ik',b,mesh['uv'][mesh['triangles'][choices]])
-        inside=np.array([BRepClass_FaceClassifier(face,gp_Pnt2d(*x),1e-9).State() in (TopAbs_IN,TopAbs_ON) for x in q])
+        inside=inside_trim(face,q)
         q=q[inside]
         if not len(q): raise ValueError(f'Face {fi} has no verified interior samples')
         xyz,n,_,_=native(surfaces[fi],q,signs[fi]);_,distance,nearest,bary=locator.closest(xyz)
@@ -57,6 +64,7 @@ def audit(step, partition, output, samples_per_face=1024, seed=810572):
         over_30=int((angles>30).sum()),over_45=int((angles>45).sum()),over_90=int((angles>90).sum()),
         worst_normals=sorted(worst,key=lambda x:-x['normal_degrees'])[:24],
         worst_distances=sorted(worst,key=lambda x:-x['distance_mm'])[:24],per_face=rows,
+        trim_classifier='BRepClass_FaceClassifier, tolerance=1e-9, UseBndBox=true',
         scope='Stratified finite samples on actual trimmed STEP. Statistics are per-face balanced, not area weighted. '
               'Source normals use unfiltered crease-separated fans; flat normals are reported separately. '
               'Not a Hausdorff, continuity, or self-intersection certificate.')

@@ -1,0 +1,16 @@
+{
+  "unchanged_supports": 985,
+  "geometry_fields": [
+    "origin",
+    "axes",
+    "lo",
+    "size",
+    "knots",
+    "height",
+    "region",
+    "triangle_ids",
+    "vertex_ids"
+  ],
+  "source_assignment_unchanged": true,
+  "comparison": "Direct complete array equality; no hashes"
+}

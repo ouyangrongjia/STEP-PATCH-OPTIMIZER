@@ -116,9 +116,32 @@ def topology(shape):
                 maximum_edge_tolerance_mm=max((BRep_Tool.Tolerance_s(e) for e in edges), default=0.))
 
 
+def checked_curve_errors(records, curves, certificates):
+    """Reuse same-process extrema only after direct geometry-array equality."""
+    if certificates is None:
+        return None
+    if len(records) != len(certificates['records']) or len(curves) != len(certificates['curves']):
+        raise ValueError('Curve/support certificate count changed')
+    for di, rec in enumerate(records):
+        prior = certificates['records'][di]
+        if any(not np.array_equal(rec[k], prior[k]) for k in ('origin', 'axes', 'lo', 'size', 'knots', 'height')):
+            raise ValueError(f'Curve/support certificate geometry changed: chart {di}')
+    errors = []
+    for ci, curve in enumerate(curves):
+        prior = certificates['curves'][ci]
+        if any(not np.array_equal(curve[k], prior[k]) for k in ('poles', 'knots', 'parameters', 'chain', 'owners')):
+            raise ValueError(f'Curve/support certificate geometry changed: curve {ci}')
+        value = np.asarray(certificates['errors'][ci], dtype=float)
+        if value.shape != (2,) or not np.isfinite(value).all() or np.any(value < 0):
+            raise ValueError('Invalid continuous curve/support error certificate')
+        errors.append(value.tolist())
+    return errors
+
+
 def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, tolerance, out,
              identity_topology=False, segment_edges=False, smooth_boundary=0., skip_smooth_faces=(),
-             write_preview=True, smooth_segments=False, shared_curve_records=None, maximum_edge_length=None):
+             write_preview=True, smooth_segments=False, shared_curve_records=None, maximum_edge_length=None,
+             curve_certificates=None, native_context=None, binary_native=False):
     from OCP.BRep import BRep_Builder, BRep_Tool
     from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeEdge,
                                    BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid)
@@ -145,6 +168,7 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
                   for a, b in zip(chain[:-1], chain[1:])]
         chains = [p for p, _ in pieces]; owners = [pair for _, pair in pieces]
     smooth_chain = [bool(smooth_boundary or shared_curve_records is not None)]*len(chains)
+    certified_errors = checked_curve_errors(records, shared_curve_records, curve_certificates)
     if smooth_boundary and skip_smooth_faces:
         skip = set(skip_smooth_faces); pieces = []
         for chain, pair in zip(chains, owners):
@@ -165,7 +189,8 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
             from .compact import curve as cubic_curve
             master = shared_curve_records[ci]; t = master['parameters']
             curve = cubic_curve(master['poles'], master['knots'])
-            smooth_errors = [spline_graph_error(master['poles'], master['knots'], records[int(fi)]) for fi in pair]
+            smooth_errors = (certified_errors[ci] if certified_errors is not None else
+                             [spline_graph_error(master['poles'], master['knots'], records[int(fi)]) for fi in pair])
             curve_deviation = float(master.get('movement_mm', 0.))
         elif smooth_chain[ci]:
             for fraction in [1., .5, .25, .125, .0625, .015625]:
@@ -306,7 +331,12 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
         from OCP.BRepTools import BRepTools
         from OCP.BRepCheck import BRepCheck_Analyzer, BRepCheck_NoError
         from OCP.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_WIRE
-        BRepTools.Write_s(solid, str(out/'native.brep'))
+        if binary_native:
+            from OCP.BinTools import BinTools
+            if not BinTools.Write_s(solid, str(out/'native.binbrep')):
+                raise ValueError('Cannot persist binary native assembly')
+        else:
+            BRepTools.Write_s(solid, str(out/'native.brep'))
         analyzer = BRepCheck_Analyzer(solid, True) if before['invalid_faces'] else None
         failures = []
         for fi in before['invalid_faces']:
@@ -342,10 +372,14 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
                   step_write_seconds=write_seconds, step_reread_check_seconds=reread_seconds,
                   step_bytes=(out/'model.step').stat().st_size if write_preview else 0,
                   step_roundtrip_performed=write_preview,
+                  native_file='native.binbrep' if binary_native else 'native.brep',
+                  continuous_error_reused_after_geometry_identity_check=certified_errors is not None,
                   actual_support_control_points=sum(len(r['height']) for r in records),
                   fitted_charts=len(records), trim_curves=len(edges), expected_solids=expected_solids,
                   cad_face_charts=cad_face_charts,
                   watertight=bool(after['brep_valid'] and after['solids'] == expected_solids and after['free_edges'] == 0
                                   and after['multiple_edges'] == 0 and after['maximum_edge_tolerance_mm'] <= tolerance))
     dump(out/'cad_result.json', result)
+    if native_context is not None:
+        native_context.update(shape=solid, topology=before, assembly=str(out.resolve()))
     return result

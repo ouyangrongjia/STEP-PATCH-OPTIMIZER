@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, replace
 import json
 from pathlib import Path
 import shutil
+import time
 import numpy as np
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepTools import BRepTools
@@ -33,12 +34,26 @@ class Options:
     repair_seed: int = 920101
     screening_fraction: float = .95
     fitting_fraction: float = .9
+    preserve_continuity: bool = False
+    preventive_repair: bool = True
+    projection_repair: bool = True
+    max_repair_groups: int | None = None
+    repair_seconds: float | None = None
+    fit_seconds: float | None = None
+    solver_seconds: float = 12.
+    fit_iterations: int = 32
+    short_repair_seconds: float | None = None
 
     def validate(self):
         if (self.max_repairs < 0 or self.samples_per_face < 1 or self.repair_samples < 1
                 or min(self.seed, self.repair_seed) < 0
                 or not 0 < self.fitting_fraction < self.screening_fraction < 1):
             raise ValueError('Invalid automatic distance-guard options')
+        if (self.max_repair_groups is not None and self.max_repair_groups < 1
+                or self.fit_iterations < 1 or not np.isfinite(self.solver_seconds) or self.solver_seconds <= 0
+                or any(value is not None and (not np.isfinite(value) or value <= 0)
+                       for value in (self.repair_seconds, self.fit_seconds, self.short_repair_seconds))):
+            raise ValueError('Invalid local repair compute budget')
 
 
 def validate_fit(root, partition, stl):
@@ -87,7 +102,10 @@ def select_faces(dense, quality, limit, options, preventive=False):
             rows[fi] = dict(row)
     failed = [fi for fi, r in rows.items() if r['source_distance_mm']['max'] > limit]
     threshold = limit*options.screening_fraction
-    selected = [r for r in rows.values() if r['source_distance_mm']['max'] > threshold] if failed or preventive else []
+    if options.short_repair_seconds is not None and not preventive:
+        selected = [r for r in rows.values() if r['source_distance_mm']['max'] > limit]
+    else:
+        selected = [r for r in rows.values() if r['source_distance_mm']['max'] > threshold] if failed or preventive else []
     return sorted(selected, key=lambda r: r['face']), sorted(failed)
 
 
@@ -172,12 +190,27 @@ def support_groups(records, selected):
     return groups
 
 
-def repair(source, assembly, step, selected, output, options, *, prior_fit=None, iteration=0):
+def repair(source, assembly, step, selected, output, options, *, prior_fit=None, iteration=0, resume=False):
     """Repair only measured outliers and their common-support members."""
     from .step_quality import tessellate, native
     from .skeleton_graph import fit_support
     from .boundary_checks import intersections
-    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=False)
+    from . import fit_checkpoint
+    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=resume)
+    previous = None
+    prior_report=None
+    if (out/'repair.json').exists():
+        prior_report=json.loads((out/'repair.json').read_text(encoding='utf-8'))
+        shutil.copy2(out/'repair.json', out/f'repair_before_resume_{len(list(out.glob("repair_before_resume_*.json"))):02d}.json')
+    if (out/'input').exists():
+        if not fit_checkpoint.matches(root, out/'input'):
+            raise ValueError('Distance-repair checkpoint input changed')
+        previous=prior_report
+    else:
+        fit_checkpoint.save(root, out/'input')
+    for name in ('probes', 'checkpoints', 'trials'):
+        (out/name).mkdir(exist_ok=True)
+    attempt = len(list(out.glob('repair_before_resume_*.json')))
     meta = json.loads((root/'run.json').read_text(encoding='utf-8')); cfg = Config(**meta['config'])
     records = {int(p.stem): dict(np.load(p)) for p in (root/'charts').glob('*.npz')}
     curves = [dict(np.load(p)) for p in sorted((root/'curves').glob('*.npz'))]
@@ -187,19 +220,41 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
     mapping = match_faces(shape, assembly, records); inverse = {di: fi for fi, di in enumerate(mapping)}
     mesh, surfaces, signs = tessellate(shape, .001)
     locator = Locator(v, f); normal = None
+    source_face_normals = None
+    if options.short_repair_seconds is not None:
+        source_face_normals = np.cross(v[f[:, 1]]-v[f[:, 0]], v[f[:, 2]]-v[f[:, 0]])
+        source_face_normals /= np.linalg.norm(source_face_normals, axis=1)[:, None]
     report = dict(status='running', can_apply=False, options=asdict(options), events=[],
         original_distance_limit_mm=cfg.distance, probe_limit_mm=cfg.distance*options.screening_fraction,
         fitting_limit_mm=cfg.distance*options.fitting_fraction, support_boundary_limit_mm=cfg.boundary*.4,
         actual_step_face_charts=mapping, shared_curves_unchanged=True, source_CAD_used_as_target=False)
     report['refit_source_normals'] = 'Unfiltered crease-separated source fans'
+    lookup = None
+    if options.preserve_continuity:
+        from .shared_support import source_angles
+        lookup = source_angles(v, f)
+    report['continuity_preservation'] = options.preserve_continuity
     changes = {}; rows = {mapping[r['face']]: r for r in selected}
     try:
-        for group in support_groups(records, rows):
+        groups = support_groups(records, rows)
+        if options.max_repair_groups is not None and len(groups) > options.max_repair_groups:
+            raise ValueError('Local distance repair group budget exhausted')
+        repair_started = time.perf_counter()
+        for group in groups:
+            if options.repair_seconds is not None and time.perf_counter()-repair_started >= options.repair_seconds:
+                raise ValueError('Local distance repair time budget exhausted')
             incident = [c for c in curves if set(group).intersection(map(int, c['owners']))]
             ids = np.unique(np.concatenate([records[di]['triangle_ids'] for di in group]))
             used = np.unique(f[ids]); tri = np.searchsorted(used, f[ids]); original = records[group[0]]
             targets = np.r_[v[used], v[f[ids]].mean(axis=1)]; probes_world = []; seeds = []
-            for di in group:
+            probe_path = out/'probes'/f'{group[0]:05d}.npz'
+            cached_probe = dict(np.load(probe_path)) if probe_path.exists() else None
+            expected_seeds = [options.repair_seed+iteration*len(records)+di for di in group]
+            if cached_probe is not None and (not np.array_equal(cached_probe['charts'],group)
+                    or not np.array_equal(cached_probe['seeds'],expected_seeds)
+                    or int(cached_probe['requested_samples']) != options.repair_samples):
+                raise ValueError('Distance-repair probe checkpoint has different ownership or sampling')
+            for di in ([] if cached_probe is not None else group):
                 fi = inverse[di]; ti = np.flatnonzero(mesh['owners'] == fi)
                 xyz = mesh['points'][mesh['triangles'][ti]]
                 area = np.linalg.norm(np.cross(xyz[:, 1]-xyz[:, 0], xyz[:, 2]-xyz[:, 0]), axis=1)/2
@@ -217,12 +272,23 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
                 if not np.allclose(positions(parameters(xyz, records[di]), records[di]), xyz, rtol=0, atol=1e-8):
                     raise ValueError('STEP witness does not lie on its matched cached support')
                 probes_world.append(xyz)
-            xyz = np.concatenate(probes_world)
+            if cached_probe is None:
+                xyz = np.concatenate(probes_world)
+                np.savez_compressed(probe_path, xyz=xyz, charts=group, seeds=seeds,
+                                    requested_samples=options.repair_samples)
+            else:
+                xyz = cached_probe['xyz']; seeds = expected_seeds
+                witnesses = [rows[di]['worst_distance']['xyz'] for di in group if di in rows]
+                if witnesses:
+                    xyz = np.r_[xyz, witnesses]
+                if not np.allclose(positions(parameters(xyz, original), original), xyz, rtol=0, atol=1e-8):
+                    raise ValueError('Cached repair probes no longer lie on their input support')
             event = dict(charts=group, faces=[inverse[di] for di in group], trials=[],
                          tuning_seeds=seeds, tuning_samples=len(xyz), passed=False)
             report['events'].append(event); dump(out/'repair.json', report)
 
             def evaluate(candidate, method, **extra):
+                np.savez_compressed(out/'trials'/f'{group[0]:05d}_{attempt:02d}_{len(event["trials"]):02d}.npz', **candidate)
                 projected = positions(parameters(xyz, candidate), candidate)
                 distance = locator.closest(projected)[1]
                 boundary = max(spline_graph_error(c['poles'], c['knots'], candidate) for c in incident)
@@ -230,30 +296,76 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
                 interior = float(abs(tensor(pq, candidate['knots'], candidate['knots'])@candidate['height']-pz).max(initial=0))
                 q = parameters(targets, candidate); z = (targets-candidate['origin'])@candidate['axes'][2]
                 training = float(abs(tensor(q, candidate['knots'], candidate['knots'])@candidate['height']-z).max(initial=0))
+                if options.short_repair_seconds is not None:
+                    interior = float(locator.closest(positions(pq, candidate))[1].max(initial=0.))
+                    training = float(locator.closest(positions(q, candidate))[1].max(initial=0.))
                 trim_valid = all(not intersections(incident, [i for i, c in enumerate(incident) if di in c['owners']], candidate)
                                  for di in group)
-                passed = (np.isfinite(distance).all() and distance.max() < cfg.distance*options.screening_fraction
+                screening_limit = cfg.distance if options.short_repair_seconds is not None else cfg.distance*options.screening_fraction
+                passed = (np.isfinite(distance).all() and distance.max() < screening_limit
                           and boundary < cfg.boundary*.4 and max(interior, training) < cfg.distance and trim_valid)
+                continuity = None
+                if passed and options.preserve_continuity:
+                    from .distance_projection import continuity_change
+                    continuity = continuity_change(group, candidate, records, {**records, **changes}, incident, lookup)
+                    passed = continuity['passed']
                 trial = dict(method=method, source_probe_max_mm=float(distance.max()), continuous_boundary_mm=boundary,
-                    interior_probe_max_mm=interior, training_max_mm=training, trim_valid=trim_valid, accepted=bool(passed), **extra)
+                    interior_probe_max_mm=interior, training_max_mm=training, trim_valid=trim_valid,
+                    continuity=continuity, accepted=bool(passed), **extra)
                 event['trials'].append(trial); dump(out/'repair.json', report)
                 print(dict(stage='automatic_distance_repair', charts=group, **trial), flush=True)
                 if passed:
                     candidate.update(continuous_boundary_error_mm=boundary, interior_probe_max_mm=interior,
-                                     sampled_source_max_mm=training, distance_repair_method=method)
+                                     sampled_source_max_mm=training, distance_repair_method=extra.get('original_method',method))
                 return passed
 
             accepted = None
+            saved_event = next((e for e in (previous or {}).get('events',[]) if e['charts']==group and e['passed']),None)
+            if saved_event is not None and all((out/'checkpoints'/f'{di:05d}.npz').exists() for di in group):
+                cached = [dict(np.load(out/'checkpoints'/f'{di:05d}.npz')) for di in group]
+                if any(any(not np.array_equal(r[k],cached[0][k]) for k in ('origin','axes','lo','size','knots','height')) for r in cached):
+                    raise ValueError('Cached distance repair split a shared support')
+                trial = next(t for t in reversed(saved_event['trials']) if t['accepted'])
+                method = trial.get('original_method',trial['method'])
+                if evaluate(cached[0], 'validated_checkpoint', original_method=method):
+                    accepted = cached[0]
+            if accepted is None and options.short_repair_seconds is not None and cfg.normal_angle_limit is None:
+                from .distance_projection import project
+                candidate, info = project(original, v[used], tri, incident, xyz, cfg, options.fitting_fraction,
+                                          seconds=options.short_repair_seconds, short=True,
+                                          source_locator=locator, source_normals=source_face_normals)
+                dump(out/f'short_projection_{group[0]:05d}.json', info)
+                if candidate is not None and evaluate(candidate, 'single_coefficient_projection', projection=info):
+                    accepted = candidate
+                if accepted is None:
+                    # Short mode never escalates a tiny miss into basis growth,
+                    # a restarted fit or repeated local subdivision.
+                    raise ValueError(f'Short local correction exhausted for charts {group}')
+            if accepted is None and options.preserve_continuity and options.projection_repair and cfg.normal_angle_limit is None:
+                from .distance_projection import project, refine
+                candidate, info = project(original, v[used], tri, incident, xyz, cfg, options.fitting_fraction)
+                dump(out/f'projection_{group[0]:05d}.json', info)
+                if candidate is not None and evaluate(candidate, 'preserve_support_jets', projection=info):
+                    accepted = candidate
+                if accepted is None:
+                    refined = refine(original, max(cfg.controls))
+                    if refined is not None:
+                        candidate, info = project(refined, v[used], tri, incident, xyz, cfg, options.fitting_fraction)
+                        info.update(original_controls=len(original['knots'])-4, refined_controls=len(refined['knots'])-4,
+                                    geometry_preserved_before_projection=True, unchanged_frame_and_basis=False)
+                        dump(out/f'projection_refined_{group[0]:05d}.json', info)
+                        if candidate is not None and evaluate(candidate, 'refined_support_jets', projection=info):
+                            accepted = candidate
             # A coefficient blend is not known to preserve a hard normal cone.
             # The bounded solver rechecks that optional constraint on refit.
-            if prior_fit is not None and cfg.normal_angle_limit is None:
+            if accepted is None and prior_fit is not None and cfg.normal_angle_limit is None:
                 prior_paths = [Path(prior_fit)/'charts'/f'{di:05d}.npz' for di in group]
                 if all(p.exists() for p in prior_paths):
-                    previous = [dict(np.load(p)) for p in prior_paths]; old = previous[0]
+                    prior_records = [dict(np.load(p)) for p in prior_paths]; old = prior_records[0]
                     compatible = all(all(np.array_equal(records[di][k], p[k]) for k in
                         ('origin', 'axes', 'lo', 'size', 'knots', 'triangle_ids', 'vertex_ids', 'region'))
-                        for di, p in zip(group, previous))
-                    compatible &= all(np.array_equal(p['height'], old['height']) for p in previous)
+                        for di, p in zip(group, prior_records))
+                    compatible &= all(np.array_equal(p['height'], old['height']) for p in prior_records)
                     if compatible and not np.array_equal(original['height'], old['height']):
                         for alpha in (.875, .75, .5, .25, 0.):
                             candidate = dict(original, height=alpha*original['height']+(1-alpha)*old['height'])
@@ -266,7 +378,10 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
                     normal = crease_fan_normals(v, f, cfg.feature_angle)
                 _, candidate, info = fit_support((group[0], v[used], tri, normal[ids],
                     np.concatenate([samples(c) for c in incident]), incident,
-                    replace(cfg, distance=cfg.distance*options.fitting_fraction), 'bounded'))
+                    replace(cfg, distance=cfg.distance*options.fitting_fraction), 'bounded', None,
+                    original if options.preserve_continuity else None, options.preserve_continuity),
+                    max_iterations=options.fit_iterations, solver_seconds=options.solver_seconds,
+                    seconds=options.fit_seconds)
                 dump(out/f'refit_{group[0]:05d}.json', info)
                 if candidate is not None and evaluate(candidate, 'refit_with_margin'):
                     accepted = candidate
@@ -279,10 +394,11 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
                 if len(group) > 1:
                     candidate['shared_support_group'] = np.array(group)
                 changes[di] = candidate
+                np.savez_compressed(out/'checkpoints'/f'{di:05d}.npz', **candidate)
             event['passed'] = True; dump(out/'repair.json', report)
         for name in ('charts', 'curves', 'routes'):
             if (root/name).exists():
-                shutil.copytree(root/name, out/name)
+                shutil.copytree(root/name, out/name, dirs_exist_ok=resume)
         for name in ('chart_index.npz', 'fitting.json'):
             shutil.copy2(root/name, out/name)
         for di, rec in changes.items():
@@ -297,14 +413,17 @@ def repair(source, assembly, step, selected, output, options, *, prior_fit=None,
     return report
 
 
-def finalize(source, output, *, reference_faces, options=None, prior_fit=None, render=False):
+def finalize(source, output, *, reference_faces, options=None, prior_fit=None, render=False, resume=False):
     """Assemble, audit, repair locally and repeat, with a bounded retry count."""
     from .graph_reassemble import reconstruct as assemble
     from .graph_export import export
     from .step_quality import audit as area_audit
     from .step_stratified import audit as dense_audit
+    from . import fit_checkpoint
     options = options or Options(); options.validate()
-    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=False)
+    root, out = Path(source), Path(output); out.mkdir(parents=True, exist_ok=resume)
+    if (out/'run.json').exists():
+        shutil.copy2(out/'run.json',out/f'run_before_resume_{len(list(out.glob("run_before_resume_*.json"))):02d}.json')
     meta = json.loads((root/'run.json').read_text(encoding='utf-8'))
     limit = float(meta['config']['distance'])
     if not np.isfinite(limit) or limit <= 0:
@@ -314,18 +433,56 @@ def finalize(source, output, *, reference_faces, options=None, prior_fit=None, r
         scope='Finite actual STEP samples; not a Hausdorff, G1/G2 or visual-quality certificate.')
     try:
         for iteration in range(options.max_repairs+1):
-            stage = out/f'round_{iteration:02d}'; stage.mkdir()
+            stage = out/f'round_{iteration:02d}'; stage.mkdir(exist_ok=resume)
+            if (stage/'input').exists():
+                if not fit_checkpoint.matches(root,stage/'input'):
+                    raise ValueError('Cached STEP audit input changed')
+            else:
+                if any(stage.iterdir()):
+                    raise ValueError('Old STEP audit has no verifiable input checkpoint')
+                fit_checkpoint.save(root,stage/'input')
             row = dict(iteration=iteration, source_fit=str(root.resolve()), seed=options.seed+iteration,
                        status='running', sample_role='validation')
             report['history'].append(row); dump(out/'run.json', report)
-            row['assembly'] = assemble(root, stage/'assembled', smooth_segments=True, write_preview=False)
-            row['step'] = export(stage/'assembled', stage/'step')
+            def completed(name):
+                path=stage/name/'run.json'
+                value=json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
+                return value if value is not None and value.get('status')=='DiagnosticOnly' else None
+
+            def retain_incomplete(name):
+                path=stage/name
+                if path.exists():
+                    target=stage/f'{name}_before_resume_{len(list(stage.glob(name+"_before_resume_*"))):02d}'
+                    if path.resolve().parent!=stage.resolve() or target.resolve().parent!=stage.resolve():
+                        raise ValueError('Invalid incomplete-stage archive path')
+                    path.rename(target)
+
+            row['assembly'] = completed('assembled')
+            if row['assembly'] is None:
+                retain_incomplete('assembled')
+                row['assembly'] = assemble(root, stage/'assembled', smooth_segments=True, write_preview=False)
+            row['step'] = completed('step')
+            if row['step'] is None:
+                retain_incomplete('step')
+                row['step'] = export(stage/'assembled', stage/'step')
             if not row['step']['watertight'] or row['step']['topology']['faces'] >= reference_faces:
                 raise ValueError('STEP topology, tolerance or face-count gate failed')
-            row['quality'] = area_audit(stage/'step/model.step', meta['partition'], stage/'quality')
-            row['stratified'] = dense_audit(stage/'step/model.step', meta['partition'], stage/'stratified.json',
-                                          samples_per_face=options.samples_per_face, seed=row['seed'])
-            selected, failed = select_faces(row['stratified'], row['quality'], limit, options, preventive=iteration == 0)
+            row['quality'] = completed('quality')
+            if row['quality'] is None:
+                retain_incomplete('quality')
+                row['quality'] = area_audit(stage/'step/model.step', meta['partition'], stage/'quality')
+            dense_path=stage/'stratified.json'
+            if dense_path.exists():
+                row['stratified']=json.loads(dense_path.read_text(encoding='utf-8'))
+                if (row['stratified']['seed']!=row['seed']
+                        or row['stratified']['requested_samples_per_face']!=options.samples_per_face):
+                    raise ValueError('Cached STEP audit uses different sampling')
+                row['cached_audit']=True
+            else:
+                row['stratified'] = dense_audit(stage/'step/model.step', meta['partition'], dense_path,
+                                              samples_per_face=options.samples_per_face, seed=row['seed'])
+            selected, failed = select_faces(row['stratified'], row['quality'], limit, options,
+                                            preventive=options.preventive_repair and iteration == 0)
             row.update(over_budget_faces=failed, selected_faces=[r['face'] for r in selected])
             if not selected:
                 row['status'] = 'passed'
@@ -341,7 +498,8 @@ def finalize(source, output, *, reference_faces, options=None, prior_fit=None, r
             if iteration == options.max_repairs:
                 raise ValueError('Automatic distance repair budget exhausted')
             row['repair'] = repair(root, stage/'assembled', stage/'step/model.step', selected,
-                stage/'repaired_fit', options, prior_fit=prior_fit, iteration=iteration)
+                stage/'repaired_fit', options, prior_fit=prior_fit, iteration=iteration,
+                resume=resume and (stage/'repaired_fit').exists())
             root = stage/'repaired_fit'
             row['status'] = 'repaired_pending_new_audit'
             dump(out/'run.json', report)
