@@ -10,7 +10,7 @@
   "previous_faces": 1092,
   "reference_faces": 2739,
   "partition": "regions/source_partition.npz",
-  "baseline": "../../native-v4/result_v5/run.json",
+  "baseline": "../../native-v4/result_v4/run.json",
   "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
   "partition_labels_unchanged": true,
   "source_triangle_coverage_verified": true,

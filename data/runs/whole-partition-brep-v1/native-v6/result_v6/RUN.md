@@ -11,7 +11,7 @@
 
 ## 实测
 
-直接对照为通过 Creo 检查的 `native-v4/result_v5`。历史 `native-v5/result_v6` 的 GEOM_CHECKS 为 1，原件保留。
+直接对照为通过 Creo 检查的 `native-v4/result_v4`。历史 `native-v5/result_v5` 的 GEOM_CHECKS 为 1，原件保留。
 
 | 检查 | 对照 | 本版 |
 |---|---:|---:|

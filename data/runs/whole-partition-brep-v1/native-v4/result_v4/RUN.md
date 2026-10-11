@@ -11,7 +11,7 @@
 - [整件六视角表面](images/whole_shaded.png)、[整件六视角全部边界](images/whole_boundaries.png)、[实际 Creo 显示](images/creo_gray.jpg)。
 - [交付摘要](run.json)、[原生几何检查](metrics/quality.json)、[Creo 验证](metrics/creo_validation.json)、[拟合参数与结果](metrics/fitting.json)、[历史实验](metrics/experiments.json)、[局部问题诊断](metrics/diagnostics.json)。
 
-与 `native-v2/result_v3`、`native-v3/result_v4` 一样，根目录只有 `model.step`、`run.json`、`RUN.md` 及 `regions/`、`images/`、`creo/`、`metrics/`。产出时未提交 Git，本次按版本单独归档；CAD 文件已配置与前两版一致的 Git LFS 路径规则。
+与 `native-v2/result_v2`、`native-v3/result_v3` 一样，根目录只有 `model.step`、`run.json`、`RUN.md` 及 `regions/`、`images/`、`creo/`、`metrics/`。产出时未提交 Git，本次按版本单独归档；CAD 文件已配置与前两版一致的 Git LFS 路径规则。
 
 ## 实测结果
 

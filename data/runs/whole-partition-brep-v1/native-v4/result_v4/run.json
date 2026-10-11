@@ -11,7 +11,7 @@
   "faces": 1092,
   "source_regions": 359,
   "partition": "regions/source_partition.npz",
-  "baseline": "../../native-v3/result_v4/run.json",
+  "baseline": "../../native-v3/result_v3/run.json",
   "source_stl": "D:\\pyProject\\step-patch-optimizer\\data\\stl\\03_配件_Clay.stl",
   "partition_labels_unchanged": true,
   "source_triangle_coverage_verified": true,
