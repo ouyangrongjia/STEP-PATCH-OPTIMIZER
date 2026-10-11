@@ -41,6 +41,18 @@ def source_angles(v, f):
     return {tuple(e): a for e, a in zip(edges, source_angles)}
 
 
+def domain_widths(records, curves, vertices, triangles):
+    """Intrinsic strip scale 2A/P from original triangles and boundary chains."""
+    area2 = np.linalg.norm(np.cross(vertices[triangles[:, 1]]-vertices[triangles[:, 0]],
+                                   vertices[triangles[:, 2]]-vertices[triangles[:, 0]]), axis=1)
+    perimeter = {di: 0. for di in records}
+    for curve in curves.values():
+        length = float(np.linalg.norm(np.diff(vertices[curve['chain']], axis=0), axis=1).sum())
+        for di in curve['owners']:
+            perimeter[int(di)] += length
+    return {di: float(area2[rec['triangle_ids']].sum()/perimeter[di]) for di, rec in records.items()}
+
+
 def restore_groups(records):
     """Recover common geometric supports, including caches without group tags."""
     groups = {}; touched = set()

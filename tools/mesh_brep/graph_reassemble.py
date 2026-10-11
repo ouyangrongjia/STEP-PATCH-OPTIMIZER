@@ -11,7 +11,7 @@ from .partition_cad import assemble
 
 def reconstruct(run, output, segment_edges=False, smooth_boundary=0., skip_smooth_faces=(), write_preview=True,
                 smooth_segments=False, maximum_edge_length=None, curve_certificates=None,
-                native_context=None, binary_native=False):
+                native_context=None, binary_native=False, measure_volume=True, segment_charts=()):
     root = Path(run); out = Path(output); out.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter(); source = json.loads((root/'run.json').read_text(encoding='utf-8'))
     report = dict(status='running', can_apply=False, commercial_engine_used=False,
@@ -19,6 +19,7 @@ def reconstruct(run, output, segment_edges=False, smooth_boundary=0., skip_smoot
         algorithm='native-graph-canonical-topology-v1', boundary_tolerance_mm=source['config']['boundary'],
         segment_edges=segment_edges, boundary_smoothing_budget_mm=smooth_boundary,
         smoothing_disabled_charts=list(skip_smooth_faces), smooth_segments=smooth_segments)
+    report['source_segmented_charts'] = sorted(map(int, segment_charts))
     dump(out/'run.json', report)
     try:
         if source.get('requires_support_refit'):
@@ -37,7 +38,8 @@ def reconstruct(run, output, segment_edges=False, smooth_boundary=0., skip_smoot
                                write_preview=write_preview, smooth_segments=smooth_segments,
                                shared_curve_records=curve_records, maximum_edge_length=maximum_edge_length,
                                curve_certificates=curve_certificates, native_context=native_context,
-                               binary_native=binary_native), status='DiagnosticOnly')
+                               binary_native=binary_native, measure_volume=measure_volume,
+                               segment_charts=segment_charts), status='DiagnosticOnly')
         report['fitted_shared_skeleton'] = curve_records is not None
         report['maximum_edge_length_mm'] = maximum_edge_length
     except Exception as error:

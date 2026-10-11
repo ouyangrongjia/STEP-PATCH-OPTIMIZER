@@ -12,6 +12,7 @@
 | v7 | `native-v7/result_v7` | [整件 STEP](native-v7/result_v7/model.step) · [运行说明](native-v7/result_v7/RUN.md) · [交付摘要](native-v7/result_v7/run.json) |
 | v8 | `native-v8/result_v8` | [整件 STEP](native-v8/result_v8/model.step) · [运行说明](native-v8/result_v8/RUN.md) · [交付摘要](native-v8/result_v8/run.json) |
 | v9（基于 v8 的边界优化） | `native-v9/result_v9` | [整件 STEP](native-v9/result_v9/model.step) · [运行说明](native-v9/result_v9/RUN.md) · [实际状态与限制](native-v9/result_v9/run.json) |
+| v10（过渡光顺与特征边约束） | `native-v10/result_v10` | [整件 STEP](native-v10/result_v10/model.step) · [运行说明](native-v10/result_v10/RUN.md) · [实际状态与限制](native-v10/result_v10/run.json) |
 
 ## 目录编号调整
 

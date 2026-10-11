@@ -1,0 +1,148 @@
+{
+  "version": "native-v10",
+  "baseline": "native-v9",
+  "status": "DiagnosticOnly",
+  "can_apply": false,
+  "algorithm": "native-transition-and-feature-boundary-v10",
+  "generation_seconds": 192.34132980002323,
+  "seconds": 400.56094860000303,
+  "target_seconds": 60.0,
+  "generation_target_met": false,
+  "time_target_met": false,
+  "topology": {
+    "faces": 985,
+    "edges": 40193,
+    "shells": 1,
+    "solids": 1,
+    "free_edges": 0,
+    "multiple_edges": 0,
+    "invalid_faces": [],
+    "brep_valid": true,
+    "volume_mm3": null,
+    "volume_evaluated": false,
+    "maximum_edge_tolerance_mm": 0.004363749549223164
+  },
+  "regions": 359,
+  "surfaces_changed": 980,
+  "surface_regions_changed": 357,
+  "curves_changed": 1034,
+  "boundary_regions_changed": 341,
+  "seam_normal_rms_degrees": [
+    7.892044131878083,
+    5.944923299887868
+  ],
+  "seam_shape_jump_rms_per_mm": [
+    7.031578083282492,
+    5.503627494265845
+  ],
+  "regional_boundary_bending_reduction_at_0_05_mm": 0.04318698697040113,
+  "source_distance": {
+    "rms": 0.0022236826649104286,
+    "p50": 0.0007898183087178966,
+    "p95": 0.004650904298451995,
+    "max": 0.02535347768972501,
+    "min": 1.3658093021319504e-08
+  },
+  "source_normal_difference": {
+    "rms": 2.9721077252806136,
+    "p50": 0.7862083919196756,
+    "p95": 5.725915444917196,
+    "max": 63.99670999025514,
+    "min": 0.0005709850231159182
+  },
+  "source_normal_difference_before": {
+    "rms": 3.017262361001707,
+    "p50": 0.6413380309324999,
+    "p95": 5.625879982834665,
+    "max": 58.23699292071662,
+    "min": 0.0004826411948585742
+  },
+  "regional_coverage": {
+    "seam_normal": {
+      "total": 359,
+      "improved": 338,
+      "worsened": 21,
+      "unchanged": 0,
+      "worse_regions": [
+        266,
+        66,
+        249,
+        63,
+        248,
+        196,
+        200,
+        319,
+        320,
+        201,
+        323,
+        321,
+        324,
+        197,
+        322,
+        325,
+        202,
+        198,
+        327,
+        326,
+        348
+      ]
+    },
+    "seam_shape_operator": {
+      "total": 359,
+      "improved": 358,
+      "worsened": 1,
+      "unchanged": 0,
+      "worse_regions": [
+        287
+      ]
+    },
+    "boundary_bending_0_05_mm": {
+      "total": 359,
+      "improved": 313,
+      "worsened": 25,
+      "unchanged": 21,
+      "worse_regions": [
+        128,
+        273,
+        305,
+        120,
+        122,
+        137,
+        101,
+        293,
+        162,
+        294,
+        256,
+        55,
+        183,
+        254,
+        345,
+        340,
+        315,
+        318,
+        17,
+        319,
+        201,
+        45,
+        197,
+        230,
+        327
+      ]
+    }
+  },
+  "stratified_source_distance": {
+    "rms": 0.0023777086470566765,
+    "p50": 0.0008721849632077698,
+    "p95": 0.005001555547702588,
+    "max": 0.029564128466247213,
+    "min": 0.0
+  },
+  "stratified_samples": 1007866,
+  "creo_closed_solid": true,
+  "creo_geometry_checks": 0,
+  "original_source_assignment_unchanged": true,
+  "geomagic_api_used": false,
+  "global_G1_G2_certified": false,
+  "native_trim_repair": null,
+  "timing_scope": "Input verification through fresh STEP readback and independent geometry, regional exports and optional Creo validation."
+}

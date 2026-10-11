@@ -1,0 +1,73 @@
+{
+  "seam_normal": {
+    "total": 359,
+    "improved": 338,
+    "worsened": 21,
+    "unchanged": 0,
+    "worse_regions": [
+      266,
+      66,
+      249,
+      63,
+      248,
+      196,
+      200,
+      319,
+      320,
+      201,
+      323,
+      321,
+      324,
+      197,
+      322,
+      325,
+      202,
+      198,
+      327,
+      326,
+      348
+    ]
+  },
+  "seam_shape_operator": {
+    "total": 359,
+    "improved": 358,
+    "worsened": 1,
+    "unchanged": 0,
+    "worse_regions": [
+      287
+    ]
+  },
+  "boundary_bending_0_05_mm": {
+    "total": 359,
+    "improved": 313,
+    "worsened": 25,
+    "unchanged": 21,
+    "worse_regions": [
+      128,
+      273,
+      305,
+      120,
+      122,
+      137,
+      101,
+      293,
+      162,
+      294,
+      256,
+      55,
+      183,
+      254,
+      345,
+      340,
+      315,
+      318,
+      17,
+      319,
+      201,
+      45,
+      197,
+      230,
+      327
+    ]
+  }
+}

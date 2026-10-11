@@ -15,7 +15,7 @@ from .mesh import dump
 from . import cad
 
 
-def export(run, output, write_pcurves=True, native_context=None):
+def export(run, output, write_pcurves=True, native_context=None, uncertainty=None, measure_volume=True):
     root = Path(run); out = Path(output); out.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter(); source = json.loads((root/'run.json').read_text(encoding='utf-8'))
     report = dict(status='running', can_apply=False, commercial_engine_used=False,
@@ -36,11 +36,15 @@ def export(run, output, write_pcurves=True, native_context=None):
                     raise ValueError('Cannot read binary native assembly')
             else:
                 BRepTools.Read_s(shape, str(native), BRep_Builder())
-            before = topology(shape)
+            before = topology(shape, measure_volume)
         expected_solids = source.get('expected_solids', 1)
         if not before['brep_valid'] or before['free_edges'] or before['solids'] != expected_solids:
             raise ValueError('Source native BRep must already contain the expected valid closed bodies')
-        writer = STEPControl_Writer(); writer.SetTolerance(before['maximum_edge_tolerance_mm'])
+        precision = before['maximum_edge_tolerance_mm'] if uncertainty is None else float(uncertainty)
+        if not 0 < precision <= source['boundary_tolerance_mm']:
+            raise ValueError('STEP uncertainty must be positive and within the boundary budget')
+        writer = STEPControl_Writer(); writer.SetTolerance(precision)
+        timing = {}; tick = time.perf_counter()
         previous = Interface_Static.IVal_s('write.surfacecurve.mode')
         try:
             if not Interface_Static.SetIVal_s('write.surfacecurve.mode', int(write_pcurves)):
@@ -48,6 +52,7 @@ def export(run, output, write_pcurves=True, native_context=None):
             writer.Transfer(shape, STEPControl_AsIs)
         finally:
             Interface_Static.SetIVal_s('write.surfacecurve.mode', previous)
+        timing['transfer'] = time.perf_counter()-tick; tick = time.perf_counter()
         model = writer.Model(); changed = 0
         for index in range(1, model.NbEntities()+1):
             entity = model.Value(index)
@@ -55,9 +60,13 @@ def export(run, output, write_pcurves=True, native_context=None):
                 entity.SetMasterRepresentation(StepGeom_pscrCurve3d); changed += 1
         if writer.Write(str(out/'model.step')) != IFSelect_RetDone:
             raise RuntimeError('STEP write failed')
-        after = topology(cad.read_generated(out/'model.step'))
+        timing['write'] = time.perf_counter()-tick; tick = time.perf_counter()
+        reread = cad.read_generated(out/'model.step')
+        timing['read'] = time.perf_counter()-tick; tick = time.perf_counter()
+        after = topology(reread, measure_volume)
+        timing['read_topology'] = time.perf_counter()-tick
         report.update(status='DiagnosticOnly', topology_before=before, topology=after,
-            master_3d_curves=changed, declared_step_uncertainty_mm=before['maximum_edge_tolerance_mm'],
+            master_3d_curves=changed, declared_step_uncertainty_mm=precision, timing=timing,
             step_bytes=(out/'model.step').stat().st_size,
             expected_solids=expected_solids,
             watertight=bool(after['brep_valid'] and after['solids'] == expected_solids and after['free_edges'] == 0

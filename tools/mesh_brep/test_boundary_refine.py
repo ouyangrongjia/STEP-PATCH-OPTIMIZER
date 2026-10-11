@@ -19,6 +19,14 @@ def wave(z=0.):
 
 
 class BoundaryRefineTests(unittest.TestCase):
+    def test_crease_attraction_improves_source_line_distance(self):
+        c = wave(); r = plane(); q = np.linspace(0, 1, 81)
+        guide = (q, np.c_[q, np.full(len(q), .5), np.zeros(len(q))], np.ones(len(q)))
+        candidate, result = propose(c, [r, r], Config(feature_weight=200.), feature_guide=guide)
+        self.assertTrue(result['accepted'], result)
+        self.assertLess(result['source_crease_rms_mm'][1], result['source_crease_rms_mm'][0])
+        np.testing.assert_array_equal(candidate['poles'][[0, -1]], c['poles'][[0, -1]])
+
     def test_timeout_recovery_requires_complete_modelcheck_and_successful_import(self):
         import tempfile, json
         from pathlib import Path
@@ -65,6 +73,13 @@ class BoundaryRefineTests(unittest.TestCase):
             result = export(root/'assembly', root/'step', native_context=context)
             self.assertTrue(result['watertight'])
             self.assertEqual(result['topology']['faces'], 4)
+            compact = export(root/'assembly', root/'precise_step', native_context=context,
+                             uncertainty=1e-7, measure_volume=False)
+            self.assertTrue(compact['watertight'])
+            self.assertIsNone(compact['topology']['volume_mm3'])
+            self.assertFalse(compact['topology']['volume_evaluated'])
+            self.assertEqual(compact['topology']['free_edges'], 0)
+            self.assertEqual(compact['topology']['faces'], 4)
             self.assertEqual(regions(root/'assembly', root/'regions')['exported_regions'], 4)
 
     def test_curve_error_reuse_rejects_changed_surface_or_curve(self):

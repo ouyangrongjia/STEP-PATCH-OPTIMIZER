@@ -90,7 +90,7 @@ def projected_curve(curve, rec):
     return Geom2d_BSplineCurve(points, array(knots), array(multi, True), curve.Degree())
 
 
-def topology(shape):
+def topology(shape, measure_volume=True):
     from OCP.TopAbs import TopAbs_FACE, TopAbs_EDGE, TopAbs_SOLID, TopAbs_SHELL
     from OCP.TopTools import TopTools_IndexedMapOfShape
     from OCP.BRep import BRep_Tool
@@ -106,13 +106,16 @@ def topology(shape):
             if not BRep_Tool.Degenerated_s(edge):
                 uses[i] += 2 if BRep_Tool.IsClosed_s(edge, face) else 1
     edges = cad.shapes(shape, TopAbs_EDGE)
-    volume = GProp_GProps(); BRepGProp.VolumeProperties_s(shape, volume)
-    analyzer = BRepCheck_Analyzer(shape, True)
+    volume = GProp_GProps()
+    if measure_volume:
+        BRepGProp.VolumeProperties_s(shape, volume)
+    analyzer = BRepCheck_Analyzer(shape, True, True)
     invalid = [i for i, face in enumerate(faces) if not analyzer.IsValid(face)]
     return dict(faces=len(faces), edges=len(edges), shells=len(cad.shapes(shape, TopAbs_SHELL)),
                 solids=len(cad.shapes(shape, TopAbs_SOLID)), free_edges=sum(n == 1 for n in uses),
                 multiple_edges=sum(n > 2 for n in uses), invalid_faces=invalid,
-                brep_valid=analyzer.IsValid(), volume_mm3=volume.Mass(),
+                brep_valid=analyzer.IsValid(), volume_mm3=volume.Mass() if measure_volume else None,
+                volume_evaluated=bool(measure_volume),
                 maximum_edge_tolerance_mm=max((BRep_Tool.Tolerance_s(e) for e in edges), default=0.))
 
 
@@ -141,7 +144,8 @@ def checked_curve_errors(records, curves, certificates):
 def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, tolerance, out,
              identity_topology=False, segment_edges=False, smooth_boundary=0., skip_smooth_faces=(),
              write_preview=True, smooth_segments=False, shared_curve_records=None, maximum_edge_length=None,
-             curve_certificates=None, native_context=None, binary_native=False):
+             curve_certificates=None, native_context=None, binary_native=False, measure_volume=True,
+             segment_charts=()):
     from OCP.BRep import BRep_Builder, BRep_Tool
     from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakeVertex, BRepBuilderAPI_MakeEdge,
                                    BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeSolid)
@@ -209,17 +213,18 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
         probe = (p[:-1, None]*(1-w[None, :, None])+p[1:, None]*w[None, :, None]).reshape(-1, 3)
         for side, fi in enumerate(pair):
             rec = records[int(fi)]; uv = parameters(p, rec)
-            err = np.linalg.norm(positions(parameters(probe, rec), rec)-probe, axis=1)
             maximum = (smooth_errors[side] if smooth_chain[ci] else
-                       polyline_graph_error(p, rec) if identity_topology else float(err.max()))
+                       polyline_graph_error(p, rec) if identity_topology else
+                       float(np.linalg.norm(positions(parameters(probe, rec), rec)-probe, axis=1).max()))
             errors.append(maximum); boundary_max = max(boundary_max, maximum)
             if maximum > tolerance*.9:
                 dump(out/'boundary_failure.json', dict(curve=ci, chart=int(fi), maximum=maximum, tolerance=tolerance))
                 raise ValueError(f'Curve {ci}/chart {fi} exceeds boundary tolerance: {maximum}')
             pcurves.append(projected_curve(curve, rec) if smooth_chain[ci] else polyline(uv, t))
         etol = max(1e-7, max(errors)*1.05)
-        parts = [(j, j+1) for j in range(len(chain)-1)] if smooth_segments else [(0, len(chain)-1)]
-        if maximum_edge_length is not None and not smooth_segments:
+        split_this_curve = smooth_segments or any(int(fi) in segment_charts for fi in pair)
+        parts = [(j, j+1) for j in range(len(chain)-1)] if split_this_curve else [(0, len(chain)-1)]
+        if maximum_edge_length is not None and not split_this_curve:
             if maximum_edge_length <= 0:
                 raise ValueError('Maximum edge length must be positive')
             length = np.linalg.norm(np.diff(p, axis=0), axis=1).sum()
@@ -326,7 +331,7 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
         {k: val.tolist() if isinstance(val, np.ndarray) else val
          for k, val in r.items() if k not in ('triangles', 'vertices')} for r in shell_records]))
     construction_seconds = time.perf_counter()-start
-    tick = time.perf_counter(); before = topology(solid); check_seconds = time.perf_counter()-tick
+    tick = time.perf_counter(); before = topology(solid, measure_volume); check_seconds = time.perf_counter()-tick
     if identity_topology:
         from OCP.BRepTools import BRepTools
         from OCP.BRepCheck import BRepCheck_Analyzer, BRepCheck_NoError
@@ -365,7 +370,7 @@ def assemble(v, triangles, records, face_chart, mesh_edges, mesh_owners, toleran
     after = before
     if write_preview:
         tick = time.perf_counter(); cad.write_step(out/'model.step', solid); write_seconds = time.perf_counter()-tick
-        tick = time.perf_counter(); reread = cad.read_generated(out/'model.step'); after = topology(reread)
+        tick = time.perf_counter(); reread = cad.read_generated(out/'model.step'); after = topology(reread, measure_volume)
         reread_seconds = time.perf_counter()-tick
     result = dict(topology_before=before, topology=after, max_curve_on_surface_mm=boundary_max,
                   construction_seconds=construction_seconds, topology_seconds=check_seconds,

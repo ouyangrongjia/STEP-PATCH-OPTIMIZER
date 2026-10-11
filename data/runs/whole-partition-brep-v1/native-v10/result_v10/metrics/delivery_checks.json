@@ -1,0 +1,24 @@
+{
+  "archive_entries": 7720,
+  "frozen_files_match_current_source": 163,
+  "entrypoint_help_checks_passed": 3,
+  "regional_steps": 359,
+  "comparison_images": 8,
+  "run_links_valid": true,
+  "archive_readable": true,
+  "backend_tests_passed": 156,
+  "backend_test_seconds": 93.375,
+  "image_review": {
+    "views": [
+      "whole_shaded",
+      "focus_01",
+      "focus_02",
+      "focus_03",
+      "focus_04",
+      "focus_05",
+      "focus_06"
+    ],
+    "conclusion": "Small improvements in transition highlights; local ripples and seams remain. Whole-model thumbnails show limited visual difference. No whole-model G1/G2 pass claim."
+  },
+  "scope": "Artifact and documentation validation after the final pipeline benchmark; no additional surface or curve edits."
+}

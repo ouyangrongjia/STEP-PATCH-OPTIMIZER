@@ -1,0 +1,7 @@
+{
+  "status": "completed",
+  "seconds": 50.00356300000567,
+  "before": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v9-incremental-verified\\fit",
+  "after": "D:\\pyProject\\step-patch-optimizer-worktrees\\whole-mesh-brep\\data\\.native-v10-scaled\\fit",
+  "scope": "Additional independent comparisons, outside pipeline benchmark"
+}

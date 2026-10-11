@@ -1,0 +1,42 @@
+[
+  {
+    "run": ".native-v10-automatic",
+    "status": "failed",
+    "seconds": 287.10443090001354,
+    "error": "UntriangulatedFaces: Faces have no triangulation: ['F', 'a', 'c', 'e', 's', ' ', 'h', 'a', 'v', 'e', ' ', 'n', 'o', ' ', 't', 'r', 'i', 'a', 'n', 'g', 'u', 'l', 'a', 't', 'i', 'o', 'n', ':', ' ', '[', '8', '9', '1', ']']",
+    "geometry_check_features": 1,
+    "import_status": "SOLID_FAILED",
+    "native_closed_solid": null,
+    "scope": "Development experiment retained; not reused as the final reconstruction"
+  },
+  {
+    "run": ".native-v10-bounded",
+    "status": "rejected",
+    "seconds": 262.87879950000206,
+    "error": null,
+    "geometry_check_features": 1,
+    "import_status": "SOLID_FAILED",
+    "native_closed_solid": false,
+    "scope": "Development experiment retained; not reused as the final reconstruction"
+  },
+  {
+    "run": ".native-v10-dev/exchange_segmented",
+    "status": null,
+    "seconds": 184.79115339997225,
+    "error": null,
+    "geometry_check_features": 1,
+    "import_status": "SOLID_FAILED",
+    "native_closed_solid": false,
+    "scope": "Development experiment retained; not reused as the final reconstruction"
+  },
+  {
+    "run": ".native-v10-dev/exchange_source",
+    "status": null,
+    "seconds": 271.5557774999761,
+    "error": null,
+    "geometry_check_features": 0,
+    "import_status": "OK",
+    "native_closed_solid": true,
+    "scope": "Development experiment retained; not reused as the final reconstruction"
+  }
+]
